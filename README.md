@@ -1,29 +1,29 @@
 # Aether Agents
 
-Sistema multi-agente basado en el framework **hermes-agent** que orquesta 6 Daimons especializados para desarrollo de software colaborativo.
+A multi-agent system built on the **hermes-agent** framework that orchestrates 6 specialized Daimons for collaborative software development.
 
 ---
 
-## ¿Qué es Aether Agents?
+## What is Aether Agents?
 
-Aether Agents es un ecosistema de agentes de IA que trabajan coordinadamente para asistir en el desarrollo de software. El sistema está compuesto por:
+Aether Agents is an AI agent ecosystem that works in a coordinated way to assist in software development. The system consists of:
 
-- **Hermes**: El orquestador principal que coordina a todos los Daimons
-- **6 Daimons**: Agentes especializados en diferentes áreas (gestión, desarrollo, investigación, diseño, seguridad)
+- **Hermes**: The main orchestrator that coordinates all Daimons
+- **6 Daimons**: Specialized agents in different areas (management, development, research, design, security)
 
-La comunicación sigue este flujo:
+Communication follows this flow:
 ```
-Hermes → talk_to() → Olympus MCP (ACP protocol) → Daimon objetivo
+Hermes → talk_to() → Olympus MCP (ACP protocol) → Target Daimon
 ```
 
-Cada Daimon tiene su propio perfil de configuración, modelo de IA asignado y herramientas específicas.
+Each Daimon has its own configuration profile, assigned AI model, and specific tools.
 
 ---
 
-## Los 6 Daimons
+## The 6 Daimons
 
-| Daimon | Rol | Modelo sugerido | Herramientas |
-|--------|-----|-----------------|--------------|
+| Daimon | Role | Suggested Model | Tools |
+|--------|------|-----------------|-------|
 | **Hermes** | Orchestrator | `glm-5.1` (z.ai) | hermes-agent |
 | **Ariadna** | Project Manager | `kimi-k2.5` (opencode.go) | opencode-go |
 | **Hefesto** | Senior Developer | `glm-5.1` (z.ai) | opencode-go |
@@ -31,25 +31,25 @@ Cada Daimon tiene su propio perfil de configuración, modelo de IA asignado y he
 | **Daedalus** | UX/UI Designer | `mimo-v2-omni` (opencode.go) | opencode-go |
 | **Athena** | Security Engineer | `kimi-k2.6` (opencode.go) | opencode-go |
 
-> **Nota sobre modelos**: Los modelos listados son sugerencias probadas que funcionaron bien para cada rol en nuestras pruebas. No son requisitos obligatorios — puedes asignar cualquier modelo que soporte el proveedor configurado. Te recomendamos evaluar modelos con prompts de dominio antes de asignarlos a cada Daimon.
+> **Note on models**: The models listed above are tested suggestions that performed well for each role in our testing. They are not hard requirements — you can assign any model supported by the configured provider. We recommend evaluating models with domain-specific prompts before assigning them to each Daimon.
 
-### Descripción de roles
+### Role descriptions
 
-- **Hermes**: Coordina tareas, delega trabajo a los Daimons, mantiene el estado del proyecto
-- **Ariadna**: Gestiona planificación, tracking de tareas, documentación de diseño y planes
-- **Hefesto**: Desarrollo de código senior, refactorización, implementación de features
-- **Etalides**: Investigación web, búsqueda de documentación, análisis de tecnologías
-- **Daedalus**: Diseño de interfaces, UX/UI, prototipado visual
-- **Athena**: Auditoría de seguridad, revisión de código, mejores prácticas de seguridad
+- **Hermes**: Coordinates tasks, delegates work to Daimons, maintains project state
+- **Ariadna**: Manages planning, task tracking, design documentation and plans
+- **Hefesto**: Senior code development, refactoring, feature implementation
+- **Etalides**: Web research, documentation search, technology analysis
+- **Daedalus**: Interface design, UX/UI, visual prototyping
+- **Athena**: Security auditing, code review, security best practices
 
 ---
 
-## Estructura del Proyecto
+## Project Structure
 
 ```
 Aether-Agents/
-├── home/                          # HERMES_HOME del proyecto
-│   ├── config.yaml                # Config del orquestador
+├── home/                          # Project HERMES_HOME
+│   ├── config.yaml                # Orchestrator config
 │   ├── profiles/
 │   │   ├── hermes/                # Orchestrator
 │   │   ├── ariadna/               # Project Manager
@@ -57,12 +57,12 @@ Aether-Agents/
 │   │   ├── etalides/              # Web Researcher
 │   │   ├── daedalus/              # UX/UI Designer
 │   │   └── athena/                # Security Engineer
-│   ├── sessions/                  # Auto-creado por hermes
-│   └── logs/                      # Auto-creado por hermes
+│   ├── sessions/                  # Auto-created by hermes
+│   └── logs/                      # Auto-created by hermes
 │
 ├── skills/
-│   └── aether-agents/             # Skills del ecosistema
-│       ├── orchestration/         # Skill de orquestación de Hermes
+│   └── aether-agents/             # Ecosystem skills
+│       ├── orchestration/         # Hermes orchestration skill
 │       ├── ariadna-workflow/
 │       ├── hefesto-workflow/
 │       ├── etalides-workflow/
@@ -77,12 +77,12 @@ Aether-Agents/
 │   ├── config.py
 │   └── log.py
 │
-├── shared/env.base                # Template de variables de entorno
+├── shared/env.base                # Environment variable template
 ├── scripts/
-│   ├── setup-env.sh               # Genera .env por perfil
-│   └── start.sh                   # Verifica ecosistema y muestra instrucciones
+│   ├── setup-env.sh               # Generates .env per profile
+│   └── start.sh                   # Verifies ecosystem and shows instructions
 │
-├── .eter/                         # Estado del proyecto (gitignored)
+├── .eter/                         # Project state (gitignored)
 │   ├── .hermes/                   # DESIGN.md + PLAN.md
 │   └── .ariadna/                  # CURRENT.md + LOG.md
 │
@@ -91,16 +91,16 @@ Aether-Agents/
 
 ---
 
-## Instalación
+## Installation
 
-### 1. Clonar el repositorio
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 ```
 
-### 2. Crear entorno virtual e instalar dependencias
+### 2. Create virtual environment and install dependencies
 
 ```bash
 python3 -m venv venv
@@ -108,34 +108,34 @@ source venv/bin/activate
 pip install -e .
 ```
 
-### 3. Configurar variables de entorno
+### 3. Configure environment variables
 
-El proyecto usa `shared/env.base` como template. Ejecuta el script de setup para generar los `.env` de cada perfil:
+The project uses `shared/env.base` as a template. Run the setup script to generate `.env` files for each profile:
 
 ```bash
 bash scripts/setup-env.sh
 ```
 
-Luego edita cada `.env` en `home/profiles/<daimon>/` con tus API keys según los modelos que hayas elegido.
+Then edit each `.env` in `home/profiles/<daimon>/` with your API keys based on the models you've chosen.
 
 ---
 
-## Configuración
+## Configuration
 
 ### API Keys
 
-Las API keys dependen de los proveedores de los modelos que elijas para cada Daimon. Configura las keys en el `.env` de cada perfil:
+API keys depend on the model providers you choose for each Daimon. Configure keys in each profile's `.env` file:
 
-| Variable de ejemplo | Proveedor | Perfiles típicos |
-|---------------------|-----------|------------------|
+| Example variable | Provider | Typical profiles |
+|------------------|----------|------------------|
 | `GLM_API_KEY` | z.ai | Hermes, Hefesto |
 | `OPENCODE_GO_API_KEY` | opencode.go | Ariadna, Etalides, Daedalus, Athena |
 
-> Estas variables son ejemplos basados en los modelos sugeridos. Si usas otros proveedores, configura las variables correspondientes.
+> These variables are examples based on the suggested models. If you use other providers, configure the corresponding variables.
 
 ### HERMES_HOME
 
-`HERMES_HOME` debe apuntar a la carpeta `home/` del proyecto. Esto aísla la configuración de Aether Agents de tu instalación global de hermes-agent.
+`HERMES_HOME` must point to the project's `home/` directory. This isolates Aether Agents configuration from your global hermes-agent installation.
 
 ```bash
 export HERMES_HOME=~/Aether-Agents/home
@@ -143,9 +143,9 @@ export HERMES_HOME=~/Aether-Agents/home
 
 ---
 
-## Cómo Arrancar
+## Getting Started
 
-### Opción A: Usar el script de verificación
+### Option A: Use the verification script
 
 ```bash
 cd ~/Aether-Agents
@@ -153,7 +153,7 @@ source venv/bin/activate
 bash scripts/start.sh
 ```
 
-### Opción B: Inicio manual
+### Option B: Manual start
 
 ```bash
 cd ~/Aether-Agents
@@ -161,7 +161,7 @@ source venv/bin/activate
 HERMES_HOME=~/Aether-Agents/home hermes --profile hermes
 ```
 
-### Iniciar un Daimon específico (para testing)
+### Start a specific Daimon (for testing)
 
 ```bash
 HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
@@ -170,25 +170,25 @@ HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna
 
 ---
 
-## Uso de Skills
+## Using Skills
 
-Los skills están organizados en `skills/aether-agents/` y se cargan vía `external_dirs` en la configuración de cada perfil.
+Skills are organized in `skills/aether-agents/` and loaded via `external_dirs` in each profile's configuration.
 
-### Estructura de skills
+### Skill structure
 
 ```
 skills/aether-agents/
-├── orchestration/         # Habilidades de orquestación (Hermes)
-├── ariadna-workflow/      # Flujo de trabajo de gestión de proyectos
-├── hefesto-workflow/      # Flujo de trabajo de desarrollo
-├── etalides-workflow/     # Flujo de trabajo de investigación
-├── daedalus-workflow/     # Flujo de trabajo de diseño
-└── athena-workflow/       # Flujo de trabajo de seguridad
+├── orchestration/         # Orchestration skills (Hermes)
+├── ariadna-workflow/      # Project management workflow
+├── hefesto-workflow/      # Development workflow
+├── etalides-workflow/     # Research workflow
+├── daedalus-workflow/     # Design workflow
+└── athena-workflow/       # Security workflow
 ```
 
-### Cargar skills
+### Loading skills
 
-Los skills se cargan automáticamente cuando inicias un perfil. La configuración en `home/profiles/<nombre>/config.yaml` debe incluir:
+Skills are loaded automatically when you start a profile. The configuration in `home/profiles/<name>/config.yaml` must include:
 
 ```yaml
 external_dirs:
@@ -197,47 +197,47 @@ external_dirs:
 
 ---
 
-## talk_to — Ciclo de vida de sesiones
+## talk_to — Session Lifecycle
 
-El orquestador se comunica con los Daimons usando este flujo:
+The orchestrator communicates with Daimons using this flow:
 
 ```
-discover → open → message → poll (o wait) → close
+discover → open → message → poll (or wait) → close
 ```
 
-| Acción | Descripción |
+| Action | Description |
 |--------|-------------|
-| `discover` | Lista agentes disponibles |
-| `open` | Spawnea el Daimon (si está muerto) y crea una sesión ACP |
-| `message` | Envía un prompt (async, retorna inmediatamente) |
-| `poll` | Consulta progreso — thoughts, mensajes, tool calls |
-| `wait` | Bloquea hasta que termine (máx 300s) |
-| `cancel` | Aborta una sesión en curso |
-| `close` | Cierra la sesión; el proceso del agente se mantiene vivo |
+| `discover` | Lists available agents |
+| `open` | Spawns the Daimon (if dead) and creates an ACP session |
+| `message` | Sends a prompt (async, returns immediately) |
+| `poll` | Checks progress — thoughts, messages, tool calls |
+| `wait` | Blocks until done (max 300s) |
+| `cancel` | Aborts a running session |
+| `close` | Closes the session; agent process stays alive |
 
-Los Daimons son **keep-alive** — se spawnean en el primer `open` y se mantienen vivos entre sesiones.
+Daimons are **keep-alive** — spawned on first `open` and kept alive between sessions.
 
 ---
 
 ## Troubleshooting
 
-### HERMES_HOME no configurado
+### HERMES_HOME not configured
 ```bash
 export HERMES_HOME=~/Aether-Agents/home
 ```
 
-### API keys faltantes
+### Missing API keys
 ```bash
 cat home/profiles/hermes/.env
-# Editar con tus keys
+# Edit with your keys
 ```
 
-### Permisos de scripts
+### Script permissions
 ```bash
 chmod +x scripts/*.sh
 ```
 
-### Olympus MCP no disponible
+### Olympus MCP not available
 ```bash
 source venv/bin/activate
 pip install -e .
@@ -245,6 +245,6 @@ pip install -e .
 
 ---
 
-## Licencia
+## License
 
-Proyecto privado. Todos los derechos reservados.
+Private project. All rights reserved.
