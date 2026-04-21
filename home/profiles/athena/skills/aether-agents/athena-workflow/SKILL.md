@@ -149,7 +149,7 @@ Every security report MUST use this format:
 - [What remains after implementing recommendations]
 - [Is it acceptable? Under what conditions?]
 
-### Confidence: [alta | media | baja]
+### Confidence: [high | medium | low]
 Based on: [what was reviewed — code, spec, architecture diagram, etc.]
 ```
 

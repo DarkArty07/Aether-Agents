@@ -2,7 +2,19 @@
 name = "olympus-mcp"
 version = "0.1.0"
 description = "Olympus MCP Server — Aether Agents orchestrator. Manages Daimon lifecycle and inter-agent communication via ACP."
+license = "MIT"
 requires-python = ">=3.11"
+authors = [
+    { name = "Christopher (DarkArty07)" },
+]
+readme = "README.md"
+keywords = ["multi-agent", "mcp", "ai", "orchestration"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 dependencies = [
     "mcp>=1.0.0",
     "agent-client-protocol>=0.1.0",

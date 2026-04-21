@@ -76,22 +76,22 @@ site:docs.example.com [topic]        — Search within official docs
 Every response MUST follow this structure exactly. No narrative prose. No recommendations.
 
 ```
-## Hallazgos
+## Findings
 - [Finding 1]: [concise, factual description — one sentence]
 - [Finding 2]: [concise, factual description]
 - ...
 
-## Fuentes
+## Sources
 1. [URL] — [what was extracted from this source]
 2. [URL] — [what was extracted from this source]
 ...
 
-## Confianza: [alta | media | baja]
-- alta = official documentation, multiple independent sources confirm
-- media = reliable source (reputable blog, secondary docs) without corroboration
-- baja = single source, undated, blog post without references
+## Confidence: [high | medium | low]
+- high = official documentation, multiple independent sources confirm
+- medium = reliable source (reputable blog, secondary docs) without corroboration
+- low = single source, undated, blog post without references
 
-## Límites encontrados
+## Limitations
 - [If any]: "Could not find X in [N] links searched"
 - [If any]: "Skipped [N] links due to timeout or access restriction"
 - [If any]: "Budget exhausted before researching Y"
@@ -130,21 +130,21 @@ Links used:
   2. web_extract("https://www.npmjs.com/package/jsonwebtoken")
   3. web_search("jsonwebtoken CVE 2024 2025")
 
-## Hallazgos
+## Findings
 - jsonwebtoken: current version 9.0.2, last published: 2023-06-20
 - Weekly downloads: ~14 million
 - CVE-2022-23529: fixed in 9.0.0 (algorithm confusion attack). No new CVEs found in 2024-2025 search.
 - GitHub: 72k stars, actively maintained (last commit: 2024-11)
 
-## Fuentes
+## Sources
 1. https://www.npmjs.com/package/jsonwebtoken — version, downloads, publish date
 2. https://github.com/auth0/node-jsonwebtoken — star count, last commit
 3. https://nvd.nist.gov (search result) — CVE-2022-23529 status: patched in 9.0.0
 
-## Confianza: alta
+## Confidence: high
 - Official npm page + NVD database confirm key facts
 
-## Límites encontrados
+## Limitations
 - Used 3 of 5 links. Budget available if follow-up needed.
 ```
 
@@ -165,12 +165,12 @@ Etalides:
 Budget: 10 links (standard mode)
 Links used: 9
 
-## Hallazgos
+## Findings
 - BullMQ: requires Redis, ~800k weekly downloads, last release: 2025-01 (active). Features: delayed jobs, repeatable jobs, priorities, rate limiting. Limitation: Redis required, no in-memory mode.
 - Bee-Queue: requires Redis, ~120k weekly downloads, last release: 2023-08 (low activity since). Features: simple queue, fast. Limitation: fewer features than BullMQ, low maintenance activity.
 - Agenda: requires MongoDB (not Redis), ~150k weekly downloads, last release: 2024-03. Features: cron-style scheduling, MongoDB persistence. Limitation: no Redis support, MongoDB latency higher for high-frequency tasks.
 
-## Fuentes
+## Sources
 1. https://www.npmjs.com/package/bullmq — downloads, version, last publish
 2. https://github.com/taskforcesh/bullmq — features, docs
 3. https://www.npmjs.com/package/bee-queue — downloads, version
@@ -181,9 +181,9 @@ Links used: 9
 8. web_search("bee-queue maintenance status 2024") — activity check
 9. web_search("agenda mongodb queue performance") — limitation corroboration
 
-## Confianza: alta (BullMQ, Agenda) / media (Bee-Queue — fewer corroborating sources)
+## Confidence: high (BullMQ, Agenda) / medium (Bee-Queue — fewer corroborating sources)
 
-## Límites encontrados
+## Limitations
 - Did not find formal benchmark comparison between the three. Hermes may need to delegate a perf test to Hefesto if raw speed comparison is needed.
 ```
 
@@ -194,19 +194,19 @@ Links used: 9
 Etalides cannot find the requested information after exhausting budget:
 
 ```
-## Hallazgos
+## Findings
 - No official documentation found for "hermes-acp protocol specification" in 10 links searched.
 - Found references to "ACP" in two GitHub issues but no formal spec document.
 - No npm package named "hermes-acp" exists.
 
-## Fuentes
+## Sources
 1. https://github.com/search?q=hermes+acp — no relevant results
 2. [8 more URLs searched]...
 
-## Confianza: baja
+## Confidence: low
 - Only indirect references found. No authoritative source.
 
-## Límites encontrados
+## Limitations
 - Budget exhausted (10 links used). Topic may be internal/private or not publicly documented.
 - Searched: GitHub, npm, official hermes docs site (if exists), general web search.
 ```
