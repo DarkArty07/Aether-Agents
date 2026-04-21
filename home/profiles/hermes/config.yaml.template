@@ -1,0 +1,61 @@
+# Hermes Orchestrator — Aether Agents profile config
+# Template: run scripts/configure.sh to generate config.yaml from this file.
+# Replaces __AETHER_ROOT__ and __HERMES_PYTHON__ with machine-specific paths.
+
+agent:
+  name: hermes
+  role: orchestrator
+  description: "Technical Lead y arquitecto del equipo. Investiga, diseña, orquesta y decide."
+  capabilities:
+    - talk_to
+    - discover
+    - delegate_task
+    - all
+  launch_command: "hermes acp"
+  keep_alive: true
+  max_turns: 150
+  gateway_timeout: 1800
+
+model:
+  default: glm-5.1
+  provider: zai
+  base_url: https://api.z.ai/api/coding/paas/v4
+
+platform_toolsets:
+  cli:
+    - clarify
+    - code_execution
+    - delegation
+    - file
+    - memory
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - web
+
+skills:
+  external_dirs:
+    - __AETHER_ROOT__/skills
+
+# Olympus MCP server — connects Hermes to Daimons via ACP
+mcp_servers:
+  olympus:
+    command: __HERMES_PYTHON__
+    args:
+      - -m
+      - olympus.server
+    env:
+      AETHER_HOME: __AETHER_ROOT__/home
+      PYTHONPATH: __AETHER_ROOT__/src
+    enabled: true
+
+web:
+  backend: exa
+
+display:
+  show_reasoning: false
+  streaming: false
+
+context:
+  engine: compressor

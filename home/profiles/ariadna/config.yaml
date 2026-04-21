@@ -1,0 +1,35 @@
+# Ariadna configuration — Aether Agents Daimon (Level 2)
+
+# Agent discovery field — Olympus reads this to register the Daimon
+agent:
+  name: ariadna
+  role: project-manager
+  description: "Project Manager y Agile Coach del equipo. Trackea, anticipa, facilita."
+  capabilities:
+    - talk_to
+    - project-tracking
+    - blocker-detection
+    - session-audit
+    - sprint-tracking
+  launch_command: "hermes acp"
+  keep_alive: true
+
+# Model configuration
+model: kimi-k2.5
+provider: opencode-go
+base_url: https://opencode.ai/zen/go/v1
+
+# Toolsets — PM tools only
+toolsets:
+  - file
+  - terminal
+  - memory
+  - session_search
+  - todo
+  - clarify
+
+# Skills — Aether-specific (to be created in Session 2)
+skills: []
+
+# Session settings
+max_iterations: 50
