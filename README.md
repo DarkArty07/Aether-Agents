@@ -22,42 +22,44 @@ Each Daimon has its own configuration profile, assigned AI model, and specific t
 
 ## Provider-Agnostic by Design
 
-Aether Agents does **not** depend on any specific AI model or provider. Every Daimon can use any model supported by your configured provider. The system works with:
+Aether Agents is **provider-agnostic**. It does not recommend, prefer, or favor any AI provider over another. Every Daimon can use **any model from any provider** — the choice is entirely yours.
 
-- OpenAI (GPT)
-- Anthropic (Claude)
-- Google (Gemini)
-- Chinese providers (GLM, Kimi, MiniMax, DeepSeek, Qwen, etc.)
-- Local models via OpenAI-compatible endpoints (Ollama, vLLM, etc.)
-- Any OpenAI-compatible API
+### Supported Providers
 
-### Model Selection Guide
+Any provider with an OpenAI-compatible API endpoint works. This includes but is not limited to:
 
-Different roles benefit from different model strengths. Here's guidance for assigning models:
+| Provider | API |
+|----------|-----|
+| OpenAI | https://api.openai.com |
+| Anthropic | https://api.anthropic.com |
+| Google Gemini | https://generativelanguage.googleapis.com |
+| Zhipu AI (GLM) | https://open.bigmodel.cn |
+| Moonshot (Kimi) | https://api.moonshot.cn |
+| MiniMax | https://api.minimax.chat |
+| DeepSeek | https://api.deepseek.com |
+| Qwen (Alibaba) | https://dashscope.aliyuncs.com |
+| OpenRouter | https://openrouter.ai |
+| Local (Ollama) | http://localhost:11434 |
+| Local (vLLM) | http://localhost:8000 |
 
-| Role | Priority | What to look for |
-|------|----------|-----------------|
-| **Hermes** (Orchestrator) | Power | The most capable model available. Needs strong reasoning, planning, and tool use. This is the brain of the system. |
-| **Hefesto** (Developer) | Power + code | A powerful coding model. Can use a lighter variant of Hermes' model, but code quality scales directly with model capability. |
-| **Ariadna** (Project Manager) | Structured output | A model good at structured data, planning, and consistency. Doesn't need frontier-level reasoning. |
-| **Daedalus** (UX/UI Designer) | Frontend strength | A model with strong frontend knowledge — HTML, CSS, design patterns, accessibility. |
-| **Etalides** (Researcher) | Instruction following | A model that follows structured output formats precisely and stays within constraints (link budgets, no opinions). |
-| **Athena** (Security) | Depth + precision | A model with strong security knowledge — threat modeling, OWASP, CVE analysis. Needs to be thorough, not creative. |
+**This is not an exhaustive list.** Any OpenAI-compatible endpoint works.
 
-### Example Configuration
+### Model Selection
 
-The table below shows one tested configuration using cost-effective Chinese models. These are **suggestions**, not requirements:
+There is no "best" model for any role. Model choice depends on your budget, latency requirements, language needs, and personal preference. The only guidance is what each role does:
 
-| Daimon | Tested Model | Why it worked |
-|--------|-------------|---------------|
-| **Hermes** | `glm-5.1` (zhipuai) | Strong reasoning and tool use at low cost |
-| **Hefesto** | `glm-5.1` (zhipuai) | Excellent code generation |
-| **Ariadna** | `kimi-k2.5` (moonshot) | Good at structured output and planning |
-| **Etalides** | `minimax-m2.7` (minimax) | Follows output format constraints well |
-| **Daedalus** | `mimo-v2-omni` (mimo) | Strong frontend/design knowledge |
-| **Athena** | `kimi-k2.6` (moonshot) | Good security analysis depth |
+| Role | Function | What matters |
+|------|----------|-------------|
+| **Hermes** (Orchestrator) | Coordinates all Daimons | Reasoning, planning, tool use |
+| **Hefesto** (Developer) | Writes and refactors code | Code generation quality |
+| **Ariadna** (Project Manager) | Tracks state and plans | Structured output, consistency |
+| **Daedalus** (UX/UI Designer) | Designs interfaces | Frontend knowledge (HTML, CSS) |
+| **Etalides** (Researcher) | Web research and analysis | Instruction following, format compliance |
+| **Athena** (Security) | Security auditing | Security knowledge, thoroughness |
 
-> **Why Chinese models?** They offer competitive capability at significantly lower cost per token, making multi-agent workflows economically viable. If budget is not a concern, GPT, Claude, and Gemini are excellent choices for all roles.
+**Use whatever model works for you.** A single model for all roles is perfectly valid. Mixing providers is fine. Changing models later is trivial — just update the `.env` file.
+
+> **Note:** The developers of Aether Agents use Chinese providers (Zhipu, Moonshot, MiniMax, etc.) in their own setup. This is a personal choice based on cost and availability, not a recommendation. Your setup is your business.
 
 ### Role descriptions
 
