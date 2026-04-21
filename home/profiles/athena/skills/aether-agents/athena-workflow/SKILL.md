@@ -210,7 +210,7 @@ Athena returns:
 - Email account compromise still allows attacker to log in as user. Acceptable unless MFA is added (separate decision).
 - Token theft via HTTPS interception: negligible if HTTPS enforced (verify HSTS header).
 
-### Confidence: alta
+### Confidence: high
 Based on: full flow spec provided. Code review not performed — recommendations based on spec analysis.
 ```
 
@@ -253,6 +253,6 @@ Athena returns:
 ### Residual Risk
 - Stripe.js handles card data entirely client-side — PCI scope is reduced. No card data touches your backend. This is the correct architecture.
 
-### Confidence: media
+### Confidence: medium
 Based on: architectural description. Full code review not performed. Recommend code review of webhook handler specifically by Hefesto (role: security) before deploy.
 ```

@@ -251,14 +251,14 @@ delegate_task(
 ### Example 2 — Research Request (Etalides)
 
 ```
-User: "¿Qué opciones hay para manejo de colas de tareas en Node.js?"
+User: "What are the options for task queue management in Node.js?"
 
 Hermes analysis:
 - Needs web research, not internal knowledge
 - No implementation yet — just options
 - Route to Etalides
 
-Hermes to user: "Voy a pedirle a Etalides que investigue las principales opciones. Dame un momento."
+Hermes to user: "I'll have Etalides research the main options. Give me a moment."
 
 talk_to(agent="etalides", action="message", prompt="""
 CONTEXT:
@@ -277,10 +277,10 @@ Standard Etalides format: Findings / Sources / Confidence / Limitations.
 
 After receiving result:
 Hermes synthesizes for user:
-"Etalides encontró 4 opciones. Las dos principales serían:
-  - BullMQ: más robusto, requiere Redis, 50k+ downloads/semana
-  - Agenda: usa MongoDB, más simple, sin Redis
-¿Tienes Redis disponible, o preferirías algo sin dependencias externas?"
+"Etalides found 4 options. The top two are:
+  - BullMQ: more robust, requires Redis, 50k+ downloads/week
+  - Agenda: uses MongoDB, simpler, no Redis
+Do you have Redis available, or would you prefer something without external dependencies?"
 → User decides → Hermes proceeds
 ```
 
@@ -296,21 +296,21 @@ Hermes analysis:
 - Cannot route without more info
 
 Hermes to user:
-"Para poder ayudarte necesito entender mejor el problema:
-  1. ¿Qué parte es lenta? (una pantalla, un endpoint, el arranque de la app, otro)
-  2. ¿Cuánto tarda actualmente vs lo que esperabas?
-  3. ¿Pasó siempre o empezó después de algún cambio?"
+"To help you I need to understand the problem better:
+  1. Which part is slow? (a screen, an endpoint, app startup, other)
+  2. How long does it take now vs what you expected?
+  3. Has it always been slow or did it start after some change?"
 
-User: "La pantalla del dashboard tarda 8 segundos en cargar"
+User: "The dashboard screen takes 8 seconds to load"
 
 Hermes re-analysis:
 - Frontend loading issue → could be: slow API call, large bundle, render blocking
 - Need to know more before routing to Hefesto or Daedalus
 
 Hermes to user:
-"Entendido. ¿Es lento desde el primer render (bundle grande) o carga rápido pero los datos tardan en aparecer?"
+"Got it. Is it slow from the first render (large bundle) or does it load fast but the data takes time to appear?"
 
-User: "Los datos tardan — la pantalla aparece vacía y luego llena"
+User: "The data takes time — the screen appears empty and then fills in"
 
 Hermes:
 - Slow data fetch → backend issue → Hefesto (role: backend/perf)
@@ -322,25 +322,25 @@ Hermes:
 ### Example 4 — Step-by-Step Design Decision (Interactive)
 
 ```
-User: "Quiero agregar autenticación al proyecto"
+User: "I want to add authentication to the project"
 
-Hermes: "Antes de diseñar algo, ¿me puedes dar contexto?
-  - ¿Quiénes son los usuarios? (internos, clientes externos, ambos)
-  - ¿Ya tienen alguna infraestructura de auth? (Google Workspace, Okta, nada)"
+Hermes: "Before designing anything, can you give me context?
+  - Who are the users? (internal, external clients, both)
+  - Do you have any existing auth infrastructure? (Google Workspace, Okta, nothing)"
 
-User: "Clientes externos. Nada de infraestructura."
+User: "External clients. No infrastructure."
 
-Hermes: "Perfecto. Veo tres caminos:
-  Option A — Email/password + JWT: Más control, más código propio. Sin deps externas de auth.
-  Option B — OAuth2 social (Google/GitHub): Más rápido de implementar, menos fricción para usuarios. Depende de terceros.
-  Option C — Magic link (email): No passwords, muy buena UX. Requiere SMTP configurado.
-  ¿Qué prioridad tienes: control total, velocidad de implementación, o UX del usuario final?"
+Hermes: "Got it. I see three paths:
+  Option A — Email/password + JWT: More control, more custom code. No external auth deps.
+  Option B — OAuth2 social (Google/GitHub): Faster to implement, less friction for users. Depends on third parties.
+  Option C — Magic link (email): No passwords, great UX. Requires SMTP configured.
+  What is your priority: full control, speed of implementation, or end-user UX?"
 
-User: "UX del usuario final"
+User: "End-user UX"
 
-Hermes: "Magic link o OAuth2 social son los candidatos. ¿Tus usuarios tienen más probabilidad de tener Google o prefieren no vincular cuentas?"
+Hermes: "Magic link or OAuth2 social are the candidates. Are your users more likely to have Google accounts or do they prefer not to link accounts?"
 
-User: "Prefieren no vincular. Magic link."
+User: "They prefer not to link. Magic link."
 
 Hermes:
 - Design decision made → now need: security review + implementation
@@ -361,15 +361,15 @@ OUTPUT FORMAT: Standard Athena format — Threats Identified / Recommendations /
 ### Example 5 — Security Review (Athena)
 
 ```
-User: "Antes de hacer el deploy, ¿puedes hacer un security review del módulo de pagos?"
+User: "Before deploying, can you do a security review of the payment module?"
 
 Hermes analysis:
 - Security review → Athena
 - Need to pass the code/spec as context
 
-Hermes to user: "Voy a pedirle a Athena que revise el módulo. ¿Puedes confirmar qué incluye: solo el backend, o también el frontend de checkout?"
+Hermes to user: "I'll have Athena review the module. Can you confirm what it includes: just the backend, or also the checkout frontend?"
 
-User: "Todo — el formulario de pago y el webhook de Stripe."
+User: "Everything — the payment form and the Stripe webhook."
 
 talk_to(agent="athena", action="message", prompt="""
 CONTEXT:
@@ -397,32 +397,32 @@ OUTPUT FORMAT: Standard Athena format — Threats / Recommendations (prioritized
 ### Example 6 — Multi-Daimon Feature (Full Pipeline)
 
 ```
-User: "Quiero agregar un sistema de notificaciones push a la app"
+User: "I want to add a push notification system to the app"
 
 Hermes analysis:
 - Complex feature: research + design + security + implementation
 - Multi-Daimon pipeline needed
 
 Hermes to user:
-"Este feature necesita varias etapas. Así lo veo:
-  1. Etalides investiga providers (FCM, OneSignal, etc.)
-  2. Tú eliges provider → diseñamos UX con Daedalus
-  3. Athena revisa el modelo de seguridad
-  4. Hefesto implementa
-  ¿Arrancamos con la investigación?"
+"This feature needs several stages. Here's how I see it:
+  1. Etalides researches providers (FCM, OneSignal, etc.)
+  2. You choose a provider → we design UX with Daedalus
+  3. Athena reviews the security model
+  4. Hefesto implements
+  Shall we start with the research?"
 
-User: "Sí"
+User: "Yes"
 
 — STEP 1: Research —
 talk_to(agent="etalides", ...) → returns FCM vs OneSignal comparison
 
 Hermes presents to user:
-"Etalides encontró dos opciones principales:
-  - FCM (Firebase): gratuito, más control, requiere Google account
-  - OneSignal: más fácil setup, plan free hasta 10k subs, SaaS
-  ¿Cuál prefieres?"
+"Etalides found two main options:
+  - FCM (Firebase): free, more control, requires Google account
+  - OneSignal: easier setup, free plan up to 10k subs, SaaS
+  Which do you prefer?"
 
-User: "OneSignal por simplicidad"
+User: "OneSignal for simplicity"
 
 — STEP 2: UX Design —
 talk_to(agent="daedalus", action="message", prompt="""
@@ -442,7 +442,7 @@ talk_to(agent="athena", ...) → security review of OneSignal integration
 — STEP 4: Implementation —
 talk_to(agent="hefesto", ...) → implement with Daedalus spec + Athena findings
 
-Hermes to user: "Sistema implementado. Athena encontró [X]. Daedalus diseñó [Y]. Hefesto implementó [Z]. ¿Revisamos juntos?"
+Hermes to user: "System implemented. Athena found [X]. Daedalus designed [Y]. Hefesto implemented [Z]. Shall we review together?"
 ```
 
 ---
@@ -460,16 +460,16 @@ OUTPUT FORMAT: Status / Blockers / Next Steps / Last Session (1 paragraph)
 """)
 
 Ariadna returns:
-Status: ejecución — implementing auth module
+Status: execution — implementing auth module
 Blockers: None active. Risk: Stripe webhook timeout under load (since yesterday)
 Next Steps: 1. Complete auth middleware 2. Integration tests 3. Staging deploy
 Last Session: Implemented magic link token generation and email send. Hefesto completed backend. Frontend pending.
 
 Hermes to user:
-"Bienvenido de regreso. El proyecto está en fase de ejecución del módulo de auth.
-Pendiente: middleware de auth, tests de integración, y deploy a staging.
-Hay un riesgo abierto: timeout del webhook de Stripe bajo carga (sin blocker aún).
-¿Seguimos con el middleware de auth o prefieres revisar el riesgo del webhook primero?"
+"Welcome back. The project is in the execution phase of the auth module.
+Pending: auth middleware, integration tests, and staging deploy.
+There's an open risk: Stripe webhook timeout under load (not a blocker yet).
+Shall we continue with the auth middleware or would you prefer to review the webhook risk first?"
 ```
 
 ---
