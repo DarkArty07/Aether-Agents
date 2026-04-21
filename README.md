@@ -1,12 +1,12 @@
 # Aether Agents
 
-A multi-agent system built on the **hermes-agent** framework that orchestrates 6 specialized Daimons for collaborative software development.
+A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 6 specialized Daimons for collaborative software development.
 
 ---
 
 ## What is Aether Agents?
 
-Aether Agents is an AI agent ecosystem that works in a coordinated way to assist in software development. The system consists of:
+Aether Agents is an AI agent ecosystem where specialized agents work in coordination to assist in software development. The system consists of:
 
 - **Hermes**: The main orchestrator that coordinates all Daimons
 - **6 Daimons**: Specialized agents in different areas (management, development, research, design, security)
@@ -20,18 +20,44 @@ Each Daimon has its own configuration profile, assigned AI model, and specific t
 
 ---
 
-## The 6 Daimons
+## Provider-Agnostic by Design
 
-| Daimon | Role | Suggested Model | Tools |
-|--------|------|-----------------|-------|
-| **Hermes** | Orchestrator | `glm-5.1` (z.ai) | hermes-agent |
-| **Ariadna** | Project Manager | `kimi-k2.5` (opencode.go) | opencode-go |
-| **Hefesto** | Senior Developer | `glm-5.1` (z.ai) | opencode-go |
-| **Etalides** | Web Researcher | `minimax-m2.7` (opencode.go) | opencode-go |
-| **Daedalus** | UX/UI Designer | `mimo-v2-omni` (opencode.go) | opencode-go |
-| **Athena** | Security Engineer | `kimi-k2.6` (opencode.go) | opencode-go |
+Aether Agents does **not** depend on any specific AI model or provider. Every Daimon can use any model supported by your configured provider. The system works with:
 
-> **Note on models**: The models listed above are tested suggestions that performed well for each role in our testing. They are not hard requirements — you can assign any model supported by the configured provider. We recommend evaluating models with domain-specific prompts before assigning them to each Daimon.
+- OpenAI (GPT-4o, o3, etc.)
+- Anthropic (Claude 4, Sonnet, etc.)
+- Google (Gemini 2.5 Pro, Flash, etc.)
+- Chinese providers (GLM, Kimi, MiniMax, DeepSeek, Qwen, etc.)
+- Local models via OpenAI-compatible endpoints (Ollama, vLLM, etc.)
+- Any OpenAI-compatible API
+
+### Model Selection Guide
+
+Different roles benefit from different model strengths. Here's guidance for assigning models:
+
+| Role | Priority | What to look for |
+|------|----------|-----------------|
+| **Hermes** (Orchestrator) | Power | The most capable model available. Needs strong reasoning, planning, and tool use. This is the brain of the system. |
+| **Hefesto** (Developer) | Power + code | A powerful coding model. Can use a lighter variant of Hermes' model, but code quality scales directly with model capability. |
+| **Ariadna** (Project Manager) | Structured output | A model good at structured data, planning, and consistency. Doesn't need frontier-level reasoning. |
+| **Daedalus** (UX/UI Designer) | Frontend strength | A model with strong frontend knowledge — HTML, CSS, design patterns, accessibility. |
+| **Etalides** (Researcher) | Instruction following | A model that follows structured output formats precisely and stays within constraints (link budgets, no opinions). |
+| **Athena** (Security) | Depth + precision | A model with strong security knowledge — threat modeling, OWASP, CVE analysis. Needs to be thorough, not creative. |
+
+### Example Configuration
+
+The table below shows one tested configuration using cost-effective Chinese models. These are **suggestions**, not requirements:
+
+| Daimon | Tested Model | Why it worked |
+|--------|-------------|---------------|
+| **Hermes** | `glm-5.1` (zhipuai) | Strong reasoning and tool use at low cost |
+| **Hefesto** | `glm-5.1` (zhipuai) | Excellent code generation |
+| **Ariadna** | `kimi-k2.5` (moonshot) | Good at structured output and planning |
+| **Etalides** | `minimax-m2.7` (minimax) | Follows output format constraints well |
+| **Daedalus** | `mimo-v2-omni` (mimo) | Strong frontend/design knowledge |
+| **Athena** | `kimi-k2.6` (moonshot) | Good security analysis depth |
+
+> **Why Chinese models?** They offer competitive capability at significantly lower cost per token, making multi-agent workflows economically viable. If budget is not a concern, GPT-4o and Claude Sonnet are excellent choices for all roles.
 
 ### Role descriptions
 
@@ -72,6 +98,10 @@ Aether-Agents/
 │   ├── configure.sh               # Generates config.yaml from templates
 │   └── start.sh                   # Verifies ecosystem and shows instructions
 │
+├── docs/
+│   └── guides/
+│       └── USER_PROFILE.md        # How to configure your personal preferences
+│
 ├── .eter/                         # Project state (gitignored)
 │   ├── .hermes/                   # DESIGN.md + PLAN.md
 │   └── .ariadna/                  # CURRENT.md + LOG.md
@@ -103,13 +133,13 @@ pip install -e .
 Each Daimon profile has its own `.env.example` with the variables it needs. Copy and fill in your API keys:
 
 ```bash
-# Example for Ariadna
-cp home/profiles/ariadna/.env.example home/profiles/ariadna/.env
+# Example for a profile using OpenAI
+cp home/profiles/hermes/.env.example home/profiles/hermes/.env
 # Edit with your keys
-nano home/profiles/ariadna/.env
+nano home/profiles/hermes/.env
 ```
 
-Repeat for each profile you want to use.
+Repeat for each profile you want to use. The variables depend on which provider you choose — check each `.env.example` for details.
 
 ---
 
@@ -117,14 +147,19 @@ Repeat for each profile you want to use.
 
 ### API Keys
 
-API keys depend on the model providers you choose for each Daimon. Configure keys in each profile's `.env` file:
+API keys depend on the model providers you choose for each Daimon. Configure keys in each profile's `.env` file.
 
-| Example variable | Provider | Typical profiles |
-|------------------|----------|------------------|
-| `GLM_API_KEY` | z.ai | Hermes, Hefesto |
-| `OPENCODE_GO_API_KEY` | opencode.go | Ariadna, Etalides, Daedalus, Athena |
+**Common providers:**
 
-> These variables are examples based on the suggested models. If you use other providers, configure the corresponding variables.
+| Provider | Example variable | Get your key |
+|----------|-----------------|--------------|
+| OpenAI | `OPENAI_API_KEY` | https://platform.openai.com |
+| Anthropic | `ANTHROPIC_API_KEY` | https://console.anthropic.com |
+| Zhipu AI | `GLM_API_KEY` | https://open.bigmodel.cn |
+| Moonshot | `MOONSHOT_API_KEY` | https://platform.moonshot.cn |
+| OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai |
+
+> This is not an exhaustive list. Any provider with an OpenAI-compatible API works.
 
 ### HERMES_HOME
 
@@ -183,6 +218,12 @@ Skills are discovered automatically by the framework. No additional configuratio
 
 ---
 
+## User Profile
+
+Each user can personalize their experience via `USER.md`. See [docs/guides/USER_PROFILE.md](docs/guides/USER_PROFILE.md) for the full guide on how to configure language preferences, workflow style, and communication settings.
+
+---
+
 ## talk_to — Session Lifecycle
 
 The orchestrator communicates with Daimons using this flow:
@@ -233,4 +274,4 @@ pip install -e .
 
 ## License
 
-Private project. All rights reserved.
+MIT License. See [LICENSE](LICENSE) for details.
