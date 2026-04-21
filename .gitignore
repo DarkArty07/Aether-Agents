@@ -6,8 +6,6 @@
 .env
 *.env
 !.env.example
-!env.base.example
-shared/env.base
 
 # --- Runtime (auto-generated) ---
 home/sessions/
