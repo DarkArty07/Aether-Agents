@@ -107,7 +107,7 @@ CONSTRAINTS:
 Standard mode (10 links max). Web sources only. No opinions or recommendations.
 
 OUTPUT FORMAT:
-Use the standard Etalides format: Hallazgos / Fuentes / Confianza / Límites encontrados.
+Use the standard Etalides format: Findings / Sources / Confidence / Limitations.
 """
 )
 ```
@@ -169,7 +169,7 @@ When a task needs 2+ Daimons:
 Every project tracked by Aether uses a `.eter/` directory at the project root. This is the persistence layer — where project state lives between sessions.
 
 ```
-PROYECTO/.eter/
+PROJECT/.eter/
 ├── .hermes/        ← DESIGN.md + PLAN.md
 ├── .ariadna/       ← CURRENT.md + LOG.md
 ├── .hefesto/       ← TASKS.md
@@ -272,7 +272,7 @@ CONSTRAINTS:
 Standard mode (10 links max). Only factual data. No recommendations.
 
 OUTPUT FORMAT:
-Standard Etalides format: Hallazgos / Fuentes / Confianza / Límites encontrados.
+Standard Etalides format: Findings / Sources / Confidence / Limitations.
 """)
 
 After receiving result:
