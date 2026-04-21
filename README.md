@@ -1,6 +1,6 @@
 # Aether Agents
 
-Sistema multi-agente basado en el framework **hermes-agent** (Nous Research) que orquesta 6 Daimons especializados para desarrollo de software colaborativo.
+Sistema multi-agente basado en el framework **hermes-agent** que orquesta 6 Daimons especializados para desarrollo de software colaborativo.
 
 ---
 
@@ -22,14 +22,16 @@ Cada Daimon tiene su propio perfil de configuración, modelo de IA asignado y he
 
 ## Los 6 Daimons
 
-| Daimon | Rol | Modelo | Herramientas |
-|--------|-----|--------|--------------|
-| **Hermes** | Orchestrator | `glm-5.1` (z.ai) | hermes-agent, opencode-go |
+| Daimon | Rol | Modelo sugerido | Herramientas |
+|--------|-----|-----------------|--------------|
+| **Hermes** | Orchestrator | `glm-5.1` (z.ai) | hermes-agent |
 | **Ariadna** | Project Manager | `kimi-k2.5` (opencode.go) | opencode-go |
 | **Hefesto** | Senior Developer | `glm-5.1` (z.ai) | opencode-go |
 | **Etalides** | Web Researcher | `minimax-m2.7` (opencode.go) | opencode-go |
 | **Daedalus** | UX/UI Designer | `mimo-v2-omni` (opencode.go) | opencode-go |
 | **Athena** | Security Engineer | `kimi-k2.6` (opencode.go) | opencode-go |
+
+> **Nota sobre modelos**: Los modelos listados son sugerencias probadas que funcionaron bien para cada rol en nuestras pruebas. No son requisitos obligatorios — puedes asignar cualquier modelo que soporte el proveedor configurado. Te recomendamos evaluar modelos con prompts de dominio antes de asignarlos a cada Daimon.
 
 ### Descripción de roles
 
@@ -47,7 +49,7 @@ Cada Daimon tiene su propio perfil de configuración, modelo de IA asignado y he
 ```
 Aether-Agents/
 ├── home/                          # HERMES_HOME del proyecto
-│   ├── config.yaml                # Config del orquestador (glm-5.1 via z.ai)
+│   ├── config.yaml                # Config del orquestador
 │   ├── profiles/
 │   │   ├── hermes/                # Orchestrator
 │   │   ├── ariadna/               # Project Manager
@@ -80,7 +82,7 @@ Aether-Agents/
 │   ├── setup-env.sh               # Genera .env por perfil
 │   └── start.sh                   # Verifica ecosistema y muestra instrucciones
 │
-├── .eter/                         # Estado del proyecto (Ariadna tracking)
+├── .eter/                         # Estado del proyecto (gitignored)
 │   ├── .hermes/                   # DESIGN.md + PLAN.md
 │   └── .ariadna/                  # CURRENT.md + LOG.md
 │
@@ -91,68 +93,53 @@ Aether-Agents/
 
 ## Instalación
 
-### 1. Copiar el proyecto a WSL
-
-Desde PowerShell o CMD en Windows:
-
-```powershell
-# Opción A: Copiar toda la carpeta
-xcopy /E /I "C:\Users\chris\Desktop\DEVELOPERSPROJECTS\Aether-Agents" "%USERPROFILE%\Aether-Agents"
-
-# Opción B: Usar rsync desde WSL
-rsync -av /mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/ ~/Aether-Agents/
-```
-
-### 2. Verificar la copia en WSL
+### 1. Clonar el repositorio
 
 ```bash
-cd ~/Aether-Agents
-ls -la
+git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
 ```
 
-Deberías ver todas las carpetas y archivos del proyecto.
+### 2. Crear entorno virtual e instalar dependencias
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+```
+
+### 3. Configurar variables de entorno
+
+El proyecto usa `shared/env.base` como template. Ejecuta el script de setup para generar los `.env` de cada perfil:
+
+```bash
+bash scripts/setup-env.sh
+```
+
+Luego edita cada `.env` en `home/profiles/<daimon>/` con tus API keys según los modelos que hayas elegido.
 
 ---
 
 ## Configuración
 
-### 1. Variables de entorno
+### API Keys
 
-El proyecto usa `shared/env.base` como template. Copia y configura tu `.env`:
+Las API keys dependen de los proveedores de los modelos que elijas para cada Daimon. Configura las keys en el `.env` de cada perfil:
 
-```bash
-cd ~/Aether-Agents
-cp shared/env.base .env
-```
-
-Edita `.env` con tus API keys:
-
-```bash
-# API Keys requeridas
-GLM_API_KEY=tu_api_key_de_z_ai
-OPENCODE_GO_API_KEY=tu_api_key_de_opencode_go
-
-# Configuración del proyecto
-HERMES_HOME=~/Aether-Agents/home
-AETHER_PROJECT_ROOT=~/Aether-Agents
-```
-
-### 2. API Keys necesarias
-
-| Variable | Proveedor | Usado por |
-|----------|-----------|-----------|
+| Variable de ejemplo | Proveedor | Perfiles típicos |
+|---------------------|-----------|------------------|
 | `GLM_API_KEY` | z.ai | Hermes, Hefesto |
 | `OPENCODE_GO_API_KEY` | opencode.go | Ariadna, Etalides, Daedalus, Athena |
 
-Obtén tus keys en:
-- z.ai: https://z.ai/api
-- opencode.go: https://opencode.go/api
+> Estas variables son ejemplos basados en los modelos sugeridos. Si usas otros proveedores, configura las variables correspondientes.
 
-### 3. Configurar HERMES_HOME
+### HERMES_HOME
 
-HERMES_HOME debe apuntar a la carpeta `home/` del proyecto. Esto aísla la configuración de Aether Agents de tu instalación global de hermes-agent.
+`HERMES_HOME` debe apuntar a la carpeta `home/` del proyecto. Esto aísla la configuración de Aether Agents de tu instalación global de hermes-agent.
 
-**Importante**: `~/.hermes/` NO se toca — es la herramienta de trabajo personal de Christopher.
+```bash
+export HERMES_HOME=~/Aether-Agents/home
+```
 
 ---
 
@@ -162,28 +149,22 @@ HERMES_HOME debe apuntar a la carpeta `home/` del proyecto. Esto aísla la confi
 
 ```bash
 cd ~/Aether-Agents
+source venv/bin/activate
 bash scripts/start.sh
 ```
-
-Este script verifica que el ecosistema esté configurado correctamente y muestra las instrucciones de inicio.
 
 ### Opción B: Inicio manual
 
 ```bash
-# Cargar variables de entorno
-source .env
-
-# Iniciar Hermes (orquestador)
+cd ~/Aether-Agents
+source venv/bin/activate
 HERMES_HOME=~/Aether-Agents/home hermes --profile hermes
 ```
 
-### Opción C: Iniciar un Daimon específico
+### Iniciar un Daimon específico (para testing)
 
 ```bash
-# Iniciar Hefesto (desarrollador)
 HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
-
-# Iniciar Ariadna (project manager)
 HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna
 ```
 
@@ -214,118 +195,27 @@ external_dirs:
   - ~/Aether-Agents/skills/aether-agents/<workflow-name>/
 ```
 
-### Ejecutar un skill
-
-Desde la sesión de Hermes:
-
-```
-hermes> run skill <nombre-del-skill> [argumentos]
-```
-
-O delegar a un Daimon específico:
-
-```
-hermes> talk_to hefesto "implementa esta feature usando hefesto-workflow"
-```
-
 ---
 
-## Convención de Parches (Workflow Windows ↔ WSL)
+## talk_to — Ciclo de vida de sesiones
 
-Este proyecto usa un flujo de trabajo híbrido entre Windows y WSL:
-
-### Regla de oro
+El orquestador se comunica con los Daimons usando este flujo:
 
 ```
-Editar código → Windows (/mnt/c/.../Aether-Agents/)
-Probar → WSL (~/Aether-Agents/)
-Parches en WSL → copiar de vuelta a Windows
+discover → open → message → poll (o wait) → close
 ```
 
-### Flujo completo
+| Acción | Descripción |
+|--------|-------------|
+| `discover` | Lista agentes disponibles |
+| `open` | Spawnea el Daimon (si está muerto) y crea una sesión ACP |
+| `message` | Envía un prompt (async, retorna inmediatamente) |
+| `poll` | Consulta progreso — thoughts, mensajes, tool calls |
+| `wait` | Bloquea hasta que termine (máx 300s) |
+| `cancel` | Aborta una sesión en curso |
+| `close` | Cierra la sesión; el proceso del agente se mantiene vivo |
 
-1. **Editar en Windows**
-   - Abre tu editor favorito en Windows (VS Code, etc.)
-   - Trabaja en: `C:\Users\chris\Desktop\DEVELOPERSPROJECTS\Aether-Agents\`
-
-2. **Probar en WSL**
-   ```bash
-   cd ~/Aether-Agents
-   # Ejecutar tests, iniciar agentes, verificar cambios
-   bash scripts/start.sh
-   ```
-
-3. **Sincronizar cambios de vuelta**
-   
-   Si hiciste cambios directamente en WSL (parches, configuraciones):
-   ```bash
-   # Desde WSL, copiar cambios a Windows
-   rsync -av ~/Aether-Agents/ /mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/
-   ```
-
-   O desde PowerShell en Windows:
-   ```powershell
-   # Los cambios en WSL ya son visibles en Windows automáticamente
-   # porque ~/Aether-Agents/ está en el filesystem de WSL
-   # Si necesitas copiar explícitamente:
-   wsl rsync -av ~/Aether-Agents/ /mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/
-   ```
-
-### Usando patch tool para edits
-
-Para edits específicos en WSL:
-
-```bash
-# Navegar al proyecto
-cd ~/Aether-Agents
-
-# Usar la herramienta patch para edits seguros
-# (si estás usando un agente que soporta patch)
-```
-
-### Estado del proyecto
-
-El tracking del proyecto se mantiene en `.eter/`:
-
-```
-.eter/
-├── .hermes/
-│   ├── DESIGN.md    # Diseño del sistema
-│   └── PLAN.md      # Planificación de features
-└── .ariadna/
-    ├── CURRENT.md   # Estado actual del proyecto
-    └── LOG.md       # Log de actividades
-```
-
----
-
-## Comandos Útiles
-
-```bash
-# Navegar al proyecto en WSL
-cd ~/Aether-Agents
-
-# Verificar configuración
-bash scripts/start.sh
-
-# Generar .env para un perfil específico
-bash scripts/setup-env.sh hermes
-
-# Iniciar orquestador
-HERMES_HOME=~/Aether-Agents/home hermes --profile hermes
-
-# Iniciar Daimon específico
-HERMES_HOME=~/Aether-Agents/home hermes --profile <daimon>
-
-# Ver logs
-tail -f ~/Aether-Agents/home/logs/*.log
-
-# Sincronizar Windows → WSL
-rsync -av /mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/ ~/Aether-Agents/
-
-# Sincronizar WSL → Windows
-rsync -av ~/Aether-Agents/ /mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/
-```
+Los Daimons son **keep-alive** — se spawnean en el primer `open` y se mantienen vivos entre sesiones.
 
 ---
 
@@ -338,11 +228,8 @@ export HERMES_HOME=~/Aether-Agents/home
 
 ### API keys faltantes
 ```bash
-# Verificar .env
-cat .env | grep API_KEY
-
-# Recargar variables
-source .env
+cat home/profiles/hermes/.env
+# Editar con tus keys
 ```
 
 ### Permisos de scripts
@@ -352,8 +239,7 @@ chmod +x scripts/*.sh
 
 ### Olympus MCP no disponible
 ```bash
-# Instalar desde pyproject.toml
-cd src/olympus
+source venv/bin/activate
 pip install -e .
 ```
 
@@ -361,10 +247,4 @@ pip install -e .
 
 ## Licencia
 
-Proyecto interno de desarrollo. Todos los derechos reservados.
-
----
-
-## Contacto
-
-Para preguntas o soporte, contactar al maintainer del proyecto.
+Proyecto privado. Todos los derechos reservados.
