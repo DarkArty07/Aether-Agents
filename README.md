@@ -24,9 +24,9 @@ Each Daimon has its own configuration profile, assigned AI model, and specific t
 
 Aether Agents does **not** depend on any specific AI model or provider. Every Daimon can use any model supported by your configured provider. The system works with:
 
-- OpenAI (GPT-4o, o3, etc.)
-- Anthropic (Claude 4, Sonnet, etc.)
-- Google (Gemini 2.5 Pro, Flash, etc.)
+- OpenAI (GPT)
+- Anthropic (Claude)
+- Google (Gemini)
 - Chinese providers (GLM, Kimi, MiniMax, DeepSeek, Qwen, etc.)
 - Local models via OpenAI-compatible endpoints (Ollama, vLLM, etc.)
 - Any OpenAI-compatible API
@@ -57,7 +57,7 @@ The table below shows one tested configuration using cost-effective Chinese mode
 | **Daedalus** | `mimo-v2-omni` (mimo) | Strong frontend/design knowledge |
 | **Athena** | `kimi-k2.6` (moonshot) | Good security analysis depth |
 
-> **Why Chinese models?** They offer competitive capability at significantly lower cost per token, making multi-agent workflows economically viable. If budget is not a concern, GPT-4o and Claude Sonnet are excellent choices for all roles.
+> **Why Chinese models?** They offer competitive capability at significantly lower cost per token, making multi-agent workflows economically viable. If budget is not a concern, GPT, Claude, and Gemini are excellent choices for all roles.
 
 ### Role descriptions
 
