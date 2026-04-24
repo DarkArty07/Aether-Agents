@@ -189,6 +189,11 @@ class ACPManager:
         if command == "hermes":
             command = hermes_bin
 
+        # Add --profile flag so hermes CLI doesn't fall back to active_profile
+        # (which would override HERMES_HOME and load the wrong SOUL.md)
+        if "--profile" not in args and "-p" not in args:
+            args = args + ["--profile", agent.name]
+
         # Set HERMES_HOME to the profile directory
         env_extra = {
             "HERMES_HOME": str(profile.profile_path),

@@ -228,12 +228,26 @@ done
 
 ### 12. MCP Tools Not Propagating to LLM Context
 
-**Problem:** `mcp_olympus_talk_to` and `mcp_olympus_discover` are registered at agent startup (visible in agent.log: "MCP server 'olympus' registered 6 tool(s)") but are NOT available in the LLM's tool schema in delegated/ACP execution contexts. The main Hermes agent process registers them, but sub-agents or ACP-invoked sessions don't receive these MCP tools in their toolset.
+### 12. MCP Tools Not Propagating to LLM Context
+
+**Problem:** MCP server tools (e.g., `mcp_olympus_talk_to`, `mcp_olympus_discover`) are registered at agent startup (visible in agent.log) but are NOT available in the LLM's tool schema in ACP sessions or delegated contexts. This is an **upstream bug in hermes-agent SDK** (not in Aether or Olympus).
+
+**Upstream issue:** [NousResearch/hermes-agent#14986](https://github.com/NousResearch/hermes-agent/issues/14986)
 
 **Symptoms:**
 - `talk_to` and `discover` appear in agent.log as registered
 - But the LLM doesn't see them as callable tools (not in tool schema sent to model)
-- `delegate_task` also lacks access to Olympus MCP tools
+- `delegate_task` sub-agents also lack access to MCP tools
+
+**Root cause — 5 interconnected gaps:**
+
+| # | File | Line | Bug |
+|---|------|------|-----|
+| 1 | `acp_adapter/session.py` | 542 | `enabled_toolsets=["hermes-acp"]` hardcoded — no MCP toolsets |
+| 2 | `toolsets.py` | 241-258 | `hermes-acp` toolset is static list, `"includes": []` — no MCP references |
+| 3 | `acp_adapter/server.py` | 290 | After MCP registration, refreshes with `["hermes-acp"]` — discards MCP tools |
+| 4 | `model_tools.py` | 223-227 | `get_tool_definitions()` only resolves explicit toolsets, skips dynamic MCP ones |
+| 5 | `tools/delegate_tool.py` | 60-67 | `_SUBAGENT_TOOLSETS` evaluated at import time before MCP discovery; children inherit `["hermes-acp"]` |
 
 **Diagnosis:**
 ```bash
@@ -243,19 +257,108 @@ grep "mcp_olympus" $HERMES_HOME/logs/agent.log | tail -5
 
 # 2. Verify Olympus process is running
 ps aux | grep olympus | grep -v grep
-# Should show at least one process
 
-# 3. The gap: tools registered in agent process != tools in LLM tool schema
-# This is a hermes-agent framework issue — MCP tools may not be included
-# in the tool config passed to sub-agents or ACP sessions
+# 3. Verify the gap: check if hermes-acp toolset includes MCP tools
+# In Python (using hermes venv):
+$HOME/.hermes/hermes-agent/venv/bin/python -c "
+from toolsets import TOOLSETS
+acp = TOOLSETS.get('hermes-acp', {})
+mcp_tools = [t for t in acp.get('tools', []) if t.startswith('mcp_')]
+print(f'MCP tools in hermes-acp: {mcp_tools}')  # Should show [] — that's the bug
+"
 ```
 
-**Possible causes:**
-- MCP tool registration happens at agent startup but the tool schema for ACP sessions is built before MCP tools are hydrated
-- Sub-agents spawned by `delegate_task` don't inherit MCP tool configs from parent
-- The ACP session's system prompt/tool list doesn't include MCP-registered tools
+**Patches APPLIED LOCALLY (2026-04-25, will be overwritten on hermes-agent update):**
 
-**Fix:** This requires a code change in hermes-agent's tool discovery/ACP session setup to ensure MCP tools are included in the tool schema for all execution contexts, not just the primary agent loop.
+All three patches have been applied to `~/.hermes/hermes-agent/`:
+
+1. `acp_adapter/session.py:540+` — discovers MCP toolsets from registry and adds to `enabled_toolsets` at session creation
+2. `acp_adapter/server.py:290+` — includes MCP toolsets in tool surface refresh after MCP registration
+3. `tools/delegate_tool.py:60+` — `_SUBAGENT_TOOLSETS` is now lazy via `_get_subagent_toolsets()`, includes dynamic MCP toolsets from registry
+
+**Upstream issue:** https://github.com/NousResearch/hermes-agent/issues/14986
+state.agent.tools = get_tool_definitions(enabled_toolsets=all_toolsets, ...)
+```
+
+*Fix C (Delegation):* Make `_SUBAGENT_TOOLSETS` lazy/dynamic to include MCP toolsets discovered at runtime.
+
+**Applied local patches (will be overwritten on hermes-agent update):**
+
+Patch 1 — `~/.hermes/hermes-agent/acp_adapter/session.py` (~line 540):
+```python
+# BEFORE:
+kwargs = {
+    "platform": "acp",
+    "enabled_toolsets": ["hermes-acp"],
+    ...
+}
+# AFTER:
+try:
+    from tools.registry import registry
+    mcp_toolsets = sorted(
+        ts for ts in registry.get_registered_toolset_names()
+        if ts.startswith("mcp-")
+    )
+except Exception:
+    mcp_toolsets = []
+kwargs = {
+    "platform": "acp",
+    "enabled_toolsets": ["hermes-acp"] + mcp_toolsets,
+    ...
+}
+```
+
+Patch 2 — `~/.hermes/hermes-agent/acp_adapter/server.py` (~line 290):
+```python
+# BEFORE:
+enabled_toolsets = getattr(state.agent, "enabled_toolsets", None) or ["hermes-acp"]
+disabled_toolsets = getattr(state.agent, "disabled_toolsets", None)
+# AFTER:
+enabled_toolsets = getattr(state.agent, "enabled_toolsets", None) or ["hermes-acp"]
+disabled_toolsets = getattr(state.agent, "disabled_toolsets", None)
+try:
+    from tools.registry import registry as _reg
+    mcp_ts = [ts for ts in _reg.get_registered_toolset_names() if ts.startswith("mcp-")]
+    enabled_toolsets = sorted(set(list(enabled_toolsets) + mcp_ts))
+except Exception:
+    pass
+```
+
+Patch 3 — `~/.hermes/hermes-agent/tools/delegate_tool.py` (~line 60):
+```python
+# BEFORE:
+_SUBAGENT_TOOLSETS = sorted(
+    name for name, defn in TOOLSETS.items()
+    if name not in _EXCLUDED_TOOLSET_NAMES
+    and not name.startswith("hermes-")
+    and not all(t in DELEGATE_BLOCKED_TOOLS for t in defn.get("tools", []))
+)
+_TOOLSET_LIST_STR = ", ".join(f"'{n}'" for n in _SUBAGENT_TOOLSETS)
+# AFTER:
+def _get_subagent_toolsets():
+    base = sorted(
+        name for name, defn in TOOLSETS.items()
+        if name not in _EXCLUDED_TOOLSET_NAMES
+        and not name.startswith("hermes-")
+        and not all(t in DELEGATE_BLOCKED_TOOLS for t in defn.get("tools", []))
+    )
+    try:
+        from tools.registry import registry
+        mcp_ts = [ts for ts in registry.get_registered_toolset_names()
+                   if ts.startswith("mcp-") and ts not in _EXCLUDED_TOOLSET_NAMES]
+        base = sorted(set(base) | set(mcp_ts))
+    except Exception:
+        pass
+    return base
+
+def _get_toolset_list_str():
+    return ", ".join(f"'{n}'" for n in _get_subagent_toolsets())
+
+_SUBAGENT_TOOLSETS = _get_subagent_toolsets()
+_TOOLSET_LIST_STR = _get_toolset_list_str()
+```
+
+**⚠️ These patches are in `~/.hermes/hermes-agent/` (installed package) and will be lost on `pip install --upgrade` or `uv sync`.** Re-apply after updating hermes-agent, or check if upstream #14986 is fixed first.
 
 ### 13. delegate_task API Key Propagation
 
@@ -392,5 +495,6 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
 - **YAML validation catches silent errors**: `skills: []` parses OK but breaks at runtime. Use `yaml.safe_load()` to verify configs. System Python may lack `yaml` — use hermes-agent venv Python.
 - **Daimons write .eter/ files at correct path**: `olympus/config.py` computes `project_root = aether_home.parent`, and `acp_client.py` uses this as the Daimon working directory. If you find `.eter/` inside the `home/` directory, your installation predates the fix — migrate with `mv home/.eter .eter`.
 - **project_root derivation**: The current code derives `project_root = aether_home.parent`, which is correct for the standard layout where Aether-Agents IS the project. When working on external projects (Artemisa, Zeus), you must ensure `PROJECT_ROOT` in the Daimon prompt points to the correct external project so Daimons write `.eter/` to the right place — not into the Aether-Agents repo. Pass `PROJECT_ROOT: /path/to/external/project` explicitly in every delegation prompt.
-- **MCP tools don't propagate to sub-agents**: MCP servers are registered at agent startup and included in the main agent's tool schema. But `delegate_task` sub-agents and ACP-invoked contexts don't inherit these MCP tools. If you're in a context where `talk_to` isn't available, this is why. The tools exist — they just aren't passed through.
+- **MCP tools don't propagate to sub-agents**: Fixed locally (2026-04-25) with 3 patches to hermes-agent. Upstream issue #14986 pending. Patches will be lost on update — reapply if upstream hasn't fixed it yet.
+- **Daimons identify as Hermes (SOUL.md not loading)**: Fixed in `src/olympus/acp_client.py` (2026-04-25). Root cause: hermes CLI's `_apply_profile_override()` reads `active_profile` file and overwrites `HERMES_HOME`, ignoring the env var set by Olympus. Fix: added `--profile <agent_name>` to spawn command so the CLI resolves the correct profile. Without this, all Daimons load Hermes's config/SOUL.md.
 - **Fire-and-forget is not the only pattern**: The orchestration skill enforces `open → message → wait → close` but MCP supports `open → message → poll → message → poll → message → close` (multi-turn within session). Don't assume Daimons can only receive one prompt per session — keep-alive means the session persists and context carries over between messages.

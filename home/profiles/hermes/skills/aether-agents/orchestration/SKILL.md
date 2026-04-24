@@ -17,7 +17,7 @@ Before responding to any user request, check:
 - [ ] **Does this involve web research (more than a quick fact check)?** → talk_to(agent="etalides")
 - [ ] **Does this involve UX/UI design, layouts, user flows?** → talk_to(agent="daedalus")
 - [ ] **Does this involve security, threat modeling, vulnerability review?** → talk_to(agent="athena")
-- [ ] **Does this involve project status, sprint tracking, session state?** → talk_to(agent="ariadna")
+- [ ] **Does this involve a complex multi-step pipeline requiring loops (e.g. dev+audit)?** → run_workflow(workflow="dev_and_audit")
 - [ ] **Is this a simple operational task (< 3 steps)?** → delegate_task (no specialist needed)
 
 If ANY check is YES → DELEGATE, do NOT execute yourself.
@@ -74,6 +74,7 @@ User sends request
 | Need UX design, flows, prototypes, design review | Daedalus | `talk_to` |
 | Need security review, threat model, dependency audit | Athena | `talk_to` |
 | Need project status, blockers, sprint tracking | Ariadna | `talk_to` |
+| Complex multi-step task requiring loops (dev+audit) | LangGraph | `run_workflow` |
 | Simple operational task (run command, read file, format data) | — | `delegate_task` |
 | Session start → get context | Ariadna | `talk_to` |
 | Session end → save state | Ariadna | `talk_to` |
@@ -190,6 +191,18 @@ When a task needs 2+ Daimons:
 ```
 
 **Gate rule:** After each Daimon returns, present the result to the user. Get explicit approval before triggering the next Daimon. Never chain Daimons without user visibility.
+
+### Automated Workflows
+
+If the task fits a standard pattern, you can use `run_workflow` instead of manual coordination.
+
+- `dev_and_audit`: design → implement ↔ audit → finalize (Loops automatically until audit passes)
+- `research_and_implement`: research → design → implement → finalize
+- `full_pipeline`: research → design → implement ↔ audit → finalize
+
+```
+run_workflow(workflow="dev_and_audit", prompt="Implement login with JWT in Python")
+```
 
 ---
 
