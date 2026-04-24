@@ -54,6 +54,10 @@ web:
   backend: exa
 
 display:
+  # IMPORTANT: Set personality to "none" for Aether Agents.
+  # The personality overlay conflicts with SOUL.md agent identities.
+  # See docs/guides/CONFIGURATION.md for details.
+  personality: none
   show_reasoning: false
   streaming: false
 
