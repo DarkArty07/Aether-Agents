@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Dict, Any
 
-from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 from langchain_core.utils.uuid import uuid7
 
@@ -15,10 +14,10 @@ from ..registry import OlympusRegistry
 logger = logging.getLogger("olympus.workflows.runner")
 
 class WorkflowRunner:
-    def __init__(self, registry: OlympusRegistry, acp_manager: ACPManager, checkpointer=None):
+    def __init__(self, registry: OlympusRegistry, acp_manager: ACPManager, checkpointer):
         self.registry = registry
         self.acp_manager = acp_manager
-        self.checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
+        self.checkpointer = checkpointer
 
     async def run(
         self,

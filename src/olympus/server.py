@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
@@ -32,7 +33,9 @@ from .config import get_config, reset_config, OlympusConfig
 from .discovery import discover_agents
 from .registry import AgentStatus, OlympusRegistry, SessionStatus
 from .workflows.runner import WorkflowRunner
-from langgraph.checkpoint.memory import InMemorySaver
+import sqlite3
+
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -45,7 +48,26 @@ logger = logging.getLogger("olympus")
 # Global state
 registry = OlympusRegistry()
 acp_manager: ACPManager | None = None
-_workflow_checkpointer = InMemorySaver()
+
+# Lazy-initialized SqliteSaver — created on first access so config is available
+_workflow_checkpointer: SqliteSaver | None = None
+_sqlite_conn: sqlite3.Connection | None = None
+
+
+def _get_workflow_checkpointer() -> SqliteSaver:
+    """Return (and lazily create) a persistent SqliteSaver checkpointer.
+
+    The SQLite database is stored at {AETHER_HOME}/.olympus_checkpoints.db
+    so checkpoint data survives server restarts, enabling HITL workflow resumes.
+    """
+    global _workflow_checkpointer, _sqlite_conn
+    if _workflow_checkpointer is None:
+        config = get_config()
+        db_path = str(Path(config.aether_home) / ".olympus_checkpoints.db")
+        logger.info(f"Creating persistent workflow checkpointer: {db_path}")
+        _sqlite_conn = sqlite3.connect(db_path, check_same_thread=False)
+        _workflow_checkpointer = SqliteSaver(_sqlite_conn)
+    return _workflow_checkpointer
 
 
 def create_server() -> Server:
@@ -419,7 +441,7 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
         )]
         
     config = get_config()
-    runner = WorkflowRunner(registry, acp_manager, checkpointer=_workflow_checkpointer)
+    runner = WorkflowRunner(registry, acp_manager, checkpointer=_get_workflow_checkpointer())
     
     try:
         # Run workflow, passing the project root from configuration
