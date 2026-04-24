@@ -34,4 +34,8 @@ toolsets:
 skills: {}
 
 # Session settings
+# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+display:
+  personality: none
+
 max_iterations: 80
