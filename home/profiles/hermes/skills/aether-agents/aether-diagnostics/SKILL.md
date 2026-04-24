@@ -433,7 +433,38 @@ open → message("What are 3 options?") → poll → read response
 - **Consultative**: `message → poll → refine → message → ... → close` — for design collaboration
 - **Supervisory**: `message → poll → redirect → message → close` — for course correction
 
-### 15. Daimon CWD and .eter/ Path Resolution
+### 15. Workflow Runner — `send_message` AttributeError
+
+**Status: FIXED (2026-04-26)** in `src/olympus/workflows/nodes.py` and `pyproject.toml`.
+
+**Symptom:** `run_workflow` tool returns `Error: 'ACPManager' object has no attribute 'send_message'`. Workflow completes its cycle counter but no Daimon actually runs.
+
+**Root cause — 3 bugs in `nodes.py`:**
+
+| # | Line | Bug | Fix |
+|---|------|-----|-----|
+| 1 | 18 | `acp.send_message(session_id, prompt)` — method doesn't exist on `ACPManager` | Changed to `acp.send_prompt(session.session_id, prompt)` |
+| 2 | 14-15 | `session_id = await acp.open_session(agent_name)` — `open_session` returns `SessionState`, not a string | Changed to `session = await acp.open_session(agent_name)`, use `session` object directly |
+| 3 | 20 | `acp.registry.get_session(session_id)` — redundant lookup with wrong type; `session` already holds the `SessionState` | Removed; use `session` from `open_session` directly |
+
+**Additional bug:** `langgraph` was missing from `pyproject.toml` dependencies. The workflow imports `langgraph.graph.StateGraph` and `langgraph.graph.message.add_messages` but the package wasn't listed. Added `langgraph>=0.2.0` to dependencies.
+
+**Diagnostic:** If workflows fail silently or with `AttributeError`, check:
+```bash
+# 1. Verify the fix is in place
+grep 'send_prompt' /path/to/Aether-Agents/src/olympus/workflows/nodes.py
+# Should show: await acp.send_prompt(session.session_id, prompt)
+
+# 2. Verify langgraph is installed
+pip show langgraph 2>/dev/null || echo "MISSING — install with: pip install langgraph"
+
+# 3. Verify langgraph is in pyproject.toml
+grep langgraph /path/to/Aether-Agents/pyproject.toml
+```
+
+**Key insight:** `_run_acp_session` is a synchronous-style helper that runs a full open→send→wait→collect cycle. It must use `open_session()` (which returns `SessionState`) and `send_prompt()` (which is fire-and-forget with `asyncio.create_task`), not `send_message` (which doesn't exist). The `SessionState` object has a `completion_event` that gets set when the background task finishes.
+
+### 16. Daimon CWD and .eter/ Path Resolution
 
 **Status: RESOLVED (as of 2026-04).** This bug has been fixed in `olympus/config.py`.
 
@@ -459,13 +490,99 @@ ls -la /path/to/Aether-Agents/home/.eter/ 2>/dev/null && echo "BUG STILL PRESENT
 mv /path/to/Aether-Agents/home/.eter /path/to/Aether-Agents/.eter
 ```
 
+### 17. Daimon Identity — SOUL.md Not Loading (Wrong Profile)
+
+**Status: FIXED (2026-04-25)** in `src/olympus/acp_client.py`.
+
+**Symptom:** All Daimons respond as "Hermes" — they use Hermes's SOUL.md, config, and identity instead of their own.
+
+**Root cause — three-layer failure:**
+
+1. **Olympus spawns without `--profile` flag:** `acp_client.py` spawned `hermes acp` with only `HERMES_HOME` env var set. The hermes CLI's `_apply_profile_override()` (line ~99 in `hermes_cli/main.py`) runs at startup BEFORE any module imports and reads `<hermes_root>/active_profile` to resolve the profile. It overwrites `os.environ["HERMES_HOME"]` with the resolved profile path.
+
+2. **`active_profile` is sticky:** The file `<hermes_root>/active_profile` contains `hermes` (written by `hermes profile use hermes`). When Olympus sets `HERMES_HOME=/path/to/profiles/ariadna` but doesn't pass `-p ariadna`, `_apply_profile_override()` ignores that env var and sets `HERMES_HOME=/path/to/profiles/hermes`.
+
+3. **SOUL.md loads from HERMES_HOME:** `agent/prompt_builder.py` calls `load_soul_md()` → `get_hermes_home() / "SOUL.md"`. With wrong HERMES_HOME, every Daimon loads Hermes's SOUL.md.
+
+**Evidence of the bug:**
+```bash
+# HERMES_HOME env var is IGNORED without -p flag:
+HERMES_HOME=/path/to/profiles/ariadna hermes config path
+# → .../profiles/hermes/config.yaml  ← WRONG!
+
+# -p flag correctly overrides:
+hermes -p ariadna config path
+# → .../profiles/ariadna/config.yaml  ← CORRECT!
+```
+
+**The fix** in `src/olympus/acp_client.py` (around line 192-195):
+```python
+# Add --profile flag so hermes CLI doesn't fall back to active_profile
+if "--profile" not in args and "-p" not in args:
+    args = args + ["--profile", agent.name]
+```
+
+This appends `--profile <name>` to the spawn command (e.g., `hermes acp --profile ariadna`), forcing the CLI to resolve HERMES_HOME to the correct profile directory regardless of `active_profile` contents.
+
+**Verification procedure:**
+```bash
+# Step 1: Verify each profile resolves correctly
+for d in ariadna athena daedalus etalides hefesto; do
+  echo -n "$d: "
+  hermes -p "$d" config path
+done
+# Expected: each shows /path/to/profiles/<name>/config.yaml
+
+# Step 2: Verify active_profile is NOT being used by Olympus
+cat /path/to/Aether-Agents/home/active_profile
+# Should show "hermes" — this is expected, but Olympus now bypasses it
+
+# Step 3: Verify the --profile flag is in the spawn code
+grep -n 'profile\|--profile' /path/to/Aether-Agents/src/olympus/acp_client.py
+# Should show lines adding --profile to spawn args
+
+# Step 4: Live test — spawn a Daimon and check identity
+cd /path/to/Aether-Agents && \
+AETHER_HOME=/path/to/Aether-Agents/home \
+PYTHONPATH=/path/to/Aether-Agents/src \
+~/.hermes/hermes-agent/venv/bin/python3 -c "
+import asyncio
+from olympus.config import get_config, reset_config
+from olympus.discovery import discover_agents
+from olympus.registry import OlympusRegistry
+from olympus.acp_client import ACPManager
+
+async def test():
+    reset_config()
+    config = get_config()
+    agents = discover_agents(config)
+    registry = OlympusRegistry()
+    registry.register_discovery(agents)
+    manager = ACPManager(registry)
+    agent = await manager.ensure_agent('ariadna')
+    session = await manager.open_session('ariadna')
+    await manager.send_prompt(session.session_id, 'Say only your name.')
+    await asyncio.sleep(10)
+    print('ariadna:', ' | '.join(session.messages[:3]))
+    await manager.close_session(session.session_id)
+    await manager.shutdown_agent('ariadna')
+
+asyncio.run(test())
+"
+# Expected: response contains "Ariadna" (not "Hermes")
+```
+
+**Important note on `active_profile`:** Do NOT delete `/path/to/Aether-Agents/home/active_profile`. It's needed by the Hermes orchestrator profile. The fix works because `--profile` overrides `active_profile`, not because `active_profile` is removed.
+
+**GLM-5.1 (Hefesto) ACP streaming note:** GLM-5.1 streams response text as `AgentThought` chunks (kawaii spinner faces), not `AgentMessage`. This means `session.messages` may be empty even after successful completion. Hefesto's identity IS correctly loaded — the kawaii spinner text confirms its profile config is active. The text capture issue is a separate ACP adapter quirk.
+
 ## Common Failure Patterns
 
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | `talk_to()` fails / "unknown agent" | Olympus MCP not in active config | Add to `$HERMES_HOME/config.yaml` (check env var first!) |
 | Daimons speak kawaii | Missing `personality: none` | Add to all profile configs (team Daimons + Hermes, not required for Prometeo) |
-| Daimon has no identity | SOUL.md not loaded | Check HERMES_HOME and system_prompt_file |
+| Daimon has no identity | SOUL.md not loaded / wrong profile | See Section 17 for diagnosis |
 | All Daimons have same skills | Skills not curated per specialty | Curate skill categories per Daimon |
 | No project state between sessions | Missing `.eter/` directory | Create with proper structure |
 | `mcp_olympus_talk_to` not available to LLM | MCP tools registered but not in LLM tool schema | Check agent.log for registration; requires hermes-agent fix to propagate MCP tools to all execution contexts |
@@ -498,3 +615,5 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
 - **MCP tools don't propagate to sub-agents**: Fixed locally (2026-04-25) with 3 patches to hermes-agent. Upstream issue #14986 pending. Patches will be lost on update — reapply if upstream hasn't fixed it yet.
 - **Daimons identify as Hermes (SOUL.md not loading)**: Fixed in `src/olympus/acp_client.py` (2026-04-25). Root cause: hermes CLI's `_apply_profile_override()` reads `active_profile` file and overwrites `HERMES_HOME`, ignoring the env var set by Olympus. Fix: added `--profile <agent_name>` to spawn command so the CLI resolves the correct profile. Without this, all Daimons load Hermes's config/SOUL.md.
 - **Fire-and-forget is not the only pattern**: The orchestration skill enforces `open → message → wait → close` but MCP supports `open → message → poll → message → poll → message → close` (multi-turn within session). Don't assume Daimons can only receive one prompt per session — keep-alive means the session persists and context carries over between messages.
+- **GLM-5.1 ACP streaming quirk**: When Hefesto (GLM-5.1 model) responds through ACP, the response text arrives as `AgentThought` chunks (showing kawaii spinner text like `(°ロ°) brainstorming...`) instead of `AgentMessage` chunks. This means `session.messages` will be empty after completion while `session.thoughts` contains the spinner text. The actual response text is not captured by the Olympus `OlympusACPClient.session_update()` handler. This is a hermes-agent ACP adapter issue, not an Aether bug. Workaround: for GLM models, use `session.final_response` (collected from the `PromptResponse` return value in `send_prompt`) instead of `session.messages`.
+- **hermes config path uses profile resolution, not HERMES_HOME**: Running `HERMES_HOME=/path/to/profile hermes config path` does NOT respect the env var if `active_profile` exists. The CLI's `_apply_profile_override()` (in `hermes_cli/main.py` line ~99) reads `<root>/active_profile` and overwrites HERMES_HOME at import time. To verify profile resolution, always use `hermes -p <name> config path` instead.
