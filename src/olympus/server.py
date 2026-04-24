@@ -109,10 +109,25 @@ def create_server() -> Server:
             mcp_types.Tool(
                 name="run_workflow",
                 description=(
-                    "Ejecuta un flujo de trabajo multi-agente predefinido con soporte HITL (Human-in-the-Loop). "
-                    "Workflows disponibles: project-init, feature, bug-fix, security-review, research, refactor. "
-                    "Cada workflow coordina múltiples Daimons de forma autónoma con ciclos de revisión. "
-                    "Para reanudar un workflow interrumpido, proporciona thread_id y resume (prompt no requerido)."
+                    "Ejecuta un flujo de trabajo multi-agente predefinido con soporte HITL (Human-in-the-Loop).\n"
+                    "Workflows disponibles: project-init, feature, bug-fix, security-review, research, refactor.\n\n"
+                    "COMPORTAMIENTO SEGÚN RESULTADO:\n\n"
+                    "1. Si status == 'interrupted': El workflow se pausó para que el usuario confirme.\n"
+                    "   DEBES: Presentar la pregunta y contexto al usuario en formato conversacional y natural.\n"
+                    "   Mostrar el contenido de interrupt[].context de forma legible (no como JSON crudo).\n"
+                    "   Preguntar al usuario su decisión entre las opciones disponibles.\n"
+                    "   Luego reanudar llamando run_workflow con el mismo workflow, thread_id, y resume=<decisión_del_usuario>.\n"
+                    "   NO resumas sin confirmación explícita del usuario.\n\n"
+                    "2. Si status == 'success': El workflow completó. Presentar el resultado final al usuario.\n\n"
+                    "3. Si status == 'error': Hubo un error. Informar al usuario y sugerir siguiente paso.\n\n"
+                    "HITL significa Human-in-the-Loop — el workflow NO continúa sin la decisión del usuario.\n"
+                    "Los puntos de confirmación varían por workflow:\n"
+                    "- feature: research_review, design_review, audit_review\n"
+                    "- bug-fix: diagnosis_review\n"
+                    "- security-review: findings_review\n"
+                    "- refactor: scope_review\n"
+                    "- project-init, research: sin HITL (corren directo)\n\n"
+                    "Para reanudar un workflow interrumpido, proporciona thread_id y resume con la decisión del usuario."
                 ),
                 inputSchema={
                     "type": "object",
@@ -140,7 +155,7 @@ def create_server() -> Server:
                         },
                         "resume": {
                             "type": "string",
-                            "description": "Datos de reanudación para continuar desde un punto de interrupción HITL",
+                            "description": "Decisión del usuario para reanudar (approve, reject, confirm, modify, accept_risk)",
                         },
                     },
                     "required": ["workflow"],
@@ -416,10 +431,48 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
             resume=resume,
         )
         
-        # If workflow was interrupted, return interrupt data to caller
+        # If workflow was interrupted, format a clear conversational response
         if result.get("status") == "interrupted":
-            return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
+            interrupts = result.get("interrupt", [])
+            thread_id = result.get("thread_id", "")
+            workflow_type = ""
+            question = ""
+            options = []
+            context = ""
+            
+            if interrupts and isinstance(interrupts, list) and len(interrupts) > 0:
+                first_interrupt = interrupts[0]
+                if isinstance(first_interrupt, dict):
+                    question = first_interrupt.get("question", "Se requiere tu confirmación")
+                    options = first_interrupt.get("options", [])
+                    workflow_type = first_interrupt.get("workflow_type", "")
+                    context = first_interrupt.get("context", "")
+            
+            # Build a clear, conversational response for the calling agent
+            hitl_msg = (
+                f"🛑 WORKFLOW INTERRUPTADO — Se requiere tu decisión\n\n"
+                f"**Workflow:** {workflow_type or workflow_name}\n"
+                f"**Thread ID:** {thread_id}\n"
+                f"**Punto de confirmación:** {question}\n"
+                f"**Opciones disponibles:** {', '.join(options) if options else 'approve, reject'}\n\n"
+            )
+            if context:
+                hitl_msg += f"**Contexto del agente:**\n{context}\n\n"
+            hitl_msg += (
+                f"**Para continuar:** Lama run_workflow con:\n"
+                f"- workflow: \"{workflow_name}\"\n"
+                f"- thread_id: \"{thread_id}\"\n"
+                f"- resume: tu decisión (una de: {', '.join(options) if options else 'approve, reject'})\n\n"
+                f"NO continúes sin confirmación explícita del usuario."
+            )
+            return [mcp_types.TextContent(type="text", text=hitl_msg)]
         
+        # Format successful completion
+        if result.get("status") == "success":
+            final_response = result.get("result", "")
+            return [mcp_types.TextContent(type="text", text=f"✅ Workflow completado exitosamente.\n\n{final_response}")]
+        
+        # Error or other status — return as-is
         return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
         logger.exception("Error during workflow execution")
