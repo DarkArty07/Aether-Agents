@@ -61,5 +61,18 @@ display:
   show_reasoning: false
   streaming: false
 
+delegation:
+  model: qwen3.6-plus
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
+  api_key: ''  # Resolved from OPENCODE_GO_API_KEY env var
+  inherit_mcp_toolsets: true
+  max_iterations: 50
+  child_timeout_seconds: 600
+  reasoning_effort: ''
+  max_concurrent_children: 3
+  max_spawn_depth: 1
+  orchestrator_enabled: true
+
 context:
   engine: compressor
