@@ -31,8 +31,7 @@ toolsets:
   - delegate_task
   - skills
 
-# Skills — Aether-specific (to be created)
-skills: []
+skills: {}
 
 # Session settings
 max_iterations: 80

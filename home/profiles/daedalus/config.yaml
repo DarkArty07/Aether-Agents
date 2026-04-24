@@ -28,8 +28,7 @@ toolsets:
   - execute_code
   - skills
 
-# Skills — Aether-specific (to be created)
-skills: []
+skills: {}
 
 # Session settings
 max_iterations: 50

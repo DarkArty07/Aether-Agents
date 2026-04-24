@@ -28,8 +28,7 @@ toolsets:
   - todo
   - clarify
 
-# Skills — Aether-specific (to be created in Session 2)
-skills: []
+skills: {}
 
 # Session settings
 max_iterations: 50
