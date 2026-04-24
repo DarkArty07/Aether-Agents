@@ -88,13 +88,17 @@ Aether-Agents/
 │   ├── sessions/                  # Auto-created by hermes
 │   └── logs/                      # Auto-created by hermes
 │
-├── src/olympus/                   # MCP server (ACP protocol)
+├── src/olympus/                   # MCP server (ACP + workflow engine)
 │   ├── server.py
 │   ├── acp_client.py
 │   ├── discovery.py
 │   ├── registry.py
 │   ├── config.py
-│   └── log.py
+│   └── workflows/
+│       ├── state.py               # WorkflowState TypedDict
+│       ├── nodes.py               # LangGraph node factories + HITL
+│       ├── definitions.py         # 6 pre-defined workflow graphs
+│       └── runner.py              # WorkflowRunner (invoke, resume, timeout)
 │
 ├── scripts/
 │   ├── configure.sh               # Generates config.yaml from templates
@@ -245,6 +249,23 @@ discover → open → message → poll (or wait) → close
 | `close` | Closes the session; agent process stays alive |
 
 Daimons are **keep-alive** — spawned on first `open` and kept alive between sessions.
+
+---
+
+## Workflows
+
+Olympus provides 6 pre-defined structured workflows with Human-in-the-Loop (HITL). When a workflow reaches a review point, it interrupts and returns to the agent with context, question, and options — the agent presents this conversationally and the user decides.
+
+| Workflow | Nodes | HITL Points | Description |
+|----------|-------|-------------|-------------|
+| `project-init` | 3 | 0 | Quick project bootstrap |
+| `feature` | 11 | 3 (research, design, audit review) | Full feature development lifecycle |
+| `bug-fix` | 6 | 1 (diagnosis review) | Research → diagnose → confirm → fix → audit |
+| `security-review` | 7 | 1 (findings review) | Security audit with fix loop |
+| `research` | 3 | 0 | Simple research pipeline |
+| `refactor` | 6 | 1 (scope review) | Scope approval → implement → audit |
+
+See [`src/olympus/README.md`](src/olympus/README.md) for full architecture documentation.
 
 ---
 
