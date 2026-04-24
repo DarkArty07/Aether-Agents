@@ -53,7 +53,7 @@ class WorkflowRunner:
             # 4. Resume from interrupt or run fresh
             if resume is not None:
                 logger.info(f"Resuming workflow {workflow_name} with thread_id={thread_id}")
-                final_state = app.invoke(Command(resume=resume), config=config)
+                final_state = await app.ainvoke(Command(resume=resume), config=config)
             else:
                 # Build initial state
                 initial_state = {
