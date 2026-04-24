@@ -16,3 +16,8 @@ class WorkflowState(TypedDict):
     max_review_cycles: int
     final_response: str
     project_root: str
+    # CHANGE 4: New fields for error tracking and lifecycle management
+    errors: Annotated[list[str], add_messages]  # Accumulated errors
+    status: str          # "running" | "completed" | "failed" | "stalled"
+    started_at: float    # timestamp (time.monotonic())
+    node_name: str       # current node for logging
