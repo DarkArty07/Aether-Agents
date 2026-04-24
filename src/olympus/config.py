@@ -30,9 +30,6 @@ class OlympusConfig:
     profiles_dir: Path
     project_root: Path  # Resolved from AETHER_HOME — Daimons' working directory
     log_level: str = "INFO"
-    log_file: Path | None = None
-    session_timeout: int = 300  # seconds
-    shutdown_timeout: int = 5  # seconds for graceful shutdown
 
     @classmethod
     def from_env(cls) -> OlympusConfig:
@@ -59,7 +56,6 @@ class OlympusConfig:
             profiles_dir=profiles_dir,
             project_root=project_root,
             log_level=os.environ.get("OLYMPUS_LOG_LEVEL", "INFO"),
-            log_file=log_dir / "olympus.log",
         )
 
 

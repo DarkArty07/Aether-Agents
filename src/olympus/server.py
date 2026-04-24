@@ -29,11 +29,10 @@ from mcp.server.stdio import stdio_server
 from mcp import types as mcp_types
 
 from .acp_client import ACPManager
-from .config import get_config, reset_config, OlympusConfig
+from .config import get_config, reset_config
 from .discovery import discover_agents
-from .registry import AgentStatus, OlympusRegistry, SessionStatus
+from .registry import OlympusRegistry, SessionStatus
 from .workflows.runner import WorkflowRunner
-import aiosqlite
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -241,12 +240,8 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     session_id = args.get("session_id", "")
     timeout = args.get("timeout", 120)
 
-    # discover action — shortcut
-    if action == "discover" or agent_name == "?":
-        return await _handle_discover()
-
-    # Validate agent name
-    if not agent_name or agent_name == "?":
+    # discover action — shortcut or missing agent name
+    if action == "discover" or agent_name == "?" or not agent_name:
         return await _handle_discover()
 
     # Self-talk prevention (D10)

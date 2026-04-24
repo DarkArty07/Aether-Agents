@@ -35,29 +35,12 @@ def should_research(state: WorkflowState) -> str:
     return "design"
 
 
-def should_audit_pass_feature(state: WorkflowState) -> str:
-    """Route for feature workflow post-audit-review:
-    - errors → finalize
-    - audit_passed → finalize
-    - cycles < max → implement_fix
-    - cycles >= max → finalize
-    """
-    if state.get("errors") and len(state["errors"]) > 0:
-        return "finalize"
-    if state.get("audit_passed", False):
-        return "finalize"
-    cycles = state.get("review_cycles", 0)
-    if cycles < state.get("max_review_cycles", 3):
-        return "implement_fix"
-    return "finalize"
-
-
 def should_audit_pass(state: WorkflowState, fix_node: str = "implement") -> str:
     """Generic audit-pass router for bug-fix, refactor workflows.
     - errors → finalize
     - audit_passed → finalize
-    - cycles < 2 → fix_node (loop)
-    - cycles >= 2 → finalize
+    - cycles < max → fix_node (loop)
+    - cycles >= max → finalize
     """
     if state.get("errors") and len(state["errors"]) > 0:
         return "finalize"

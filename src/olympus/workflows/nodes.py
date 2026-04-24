@@ -6,7 +6,6 @@ import re
 import time
 
 from langgraph.types import interrupt, Command
-from typing import Literal
 
 from .state import WorkflowState
 from ..acp_client import ACPManager
@@ -14,7 +13,6 @@ from ..registry import SessionStatus
 
 logger = logging.getLogger("olympus.workflows.nodes")
 
-# CHANGE 3: Module-level constants for the progress watchdog
 POLL_INTERVAL = 10    # seconds
 STALL_TIMEOUT = 120   # 2 minutes without activity = STALLED
 
@@ -39,7 +37,6 @@ def _is_spinner_noise(text: str) -> bool:
         return True
     return bool(_SPINNER_PATTERN.match(text))
 
-# CHANGE 2+3: Rewritten _run_acp_session with try/finally and progress watchdog
 async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str:
     """Run a full ACP session with progress watchdog."""
     session = await acp.open_session(agent_name)
@@ -50,6 +47,7 @@ async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str
         last_messages_count = len(session.messages)
         last_tool_calls_count = len(session.tool_calls)
         last_activity_time = time.monotonic()
+        start_time = time.monotonic()
         logger.info(f"[workflow] {agent_name} session started")
 
         while True:
@@ -71,7 +69,7 @@ async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str
                 last_thoughts_count = curr_t
                 last_messages_count = curr_m
                 last_tool_calls_count = curr_tc
-                logger.info(f"[workflow] {agent_name} still working — {curr_t} thoughts, {curr_tc} tool_calls ({time.monotonic() - last_activity_time:.0f}s elapsed)")
+                logger.info(f"[workflow] {agent_name} still working — {curr_t} thoughts, {curr_tc} tool_calls ({time.monotonic() - start_time:.0f}s elapsed)")
             else:
                 if time.monotonic() - last_activity_time >= STALL_TIMEOUT:
                     logger.error(f"[workflow] {agent_name} STALLED — no activity for {STALL_TIMEOUT}s")
@@ -104,9 +102,9 @@ async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str
             logger.warning(f"Failed to close session {session.session_id}: {e}")
 
 
-# A hack to pass the acp parameter correctly:
-# LangGraph state nodes only take ONE argument (state). We can pass acp via partial
-# or via closure. Let's make node factories that receive ACPManager and return the async func.
+# Node factories that receive ACPManager and return async node functions.
+# LangGraph state nodes only take ONE argument (state), so we use closures
+# to bind the acp parameter.
 
 def make_node_design(acp: ACPManager):
     async def node_design(state: WorkflowState) -> dict:
@@ -163,7 +161,6 @@ def make_node_implement(acp: ACPManager):
         # Build prompt based on workflow type and context
         if workflow_type == "bug-fix":
             if audit_result and not audit_passed:
-                # Refining fix after audit
                 prompt = f"PROJECT_ROOT: {project_root}\nTASK: Refine the bug fix based on the security review.\n\nAUDIT FEEDBACK:\n{audit_result}\n\nCURRENT FIX:\n{code}"
             else:
                 prompt = f"PROJECT_ROOT: {project_root}\nTASK: Fix this bug based on the diagnosis.\n\nDIAGNOSIS:\n{research}\n\nBUG DESCRIPTION:\n{user_prompt}"
@@ -215,10 +212,8 @@ def make_node_audit(acp: ACPManager):
         review_cycles = state.get("review_cycles", 0)
 
         if workflow_type == "security-review" and review_cycles == 0:
-            # Initial security review with research context
             prompt = f"PROJECT_ROOT: {project_root}\nTASK: Perform a comprehensive security review.\n\nSECURITY CONTEXT (from research):\n{research}\n\nSCOPE:\n{user_prompt}\n\nProvide a full threat assessment using the STRIDE methodology. Prioritize findings by severity."
         elif workflow_type == "security-review" and review_cycles > 0:
-            # Re-verification after fix
             prompt = f"PROJECT_ROOT: {project_root}\nTASK: Re-verify the security fixes. Confirm each finding from the original review has been addressed.\n\nORIGINAL FINDINGS:\n{state.get('audit_result', '')}\n\nFIXED CODE:\n{code}\n\nReply exactly with 'PASSED' if all findings are addressed. Otherwise list remaining issues."
         elif workflow_type == "bug-fix":
             prompt = f"PROJECT_ROOT: {project_root}\nTASK: Verify that this bug fix is correct and doesn't introduce new issues.\n\nBUG DESCRIPTION:\n{user_prompt}\n\nFIX IMPLEMENTATION:\n{code}\n\nReply exactly with 'PASSED' at the beginning of your response if the fix is correct. Otherwise list the issues."
@@ -278,23 +273,11 @@ def make_node_research(acp: ACPManager):
             return {"research": "", "errors": [f"etalides: {str(e)}"], "node_name": node_name, "status": "failed"}
     return node_research
 
-# CHANGE 6: New should_terminate_on_error function
 def should_terminate_on_error(state: WorkflowState) -> str:
     """Conditional edge: terminate early if any errors accumulated."""
     if state.get("errors") and len(state["errors"]) > 0:
         return "finalize"
     return "continue"
-
-# CHANGE 6: Updated should_retry_implementation to check errors FIRST
-def should_retry_implementation(state: WorkflowState) -> str:
-    """Conditional edge: retry if audit failed and under max cycles."""
-    if state.get("errors") and len(state["errors"]) > 0:
-        return "finalize"
-    if state.get("audit_passed", False):
-        return "finalize"
-    if state.get("review_cycles", 0) < state.get("max_review_cycles", 3):
-        return "implement"
-    return "finalize"
 
 async def node_finalize(state: WorkflowState) -> dict:
     """Consolidation node — produces final output adapted to workflow type."""

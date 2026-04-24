@@ -49,9 +49,8 @@ class SessionState:
     final_response: str | None = None
     stop_reason: str | None = None
 
-    # ACP connection objects (not serialized)
+    # ACP connection object (not serialized)
     acp_connection: Any = None
-    acp_process: Any = None
 
     # Event to signal completion
     completion_event: asyncio.Event = field(default_factory=asyncio.Event)
@@ -128,11 +127,9 @@ class OlympusRegistry:
 
     def __init__(self) -> None:
         self.agents: dict[str, AgentState] = {}
-        self._discovered_profiles: dict[str, DaimonProfile] = {}
 
     def register_discovery(self, profiles: dict[str, DaimonProfile]) -> None:
         """Register discovered agent profiles."""
-        self._discovered_profiles = profiles
         for name, profile in profiles.items():
             if name not in self.agents:
                 self.agents[name] = AgentState(name=name, profile=profile)
