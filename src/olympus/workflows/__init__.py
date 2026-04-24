@@ -1,8 +1,30 @@
 """Olympus workflows package for LangGraph-based multi-Daimon orchestration."""
 from .definitions import get_workflow
 from .runner import WorkflowRunner
+from .nodes import (
+    make_node_design,
+    make_node_implement,
+    make_node_audit,
+    make_node_research,
+    make_node_onboard,
+    make_node_hitl,
+    node_finalize,
+    should_retry_implementation,
+    should_terminate_on_error,
+)
+from .prompts import get_prompt
 
-# TODO: Phase 2.2 — add prompts module exports
-# from .prompts import ...
-
-__all__ = ["get_workflow", "WorkflowRunner"]
+__all__ = [
+    "get_workflow",
+    "WorkflowRunner",
+    "make_node_design",
+    "make_node_implement",
+    "make_node_audit",
+    "make_node_research",
+    "make_node_onboard",
+    "make_node_hitl",
+    "node_finalize",
+    "should_retry_implementation",
+    "should_terminate_on_error",
+    "get_prompt",
+]

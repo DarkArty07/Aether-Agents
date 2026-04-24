@@ -5,6 +5,9 @@ import logging
 import re
 import time
 
+from langgraph.types import interrupt, Command
+from typing import Literal
+
 from .state import WorkflowState
 from ..acp_client import ACPManager
 from ..registry import SessionStatus
@@ -112,14 +115,25 @@ def make_node_design(acp: ACPManager):
         agent_name = "daedalus"
         start = time.monotonic()
         logger.info(f"[workflow] {node_name} started — agent={agent_name}")
-        # CHANGE 1: Fixed double-escape \\n -> \n (real newlines)
-        prompt = f"PROJECT_ROOT: {state.get('project_root', '')}\nTASK: Design the following feature.\n{state.get('user_prompt', '')}"
+
+        has_ui = state.get("has_ui", True)
+        research = state.get("research", "")
+        user_prompt = state.get("user_prompt", "")
+        project_root = state.get("project_root", "")
+
+        if has_ui:
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Design the user experience for this feature.\nProduce a user flow (minimum steps) and a layout specification (visual hierarchy, component list, states, accessibility notes).\n\nFEATURE DESCRIPTION:\n{user_prompt}"
+        else:
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Design the internal flow and component specification for this feature.\nThis is a backend/internal feature — produce a data flow and component interaction spec that a developer can implement from.\n\nFEATURE DESCRIPTION:\n{user_prompt}"
+
+        if research:
+            prompt += f"\n\nRESEARCH CONTEXT:\n{research}"
+
         try:
             result = await _run_acp_session(acp, "daedalus", prompt)
             elapsed = time.monotonic() - start
             if result.startswith("Error:"):
                 logger.error(f"[workflow] {node_name} failed: {result}")
-                # CHANGE 7: Return errors in state
                 return {"context": result, "errors": [f"daedalus: {result}"], "node_name": node_name, "status": "failed"}
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
             return {"context": result, "node_name": node_name}
@@ -131,19 +145,40 @@ def make_node_design(acp: ACPManager):
 
 def make_node_implement(acp: ACPManager):
     async def node_implement(state: WorkflowState) -> dict:
-        """Hefesto node: implements code based on design and feedback."""
+        """Hefesto node: implements code based on context and feedback."""
         node_name = "implement"
         agent_name = "hefesto"
         start = time.monotonic()
         logger.info(f"[workflow] {node_name} started — agent={agent_name}")
-        # CHANGE 1: Fixed double-escape \\n -> \n (real newlines)
-        prompt = f"PROJECT_ROOT: {state.get('project_root', '')}\nTASK: Implement the feature.\n"
-        if state.get("context"):
-            prompt += f"\nDESIGN CONTEXT:\n{state['context']}\n"
-        if state.get("audit_result") and not state.get("audit_passed"):
-            prompt += f"\nAUDIT FEEDBACK (Must fix these issues):\n{state['audit_result']}\n"
-        else:
-            prompt += f"\nUSER PROMPT:\n{state.get('user_prompt', '')}\n"
+
+        workflow_type = state.get("workflow_type", "feature")
+        project_root = state.get("project_root", "")
+        user_prompt = state.get("user_prompt", "")
+        context = state.get("context", "")
+        code = state.get("code", "")
+        research = state.get("research", "")
+        audit_result = state.get("audit_result", "")
+        audit_passed = state.get("audit_passed", False)
+
+        # Build prompt based on workflow type and context
+        if workflow_type == "bug-fix":
+            if audit_result and not audit_passed:
+                # Refining fix after audit
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Refine the bug fix based on the security review.\n\nAUDIT FEEDBACK:\n{audit_result}\n\nCURRENT FIX:\n{code}"
+            else:
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Fix this bug based on the diagnosis.\n\nDIAGNOSIS:\n{research}\n\nBUG DESCRIPTION:\n{user_prompt}"
+        elif workflow_type == "security-review":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Fix the following security issues.\n\nSECURITY FINDINGS:\n{audit_result}\n\nORIGINAL CODE:\n{code}"
+        elif workflow_type == "refactor":
+            if audit_result and not audit_passed:
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Refine the refactoring based on security review.\n\nAUDIT FEEDBACK:\n{audit_result}\n\nCURRENT CODE:\n{code}"
+            else:
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Refactor the following code. Preserve all existing functionality.\n\nIMPACT MAP:\n{research}\n\nREFACTOR DESCRIPTION:\n{user_prompt}"
+        else:  # feature or default
+            if audit_result and not audit_passed:
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Fix the security issues found in the audit.\n\nAUDIT FEEDBACK (Must fix these issues):\n{audit_result}\n\nORIGINAL IMPLEMENTATION:\n{code}"
+            else:
+                prompt = f"PROJECT_ROOT: {project_root}\nTASK: Implement the feature.\n\nDESIGN CONTEXT:\n{context}\n\nUSER PROMPT:\n{user_prompt}"
 
         try:
             result = await _run_acp_session(acp, "hefesto", prompt)
@@ -152,9 +187,8 @@ def make_node_implement(acp: ACPManager):
                 logger.error(f"[workflow] {node_name} failed: {result}")
                 return {"code": result, "errors": [f"hefesto: {result}"], "node_name": node_name, "status": "failed"}
 
-            # Increment review cycle if coming from an audit failure
             cycles = state.get("review_cycles", 0)
-            if state.get("audit_result") and not state.get("audit_passed"):
+            if audit_result and not audit_passed:
                 cycles += 1
 
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
@@ -172,11 +206,26 @@ def make_node_audit(acp: ACPManager):
         agent_name = "athena"
         start = time.monotonic()
         logger.info(f"[workflow] {node_name} started — agent={agent_name}")
-        # CHANGE 1: Fixed double-escape \\n -> \n (real newlines)
-        prompt = f"PROJECT_ROOT: {state.get('project_root', '')}\nTASK: Audit this code for security, best practices, and correctness.\n"
-        prompt += f"USER INTENT:\n{state.get('user_prompt', '')}\n"
-        prompt += f"IMPLEMENTATION DETAILS:\n{state.get('code', '')}\n"
-        prompt += "Reply exactly with 'PASSED' at the beginning of your response if the code is correct. Otherwise list the issues."
+
+        workflow_type = state.get("workflow_type", "feature")
+        project_root = state.get("project_root", "")
+        user_prompt = state.get("user_prompt", "")
+        code = state.get("code", "")
+        research = state.get("research", "")
+        review_cycles = state.get("review_cycles", 0)
+
+        if workflow_type == "security-review" and review_cycles == 0:
+            # Initial security review with research context
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Perform a comprehensive security review.\n\nSECURITY CONTEXT (from research):\n{research}\n\nSCOPE:\n{user_prompt}\n\nProvide a full threat assessment using the STRIDE methodology. Prioritize findings by severity."
+        elif workflow_type == "security-review" and review_cycles > 0:
+            # Re-verification after fix
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Re-verify the security fixes. Confirm each finding from the original review has been addressed.\n\nORIGINAL FINDINGS:\n{state.get('audit_result', '')}\n\nFIXED CODE:\n{code}\n\nReply exactly with 'PASSED' if all findings are addressed. Otherwise list remaining issues."
+        elif workflow_type == "bug-fix":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Verify that this bug fix is correct and doesn't introduce new issues.\n\nBUG DESCRIPTION:\n{user_prompt}\n\nFIX IMPLEMENTATION:\n{code}\n\nReply exactly with 'PASSED' at the beginning of your response if the fix is correct. Otherwise list the issues."
+        elif workflow_type == "refactor":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Verify that this refactoring preserves all existing functionality and doesn't introduce security issues.\n\nREFACTOR DESCRIPTION:\n{user_prompt}\n\nREFACTORED CODE:\n{code}\n\nReply exactly with 'PASSED' if the refactoring is correct. Otherwise list issues."
+        else:  # feature or default
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Audit this code for security, best practices, and correctness.\n\nUSER INTENT:\n{user_prompt}\n\nIMPLEMENTATION DETAILS:\n{code}\n\nReply exactly with 'PASSED' at the beginning of your response if the code is correct. Otherwise list the issues with severity levels."
 
         try:
             result = await _run_acp_session(acp, "athena", prompt)
@@ -201,8 +250,20 @@ def make_node_research(acp: ACPManager):
         agent_name = "etalides"
         start = time.monotonic()
         logger.info(f"[workflow] {node_name} started — agent={agent_name}")
-        # CHANGE 1: Fixed double-escape \\n -> \n (real newlines)
-        prompt = f"PROJECT_ROOT: {state.get('project_root', '')}\nTASK: Research the following topic.\n{state.get('user_prompt', '')}"
+
+        workflow_type = state.get("workflow_type", "feature")
+        project_root = state.get("project_root", "")
+        user_prompt = state.get("user_prompt", "")
+
+        if workflow_type == "bug-fix":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Research and diagnose this bug. Find known issues, error explanations, Stack Overflow answers, and potential root causes.\nDepth: standard (10 links max).\n\nBUG DESCRIPTION:\n{user_prompt}"
+        elif workflow_type == "security-review":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Research security context for this project. Find CVEs for project dependencies, known vulnerabilities in the tech stack, and security advisories.\nDepth: standard (10 links max).\n\nSCOPE:\n{user_prompt}"
+        elif workflow_type == "refactor":
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Research the impact of refactoring this code. Map all dependencies, identify breaking changes, and find relevant documentation for the components involved.\nDepth: standard (10 links max).\n\nREFACTOR SCOPE:\n{user_prompt}"
+        else:  # feature or research
+            prompt = f"PROJECT_ROOT: {project_root}\nTASK: Research the following topic.\nDepth: standard (10 links max).\n\nTOPIC:\n{user_prompt}"
+
         try:
             result = await _run_acp_session(acp, "etalides", prompt)
             elapsed = time.monotonic() - start
@@ -236,25 +297,103 @@ def should_retry_implementation(state: WorkflowState) -> str:
     return "finalize"
 
 async def node_finalize(state: WorkflowState) -> dict:
-    """Consolidation node."""
-    cycles = state.get("review_cycles", 0)
-    passed = state.get("audit_passed", False)
+    """Consolidation node — produces final output adapted to workflow type."""
+    workflow_type = state.get("workflow_type", "feature")
     errors = state.get("errors", [])
+    passed = state.get("audit_passed", False)
+    cycles = state.get("review_cycles", 0)
+    hitl_decisions = state.get("hitl_decisions", [])
 
+    # Determine overall status
     if errors:
         status = f"Failed — {'; '.join(errors)}"
     elif passed:
         status = "Approved"
+    elif workflow_type == "research":
+        status = "Completed"
+    elif workflow_type == "project-init":
+        status = "Completed"
     else:
         status = "Rejected (Reached max review cycles without passing)"
 
-    # CHANGE 1: Fixed double-escape \\n -> \n (real newlines)
-    final = f"Workflow Completed.\nStatus: {status}\nReview Cycles: {cycles}\n"
+    # Build response adapted to workflow type
+    final = f"Workflow Completed.\nType: {workflow_type}\nStatus: {status}\nReview Cycles: {cycles}\n"
+
+    if hitl_decisions:
+        final += f"\n--- User Decisions ---\n" + "\n".join(f"  {d}" for d in hitl_decisions) + "\n"
+
     if state.get("research"):
         final += f"\n--- Research ---\n{state['research']}\n"
-    final += f"\n--- Implementation ---\n{state.get('code', 'None')}\n"
-    if state.get("audit_result"):
-        final += f"\n--- Final Audit ---\n{state['audit_result']}\n"
 
-    # CHANGE 7: Include errors and status in output
+    if state.get("context"):
+        final += f"\n--- Design ---\n{state['context']}\n"
+
+    if state.get("code"):
+        final += f"\n--- Implementation ---\n{state['code']}\n"
+
+    if state.get("audit_result"):
+        final += f"\n--- Audit ---\n{state['audit_result']}\n"
+
     return {"final_response": final, "status": "failed" if errors else "completed", "node_name": "finalize"}
+
+
+def make_node_onboard(acp: ACPManager):
+    async def node_onboard(state: WorkflowState) -> dict:
+        """Ariadna node: initialize .eter/ project tracking."""
+        node_name = "onboard"
+        agent_name = "ariadna"
+        start = time.monotonic()
+        logger.info(f"[workflow] {node_name} started — agent={agent_name}")
+        prompt = f"PROJECT_ROOT: {state.get('project_root', '')}\nTASK: Initialize project tracking. Project description:\n{state.get('user_prompt', '')}\n\nCreate the .eter/ directory structure with CURRENT.md (initial status) and LOG.md (first entry). Use your standard output format: Status, Blockers, Risks, Next Steps, Last Session."
+        try:
+            result = await _run_acp_session(acp, "ariadna", prompt)
+            elapsed = time.monotonic() - start
+            if result.startswith("Error:"):
+                logger.error(f"[workflow] {node_name} failed: {result}")
+                return {"context": result, "errors": [f"ariadna: {result}"], "node_name": node_name, "status": "failed"}
+            logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
+            return {"context": result, "node_name": node_name}
+        except RuntimeError as e:
+            elapsed = time.monotonic() - start
+            logger.error(f"[workflow] {node_name} failed: {e}")
+            return {"context": "", "errors": [f"ariadna: {str(e)}"], "node_name": node_name, "status": "failed"}
+    return node_onboard
+
+
+def make_node_hitl(
+    key: str,
+    question: str,
+    options: list[str],
+    routing: dict[str, str],
+    include_context_key: str | None = None,
+):
+    """Factory for Human-in-the-Loop review nodes.
+
+    Args:
+        key: Identifier for this HITL point (e.g., "design_review", "audit_review")
+        question: Question to present to the user
+        options: Available options (e.g., ["approve", "reject", "modify"])
+        routing: Maps each option to the next node name (e.g., {"approve": "implement", "reject": "finalize"})
+        include_context_key: Optional state key to include as context in the interrupt payload
+    """
+    async def hitl_node(state: WorkflowState) -> Command:
+        interrupt_payload = {
+            "question": question,
+            "options": options,
+            "workflow_type": state.get("workflow_type", ""),
+            "node": key,
+        }
+        if include_context_key and state.get(include_context_key):
+            interrupt_payload["context"] = state[include_context_key]
+
+        decision = interrupt(interrupt_payload)
+
+        goto = routing.get(decision, "finalize")
+        logger.info(f"[workflow] HITL {key}: user chose '{decision}' → going to '{goto}'")
+
+        return Command(
+            update={"hitl_decisions": [f"{key}:{decision}"]},
+            goto=goto,
+        )
+
+    return hitl_node
