@@ -13,7 +13,7 @@ from .nodes import (
 )
 from ..acp_client import ACPManager
 
-def get_workflow(name: str, acp: ACPManager):
+def get_workflow(name: str, acp: ACPManager, checkpointer=None):
     """Factory builder for predefined workflows."""
 
     # Initialize the graph builder
@@ -101,4 +101,4 @@ def get_workflow(name: str, acp: ACPManager):
     else:
         raise ValueError(f"Unknown workflow name: {name}")
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)

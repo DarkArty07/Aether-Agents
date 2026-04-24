@@ -109,28 +109,41 @@ def create_server() -> Server:
             mcp_types.Tool(
                 name="run_workflow",
                 description=(
-                    "Ejecuta un flujo de trabajo multi-agente predefinido. "
-                    "Workflows disponibles: dev_and_audit, research_and_implement, full_pipeline. "
-                    "Cada workflow coordina múltiples Daimons de forma autónoma con ciclos de revisión."
+                    "Ejecuta un flujo de trabajo multi-agente predefinido con soporte HITL (Human-in-the-Loop). "
+                    "Workflows disponibles: project-init, feature, bug-fix, security-review, research, refactor. "
+                    "Cada workflow coordina múltiples Daimons de forma autónoma con ciclos de revisión. "
+                    "Para reanudar un workflow interrumpido, proporciona thread_id y resume (prompt no requerido)."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "workflow": {
                             "type": "string",
-                            "enum": ["dev_and_audit", "research_and_implement", "full_pipeline"],
+                            "enum": ["project-init", "feature", "bug-fix", "security-review", "research", "refactor"],
                             "description": "Nombre del workflow a ejecutar",
                         },
                         "prompt": {
                             "type": "string",
-                            "description": "Descripción de la tarea a realizar",
+                            "description": "Descripción de la tarea a realizar (no requerido si se usa resume)",
                         },
                         "max_review_cycles": {
                             "type": "integer",
                             "description": "Máximo de ciclos de revisión Hefesto <-> Athena (default: 3)",
                         },
+                        "params": {
+                            "type": "object",
+                            "description": "Parámetros específicos del workflow (needs_research, has_ui, workflow_type, etc.)",
+                        },
+                        "thread_id": {
+                            "type": "string",
+                            "description": "ID del hilo para reanudar un workflow interrumpido (requerido con resume)",
+                        },
+                        "resume": {
+                            "type": "string",
+                            "description": "Datos de reanudación para continuar desde un punto de interrupción HITL",
+                        },
                     },
-                    "required": ["workflow", "prompt"],
+                    "required": ["workflow"],
                 },
             ),
         ]
@@ -377,11 +390,15 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
     workflow_name = args.get("workflow", "")
     prompt_text = args.get("prompt", "")
     max_review_cycles = args.get("max_review_cycles", 3)
+    params = args.get("params", None)
+    thread_id = args.get("thread_id", None)
+    resume = args.get("resume", None)
     
-    if not workflow_name or not prompt_text:
+    # For resume calls, prompt is not required — only thread_id and resume are needed
+    if resume is None and (not workflow_name or not prompt_text):
         return [mcp_types.TextContent(
             type="text",
-            text=json.dumps({"error": "workflow and prompt are required"}),
+            text=json.dumps({"error": "workflow and prompt are required (or use thread_id + resume to resume)"}),
         )]
         
     config = get_config()
@@ -393,8 +410,16 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
             workflow_name=workflow_name,
             prompt=prompt_text,
             project_root=str(config.project_root),
-            max_review_cycles=max_review_cycles
+            max_review_cycles=max_review_cycles,
+            params=params,
+            thread_id=thread_id,
+            resume=resume,
         )
+        
+        # If workflow was interrupted, return interrupt data to caller
+        if result.get("status") == "interrupted":
+            return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
+        
         return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
     except Exception as e:
         logger.exception("Error during workflow execution")
