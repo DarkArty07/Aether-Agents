@@ -651,7 +651,30 @@ LangGraph StateGraph (Hermes orchestration logic)
 
 **What it doesn't change:** Olympus MCP, `acp_client.py`, Daimon profiles, SOUL.md, skills, `.eter/` convention.
 
-**Status:** Christopher is evaluating options. No decision made yet.
+**Status:** Christopher approved LangGraph. Implemented and working (2026-04-26). 3 workflows on branch `dev`.
+
+### Workflow Engine — Technical Debt and Design Decisions (2026-04-26)
+
+The workflow engine has known technical debt that was identified during a deep code review:
+
+**Bugs found (CRITICAL):**
+1. **Double-escape bug** — All prompts in `nodes.py` use `\\n` (double-escaped) producing literal `\n` text instead of newlines. Daimons receive garbled prompts like `"PROJECT_ROOT: /path\nTASK: Design..."` where `\n` is backslash-n, not a line break.
+2. **Session leak** — `_run_acp_session()` opens ACP sessions but never calls `close_session()`. Sessions accumulate indefinitely in registry.
+3. **Error propagation** — `_run_acp_session()` catches exceptions and returns error strings like `"Error: timeout"`. LangGraph nodes treat these as valid output. Next node uses error text as if it were real Daimon response.
+4. **No stall detection** — `_run_acp_session()` does `completion_event.wait()` blocking blindly. If a Daimon hangs, the workflow hangs forever.
+
+**Design decision — Progress Watchdog instead of hard timeouts (Christopher's call):**
+Christopher rejected hard timeouts because LLM tasks can legitimately take minutes (research, complex code). The solution is a **Progress Watchdog**:
+- Poll every 10s for activity (`thoughts`, `messages`, `tool_calls` in SessionState)
+- If activity detected → reset stall timer, keep waiting (agent is working, give unlimited time)
+- If 120s with NO activity → STALLED (no model reasons for 2 min without emitting anything)
+- 30-min safety timeout as emergency net only (not operational limit)
+
+This respects the nature of LLM work: tasks that take long because the agent is actively producing should never be cut short.
+
+**Plan file:** `.eter/.hermes/PLAN.md` in the Aether-Agents repo.
+
+### LangGraph Key Patterns for Aether
 
 ### LangGraph Key Patterns for Aether
 

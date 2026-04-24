@@ -617,7 +617,7 @@ asyncio.run(test())
 
 **Important note on `active_profile`:** Do NOT delete `/path/to/Aether-Agents/home/active_profile`. It's needed by the Hermes orchestrator profile. The fix works because `--profile` overrides `active_profile`, not because `active_profile` is removed.
 
-**GLM-5.1 (Hefesto) ACP streaming note:** GLM-5.1 streams response text as `AgentThought` chunks (kawaii spinner faces), not `AgentMessage`. This means `session.messages` may be empty even after successful completion. Hefesto's identity IS correctly loaded — the kawaii spinner text confirms its profile config is active. The text capture issue is a separate ACP adapter quirk.
+**GLM-5.1 (Hefesto) ACP streaming note:** GLM-5.1 may stream response text as `AgentThoughtChunk` (spinner faces like `(°ロ°)`) instead of `AgentMessageChunk`. The ACP protocol defines two channels: `AgentMessageChunk` (response text) and `AgentThoughtChunk` (progress/spinner). The PromptResponse only contains `stop_reason`, no text. If `session.messages` is empty after completion, the recovery path in `_run_acp_session` (nodes.py) filters spinner noise from `session.thoughts` and uses the remaining substantive content as fallback. The primary fix (`asyncio.sleep(0)` in acp_client.py) addresses the race condition for well-behaved providers.
 
 ## Common Failure Patterns
 
@@ -633,6 +633,7 @@ asyncio.run(test())
 | Custom skin not applying (falls back to default) | `HERMES_HOME/skins/` dir missing in profile | Symlink `~/.hermes/skins` into profile dir |
 | Skin loads but colors clash (green on pink etc.) | Missing `status_bar_*` keys fall back to gold/kawaii | Define ALL 27 color keys in custom skin YAML |
 | `.eter/` files inside `home/` dir | Stale install prior to fix | Run `mv home/.eter .eter` to migrate |
+| `talk_to()` returns empty response | ACP race condition: streaming callbacks not yet processed | Fixed in `fa39ac8` — `asyncio.sleep(0)` after `prompt()` + thoughts recovery path |
 
 ## Skin Engine Field Reference
 
@@ -658,5 +659,11 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
 - **MCP tools don't propagate to sub-agents**: Fixed locally (2026-04-25) with 3 patches to hermes-agent. Upstream issue #14986 pending. Patches will be lost on update — reapply if upstream hasn't fixed it yet.
 - **Daimons identify as Hermes (SOUL.md not loading)**: Fixed in `src/olympus/acp_client.py` (2026-04-25). Root cause: hermes CLI's `_apply_profile_override()` reads `active_profile` file and overwrites `HERMES_HOME`, ignoring the env var set by Olympus. Fix: added `--profile <agent_name>` to spawn command so the CLI resolves the correct profile. Without this, all Daimons load Hermes's config/SOUL.md.
 - **Fire-and-forget is not the only pattern**: The orchestration skill enforces `open → message → wait → close` but MCP supports `open → message → poll → message → poll → message → close` (multi-turn within session). Don't assume Daimons can only receive one prompt per session — keep-alive means the session persists and context carries over between messages.
-- **GLM-5.1 ACP streaming quirk**: When Hefesto (GLM-5.1 model) responds through ACP, the response text arrives as `AgentThought` chunks (showing kawaii spinner text like `(°ロ°) brainstorming...`) instead of `AgentMessage` chunks. This means `session.messages` will be empty after completion while `session.thoughts` contains the spinner text. The actual response text is not captured by the Olympus `OlympusACPClient.session_update()` handler. This is a hermes-agent ACP adapter issue, not an Aether bug. Workaround: for GLM models, use `session.final_response` (collected from the `PromptResponse` return value in `send_prompt`) instead of `session.messages`.
+- **ACP Response Collection (FIXED, commit `fa39ac8`)**: Three-layer fix for empty response bug:
+  - **Layer 1 (acp_client.py)**: `await asyncio.sleep(0)` after `prompt()` returns — yields to event loop so pending `AgentMessageChunk` callbacks process before collecting `session.messages`. This is the primary fix for the race condition where streaming updates arrive asynchronously.
+  - **Layer 2 (registry.py)**: `mark_done()` logs a warning when `response=""` AND `messages=[]` — makes the issue visible in logs for diagnosis.
+  - **Layer 3 (nodes.py)**: Recovery path in `_run_acp_session` — if `session.final_response` is empty but `session.thoughts` has content, filters kawaii spinner noise with `_is_spinner_noise()` regex and uses remaining substantive thoughts as fallback. This handles providers that stream via `AgentThoughtChunk` instead of `AgentMessageChunk`.
+  - **Spinner noise filter**: Matches bracket patterns `(...)`, kawaii faces `(°ロ°)`, status strings `thinking...`, and very short fragments (<5 chars). Everything else is considered substantive content.
+  - **Diagnostic**: `grep "completed with empty response" $HERMES_HOME/logs/agent.log` and `grep "substantive thoughts" $HERMES_HOME/logs/agent.log`
+  - **GLM-5.1 note**: GLM-5.1 sends kawaii spinner text as `AgentThoughtChunk`. With `personality: none` this is minimal but may still appear. This is SEPARATE from the race condition.
 - **hermes config path uses profile resolution, not HERMES_HOME**: Running `HERMES_HOME=/path/to/profile hermes config path` does NOT respect the env var if `active_profile` exists. The CLI's `_apply_profile_override()` (in `hermes_cli/main.py` line ~99) reads `<root>/active_profile` and overwrites HERMES_HOME at import time. To verify profile resolution, always use `hermes -p <name> config path` instead.

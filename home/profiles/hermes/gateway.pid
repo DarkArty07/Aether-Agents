@@ -1,0 +1,1 @@
+{"pid": 24537, "kind": "hermes-gateway", "argv": ["/home/prometeo/.hermes/hermes-agent/hermes_cli/main.py", "gateway", "run", "--replace"], "start_time": 2768224}

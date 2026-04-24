@@ -1,0 +1,29 @@
+{
+  "updated_at": "2026-04-24T13:31:54.570612",
+  "platforms": {
+    "telegram": [
+      {
+        "id": "5275738997",
+        "name": "Arty",
+        "type": "dm",
+        "thread_id": null
+      }
+    ],
+    "discord": [],
+    "whatsapp": [],
+    "slack": [],
+    "signal": [],
+    "mattermost": [],
+    "matrix": [],
+    "homeassistant": [],
+    "email": [],
+    "sms": [],
+    "dingtalk": [],
+    "feishu": [],
+    "wecom": [],
+    "wecom_callback": [],
+    "weixin": [],
+    "bluebubbles": [],
+    "qqbot": []
+  }
+}

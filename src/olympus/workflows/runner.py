@@ -75,13 +75,41 @@ class WorkflowRunner:
 
                 final_state = await app.ainvoke(initial_state, config=config)
 
+            # 4.5 Normalize final_state to dict if needed
+            # LangGraph may return a State dict or a dict-like object
+            if final_state is not None and not isinstance(final_state, dict):
+                # Some LangGraph versions return a State object — convert to dict
+                try:
+                    final_state = dict(final_state)
+                except (TypeError, ValueError):
+                    logger.warning(f"Could not convert final_state to dict: {type(final_state)}")
+                    final_state = {"final_response": str(final_state)}
+
             # 5. Check for interrupt
             if isinstance(final_state, dict) and "__interrupt__" in final_state:
                 interrupt_data = final_state["__interrupt__"]
+                # Convert Interrupt objects to JSON-serializable dicts.
+                # LangGraph returns Interrupt objects (not plain dicts) inside the
+                # __interrupt__ list. Each Interrupt has .value (the payload) and
+                # .ns (namespace). We extract .value which is the dict we passed
+                # to interrupt() in make_node_hitl.
+                serializable_interrupt = []
+                for entry in interrupt_data:
+                    if hasattr(entry, "value"):
+                        # LangGraph Interrupt object — extract .value
+                        val = entry.value
+                        if isinstance(val, dict):
+                            serializable_interrupt.append(val)
+                        else:
+                            serializable_interrupt.append(str(val))
+                    elif isinstance(entry, dict):
+                        serializable_interrupt.append(entry)
+                    else:
+                        serializable_interrupt.append(str(entry))
                 return {
                     "status": "interrupted",
                     "thread_id": thread_id,
-                    "interrupt": interrupt_data,
+                    "interrupt": serializable_interrupt,
                 }
 
             # 6. Extract final response or fallback
