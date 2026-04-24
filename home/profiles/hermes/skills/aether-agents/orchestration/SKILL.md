@@ -924,3 +924,4 @@ message: "Perfecto, implementa esto..." → wait → close
 | Skipping session close | State lost between sessions | Always close session with Ariadna |
 | Executing Daimon work directly "because it's faster" | Bypasses the orchestration layer entirely | Pre-flight check, then delegate |
 | Skipping the pre-flight check | LLM gravity toward direct tool use | Run the checklist every time |
+| run_workflow times out on long tasks | MCP timeout (default 2-3 min) kills workflows before Daimons finish | Use `delegate_task` with parallel sub-agents as fallback for doc/modification tasks; increase `timeout` in Olympus MCP config for code tasks |

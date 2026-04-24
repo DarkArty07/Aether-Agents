@@ -284,6 +284,10 @@ hitl_decisions: Annotated[list[str], operator.add]  # MUST use operator.add, NOT
 
 25. **`log.py` was a phantom module** — Created as a placeholder during initial development but never imported by any module. For workflow engines, logging should use the existing `logging` module or `structlog` rather than creating custom log abstractions. The Olympus server uses FastAPI/MCP logging.
 
+26. **run_workflow MCP timeout kills long workflows** — The MCP tool call has a default timeout (2-3 min in most MCP clients, configurable to ~10 min). Multi-Daimon workflows can take 5-15+ minutes (Etalides research alone can take 4+ min). When the timeout fires: (1) Hermes gets TimeoutError, (2) Olympus continues running the workflow in the background, (3) the workflow completes but nobody is listening. **Fix:** For doc/modification tasks that don't need HITL, use `delegate_task` with parallel sub-agents as a reliable fallback. For code tasks that need the workflow engine, increase `timeout: 600` in the Olympus MCP config (`~/.hermes/config.yaml` under `mcpServers`).
+
+27. **SOUL.md and Skills must reflect the workflow system** — When the workflow engine is updated (new workflows, new HITL points, new parameters), all Daimon SOUL.md files and workflow Skills must be updated to reflect the changes. Otherwise Daimons operate as if they're in fire-and-forget mode and don't leverage accumulated context. The gap is: Daimons need "In Workflow Context" sections in their SOUL.md explaining how context accumulation, workflow_type adaptation, and HITL decisions work. Without this, a Daimon in a workflow doesn't know it's in a workflow — it can't adapt its output for the next node. This was a Phase 3 gap identified and fixed in commit f14c3d8.
+
 26. **Don't export convenience functions from `__init__.py` that nobody imports** — `should_retry_implementation` and `get_prompt` were exported from `__init__.py` but never imported by any module. Dead exports create false assumptions that code is "in use" and make refactoring harder. Only export what's actually imported.
 
 --- — Usage Priority
