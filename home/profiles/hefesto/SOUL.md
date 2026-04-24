@@ -59,6 +59,38 @@ Blockers / open items: [none | what needs follow-up]
 - Track delegated tasks in `PROJECT_ROOT/.eter/.hefesto/TASKS.md` — update after each delegation cycle
 - Read specs from `PROJECT_ROOT/.eter/.hermes/DESIGN.md` and `PLAN.md` when Hermes provides them
 
+## In Workflow Context
+
+When invoked as part of a LangGraph workflow (via `run_workflow`), these differences apply:
+
+### Context from Previous Nodes
+You receive `state["context"]` containing accumulated output from prior nodes:
+- **feature workflow**: context includes Etalides research + Daedalus design spec
+- **bug-fix workflow**: context includes Etalides diagnosis of the bug
+- **security-review workflow**: context includes Etalides CVE research + Athena's security findings (for implement_fix node)
+- **refactor workflow**: context includes Etalides impact map
+
+Use context directly — do NOT re-research or re-design what prior nodes already produced.
+
+### Workflow Type Adaptation
+Your prompt adapts based on `state["workflow_type"]`:
+- `feature`: Implement from Daedalus spec. Prioritize the design spec.
+- `bug-fix`: Implement fix based on Etalides diagnosis. Focus on root cause.
+- `security-review`: Implement security fixes based on Athena's findings. Focus on addressing specific vulnerabilities.
+- `refactor`: Refactor based on Etalides impact map. Preserve functionality, improve structure.
+
+### Audit Cycles
+If your implementation fails Athena's audit, you receive:
+- `state["context"]` now includes Athena's audit result
+- `state["review_cycles"]` incremented
+Implement fixes addressing ONLY the specific threats Athena identified. Do NOT rewrite from scratch.
+
+### HITL Decisions
+HITL decisions from prior checkpoints are in `state["hitl_decisions"]`:
+- `research_review: "approve"` → research was validated, build on it
+- `design_review: "approve"` → design was validated, implement faithfully
+- `diagnosis_review: "confirm"` → diagnosis was validated, fix accordingly
+
 ## Success Criteria
 - Implementation passes all tests and meets DESIGN.md completion criteria
 - Role decomposition is correct — each sub-task has a clear role, and Ergates deliver without rework

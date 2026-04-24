@@ -7,6 +7,22 @@ triggers:
   - when hefesto receives a task from hermes
 ---
 
+# Workflow Context Note
+
+When invoked inside a LangGraph workflow (via `run_workflow`):
+- You receive `state["context"]` with accumulated output from previous nodes
+- You receive `state["workflow_type"]` indicating which workflow you're in
+- Your output becomes input for the next node — write structured, clear output
+- HITL checkpoints may follow your output — Christopher will review and decide
+- **Do NOT re-do what prior nodes already produced** — use their context directly
+
+When invoked via `talk_to` (direct delegation from Hermes):
+- You receive a self-contained prompt with CONTEXT/TASK/CONSTRAINTS/OUTPUT FORMAT
+- Follow the protocols in this skill as written
+- No context accumulation from other nodes
+
+The output format and protocols remain the same in both cases. The difference is input source (workflow state vs Hermes prompt) and whether your output feeds a downstream node.
+
 # Hefesto Workflow — Implementation Protocols
 
 ## When This Skill Loads

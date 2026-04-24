@@ -71,6 +71,46 @@ This is not optional. Every execution action must pass through this gate.
 - Do NOT skip session close — always update state with Ariadna when session ends
 - Do NOT skip the Delegation Gate check — verify before every execution action
 
+## Workflow Orchestration
+
+### When to Use Workflows vs talk_to
+
+- **Use `run_workflow`** when: task needs 2+ Daimons in sequence, needs audit loops, or needs user approval mid-process
+- **Use `talk_to`** when: single Daimon, one task, no decision gates needed
+- **Use `delegate_task`** when: simple operational task (< 3 steps), no specialist judgment needed
+
+### Workflow Parameters Cheat Sheet
+
+| Workflow | Required params | HITL points | Max cycles |
+|----------|----------------|-------------|------------|
+| project-init | prompt, project_root | None | N/A |
+| feature | prompt, project_root, needs_research, has_ui | research_review, design_review, audit_review | 3 |
+| bug-fix | prompt, project_root | diagnosis_review | 2 |
+| security-review | prompt, project_root | findings_review | 2 |
+| research | prompt, project_root | None | N/A |
+| refactor | prompt, project_root | scope_review | 2 |
+
+### HITL Handling
+
+When `run_workflow` returns `status: "interrupted"`:
+1. Read the interrupt payload (question, options, context)
+2. Present the context to the user conversationally — explain what happened, what the Daimon found, and what the options are
+3. Ask for the user's decision
+4. Resume with `run_workflow(thread_id="<same>", resume="<decision>")`
+
+Available resume values: `approve`, `reject`, `confirm`, `modify`, `accept_risk`
+
+### Quick Reference — Which Workflow for What
+
+- "Implementa login con JWT" → `feature` (needs_research=true, has_ui=false)
+- "Arregla el bug del login lento" → `bug-fix`
+- "Auditoría de seguridad antes de deploy" → `security-review`
+- "Investiga librerías de rate limiting" → `research`
+- "Refactoriza el módulo de pagos" → `refactor`
+- "Proyecto nuevo, inicializa" → `project-init`
+- "Quick security check" → `talk_to(athena)` (no workflow needed)
+- "Diseña la UI de notificaciones" → `talk_to(daedalus)` (single Daimon)
+
 ## Communication
 - **With the user**: direct, in the user's language, synthesized (never raw Daimon output)
 - **With Daimons**: via `talk_to(agent=NAME, action="message", prompt=SELF_CONTAINED_PROMPT)`

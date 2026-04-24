@@ -7,6 +7,22 @@ triggers:
   - when etalides receives a research task from hermes
 ---
 
+# Workflow Context Note
+
+When invoked inside a LangGraph workflow (via `run_workflow`):
+- You receive `state["context"]` with accumulated output from previous nodes
+- You receive `state["workflow_type"]` indicating which workflow you're in
+- Your output becomes input for the next node — write structured, clear output
+- HITL checkpoints may follow your output — Christopher will review and decide
+- **Do NOT re-do what prior nodes already produced** — use their context directly
+
+When invoked via `talk_to` (direct delegation from Hermes):
+- You receive a self-contained prompt with CONTEXT/TASK/CONSTRAINTS/OUTPUT FORMAT
+- Follow the protocols in this skill as written
+- No context accumulation from other nodes
+
+The output format and protocols remain the same in both cases. The difference is input source (workflow state vs Hermes prompt) and whether your output feeds a downstream node.
+
 # Etalides Workflow — Research Protocols
 
 ## When This Skill Loads
@@ -46,6 +62,13 @@ The link budget is **non-negotiable**. Every web operation consumes budget.
 
 **When budget is exhausted:** Stop immediately. Report what was found and explicitly state: "Budget exhausted before [X] was researched."
 
+**Fallback strategy when primary methods fail:**
+1. If `browser` navigation times out on a URL, count it as used — do NOT retry the same URL
+2. If all browser attempts fail, switch to `web_search()` + `web_extract()` — these are lighter-weight
+3. If web resources are completely inaccessible, report clearly: "No external sources reachable" and note the gap in Limitations
+4. Never spend 3+ links on failed browser navigations before trying `web_search`
+5. Never exceed 2 browser timeouts in a row — switch approach immediately
+6. **Before concluding:** Check if the project codebase contains relevant knowledge (skills, issue taxonomies, READMEs, guides). Internal project sources count as valid sources when external web is inaccessible. Update the Findings and Limitations accordingly.
 **Skip slow links:** If a link does not load within reasonable time, skip it. Count it as used. Move on.
 
 ---
@@ -210,3 +233,77 @@ Etalides cannot find the requested information after exhausting budget:
 - Budget exhausted (10 links used). Topic may be internal/private or not publicly documented.
 - Searched: GitHub, npm, official hermes docs site (if exists), general web search.
 ```
+
+---
+
+### Example D — Web Resources Inaccessible
+
+Web resources are timing out or unreachable — adapt strategy and report:
+
+```
+## Findings
+- pygame.org documentation: unreachable (browser timeout)
+- Real Python pygame tutorial: unreachable (browser timeout)
+- Pygame API: confirmed stable via training knowledge
+- Snake game implementation: standard grid-based approach, well-documented pattern
+
+## Sources
+1. N/A — All web resources inaccessible. Implementation based on Pygame library training knowledge.
+
+## Confidence: medium
+- Pygame API is stable and well-established; standard implementation patterns confirmed via domain knowledge.
+
+## Limitations
+- Could not access any external sources for verification (3 links spent on browser timeouts)
+- Budget exhausted before corroboration. Recommend re-running research when web access is available.
+```
+
+### Example E — Web Inaccessible + Internal Project Knowledge Available
+
+External web resources (browser, search) all fail — but the project codebase contains relevant information:
+
+```
+Budget: 10 links (standard mode)
+Links used: 0 (all web resources timed out)
+Fallback activated: checked internal project knowledge first.
+
+## Findings
+- Pattern matches known taxonomy: "A key button does nothing when clicked (but refreshing fixes it)"
+  classified as High Severity in the project's issue taxonomy (Functional + UX categories)
+- Standard web causes for this pattern: default submit without handler, DOM replacement
+  without re-attaching listeners, CSS pointer-events:none, z-index overlay, etc.
+
+## Sources
+1. /path/to/project/home/skills/dogfood/references/issue-taxonomy.md — Project's own taxonomy
+   classifying this exact bug pattern as High Severity
+2. https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/button — MDN: type="submit"
+   is default in <button> inside <form> (used to corroborate the default-submit root cause)
+3. N/A — All external web resources inaccessible (3 browser timeouts + 2 search timeouts)
+
+## Confidence: medium
+- Primary source: internal project taxonomy (authoritative for this project's bug patterns)
+- Secondary source: MDN for technical corroboration (accessed via training knowledge)
+
+## Limitations
+- Could not access Stack Overflow or forums for community-reported variations of this bug
+- External web completely inaccessible; used internal project knowledge as primary source
+- Bug is from external application not present in the project codebase
+```
+
+---
+
+## Protocol 6 — Project Codebase as a Source
+
+When external web is inaccessible, **the project itself is a valid source**. This includes:
+- Skills in `home/skills/` and `home/profiles/*/skills/` (contain proven workflows, patterns, known issues)
+- Documentation in `docs/` and `website/`
+- Issue taxonomies, bug classifiers, QA testing guides
+- README files, guides, configuration docs
+
+These internal sources often contain higher-quality, project-specific knowledge than general web searches.
+
+**Example:** A bug about "button click not working" matches the project's own dogfood issue taxonomy
+which classifies this exact pattern. That internal classification IS the finding — no external
+web search needed for the pattern match.
+
+Always note in Limitations: "Budget spent: N/10. External web inaccessible — used internal project knowledge."

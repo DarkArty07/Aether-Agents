@@ -7,6 +7,22 @@ triggers:
   - when athena receives a security task from hermes
 ---
 
+# Workflow Context Note
+
+When invoked inside a LangGraph workflow (via `run_workflow`):
+- You receive `state["context"]` with accumulated output from previous nodes
+- You receive `state["workflow_type"]` indicating which workflow you're in
+- Your output becomes input for the next node — write structured, clear output
+- HITL checkpoints may follow your output — Christopher will review and decide
+- **Do NOT re-do what prior nodes already produced** — use their context directly
+
+When invoked via `talk_to` (direct delegation from Hermes):
+- You receive a self-contained prompt with CONTEXT/TASK/CONSTRAINTS/OUTPUT FORMAT
+- Follow the protocols in this skill as written
+- No context accumulation from other nodes
+
+The output format and protocols remain the same in both cases. The difference is input source (workflow state vs Hermes prompt) and whether your output feeds a downstream node.
+
 # Athena Workflow — Security Protocols
 
 ## When This Skill Loads
@@ -123,7 +139,49 @@ Athena communicates risks in two ways:
 
 ---
 
-## Protocol 5 — Mandatory Output Format
+## Protocol 5 — Documentation Refactoring Verification
+
+When asked to verify that a documentation refactoring preserves functionality and doesn't introduce security issues:
+
+**7-step verification process:**
+```
+1. LOAD SPEC        — Read the PLAN.md or spec defining required changes
+2. INVENTORY        — Confirm all target files exist on disk
+3. REQUIRED CHECK   — For each file, verify every required section/string is present
+4. FORBIDDEN CHECK  — Verify no old/removed references remain (e.g., old workflow names)
+5. CROSS-REF CHECK  — Ensure terminology is consistent across all files
+6. SECURITY SCAN    — Check for hardcoded secrets, tokens, or credentials in modified files
+7. REPORT           — Use Athena output format. If all checks pass → PASSED. Else → list issues.
+```
+
+**Checklist per file:**
+- [ ] File exists and is readable
+- [ ] All sections specified in PLAN.md are present
+- [ ] All required strings/phrases are found
+- [ ] No forbidden/obsolete strings remain
+- [ ] Cross-references to other files use consistent terminology
+- [ ] No hardcoded secrets (API keys, tokens, passwords) introduced
+
+**Verification technique — go deeper than `git status`:**
+1. Run `git status --short` to see modified files, but do NOT stop there.
+2. Run `git diff <file>` for **every** file the spec says should change. A file can appear in `git status` yet contain completely wrong content.
+3. Use `search_files` (or `grep -r`) across the entire profile/project tree to verify new terminology (workflow names, HITL options) appears in all expected files and old terminology is absent everywhere.
+
+**Common pitfalls:**
+- Plan says "add section X" but file is unmodified → report as MISSING
+- File WAS modified, but with completely unrelated content (e.g., wrong protocol injected instead of required section) → report as WRONG_CONTENT. Always diff the file, don't trust `git status` alone.
+- Old references exist in comments or appendices even if removed from main text → report
+- HITL options or workflow names differ slightly between files → report as INCONSISTENT
+- Git status shows only 1-2 files modified when 13 should be → report REFACTORING NOT APPLIED
+
+**Security governance gaps to flag in documentation reviews:**
+- `accept_risk` or similar bypass options that allow skipping security fixes without requiring explicit justification or audit-trail logging
+- `state["context"]` or similar accumulation mechanisms that propagate data between nodes without sanitization warnings — sensitive data (secrets, PII) can leak downstream
+- Missing warnings about secret propagation in multi-node workflows
+
+---
+
+## Protocol 6 — Mandatory Output Format
 
 Every security report MUST use this format:
 

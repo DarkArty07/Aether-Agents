@@ -470,7 +470,7 @@ grep 'should_terminate_on_error' /path/to/Aether-Agents/src/olympus/workflows/de
 cd /path/to/Aether-Agents && python3 -c "
 from src.olympus.workflows.definitions import get_workflow
 class MockACP: pass
-for name in ['dev_and_audit', 'research_and_implement', 'full_pipeline']:
+for name in ['feature', 'bug-fix', 'research']:
     g = get_workflow(name, MockACP())
     print(f'✅ {name}: OK')
 "
@@ -667,3 +667,5 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
   - **Diagnostic**: `grep "completed with empty response" $HERMES_HOME/logs/agent.log` and `grep "substantive thoughts" $HERMES_HOME/logs/agent.log`
   - **GLM-5.1 note**: GLM-5.1 sends kawaii spinner text as `AgentThoughtChunk`. With `personality: none` this is minimal but may still appear. This is SEPARATE from the race condition.
 - **hermes config path uses profile resolution, not HERMES_HOME**: Running `HERMES_HOME=/path/to/profile hermes config path` does NOT respect the env var if `active_profile` exists. The CLI's `_apply_profile_override()` (in `hermes_cli/main.py` line ~99) reads `<root>/active_profile` and overwrites HERMES_HOME at import time. To verify profile resolution, always use `hermes -p <name> config path` instead.
+- **LangGraph Interrupt serialization (FIXED, commit `e69da51`)**: LangGraph's `interrupt()` returns `Interrupt` objects (not plain dicts) inside the `__interrupt__` list. Each `Interrupt` has `.value` (the payload dict) and `.ns` (namespace). JSON serialization of the workflow result fails with `"Object of type Interrupt is not JSON serializable"`. Fix in `runner.py`: iterate over `__interrupt__` entries, extract `.value` attribute (the dict we passed to `interrupt()`), convert to serializable dict. Without this fix, HITL workflows crash at the first interrupt point.
+- **MCP tool call timeout kills long-running workflows**: The `run_workflow` MCP tool is synchronous — Hermes calls it and waits for the result. But workflows with real agent calls take 2-5+ minutes per node. The MCP tool call timeout (typically 2-3 minutes) expires BEFORE the workflow completes, causing: (1) Hermes gets a timeout error, (2) the Olympus server continues running, (3) when the workflow reaches an interrupt, there's no MCP caller to receive the result, and the workflow hangs. **Architectural limitation** — HITL workflows require async execution with polling, increased MCP timeout, or Hermes-level orchestration.

@@ -73,6 +73,16 @@ PROJECT_ROOT/.eter/
 - `CURRENT.md` — overwrite each session with current state
 - `LOG.md` — append-only session log (never overwrite)
 
+## In Workflow Context
+
+When invoked as part of a `project-init` workflow:
+- You receive `state["user_prompt"]` and `state["project_root"]`
+- Create the `.eter/` directory structure: `.hermes/`, `.ariadna/`, `.hefesto/`, `.etalides/`
+- Initialize `CURRENT.md` and `LOG.md` in `.eter/.ariadna/`
+- Report project initialization status
+
+This is the only workflow where Ariadna participates directly. For all other workflows, Ariadna's role is session management (onboarding/close) outside the workflow.
+
 ## Success Criteria
 - Tracking is successful when Hermes can answer "how's X going?" without reading files himself
 - A blocker is successfully detected when identified BEFORE it stops work
