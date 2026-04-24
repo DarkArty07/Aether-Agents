@@ -433,7 +433,50 @@ open → message("What are 3 options?") → poll → read response
 - **Consultative**: `message → poll → refine → message → ... → close` — for design collaboration
 - **Supervisory**: `message → poll → redirect → message → close` — for course correction
 
-### 15. Workflow Runner — `send_message` AttributeError
+### 15. Workflow Engine Technical Debt — FIXED (2026-04-26)
+
+**All 7 critical issues resolved in commit `daed7e0`:**
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1 | **Double-escape bug**: Prompts sent `\\n` (literal backslash-n) instead of `\n` (newline) | Changed all `\\n` to `\n` in nodes.py f-strings |
+| 2 | **Session leak**: `_run_acp_session` never closed ACP sessions | Added `try/finally` with `close_session()` |
+| 3 | **No stall detection**: `completion_event.wait()` blocked indefinitely if agent hung | Progress Watchdog: polls every 10s for activity (thoughts/messages/tool_calls). Stalls after 120s of no activity |
+| 4 | **No error recovery**: Error strings fed into next nodes as valid input | Added `errors` list to WorkflowState, `should_terminate_on_error` edge, and per-node try/except |
+| 5 | **No logging**: Nodes produced zero logs during execution | Added `[workflow]` start/complete/failed logging with timing |
+| 6 | **State incomplete**: WorkflowState lacked error tracking and lifecycle metadata | Added `errors`, `status`, `started_at`, `node_name` fields |
+| 7 | **No error edges**: Workflows continued even after node failures | Added `should_terminate_on_error` conditional edges to all 3 workflows |
+
+**Progress Watchdog parameters:**
+- `POLL_INTERVAL = 10s` — check for activity every 10 seconds
+- `STALL_TIMEOUT = 120s` — if no activity for 2 minutes, mark as STALLED
+- `total_safety_timeout = 1800s` (30 min) — emergency ceiling in runner (not operational limit)
+
+**Key design principle:** Hard timeouts are wrong for agent workflows. An actively working agent (producing thoughts, tool calls) is given unlimited time. Only agents that emit ZERO activity for 120 seconds are considered stalled.
+
+**Diagnostic:**
+```bash
+# Verify the fix is in place
+grep 'STALL_TIMEOUT' /path/to/Aether-Agents/src/olympus/workflows/nodes.py
+# Should show: STALL_TIMEOUT = 120
+
+grep 'close_session' /path/to/Aether-Agents/src/olympus/workflows/nodes.py
+# Should show: await acp.close_session(session.session_id) in finally block
+
+grep 'should_terminate_on_error' /path/to/Aether-Agents/src/olympus/workflows/definitions.py
+# Should show conditional edges after research, design, implement nodes
+
+# Verify all 3 workflows compile
+cd /path/to/Aether-Agents && python3 -c "
+from src.olympus.workflows.definitions import get_workflow
+class MockACP: pass
+for name in ['dev_and_audit', 'research_and_implement', 'full_pipeline']:
+    g = get_workflow(name, MockACP())
+    print(f'✅ {name}: OK')
+"
+```
+
+### 15b. Workflow Runner — `send_message` AttributeError (HISTORICAL)
 
 **Status: FIXED (2026-04-26)** in `src/olympus/workflows/nodes.py` and `pyproject.toml`.
 
