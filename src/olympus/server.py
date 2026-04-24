@@ -31,6 +31,7 @@ from .acp_client import ACPManager
 from .config import get_config, reset_config, OlympusConfig
 from .discovery import discover_agents
 from .registry import AgentStatus, OlympusRegistry, SessionStatus
+from .workflows.runner import WorkflowRunner
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -105,6 +106,33 @@ def create_server() -> Server:
                     "properties": {},
                 },
             ),
+            mcp_types.Tool(
+                name="run_workflow",
+                description=(
+                    "Ejecuta un flujo de trabajo multi-agente predefinido. "
+                    "Workflows disponibles: dev_and_audit, research_and_implement, full_pipeline. "
+                    "Cada workflow coordina múltiples Daimons de forma autónoma con ciclos de revisión."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string",
+                            "enum": ["dev_and_audit", "research_and_implement", "full_pipeline"],
+                            "description": "Nombre del workflow a ejecutar",
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Descripción de la tarea a realizar",
+                        },
+                        "max_review_cycles": {
+                            "type": "integer",
+                            "description": "Máximo de ciclos de revisión Hefesto <-> Athena (default: 3)",
+                        },
+                    },
+                    "required": ["workflow", "prompt"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -114,6 +142,8 @@ def create_server() -> Server:
             return await _handle_discover()
         elif name == "talk_to":
             return await _handle_talk_to(arguments)
+        elif name == "run_workflow":
+            return await _handle_run_workflow(arguments)
         else:
             return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -335,6 +365,42 @@ async def _action_close(session_id: str) -> list[mcp_types.TextContent]:
         return [mcp_types.TextContent(
             type="text",
             text=json.dumps({"error": f"Failed to close session: {str(e)}"}),
+        )]
+
+
+async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextContent]:
+    """Handle run_workflow action - execute a LangGraph predefined workflow."""
+    global acp_manager
+    if acp_manager is None:
+        acp_manager = ACPManager(registry)
+        
+    workflow_name = args.get("workflow", "")
+    prompt_text = args.get("prompt", "")
+    max_review_cycles = args.get("max_review_cycles", 3)
+    
+    if not workflow_name or not prompt_text:
+        return [mcp_types.TextContent(
+            type="text",
+            text=json.dumps({"error": "workflow and prompt are required"}),
+        )]
+        
+    config = get_config()
+    runner = WorkflowRunner(registry, acp_manager)
+    
+    try:
+        # Run workflow, passing the project root from configuration
+        result = await runner.run(
+            workflow_name=workflow_name,
+            prompt=prompt_text,
+            project_root=str(config.project_root),
+            max_review_cycles=max_review_cycles
+        )
+        return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
+    except Exception as e:
+        logger.exception("Error during workflow execution")
+        return [mcp_types.TextContent(
+            type="text", 
+            text=json.dumps({"error": f"Workflow exception: {str(e)}"})
         )]
 
 
