@@ -54,14 +54,21 @@ run_workflow(workflow="dev_and_audit", prompt="Crea hello.py...", max_review_cyc
 
 ## Mejoras pendientes (TODO)
 
-### Alta prioridad
-- [ ] **Timeout handling**: El MCP client timeout corta workflows largos. Necesitamos un
-  mecanismo async donde run_workflow retorne inmediatamente un workflow_id y Hermes
-  pueda hacer poll del estado. Actualmente si el workflow tarda >300s, se pierde.
-- [ ] **Error recovery**: Si un Daimon falla (crash, timeout), `_run_acp_session` retorna
-  un string de error pero el workflow sigue corriendo. Agregar manejo de errores por nodo.
-- [ ] **Session cleanup**: `_run_acp_session` abre sesiones pero nunca las cierra. Los
-  Daimons quedan con sesiones abiertas acumuladas. Agregar `close_session` al final.
+### Alta prioridad — ✅ COMPLETADO (2026-04-26)
+- [x] **Progress Watchdog**: Reemplazado `completion_event.wait()` ciego con polling de actividad.
+  Cada 10s verifica thoughts/messages/tool_calls. Si el agente está activo, se le da tiempo ilimitado.
+  Solo se corta tras 120s sin NINGUNA señal de vida (stall detection).
+  Fallback de seguridad: 30 min total como red contra bugs infinitos.
+- [x] **Error recovery**: Errores se propagan como `state["errors"]` list, no como strings en campos de texto.
+  Edge condicional `should_terminate_on_error` salta a finalize si hay errores.
+  `should_retry_implementation` chequea errores antes de decidir retry.
+  Cada nodo catchea RuntimeError y Error: strings, los agrega a errors.
+- [x] **Session cleanup**: `_run_acp_session` ahora usa `try/finally` con `close_session()`.
+  Si close falla, loguea warning y continúa sin bloquear el workflow.
+- [x] **Double-escape bug**: Todos los prompts usaban `\\n` (literal) en vez de `\n` (newline). Corregido.
+- [x] **State ampliado**: `WorkflowState` ahora tiene `errors`, `status`, `started_at`, `node_name`.
+- [x] **Logging**: Todos los nodos loguean `[workflow] {node} started/completed/failed` con timing.
+- [x] **Error edges**: Los 3 workflows tienen conditional edges que detectan errores y saltan a finalize.
 
 ### Media prioridad
 - [ ] **Nuevos workflows**: bug_fix, code_review, iterate_design, refactor, doc_and_test, explore_and_spec
