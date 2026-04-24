@@ -6,7 +6,7 @@ agent:
   role: security-engineer
   description: "Security Engineer del ecosistema. Protección proactiva, threat modeling, security review."
   capabilities:
-    - talk_to
+    - receives_from
     - threat-modeling
     - security-review
     - dependency-audit

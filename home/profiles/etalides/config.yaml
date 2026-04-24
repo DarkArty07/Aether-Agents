@@ -6,7 +6,7 @@ agent:
   role: web-researcher
   description: "Web Researcher puro. Busca, extrae, y entrega información verificable. Nunca opina."
   capabilities:
-    - talk_to
+    - receives_from
     - web-search
     - web-extract
     - link-budget

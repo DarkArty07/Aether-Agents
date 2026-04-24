@@ -6,7 +6,7 @@ agent:
   role: senior-developer
   description: "Senior Developer y Tech Lead de implementación. Descompone por rol, delega, revisa, integra."
   capabilities:
-    - talk_to
+    - receives_from
     - delegate_task
     - implementation
     - code-review

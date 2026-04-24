@@ -6,7 +6,7 @@ agent:
   role: project-manager
   description: "Project Manager y Agile Coach del equipo. Trackea, anticipa, facilita."
   capabilities:
-    - talk_to
+    - receives_from
     - project-tracking
     - blocker-detection
     - session-audit

@@ -590,6 +590,91 @@ The values `"none"`, `"default"`, and `"neutral"` all disable the overlay (resol
 
 **Documentation:** `docs/guides/CONFIGURATION.md` in the Aether Agents repo includes a full explanation of this issue with the personality table.
 
+## Collaborative Communication Gap — Known Limitation
+
+The current MCP/ACP flow is **fire-and-forget**: Hermes sends a prompt → Daimon responds → done. This creates several problems:
+
+1. **No iterative conversation** — Daimons can't ask for clarification mid-task
+2. **No shared state between turns** — Each `talk_to` is stateless; Daimons don't remember previous interactions
+3. **No collaborative design** — Hermes and Daimons can't "think together" in real time
+4. **No automatic routing** — If Athena finds a security issue, Hermes must manually bridge to Hefesto
+5. **No checkpointing** — If a session breaks, everything is lost
+
+### Framework Research (2026-04-24)
+
+Christopher identified this gap and proposed investigating LangGraph. Research findings:
+
+| Framework | Philosophy | Multi-turn | State | HITL | Best For |
+|-----------|-----------|------------|-------|------|----------|
+| **LangGraph** | Graph-based state machines | Yes (via graph cycles) | Typed, checkpointed, persistent | First-class `interrupt()` + `Command(resume=...)` | Complex stateful workflows, production systems |
+| **AutoGen/AG2** | Conversation-first | Yes (group chats) | Conversation-scoped (not durable) | UserProxyAgent | Agent debate, brainstorming, open-ended reasoning |
+| **CrewAI** | Role-based crew | Limited | Execution-scoped | Basic | Rapid prototyping, business workflows |
+
+**Key protocols comparison:**
+
+| Protocol | Purpose | State | Best For |
+|----------|---------|-------|----------|
+| MCP | Agent-to-tool connectivity | Stateful connections | Connecting agents to tools/data |
+| A2A (Google) | Agent-to-agent communication | Task lifecycle (stateless) | Cross-vendor interop |
+| ACP (IBM→merged into A2A) | Multi-agent orchestration | Session-based | Framework-agnostic coordination |
+| LangGraph checkpoints | Intra-app state persistence | Deeply stateful (SQLite/Postgres) | Long-running workflows with recovery |
+
+**Proposed hybrid architecture (under discussion, not decided):**
+
+```
+LangGraph StateGraph (Hermes orchestration logic)
+  ├── Nodes: classify, route, delegate_daimon, synthesize, interrupt_user
+  ├── Edges: conditional routing based on Daimon responses
+  ├── State: typed schema with decisions, Daimon results, user context
+  ├── interrupt(): pauses for user decisions
+  └── Checkpointing: resume after crashes
+
+     │ (MCP/ACP transport — unchanged)
+     ↓
+  Olympus MCP Server → Daimones (hermes acp processes — unchanged)
+```
+
+**What this changes:** Hermes' orchestration logic (currently static SOUL.md + skills) becomes a LangGraph graph with state. Everything else (Olympus, ACP, Daimon profiles, `.eter/`) stays the same.
+
+**What it doesn't change:** Olympus MCP, `acp_client.py`, Daimon profiles, SOUL.md, skills, `.eter/` convention.
+
+**Status:** Christopher is evaluating options. No decision made yet.
+
+### LangGraph Key Patterns for Aether
+
+- **interrupt()** — Pauses graph execution, saves state, waits for human input. Resume with `Command(resume=value)`. Replaces manual "ask user" flows.
+- **Conditional edges** — Route based on state: `if athena_result["risk"] == "high": goto("hefesto_fix")`. Replaces manual multi-Daimon coordination.
+- **Subgraphs** — Each Daimon interaction could be a subgraph with its own state schema. Enables nested workflows.
+- **Checkpointing** — `MemorySaver` (in-memory), `SqliteSaver`, `PostgresSaver`. Automatic state persistence after every node.
+- **Streaming** — Token-level and node-level streaming for real-time feedback.
+- **Double execution gotcha** — When resuming from `interrupt()`, the interrupted node re-runs from the beginning. Fix: dedicated approval nodes that only call `interrupt()`.
+
+---
+
+## Session Patterns — Fire-and-Forget vs. Collaborative
+
+The current orchestration skill prescribes a **one-shot delegation pattern**:
+```
+open → message (self-contained prompt) → wait → receive response → close
+```
+
+But Olympus MCP **already supports more**. The keep-alive architecture means Daimons stay running between sessions. Combined with `message` (async) and `poll`, a **collaborative multi-turn pattern** is possible:
+```
+open → message: "¿Qué opinas de X?" → poll → read response →
+message: "Buen punto, ¿y si combinamos con Y?" → poll → read response →
+message: "Perfecto, implementa esto..." → wait → close
+```
+
+**The gap is behavioral, not infrastructural.** The MCP supports multi-turn sessions — the orchestration skill just doesn't use them. When the infrastructure allows it, prefer collaborative patterns over one-shot delegation for design and review tasks.
+
+**When to use each pattern:**
+| Pattern | When | Example |
+|---------|------|---------|
+| One-shot delegation | Well-defined tasks, no ambiguity needed | "Implement this endpoint", "Research these 3 libraries" |
+| Collaborative multi-turn | Design, review, creative work needing iteration | UX design, architecture decisions, security review |
+
+**Limitation (as of 2026-04):** The Hermes agent's `talk_to` tool only supports the one-shot pattern from the LLM context — you call `open`, get a session ID, then `message` with a prompt, then `wait`. The LLM cannot natively hold a conversation with a Daimon across multiple turns because each tool call is a separate iteration. This means collaborative multi-turn requires either (a) a new tool/protocol that supports message loops, or (b) a higher-level orchestration layer (like LangGraph StateGraph) that manages the conversation state.
+
 ## Anti-Patterns — What Hermes Must NOT Do
 
 | Anti-Pattern | Why | Instead |

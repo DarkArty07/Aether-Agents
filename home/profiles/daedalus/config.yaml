@@ -6,7 +6,7 @@ agent:
   role: ux-designer
   description: "UX/UI Designer exclusivo. Diseña experiencias, prototipa con LLM frontend. No implementa producción."
   capabilities:
-    - talk_to
+    - receives_from
     - ux-design
     - prototyping
     - design-systems

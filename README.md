@@ -1,6 +1,6 @@
 # Aether Agents
 
-A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 6 specialized Daimons for collaborative software development.
+A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 5 specialized Daimons for collaborative software development.
 
 ---
 
@@ -9,7 +9,7 @@ A **provider-agnostic** multi-agent system built on the **hermes-agent** framewo
 Aether Agents is an AI agent ecosystem where specialized agents work in coordination to assist in software development. The system consists of:
 
 - **Hermes**: The main orchestrator that coordinates all Daimons
-- **6 Daimons**: Specialized agents in different areas (management, development, research, design, security)
+- **5 Daimons**: Specialized agents in different areas (management, development, research, design, security)
 
 Communication follows this flow:
 ```
