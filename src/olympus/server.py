@@ -32,6 +32,7 @@ from .config import get_config, reset_config, OlympusConfig
 from .discovery import discover_agents
 from .registry import AgentStatus, OlympusRegistry, SessionStatus
 from .workflows.runner import WorkflowRunner
+from langgraph.checkpoint.memory import InMemorySaver
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -44,6 +45,7 @@ logger = logging.getLogger("olympus")
 # Global state
 registry = OlympusRegistry()
 acp_manager: ACPManager | None = None
+_workflow_checkpointer = InMemorySaver()
 
 
 def create_server() -> Server:
@@ -417,7 +419,7 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
         )]
         
     config = get_config()
-    runner = WorkflowRunner(registry, acp_manager)
+    runner = WorkflowRunner(registry, acp_manager, checkpointer=_workflow_checkpointer)
     
     try:
         # Run workflow, passing the project root from configuration
