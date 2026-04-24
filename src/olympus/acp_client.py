@@ -176,7 +176,11 @@ class ACPManager:
         profile = agent.profile
 
         # Build the command and environment
-        hermes_bin = shutil.which("hermes") or "/home/prometeo/.hermes/sdk/venv/bin/hermes"
+        hermes_bin = (
+            shutil.which("hermes")
+            or os.path.expanduser("~/.local/bin/hermes")
+            or "hermes"
+        )
         command_parts = profile.launch_command.split()
         command = command_parts[0] if command_parts else "hermes"
         args = command_parts[1:] if len(command_parts) > 1 else []
@@ -258,10 +262,12 @@ class ACPManager:
         if agent.connection is None:
             raise RuntimeError(f"Agent {agent_name} has no ACP connection")
 
-        # Create ACP session
-        aether_home = str(self._config.aether_home)
+        # Create ACP session — cwd is the project root, not AETHER_HOME.
+        # This is where the project's .eter/ directory lives and where
+        # Daimons should read/write their state files.
+        project_root = str(self._config.project_root)
         session_resp: NewSessionResponse = await agent.connection.new_session(
-            cwd=aether_home,
+            cwd=project_root,
             mcp_servers=[],  # Daimons don't need Olympus MCP — they talk TO us, not through another MCP server
         )
 

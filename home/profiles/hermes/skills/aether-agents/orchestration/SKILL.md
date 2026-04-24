@@ -1,3 +1,14 @@
+---
+name: orchestration
+description: How Hermes orchestrates the Aether Agents ecosystem — routing decisions, step-by-step design with the user, multi-Daimon coordination, and few-shot examples.
+version: 1.0.0
+category: aether-agents
+triggers:
+  - always loaded for hermes profile
+---
+
+# Orchestration — How Hermes Works
+
 ## ⚠️ PRE-FLIGHT CHECKLIST — Execute Before EVERY Response
 
 Before responding to any user request, check:
@@ -13,18 +24,6 @@ If ANY check is YES → DELEGATE, do NOT execute yourself.
 Exception: Hermes can use web_search for a single quick fact, read files for context, and write .eter/ state files.
 
 This checklist is MANDATORY. Skipping it means doing a Daimon's job directly.
-
----
----
-name: orchestration
-description: How Hermes orchestrates the Aether Agents ecosystem — routing decisions, step-by-step design with the user, multi-Daimon coordination, and few-shot examples.
-version: 1.0.0
-category: aether-agents
-triggers:
-  - always loaded for hermes profile
----
-
-# Orchestration — How Hermes Works
 
 ## Core Principle
 
@@ -90,12 +89,24 @@ User sends request
 
 ---
 
+## Project Root — MANDATORY RULE
+
+Every Aether project operates in a specific directory (`PROJECT_ROOT`). This is where `.eter/` lives and where all agents write their state files.
+
+**Before any session:**
+1. Ask the user: "¿En qué proyecto/ruta vamos a trabajar?"
+2. Confirm the path exists and contains `.eter/` (if not, offer to create it)
+3. Set `PROJECT_ROOT` for the entire session
+
+**Every prompt to a Daimon MUST include PROJECT_ROOT as the first line of CONTEXT.** Without it, Daimons don't know where to write their state files.
+
 ## Delegate Prompt Template
 
 Every `talk_to()` call MUST use this format. Daimons have no memory between sessions — the prompt must be self-contained.
 
 ```
 CONTEXT:
+PROJECT_ROOT: /absolute/path/to/project
 [2-4 lines of project context the Daimon needs. Tech stack, what exists, what the goal is.]
 
 TASK:
@@ -115,6 +126,7 @@ talk_to(
   action="message",
   prompt="""
 CONTEXT:
+PROJECT_ROOT: /home/user/projects/my-api
 We are building a Node.js REST API. The team needs to choose an auth library. Current stack: Express 4, PostgreSQL, JWT preferences.
 
 TASK:
@@ -183,10 +195,10 @@ When a task needs 2+ Daimons:
 
 ## Project State — `.eter/` Convention
 
-Every project tracked by Aether uses a `.eter/` directory at the project root. This is the persistence layer — where project state lives between sessions.
+Every project tracked by Aether uses a `.eter/` directory at the `PROJECT_ROOT`. This is the persistence layer — where project state lives between sessions. All paths are relative to `PROJECT_ROOT`.
 
 ```
-PROJECT/.eter/
+PROJECT_ROOT/.eter/
 ├── .hermes/        ← DESIGN.md + PLAN.md
 ├── .ariadna/       ← CURRENT.md + LOG.md
 ├── .hefesto/       ← TASKS.md
@@ -197,18 +209,18 @@ PROJECT/.eter/
 
 | Directory | Owner | Files | When updated |
 |-----------|-------|-------|--------------|
-| `.eter/.hermes/` | Hermes | `DESIGN.md` (architecture), `PLAN.md` (implementation steps) | During design phase |
-| `.eter/.ariadna/` | Ariadna | `CURRENT.md` (current state), `LOG.md` (session history) | Every session start/end |
-| `.eter/.hefesto/` | Hefesto | `TASKS.md` (delegated tasks and state) | During implementation |
-| `.eter/.etalides/` | Etalides | `RESEARCH.md` (research findings) | When research is requested |
+| `PROJECT_ROOT/.eter/.hermes/` | Hermes | `DESIGN.md` (architecture), `PLAN.md` (implementation steps) | During design phase |
+| `PROJECT_ROOT/.eter/.ariadna/` | Ariadna | `CURRENT.md` (current state), `LOG.md` (session history) | Every session start/end |
+| `PROJECT_ROOT/.eter/.hefesto/` | Hefesto | `TASKS.md` (delegated tasks and state) | During implementation |
+| `PROJECT_ROOT/.eter/.etalides/` | Etalides | `RESEARCH.md` (research findings) | When research is requested |
 
 ### Rules
-- Ariadna is responsible for **creating** `.eter/` if it doesn't exist in a new project
+- Ariadna is responsible for **creating** `PROJECT_ROOT/.eter/` if it doesn't exist in a new project
 - `CURRENT.md` is **overwritten** each session (snapshot of now)
 - `LOG.md` is **append-only** (complete history)
 - `RESEARCH.md` is **append-only** (each investigation adds a section)
 - `TASKS.md` is **overwritten** by Hefesto (current task state)
-- When Hermes needs project context, read `.eter/.hermes/DESIGN.md` first, then ask Ariadna for status
+- When Hermes needs project context, read `PROJECT_ROOT/.eter/.hermes/DESIGN.md` first, then ask Ariadna for status
 
 ---
 
@@ -517,6 +529,66 @@ This check exists because LLMs default to the path of least resistance — using
 | Hermes manages .eter/ files directly | "Let me update CURRENT.md..." | Route to Ariadna |
 | Hermes skips delegation "because it's faster" | "I can do this quicker than explaining" | Delegation IS the process |
 | Daimons spawn without skills | Daimon doesn't follow workflow protocol | Check config.yaml has skills configured (not `[]`) |
+| Personality overlay overrides SOUL.md | Agent speaks kawaii/catgirl instead of its Daimon identity | Set `display.personality: none` in config.yaml — hermes-agent defaults to "kawaii" which overwrites Daimon identities |
+
+## Delegation Model Configuration — Setting Up Subagent Models
+
+When configuring which model subagents (delegate_task) use, there are **3 override levels** in priority order:
+
+1. **Per-call parameter** — `delegate_task(model={"model": "x", "provider": "y"})` in the tool call itself
+2. **Profile config delegation section** — `~/Aether-Agents/home/profiles/hermes/config.yaml` → `delegation.model` / `delegation.provider`
+3. **Runtime config delegation section** — `~/.hermes/config.yaml` → `delegation.model` / `delegation.provider`
+4. **Inherit from parent** — if none of the above are set, subagents use the same model as Hermes
+
+**Both config files must be updated** for delegation to work correctly:
+- Profile config → tracked in template, sets defaults for new installations
+- Runtime config → what the running agent actually reads
+
+**opencode-go provider specifics** (relevant for ZhipuAI-based setups):
+- Model IDs use dot notation: `qwen3.6-plus` (NOT `qwen-3.6-plus`)
+- The `/models` API endpoint returns HTML (404) — you **cannot enumerate** available models
+- To verify a model works, make a minimal `chat/completions` request with it
+- Base URL: `https://opencode.ai/zen/go/v1` (NOT `/v1/v1`)
+- API key env var: `OPENCODE_GO_API_KEY` — check it's not commented out in `~/.hermes/.env`
+- Regular `opencode` (Zen) and `opencode-go` use different endpoints and model catalogs
+
+**Current delegation config (as of 2026-04-23):**
+```yaml
+delegation:
+  model: qwen3.6-plus
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
+  api_key: ''  # Resolved from OPENCODE_GO_API_KEY env var
+  inherit_mcp_toolsets: true
+  max_iterations: 50
+  child_timeout_seconds: 600
+  max_concurrent_children: 3
+  max_spawn_depth: 1
+  orchestrator_enabled: true
+```
+
+**Pitfall:** The hermes-agent codebase `models.py` hardcoded catalog for `opencode-go` may be incomplete (missing `qwen3.6-plus`). Models verified to work on the endpoint may not appear in the local catalog. Always test with an actual API call rather than trusting the catalog.
+
+## Personality Overlay Bug — Critical Configuration Check
+
+Hermes-agent ships with `display.personality: "kawaii"` as the **hardcoded default** (in `hermes_cli/config.py` `DEFAULT_CONFIG`). When a profile's `config.yaml` doesn't set `display.personality`, it inherits this default. The kawaii prompt ("You are a kawaii assistant! Use cute expressions...") is appended to the system prompt, **overriding the Daimon's SOUL.md identity**.
+
+**This causes:** Hermes speaking with sparkles and kaomoji instead of its orchestrator persona. All Delegation Gates, communication rules, and role clarity from SOUL.md get diluted.
+
+**Fix for all Aether Agent profiles:**
+```yaml
+display:
+  personality: none  # Critical — prevents kawaii default from overriding SOUL.md
+```
+
+The values `"none"`, `"default"`, and `"neutral"` all disable the overlay (resolved by `_resolve_personality_prompt()` in `hermes_cli/config.py` and `tui_gateway/server.py`).
+
+**Where to set it:**
+- Profile `config.yaml` — primary (gitignored, local)
+- Profile `config.yaml.template` — for new installations (tracked in git)
+- `~/.hermes/config.yaml` — user-level CLI config (local)
+
+**Documentation:** `docs/guides/CONFIGURATION.md` in the Aether Agents repo includes a full explanation of this issue with the personality table.
 
 ## Anti-Patterns — What Hermes Must NOT Do
 

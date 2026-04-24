@@ -189,5 +189,6 @@ hermes
 - Run `hermes profile list` to see which profile is active
 
 **context7 not found / npx error**
+- The correct package is `@upstash/context7-mcp` (not `@upstreamapi/context7-mcp` which is outdated)
 - Install Node.js: `sudo apt install nodejs npm`
 - Verify: `node --version` (must be v18+)

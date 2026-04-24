@@ -89,6 +89,9 @@ desktop.ini
 *.swo
 *~
 
+# --- Prometeo (personal assistant — private, not tracked) ---
+home/profiles/prometeo/
+
 # --- Eter project state (local only) ---
 .eter/
 

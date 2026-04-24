@@ -8,7 +8,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 AETHER_HOME="${AETHER_HOME:-$PROJECT_ROOT/home}"
-PYTHON="${PYTHON:-$HOME/.hermes/sdk/venv/bin/python}"
+PYTHON="${PYTHON:-}"
+if [ -z "$PYTHON" ]; then
+    # Try standard install path first, then from-source, then PATH
+    if [ -f "$HOME/.hermes/sdk/venv/bin/python" ]; then
+        PYTHON="$HOME/.hermes/sdk/venv/bin/python"
+    elif [ -f "$HOME/.hermes/hermes-agent/venv/bin/python" ]; then
+        PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python"
+    elif command -v hermes &>/dev/null; then
+        # Try to resolve from hermes binary location
+        PYTHON="$(dirname "$(command -v hermes)")/python" 2>/dev/null || true
+        if [ ! -f "$PYTHON" ]; then
+            PYTHON=""
+        fi
+    fi
+    if [ -z "$PYTHON" ]; then
+        echo "ERROR: Could not find hermes-agent Python interpreter."
+        echo "  Set PYTHON=/path/to/python or install hermes-agent SDK:"
+        echo "    curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
+        exit 1
+    fi
+fi
 HERMES_BIN="${HERMES_BIN:-$(which hermes 2>/dev/null || echo "$HOME/.local/bin/hermes")}"
 
 export AETHER_HOME
@@ -29,8 +49,18 @@ fi
 
 # ── Step 1: Setup .env files ─────────────────────────────────────
 if [ ! -f "$AETHER_HOME/profiles/ariadna/.env" ]; then
-    echo "Step 1: Setting up .env files..."
-    bash "$SCRIPT_DIR/setup-env.sh"
+    echo "Step 1: Setting up .env files from .env.example..."
+    for profile_dir in "$AETHER_HOME/profiles"/*/; do
+        profile_name="$(basename "$profile_dir")"
+        if [ -f "$profile_dir/.env.example" ] && [ ! -f "$profile_dir/.env" ]; then
+            cp "$profile_dir/.env.example" "$profile_dir/.env"
+            echo "  Created $profile_name/.env from .env.example"
+        fi
+    done
+    echo ""
+    echo "  IMPORTANT: Edit the .env files in each profile directory"
+    echo "  with your actual API keys before using the system."
+    echo "  Profile directory: $AETHER_HOME/profiles/"
 else
     echo "Step 1: .env files already exist (skipping)"
 fi
