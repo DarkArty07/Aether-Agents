@@ -33,9 +33,9 @@ from .config import get_config, reset_config, OlympusConfig
 from .discovery import discover_agents
 from .registry import AgentStatus, OlympusRegistry, SessionStatus
 from .workflows.runner import WorkflowRunner
-import sqlite3
+import aiosqlite
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -49,24 +49,24 @@ logger = logging.getLogger("olympus")
 registry = OlympusRegistry()
 acp_manager: ACPManager | None = None
 
-# Lazy-initialized SqliteSaver — created on first access so config is available
-_workflow_checkpointer: SqliteSaver | None = None
-_sqlite_conn: sqlite3.Connection | None = None
+# Lazy-initialized AsyncSqliteSaver — created on first access so config is available
+_workflow_checkpointer: AsyncSqliteSaver | None = None
+_checkpointer_cm: Any = None  # keeps the async context manager alive
 
 
-def _get_workflow_checkpointer() -> SqliteSaver:
-    """Return (and lazily create) a persistent SqliteSaver checkpointer.
+async def _get_workflow_checkpointer() -> AsyncSqliteSaver:
+    """Return (and lazily create) a persistent AsyncSqliteSaver checkpointer.
 
     The SQLite database is stored at {AETHER_HOME}/.olympus_checkpoints.db
     so checkpoint data survives server restarts, enabling HITL workflow resumes.
     """
-    global _workflow_checkpointer, _sqlite_conn
+    global _workflow_checkpointer, _checkpointer_cm
     if _workflow_checkpointer is None:
         config = get_config()
         db_path = str(Path(config.aether_home) / ".olympus_checkpoints.db")
         logger.info(f"Creating persistent workflow checkpointer: {db_path}")
-        _sqlite_conn = sqlite3.connect(db_path, check_same_thread=False)
-        _workflow_checkpointer = SqliteSaver(_sqlite_conn)
+        _checkpointer_cm = AsyncSqliteSaver.from_conn_string(db_path)
+        _workflow_checkpointer = await _checkpointer_cm.__aenter__()
     return _workflow_checkpointer
 
 
@@ -441,7 +441,8 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
         )]
         
     config = get_config()
-    runner = WorkflowRunner(registry, acp_manager, checkpointer=_get_workflow_checkpointer())
+    checkpointer = await _get_workflow_checkpointer()
+    runner = WorkflowRunner(registry, acp_manager, checkpointer=checkpointer)
     
     try:
         # Run workflow, passing the project root from configuration
