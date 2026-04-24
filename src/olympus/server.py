@@ -70,6 +70,18 @@ async def _get_workflow_checkpointer() -> AsyncSqliteSaver:
     return _workflow_checkpointer
 
 
+async def _shutdown_checkpointer():
+    """Close the AsyncSqliteSaver connection on server shutdown."""
+    global _workflow_checkpointer, _checkpointer_cm
+    if _checkpointer_cm is not None:
+        try:
+            await _checkpointer_cm.__aexit__(None, None, None)
+        except Exception as e:
+            logger.warning(f"Error closing checkpointer: {e}")
+        _workflow_checkpointer = None
+        _checkpointer_cm = None
+
+
 def create_server() -> Server:
     """Create and configure the Olympus MCP Server with tool handlers."""
     server = Server("olympus-mcp")
@@ -536,11 +548,15 @@ async def _run_server() -> None:
 
     async with stdio_server() as (read_stream, write_stream):
         logger.info("Olympus MCP Server running on stdio")
-        await server.run(
-            read_stream,
-            write_stream,
-            init_options,
-        )
+        try:
+            await server.run(
+                read_stream,
+                write_stream,
+                init_options,
+            )
+        finally:
+            # Cleanup: close the AsyncSqliteSaver connection
+            await _shutdown_checkpointer()
 
 
 def main() -> None:

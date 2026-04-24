@@ -64,7 +64,7 @@ class WorkflowRunner:
                     "messages": [],
                     "errors": [],
                     "status": "running",
-                    "started_at": time.monotonic(),
+                    "started_at": time.time(),
                     "node_name": "",
                     "needs_research": needs_research,
                     "has_ui": has_ui,

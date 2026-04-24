@@ -154,8 +154,7 @@ def get_workflow(name: str, acp: ACPManager, checkpointer=None):
         workflow.add_node("design_review", design_review)
         workflow.add_node("audit_review", audit_review)
 
-        # Edges
-        workflow.add_edge(START, "research")  # start with conditional below
+        # Edges — START routes via conditional (should_research)
 
         # START → conditional: needs_research?
         workflow.add_conditional_edges(

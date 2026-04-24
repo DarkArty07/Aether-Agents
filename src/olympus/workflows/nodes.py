@@ -137,7 +137,7 @@ def make_node_design(acp: ACPManager):
                 return {"context": result, "errors": [f"daedalus: {result}"], "node_name": node_name, "status": "failed"}
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
             return {"context": result, "node_name": node_name}
-        except RuntimeError as e:
+        except Exception as e:
             elapsed = time.monotonic() - start
             logger.error(f"[workflow] {node_name} failed: {e}")
             return {"context": "", "errors": [f"daedalus: {str(e)}"], "node_name": node_name, "status": "failed"}
@@ -193,7 +193,7 @@ def make_node_implement(acp: ACPManager):
 
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
             return {"code": result, "review_cycles": cycles, "node_name": node_name}
-        except RuntimeError as e:
+        except Exception as e:
             elapsed = time.monotonic() - start
             logger.error(f"[workflow] {node_name} failed: {e}")
             return {"code": "", "errors": [f"hefesto: {str(e)}"], "node_name": node_name, "status": "failed"}
@@ -237,7 +237,7 @@ def make_node_audit(acp: ACPManager):
             passed = result.strip().startswith("PASSED")
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s — {'PASSED' if passed else 'FAILED'}")
             return {"audit_result": result, "audit_passed": passed, "node_name": node_name}
-        except RuntimeError as e:
+        except Exception as e:
             elapsed = time.monotonic() - start
             logger.error(f"[workflow] {node_name} failed: {e}")
             return {"audit_result": "", "audit_passed": False, "errors": [f"athena: {str(e)}"], "node_name": node_name, "status": "failed"}
@@ -272,7 +272,7 @@ def make_node_research(acp: ACPManager):
                 return {"research": result, "errors": [f"etalides: {result}"], "node_name": node_name, "status": "failed"}
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
             return {"research": result, "node_name": node_name}
-        except RuntimeError as e:
+        except Exception as e:
             elapsed = time.monotonic() - start
             logger.error(f"[workflow] {node_name} failed: {e}")
             return {"research": "", "errors": [f"etalides: {str(e)}"], "node_name": node_name, "status": "failed"}
@@ -353,7 +353,7 @@ def make_node_onboard(acp: ACPManager):
                 return {"context": result, "errors": [f"ariadna: {result}"], "node_name": node_name, "status": "failed"}
             logger.info(f"[workflow] {node_name} completed in {elapsed:.1f}s")
             return {"context": result, "node_name": node_name}
-        except RuntimeError as e:
+        except Exception as e:
             elapsed = time.monotonic() - start
             logger.error(f"[workflow] {node_name} failed: {e}")
             return {"context": "", "errors": [f"ariadna: {str(e)}"], "node_name": node_name, "status": "failed"}
