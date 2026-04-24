@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 import time
 
 from .state import WorkflowState
@@ -13,6 +14,27 @@ logger = logging.getLogger("olympus.workflows.nodes")
 # CHANGE 3: Module-level constants for the progress watchdog
 POLL_INTERVAL = 10    # seconds
 STALL_TIMEOUT = 120   # 2 minutes without activity = STALLED
+
+# Spinner noise filter — identifies kawaii/progress text that isn't substantive content.
+# The ACP protocol has two channels: AgentMessageChunk (response text) and
+# AgentThoughtChunk (progress/spinner/leaning). Most providers use both correctly.
+# Some providers (e.g., GLM-5.1) stream response content via AgentThoughtChunk
+# instead of AgentMessageChunk. This filter helps separate signal from noise
+# when falling back to the thoughts channel.
+_SPINNER_PATTERN = re.compile(
+    r'^[\(\[（【].*?[\)\]）】]'            # Brackets: (...), [...], （...）
+    r'|(°ロ°|´･_･`|•̀ᴗ•́|ᕕᐛᕗ|◝ᴗ◝|◕ᴗ◕|ᕙᐛᕗ|¯\\_?\\(ツ\\)_?/¯)'  # Kawaii faces
+    r'|^\s*(thinking|analyzing|processing|brainstorming|working|loading)\.{1,3}\s*$',  # Status text
+    re.IGNORECASE
+)
+
+
+def _is_spinner_noise(text: str) -> bool:
+    """Filter out kawaii spinner patterns that aren't substantive content."""
+    text = text.strip()
+    if not text or len(text) < 5:
+        return True
+    return bool(_SPINNER_PATTERN.match(text))
 
 # CHANGE 2+3: Rewritten _run_acp_session with try/finally and progress watchdog
 async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str:
@@ -53,7 +75,22 @@ async def _run_acp_session(acp: ACPManager, agent_name: str, prompt: str) -> str
                     raise RuntimeError(f"Agent {agent_name} stalled — no activity for {STALL_TIMEOUT}s")
 
         if session.status == SessionStatus.DONE:
-            return session.final_response or ""
+            result = session.final_response or ""
+            # Recovery: if messages channel is empty but thoughts has content,
+            # the agent may have streamed via AgentThoughtChunk instead of
+            # AgentMessageChunk. Filter out spinner noise and use substantive
+            # thoughts as a fallback — this avoids silent empty responses.
+            if not result and session.thoughts:
+                content_thoughts = [t for t in session.thoughts if not _is_spinner_noise(t)]
+                if content_thoughts:
+                    logger.warning(
+                        f"[workflow] {agent_name} returned empty response but has "
+                        f"{len(content_thoughts)}/{len(session.thoughts)} substantive thoughts. "
+                        f"Agent may stream via thoughts channel instead of messages. "
+                        f"Using filtered thoughts as fallback."
+                    )
+                    result = "\n".join(content_thoughts)
+            return result
         elif session.status == SessionStatus.ERROR:
             return f"Error: {session.final_response}"
         return "Error: Session completed with unexpected status"

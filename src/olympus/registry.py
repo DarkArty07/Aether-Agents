@@ -73,6 +73,19 @@ class SessionState:
         self.final_response = response
         self.stop_reason = stop_reason
         self.last_updated = time.time()
+
+        # Diagnostic: detect empty response scenarios
+        # The ACP protocol sends response text via AgentMessageChunk streaming.
+        # If messages is empty but the agent completed, something went wrong
+        # in the streaming collection — likely a race condition or a provider
+        # that streams via AgentThoughtChunk instead of AgentMessageChunk.
+        if not response and not self.messages:
+            logger.warning(
+                f"Session {self.session_id} completed with empty response "
+                f"(messages={len(self.messages)}, thoughts={len(self.thoughts)}, "
+                f"stop_reason={stop_reason})"
+            )
+
         self.completion_event.set()
 
     def mark_error(self, error: str) -> None:

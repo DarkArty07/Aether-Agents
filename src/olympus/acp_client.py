@@ -322,14 +322,22 @@ class ACPManager:
                     prompt=[text_block(prompt_text)],
                 )
 
-                # Collect the final response
+                # Yield to event loop — ensure all pending session_update
+                # callbacks (AgentMessageChunk/AgentThoughtChunk) are processed
+                # before we collect the response. The ACP protocol sends the
+                # response text via streaming notifications, and the PromptResponse
+                # only contains stop_reason (no text). Without this yield,
+                # the final messages may not yet be in session.messages.
+                await asyncio.sleep(0)
+
+                # Collect the final response from session messages
                 full_response = "".join(session.messages) if session.messages else ""
                 session.mark_done(
                     response=full_response,
                     stop_reason=response.stop_reason,
                 )
                 agent.status = AgentStatus.IDLE
-                logger.info(f"Prompt completed for session {session_id}: stop_reason={response.stop_reason}")
+                logger.info(f"Prompt completed for session {session_id}: stop_reason={response.stop_reason}, response_len={len(full_response)}")
 
             except Exception as e:
                 logger.error(f"Prompt error for session {session_id}: {e}")
