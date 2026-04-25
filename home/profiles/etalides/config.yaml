@@ -25,7 +25,9 @@ toolsets:
   - browser
   - file
 
-skills: {}
+skills:
+  external_dirs:
+    - /home/prometeo/Aether-Agents/home/skills
 
 # Session settings
 # Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
