@@ -39,10 +39,11 @@ home/profiles/*/skills/*
 home/config.yaml
 home/profiles/hermes/config.yaml
 
-# --- Hermes runtime dirs ---
-home/profiles/hermes/bin/
-home/profiles/hermes/sandboxes/
-home/profiles/hermes/cron/
+# --- Per-profile runtime dirs ---
+home/profiles/*/bin/
+home/profiles/*/sandboxes/
+home/profiles/*/cron/
+home/profiles/*/pastes/
 
 # --- Python ---
 __pycache__/
