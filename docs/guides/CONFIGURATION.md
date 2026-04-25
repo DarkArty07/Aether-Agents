@@ -164,7 +164,7 @@ mcp_servers:
     command: npx
     args:
       - -y
-      - "@upstreamapi/context7-mcp@latest"
+      - "@upstash/context7-mcp"
     enabled: true
 ```
 

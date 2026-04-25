@@ -28,18 +28,25 @@ class OlympusConfig:
 
     aether_home: Path
     profiles_dir: Path
+    project_root: Path  # Resolved from AETHER_HOME — Daimons' working directory
     log_level: str = "INFO"
-    log_file: Path | None = None
-    session_timeout: int = 300  # seconds
-    shutdown_timeout: int = 5  # seconds for graceful shutdown
 
     @classmethod
     def from_env(cls) -> OlympusConfig:
         """Load configuration from environment variables and defaults."""
-        aether_home = Path(os.environ.get(
-            "AETHER_HOME",
-            "/mnt/c/Users/chris/Desktop/DEVELOPERSPROJECTS/Aether-Agents/home",
-        ))
+        aether_home_env = os.environ.get("AETHER_HOME")
+        if aether_home_env:
+            aether_home = Path(aether_home_env)
+        else:
+            # Generic fallback: use "home" directory relative to the repo root
+            # (src/olympus/../../home -> project_root/home)
+            _here = Path(__file__).resolve()
+            aether_home = _here.parent.parent.parent / "home"
+
+        # Project root is always AETHER_HOME's parent directory.
+        # This is where .eter/ lives and where Daimons should operate.
+        project_root = aether_home.parent
+
         profiles_dir = aether_home / "profiles"
         log_dir = aether_home / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -47,8 +54,8 @@ class OlympusConfig:
         return cls(
             aether_home=aether_home,
             profiles_dir=profiles_dir,
+            project_root=project_root,
             log_level=os.environ.get("OLYMPUS_LOG_LEVEL", "INFO"),
-            log_file=log_dir / "olympus.log",
         )
 
 

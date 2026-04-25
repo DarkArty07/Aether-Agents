@@ -176,7 +176,11 @@ class ACPManager:
         profile = agent.profile
 
         # Build the command and environment
-        hermes_bin = shutil.which("hermes") or "/home/prometeo/.hermes/sdk/venv/bin/hermes"
+        hermes_bin = (
+            shutil.which("hermes")
+            or os.path.expanduser("~/.local/bin/hermes")
+            or "hermes"
+        )
         command_parts = profile.launch_command.split()
         command = command_parts[0] if command_parts else "hermes"
         args = command_parts[1:] if len(command_parts) > 1 else []
@@ -184,6 +188,11 @@ class ACPManager:
         # If launch_command is just "hermes acp", use the hermes binary
         if command == "hermes":
             command = hermes_bin
+
+        # Add --profile flag so hermes CLI doesn't fall back to active_profile
+        # (which would override HERMES_HOME and load the wrong SOUL.md)
+        if "--profile" not in args and "-p" not in args:
+            args = args + ["--profile", agent.name]
 
         # Set HERMES_HOME to the profile directory
         env_extra = {
@@ -258,10 +267,12 @@ class ACPManager:
         if agent.connection is None:
             raise RuntimeError(f"Agent {agent_name} has no ACP connection")
 
-        # Create ACP session
-        aether_home = str(self._config.aether_home)
+        # Create ACP session — cwd is the project root, not AETHER_HOME.
+        # This is where the project's .eter/ directory lives and where
+        # Daimons should read/write their state files.
+        project_root = str(self._config.project_root)
         session_resp: NewSessionResponse = await agent.connection.new_session(
-            cwd=aether_home,
+            cwd=project_root,
             mcp_servers=[],  # Daimons don't need Olympus MCP — they talk TO us, not through another MCP server
         )
 
@@ -311,14 +322,22 @@ class ACPManager:
                     prompt=[text_block(prompt_text)],
                 )
 
-                # Collect the final response
+                # Yield to event loop — ensure all pending session_update
+                # callbacks (AgentMessageChunk/AgentThoughtChunk) are processed
+                # before we collect the response. The ACP protocol sends the
+                # response text via streaming notifications, and the PromptResponse
+                # only contains stop_reason (no text). Without this yield,
+                # the final messages may not yet be in session.messages.
+                await asyncio.sleep(0)
+
+                # Collect the final response from session messages
                 full_response = "".join(session.messages) if session.messages else ""
                 session.mark_done(
                     response=full_response,
                     stop_reason=response.stop_reason,
                 )
                 agent.status = AgentStatus.IDLE
-                logger.info(f"Prompt completed for session {session_id}: stop_reason={response.stop_reason}")
+                logger.info(f"Prompt completed for session {session_id}: stop_reason={response.stop_reason}, response_len={len(full_response)}")
 
             except Exception as e:
                 logger.error(f"Prompt error for session {session_id}: {e}")

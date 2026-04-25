@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any
 
 from mcp.server import Server
@@ -28,9 +29,12 @@ from mcp.server.stdio import stdio_server
 from mcp import types as mcp_types
 
 from .acp_client import ACPManager
-from .config import get_config, reset_config, OlympusConfig
+from .config import get_config, reset_config
 from .discovery import discover_agents
-from .registry import AgentStatus, OlympusRegistry, SessionStatus
+from .registry import OlympusRegistry, SessionStatus
+from .workflows.runner import WorkflowRunner
+
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
@@ -43,6 +47,38 @@ logger = logging.getLogger("olympus")
 # Global state
 registry = OlympusRegistry()
 acp_manager: ACPManager | None = None
+
+# Lazy-initialized AsyncSqliteSaver — created on first access so config is available
+_workflow_checkpointer: AsyncSqliteSaver | None = None
+_checkpointer_cm: Any = None  # keeps the async context manager alive
+
+
+async def _get_workflow_checkpointer() -> AsyncSqliteSaver:
+    """Return (and lazily create) a persistent AsyncSqliteSaver checkpointer.
+
+    The SQLite database is stored at {AETHER_HOME}/.olympus_checkpoints.db
+    so checkpoint data survives server restarts, enabling HITL workflow resumes.
+    """
+    global _workflow_checkpointer, _checkpointer_cm
+    if _workflow_checkpointer is None:
+        config = get_config()
+        db_path = str(Path(config.aether_home) / ".olympus_checkpoints.db")
+        logger.info(f"Creating persistent workflow checkpointer: {db_path}")
+        _checkpointer_cm = AsyncSqliteSaver.from_conn_string(db_path)
+        _workflow_checkpointer = await _checkpointer_cm.__aenter__()
+    return _workflow_checkpointer
+
+
+async def _shutdown_checkpointer():
+    """Close the AsyncSqliteSaver connection on server shutdown."""
+    global _workflow_checkpointer, _checkpointer_cm
+    if _checkpointer_cm is not None:
+        try:
+            await _checkpointer_cm.__aexit__(None, None, None)
+        except Exception as e:
+            logger.warning(f"Error closing checkpointer: {e}")
+        _workflow_checkpointer = None
+        _checkpointer_cm = None
 
 
 def create_server() -> Server:
@@ -105,6 +141,61 @@ def create_server() -> Server:
                     "properties": {},
                 },
             ),
+            mcp_types.Tool(
+                name="run_workflow",
+                description=(
+                    "Ejecuta un flujo de trabajo multi-agente predefinido con soporte HITL (Human-in-the-Loop).\n"
+                    "Workflows disponibles: project-init, feature, bug-fix, security-review, research, refactor.\n\n"
+                    "COMPORTAMIENTO SEGÚN RESULTADO:\n\n"
+                    "1. Si status == 'interrupted': El workflow se pausó para que el usuario confirme.\n"
+                    "   DEBES: Presentar la pregunta y contexto al usuario en formato conversacional y natural.\n"
+                    "   Mostrar el contenido de interrupt[].context de forma legible (no como JSON crudo).\n"
+                    "   Preguntar al usuario su decisión entre las opciones disponibles.\n"
+                    "   Luego reanudar llamando run_workflow con el mismo workflow, thread_id, y resume=<decisión_del_usuario>.\n"
+                    "   NO resumas sin confirmación explícita del usuario.\n\n"
+                    "2. Si status == 'success': El workflow completó. Presentar el resultado final al usuario.\n\n"
+                    "3. Si status == 'error': Hubo un error. Informar al usuario y sugerir siguiente paso.\n\n"
+                    "HITL significa Human-in-the-Loop — el workflow NO continúa sin la decisión del usuario.\n"
+                    "Los puntos de confirmación varían por workflow:\n"
+                    "- feature: research_review, design_review, audit_review\n"
+                    "- bug-fix: diagnosis_review\n"
+                    "- security-review: findings_review\n"
+                    "- refactor: scope_review\n"
+                    "- project-init, research: sin HITL (corren directo)\n\n"
+                    "Para reanudar un workflow interrumpido, proporciona thread_id y resume con la decisión del usuario."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "workflow": {
+                            "type": "string",
+                            "enum": ["project-init", "feature", "bug-fix", "security-review", "research", "refactor"],
+                            "description": "Nombre del workflow a ejecutar",
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Descripción de la tarea a realizar (no requerido si se usa resume)",
+                        },
+                        "max_review_cycles": {
+                            "type": "integer",
+                            "description": "Máximo de ciclos de revisión Hefesto <-> Athena (default: 3)",
+                        },
+                        "params": {
+                            "type": "object",
+                            "description": "Parámetros específicos del workflow (needs_research, has_ui, workflow_type, etc.)",
+                        },
+                        "thread_id": {
+                            "type": "string",
+                            "description": "ID del hilo para reanudar un workflow interrumpido (requerido con resume)",
+                        },
+                        "resume": {
+                            "type": "string",
+                            "description": "Decisión del usuario para reanudar (approve, reject, confirm, modify, accept_risk)",
+                        },
+                    },
+                    "required": ["workflow"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -114,6 +205,8 @@ def create_server() -> Server:
             return await _handle_discover()
         elif name == "talk_to":
             return await _handle_talk_to(arguments)
+        elif name == "run_workflow":
+            return await _handle_run_workflow(arguments)
         else:
             return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -147,12 +240,8 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     session_id = args.get("session_id", "")
     timeout = args.get("timeout", 120)
 
-    # discover action — shortcut
-    if action == "discover" or agent_name == "?":
-        return await _handle_discover()
-
-    # Validate agent name
-    if not agent_name or agent_name == "?":
+    # discover action — shortcut or missing agent name
+    if action == "discover" or agent_name == "?" or not agent_name:
         return await _handle_discover()
 
     # Self-talk prevention (D10)
@@ -338,6 +427,93 @@ async def _action_close(session_id: str) -> list[mcp_types.TextContent]:
         )]
 
 
+async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextContent]:
+    """Handle run_workflow action - execute a LangGraph predefined workflow."""
+    global acp_manager
+    if acp_manager is None:
+        acp_manager = ACPManager(registry)
+        
+    workflow_name = args.get("workflow", "")
+    prompt_text = args.get("prompt", "")
+    max_review_cycles = args.get("max_review_cycles", 3)
+    params = args.get("params", None)
+    thread_id = args.get("thread_id", None)
+    resume = args.get("resume", None)
+    
+    # For resume calls, prompt is not required — only thread_id and resume are needed
+    if resume is None and (not workflow_name or not prompt_text):
+        return [mcp_types.TextContent(
+            type="text",
+            text=json.dumps({"error": "workflow and prompt are required (or use thread_id + resume to resume)"}),
+        )]
+        
+    config = get_config()
+    checkpointer = await _get_workflow_checkpointer()
+    runner = WorkflowRunner(registry, acp_manager, checkpointer=checkpointer)
+    
+    try:
+        # Run workflow, passing the project root from configuration
+        result = await runner.run(
+            workflow_name=workflow_name,
+            prompt=prompt_text,
+            project_root=str(config.project_root),
+            max_review_cycles=max_review_cycles,
+            params=params,
+            thread_id=thread_id,
+            resume=resume,
+        )
+        
+        # If workflow was interrupted, format a clear conversational response
+        if result.get("status") == "interrupted":
+            interrupts = result.get("interrupt", [])
+            thread_id = result.get("thread_id", "")
+            workflow_type = ""
+            question = ""
+            options = []
+            context = ""
+            
+            if interrupts and isinstance(interrupts, list) and len(interrupts) > 0:
+                first_interrupt = interrupts[0]
+                if isinstance(first_interrupt, dict):
+                    question = first_interrupt.get("question", "Se requiere tu confirmación")
+                    options = first_interrupt.get("options", [])
+                    workflow_type = first_interrupt.get("workflow_type", "")
+                    context = first_interrupt.get("context", "")
+            
+            # Build a clear, conversational response for the calling agent
+            hitl_msg = (
+                f"🛑 WORKFLOW INTERRUPTADO — Se requiere tu decisión\n\n"
+                f"**Workflow:** {workflow_type or workflow_name}\n"
+                f"**Thread ID:** {thread_id}\n"
+                f"**Punto de confirmación:** {question}\n"
+                f"**Opciones disponibles:** {', '.join(options) if options else 'approve, reject'}\n\n"
+            )
+            if context:
+                hitl_msg += f"**Contexto del agente:**\n{context}\n\n"
+            hitl_msg += (
+                f"**Para continuar:** Lama run_workflow con:\n"
+                f"- workflow: \"{workflow_name}\"\n"
+                f"- thread_id: \"{thread_id}\"\n"
+                f"- resume: tu decisión (una de: {', '.join(options) if options else 'approve, reject'})\n\n"
+                f"NO continúes sin confirmación explícita del usuario."
+            )
+            return [mcp_types.TextContent(type="text", text=hitl_msg)]
+        
+        # Format successful completion
+        if result.get("status") == "success":
+            final_response = result.get("result", "")
+            return [mcp_types.TextContent(type="text", text=f"✅ Workflow completado exitosamente.\n\n{final_response}")]
+        
+        # Error or other status — return as-is
+        return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
+    except Exception as e:
+        logger.exception("Error during workflow execution")
+        return [mcp_types.TextContent(
+            type="text", 
+            text=json.dumps({"error": f"Workflow exception: {str(e)}"})
+        )]
+
+
 async def _run_server() -> None:
     """Initialize and run the Olympus MCP Server."""
     global acp_manager
@@ -367,11 +543,15 @@ async def _run_server() -> None:
 
     async with stdio_server() as (read_stream, write_stream):
         logger.info("Olympus MCP Server running on stdio")
-        await server.run(
-            read_stream,
-            write_stream,
-            init_options,
-        )
+        try:
+            await server.run(
+                read_stream,
+                write_stream,
+                init_options,
+            )
+        finally:
+            # Cleanup: close the AsyncSqliteSaver connection
+            await _shutdown_checkpointer()
 
 
 def main() -> None:

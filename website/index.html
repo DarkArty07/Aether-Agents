@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aether Agents — Multi-Agent System built on hermes-agent</title>
+    <meta name="description" content="Provider-agnostic multi-agent system built on hermes-agent. Orchestrates 6 specialized Daimóns for collaborative software development via Olympus MCP and ACP protocol.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav id="top-nav">
+        <div class="nav-inner">
+            <span class="nav-logo">Aether Agents</span>
+            <div class="nav-links">
+                <a href="#architecture">Architecture</a>
+                <a href="#daimons">Daimons</a>
+                <a href="#install">Install</a>
+                <a href="https://github.com/DarkArty07/Aether-Agents" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="hero-inner">
+            <div class="hero-badge">Built on hermes-agent · Open Source · MIT</div>
+            <h1>Aether Agents</h1>
+            <p class="hero-subtitle">
+                A provider-agnostic multi-agent system. Orchestrates 6 specialized Daimons for collaborative software development through <strong>Olympus MCP</strong> and the <strong>ACP protocol</strong>.
+            </p>
+            <div class="hero-install">
+                <pre><code><span class="c-dim">$</span> git clone https://github.com/DarkArty07/Aether-Agents.git
+<span class="c-dim">$</span> cd Aether-Agents && pip install -e .
+<span class="c-dim">$</span> HERMES_HOME=~/Aether-Agents/home hermes --profile hermes</code></pre>
+                <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- WHAT IS IT -->
+    <section class="section what-section">
+        <div class="container">
+            <div class="section-label">Overview</div>
+            <h2>What is Aether Agents?</h2>
+            <p class="section-desc">
+                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> — the orchestrator — via Olympus MCP's <code>talk_to()</code> tool.
+            </p>
+
+            <div class="callout">
+                <div class="callout-line">
+                    <span class="callout-icon">→</span>
+                    Each Daimon has a <code>SOUL.md</code> — a strict system prompt defining its role, responsibilities, and the things it must never do.
+                </div>
+                <div class="callout-line">
+                    <span class="callout-icon">→</span>
+                    Daimons don't talk to each other. All routing goes through Hermes.
+                </div>
+                <div class="callout-line">
+                    <span class="callout-icon">→</span>
+                    Every project tracked by Aether gets a <code>.eter/</code> directory at its root — shared state across the team.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section id="architecture" class="section arch-section">
+        <div class="container">
+            <div class="section-label">Architecture</div>
+            <h2>How it works</h2>
+            <p class="section-desc">
+                Hermes connects to the <strong>Olympus MCP server</strong> via stdio. Olympus exposes two tools: <code>talk_to()</code> and <code>discover()</code>. Under the hood, Olympus uses the <strong>ACP (Agent Client Protocol)</strong> to spawn and communicate with each Daimon.
+            </p>
+
+            <div class="arch-diagram">
+                <div class="arch-node you">
+                    <span class="node-icon">👤</span>
+                    <span>You</span>
+                </div>
+                <div class="arch-arrow">→</div>
+                <div class="arch-node hermes-node">
+                    <span class="node-icon">⚡</span>
+                    <span>Hermes</span>
+                    <span class="node-sub">Orchestrator</span>
+                </div>
+                <div class="arch-arrow">→ MCP stdio →</div>
+                <div class="arch-node olympus-node">
+                    <span class="node-icon">⚙</span>
+                    <span>Olympus</span>
+                    <span class="node-sub">MCP Server</span>
+                </div>
+                <div class="arch-arrow">→ ACP →</div>
+                <div class="arch-node daimons-node">
+                    <span class="node-icon">◈</span>
+                    <span>Daimons</span>
+                    <span class="node-sub">Persistent processes</span>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">talk_to() lifecycle</h3>
+            <p class="section-desc">The <code>talk_to()</code> tool exposes 7 actions. Daimons are keep-alive — spawned on first <code>open</code>, they stay alive between sessions.</p>
+
+            <div class="lifecycle-table">
+                <div class="lifecycle-row header">
+                    <div>Action</div>
+                    <div>Description</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>discover</code></div>
+                    <div>Lists all available Daimons and their capabilities</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>open</code></div>
+                    <div>Spawns the Daimon process (if not running) and creates an ACP session</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>message</code></div>
+                    <div>Sends a prompt asynchronously — returns immediately with a session ID</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>poll</code></div>
+                    <div>Non-blocking status check — returns current thoughts, messages, tool calls</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>wait</code></div>
+                    <div>Blocks until the Daimon completes (max 300s timeout)</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>cancel</code></div>
+                    <div>Aborts a running session</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>close</code></div>
+                    <div>Closes the session. Agent process stays alive for next call.</div>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">.eter/ — Shared Project State</h3>
+            <p class="section-desc">Every project tracked by Aether gets this directory structure at its root. Each Daimon owns a subdirectory.</p>
+
+            <pre class="code-block"><code>PROJECT/.eter/
+├── .hermes/     ← DESIGN.md + PLAN.md       (architecture, decisions)
+├── .ariadna/    ← CURRENT.md + LOG.md       (status, session history)
+├── .hefesto/    ← TASKS.md                  (implementation tracking)
+└── .etalides/   ← RESEARCH.md               (append-only, only when used)</code></pre>
+        </div>
+    </section>
+
+    <!-- DAIMONS -->
+    <section id="daimons" class="section daimons-section">
+        <div class="container">
+            <div class="section-label">Daimons</div>
+            <h2>The Team</h2>
+            <p class="section-desc">
+                Six specialized agents. Each has its own model configuration, tool access, and a <code>SOUL.md</code> that defines precisely what it does — and what it must never do.
+            </p>
+
+            <div class="daimons-grid">
+
+                <!-- Hermes -->
+                <div class="daimon-card" id="daimon-hermes">
+                    <div class="daimon-image">
+                        <img src="assets/images/HERMES.jpg" alt="Hermes">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Hermes</span>
+                            <span class="daimon-tag tag-hermes">Orchestrator</span>
+                        </div>
+                        <p>The only agent the user speaks to directly. Decomposes tasks, routes to the right Daimon, and synthesizes results. Owns <code>.eter/.hermes/</code>.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No implement code</span>
+                            <span class="rule">→ No direct web search</span>
+                            <span class="rule">→ No skip session close</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ariadna -->
+                <div class="daimon-card" id="daimon-ariadna">
+                    <div class="daimon-image">
+                        <img src="assets/images/ARIADNA.jpg" alt="Ariadna">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Ariadna</span>
+                            <span class="daimon-tag tag-ariadna">Project Manager</span>
+                        </div>
+                        <p>Maintains <code>CURRENT.md</code> and <code>LOG.md</code>. Detects blockers before they stop work. Provides session onboarding status on every open.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No architectural decisions</span>
+                            <span class="rule">→ No code writing</span>
+                            <span class="rule">→ No direct user contact</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hefesto -->
+                <div class="daimon-card" id="daimon-hefesto">
+                    <div class="daimon-image">
+                        <img src="assets/images/HEFESTO.jpg" alt="Hefesto">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Hefesto</span>
+                            <span class="daimon-tag tag-hefesto">Senior Developer</span>
+                        </div>
+                        <p>Receives specs from Hermes, spawns atomic sub-agents (<strong>Ergates</strong>) via <code>delegate_task(role=...)</code>, consolidates results, and runs tests.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No design decisions</span>
+                            <span class="rule">→ No ambiguous specs (report first)</span>
+                            <span class="rule">→ Tracks via TASKS.md</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Etalides -->
+                <div class="daimon-card" id="daimon-etalides">
+                    <div class="daimon-image">
+                        <img src="assets/images/ETALIDES.jpg" alt="Etalides">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Etalides</span>
+                            <span class="daimon-tag tag-etalides">Web Researcher</span>
+                        </div>
+                        <p>Uses <code>web_search</code> + <code>web_extract</code>. Every finding requires a source URL and a confidence level. Output is always structured: Findings / Sources / Confidence.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No opinions or recommendations</span>
+                            <span class="rule">→ ≤10 links / standard mode</span>
+                            <span class="rule">→ Append-only RESEARCH.md</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daedalus -->
+                <div class="daimon-card" id="daimon-daedalus">
+                    <div class="daimon-image">
+                        <img src="assets/images/DEDALO.jpg" alt="Daedalus">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Daedalus</span>
+                            <span class="daimon-tag tag-daedalus">UX/UI Designer</span>
+                        </div>
+                        <p>Designs user flows, layout specs, and HTML/CSS prototypes. Performs UX review post-implementation to catch regressions. Ensures WCAG compliance.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No production code</span>
+                            <span class="rule">→ No tech stack decisions</span>
+                            <span class="rule">→ Minimum steps per flow</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Athena -->
+                <div class="daimon-card" id="daimon-athena">
+                    <div class="daimon-image">
+                        <img src="assets/images/ATENEA.jpg" alt="Athena">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Athena</span>
+                            <span class="daimon-tag tag-athena">Security Engineer</span>
+                        </div>
+                        <p>STRIDE threat modeling, OWASP review, dependency CVE auditing. Flags risks to Ariadna as sprint blockers. Activates proactively on new endpoints or dependencies.</p>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No code implementation</span>
+                            <span class="rule">→ All CVE search via Etalides</span>
+                            <span class="rule">→ Risk before deployment</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- PROVIDERS -->
+    <section class="section providers-section">
+        <div class="container">
+            <div class="section-label">Provider-Agnostic</div>
+            <h2>Any model. Any provider.</h2>
+            <p class="section-desc">
+                Aether Agents doesn't prescribe a model. Any provider exposing an OpenAI-compatible API works. Each Daimon gets its own <code>.env</code> file — you can run Hermes on GPT-4o and Hefesto on a local vLLM instance, or use a single model for everything. Change it anytime.
+            </p>
+
+            <div class="providers-table">
+                <div class="providers-row header">
+                    <div>Provider</div>
+                    <div>API Base</div>
+                    <div>Env var</div>
+                </div>
+                <div class="providers-row">
+                    <div>OpenAI</div>
+                    <div><code>https://api.openai.com</code></div>
+                    <div><code>OPENAI_API_KEY</code></div>
+                </div>
+                <div class="providers-row">
+                    <div>Anthropic</div>
+                    <div><code>https://api.anthropic.com</code></div>
+                    <div><code>ANTHROPIC_API_KEY</code></div>
+                </div>
+                <div class="providers-row">
+                    <div>Google Gemini</div>
+                    <div><code>https://generativelanguage.googleapis.com</code></div>
+                    <div><code>GEMINI_API_KEY</code></div>
+                </div>
+                <div class="providers-row">
+                    <div>Moonshot (Kimi)</div>
+                    <div><code>https://api.moonshot.cn</code></div>
+                    <div><code>MOONSHOT_API_KEY</code></div>
+                </div>
+                <div class="providers-row">
+                    <div>OpenRouter</div>
+                    <div><code>https://openrouter.ai</code></div>
+                    <div><code>OPENROUTER_API_KEY</code></div>
+                </div>
+                <div class="providers-row">
+                    <div>Ollama (local)</div>
+                    <div><code>http://localhost:11434</code></div>
+                    <div><em>No key needed</em></div>
+                </div>
+                <div class="providers-row">
+                    <div>vLLM (local)</div>
+                    <div><code>http://localhost:8000</code></div>
+                    <div><em>No key needed</em></div>
+                </div>
+            </div>
+            <p class="table-note">This is not an exhaustive list. Any OpenAI-compatible endpoint works.</p>
+        </div>
+    </section>
+
+    <!-- INSTALL -->
+    <section id="install" class="section install-section">
+        <div class="container">
+            <div class="section-label">Installation</div>
+            <h2>Get started</h2>
+
+            <div class="steps">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Clone and install</h4>
+                        <pre class="code-block"><code>git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Configure each profile's .env</h4>
+                        <p class="step-note">Each Daimon has its own <code>.env.example</code>. Copy it, fill in your API keys.</p>
+                        <pre class="code-block"><code>cp home/profiles/hermes/.env.example home/profiles/hermes/.env
+# Repeat for ariadna, hefesto, etalides, daedalus, athena</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Set HERMES_HOME and run</h4>
+                        <pre class="code-block"><code>export HERMES_HOME=~/Aether-Agents/home
+
+# Use the verification script
+bash scripts/start.sh
+
+# Or run directly
+HERMES_HOME=~/Aether-Agents/home hermes --profile hermes</code></pre>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Test a specific Daimon</h4>
+                        <pre class="code-block"><code>HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
+HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container footer-inner">
+            <div class="footer-left">
+                <span class="footer-name">Aether Agents</span>
+                <span class="footer-lic">MIT License</span>
+            </div>
+            <div class="footer-right">
+                Built on <a href="https://hermes-agent.nousresearch.com/" target="_blank">hermes-agent</a> by Nous Research
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

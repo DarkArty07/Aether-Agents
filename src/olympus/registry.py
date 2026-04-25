@@ -49,9 +49,8 @@ class SessionState:
     final_response: str | None = None
     stop_reason: str | None = None
 
-    # ACP connection objects (not serialized)
+    # ACP connection object (not serialized)
     acp_connection: Any = None
-    acp_process: Any = None
 
     # Event to signal completion
     completion_event: asyncio.Event = field(default_factory=asyncio.Event)
@@ -73,6 +72,19 @@ class SessionState:
         self.final_response = response
         self.stop_reason = stop_reason
         self.last_updated = time.time()
+
+        # Diagnostic: detect empty response scenarios
+        # The ACP protocol sends response text via AgentMessageChunk streaming.
+        # If messages is empty but the agent completed, something went wrong
+        # in the streaming collection — likely a race condition or a provider
+        # that streams via AgentThoughtChunk instead of AgentMessageChunk.
+        if not response and not self.messages:
+            logger.warning(
+                f"Session {self.session_id} completed with empty response "
+                f"(messages={len(self.messages)}, thoughts={len(self.thoughts)}, "
+                f"stop_reason={stop_reason})"
+            )
+
         self.completion_event.set()
 
     def mark_error(self, error: str) -> None:
@@ -115,11 +127,9 @@ class OlympusRegistry:
 
     def __init__(self) -> None:
         self.agents: dict[str, AgentState] = {}
-        self._discovered_profiles: dict[str, DaimonProfile] = {}
 
     def register_discovery(self, profiles: dict[str, DaimonProfile]) -> None:
         """Register discovered agent profiles."""
-        self._discovered_profiles = profiles
         for name, profile in profiles.items():
             if name not in self.agents:
                 self.agents[name] = AgentState(name=name, profile=profile)

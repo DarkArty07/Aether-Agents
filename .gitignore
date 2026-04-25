@@ -16,7 +16,7 @@ home/.cache/
 **/request_dump*
 **/logs/
 
-# --- Auth and model caches (contain API keys/tokens) ---
+# --- Auth and model caches ---
 **/auth.json
 **/models_dev_cache.json
 
@@ -28,43 +28,34 @@ home/.cache/
 **/checkpoints/
 home/skills/.hub/
 
-# --- Hermes bundled skills (auto-expanded by framework, ~8MB) ---
-# Each profile gets bundled skills on first run. Only custom skills
-# (aether-agents/) should be committed.
-home/profiles/hermes/skills/apple/
-home/profiles/hermes/skills/autonomous-ai-agents/
-home/profiles/hermes/skills/creative/
-home/profiles/hermes/skills/data-science/
-home/profiles/hermes/skills/devops/
-home/profiles/hermes/skills/diagramming/
-home/profiles/hermes/skills/dogfood/
-home/profiles/hermes/skills/domain/
-home/profiles/hermes/skills/email/
-home/profiles/hermes/skills/feeds/
-home/profiles/hermes/skills/gaming/
-home/profiles/hermes/skills/gifs/
-home/profiles/hermes/skills/github/
-home/profiles/hermes/skills/inference-sh/
-home/profiles/hermes/skills/mcp/
-home/profiles/hermes/skills/media/
-home/profiles/hermes/skills/mlops/
-home/profiles/hermes/skills/note-taking/
-home/profiles/hermes/skills/productivity/
-home/profiles/hermes/skills/red-teaming/
-home/profiles/hermes/skills/research/
-home/profiles/hermes/skills/smart-home/
-home/profiles/hermes/skills/social-media/
-home/profiles/hermes/skills/software-development/
-home/profiles/hermes/skills/.bundled_manifest
+# --- Profile skills directories (skills loaded via external_dirs from home/skills/) ---
+home/profiles/*/skills/*
+!home/profiles/*/skills/.gitkeep
 
-# --- Hermes auto-generated configs (run configure.sh after clone) ---
+# --- Per-profile bundled manifests (auto-generated) ---
+**/.bundled_manifest
+
+# --- Per-profile auto-generated configs ---
 home/config.yaml
-home/profiles/hermes/config.yaml
+home/profiles/*/config.yaml
 
-# --- Hermes runtime dirs ---
-home/profiles/hermes/bin/
-home/profiles/hermes/sandboxes/
-home/profiles/hermes/cron/
+# --- Per-profile runtime state ---
+home/profiles/*/memories/
+home/profiles/*/.update_check
+home/profiles/*/channel_directory.json
+home/profiles/*/gateway.lock
+home/profiles/*/gateway.pid
+home/profiles/*/gateway_state.json
+home/profiles/*/ollama_cloud_models_cache.json
+
+# --- Per-profile runtime dirs ---
+home/profiles/*/bin/
+home/profiles/*/sandboxes/
+home/profiles/*/cron/
+home/profiles/*/pastes/
+home/profiles/*/spawn-trees/
+home/profiles/*/processes.json
+home/profiles/*/skins
 
 # --- Python ---
 __pycache__/
@@ -89,10 +80,16 @@ desktop.ini
 *.swo
 *~
 
-# --- Eter project state (local only) ---
-.eter/
+# --- Prometeo (personal assistant — private) ---
+home/profiles/prometeo/
 
-# --- Claude Code (dev tool, not project) ---
+# --- Project state (local only) ---
+.eter/
+**/.olympus_checkpoints.db*
+**/state.db-shm
+**/state.db-wal
+
+# --- Claude Code (dev tool) ---
 .claude/
 
 # --- Development artifacts ---

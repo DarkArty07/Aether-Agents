@@ -1,74 +1,62 @@
 # Aether Agents
 
-A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 6 specialized Daimons for collaborative software development.
+A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 5 specialized Daimons for collaborative software development with structured workflows and Human-in-the-Loop (HITL) approval gates.
 
 ---
 
 ## What is Aether Agents?
 
-Aether Agents is an AI agent ecosystem where specialized agents work in coordination to assist in software development. The system consists of:
+Aether Agents is an AI agent ecosystem where specialized agents work in coordination following a 5-phase methodology:
 
-- **Hermes**: The main orchestrator that coordinates all Daimons
-- **6 Daimons**: Specialized agents in different areas (management, development, research, design, security)
-
-Communication follows this flow:
 ```
-Hermes → talk_to() → Olympus MCP (ACP protocol) → Target Daimon
+IDEA → INVESTIGAR → DISEÑAR → PLANIFICAR → PROGRAMAR
 ```
 
-Each Daimon has its own configuration profile, assigned AI model, and specific tools.
+**Hermes** orchestrates all communication. **5 Daimons** handle their specialties. Communication flows through **Olympus MCP**:
+
+```
+Hermes → talk_to() / run_workflow() → Olympus MCP (ACP protocol) → Target Daimon
+```
 
 ---
 
-## Provider-Agnostic by Design
+## Agents
 
-Aether Agents is **provider-agnostic**. It does not recommend, prefer, or favor any AI provider over another. Every Daimon can use **any model from any provider** — the choice is entirely yours.
+| Agent | Role | Specialty |
+|-------|------|-----------|
+| **Hermes** | Orchestrator | Coordinates, designs architecture, delegates, synthesizes |
+| **Ariadna** | Project Manager | Tracks state, detects blockers, manages `.eter/`, session audits |
+| **Hefesto** | Senior Developer | Implements specs, coordinates Ergates (sub-agents by role), debugging |
+| **Etalides** | Web Researcher | Searches, extracts, verifies web sources. 10-link budget. No opinions. |
+| **Daedalus** | UX/UI Designer | User flows, layouts, prototypes, design systems, accessibility |
+| **Athena** | Security Engineer | STRIDE threat modeling, code audit, dependency CVE review |
 
-### Supported Providers
+---
 
-Any provider with an OpenAI-compatible API endpoint works. This includes but is not limited to:
+## Olympus MCP — Workflow Engine
 
-| Provider | API |
-|----------|-----|
-| OpenAI | https://api.openai.com |
-| Anthropic | https://api.anthropic.com |
-| Google Gemini | https://generativelanguage.googleapis.com |
-| Zhipu AI (GLM) | https://open.bigmodel.cn |
-| Moonshot (Kimi) | https://api.moonshot.cn |
-| MiniMax | https://api.minimax.chat |
-| DeepSeek | https://api.deepseek.com |
-| Qwen (Alibaba) | https://dashscope.aliyuncs.com |
-| OpenRouter | https://openrouter.ai |
-| Local (Ollama) | http://localhost:11434 |
-| Local (vLLM) | http://localhost:8000 |
+Olympus exposes 3 MCP tools to the orchestrator:
 
-**This is not an exhaustive list.** Any OpenAI-compatible endpoint works.
+| Tool | Purpose |
+|------|---------|
+| `talk_to` | Direct communication with a single Daimon (open → message → poll → close) |
+| `discover` | List available Daimons and their capabilities |
+| `run_workflow` | Execute multi-agent LangGraph workflows with Human-in-the-Loop |
 
-### Model Selection
+### 6 Predefined Workflows
 
-There is no "best" model for any role. Model choice depends on your budget, latency requirements, language needs, and personal preference. The only guidance is what each role does:
+| Workflow | Purpose | HITL Points | Daimons |
+|----------|---------|-------------|---------|
+| `project-init` | Initialize new project `.eter/` structure | None | Ariadna |
+| `feature` | Full feature lifecycle (research→design→code→audit) | 3 | Etalides, Daedalus, Hefesto, Athena |
+| `bug-fix` | Diagnose → fix → verify | 1 | Etalides, Hefesto, Athena |
+| `security-review` | CVE research → audit → fix loop | 1 | Etalides, Athena, Hefesto |
+| `research` | Pure knowledge gathering | None | Etalides |
+| `refactor` | Scope → implement → audit | 1 | Etalides, Hefesto, Athena |
 
-| Role | Function | What matters |
-|------|----------|-------------|
-| **Hermes** (Orchestrator) | Coordinates all Daimons | Reasoning, planning, tool use |
-| **Hefesto** (Developer) | Writes and refactors code | Code generation quality |
-| **Ariadna** (Project Manager) | Tracks state and plans | Structured output, consistency |
-| **Daedalus** (UX/UI Designer) | Designs interfaces | Frontend knowledge (HTML, CSS) |
-| **Etalides** (Researcher) | Web research and analysis | Instruction following, format compliance |
-| **Athena** (Security) | Security auditing | Security knowledge, thoroughness |
+### Human-in-the-Loop (HITL)
 
-**Use whatever model works for you.** A single model for all roles is perfectly valid. Mixing providers is fine. Changing models later is trivial — just update the `.env` file.
-
-> **Note:** The developers of Aether Agents use Chinese providers (Zhipu, Moonshot, MiniMax, etc.) in their own setup. This is a personal choice based on cost and availability, not a recommendation. Your setup is your business.
-
-### Role descriptions
-
-- **Hermes**: Coordinates tasks, delegates work to Daimons, maintains project state
-- **Ariadna**: Manages planning, task tracking, design documentation and plans
-- **Hefesto**: Senior code development, refactoring, feature implementation
-- **Etalides**: Web research, documentation search, technology analysis
-- **Daedalus**: Interface design, UX/UI, visual prototyping
-- **Athena**: Security auditing, code review, security best practices
+Workflows pause at decision points for user approval. The orchestrator presents findings conversationally and the user decides: `approve`, `reject`, `modify`, `confirm`, or `accept_risk`. Workflow state persists via AsyncSqliteSaver.
 
 ---
 
@@ -76,201 +64,122 @@ There is no "best" model for any role. Model choice depends on your budget, late
 
 ```
 Aether-Agents/
-├── home/                          # Project HERMES_HOME
-│   ├── config.yaml                # Orchestrator config (generated by configure.sh)
-│   ├── profiles/
-│   │   ├── hermes/                # Orchestrator (skills/ has orchestration/)
-│   │   ├── ariadna/               # Project Manager (skills/ has ariadna-workflow/)
-│   │   ├── hefesto/               # Senior Developer (skills/ has hefesto-workflow/)
-│   │   ├── etalides/              # Web Researcher (skills/ has etalides-workflow/)
-│   │   ├── daedalus/              # UX/UI Designer (skills/ has daedalus-workflow/)
-│   │   └── athena/                # Security Engineer (skills/ has athena-workflow/)
-│   ├── sessions/                  # Auto-created by hermes
-│   └── logs/                      # Auto-created by hermes
+├── home/                              ← HERMES_HOME root
+│   ├── skills/                        ← Shared skills (single source of truth)
+│   │   ├── aether-agents/             ← Framework skills (10 skills)
+│   │   ├── productivity/              ← Generic skill categories
+│   │   ├── research/
+│   │   └── ... (24 categories total)
+│   ├── profiles/                      ← Agent profiles (HERMES_HOME per agent)
+│   │   ├── hermes/                    ← Orchestrator (SOUL.md + config.yaml)
+│   │   ├── ariadna/                   ← Project Manager
+│   │   ├── hefesto/                   ← Senior Developer
+│   │   ├── etalides/                  ← Web Researcher
+│   │   ├── daedalus/                  ← UX/UI Designer
+│   │   └── athena/                    ← Security Engineer
+│   ├── sessions/                      ← Auto-created by hermes
+│   └── logs/                          ← Auto-created by hermes
 │
-├── src/olympus/                   # MCP server (ACP protocol)
-│   ├── server.py
-│   ├── acp_client.py
-│   ├── discovery.py
-│   ├── registry.py
-│   ├── config.py
-│   └── log.py
+├── src/olympus/                       ← MCP server + workflow engine
+│   ├── server.py                      ← MCP server (tools: talk_to, discover, run_workflow)
+│   ├── acp_client.py                  ← ACP protocol client
+│   ├── discovery.py                   ← Agent profile discovery
+│   ├── registry.py                    ← Session tracking
+│   ├── config.py                      ← Olympus configuration
+│   └── workflows/                     ← LangGraph workflow engine
+│       ├── state.py                   ← WorkflowState TypedDict
+│       ├── nodes.py                   ← Node factories + HITL
+│       ├── definitions.py             ← 6 workflow graphs
+│       └── runner.py                  ← WorkflowRunner (invoke, resume)
 │
-├── scripts/
-│   ├── configure.sh               # Generates config.yaml from templates
-│   └── start.sh                   # Verifies ecosystem and shows instructions
-│
-├── docs/
-│   └── guides/
-│       └── USER_PROFILE.md        # How to configure your personal preferences
-│
-├── .eter/                         # Project state (gitignored)
-│   ├── .hermes/                   # DESIGN.md + PLAN.md
-│   └── .ariadna/                  # CURRENT.md + LOG.md
-│
-└── pyproject.toml                 # Olympus MCP package
+├── scripts/                           ← Setup scripts
+├── .eter/                             ← Project state (gitignored, local)
+├── pyproject.toml                     ← Olympus package definition
+└── .gitignore
+```
+
+### Skills Architecture
+
+Skills live in ONE place: `home/skills/`. Each profile's `config.yaml` points to this shared directory via `skills.external_dirs`. No symlinks, no duplicates.
+
+- **Aether skills** (`home/skills/aether-agents/`): Custom framework skills for orchestration, workflow design, diagnostics, and agent creation
+- **Generic skills** (`home/skills/{category}/`): Standard hermes-agent skill categories (productivity, research, github, etc.)
+
+Each agent's SOUL.md references the skills relevant to their specialty.
+
+---
+
+## SOUL.md Convention
+
+All agent profiles follow a 7-section structure:
+
+1. **Identity** — who I am, eponym, role
+2. **Execution Context** — how I'm invoked, project root, session scope (DRY for 5 Daimons)
+3. **Core Responsibilities** — what I do
+4. **Limits** — what I MUST NOT do
+5. **Skills** — skills I load (with 1-line descriptions)
+6. **Output Format** — how I structure my responses
+7. **In Workflow Context** — how I operate inside LangGraph workflows
+
+---
+
+## Project State (`.eter/`)
+
+Every project uses `.eter/` for persistence:
+
+```
+PROJECT_ROOT/.eter/
+├── .hermes/        ← DESIGN.md (append-top v{N}) + PLAN.md (append-top Sprint{N})
+├── .ariadna/       ← CURRENT.md (overwrite) + LOG.md (append-bottom)
+├── .hefesto/       ← TASKS.md (overwrite with cycles)
+└── .etalides/      ← RESEARCH.md (append-bottom)
 ```
 
 ---
 
 ## Installation
 
-### 1. Clone the repository
-
 ```bash
 git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
-```
 
-### 2. Create virtual environment and install dependencies
-
-```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install -e .
 ```
 
-### 3. Configure environment variables
-
-Each Daimon profile has its own `.env.example` with the variables it needs. Copy and fill in your API keys:
+### Configure environment
 
 ```bash
-# Example for a profile using OpenAI
+# Each profile needs API keys
 cp home/profiles/hermes/.env.example home/profiles/hermes/.env
 # Edit with your keys
-nano home/profiles/hermes/.env
 ```
 
-Repeat for each profile you want to use. The variables depend on which provider you choose — check each `.env.example` for details.
-
----
-
-## Configuration
-
-### API Keys
-
-API keys depend on the model providers you choose for each Daimon. Configure keys in each profile's `.env` file.
-
-**Common providers:**
-
-| Provider | Example variable | Get your key |
-|----------|-----------------|--------------|
-| OpenAI | `OPENAI_API_KEY` | https://platform.openai.com |
-| Anthropic | `ANTHROPIC_API_KEY` | https://console.anthropic.com |
-| Zhipu AI | `GLM_API_KEY` | https://open.bigmodel.cn |
-| Moonshot | `MOONSHOT_API_KEY` | https://platform.moonshot.cn |
-| OpenRouter | `OPENROUTER_API_KEY` | https://openrouter.ai |
-
-> This is not an exhaustive list. Any provider with an OpenAI-compatible API works.
-
-### HERMES_HOME
-
-`HERMES_HOME` must point to the project's `home/` directory. This isolates Aether Agents configuration from your global hermes-agent installation.
+### Start
 
 ```bash
-export HERMES_HOME=~/Aether-Agents/home
+HERMES_HOME=/path/to/Aether-Agents/home hermes --profile hermes
 ```
-
----
-
-## Getting Started
-
-### Option A: Use the verification script
-
-```bash
-cd ~/Aether-Agents
-source venv/bin/activate
-bash scripts/start.sh
-```
-
-### Option B: Manual start
-
-```bash
-cd ~/Aether-Agents
-source venv/bin/activate
-HERMES_HOME=~/Aether-Agents/home hermes --profile hermes
-```
-
-### Start a specific Daimon (for testing)
-
-```bash
-HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
-HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna
-```
-
----
-
-## Using Skills
-
-Skills live inside each profile's `skills/` directory and are loaded automatically by hermes-agent.
-
-### Skill structure (per profile)
-
-```
-home/profiles/hermes/skills/aether-agents/
-├── orchestration/SKILL.md
-
-home/profiles/ariadna/skills/aether-agents/
-├── ariadna-workflow/SKILL.md
-
-# ... same pattern for each Daimon
-```
-
-Skills are discovered automatically by the framework. No additional configuration needed — each profile's `skills/` directory is the standard location hermes-agent scans.
-
----
-
-## User Profile
-
-Each user can personalize their experience via `USER.md`. See [docs/guides/USER_PROFILE.md](docs/guides/USER_PROFILE.md) for the full guide on how to configure language preferences, workflow style, and communication settings.
 
 ---
 
 ## talk_to — Session Lifecycle
 
-The orchestrator communicates with Daimons using this flow:
-
 ```
 discover → open → message → poll (or wait) → close
 ```
 
-| Action | Description |
-|--------|-------------|
-| `discover` | Lists available agents |
-| `open` | Spawns the Daimon (if dead) and creates an ACP session |
-| `message` | Sends a prompt (async, returns immediately) |
-| `poll` | Checks progress — thoughts, messages, tool calls |
-| `wait` | Blocks until done (max 300s) |
-| `cancel` | Aborts a running session |
-| `close` | Closes the session; agent process stays alive |
-
-Daimons are **keep-alive** — spawned on first `open` and kept alive between sessions.
+Daimons are **keep-alive** — spawned on first `open`, stay alive between sessions.
 
 ---
 
-## Troubleshooting
+## Documentation
 
-### HERMES_HOME not configured
-```bash
-export HERMES_HOME=~/Aether-Agents/home
-```
-
-### Missing API keys
-```bash
-cat home/profiles/hermes/.env
-# Edit with your keys
-```
-
-### Script permissions
-```bash
-chmod +x scripts/*.sh
-```
-
-### Olympus MCP not available
-```bash
-source venv/bin/activate
-pip install -e .
-```
+- **Olympus MCP**: [`src/olympus/README.md`](src/olympus/README.md) — API reference, HITL guide, pitfalls
+- **Team playbook**: `home/skills/aether-agents/orchestration/SKILL.md` — 5-phase pipeline, decision matrix, assignment rules
+- **Workflow engine**: `home/skills/aether-agents/workflow-design/SKILL.md` — technical reference
+- **Diagnostics**: `home/skills/aether-agents/aether-diagnostics/SKILL.md` — health checks
 
 ---
 

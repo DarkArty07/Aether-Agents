@@ -17,7 +17,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Auto-detect hermes-agent Python (override with HERMES_PYTHON env var)
-HERMES_PYTHON="${HERMES_PYTHON:-$HOME/.hermes/hermes-agent/venv/bin/python}"
+HERMES_PYTHON="${HERMES_PYTHON:-}"
+if [ -z "$HERMES_PYTHON" ]; then
+    # Try standard install path first, then from-source, then PATH
+    if [ -f "$HOME/.hermes/sdk/venv/bin/python" ]; then
+        HERMES_PYTHON="$HOME/.hermes/sdk/venv/bin/python"
+    elif [ -f "$HOME/.hermes/hermes-agent/venv/bin/python" ]; then
+        HERMES_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python"
+    elif command -v hermes &>/dev/null; then
+        # Try to resolve from hermes binary location
+        HERMES_PYTHON="$(dirname "$(command -v hermes)")/python" 2>/dev/null || true
+        if [ ! -f "$HERMES_PYTHON" ]; then
+            HERMES_PYTHON=""
+        fi
+    fi
+fi
 
 echo "=== Aether Agents — Configure ==="
 echo "  Project root:  $PROJECT_ROOT"
