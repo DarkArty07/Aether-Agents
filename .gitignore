@@ -35,9 +35,18 @@ home/profiles/*/skills/*
 # --- Per-profile bundled manifests (auto-generated) ---
 **/.bundled_manifest
 
-# --- Hermes auto-generated configs ---
+# --- Per-profile auto-generated configs ---
 home/config.yaml
-home/profiles/hermes/config.yaml
+home/profiles/*/config.yaml
+
+# --- Per-profile runtime state ---
+home/profiles/*/memories/
+home/profiles/*/.update_check
+home/profiles/*/channel_directory.json
+home/profiles/*/gateway.lock
+home/profiles/*/gateway.pid
+home/profiles/*/gateway_state.json
+home/profiles/*/ollama_cloud_models_cache.json
 
 # --- Per-profile runtime dirs ---
 home/profiles/*/bin/
