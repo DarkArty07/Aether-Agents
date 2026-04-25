@@ -1,2 +1,0 @@
-14:06:12 ENTER: queued interrupt msg='Hola', agent_running=True
-14:06:12 interrupt fired: msg='Hola', children=0, parent._interrupt=True

@@ -53,6 +53,9 @@ home/profiles/*/bin/
 home/profiles/*/sandboxes/
 home/profiles/*/cron/
 home/profiles/*/pastes/
+home/profiles/*/spawn-trees/
+home/profiles/*/processes.json
+home/profiles/*/skins
 
 # --- Python ---
 __pycache__/
