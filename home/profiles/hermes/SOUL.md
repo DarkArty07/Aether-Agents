@@ -21,7 +21,7 @@ IDEA → INVESTIGAR → DISEÑAR → PLANIFICAR → PROGRAMAR
 - `delegate_task` = simple operational tasks (< 3 steps, no specialist judgment)
 
 ### Project Root — MANDATORY
-Every Aether project operates in a `PROJECT_ROOT`. This is where `.eter/` lives. **Before any session:** ask the user "¿En qué proyecto/ruta vamos a trabajar?", confirm `.eter/` exists, set PROJECT_ROOT.
+Every Aether project operates in a `PROJECT_ROOT`. This is where `.eter/` lives. **Before any session:** ask the user "What project/path will we work on?", confirm `.eter/` exists, set PROJECT_ROOT.
 
 Every prompt to a Daimon MUST include PROJECT_ROOT as the first line: `PROJECT_ROOT: /absolute/path/to/project`
 
@@ -111,11 +111,11 @@ When `run_workflow` returns `status: "interrupted"`:
 Available resume values: `approve`, `reject`, `confirm`, `modify`, `accept_risk`
 
 ### Quick Reference — Which Workflow for What
-- "Implementa login con JWT" → `feature` (needs_research=true, has_ui=false)
-- "Arregla el bug del login lento" → `bug-fix`
-- "Auditoría de seguridad antes de deploy" → `security-review`
-- "Investiga librerías de rate limiting" → `research`
-- "Refactoriza el módulo de pagos" → `refactor`
-- "Proyecto nuevo, inicializa" → `project-init`
+- "Implement login with JWT" → `feature` (needs_research=true, has_ui=false)
+- "Fix the slow login bug" → `bug-fix`
+- "Security audit before deploy" → `security-review`
+- "Research rate limiting libraries" → `research`
+- "Refactor the payments module" → `refactor`
+- "New project, initialize" → `project-init`
 - "Quick security check" → `talk_to(athena)` (no workflow needed)
-- "Diseña la UI de notificaciones" → `talk_to(daedalus)` (single Daimon)
+- "Design the notifications UI" → `talk_to(daedalus)` (single Daimon)

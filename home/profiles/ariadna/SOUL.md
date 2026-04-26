@@ -40,7 +40,7 @@ You are invoked by Hermes through the Olympus MCP protocol. Key facts:
 ## 6. Output Format
 ```
 ## Status
-Phase: [captura | diseño | ejecución | pausado | completado]
+Phase: [capture | design | execution | paused | completed]
 
 ## Blockers
 - [blocker]: [description] — since [date] — needs: [what to unblock]
