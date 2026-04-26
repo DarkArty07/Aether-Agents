@@ -183,6 +183,42 @@ Daimons are **keep-alive** — spawned on first `open`, stay alive between sessi
 
 ---
 
+## Best Practices
+
+### 1. Read the Aether skills before coding
+
+When starting a new coding session, ask Hermes to load the Aether skills first. These contain project-specific conventions, workflow protocols, and known pitfalls that aren't obvious from the code alone. Without them, Hermes may miss routing rules, HITL checkpoints, or the delegation matrix.
+
+### 2. Populate USER.md before your first session
+
+Before doing meaningful work, fill out `home/profiles/hermes/memories/USER.md` (or let Hermes ask you). Include basics: your name, preferred language, coding style, tech stack, and project context. This lets Hermes personalize interactions and avoid assumptions about what you know or prefer.
+
+### 3. Use talk_to for design-phase opinions
+
+During the DESIGN phase, ask for specialist opinions through `talk_to()`. Each Daimon offers a unique lens:
+
+- **Etalides** — "Are there established patterns or libraries for this?"
+- **Daedalus** — "Is the user flow intuitive? What would the UI look like?"
+- **Athena** — "What are the security implications of this architecture?"
+- **Hefesto** — "Is this technically feasible? What are the implementation trade-offs?"
+
+Don't jump to PROGRAMAR without consulting at least one Daimon during DISEÑAR.
+
+### 4. Let Hermes decide the workflow
+
+When a task needs multiple agents, tell Hermes *what* you want done — not *how* to orchestrate it. Hermes will choose the right Olympus workflow based on the task type:
+
+- New feature? → `feature` workflow (4 Daimons, 3 HITL gates)
+- Bug? → `bug-fix`
+- Security audit? → `security-review`
+- Pure research? → `research`
+- Refactor? → `refactor`
+- New project? → `project-init`
+
+Trying to manually chain `talk_to` calls loses context, skips approval gates, and has no error recovery. Trust the workflow engine.
+
+---
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
