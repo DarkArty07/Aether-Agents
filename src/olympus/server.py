@@ -92,42 +92,42 @@ def create_server() -> Server:
             mcp_types.Tool(
                 name="talk_to",
                 description=(
-                    "Canal de comunicación con sub-agentes via Olympus MCP. "
-                    "Flujo: discover → open → message → poll/wait → close. "
-                    "Message es async por defecto — usa poll para consultar progreso o wait para bloquear."
+                    "Communication channel with sub-agents via Olympus MCP. "
+                    "Flow: discover → open → message → poll/wait → close. "
+                    "Message is async by default — use poll to check progress or wait to block."
                 ),
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "agent": {
                             "type": "string",
-                            "description": "Nombre del agente o '?' para discover",
+                            "description": "Agent name or '?' to discover",
                         },
                         "action": {
                             "type": "string",
                             "enum": ["discover", "open", "message", "poll", "wait", "cancel", "close"],
                             "description": (
-                                "Acción a ejecutar. "
-                                "discover: lista agentes. "
-                                "open: crea sesión ACP. "
-                                "message: envía prompt (async). "
-                                "poll: consulta estado con progreso real. "
-                                "wait: bloquea hasta respuesta. "
-                                "cancel: aborta sesión. "
-                                "close: cierra sesión."
+                                "Action to execute. "
+                                "discover: list agents. "
+                                "open: create ACP session. "
+                                "message: send prompt (async). "
+                                "poll: check status with real progress. "
+                                "wait: block until response. "
+                                "cancel: abort session. "
+                                "close: close session."
                             ),
                         },
                         "prompt": {
                             "type": "string",
-                            "description": "Mensaje. Solo con action=message",
+                            "description": "Message. Only with action=message",
                         },
                         "session_id": {
                             "type": "string",
-                            "description": "ID de sesión (retornado por open). Requerido para poll, wait, cancel, close.",
+                            "description": "Session ID (returned by open). Required for poll, wait, cancel, close.",
                         },
                         "timeout": {
                             "type": "integer",
-                            "description": "Timeout en segundos para wait. Default 120s, max 300s.",
+                            "description": "Timeout in seconds for wait. Default 120s, max 300s.",
                         },
                     },
                     "required": ["agent", "action"],
@@ -135,7 +135,7 @@ def create_server() -> Server:
             ),
             mcp_types.Tool(
                 name="discover",
-                description="Lista los agentes Daimon disponibles y sus capabilities.",
+                description="List available Daimon agents and their capabilities.",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -144,25 +144,25 @@ def create_server() -> Server:
             mcp_types.Tool(
                 name="run_workflow",
                 description=(
-                    "Ejecuta un flujo de trabajo multi-agente predefinido con soporte HITL (Human-in-the-Loop).\n"
-                    "Workflows disponibles: project-init, feature, bug-fix, security-review, research, refactor.\n\n"
-                    "COMPORTAMIENTO SEGÚN RESULTADO:\n\n"
-                    "1. Si status == 'interrupted': El workflow se pausó para que el usuario confirme.\n"
-                    "   DEBES: Presentar la pregunta y contexto al usuario en formato conversacional y natural.\n"
-                    "   Mostrar el contenido de interrupt[].context de forma legible (no como JSON crudo).\n"
-                    "   Preguntar al usuario su decisión entre las opciones disponibles.\n"
-                    "   Luego reanudar llamando run_workflow con el mismo workflow, thread_id, y resume=<decisión_del_usuario>.\n"
-                    "   NO resumas sin confirmación explícita del usuario.\n\n"
-                    "2. Si status == 'success': El workflow completó. Presentar el resultado final al usuario.\n\n"
-                    "3. Si status == 'error': Hubo un error. Informar al usuario y sugerir siguiente paso.\n\n"
-                    "HITL significa Human-in-the-Loop — el workflow NO continúa sin la decisión del usuario.\n"
-                    "Los puntos de confirmación varían por workflow:\n"
+                    "Executes a predefined multi-agent workflow with HITL (Human-in-the-Loop) support.\n"
+                    "Available workflows: project-init, feature, bug-fix, security-review, research, refactor.\n\n"
+                    "BEHAVIOR BASED ON RESULT:\n\n"
+                    "1. If status == 'interrupted': The workflow paused for user confirmation.\n"
+                    "   YOU MUST: Present the question and context to the user in a conversational and natural format.\n"
+                    "   Show the interrupt[].context content in a readable way (not as raw JSON).\n"
+                    "   Ask the user for their decision among the available options.\n"
+                    "   Then resume by calling run_workflow with the same workflow, thread_id, and resume=<user_decision>.\n"
+                    "   Do NOT resume without explicit user confirmation.\n\n"
+                    "2. If status == 'success': The workflow completed. Present the final result to the user.\n\n"
+                    "3. If status == 'error': An error occurred. Inform the user and suggest next steps.\n\n"
+                    "HITL means Human-in-the-Loop — the workflow does NOT continue without the user's decision.\n"
+                    "Confirmation points vary by workflow:\n"
                     "- feature: research_review, design_review, audit_review\n"
                     "- bug-fix: diagnosis_review\n"
                     "- security-review: findings_review\n"
                     "- refactor: scope_review\n"
-                    "- project-init, research: sin HITL (corren directo)\n\n"
-                    "Para reanudar un workflow interrumpido, proporciona thread_id y resume con la decisión del usuario."
+                    "- project-init, research: no HITL (run directly)\n\n"
+                    "To resume an interrupted workflow, provide thread_id and resume with the user's decision."
                 ),
                 inputSchema={
                     "type": "object",
@@ -170,27 +170,27 @@ def create_server() -> Server:
                         "workflow": {
                             "type": "string",
                             "enum": ["project-init", "feature", "bug-fix", "security-review", "research", "refactor"],
-                            "description": "Nombre del workflow a ejecutar",
+                            "description": "Name of the workflow to execute",
                         },
                         "prompt": {
                             "type": "string",
-                            "description": "Descripción de la tarea a realizar (no requerido si se usa resume)",
+                            "description": "Description of the task to perform (not required when using resume)",
                         },
                         "max_review_cycles": {
                             "type": "integer",
-                            "description": "Máximo de ciclos de revisión Hefesto <-> Athena (default: 3)",
+                            "description": "Maximum review cycles (Hefesto <-> Athena, default: 3)",
                         },
                         "params": {
                             "type": "object",
-                            "description": "Parámetros específicos del workflow (needs_research, has_ui, workflow_type, etc.)",
+                            "description": "Workflow-specific parameters (needs_research, has_ui, workflow_type, etc.)",
                         },
                         "thread_id": {
                             "type": "string",
-                            "description": "ID del hilo para reanudar un workflow interrumpido (requerido con resume)",
+                            "description": "Thread ID for resuming an interrupted workflow (required with resume)",
                         },
                         "resume": {
                             "type": "string",
-                            "description": "Decisión del usuario para reanudar (approve, reject, confirm, modify, accept_risk)",
+                            "description": "User decision to resume (approve, reject, confirm, modify, accept_risk)",
                         },
                     },
                     "required": ["workflow"],
@@ -475,34 +475,34 @@ async def _handle_run_workflow(args: dict[str, Any]) -> list[mcp_types.TextConte
             if interrupts and isinstance(interrupts, list) and len(interrupts) > 0:
                 first_interrupt = interrupts[0]
                 if isinstance(first_interrupt, dict):
-                    question = first_interrupt.get("question", "Se requiere tu confirmación")
+                    question = first_interrupt.get("question", "Your confirmation is required")
                     options = first_interrupt.get("options", [])
                     workflow_type = first_interrupt.get("workflow_type", "")
                     context = first_interrupt.get("context", "")
             
             # Build a clear, conversational response for the calling agent
             hitl_msg = (
-                f"🛑 WORKFLOW INTERRUPTADO — Se requiere tu decisión\n\n"
+                f"🛑 WORKFLOW INTERRUPTED — Your decision is required\n\n"
                 f"**Workflow:** {workflow_type or workflow_name}\n"
                 f"**Thread ID:** {thread_id}\n"
-                f"**Punto de confirmación:** {question}\n"
-                f"**Opciones disponibles:** {', '.join(options) if options else 'approve, reject'}\n\n"
+                f"**Confirmation point:** {question}\n"
+                f"**Available options:** {', '.join(options) if options else 'approve, reject'}\n\n"
             )
             if context:
-                hitl_msg += f"**Contexto del agente:**\n{context}\n\n"
+                hitl_msg += f"**Agent context:**\n{context}\n\n"
             hitl_msg += (
-                f"**Para continuar:** Lama run_workflow con:\n"
+                f"**To continue:** Call run_workflow with:\n"
                 f"- workflow: \"{workflow_name}\"\n"
                 f"- thread_id: \"{thread_id}\"\n"
-                f"- resume: tu decisión (una de: {', '.join(options) if options else 'approve, reject'})\n\n"
-                f"NO continúes sin confirmación explícita del usuario."
+                f"- resume: your decision (one of: {', '.join(options) if options else 'approve, reject'})\n\n"
+                f"Do NOT continue without explicit user confirmation."
             )
             return [mcp_types.TextContent(type="text", text=hitl_msg)]
         
         # Format successful completion
         if result.get("status") == "success":
             final_response = result.get("result", "")
-            return [mcp_types.TextContent(type="text", text=f"✅ Workflow completado exitosamente.\n\n{final_response}")]
+            return [mcp_types.TextContent(type="text", text=f"✅ Workflow completed successfully.\n\n{final_response}")]
         
         # Error or other status — return as-is
         return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
