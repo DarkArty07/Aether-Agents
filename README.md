@@ -18,6 +18,10 @@ IDEA → INVESTIGAR → DISEÑAR → PLANIFICAR → PROGRAMAR
 Hermes → talk_to() / run_workflow() → Olympus MCP (ACP protocol) → Target Daimon
 ```
 
+### Provider Compatibility
+
+Aether Agents inherits the same extensive provider compatibility as hermes-agent. Any provider with an OpenAI-compatible API endpoint works — OpenAI, Anthropic, Google, Zhipu AI, DeepSeek, Qwen, OpenRouter, Ollama, vLLM, and many more. Each Daimon can use a different model/provider. No vendor lock-in.
+
 ---
 
 ## Agents
@@ -60,6 +64,27 @@ Workflows pause at decision points for user approval. The orchestrator presents 
 
 ---
 
+## Project Status
+
+**Current version:** v0.2.0 — Workflow Engine + Conventions Formalized
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| Olympus MCP server | ✅ Working | `talk_to`, `discover`, `run_workflow` functional |
+| LangGraph workflows | ✅ Working | 6 canonical workflows with HITL gates |
+| AsyncSqliteSaver | ✅ Working | Persistent checkpointing across sessions |
+| Progress Watchdog | ✅ Working | Stall detection (no hard timeouts on LLM tasks) |
+| .eter/ project state | ✅ Working | Persistent project state across sessions |
+| SOUL.md convention | ✅ Working | 7-section structure, DRY execution context |
+| Skills architecture | ✅ Working | Shared external_dirs, single source of truth |
+| Daimon identity | ✅ Fixed | `--profile` flag ensures correct SOUL.md loading |
+| MCP tool propagation | ✅ Patched | Subagents receive Olympus tools via delegation |
+| ACP response collection | ✅ Fixed | Race condition resolved, thoughts recovery path |
+| Collaborative multi-turn | 🔜 Planned | Multi-turn Daimon sessions (MCP supports it, skill doesn't use it yet) |
+| Website landing page | ✅ Working | Static site in `website/` |
+
+---
+
 ## Project Structure
 
 ```
@@ -71,7 +96,7 @@ Aether-Agents/
 │   │   ├── research/
 │   │   └── ... (24 categories total)
 │   ├── profiles/                      ← Agent profiles (HERMES_HOME per agent)
-│   │   ├── hermes/                    ← Orchestrator (SOUL.md + config.yaml)
+│   │   ├── hermes/                    ← Orchestrator (SOUL.md + .env.example + config.yaml.template)
 │   │   ├── ariadna/                   ← Project Manager
 │   │   ├── hefesto/                   ← Senior Developer
 │   │   ├── etalides/                  ← Web Researcher
@@ -92,6 +117,7 @@ Aether-Agents/
 │       ├── definitions.py             ← 6 workflow graphs
 │       └── runner.py                  ← WorkflowRunner (invoke, resume)
 │
+├── website/                           ← Landing page
 ├── scripts/                           ← Setup scripts
 ├── .eter/                             ← Project state (gitignored, local)
 ├── pyproject.toml                     ← Olympus package definition
@@ -153,7 +179,7 @@ pip install -e .
 ```bash
 # Each profile needs API keys
 cp home/profiles/hermes/.env.example home/profiles/hermes/.env
-# Edit with your keys
+# Edit .env with your keys — supports any OpenAI-compatible provider
 ```
 
 ### Start
@@ -161,25 +187,6 @@ cp home/profiles/hermes/.env.example home/profiles/hermes/.env
 ```bash
 HERMES_HOME=/path/to/Aether-Agents/home hermes --profile hermes
 ```
-
----
-
-## talk_to — Session Lifecycle
-
-```
-discover → open → message → poll (or wait) → close
-```
-
-Daimons are **keep-alive** — spawned on first `open`, stay alive between sessions.
-
----
-
-## Documentation
-
-- **Olympus MCP**: [`src/olympus/README.md`](src/olympus/README.md) — API reference, HITL guide, pitfalls
-- **Team playbook**: `home/skills/aether-agents/orchestration/SKILL.md` — 5-phase pipeline, decision matrix, assignment rules
-- **Workflow engine**: `home/skills/aether-agents/workflow-design/SKILL.md` — technical reference
-- **Diagnostics**: `home/skills/aether-agents/aether-diagnostics/SKILL.md` — health checks
 
 ---
 
@@ -216,6 +223,16 @@ When a task needs multiple agents, tell Hermes *what* you want done — not *how
 - New project? → `project-init`
 
 Trying to manually chain `talk_to` calls loses context, skips approval gates, and has no error recovery. Trust the workflow engine.
+
+---
+
+## Documentation
+
+- **Olympus MCP**: [`src/olympus/README.md`](src/olympus/README.md) — API reference, HITL guide, pitfalls
+- **Home directory**: [`home/README.md`](home/README.md) — profiles, skills architecture, adding new Daimons
+- **Team playbook**: `home/skills/aether-agents/orchestration/SKILL.md` — 5-phase pipeline, decision matrix, assignment rules
+- **Workflow engine**: `home/skills/aether-agents/workflow-design/SKILL.md` — technical reference
+- **Diagnostics**: `home/skills/aether-agents/aether-diagnostics/SKILL.md` — health checks
 
 ---
 
