@@ -1,0 +1,43 @@
+# Hefesto configuration — Aether Agents Daimon (Level 2)
+
+# Agent discovery field — Olympus reads this to register the Daimon
+agent:
+  name: hefesto
+  role: senior-developer
+  description: "Senior Developer y Tech Lead de implementación. Descompone por rol, delega, revisa, integra."
+  capabilities:
+    - receives_from
+    - delegate_task
+    - implementation
+    - code-review
+    - integration
+    - debugging
+    - estimation
+  launch_command: "hermes acp"
+  keep_alive: true
+
+# Model configuration
+model: glm-5.1
+provider: opencode-go
+base_url: https://opencode.ai/zen/go/v1
+
+# Toolsets — implementation tools only
+toolsets:
+  - terminal
+  - file
+  - search_files
+  - patch
+  - execute_code
+  - delegate_task
+  - skills
+
+skills:
+  external_dirs:
+    - /home/prometeo/Aether-Agents/home/skills
+
+# Session settings
+# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+display:
+  personality: none
+
+max_iterations: 80
