@@ -15,8 +15,9 @@ agent:
   keep_alive: true
 
 # Model configuration
-# DeepSeek V4 Flash via OpenCode Go — fast, cost-effective, better for web research than minimax-m2.7
-model: deepseek-v4-flash
+# Using qwen3.6-plus (fast, reliable, in opencode-go catalog) — previous minimax-m2.7
+# timed out on research, deepseek-v4-flash was misrouted by hermes-agent model_normalize
+model: qwen3.6-plus
 provider: opencode-go
 base_url: https://opencode.ai/zen/go/v1
 
