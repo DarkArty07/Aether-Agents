@@ -163,24 +163,25 @@
    163|
    164|## config.yaml Template
    165|
-   166|### Team Daimon (registered in Olympus)
-   167|
-   168|```yaml
-   169|# <Name> configuration — Aether Agents Daimon (Level 2)
-   170|
-   171|agent:
-   172|  name: <name>
-   173|  role: <role-slug>
-   174|  description: "<Spanish description>"
-   175|  capabilities:
-   176|    - <capability1>
-   177|    - <capability2>
-   178|  launch_command: "hermes acp"
-   179|  keep_alive: true
-   180|
-   181|model: <model-name>
-   182|provider: opencode-go
-   183|base_url: https://opencode.ai/zen/go/v1
+### Team Daimon (registered in Olympus)
+
+```yaml
+# <Name> configuration — Aether Agents Daimon (Level 2)
+
+agent:
+  name: <name>
+  role: <role-slug>
+  description: "<Spanish description>"
+  capabilities:
+    - <capability1>
+    - <capability2>
+  launch_command: "hermes acp"
+  keep_alive: true
+
+model:
+  default: <model-name>
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
    184|
    185|toolsets:
    186|  - <toolset1>
@@ -201,15 +202,16 @@
    201|```
    202|
    203|
-   204|### Personal Agent (NOT in Olympus)
-   205|
-   206|```yaml
-   207|# <Name> configuration — Personal Assistant (Private, not a Daimon)
-   208|# No agent discovery field needed
-   209|
-   210|model: <model-name>
-   211|provider: opencode-go
-   212|base_url: https://opencode.ai/zen/go/v1
+### Personal Agent (NOT in Olympus)
+
+```yaml
+# <Name> configuration — Personal Assistant (Private, not a Daimon)
+# No agent discovery field needed
+
+model:
+  default: <model-name>
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
    213|
    214|toolsets:
    215|  - <full toolset based on needs>
@@ -365,7 +367,25 @@
    365|
    366|17. **SOUL.md MUST use the 7-section numbered template**: Identity(1), Execution Context(2), Responsibilities(3), Limits(4), Skills(5), Output Format(6), In Workflow Context(7). The Execution Context is DRY — identical for all 5 Daimons. Only Hermes differs (adds pipeline + delegation gates + .eter/ ownership). Old sections like "Anti-Bias Rule", "Communication", "Success Criteria" are no longer separate — their content merged into Execution Context or removed.
    367|
-   368|18. **Skills MUST use `external_dirs`, never copied**: hermes-agent supports `skills.external_dirs` in config.yaml to scan skill directories outside the default location. This is the clean way to share skills — no symlinks, no duplicates. Place aether-agent workflow skills in the Daimon's local `skills/` and shared categories in `home/skills/`. Configure each Daimon with:\n```yaml\nskills:\n  external_dirs:\n    - /path/to/Aether-Agents/home/skills\n```\nThe agent scans its local `HERMES_HOME/skills/` first, then external dirs. Copying skills creates stale duplicates — use `external_dirs` instead.
+19. **Model config MUST use nested YAML format**: hermes-agent expects `model.default`, `model.provider`, and `model.base_url` as nested keys under a `model:` block — NOT as flat top-level keys. Flat keys like `model: deepseek-v4-flash` / `provider: opencode-go` are **silently ignored**. The agent will fall back to the parent/delegation provider instead of the profile's model. Always use:
+```yaml
+model:
+  default: deepseek-v4-flash
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
+```
+NEVER use:
+```yaml
+model: deepseek-v4-flash      # WRONG — silently ignored!
+provider: opencode-go          # WRONG — silently ignored!
+base_url: https://...          # WRONG — silently ignored!
+```
+
+20. **API key corruption in .env files**: When copying `.env` files between profiles, keys can get corrupted (extra character, wrong character). Symptoms: HTTP 401 "Invalid API key" even though the key looks correct. Always verify key length matches across profiles (e.g., OpenCode Go keys are 67 chars). Use `xxd` or `wc -c` to check. A 1-char difference means a typo or trailing newline.
+
+21. **Verify Daimons respond after config changes**: After changing model/provider config in any Daimon, test each one with `talk_to` sending a simple "who are you and what model?" prompt. Empty responses usually mean: (a) wrong API key in .env, (b) corrupted key, (c) model not supported by the provider endpoint. HTTP 401 = key issue, HTTP 402 = wrong provider routing, empty response = check key first, then model compatibility.
+
+22. **OpenCode Go catalog**: The supported models on OpenCode Go are: kimi-k2.6, kimi-k2.5, glm-5.1, glm-5, mimo-v2.5-pro, mimo-v2.5, mimo-v2-pro, mimo-v2-omni, minimax-m2.7, minimax-m2.5, qwen3.6-plus, qwen3.5-plus. Models NOT in this list (like deepseek-v4-flash) can be added to hermes-agent catalogs (models.py, setup.py) and model_normalize.py, but may need patches to avoid provider misrouting.
    369|
    370|---
    371|
