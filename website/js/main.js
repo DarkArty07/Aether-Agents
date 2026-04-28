@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Scroll-in animation for daimon cards ─────
-    const cards = document.querySelectorAll('.daimon-card');
+    const cards = document.querySelectorAll('.daimon-card, .workflow-card');
     const observer = new IntersectionObserver((entries) => {
         entries.forEach((entry, i) => {
             if (entry.isIntersecting) {
