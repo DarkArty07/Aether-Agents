@@ -292,22 +292,38 @@ Fallback activated: checked internal project knowledge first.
 
 ---
 
-## Known Issue — Model Timeout (minimax-m2.7)
+## Known Issue — ACP Session Stall (NOT model-specific)
 
-When running on `minimax-m2.7` via `opencode-go`, Etalides may timeout on multi-step web research tasks (>5 minutes). The model enters extended "thinking" cycles without producing tool calls or messages.
+Etalides (and potentially other Daimons) may enter an infinite "thinking" state through the Olympus MCP `talk_to` interface. The Daimon process is alive, thoughts show "formulating"/"analyzing"/"pondering", but **no messages or tool calls are ever produced**.
 
-**Symptom:** `talk_to(agent="etalides")` polls with `status: "active"` but no messages, no tool calls, just `thoughts` showing "formulating", "mulling", "cogitating" indefinitely.
+**This affects multiple models** — confirmed with both `minimax-m2.7` and `deepseek-v4-flash`. This is NOT a model speed issue. It's an ACP session-level problem where the model's response never fully completes the response cycle back to Olympus.
 
-**Workaround for Hermes:** If Etalides times out on a research task:
+**Symptom:** `talk_to(agent="etalides")` → polls with `status: "active"` but `messages: []` and `tool_calls: []` forever. Only `thoughts` show kawaii faces ("formulating", "mulling", "cogitating"). Wait times exceed 5+ minutes with no output.
+
+**Root cause hypothesis:** The model produces `AgentThoughtChunk` (thinking/spinner) but never transitions to `AgentMessageChunk` (actual response). The ACP session's `completion_event` is never set, so `wait()` blocks indefinitely. This may be related to the known ACP race condition (see aether-diagnostics Section about `asyncio.sleep(0)` fix) or may be a separate issue with how certain model responses are parsed.
+
+**Workaround for Hermes:** If Etalides stalls on a research task:
 1. Close the session (`talk_to(action="close")`)
 2. Use `delegate_task` with `toolsets=["web"]` as fallback — sub-agents can use `web_search` directly
 3. Alternatively, Hermes can use `web_search` for quick fact checks (single lookup)
 
-**Long-term fix:** Consider changing Etalides' model to a faster one (e.g., `kimi-k2.5` or `glm-5.1`) in the profile's `config.yaml`:
-```yaml
-model: kimi-k2.5  # or glm-5.1
-provider: opencode-go
-```
+**Model history (Etalides):**
+- `minimax-m2.7` — timed out on research tasks (stall bug, infinite "thinking")
+- `deepseek-v4-flash` — **FAILED**: HTTP 402 "unable to verify membership" because hermes-agent misroutes it
+- `qwen3.6-plus` — **CURRENT, WORKING** via `provider: opencode-go`
+
+**Multi-layer routing bug in hermes-agent (deepseek-v4-flash vs opencode-go):**
+Three separate layers in hermes-agent intercept `deepseek-*` model names and route them away from `opencode-go`:
+
+1. **`model_normalize.py` (~line 396):** The normalizer had a handler for `opencode-zen` but not `opencode-go`, so `deepseek-v4-flash` was normalized to the native deepseek provider. **PATCHED 2026-04-28:** Added `opencode-go` to the same block so deepseek models pass through as-is.
+
+2. **`models.py` — `_PROVIDER_MODELS` dict:** The catalog did not include `deepseek-v4-flash` or `deepseek-v4-pro` in the `opencode-go` list. **PATCHED 2026-04-28:** Added both to `models.py` and `setup.py`.
+
+3. **`models.py` — `detect_provider_for_model()` (NOT PATCHED):** Even with patches #1 and #2, this function searches ALL provider catalogs to find which provider "owns" a model. It finds `deepseek-v4-flash` in the `deepseek` native provider catalog and returns `("deepseek", "deepseek-v4-flash")`. The credential system then finds no deepseek API key and falls back to `kimi-coding`, producing `Provider: kimi-coding, Endpoint: https://api.kimi.com/coding` → HTTP 402. This layer needs an upstream fix.
+
+**Impact:** ANY Daimon config using a `deepseek-*` model name with `provider: opencode-go` will be misrouted to kimi-coding until hermes-agent upstream adds proper support for respecting the explicit `provider:` config field.
+
+**Workaround:** Use `qwen3.6-plus` (or other non-intercepted models from the opencode-go catalog) with `provider: opencode-go`.
 
 ---
 

@@ -15,11 +15,13 @@ agent:
   keep_alive: true
 
 # Model configuration
-# Using qwen3.6-plus (fast, reliable, in opencode-go catalog) — previous minimax-m2.7
-# timed out on research, deepseek-v4-flash was misrouted by hermes-agent model_normalize
-model: qwen3.6-plus
-provider: opencode-go
-base_url: https://opencode.ai/zen/go/v1
+# Using deepseek-v4-flash via opencode-go — strong reasoning for web research.
+# Added to hermes-agent catalogs (models.py + setup.py). model_normalize.py patched
+# for opencode-go.
+model:
+  default: deepseek-v4-flash
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
 
 # Toolsets — web research tools only
 toolsets:

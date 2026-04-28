@@ -240,9 +240,66 @@ for d in .hermes .ariadna .hefesto .etalides; do
 done
 ```
 
-### 12. MCP Tools Not Propagating to LLM Context
+### 12. Profile Resolution Fails for External Profiles (`-p` flag)
 
-### 12. MCP Tools Not Propagating to LLM Context
+**Problem:** `hermes -p prometeo` fails with "Profile 'prometeo' does not exist" even though the profile directory exists and works with the wrapper script.
+
+**Root cause:** `_apply_profile_override()` in `hermes_cli/main.py` resolves the profile name by calling `resolve_profile_env('prometeo')`, which calls `get_profile_dir('prometeo')` → `_get_profiles_root() / 'prometeo'`. The `_get_profiles_root()` function uses `get_default_hermes_root()` which checks `HERMES_HOME`:
+
+- **HERMES_HOME unset** → `get_default_hermes_root()` returns `~/.hermes` → profiles searched in `~/.hermes/profiles/prometeo` → symlink resolves ✅
+- **HERMES_HOME=/home/prometeo/.prometeo** (wrapper script) → `get_default_hermes_root()` returns `/home/prometeo/.prometeo` → profiles searched in `.prometeo/profiles/prometeo` → exists ✅
+- **HERMES_HOME=/home/prometeo/Aether-Agents/home/profiles/hermes** (Aether session) → `get_default_hermes_root()` detects parent is `profiles/`, returns `/home/prometeo/Aether-Agents/home` → profiles searched in `Aether-Agents/home/profiles/prometeo` → **DOES NOT EXIST** ❌
+
+The profile system always searches under the **effective hermes root**, not under `~/.hermes/`. When another profile's HERMES_HOME is active, profiles that only exist as symlinks under `~/.hermes/profiles/` become invisible.
+
+**Diagnostic steps:**
+```bash
+# Step 1: Check current HERMES_HOME
+echo $HERMES_HOME
+
+# Step 2: Check if profile resolves correctly
+hermes -p prometeo config path
+# If ERROR: Profile doesn't exist under current hermes root
+
+# Step 3: Check what profiles exist under current root
+ls $(dirname $(hermes config path))/../profiles/
+# These are the only profiles visible with the current HERMES_HOME
+
+# Step 4: Verify profile exists under ~/.hermes (symlink)
+ls -la ~/.hermes/profiles/prometeo
+# Should show symlink → /home/prometeo/.prometeo/profiles/prometeo
+
+# Step 5: Test with clean environment (unset HERMES_HOME)
+env -u HERMES_HOME hermes -p prometeo config path
+# If this works but Step 2 failed, the issue is HERMES_HOME interference
+```
+
+**Fix options (pick one):**
+
+**Option A: Symlink in each external HERMES_HOME (recommended for multi-profile setups)**
+```bash
+# Add a symlink in the Aether Agents profiles directory
+ln -s /home/prometeo/.prometeo/profiles/prometeo /home/prometeo/Aether-Agents/home/profiles/prometeo
+```
+This makes `prometeo` discoverable regardless of which HERMES_HOME is active. Repeat for any other external profile locations.
+
+**Option B: Use the wrapper script (always works)**
+```bash
+~/.local/bin/prometeo chat
+# or equivalently:
+HERMES_HOME=/home/prometeo/.prometeo hermes -p prometeo chat
+```
+The wrapper sets HERMES_HOME before calling hermes, so profile resolution always searches the correct root.
+
+**Option C: Unset HERMES_HOME before running**
+```bash
+env -u HERMES_HOME hermes -p prometeo chat
+```
+This forces fallback to `~/.hermes` where the symlink exists. Works but risks losing the current session's profile context.
+
+**Important:** `hermes profile create prometeo` would create a NEW blank profile under `~/.hermes/profiles/prometeo/`, overwriting the symlink. Do NOT use this to "fix" a symlinked profile — it breaks the link and creates a separate, empty profile.
+
+### 13. MCP Tools Not Propagating to LLM Context
 
 **Problem:** MCP server tools (e.g., `mcp_olympus_talk_to`, `mcp_olympus_discover`) are registered at agent startup (visible in agent.log) but are NOT available in the LLM's tool schema in ACP sessions or delegated contexts. This is an **upstream bug in hermes-agent SDK** (not in Aether or Olympus).
 
@@ -547,7 +604,115 @@ ls -la /path/to/Aether-Agents/home/.eter/ 2>/dev/null && echo "BUG STILL PRESENT
 mv /path/to/Aether-Agents/home/.eter /path/to/Aether-Agents/.eter
 ```
 
-### 17. Daimon Identity — SOUL.md Not Loading (Wrong Profile)
+### 17. Profile Resolution — How `-p` and HERMES_HOME Interact
+
+**Critical for anyone running multiple profiles (external HERMES_HOME).**
+
+The `_apply_profile_override()` function in `hermes_cli/main.py` (line 99-160) runs **before any hermes module imports**. It parses `sys.argv` for `--profile/-p`, resolves the profile name to a directory via `resolve_profile_env()`, and sets `os.environ["HERMES_HOME"]` to that directory.
+
+The resolution chain is:
+
+```
+-p prometeo
+  → get_profile_dir('prometeo')
+    → _get_profiles_root() / 'prometeo'
+      → get_default_hermes_root() / 'profiles' / 'prometeo'
+```
+
+**The problem:** `get_default_hermes_root()` (in `hermes_constants.py`) behaves differently depending on whether `HERMES_HOME` is already set:
+
+| Current HERMES_HOME | get_default_hermes_root() returns | Profiles root |
+|---|---|---|
+| Unset | `~/.hermes` | `~/.hermes/profiles/` |
+| `~/.hermes/profiles/coder` (under ~/.hermes) | `~/.hermes` | `~/.hermes/profiles/` |
+| `/opt/data/profiles/coder` (Docker, parent="profiles") | `/opt/data` | `/opt/data/profiles/` |
+| `/home/prometeo/Aether-Agents/home/profiles/hermes` (parent="profiles") | `/home/prometeo/Aether-Agents/home` | `/home/prometeo/Aether-Agents/home/profiles/` |
+| `/home/prometeo/.prometeo` (not under ~/.hermes, no "profiles" parent) | `/home/prometeo/.prometeo` | `/home/prometeo/.prometeo/profiles/` |
+
+**This means:** When HERMES_HOME is set to Aether Agents (`/home/prometeo/Aether-Agents/home/profiles/hermes`), running `hermes -p prometeo` looks for the profile at `/home/prometeo/Aether-Agents/home/profiles/prometeo` — which doesn't exist. It does NOT fall back to `~/.hermes/profiles/prometeo`.
+
+**The correct way to launch external profiles:** Always use the wrapper script created by `hermes profile create`. The wrapper sets HERMES_HOME explicitly:
+
+```bash
+# ~/.local/bin/prometeo
+#!/bin/sh
+export HERMES_HOME=/home/prometeo/.prometeo
+exec hermes -p prometeo "$@"
+```
+
+This ensures profile resolution happens from the correct root, regardless of any HERMES_HOME already in the environment.
+
+**Diagnostic:**
+```bash
+# 1. Check wrapper script for profile
+cat ~/.local/bin/<profile-name>
+
+# 2. Verify profile resolution from clean shell (no HERMES_HOME)
+unset HERMES_HOME; hermes -p <name> config path
+
+# 3. Verify wrapper works from any context
+~/.local/bin/<profile-name> config path
+
+# 4. If -p fails from within another session, check current HERMES_HOME
+echo $HERMES_HOME
+```
+
+**Cross-profile isolation rule:** External profiles (Prometeo in `.prometeo/`, Aether in `Aether-Agents/home/`) are separate agents with separate homes. Do NOT create symlinks between their `profiles/` directories. Each agent uses its own wrapper script that sets the correct HERMES_HOME.
+
+### 17. External Profile Launch Failure (`hermes -p <name>` fails from another session)
+
+**Problem:** `hermes -p prometeo` returns "Profile 'prometeo' does not exist" when HERMES_HOME is already set to an external directory (e.g., Aether Agents).
+
+**Root cause:** Profile resolution in `_apply_profile_override()` (hermes_cli/main.py:99-160) uses `get_profile_dir(name)` which calls `_get_profiles_root()` which calls `get_default_hermes_root()`. When HERMES_HOME is already set to an external path like `/home/prometeo/Aether-Agents/home/profiles/hermes`, `get_default_hermes_root()` detects the parent is `profiles/` and returns the grandparent `/home/prometeo/Aether-Agents/home`. Then `_get_profiles_root()` returns `/home/prometeo/Aether-Agents/home/profiles/`, and `get_profile_dir('prometeo')` looks for `/home/prometeo/Aether-Agents/home/profiles/prometeo/` which doesn't exist.
+
+**Key insight:** Profiles are scoped to their HERMES_HOME root. An external agent (like Prometeo at `~/.prometeo/`) has its own profile tree invisible to a different root (like Aether Agents at `Aether-Agents/home/`).
+
+**The correct way to launch external profiles:** Use the wrapper script at `~/.local/bin/<name>`. This script sets HERMES_HOME to the external root BEFORE calling hermes:
+
+```bash
+#!/bin/sh
+export HERMES_HOME=/home/prometeo/.prometeo
+exec hermes -p prometeo "$@"
+```
+
+**Diagnosis:**
+```bash
+# 1. Does the wrapper exist?
+cat ~/.local/bin/prometeo
+
+# 2. Does the profile directory exist?
+ls -la ~/.prometeo/profiles/prometeo/  # External profile location
+ls -la ~/.hermes/profiles/prometeo/     # Symlink (if created by hermes profile create)
+
+# 3. Test resolution from clean environment
+unset HERMES_HOME; hermes -p prometeo config path  # Should work via symlink
+~/.local/bin/prometeo config path                    # Should work via wrapper
+
+# 4. Test resolution with HERMES_HOME set to another root (FAILS for external profiles)
+HERMES_HOME=/path/to/Aether-Agents/home/profiles/hermes hermes -p prometeo config path
+# → ERROR: Profile 'prometeo' does not exist
+```
+
+**Fix options:**
+- **Best:** Always use the wrapper script (`prometeo chat`) to launch external profiles
+- **Alternative:** Create a symlink in the Aether profiles directory: `ln -s /home/prometeo/.prometeo/profiles/prometeo /home/prometeo/Aether-Agents/home/profiles/prometeo`
+- **Never:** Set HERMES_HOME manually and rely on `-p` alone — it fails cross-root
+
+**Profile resolution diagram:**
+```
+hermes -p <name> resolution:
+  1. Parse -p <name> from argv (before any imports)
+  2. resolve_profile_env(name) → get_profile_dir(name) → _get_profiles_root() / name
+  3. _get_profiles_root() = get_default_hermes_root() / "profiles"
+  4. get_default_hermes_root() depends on HERMES_HOME:
+     - No HERMES_HOME → ~/.hermes
+     - HERMES_HOME under ~/.hermes → ~/.hermes (standard profile mode)
+     - HERMES_HOME outside ~/.hermes, parent is "profiles/" → grandparent (Aether mode)
+     - HERMES_HOME outside ~/.hermes, other → HERMES_HOME itself (Docker/custom)
+  5. If profile_dir.is_dir() is False → FileNotFoundError → "Profile does not exist"
+```
+
+### 18. Daimon Identity — SOUL.md Not Loading (Wrong Profile)
 
 **Status: FIXED (2026-04-25)** in `src/olympus/acp_client.py`.
 
@@ -647,6 +812,7 @@ asyncio.run(test())
 | Custom skin not applying (falls back to default) | `HERMES_HOME/skins/` dir missing in profile | Symlink `~/.hermes/skins` into profile dir |
 | Skin loads but colors clash (green on pink etc.) | Missing `status_bar_*` keys fall back to gold/kawaii | Define ALL 27 color keys in custom skin YAML |
 | `.eter/` files inside `home/` dir | Stale install prior to fix | Run `mv home/.eter .eter` to migrate |
+| `hermes -p <profile>` says "does not exist" | HERMES_HOME already set to different profile's root; `-p` resolves profiles under that root, not `~/.hermes` | See Section 17: use wrapper script (`~/.local/bin/<name>`) which sets HERMES_HOME explicitly |
 | `talk_to()` returns empty response | ACP race condition: streaming callbacks not yet processed | Fixed in `fa39ac8` — `asyncio.sleep(0)` after `prompt()` + thoughts recovery path |
 
 ## Skin Engine Field Reference
@@ -662,6 +828,8 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
 ## Pitfalls
 
 - **Always verify HERMES_HOME first**: Before diagnosing ANY config issue, run `echo $HERMES_HOME`. If set, that directory is the source of truth for config.yaml, SOUL.md, skills/, skins/, .env — everything. `~/.hermes/` is the CLI fallback used only when no profile is active. Editing `~/.hermes/config.yaml` when a profile is active has NO effect on runtime behavior and will produce false diagnostics.
+- **`hermes -p <name>` resolves profiles under the current HERMES_HOME root**: If HERMES_HOME is already set (e.g., from a wrapper script or within another agent session), `-p prometeo` looks for the profile under THAT root's `profiles/` directory, NOT under `~/.hermes/profiles/`. This means `hermes -p prometeo` fails when run inside a Hermes session whose HERMES_HOME points elsewhere. Always use the wrapper script (`~/.local/bin/<name>`) for external profiles, which explicitly sets HERMES_HOME before calling hermes.
+- **External profiles must stay isolated**: Do NOT symlink external profiles into each other's `profiles/` directories. Prometeo lives in `.prometeo/`, Aether lives in `Aether-Agents/home/`. Cross-contaminating profile roots causes `hermes -p` to find the wrong home.
 - **`skills: []` is INVALID YAML**: Must use `skills: {}` for empty dict. The parser expects a dict, not a list.
 - **Daimon .env files**: Each Daimon needs its own `.env` with API keys. The `.env.example` is a template — must be copied and filled.
 - **Olympus starts lazily**: Daimons are spawned on first `talk_to(action="open")`. Discovery works without running Daimons, but actual communication requires `hermes acp` to be functional.
@@ -681,5 +849,7 @@ Missing keys inherit from `default` skin (gold/kawaii) which **clashes** with da
   - **Diagnostic**: `grep "completed with empty response" $HERMES_HOME/logs/agent.log` and `grep "substantive thoughts" $HERMES_HOME/logs/agent.log`
   - **GLM-5.1 note**: GLM-5.1 sends kawaii spinner text as `AgentThoughtChunk`. With `personality: none` this is minimal but may still appear. This is SEPARATE from the race condition.
 - **hermes config path uses profile resolution, not HERMES_HOME**: Running `HERMES_HOME=/path/to/profile hermes config path` does NOT respect the env var if `active_profile` exists. The CLI's `_apply_profile_override()` (in `hermes_cli/main.py` line ~99) reads `<root>/active_profile` and overwrites HERMES_HOME at import time. To verify profile resolution, always use `hermes -p <name> config path` instead.
+- **Profile `-p` flag fails when HERMES_HOME points to a different root**: `hermes -p prometeo` searches for the profile under `get_default_hermes_root()/profiles/`, which changes based on the current HERMES_HOME. If HERMES_HOME is set to `/home/user/Aether-Agents/home/profiles/hermes` (an external profile), `get_default_hermes_root()` returns `/home/user/Aether-Agents/home` (the parent), and profiles are searched in `/home/user/Aether-Agents/home/profiles/` — NOT `~/.hermes/profiles/`. A symlink at `~/.hermes/profiles/prometeo` becomes invisible. Fix: add symlinks in each external root's profiles/ directory, or always use the wrapper script that sets HERMES_HOME correctly before calling hermes. See Section 12 for full diagnosis.
+- **Daimon config.yaml gitignored = Daimons disappear from Olympus (FIXED 2026-04-28)**: In commit `346c837`, `home/profiles/*/config.yaml` was added to `.gitignore` as "auto-generated runtime files". This removed the `agent:` discovery field from all 5 Daimon configs, causing `discover()` to only find Hermes. **Diagnosis**: run `talk_to(action="discover")` — if only `hermes` appears, check if `home/profiles/<daimon>/config.yaml` exists on disk AND is tracked by git. If the files are missing, restore them from the last commit that had them (`git show <commit>^:home/profiles/<daimon>/config.yaml`). **Fix**: Changed `.gitignore` from `home/profiles/*/config.yaml` (blanket ignore) to only `home/profiles/hermes/config.yaml` (hermes has API keys). All other Daimon configs are tracked because the `agent:` field is essential for Olympus discovery. **Lesson**: Daimon `config.yaml` is NOT a runtime file — it's the Daimon registration manifest that Olympus reads at startup.
 - **LangGraph Interrupt serialization (FIXED, commit `e69da51`)**: LangGraph's `interrupt()` returns `Interrupt` objects (not plain dicts) inside the `__interrupt__` list. Each `Interrupt` has `.value` (the payload dict) and `.ns` (namespace). JSON serialization of the workflow result fails with `"Object of type Interrupt is not JSON serializable"`. Fix in `runner.py`: iterate over `__interrupt__` entries, extract `.value` attribute (the dict we passed to `interrupt()`), convert to serializable dict. Without this fix, HITL workflows crash at the first interrupt point.
 - **MCP tool call timeout kills long-running workflows**: The `run_workflow` MCP tool is synchronous — Hermes calls it and waits for the result. But workflows with real agent calls take 2-5+ minutes per node. The MCP tool call timeout (typically 2-3 minutes) expires BEFORE the workflow completes, causing: (1) Hermes gets a timeout error, (2) the Olympus server continues running, (3) when the workflow reaches an interrupt, there's no MCP caller to receive the result, and the workflow hangs. **Architectural limitation** — HITL workflows require async execution with polling, increased MCP timeout, or Hermes-level orchestration.
