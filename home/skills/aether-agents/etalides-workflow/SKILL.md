@@ -292,6 +292,25 @@ Fallback activated: checked internal project knowledge first.
 
 ---
 
+## Known Issue — Model Timeout (minimax-m2.7)
+
+When running on `minimax-m2.7` via `opencode-go`, Etalides may timeout on multi-step web research tasks (>5 minutes). The model enters extended "thinking" cycles without producing tool calls or messages.
+
+**Symptom:** `talk_to(agent="etalides")` polls with `status: "active"` but no messages, no tool calls, just `thoughts` showing "formulating", "mulling", "cogitating" indefinitely.
+
+**Workaround for Hermes:** If Etalides times out on a research task:
+1. Close the session (`talk_to(action="close")`)
+2. Use `delegate_task` with `toolsets=["web"]` as fallback — sub-agents can use `web_search` directly
+3. Alternatively, Hermes can use `web_search` for quick fact checks (single lookup)
+
+**Long-term fix:** Consider changing Etalides' model to a faster one (e.g., `kimi-k2.5` or `glm-5.1`) in the profile's `config.yaml`:
+```yaml
+model: kimi-k2.5  # or glm-5.1
+provider: opencode-go
+```
+
+---
+
 ## Protocol 6 — Project Codebase as a Source
 
 When external web is inaccessible, **the project itself is a valid source**. This includes:

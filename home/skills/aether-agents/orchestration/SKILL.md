@@ -865,6 +865,8 @@
    865|| Hermes skips delegation "because it's faster" | "I can do this quicker than explaining" | Delegation IS the process |
    866|| Daimons spawn without skills | Daimon doesn't follow workflow protocol | Check config.yaml has skills configured (not `[]`) |
    867|| Personality overlay overrides SOUL.md | Agent speaks kawaii/catgirl instead of its Daimon identity | Set `display.personality: none` in config.yaml — hermes-agent defaults to "kawaii" which overwrites Daimon identities |
+|| Etalides timeout on research | `talk_to(etalides)` polls indefinitely with no output (>5min) | Close session, use `delegate_task(toolsets=["web"])` with `web_search` as fallback. Consider changing Etalides model from minimax-m2.7 to kimi-k2.5 or glm-5.1 |
+|| Daimon configs missing agent: field | `discover()` only shows hermes | Ensure all Daimon config.yaml files have `agent:` section with name, role, description, capabilities. These were accidentally gitignored in commit 346c837 — fixed 2026-04-28 |
    868|
    869|## Delegation Model Configuration — Setting Up Subagent Models
    870|
