@@ -15,9 +15,10 @@ agent:
   keep_alive: true
 
 # Model configuration
-model: kimi-k2.5
-provider: opencode-go
-base_url: https://opencode.ai/zen/go/v1
+model:
+  default: kimi-k2.5
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
 
 # Toolsets — PM tools only
 toolsets:
