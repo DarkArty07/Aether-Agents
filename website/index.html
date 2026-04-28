@@ -17,7 +17,9 @@
             <span class="nav-logo">Aether Agents</span>
             <div class="nav-links">
                 <a href="#architecture">Architecture</a>
+                <a href="#workflows">Workflows</a>
                 <a href="#daimons">Daimons</a>
+                <a href="#pipeline">Pipeline</a>
                 <a href="#install">Install</a>
                 <a href="https://github.com/DarkArty07/Aether-Agents" target="_blank" class="nav-github">
                     <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -50,7 +52,7 @@
             <div class="section-label">Overview</div>
             <h2>What is Aether Agents?</h2>
             <p class="section-desc">
-                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> — the orchestrator — via Olympus MCP's <code>talk_to()</code> tool.
+                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> — the orchestrator — via Olympus MCP. Workflows orchestrate multi-phase tasks across Daimons with <strong>HITL</strong> (human-in-the-loop) approval gates.
             </p>
 
             <div class="callout">
@@ -65,6 +67,10 @@
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
                     Every project tracked by Aether gets a <code>.eter/</code> directory at its root — shared state across the team.
+                </div>
+                <div class="callout-line">
+                    <span class="callout-icon">→</span>
+                    6 workflow types with HITL gates — project-init, feature, bug-fix, security-review, research, refactor.
                 </div>
             </div>
         </div>
@@ -150,6 +156,140 @@
 ├── .ariadna/    ← CURRENT.md + LOG.md       (status, session history)
 ├── .hefesto/    ← TASKS.md                  (implementation tracking)
 └── .etalides/   ← RESEARCH.md               (append-only, only when used)</code></pre>
+        </div>
+    </section>
+
+    <!-- WORKFLOWS -->
+    <section id="workflows" class="section workflows-section">
+        <div class="container">
+            <div class="section-label">Workflows</div>
+            <h2>Automated multi-phase tasks</h2>
+            <p class="section-desc">
+                Six canonical workflows orchestrate Daimons in sequence, with <strong>human-in-the-loop</strong> approval gates at critical points. Each workflow type is purpose-built — you don't start from scratch.
+            </p>
+
+            <div class="workflows-grid">
+                <div class="workflow-card" id="workflow-project-init">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">🚀</span>
+                        <span class="workflow-name">Project Init</span>
+                        <span class="workflow-tag tag-ariadna">PM</span>
+                    </div>
+                    <p class="workflow-purpose">Scaffold a new project from scratch — structure, configs, and .eter/ directory.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(57,255,130,0.4); color: var(--c-hermes);">Hermes</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(180,75,255,0.4); color: var(--c-ariadna);">Ariadna</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(42,245,245,0.4); color: var(--c-daedalus);">Daedalus</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">Plan approval</span>
+                        <span class="workflow-hitl-badge">Final review</span>
+                    </div>
+                </div>
+
+                <div class="workflow-card" id="workflow-feature">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">✨</span>
+                        <span class="workflow-name">Feature</span>
+                        <span class="workflow-tag tag-hefesto">All</span>
+                    </div>
+                    <p class="workflow-purpose">Implement a new feature end-to-end — research, design, code, and security audit.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(57,255,130,0.4); color: var(--c-hermes);">Hermes</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(180,75,255,0.4); color: var(--c-ariadna);">Ariadna</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,197,66,0.4); color: var(--c-etalides);">Etalides</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(42,245,245,0.4); color: var(--c-daedalus);">Daedalus</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,94,26,0.4); color: var(--c-hefesto);">Hefesto</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(68,144,255,0.4); color: var(--c-athena);">Athena</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">Research review</span>
+                        <span class="workflow-hitl-badge">Design review</span>
+                        <span class="workflow-hitl-badge">Audit review</span>
+                    </div>
+                </div>
+
+                <div class="workflow-card" id="workflow-bugfix">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">🐛</span>
+                        <span class="workflow-name">Bug Fix</span>
+                        <span class="workflow-tag tag-hefesto">4 Daimons</span>
+                    </div>
+                    <p class="workflow-purpose">Investigate, diagnose, and fix a bug. Research root cause, implement fix, verify security.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(57,255,130,0.4); color: var(--c-hermes);">Hermes</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,197,66,0.4); color: var(--c-etalides);">Etalides</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,94,26,0.4); color: var(--c-hefesto);">Hefesto</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(68,144,255,0.4); color: var(--c-athena);">Athena</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">Diagnosis review</span>
+                    </div>
+                </div>
+
+                <div class="workflow-card" id="workflow-security">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">🛡</span>
+                        <span class="workflow-name">Security Review</span>
+                        <span class="workflow-tag tag-athena">Security</span>
+                    </div>
+                    <p class="workflow-purpose">Proactive security audit — threat modeling, dependency CVE check, OWASP review.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,197,66,0.4); color: var(--c-etalides);">Etalides</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(68,144,255,0.4); color: var(--c-athena);">Athena</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,94,26,0.4); color: var(--c-hefesto);">Hefesto</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">Findings review</span>
+                    </div>
+                </div>
+
+                <div class="workflow-card" id="workflow-research">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">🔍</span>
+                        <span class="workflow-name">Research</span>
+                        <span class="workflow-tag tag-etalides">Research</span>
+                    </div>
+                    <p class="workflow-purpose">Deep-dive on a technical question. Structured findings with sources and confidence levels.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,197,66,0.4); color: var(--c-etalides);">Etalides</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">None</span>
+                    </div>
+                </div>
+
+                <div class="workflow-card" id="workflow-refactor">
+                    <div class="workflow-header">
+                        <span class="workflow-icon">🔧</span>
+                        <span class="workflow-name">Refactor</span>
+                        <span class="workflow-tag tag-daedalus">Design</span>
+                    </div>
+                    <p class="workflow-purpose">Restructure code without changing behavior. Impact analysis, scope review, implementation.</p>
+                    <div class="workflow-section-label">Participates</div>
+                    <div class="workflow-daimons">
+                        <span class="workflow-daimon-chip" style="border-color: rgba(42,245,245,0.4); color: var(--c-daedalus);">Daedalus</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(255,94,26,0.4); color: var(--c-hefesto);">Hefesto</span>
+                        <span class="workflow-daimon-chip" style="border-color: rgba(68,144,255,0.4); color: var(--c-athena);">Athena</span>
+                    </div>
+                    <div class="workflow-section-label">HITL gates</div>
+                    <div class="workflow-hitl">
+                        <span class="workflow-hitl-badge">Scope review</span>
+                    </div>
+                </div>
+            </div>
+
+            <p class="workflows-note">Use <code>talk_to()</code> for single-Daimon consultations. Use <code>run_workflow()</code> for multi-phase tasks that need coordination and approval gates.</p>
         </div>
     </section>
 
@@ -285,6 +425,90 @@
                 </div>
 
             </div>
+        </div>
+    </section>
+
+    <!-- PIPELINE -->
+    <section id="pipeline" class="section pipeline-section">
+        <div class="container">
+            <div class="section-label">Pipeline</div>
+            <h2>The 5-phase lifecycle</h2>
+            <p class="section-desc">
+                Every workflow follows a structured pipeline. Each phase has a clear owner, produces an artifact, and gates before the next phase begins.
+            </p>
+
+            <div class="pipeline-flow">
+                <div class="pipeline-phase" id="phase-idea">
+                    <div class="phase-num">1</div>
+                    <div class="phase-name" style="color: var(--c-hermes);">IDEA</div>
+                    <div class="phase-owner" style="border-color: rgba(57,255,130,0.4); color: var(--c-hermes);">Hermes</div>
+                </div>
+                <div class="pipeline-phase" id="phase-research">
+                    <div class="phase-num">2</div>
+                    <div class="phase-name" style="color: var(--c-etalides);">RESEARCH</div>
+                    <div class="phase-owner" style="border-color: rgba(255,197,66,0.4); color: var(--c-etalides);">Etalides</div>
+                    <div class="phase-gate-label">findings review</div>
+                </div>
+                <div class="pipeline-phase" id="phase-design">
+                    <div class="phase-num">3</div>
+                    <div class="phase-name" style="color: var(--c-daedalus);">DESIGN</div>
+                    <div class="phase-owner" style="border-color: rgba(42,245,245,0.4); color: var(--c-daedalus);">Daedalus</div>
+                    <div class="phase-gate-label">design review</div>
+                </div>
+                <div class="pipeline-phase" id="phase-plan">
+                    <div class="phase-num">4</div>
+                    <div class="phase-name" style="color: var(--c-ariadna);">PLAN</div>
+                    <div class="phase-owner" style="border-color: rgba(180,75,255,0.4); color: var(--c-ariadna);">Ariadna</div>
+                    <div class="phase-gate-label">plan approval</div>
+                </div>
+                <div class="pipeline-phase" id="phase-code">
+                    <div class="phase-num">5</div>
+                    <div class="phase-name" style="color: var(--c-hefesto);">CODE</div>
+                    <div class="phase-owner" style="border-color: rgba(255,94,26,0.4); color: var(--c-hefesto);">Hefesto</div>
+                    <div class="phase-gate-label">final review</div>
+                </div>
+            </div>
+
+            <div class="pipeline-table">
+                <div class="pipeline-row header">
+                    <div>Phase</div>
+                    <div>Owner</div>
+                    <div>Participants</div>
+                    <div>HITL Gate</div>
+                </div>
+                <div class="pipeline-row">
+                    <div class="phase-name-cell">1. IDEA</div>
+                    <div>Hermes</div>
+                    <div>User, Hermes</div>
+                    <div class="pipeline-hitl">—</div>
+                </div>
+                <div class="pipeline-row">
+                    <div class="phase-name-cell">2. RESEARCH</div>
+                    <div>Etalides</div>
+                    <div>Etalides, Athena</div>
+                    <div class="pipeline-hitl">Findings review</div>
+                </div>
+                <div class="pipeline-row">
+                    <div class="phase-name-cell">3. DESIGN</div>
+                    <div>Daedalus</div>
+                    <div>Daedalus, Hermes</div>
+                    <div class="pipeline-hitl">Design review</div>
+                </div>
+                <div class="pipeline-row">
+                    <div class="phase-name-cell">4. PLAN</div>
+                    <div>Ariadna</div>
+                    <div>Ariadna, Hermes</div>
+                    <div class="pipeline-hitl">Plan approval</div>
+                </div>
+                <div class="pipeline-row">
+                    <div class="phase-name-cell">5. CODE</div>
+                    <div>Hefesto</div>
+                    <div>Hefesto + all as needed</div>
+                    <div class="pipeline-hitl">Final review</div>
+                </div>
+            </div>
+
+            <p class="pipeline-note">Phases run sequentially. Each phase produces an artifact (RESEARCH.md, DESIGN.md, PLAN.md, TASKS.md) stored in the project's <code>.eter/</code> directory. No phase starts before the previous one's artifact exists.</p>
         </div>
     </section>
 
