@@ -309,21 +309,21 @@ Etalides (and potentially other Daimons) may enter an infinite "thinking" state 
 
 **Model history (Etalides):**
 - `minimax-m2.7` — timed out on research tasks (stall bug, infinite "thinking")
-- `deepseek-v4-flash` — **FAILED**: HTTP 402 "unable to verify membership" because hermes-agent misroutes it
-- `qwen3.6-plus` — **CURRENT, WORKING** via `provider: opencode-go`
+- `deepseek-v4-flash` — **CURRENT, WORKING** via `provider: opencode-go` (see routing fixes below)
+- `qwen3.6-plus` — working fallback (less reasoning, cheaper)
 
 **Multi-layer routing bug in hermes-agent (deepseek-v4-flash vs opencode-go):**
 Three separate layers in hermes-agent intercept `deepseek-*` model names and route them away from `opencode-go`:
 
-1. **`model_normalize.py` (~line 396):** The normalizer had a handler for `opencode-zen` but not `opencode-go`, so `deepseek-v4-flash` was normalized to the native deepseek provider. **PATCHED 2026-04-28:** Added `opencode-go` to the same block so deepseek models pass through as-is.
+1. **`model_normalize.py` (~line 396):** The normalizer had a handler for `opencode-zen` but not `opencode-go`. **PATCHED 2026-04-28:** Added `opencode-go` to the same block so deepseek models pass through as-is.
 
 2. **`models.py` — `_PROVIDER_MODELS` dict:** The catalog did not include `deepseek-v4-flash` or `deepseek-v4-pro` in the `opencode-go` list. **PATCHED 2026-04-28:** Added both to `models.py` and `setup.py`.
 
-3. **`models.py` — `detect_provider_for_model()` (NOT PATCHED):** Even with patches #1 and #2, this function searches ALL provider catalogs to find which provider "owns" a model. It finds `deepseek-v4-flash` in the `deepseek` native provider catalog and returns `("deepseek", "deepseek-v4-flash")`. The credential system then finds no deepseek API key and falls back to `kimi-coding`, producing `Provider: kimi-coding, Endpoint: https://api.kimi.com/coding` → HTTP 402. This layer needs an upstream fix.
+3. **Daimon config format (ROOT CAUSE of HTTP 402):** Daimon configs in Aether Agents use hermes-agent's `model.default` / `model.provider` / `model.base_url` nested YAML format. Using flat top-level keys (`model: X`, `provider: Y`) causes hermes-agent to silently ignore the provider setting and fall back to credential auto-detection, which routes `deepseek-v4-flash` to `kimi-coding` → HTTP 402. **All 5 Daimon configs corrected 2026-04-28.**
 
-**Impact:** ANY Daimon config using a `deepseek-*` model name with `provider: opencode-go` will be misrouted to kimi-coding until hermes-agent upstream adds proper support for respecting the explicit `provider:` config field.
+**Impact:** Any Daimon config using flat `model:` / `provider:` keys will silently fall back to auto-detection. Always use the nested `model:` block format.
 
-**Workaround:** Use `qwen3.6-plus` (or other non-intercepted models from the opencode-go catalog) with `provider: opencode-go`.
+**API key corruption:** Hefesto's `.env` had a 69-char OPENCODE_GO_API_KEY (correct: 67 chars). One corrupted character caused HTTP 401 "Invalid API key." Always verify key length matches across profiles.
 
 ---
 
