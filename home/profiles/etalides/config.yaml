@@ -15,7 +15,8 @@ agent:
   keep_alive: true
 
 # Model configuration
-model: minimax-m2.7
+# DeepSeek V4 Flash via OpenCode Go — fast, cost-effective, better for web research than minimax-m2.7
+model: deepseek-v4-flash
 provider: opencode-go
 base_url: https://opencode.ai/zen/go/v1
 
