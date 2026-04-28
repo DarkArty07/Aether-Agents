@@ -327,7 +327,60 @@ Three separate layers in hermes-agent intercept `deepseek-*` model names and rou
 
 ---
 
-## Protocol 6 — Project Codebase as a Source
+## Protocol 6 — Research Persistence
+
+**Every completed research task MUST be saved to disk.** Research that only exists in chat is wasted work.
+
+### File Path
+```
+AETHER_HOME/research/YYYY-MM-DD-HHMM-topic-slug.md
+```
+Where `AETHER_HOME` is the project root (e.g., `/home/prometeo/Aether-Agents/home`). This folder is gitignored — research is local-only.
+
+### File Name Format
+- `YYYY-MM-DD-HHMM` — date and hour/minute (UTC)
+- `topic-slug` — 2-4 lowercase hyphenated words
+- Examples: `2026-04-28-1715-multi-agent-frameworks.md`, `2026-05-01-0930-react-query-v5-migration.md`
+
+### File Content Format
+```markdown
+---
+date: 2026-04-28T17:15:00Z
+author: etalides
+depth: standard
+confidence: high
+model: deepseek-v4-flash
+links_used: 8
+links_budget: 10
+---
+
+# [Topic Title]
+
+## Findings
+- [Finding 1]: [concise, factual description]
+- [Finding 2]: [concise, factual description]
+
+## Sources
+1. [URL] — [what was extracted from this source]
+2. [URL] — [what was extracted from this source]
+
+## Confidence: [high | medium | low]
+- [justification]
+
+## Limitations
+- [what could not be found or was skipped]
+```
+
+### When to Save
+- **ALWAYS** after completing a research task (both `talk_to` and workflow)
+- Save even if results are incomplete (note "Budget exhausted" in Limitations)
+- Save even if results are negative ("no information found")
+- Use `write_file` or `file` tool to create the file
+- Filename: URL-safe, lowercase, hyphens, no special characters
+
+---
+
+## Protocol 7 — Project Codebase as a Source
 
 When external web is inaccessible, **the project itself is a valid source**. This includes:
 - Skills in `home/skills/` and `home/profiles/*/skills/` (contain proven workflows, patterns, known issues)
