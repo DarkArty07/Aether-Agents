@@ -35,9 +35,9 @@ home/profiles/*/skills/*
 # --- Per-profile bundled manifests (auto-generated) ---
 **/.bundled_manifest
 
-# --- Per-profile auto-generated configs ---
-home/config.yaml
-home/profiles/*/config.yaml
+# --- Per-profile configs (tracked — contain agent: discovery for Olympus) ---
+# Only the hermes config has API keys that should stay local
+home/profiles/hermes/config.yaml
 
 # --- Per-profile runtime state ---
 home/profiles/*/memories/
