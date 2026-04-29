@@ -131,6 +131,10 @@ def make_node_design(acp: ACPManager):
         if research:
             prompt += f"\n\nRESEARCH CONTEXT:\n{research}"
 
+        # Include modification feedback if this is a redesign
+        if state.get("modification_feedback"):
+            prompt += f"\n\nMODIFICATION FEEDBACK FROM USER:\n{state['modification_feedback']}\nPlease revise the design based on this feedback."
+
         try:
             result = await _run_acp_session(acp, "daedalus", prompt)
             elapsed = time.monotonic() - start
@@ -378,8 +382,14 @@ def make_node_hitl(
         goto = routing.get(decision, "finalize")
         logger.info(f"[workflow] HITL {key}: user chose '{decision}' → going to '{goto}'")
 
+        update = {"hitl_decisions": [f"{key}:{decision}"]}
+
+        # When user selects "modify", capture their feedback for the design node
+        if decision == "modify":
+            update["modification_feedback"] = interrupt_payload.get("context", "")
+
         return Command(
-            update={"hitl_decisions": [f"{key}:{decision}"]},
+            update=update,
             goto=goto,
         )
 

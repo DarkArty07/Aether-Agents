@@ -71,8 +71,18 @@ class OlympusACPClient(Client):
         tool_call: ToolCall,
         **kwargs: Any,
     ) -> RequestPermissionResponse:
-        """Handle permission requests from Daimons — auto-approve for MVP."""
-        logger.info(f"[OlympusClient] Permission request from {self.agent_name} (session={session_id}): {tool_call.name}")
+        """Handle permission requests from Daimons — auto-approved for MVP.
+        
+        SECURITY NOTICE: All permission requests are currently auto-approved.
+        This is acceptable for local development but MUST be reviewed before
+        production deployment. See SECURITY.md for details.
+        """
+        permission_type = tool_call.name if tool_call else "unknown"
+        description = tool_call.input.get("description", "no description") if tool_call and hasattr(tool_call, "input") and isinstance(tool_call.input, dict) else "no description"
+        logger.warning(
+            f"[olympus] AUTO-APPROVED permission for {self.agent_name}: "
+            f"type={permission_type}, description={description}, session={session_id}"
+        )
         # Auto-approve for MVP — in production this could ask Hermes
         return RequestPermissionResponse(outcome={"outcome": "approved"})
 
@@ -402,7 +412,7 @@ class ACPManager:
         return {"status": "cancelled", "session_id": session_id}
 
     async def shutdown_agent(self, name: str) -> dict:
-        """Gracefully shut down a Daimon process (SIGTERM)."""
+        """Gracefully shut down a Daimon process (SIGTERM + SIGKILL fallback)."""
         agent = self.registry.get_agent(name)
         if agent is None:
             raise ValueError(f"Unknown agent: {name}")
@@ -422,12 +432,22 @@ class ACPManager:
                 logger.warning(f"Error closing ACP connection for {name}: {e}")
 
         # Terminate the process
-        if agent.process:
+        agent.status = AgentStatus.DEAD
+        if agent.process is not None:
             try:
-                # The context manager should handle cleanup
-                agent.status = AgentStatus.DEAD
+                agent.process.terminate()
+                try:
+                    await asyncio.wait_for(agent.process.wait(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    # Process didn't terminate gracefully, force kill
+                    agent.process.kill()
+                    await agent.process.wait()
+                logger.info(f"[olympus] Terminated process for {name} (PID: {agent.process.pid})")
+            except ProcessLookupError:
+                # Process already dead
+                logger.info(f"[olympus] Process for {name} already terminated")
             except Exception as e:
-                logger.warning(f"Error terminating process for {name}: {e}")
+                logger.warning(f"[olympus] Error terminating process for {name}: {e}")
 
         logger.info(f"Agent {name} shut down")
         return {"status": "shutdown", "agent": name}
