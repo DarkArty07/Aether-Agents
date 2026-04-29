@@ -78,7 +78,9 @@ class OlympusACPClient(Client):
         production deployment. See SECURITY.md for details.
         """
         permission_type = tool_call.name if tool_call else "unknown"
-        description = tool_call.input.get("description", "no description") if tool_call and hasattr(tool_call, "input") and isinstance(tool_call.input, dict) else "no description"
+        description = "no description"
+        if tool_call and hasattr(tool_call, 'input') and tool_call.input:
+            description = str(tool_call.input)[:200]
         logger.warning(
             f"[olympus] AUTO-APPROVED permission for {self.agent_name}: "
             f"type={permission_type}, description={description}, session={session_id}"

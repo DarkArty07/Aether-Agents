@@ -135,15 +135,16 @@ class TestWorkflowCompilation:
 class TestConditionalEdges:
     """Test conditional edge functions."""
 
-    def test_should_research_true(self):
+    def test_should_enter_research_true(self):
         """needs_research=True should route to research node."""
-        from olympus.workflows.definitions import should_research
-        assert should_research({"needs_research": True}) == "research"
+        from olympus.workflows.definitions import should_research as should_enter_research
+        # Note: TypedDict doesn't enforce at runtime, so we test the function directly
+        assert should_enter_research({"needs_research": True}) == "research"
 
-    def test_should_research_false(self):
+    def test_should_enter_research_false(self):
         """needs_research=False should skip research."""
-        from olympus.workflows.definitions import should_research
-        assert should_research({"needs_research": False}) == "design"
+        from olympus.workflows.definitions import should_research as should_enter_research
+        assert should_enter_research({"needs_research": False}) == "design"
 
     def test_should_terminate_on_error_no_errors(self):
         """No errors should continue."""
@@ -169,8 +170,7 @@ class TestSTALLTIMEOUT:
         import subprocess
         result = subprocess.run(
             ["grep", "-c", "1800", "src/olympus/workflows/runner.py"],
-            capture_output=True, text=True,
-            cwd=os.path.join(os.path.dirname(__file__), ".."),
+            capture_output=True, text=True
         )
         # grep -c returns the count of matching lines
         # "0" means no matches (which is what we want)
