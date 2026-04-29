@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Daimons — Aether Agents</title>
+    <meta name="description" content="Meet the 6 specialized Daimons that power Aether Agents — each with its own model, tools, and SOUL.md defining what it does and must never do.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav id="top-nav">
+        <div class="nav-inner">
+            <a href="index.html" class="nav-logo">Aether Agents</a>
+            <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="setup.html" class="nav-link">Setup</a>
+                <a href="daimons.html" class="nav-link active">Daimons</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="https://github.com/DarkArty07/Aether-Agents" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- PAGE HEADER -->
+    <section class="page-header">
+        <div class="container">
+            <h1>The Daimons</h1>
+            <p>Six specialized agents. Each has its own model configuration, tool access, and a <code>SOUL.md</code> that defines precisely what it does — and what it must never do.</p>
+        </div>
+    </section>
+
+    <!-- DAIMONS -->
+    <section class="section daimons-section">
+        <div class="container">
+            <div class="daimons-grid">
+
+                <!-- Hermes -->
+                <div class="daimon-card" id="daimon-hermes">
+                    <div class="daimon-image">
+                        <img src="assets/images/HERMES.jpg" alt="Hermes">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Hermes</span>
+                            <span class="daimon-tag tag-hermes">Orchestrator</span>
+                        </div>
+                        <p>The only agent the user speaks to directly. Decomposes tasks, routes to the right Daimon, and synthesizes results. Owns <code>.eter/.hermes/</code>.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>delegate_task, talk_to, discover, run_workflow, memory, clarify</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No implement code · No direct web search · No skip session close</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature, bug-fix, security-review, research, refactor</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No implement code</span>
+                            <span class="rule">→ No direct web search</span>
+                            <span class="rule">→ No skip session close</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ariadna -->
+                <div class="daimon-card" id="daimon-ariadna">
+                    <div class="daimon-image">
+                        <img src="assets/images/ARIADNA.jpg" alt="Ariadna">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Ariadna</span>
+                            <span class="daimon-tag tag-ariadna">Project Manager</span>
+                        </div>
+                        <p>Maintains <code>CURRENT.md</code> and <code>LOG.md</code>. Detects blockers before they stop work. Provides session onboarding status on every open.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-4o</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>todo, memory, read_file, write_file, session_search</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No architectural decisions · No code writing · No direct user contact</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No architectural decisions</span>
+                            <span class="rule">→ No code writing</span>
+                            <span class="rule">→ No direct user contact</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hefesto -->
+                <div class="daimon-card" id="daimon-hefesto">
+                    <div class="daimon-image">
+                        <img src="assets/images/HEFESTO.jpg" alt="Hefesto">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Hefesto</span>
+                            <span class="daimon-tag tag-hefesto">Senior Developer</span>
+                        </div>
+                        <p>Receives specs from Hermes, spawns atomic sub-agents (<strong>Ergates</strong>) via <code>delegate_task(role=...)</code>, consolidates results, and runs tests.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>delegate_task, execute_code, read_file, write_file, patch, terminal, search_files</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No design decisions · No ambiguous specs (report first) · Tracks via TASKS.md</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, refactor</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No design decisions</span>
+                            <span class="rule">→ No ambiguous specs</span>
+                            <span class="rule">→ Tracks via TASKS.md</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Etalides -->
+                <div class="daimon-card" id="daimon-etalides">
+                    <div class="daimon-image">
+                        <img src="assets/images/ETALIDES.jpg" alt="Etalides">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Etalides</span>
+                            <span class="daimon-tag tag-etalides">Web Researcher</span>
+                        </div>
+                        <p>Uses <code>web_search</code> + <code>web_extract</code>. Every finding requires a source URL and a confidence level. Output is always structured: Findings / Sources / Confidence.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>web_search, web_extract, browser_navigate, browser_snapshot, browser_click</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No opinions or recommendations · ≤10 links / standard mode · Append-only RESEARCH.md</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, research</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No opinions</span>
+                            <span class="rule">→ ≤10 links / standard</span>
+                            <span class="rule">→ Append-only RESEARCH.md</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Daedalus -->
+                <div class="daimon-card" id="daimon-daedalus">
+                    <div class="daimon-image">
+                        <img src="assets/images/DEDALO.jpg" alt="Daedalus">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Daedalus</span>
+                            <span class="daimon-tag tag-daedalus">UX/UI Designer</span>
+                        </div>
+                        <p>Designs user flows, layout specs, and HTML/CSS prototypes. Performs UX review post-implementation to catch regressions. Ensures WCAG compliance.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>browser_navigate, browser_snapshot, browser_vision, read_file, write_file</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No production code · No tech stack decisions · Minimum steps per flow</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature, refactor</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No production code</span>
+                            <span class="rule">→ No tech stack decisions</span>
+                            <span class="rule">→ Minimum steps per flow</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Athena -->
+                <div class="daimon-card" id="daimon-athena">
+                    <div class="daimon-image">
+                        <img src="assets/images/ATENEA.jpg" alt="Athena">
+                        <div class="daimon-overlay"></div>
+                    </div>
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Athena</span>
+                            <span class="daimon-tag tag-athena">Security Engineer</span>
+                        </div>
+                        <p>STRIDE threat modeling, OWASP review, dependency CVE auditing. Flags risks to Ariadna as sprint blockers. Activates proactively on new endpoints or dependencies.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>search_files, read_file, terminal, web_search</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No code implementation · All CVE search via Etalides · Risk before deployment</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, refactor</span></div>
+                        </div>
+                        <div class="daimon-rules">
+                            <span class="rule">→ No code implementation</span>
+                            <span class="rule">→ CVE search via Etalides</span>
+                            <span class="rule">→ Risk before deployment</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- CAPABILITIES MATRIX -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Reference</div>
+            <h2>Capabilities Matrix</h2>
+            <p class="section-desc">At a glance — each Daimon's role, model, key tools, and SOUL.md limits.</p>
+
+            <div class="lifecycle-table" style="margin-top: 2rem;">
+                <div class="lifecycle-row header" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div>Daimon</div>
+                    <div>Role</div>
+                    <div>Model</div>
+                    <div>Key Tools</div>
+                    <div>SOUL.md Limit</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-hermes);">Hermes</strong></div>
+                    <div>Orchestrator</div>
+                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>delegate_task, talk_to, discover, run_workflow, memory</div>
+                    <div>No implement code, No direct web search</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-ariadna);">Ariadna</strong></div>
+                    <div>Project Manager</div>
+                    <div><code>gpt-4o</code></div>
+                    <div>todo, memory, read_file, write_file, session_search</div>
+                    <div>No architectural decisions, No code writing</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-hefesto);">Hefesto</strong></div>
+                    <div>Senior Developer</div>
+                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>delegate_task, execute_code, read_file, write_file, terminal</div>
+                    <div>No design decisions, No ambiguous specs</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-etalides);">Etalides</strong></div>
+                    <div>Web Researcher</div>
+                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>web_search, web_extract, browser_navigate, browser_snapshot</div>
+                    <div>No opinions, ≤10 links, Append-only RESEARCH.md</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-daedalus);">Daedalus</strong></div>
+                    <div>UX/UI Designer</div>
+                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>browser_navigate, browser_snapshot, browser_vision, read_file</div>
+                    <div>No production code, No tech stack decisions</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-athena);">Athena</strong></div>
+                    <div>Security Engineer</div>
+                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>search_files, read_file, terminal, web_search</div>
+                    <div>No code implementation, CVE search via Etalides</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container footer-inner">
+            <div class="footer-left">
+                <span class="footer-name">Aether Agents</span>
+                <span class="footer-lic">MIT License</span>
+            </div>
+            <div class="footer-right">
+                Built on <a href="https://hermes-agent.nousresearch.com/" target="_blank">hermes-agent</a> by Nous Research
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

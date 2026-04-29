@@ -89,6 +89,9 @@ home/profiles/prometeo/
 **/state.db-shm
 **/state.db-wal
 
+# --- Research (local findings, not shared) ---
+home/research/
+
 # --- Claude Code (dev tool) ---
 .claude/
 

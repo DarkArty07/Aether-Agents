@@ -711,10 +711,180 @@ footer {
     line-height: 1.6;
 }
 
+/* ── Nav Link Active ──────────────────────────── */
+.nav-link.active {
+    color: var(--text) !important;
+    position: relative;
+}
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--c-hermes);
+    border-radius: 1px;
+}
+
+/* ── Nav Toggle (hamburger) ───────────────────── */
+.nav-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    z-index: 101;
+}
+.nav-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 2px;
+    transition: transform 0.3s, opacity 0.3s;
+}
+.nav-toggle.open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+.nav-toggle.open span:nth-child(2) {
+    opacity: 0;
+}
+.nav-toggle.open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ── Page Header (inner pages) ─────────────────── */
+.page-header {
+    padding-top: 130px;
+    padding-bottom: 40px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+.page-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(57,255,130,0.04) 0%, transparent 70%);
+    pointer-events: none;
+}
+.page-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.75rem;
+    position: relative;
+}
+.page-header p {
+    font-size: 1.05rem;
+    color: var(--text-muted);
+    max-width: 580px;
+    margin: 0 auto;
+    line-height: 1.7;
+}
+.page-header p code {
+    color: var(--c-hermes);
+}
+
+/* ── Callout Warn ──────────────────────────────── */
+.callout-warn {
+    border-color: rgba(255,94,26,0.25);
+    background: rgba(255,94,26,0.04);
+    margin-top: 1rem;
+}
+.callout-warn + .callout-warn {
+    margin-top: 0.75rem;
+}
+.callout-warn .callout-icon {
+    color: var(--c-hefesto);
+}
+
+/* ── Code Block Wrap (with copy button) ────────── */
+.code-block-wrap {
+    position: relative;
+    margin-top: 1rem;
+}
+.code-block-wrap .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    cursor: pointer;
+    padding: 0.25rem 0.6rem;
+    transition: color 0.2s, background 0.2s;
+    z-index: 2;
+}
+.code-block-wrap .copy-btn:hover {
+    color: var(--text);
+    background: var(--bg-2);
+}
+.code-block-wrap .copy-btn.copied {
+    color: var(--c-hermes);
+}
+
+/* ── Daimon Detail (expanded card info) ────────── */
+.daimon-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.65rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 0.25rem;
+}
+.daimon-detail-row {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+.daimon-detail-label {
+    font-weight: 600;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 /* ── Responsive ──────────────────────────────── */
 @media (max-width: 760px) {
     .hero h1 { font-size: 2.25rem; }
-    .nav-links a:not(.nav-github) { display: none; }
+    .nav-toggle { display: flex; }
+    .nav-links {
+        position: fixed;
+        top: 0; right: 0;
+        width: 260px;
+        height: 100vh;
+        background: var(--bg);
+        border-left: 1px solid var(--border);
+        flex-direction: column;
+        padding: 80px 2rem 2rem;
+        gap: 0;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        z-index: 100;
+    }
+    .nav-links.open {
+        transform: translateX(0);
+    }
+    .nav-links .nav-link {
+        display: block;
+        padding: 0.75rem 0;
+        font-size: 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .nav-links .nav-github {
+        margin-top: 1rem;
+        padding: 0.6rem 1rem;
+    }
     .arch-diagram { flex-direction: column; }
     .arch-arrow { transform: rotate(90deg); }
     .lifecycle-row { grid-template-columns: 110px 1fr; }
@@ -744,4 +914,7 @@ footer {
         padding: 0.6rem 1rem;
     }
     .pipeline-row.header { display: none; }
+    .page-header h1 { font-size: 1.75rem; }
+    .page-header p { font-size: 0.95rem; }
+    .callout-warn .callout-line { flex-wrap: wrap; }
 }

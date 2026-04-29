@@ -14,10 +14,11 @@ agent:
   launch_command: "hermes acp"
   keep_alive: true
 
-# Model configuration
-model: minimax-m2.7
-provider: opencode-go
-base_url: https://opencode.ai/zen/go/v1
+# Model configuration — deepseek-v4-flash via opencode-go
+model:
+  default: deepseek-v4-flash
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
 
 # Toolsets — web research tools only
 toolsets:

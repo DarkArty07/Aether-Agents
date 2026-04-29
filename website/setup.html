@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Guide — Aether Agents</title>
+    <meta name="description" content="Get Aether Agents running locally — clone, configure API keys, set up providers, and launch your first Daimon.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav id="top-nav">
+        <div class="nav-inner">
+            <a href="index.html" class="nav-logo">Aether Agents</a>
+            <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="setup.html" class="nav-link active">Setup</a>
+                <a href="daimons.html" class="nav-link">Daimons</a>
+                <a href="config.html" class="nav-link">Config</a>
+                <a href="https://github.com/DarkArty07/Aether-Agents" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- PAGE HEADER -->
+    <section class="page-header">
+        <div class="container">
+            <h1>Setup Guide</h1>
+            <p>Get Aether Agents running locally in under five minutes — no Docker, no Redis, no ceremony.</p>
+        </div>
+    </section>
+
+    <!-- STEPS -->
+    <section class="section">
+        <div class="container">
+            <div class="steps">
+
+                <!-- Step 1 -->
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h4>Clone &amp; Install</h4>
+                        <div class="code-block-wrap">
+                            <pre class="code-block"><code>git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .</code></pre>
+                            <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .">Copy</button>
+                        </div>
+                        <p class="step-note">Use Python 3.11 or later. Activate the venv before every session.</p>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h4>Configure API Keys</h4>
+                        <p class="step-note">Each Daimon reads its own <code>.env</code> file from <code>profiles/&lt;name&gt;/.env</code>. This keeps keys isolated — Hermes can use OpenAI while Hefesto uses Anthropic.</p>
+                        <div class="code-block-wrap">
+                            <pre class="code-block"><code>cp home/profiles/hermes/.env.example home/profiles/hermes/.env
+# Repeat for each profile:
+cp home/profiles/ariadna/.env.example home/profiles/ariadna/.env
+cp home/profiles/hefesto/.env.example home/profiles/hefesto/.env
+cp home/profiles/etalides/.env.example home/profiles/etalides/.env
+cp home/profiles/daedalus/.env.example home/profiles/daedalus/.env
+cp home/profiles/athena/.env.example home/profiles/athena/.env</code></pre>
+                            <button class="copy-btn" data-copy="cp home/profiles/hermes/.env.example home/profiles/hermes/.env
+cp home/profiles/ariadna/.env.example home/profiles/ariadna/.env
+cp home/profiles/hefesto/.env.example home/profiles/hefesto/.env
+cp home/profiles/etalides/.env.example home/profiles/etalides/.env
+cp home/profiles/daedalus/.env.example home/profiles/daedalus/.env
+cp home/profiles/athena/.env.example home/profiles/athena/.env">Copy</button>
+                        </div>
+                        <p class="step-note">Only fill in the key for your chosen provider. Other keys can be left unset.</p>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h4>Provider Setup</h4>
+                        <p class="step-note">Set <code>PROVIDER</code> in the profile's <code>.env</code> and supply the matching API key. Supported providers:</p>
+                        <div class="providers-table">
+                            <div class="providers-row header">
+                                <div>Provider</div>
+                                <div>API Base</div>
+                                <div>Env var</div>
+                            </div>
+                            <div class="providers-row">
+                                <div>OpenAI</div>
+                                <div><code>https://api.openai.com</code></div>
+                                <div><code>OPENAI_API_KEY</code></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>Anthropic</div>
+                                <div><code>https://api.anthropic.com</code></div>
+                                <div><code>ANTHROPIC_API_KEY</code></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>Google Gemini</div>
+                                <div><code>https://generativelanguage.googleapis.com</code></div>
+                                <div><code>GEMINI_API_KEY</code></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>Moonshot (Kimi)</div>
+                                <div><code>https://api.moonshot.cn</code></div>
+                                <div><code>MOONSHOT_API_KEY</code></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>OpenRouter</div>
+                                <div><code>https://openrouter.ai</code></div>
+                                <div><code>OPENROUTER_API_KEY</code></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>Ollama (local)</div>
+                                <div><code>http://localhost:11434</code></div>
+                                <div><em>No key needed</em></div>
+                            </div>
+                            <div class="providers-row">
+                                <div>vLLM (local)</div>
+                                <div><code>http://localhost:8000</code></div>
+                                <div><em>No key needed</em></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h4>Exa Web Search</h4>
+                        <div class="callout" style="border-color: rgba(255,197,66,0.3);">
+                            <div class="callout-line">
+                                <span class="callout-icon" style="color: var(--c-etalides);">🔍</span>
+                                <span>Etalides needs <code>EXA_API_KEY</code> for web search. Get a free key at <a href="https://exa.ai" target="_blank" style="color: var(--c-etalides);">exa.ai</a>, then add it to Etalides' <code>.env</code>:</span>
+                            </div>
+                        </div>
+                        <div class="code-block-wrap" style="margin-top: 1rem;">
+                            <pre class="code-block"><code># home/profiles/etalides/.env
+PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+EXA_API_KEY=exa-...</code></pre>
+                            <button class="copy-btn" data-copy="PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+EXA_API_KEY=exa-...">Copy</button>
+                        </div>
+                        <p class="step-note">Without <code>EXA_API_KEY</code>, Etalides will start but web search queries will fail.</p>
+                    </div>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="step">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <h4>Verify &amp; Launch</h4>
+                        <p class="step-note">Set <code>HERMES_HOME</code> to point at the home directory, then start a Daimon:</p>
+                        <div class="code-block-wrap">
+                            <pre class="code-block"><code>export HERMES_HOME=~/Aether-Agents/home
+
+# Use the verification script
+bash scripts/start.sh
+
+# Or run directly
+HERMES_HOME=~/Aether-Agents/home hermes --profile hermes</code></pre>
+                            <button class="copy-btn" data-copy="export HERMES_HOME=~/Aether-Agents/home
+bash scripts/start.sh
+HERMES_HOME=~/Aether-Agents/home hermes --profile hermes">Copy</button>
+                        </div>
+                        <p class="step-note">Add <code>export HERMES_HOME=~/Aether-Agents/home</code> to your <code>.bashrc</code> or <code>.zshrc</code> so it persists across sessions.</p>
+                    </div>
+                </div>
+
+                <!-- Step 6 -->
+                <div class="step">
+                    <div class="step-num">6</div>
+                    <div class="step-content">
+                        <h4>Test a Daimon</h4>
+                        <p class="step-note">Send a message and verify the response flows back correctly:</p>
+                        <div class="code-block-wrap">
+                            <pre class="code-block"><code>HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
+HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna</code></pre>
+                            <button class="copy-btn" data-copy="HERMES_HOME=~/Aether-Agents/home hermes --profile hefesto
+HERMES_HOME=~/Aether-Agents/home hermes --profile ariadna">Copy</button>
+                        </div>
+                        <p class="step-note">Try each Daimon — <span class="tag-hermes" style="font-size:0.78rem;">hermes</span> <span class="tag-ariadna" style="font-size:0.78rem;">ariadna</span> <span class="tag-hefesto" style="font-size:0.78rem;">hefesto</span> <span class="tag-etalides" style="font-size:0.78rem;">etalides</span> <span class="tag-daedalus" style="font-size:0.78rem;">daedalus</span> <span class="tag-athena" style="font-size:0.78rem;">athena</span></p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- TROUBLESHOOTING -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Troubleshooting</div>
+            <h2>Common Issues</h2>
+            <p class="section-desc">Quick fixes for the most frequent setup problems.</p>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🚨</span>
+                    <span><strong><code>HERMES_HOME</code> not set</strong> → "No module" error. The runtime can't locate the home directory. Fix: <code>export HERMES_HOME=~/Aether-Agents/home</code></span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🤫</span>
+                    <span><strong>Missing <code>.env</code></strong> → Silent fallback to defaults. The agent may run but with wrong provider settings. Fix: <code>cp .env.example .env</code> for each profile.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🔌</span>
+                    <span><strong>Wrong <code>PROVIDER</code> value</strong> → Connection fails. Typos like <code>open_ai</code> or <code>Anthropic</code> (wrong case) cause lookup failure. Use exact values: <code>openai</code>, <code>anthropic</code>, <code>google</code>, <code>moonshot</code>, <code>openrouter</code>, <code>ollama</code>, <code>vllm</code>.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">📐</span>
+                    <span><strong>YAML indentation</strong> → Use spaces, not tabs. Python's YAML parser rejects tabs. Enable "render whitespace" in your editor to spot them.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🔍</span>
+                    <span><strong>Exa key missing</strong> → Etalides can't search. Without <code>EXA_API_KEY</code> in <code>profiles/etalides/.env</code>, web search queries return errors. Get a free key at <a href="https://exa.ai" target="_blank" style="color: var(--c-etalides);">exa.ai</a>.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container footer-inner">
+            <div class="footer-left">
+                <span class="footer-name">Aether Agents</span>
+                <span class="footer-lic">MIT License</span>
+            </div>
+            <div class="footer-right">
+                Built on <a href="https://hermes-agent.nousresearch.com/" target="_blank">hermes-agent</a> by Nous Research
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
