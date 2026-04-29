@@ -127,7 +127,7 @@ def create_server() -> Server:
                         },
                         "timeout": {
                             "type": "integer",
-                            "description": "Timeout in seconds for wait. Default 120s, max 300s.",
+                            "description": "Timeout in seconds for wait. Default 300s, max 600s.",
                         },
                     },
                     "required": ["agent", "action"],
@@ -238,7 +238,7 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     action = args.get("action", "")
     prompt_text = args.get("prompt", "")
     session_id = args.get("session_id", "")
-    timeout = args.get("timeout", 120)
+    timeout = args.get("timeout", 300)
 
     # discover action — shortcut or missing agent name
     if agent_name == "?" or not agent_name:
@@ -285,7 +285,7 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
         return await _action_poll(session_id)
 
     elif action == "wait":
-        clamp = min(max(timeout, 1), 300)
+        clamp = min(max(timeout, 1), 600)
         return await _action_wait(session_id, clamp)
 
     elif action == "cancel":
