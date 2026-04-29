@@ -45,9 +45,11 @@
     45|6. **Olympus registration**: Daimons get `agent:` block in config.yaml. Personal agents don't.
     46|7. **Git status**: Private agents get gitignored. Team agents get committed.
     47|
-    48|## SOUL.md Template — 7-Section Standard (v2)
-    49|
-    50|Every Aether Daimon SOUL.md follows exactly 7 numbered sections. This ensures consistency, makes Execution Context DRY across Daimons, and guarantees hermes-agent loads identity correctly.
+## SOUL.md Template — 7+ Section Standard with Embedded Protocols (v3)
+
+Every Aether Daimon SOUL.md follows the core 7 sections PLUS an embedded Workflow Protocols section. This ensures agents actually follow their protocols.
+
+**Critical lesson (2026-04-28):** Agents do NOT reliably load their workflow skills from the skills directory. The skills index (Slot 8 in system prompt) is conditional and often skipped. SOUL.md (Slot 1) is always loaded. Therefore, workflow protocols MUST be embedded directly in the SOUL.md — not stored as separate skills that agents might ignore.
     51|
     52|### Standard Daimon Template (Ariadna, Hefesto, Etalides, Daedalus, Athena)
     53|
@@ -83,17 +85,32 @@
     83|- Do NOT <limit 2>
     84|- ... (equal importance to section 3 — both are required)
     85|
-    86|## 5. Skills
-    87|- `aether-agents:{name}-workflow` — operating inside LangGraph workflows
-    88|- `{category}:{skill}` — [1 line description]
-    89|- ... (ONLY skills the agent actually loads — see Curation Table below)
-    90|
-    91|## 6. Output Format
-    92|[Structured template — the agent always returns this format]
-    93|
-    94|## 7. In Workflow Context
-    95|[How to interpret accumulated state["context"] from prior nodes, adapt output by workflow_type, handle HITL checkpoints]
-    96|```
+## 5. Skills
+- `{category}:{skill}` — [1 line description]
+- ... (ONLY skills the agent actually loads — see Curation Table below)
+- NOTE: The {name}-workflow skill content is now embedded in section 8/9 below, NOT loaded externally.
+
+## 6. Output Format
+[Structured template — the agent always returns this format]
+
+## 7. In Workflow Context
+[How to interpret accumulated state["context"] from prior nodes, adapt output by workflow_type, handle HITL checkpoints]
+
+## 8. Workflow Protocols
+[Merge of the {name}-workflow SKILL.md content: all protocols, few-shot examples, known issues]
+[This section replaces the external skill reference — agents read their SOUL.md but skip skills]
+```
+
+### Merging Workflow Skills into SOUL.md
+
+**Why:** Agents don't reliably load their workflow skills from `home/skills/aether-agents/{name}-workflow/`. The SOUL.md is always loaded (Slot 1 in system prompt), but skills are conditional (Slot 8). If an agent skips reading its skill, it operates without protocols.
+
+**How to merge:**
+1. Read the Daimon's SOUL.md and their `{name}-workflow/SKILL.md`
+2. Remove the `- aether-agents:{name}-workflow` line from section 5 (Skills)
+3. Append all protocol content from the SKILL.md as a new section `## 8. Workflow Protocols` (or `## 9.` if section 8 already exists, like Etalides)
+4. Skip content already in SOUL.md: YAML frontmatter, Workflow Context Note (already in §7), and any protocols already embedded (like Etalides §8 Research Persistence)
+5. Keep the SKILL.md file in place (don't delete) — it serves as a reference and can be re-merged if updated
     97|
     98|### Hermes Variant (different Execution Context)
     99|
@@ -125,15 +142,16 @@
    125|
    126|**Key rule:** Hermes' Execution Context includes the pipeline, delegation gates, and .eter/ ownership. Daimons' Execution Context is DRY (identical 7-point list).
    127|
-   128|### Sections that were REMOVED (v1 → v2)
-   129|
-   130|| Old section | Where it went |
-   131||---|---|
-   132|| Anti-Bias Rule | Removed — not needed. SOUL.md identity + Limits cover this. |
-   133|| Communication | Merged into Execution Context (first bullet) |
-   134|| Decision Flow | Hermes only — merged into Execution Context |
-   135|| Project Root | Merged into Execution Context (all Daimons + Hermes) |
-   136|| Success Criteria | Removed — Output Format + Limits cover this implicitly |
+### Sections that changed (v2 → v3)
+
+| Old section | What changed |
+|---|---|
+| Anti-Bias Rule | Removed — not needed. SOUL.md identity + Limits cover this. |
+| Communication | Merged into Execution Context (first bullet) |
+| Decision Flow | Hermes only — merged into Execution Context |
+| Project Root | Merged into Execution Context (all Daimons + Hermes) |
+| Success Criteria | Removed — Output Format + Limits cover this implicitly |
+| `{name}-workflow` skill reference | Removed from §5 — now embedded as §8/§9 Workflow Protocols |
    137|
    138|
    139|### Personal Agent Variations
