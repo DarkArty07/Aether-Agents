@@ -15,6 +15,10 @@ logger = logging.getLogger("olympus.workflows.nodes")
 
 POLL_INTERVAL = 10    # seconds
 STALL_TIMEOUT = 120   # 2 minutes without activity = STALLED
+# NOTE: There is NO separate "hard timeout" or "safety ceiling" in runner.py.
+# STALL_TIMEOUT is the only timeout mechanism. If an agent produces activity
+# (thoughts, messages, or tool calls) within this window, it gets unlimited time.
+# Only agents with zero activity for STALL_TIMEOUT seconds are considered stalled.
 
 # Spinner noise filter — identifies kawaii/progress text that isn't substantive content.
 # The ACP protocol has two channels: AgentMessageChunk (response text) and

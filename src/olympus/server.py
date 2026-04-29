@@ -105,7 +105,7 @@ def create_server() -> Server:
                         },
                         "action": {
                             "type": "string",
-                            "enum": ["discover", "open", "message", "poll", "wait", "cancel", "close"],
+                            "enum": ["open", "message", "poll", "wait", "cancel", "close"],
                             "description": (
                                 "Action to execute. "
                                 "discover: list agents. "
@@ -241,7 +241,7 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     timeout = args.get("timeout", 120)
 
     # discover action — shortcut or missing agent name
-    if action == "discover" or agent_name == "?" or not agent_name:
+    if agent_name == "?" or not agent_name:
         return await _handle_discover()
 
     # Self-talk prevention (D10)
@@ -297,7 +297,7 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     else:
         return [mcp_types.TextContent(
             type="text",
-            text=json.dumps({"error": f"Unknown action: {action}. Valid: discover, open, message, poll, wait, cancel, close"}),
+            text=json.dumps({"error": f"Unknown action: {action}. Valid: open, message, poll, wait, cancel, close. For discovery, use the 'discover' tool."}),
         )]
 
 

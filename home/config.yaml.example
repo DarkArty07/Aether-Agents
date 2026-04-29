@@ -1,0 +1,21 @@
+# Example configuration for Olympus MCP Server
+# Copy this file to home/config.yaml and adjust paths for your system.
+
+mcp_servers:
+  olympus:
+    command: /path/to/hermes-agent/venv/bin/python
+    args:
+      - -m
+      - olympus.server
+    env:
+      AETHER_HOME: /path/to/Aether-Agents/home
+      PYTHONPATH: /path/to/Aether-Agents/src
+    enabled: true
+
+# Context7 — for documentation lookups (optional)
+  context7:
+    command: npx
+    args:
+      - -y
+      - "@upstash/context7-mcp"
+    enabled: true
