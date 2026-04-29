@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Reference — Aether Agents</title>
+    <meta name="description" content="Configuration reference for Aether Agents — config.yaml, .env files, directory structure, toolsets, and common pitfalls.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- NAV -->
+    <nav id="top-nav">
+        <div class="nav-inner">
+            <a href="index.html" class="nav-logo">Aether Agents</a>
+            <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="setup.html" class="nav-link">Setup</a>
+                <a href="daimons.html" class="nav-link">Daimons</a>
+                <a href="config.html" class="nav-link active">Config</a>
+                <a href="https://github.com/DarkArty07/Aether-Agents" target="_blank" class="nav-github">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- PAGE HEADER -->
+    <section class="page-header">
+        <div class="container">
+            <h1>Configuration Reference</h1>
+            <p>Everything you need to configure Aether Agents — from directory structure and config.yaml to per-Daimon environment variables and toolsets.</p>
+        </div>
+    </section>
+
+    <!-- HERMES_HOME -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Directory Structure</div>
+            <h2>HERMES_HOME</h2>
+            <p class="section-desc">Aether Agents uses <code>HERMES_HOME</code> to locate its runtime directory. This directory contains the global configuration, per-Daimon profiles with environment secrets, and shared skills.</p>
+            <div class="code-block-wrap">
+                <pre class="code-block"><code>~/Aether-Agents/home/
+├── config.yaml           ← Global configuration
+├── profiles/
+│   ├── hermes/
+│   │   ├── .env           ← Hermes API keys
+│   │   └── SOUL.md        ← Hermes system prompt
+│   ├── ariadna/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── hefesto/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── etalides/
+│   │   ├── .env           ← Includes EXA_API_KEY
+│   │   └── SOUL.md
+│   ├── daedalus/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   └── athena/
+│       ├── .env
+│       └── SOUL.md
+└── skills/
+    └── (shared skills)</code></pre>
+                <button class="copy-btn" data-copy="~/Aether-Agents/home/
+├── config.yaml
+├── profiles/
+│   ├── hermes/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── ariadna/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── hefesto/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── etalides/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   ├── daedalus/
+│   │   ├── .env
+│   │   └── SOUL.md
+│   └── athena/
+│       ├── .env
+│       └── SOUL.md
+└── skills/
+    └── (shared skills)">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONFIG.YAML REFERENCE -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Configuration</div>
+            <h2>config.yaml Reference</h2>
+            <p class="section-desc"><code>config.yaml</code> is the central configuration file for Aether Agents. It defines global model defaults and per-profile overrides so each Daimon can use a different provider or model.</p>
+            <div class="code-block-wrap">
+                <pre class="code-block"><code># Global model configuration
+model:
+  default: claude-3.5-sonnet     # Default model for all Daimons
+  provider: anthropic              # Provider: openai, anthropic, google, moonshot, openrouter, ollama, vllm
+  base_url: https://api.anthropic.com  # Override API base URL (optional)
+
+# Per-profile overrides (optional)
+profiles:
+  hermes:
+    model:
+      default: claude-3.5-sonnet
+      provider: anthropic
+  etalides:
+    model:
+      default: claude-3.5-sonnet
+      provider: anthropic</code></pre>
+                <button class="copy-btn" data-copy="model:
+  default: claude-3.5-sonnet
+  provider: anthropic
+  base_url: https://api.anthropic.com
+
+profiles:
+  hermes:
+    model:
+      default: claude-3.5-sonnet
+      provider: anthropic
+  etalides:
+    model:
+      default: claude-3.5-sonnet
+      provider: anthropic">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- NESTED YAML FORMAT -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Important</div>
+            <h2>Nested vs Flat YAML Format</h2>
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">⚠️</span>
+                    <span><strong>Critical:</strong> The flat format <code>model: claude-3.5-sonnet</code> is <strong>silently ignored</strong>. You MUST use the nested format with <code>model.default</code> — otherwise your configuration will have no effect and Aether Agents will fall back to hardcoded defaults.</span>
+                </div>
+            </div>
+            <div class="code-block-wrap" style="margin-top: 1.5rem;">
+                <pre class="code-block"><code># ✗ WRONG — silently ignored:
+model: claude-3.5-sonnet
+
+# ✓ CORRECT — nested format:
+model:
+  default: claude-3.5-sonnet</code></pre>
+                <button class="copy-btn" data-copy="# ✓ CORRECT — nested format:
+model:
+  default: claude-3.5-sonnet">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- .ENV SETUP PER DAIMON -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Environment</div>
+            <h2>.env Setup per Daimon</h2>
+            <p class="section-desc">Each Daimon has its own <code>.env</code> file in its profile directory under <code>HERMES_HOME/profiles/&lt;daimon&gt;/</code>. This file stores the provider, model, and API keys for that specific agent.</p>
+
+            <h3 class="subsection-title">Example — hermes/.env</h3>
+            <div class="code-block-wrap">
+                <pre class="code-block"><code>PROVIDER=anthropic
+MODEL_DEFAULT=claude-3.5-sonnet
+ANTHROPIC_API_KEY=sk-ant-...</code></pre>
+                <button class="copy-btn" data-copy="PROVIDER=anthropic
+MODEL_DEFAULT=claude-3.5-sonnet
+ANTHROPIC_API_KEY=sk-ant-...">Copy</button>
+            </div>
+
+            <h3 class="subsection-title">Example — etalides/.env</h3>
+            <div class="code-block-wrap">
+                <pre class="code-block"><code>PROVIDER=anthropic
+MODEL_DEFAULT=claude-3.5-sonnet
+ANTHROPIC_API_KEY=sk-ant-...
+EXA_API_KEY=exa-...         ← Required for web search!</code></pre>
+                <button class="copy-btn" data-copy="PROVIDER=anthropic
+MODEL_DEFAULT=claude-3.5-sonnet
+ANTHROPIC_API_KEY=sk-ant-...
+EXA_API_KEY=exa-...">Copy</button>
+            </div>
+
+            <div class="callout" style="border-color: rgba(255,197,66,0.3); margin-top: 1.5rem;">
+                <div class="callout-line">
+                    <span class="callout-icon" style="color: var(--c-etalides);">🔑</span>
+                    <span><strong>EXA_API_KEY is required for Etalides.</strong> Without this key, Etalides cannot perform web searches. Make sure to add <code>EXA_API_KEY=exa-...</code> to <code>etalides/.env</code>. Get a free key at <a href="https://exa.ai" target="_blank" style="color: var(--c-etalides);">exa.ai</a>.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOOLSETS TABLE -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Toolsets</div>
+            <h2>Daimon Toolset Reference</h2>
+            <p class="section-desc">Each Daimon has a set of default tools and optional tools that can be enabled. Tools define what actions a Daimon can take.</p>
+
+            <div class="lifecycle-table" style="margin-top: 2rem;">
+                <div class="lifecycle-row header" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div>Daimon</div>
+                    <div>Default Tools</div>
+                    <div>Optional Tools</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-hermes);">Hermes</strong></div>
+                    <td>delegate_task, talk_to, discover, memory</td>
+                    <td>browser, web</td>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-ariadna);">Ariadna</strong></div>
+                    <td>todo, memory, read_file, write_file</td>
+                    <td>session_search</td>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-athena);">Athena</strong></div>
+                    <td>search_files, read_file, terminal</td>
+                    <td>web_search</td>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-daedalus);">Daedalus</strong></div>
+                    <td>browser_navigate, browser_snapshot, browser_vision, read_file</td>
+                    <td>write_file</td>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-etalides);">Etalides</strong></div>
+                    <td>web_search, web_extract, browser_navigate</td>
+                    <td>browser_snapshot, browser_click</td>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 110px 1fr 1fr;">
+                    <div><strong style="color: var(--c-hefesto);">Hefesto</strong></div>
+                    <td>delegate_task, execute_code, read_file, write_file, terminal</td>
+                    <td>patch, search_files</td>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMMON PITFALLS -->
+    <section class="section">
+        <div class="container">
+            <div class="section-label">Troubleshooting</div>
+            <h2>Common Pitfalls</h2>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🚨</span>
+                    <span><strong>HERMES_HOME not set</strong> → "No module" error. The runtime can't locate the home directory. Fix: <code>export HERMES_HOME=~/Aether-Agents/home</code></span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🤫</span>
+                    <span><strong>Missing <code>.env</code></strong> → Silent fallback to defaults. The agent may run but with wrong provider settings. Fix: <code>cp .env.example .env</code> for each profile.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🔌</span>
+                    <span><strong>Wrong PROVIDER value</strong> → Connection fails. Typos like <code>open_ai</code> or <code>Anthropic</code> (wrong case) cause lookup failure. Use exact values: <code>openai</code>, <code>anthropic</code>, <code>google</code>, <code>moonshot</code>, <code>openrouter</code>, <code>ollama</code>, <code>vllm</code>.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">📐</span>
+                    <span><strong>YAML indentation with tabs</strong> → Python's YAML parser rejects tabs. Use spaces only — never tabs in <code>config.yaml</code>.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">⚙️</span>
+                    <span><strong>Flat config format silently ignored.</strong> Writing <code>model: claude-3.5-sonnet</code> has no effect. Fix: Always use nested format — <code>model.default: claude-3.5-sonnet</code>.</span>
+                </div>
+            </div>
+
+            <div class="callout callout-warn">
+                <div class="callout-line">
+                    <span class="callout-icon">🔍</span>
+                    <span><strong>Exa key missing for Etalides.</strong> Etalides can't perform web searches without the Exa API key. Fix: Add <code>EXA_API_KEY=exa-...</code> to <code>etalides/.env</code>. Get a free key at <a href="https://exa.ai" target="_blank" style="color: var(--c-etalides);">exa.ai</a>.</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container footer-inner">
+            <div class="footer-left">
+                <span class="footer-name">Aether Agents</span>
+                <span class="footer-lic">MIT License</span>
+            </div>
+            <div class="footer-right">
+                Built on <a href="https://hermes-agent.nousresearch.com/" target="_blank">hermes-agent</a> by Nous Research
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

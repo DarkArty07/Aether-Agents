@@ -1,20 +1,21 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // ── Copy button ───────────────────────────────
-    const copyBtn = document.querySelector('.copy-btn');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-            const text = copyBtn.getAttribute('data-copy');
+    // ── Copy buttons ───────────────────────────────
+    const copyBtns = document.querySelectorAll('.copy-btn');
+    copyBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const text = btn.getAttribute('data-copy');
+            if (!text) return;
             navigator.clipboard.writeText(text).then(() => {
-                copyBtn.textContent = 'Copied!';
-                copyBtn.classList.add('copied');
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
                 setTimeout(() => {
-                    copyBtn.textContent = 'Copy';
-                    copyBtn.classList.remove('copied');
+                    btn.textContent = 'Copy';
+                    btn.classList.remove('copied');
                 }, 2000);
             });
         });
-    }
+    });
 
     // ── Scroll-in animation for daimon cards ─────
     const cards = document.querySelectorAll('.daimon-card, .workflow-card');
@@ -37,21 +38,54 @@ document.addEventListener('DOMContentLoaded', () => {
         observer.observe(card);
     });
 
-    // ── Active nav link on scroll ─────────────────
-    const sections = document.querySelectorAll('section[id]');
-    const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+    // ── Mobile nav toggle ──────────────────────────
+    const navToggle = document.querySelector('.nav-toggle');
+    const navLinks = document.querySelector('.nav-links');
 
-    const sectionObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const id = entry.target.id;
-                navLinks.forEach(link => {
-                    link.style.color = link.getAttribute('href') === `#${id}`
-                        ? 'var(--text)' : '';
-                });
+    if (navToggle && navLinks) {
+        navToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('open');
+            navToggle.classList.toggle('open');
+            const expanded = navToggle.getAttribute('aria-expanded') === 'true';
+            navToggle.setAttribute('aria-expanded', !expanded);
+        });
+
+        // Close overlay on link click
+        navLinks.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                navLinks.classList.remove('open');
+                navToggle.classList.remove('open');
+                navToggle.setAttribute('aria-expanded', 'false');
+            });
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && navLinks.classList.contains('open')) {
+                navLinks.classList.remove('open');
+                navToggle.classList.remove('open');
+                navToggle.setAttribute('aria-expanded', 'false');
             }
         });
-    }, { rootMargin: '-30% 0px -60% 0px' });
+    }
 
-    sections.forEach(s => sectionObserver.observe(s));
+    // ── Active nav link on scroll (home page only) ──
+    const sections = document.querySelectorAll('section[id]');
+    const navLinkEls = document.querySelectorAll('.nav-links a[href^="#"]');
+
+    if (sections.length > 0 && navLinkEls.length > 0) {
+        const sectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    navLinkEls.forEach(link => {
+                        link.style.color = link.getAttribute('href') === `#${id}`
+                            ? 'var(--text)' : '';
+                    });
+                }
+            });
+        }, { rootMargin: '-30% 0px -60% 0px' });
+
+        sections.forEach(s => sectionObserver.observe(s));
+    }
 });
