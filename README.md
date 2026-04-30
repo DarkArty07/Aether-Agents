@@ -94,7 +94,7 @@ Aether-Agents/
 │   │   ├── aether-agents/             ← Framework skills (10 skills)
 │   │   ├── productivity/              ← Generic skill categories
 │   │   ├── research/
-│   │   └── ... (24 categories total)
+│   │   └── ... (27 categories total)
 │   ├── profiles/                      ← Agent profiles (HERMES_HOME per agent)
 │   │   ├── hermes/                    ← Orchestrator (SOUL.md + .env.example + config.yaml.template)
 │   │   ├── ariadna/                   ← Project Manager
