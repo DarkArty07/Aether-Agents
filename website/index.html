@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aether Agents — Multi-Agent System built on hermes-agent</title>
-    <meta name="description" content="Provider-agnostic multi-agent system built on hermes-agent. Orchestrates 6 specialized Daimóns for collaborative software development via Olympus MCP and ACP protocol.">
+    <meta name="description" content="Provider-agnostic multi-agent system built on hermes-agent. Orchestrates 6 specialized Daimons for collaborative software development via Olympus MCP and ACP protocol.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
@@ -84,7 +84,7 @@
             <div class="section-label">Architecture</div>
             <h2>How it works</h2>
             <p class="section-desc">
-                Hermes connects to the <strong>Olympus MCP server</strong> via stdio. Olympus exposes two tools: <code>talk_to()</code> and <code>discover()</code>. Under the hood, Olympus uses the <strong>ACP (Agent Client Protocol)</strong> to spawn and communicate with each Daimon.
+                Hermes connects to the <strong>Olympus MCP server</strong> via stdio. Olympus exposes three tools: <code>talk_to()</code>, <code>discover()</code>, and <code>run_workflow()</code>. Under the hood, Olympus uses the <strong>ACP (Agent Client Protocol)</strong> to spawn and communicate with each Daimon.
             </p>
 
             <div class="arch-diagram">
@@ -138,7 +138,7 @@
                 </div>
                 <div class="lifecycle-row">
                     <div><code>wait</code></div>
-                    <div>Blocks until the Daimon completes (max 300s timeout)</div>
+                    <div>Blocks until the Daimon completes (max 600s timeout)</div>
                 </div>
                 <div class="lifecycle-row">
                     <div><code>cancel</code></div>

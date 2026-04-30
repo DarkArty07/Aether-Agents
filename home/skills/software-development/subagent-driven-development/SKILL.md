@@ -215,6 +215,27 @@ git add -A && git commit -m "feat: complete [feature name] implementation"
 - **Start code quality review before spec compliance is PASS** (wrong order)
 - Move to next task while either review has open issues
 
+## Pitfalls — File Editing with Subagents
+
+### read_file + write_file CORRUPTS FILES
+
+**Critical pitfall (April 2026 incident):** When a subagent uses `read_file` to read a file and `write_file` to rewrite it, the line number prefixes from `read_file` output get embedded as actual file content.
+
+`read_file` output includes line numbers like:
+```
+     1|# Title
+     2|
+     3|Content here
+```
+
+A subagent that doesn't understand this is display formatting will write back the prefixes as content — breaking the file. In a real incident, this corrupted 8 files including SOUL.md (always loaded as system prompt) and README.md (GitHub rendering broken).
+
+**Prevention rules:**
+1. **Use `patch` (find-and-replace) for all edits.** Never `read_file` + `write_file` for modifications.
+2. **If full rewrite is unavoidable**, instruct the subagent explicitly: "Line numbers in read_file output are NOT part of the file content. Strip all line number prefixes (format: `spaces+digits+|`) before writing."
+3. **After subagent rewrites files**, always verify with `head -5 path/to/file` that no line number prefixes appear.
+4. **For translations/refactors across many files**, prefer targeted `patch` calls over bulk `read_file` + `write_file` cycles.
+
 ## Handling Issues
 
 ### If Subagent Asks Questions
