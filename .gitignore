@@ -12,6 +12,8 @@ home/sessions/
 home/logs/
 home/plugins/
 home/.cache/
+home/active_profile
+home/bin/
 **/sessions/
 **/request_dump*
 **/logs/
@@ -26,6 +28,7 @@ home/.cache/
 **/.skills_prompt_snapshot.json
 **/.hermes_history
 **/checkpoints/
+**/interrupt_debug.log
 home/skills/.hub/
 
 # --- Profile skills directories (skills loaded via external_dirs from home/skills/) ---
@@ -41,6 +44,7 @@ home/profiles/hermes/config.yaml
 
 # --- Per-profile runtime state ---
 home/profiles/*/memories/
+home/profiles/*/research/
 home/profiles/*/.update_check
 home/profiles/*/channel_directory.json
 home/profiles/*/gateway.lock
@@ -85,6 +89,7 @@ home/profiles/prometeo/
 
 # --- Project state (local only) ---
 .eter/
+.hermes/
 **/.olympus_checkpoints.db*
 **/state.db-shm
 **/state.db-wal
