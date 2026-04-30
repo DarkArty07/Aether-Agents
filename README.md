@@ -66,7 +66,7 @@
     66|
     67|## Project Status
     68|
-    69|**Current version:** v0.2.0 — Workflow Engine + Conventions Formalized
+    69|**Current version:** v0.3.0 — External Audit Fixes
     70|
     71|| Component | Status | Description |
     72||-----------|--------|-------------|

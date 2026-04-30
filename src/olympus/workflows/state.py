@@ -27,3 +27,4 @@ class WorkflowState(TypedDict):
     has_ui: bool                   # feature: whether the feature has UI components
     workflow_type: str             # "project-init" | "feature" | "bug-fix" | "security-review" | "research" | "refactor"
     hitl_decisions: Annotated[list[str], operator.add]  # Accumulated user decisions (operator.add, NOT add_messages)
+    modification_feedback: str  # HITL modify decision feedback — passes user instructions to redesign

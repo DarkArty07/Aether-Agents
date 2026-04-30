@@ -1,7 +1,8 @@
 # Olympus — Workflow Engine for Aether Agents
 
-Olympus is the MCP server that powers Aether Agents' multi-agent orchestration. It exposes two tools to Hermes (or any MCP-compatible agent):
+Olympus is the MCP server that powers Aether Agents' multi-agent orchestration. It exposes three tools to Hermes (or any MCP-compatible agent):
 
+- **`discover`** — List available Daimons and their capabilities
 - **`talk_to`** — Communicate with Daimons (open, message, poll, wait, cancel, close)
 - **`run_workflow`** — Execute structured multi-step workflows with Human-in-the-Loop (HITL)
 

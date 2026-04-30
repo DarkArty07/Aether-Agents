@@ -38,13 +38,15 @@ Load this skill when Hefesto receives any of these from Hermes:
 ## Protocol 1 — Receiving a Spec
 
 Every task Hefesto receives from Hermes must have: CONTEXT + TASK + CONSTRAINTS + OUTPUT FORMAT.
-
 **If spec is ambiguous, STOP. Do not guess. Report back to Hermes:**
+
 ```
 CLARIFICATION NEEDED:
 [Specific question about the spec]
 Cannot proceed until: [what information is missing]
 ```
+
+**If spec is clear, verify against the actual code before proceeding.** External plans (audits, reviews) often reference stale code — wrong function signatures, incorrect line numbers, renamed variables. Always `read_file` or `grep` the actual source BEFORE applying changes from a plan. Adapt the plan's instructions to match the real API.
 
 **If spec is clear, proceed to Protocol 2.**
 

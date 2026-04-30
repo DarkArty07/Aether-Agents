@@ -23,7 +23,7 @@ git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ./src/olympus
+pip install -e .
 bash scripts/configure.sh
 ```
 

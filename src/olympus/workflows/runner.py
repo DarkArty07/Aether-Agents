@@ -5,7 +5,7 @@ import time
 from typing import Dict, Any
 
 from langgraph.types import Command
-from langchain_core.utils.uuid import uuid7
+import uuid
 
 from .definitions import get_workflow
 from ..acp_client import ACPManager
@@ -38,7 +38,7 @@ class WorkflowRunner:
 
             # 2. Generate thread_id if not provided
             if thread_id is None:
-                thread_id = str(uuid7())
+                thread_id = str(uuid.uuid4())
 
             config = {"configurable": {"thread_id": thread_id}}
 

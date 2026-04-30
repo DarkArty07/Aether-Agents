@@ -15,6 +15,10 @@ logger = logging.getLogger("olympus.workflows.nodes")
 
 POLL_INTERVAL = 10    # seconds
 STALL_TIMEOUT = 120   # 2 minutes without activity = STALLED
+# NOTE: There is NO separate "hard timeout" or "safety ceiling" in runner.py.
+# STALL_TIMEOUT is the only timeout mechanism. If an agent produces activity
+# (thoughts, messages, or tool calls) within this window, it gets unlimited time.
+# Only agents with zero activity for STALL_TIMEOUT seconds are considered stalled.
 
 # Spinner noise filter — identifies kawaii/progress text that isn't substantive content.
 # The ACP protocol has two channels: AgentMessageChunk (response text) and
@@ -126,6 +130,10 @@ def make_node_design(acp: ACPManager):
 
         if research:
             prompt += f"\n\nRESEARCH CONTEXT:\n{research}"
+
+        # Include modification feedback if this is a redesign
+        if state.get("modification_feedback"):
+            prompt += f"\n\nMODIFICATION FEEDBACK FROM USER:\n{state['modification_feedback']}\nPlease revise the design based on this feedback."
 
         try:
             result = await _run_acp_session(acp, "daedalus", prompt)
@@ -374,8 +382,14 @@ def make_node_hitl(
         goto = routing.get(decision, "finalize")
         logger.info(f"[workflow] HITL {key}: user chose '{decision}' → going to '{goto}'")
 
+        update = {"hitl_decisions": [f"{key}:{decision}"]}
+
+        # When user selects "modify", capture their feedback for the design node
+        if decision == "modify":
+            update["modification_feedback"] = interrupt_payload.get("context", "")
+
         return Command(
-            update={"hitl_decisions": [f"{key}:{decision}"]},
+            update=update,
             goto=goto,
         )
 

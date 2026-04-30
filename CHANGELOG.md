@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] — 2026-04-29
+
+### Fixed
+
+- Unified project version across README (0.2.0), pyproject.toml (0.1.0), and CHANGELOG (2.0.0) to 0.3.0
+- Added `langgraph-checkpoint-sqlite>=2.0.0` to pyproject.toml dependencies (was missing but required by server.py)
+- Fixed QUICKSTART.md: `pip install -e ./src/olympus` → `pip install -e .` (pyproject.toml is at root)
+- Replaced `langchain_core.utils.uuid.uuid7` with stdlib `uuid.uuid4()` in runner.py (removes fragile dependency)
+- Fixed Olympus README: "two tools" → "three tools" (discover, talk_to, run_workflow)
+- Removed redundant `talk_to(action="discover")` — `mcp_olympus_discover` is the canonical tool
+- Documented that STALL_TIMEOUT=120s is the only timeout (removed phantom "30 min hard limit" reference)
+- Created `home/config.yaml.example` for MCP server configuration
+
+### Changed
+
+- `shutdown_agent` now terminates process (`proc.terminate()` + `proc.wait()`) instead of only setting status to DEAD
+- Added `modification_feedback` field to WorkflowState for HITL modify decision routing
+- Added permission audit logging in `request_permission()` — auto-approve still default, but now logged
+- Created `tests/test_workflows.py` with basic workflow compilation tests
+
+### Security
+
+- Auto-approve of Daimon permissions is now logged with agent name, permission type, and timestamp
+- Created `SECURITY.md` documenting the permission model and current MVP auto-approve behavior
+
+---
+
 ## [2.0.0] — 2025-04-24
 
 ### Olympus Workflow Engine v2 — Complete Rewrite

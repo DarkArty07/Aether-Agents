@@ -14,17 +14,26 @@ agent:
   launch_command: "hermes acp"
   keep_alive: true
 
-# Model configuration — deepseek-v4-flash via opencode-go
+# Model configuration
 model:
   default: deepseek-v4-flash
   provider: opencode-go
   base_url: https://opencode.ai/zen/go/v1
 
-# Toolsets — web research tools only
+# Web search backend — Exa for high-quality research
+web:
+  backend: "exa"
+
+# Toolsets — web research tools
 toolsets:
   - web
   - browser
   - file
+
+# Link budget for research tasks
+link_budget:
+  max_links: 10
+  fast_mode: 5
 
 skills:
   external_dirs:
@@ -35,9 +44,4 @@ skills:
 display:
   personality: none
 
-max_iterations: 50
-
-# Etalides-specific: link budget
-link_budget:
-  max_links: 10
-  fast_mode: 5
+max_iterations: 80
