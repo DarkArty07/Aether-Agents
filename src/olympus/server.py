@@ -1,7 +1,7 @@
 """Olympus MCP Server — Aether Agents orchestrator.
 
 Exposes two MCP tools:
-- talk_to(agent, action, prompt, session_id, timeout) — communicate with Daimons
+- talk_to(agent, action, prompt, session_id) — communicate with Daimons
 - discover() — list available agents and their capabilities
 
 Runs as an MCP stdio server. Hermes (or any MCP-compatible agent) connects
@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ from .acp_client import ACPManager
 from .config import get_config, reset_config
 from .discovery import discover_agents
 from .registry import OlympusRegistry, SessionStatus
+from .workflows.nodes import _is_spinner_noise
 from .workflows.runner import WorkflowRunner
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -94,7 +96,10 @@ def create_server() -> Server:
                 description=(
                     "Communication channel with sub-agents via Olympus MCP. "
                     "Flow: discover → open → message → poll/wait → close. "
-                    "Message is async by default — use poll to check progress or wait to block."
+                    "Message is async by default — use poll to check progress or wait to block. "
+                    "Poll interval: wait at least poll_interval seconds between poll calls. "
+                    "The open and poll responses include the recommended poll_interval value "
+                    "(default: 15s, configurable in olympus config)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -105,14 +110,12 @@ def create_server() -> Server:
                         },
                         "action": {
                             "type": "string",
-                            "enum": ["open", "message", "poll", "wait", "cancel", "close"],
+                            "enum": ["open", "message", "poll", "cancel", "close"],
                             "description": (
                                 "Action to execute. "
-                                "discover: list agents. "
                                 "open: create ACP session. "
                                 "message: send prompt (async). "
                                 "poll: check status with real progress. "
-                                "wait: block until response. "
                                 "cancel: abort session. "
                                 "close: close session."
                             ),
@@ -123,11 +126,7 @@ def create_server() -> Server:
                         },
                         "session_id": {
                             "type": "string",
-                            "description": "Session ID (returned by open). Required for poll, wait, cancel, close.",
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Timeout in seconds for wait. Default 300s, max 600s.",
+                            "description": "Session ID (returned by open). Required for poll, cancel, close.",
                         },
                     },
                     "required": ["agent", "action"],
@@ -238,7 +237,6 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     action = args.get("action", "")
     prompt_text = args.get("prompt", "")
     session_id = args.get("session_id", "")
-    timeout = args.get("timeout", 300)
 
     # discover action — shortcut or missing agent name
     if agent_name == "?" or not agent_name:
@@ -284,10 +282,6 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     elif action == "poll":
         return await _action_poll(session_id)
 
-    elif action == "wait":
-        clamp = min(max(timeout, 1), 600)
-        return await _action_wait(session_id, clamp)
-
     elif action == "cancel":
         return await _action_cancel(session_id)
 
@@ -297,12 +291,13 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     else:
         return [mcp_types.TextContent(
             type="text",
-            text=json.dumps({"error": f"Unknown action: {action}. Valid: open, message, poll, wait, cancel, close. For discovery, use the 'discover' tool."}),
+            text=json.dumps({"error": f"Unknown action: {action}. Valid: open, message, poll, cancel, close. For discovery, use the 'discover' tool."}),
         )]
 
 
 async def _action_open(agent_name: str) -> list[mcp_types.TextContent]:
     """Open a new session on a Daimon."""
+    config = get_config()
     try:
         session = await acp_manager.open_session(agent_name)
         return [mcp_types.TextContent(
@@ -311,6 +306,7 @@ async def _action_open(agent_name: str) -> list[mcp_types.TextContent]:
                 "status": "open",
                 "session_id": session.session_id,
                 "agent": agent_name,
+                "poll_interval": config.poll_interval,
             }),
         )]
     except Exception as e:
@@ -344,63 +340,74 @@ async def _action_message(session_id: str, prompt_text: str) -> list[mcp_types.T
 
 
 async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
-    """Poll session state — return current thoughts, messages, tool calls."""
+    """Poll session state — return current progress, filtered thoughts, messages, tool calls.
+
+    Returns substantive content (not spinner animations) and includes both:
+    - A snapshot of recent items (wider window than before)
+    - A differential view of items added since the last poll call
+    """
     session = registry.get_session(session_id)
     if session is None:
         return [mcp_types.TextContent(
             type="text",
             text=json.dumps({"error": f"Unknown session: {session_id}"}),
         )]
+
+    # Filter spinners from thoughts — show only substantive content
+    substantive = session.substantive_thoughts
 
     result = {
         "session_id": session.session_id,
         "agent": session.agent_name,
         "status": session.status.value,
-        "thoughts": session.thoughts[-5:],  # Last 5 thoughts
-        "messages": session.messages[-3:],  # Last 3 messages
-        "tool_calls": session.tool_calls[-5:],  # Last 5 tool calls
+        "poll_interval": get_config().poll_interval,
+        "progress": {
+            "total_thoughts": len(session.thoughts),
+            "substantive_thoughts": len(substantive),
+            "total_messages": len(session.messages),
+            "total_tool_calls": len(session.tool_calls),
+            "elapsed_seconds": round(time.time() - session.created_at, 1),
+        },
+        # Wider window — 20 substantive thoughts instead of 5 raw (including spinners)
+        "thoughts": substantive[-20:],
+        # Wider window — 10 messages instead of 3
+        "messages": session.messages[-10:],
+        # Wider window — 10 tool_calls instead of 5
+        "tool_calls": session.tool_calls[-10:],
+        # Differential: only items added since last poll
+        "new_since_last_poll": {
+            "thoughts": session.thoughts[session.last_poll_thought_idx:],
+            "messages": session.messages[session.last_poll_message_idx:],
+            "tool_calls": session.tool_calls[session.last_poll_tool_call_idx:],
+        },
         "last_updated": session.last_updated,
     }
+
+    # Update differential tracking indexes AFTER building the response
+    session.last_poll_thought_idx = len(session.thoughts)
+    session.last_poll_message_idx = len(session.messages)
+    session.last_poll_tool_call_idx = len(session.tool_calls)
 
     if session.status in (SessionStatus.DONE, SessionStatus.ERROR, SessionStatus.CANCELLED):
         result["response"] = session.final_response
         result["stop_reason"] = session.stop_reason
 
+        # Thought-fallback: if response is empty but thoughts has content,
+        # the agent streamed via AgentThoughtChunk instead of AgentMessageChunk.
+        # This is common with many providers — NOT GLM-5.1-specific.
+        if not result.get("response") and session.thoughts:
+            content_thoughts = [t for t in session.thoughts if not _is_spinner_noise(t)]
+            if content_thoughts:
+                logger.warning(
+                    f"[talk_to] Session {session_id} returned empty response but has "
+                    f"{len(content_thoughts)}/{len(session.thoughts)} substantive thoughts. "
+                    f"Agent may stream via thoughts channel instead of messages. "
+                    f"Using filtered thoughts as fallback."
+                )
+                result["response"] = "\n".join(content_thoughts)
+                result["fallback_used"] = True
+
     return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
-
-
-async def _action_wait(session_id: str, timeout: int) -> list[mcp_types.TextContent]:
-    """Block until the session completes or timeout."""
-    session = registry.get_session(session_id)
-    if session is None:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": f"Unknown session: {session_id}"}),
-        )]
-
-    try:
-        await asyncio.wait_for(session.completion_event.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({
-                "session_id": session.session_id,
-                "status": "timeout",
-                "thoughts": session.thoughts[-5:],
-                "messages": session.messages[-3:],
-            }),
-        )]
-
-    return [mcp_types.TextContent(
-        type="text",
-        text=json.dumps({
-            "session_id": session.session_id,
-            "agent": session.agent_name,
-            "status": session.status.value,
-            "response": session.final_response,
-            "stop_reason": session.stop_reason,
-        }),
-    )]
 
 
 async def _action_cancel(session_id: str) -> list[mcp_types.TextContent]:

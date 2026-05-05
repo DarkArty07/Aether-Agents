@@ -45,6 +45,14 @@ class SessionState:
     messages: list[str] = field(default_factory=list)
     tool_calls: list[dict] = field(default_factory=list)
 
+    # Classification at ingestion time — O(1) per poll instead of filtering O(n)
+    substantive_thoughts: list[str] = field(default_factory=list)
+
+    # Differential polling — track what Hermes has already seen
+    last_poll_thought_idx: int = 0
+    last_poll_message_idx: int = 0
+    last_poll_tool_call_idx: int = 0
+
     # Final response when session completes
     final_response: str | None = None
     stop_reason: str | None = None
@@ -56,7 +64,10 @@ class SessionState:
     completion_event: asyncio.Event = field(default_factory=asyncio.Event)
 
     def update_from_thought(self, text: str) -> None:
+        from .workflows.nodes import _is_spinner_noise  # Lazy import to avoid circular dependency
         self.thoughts.append(text)
+        if not _is_spinner_noise(text):
+            self.substantive_thoughts.append(text)
         self.last_updated = time.time()
 
     def update_from_message(self, text: str) -> None:

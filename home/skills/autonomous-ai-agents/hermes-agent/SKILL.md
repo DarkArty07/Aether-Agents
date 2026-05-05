@@ -1,6 +1,6 @@
 ---
 name: hermes-agent
-description: Complete guide to using and extending Hermes Agent — CLI usage, setup, configuration, spawning additional agents, gateway platforms, skills, voice, tools, profiles, and a concise contributor reference. Load this skill when helping users configure Hermes, troubleshoot issues, spawn agent instances, or make code contributions.
+description: "Configure, extend, or contribute to Hermes Agent."
 version: 2.0.0
 author: Hermes Agent + Teknium
 license: MIT
@@ -29,6 +29,8 @@ People use Hermes for software development, research, system administration, dat
 **This skill helps you work with Hermes Agent effectively** — setting it up, configuring features, spawning additional agent instances, troubleshooting issues, finding the right commands and settings, and understanding how the system works when you need to extend or contribute to it.
 
 **Docs:** https://hermes-agent.nousresearch.com/docs/
+
+**PREFERENCE:** When looking up documentation for any framework, library, or project, ALWAYS use Context7 MCP (`mcp_context7_resolve_library_id` → `mcp_context7_query_docs`) instead of searching the filesystem or doing a generic `web_search`. Context7 is faster and more accurate for official docs. Only fall back to `web_search` or `web_extract` when Context7 doesn't have the library or the answer isn't in the indexed docs.
 
 ## Quick Start
 
@@ -115,7 +117,7 @@ hermes tools disable NAME   Disable a toolset
 
 hermes skills list          List installed skills
 hermes skills search QUERY  Search the skills hub
-hermes skills install ID    Install a skill
+hermes skills install ID    Install a skill (ID can be a hub identifier OR a direct https://…/SKILL.md URL; pass --name to override when frontmatter has no name)
 hermes skills inspect ID    Preview without installing
 hermes skills config        Enable/disable skills per platform
 hermes skills check         Check for updates
@@ -199,6 +201,10 @@ hermes profile export NAME  Export to tar.gz
 hermes profile import FILE  Import from archive
 ```
 
+**⚠ Reserved profile name "hermes":** `hermes profile alias hermes` fails with `Error: 'hermes' is a reserved name`. The workaround is to create the wrapper script manually — see `templates/profile-alias-wrapper.sh`. A bare symlink silently uses the default profile instead of the named one, which is the #1 cause of "my SOUL.md isn't loading" bugs.
+
+**⚠ Wrapper-script alias conflict (THE #2 CAUSE OF PROFILE ISSUES):** If `/home/YOURUSER/.local/bin/hermes` is a custom bash wrapper that injects `-p hermes`, then `hermes profile alias <name>` creates scripts that call `exec hermes -p <name>`, which expands to `exec hermes -p hermes -p <name>`. The pre-parser `_apply_profile_override()` takes the first `-p` (`hermes`), strips it from argv, and argparse then sees `<name>` as a positional subcommand → `error: invalid choice: '<name>'`. **Fix:** All profile alias scripts must call the venv binary directly, NOT via the `hermes` wrapper. Template: `exec /home/YOURUSER/.hermes/hermes-agent/venv/bin/hermes -p <name> "$@"`, plus `export HERMES_HOME=/home/YOURUSER/Aether-Agents/home`. Never use `exec hermes -p <name>` in an alias script if the `hermes` command is itself a wrapper.
+
 ### Credential Pools
 
 ```
@@ -281,7 +287,6 @@ Type these during an interactive chat session.
 ### Utility
 ```
 /branch (/fork)      Branch the current session
-/btw                 Ephemeral side question (doesn't interrupt main task)
 /fast                Toggle priority/fast processing
 /browser             Open CDP browser connection
 /history             Show conversation history (CLI)
@@ -310,8 +315,8 @@ Type these during an interactive chat session.
 ## Key Paths & Config
 
 ```
-~/.hermes/config.yaml       Main configuration
-~/.hermes/.env              API keys and secrets
+~/.hermes/config.yaml       Main configuration (DEFAULT profile only)
+~/.hermes/.env              API keys and secrets (DEFAULT profile only)
 $HERMES_HOME/skills/        Installed skills
 ~/.hermes/sessions/         Session transcripts
 ~/.hermes/logs/             Gateway and error logs
@@ -319,7 +324,9 @@ $HERMES_HOME/skills/        Installed skills
 ~/.hermes/hermes-agent/     Source code (if git-installed)
 ```
 
-Profiles use `~/.hermes/profiles/<name>/` with the same layout.
+Profiles use `~/.hermes/profiles/<name>/` with the same layout. **Always run `hermes config path` to find the ACTIVE profile directory** — it may NOT be `~/.hermes/`. When using `hermes -p <name>`, the profile home is typically `~/Aether-Agents/home/profiles/<name>/` and contains config.yaml, .env, SOUL.md, memories/, skills/, sessions/, cron/, logs/, state.db. The installation directory (`~/.hermes/hermes-agent/`) is always shared across profiles.
+
+**PITFALL:** Editing `~/.hermes/config.yaml` when the active profile is at `~/Aether-Agents/home/profiles/hermes/config.yaml` changes the WRONG file. Always check with `hermes config path` first.
 
 ### Config Sections
 
@@ -330,14 +337,58 @@ Edit with `hermes config edit` or `hermes config set section.key value`.
 | `model` | `default`, `provider`, `base_url`, `api_key`, `context_length` |
 | `agent` | `max_turns` (90), `tool_use_enforcement` |
 | `terminal` | `backend` (local/docker/ssh/modal), `cwd`, `timeout` (180) |
-| `compression` | `enabled`, `threshold` (0.50), `target_ratio` (0.20) |
-| `display` | `skin`, `tool_progress`, `show_reasoning`, `show_cost` |
+| `compression` | `enabled`, `threshold` (0.50), `target_ratio` (0.20), `protect_last_n` (20), `hygiene_hard_message_limit` (400) |
+| `display` | `skin`, `tool_progress`, `show_reasoning`, `show_cost`, `streaming` |
 | `stt` | `enabled`, `provider` (local/groq/openai/mistral) |
 | `tts` | `provider` (edge/elevenlabs/openai/minimax/mistral/neutts) |
 | `memory` | `memory_enabled`, `user_profile_enabled`, `provider` |
 | `security` | `tirith_enabled`, `website_blocklist` |
-| `delegation` | `model`, `provider`, `base_url`, `api_key`, `max_iterations` (50), `reasoning_effort` |
+| `delegation` | `model`, `provider`, `base_url`, `api_key`, `max_iterations` (50), `reasoning_effort`, `max_spawn_depth` (1), `max_concurrent_children` (5), `child_timeout_seconds` (600), `subagent_auto_approve` (false), `inherit_mcp_toolsets` (true) |
+| `approvals` | `mode` (manual/smart/off), `timeout` (60), `cron_mode` (deny) |
+| `stt` | `enabled`, `provider` (local/groq/openai/mistral), `local.model` (tiny/base/small/medium/large-v3) |
+
+#### Reasoning Effort — GLM-5.1 / OpenCode Go
+
+GLM-5.1 has **thinking mode enabled by default** (Interleaved Thinking). It does NOT use OpenAI-style `reasoning_effort` levels — it's either ON or OFF via `thinking.type`. With OpenCode Go in `chat_completions` mode, `reasoning_effort` set in Hermes config is likely **ignored**. Leave `delegation.reasoning_effort: ''` (empty). See `references/opencode-go-models.md` for full details.
+
+#### STT Model — GPU-Optimized Selection
+
+With `stt.provider: local` (faster-whisper), choose the Whisper model based on available GPU VRAM. For RTX 4070 Ti Super 16GB: use `medium` (~5 GB VRAM, very good Spanish accuracy). Set with `hermes config set stt.local.model medium`. First use auto-downloads the model.
 | `checkpoints` | `enabled`, `max_snapshots` (50) |
+
+#### Auxiliary Model Slots
+
+All auxiliary sub-tasks can have their own `provider`, `model`, `base_url`, `api_key`, `timeout`, and `extra_body` under `auxiliary.<slot>:`. The full list:
+
+| Slot | Purpose | Recommended model |
+|------|---------|-------------------|
+| `vision` | Image analysis | Multimodal model (qwen3.6-plus, gemini-2.5-flash) |
+| `compression` | Context summarization | Fast cheap model (deepseek-v4-flash) |
+| `web_extract` | Web content extraction | Fast cheap model (deepseek-v4-flash) |
+| `session_search` | Search past conversations | Fast cheap model |
+| `skills_hub` | Search/install skills | Fast cheap model |
+| `title_generation` | Session titles | Fast cheap model |
+| `approval` | Command-safety decisions | Fast cheap model (irrelevant if `approvals.mode: off`) |
+| `mcp` | Process MCP responses | Fast cheap model |
+| `curator` | Memory maintenance/cleanup | Fast cheap model |
+| `flush_memories` | Flush stale memories | Fast cheap model |
+
+**Cost optimization**: Set all non-vision auxiliary slots to a fast cheap model (e.g., deepseek-v4-flash). Leave only `vision` on a multimodal model. This dramatically reduces cost and latency since auxiliaries fire frequently.
+
+#### Compression System
+
+Hermes uses a **dual compression system**:
+
+1. **Agent ContextCompressor** — fires at `threshold`% of context window (default 50%). Primary compression with accurate token counts from API.
+2. **Gateway Session Hygiene** — fires at 85% of context. Safety net for sessions that accumulate messages between turns (e.g., Telegram overnight).
+
+**Algorithm**: When threshold is hit, the conversation is split into Head (system prompt + first exchange, always preserved), Middle (old history, summarized by the compression model), and Tail (last N messages, preserved intact using `target_ratio` and `protect_last_n`).
+
+**Config values**:
+- `threshold` (0.50 default): Fraction of context that triggers compression
+- `target_ratio` (0.20 default): Fraction of threshold tokens reserved as "protected tail"
+- `protect_last_n` (20 default): Minimum recent messages always preserved
+- `hygiene_hard_message_limit` (400 default): Hard message count limit for gateway hygiene safety net
 
 Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 
@@ -374,6 +425,8 @@ Full provider docs: https://hermes-agent.nousresearch.com/docs/integrations/prov
 
 ### Toolsets
 
+### Toolsets
+
 Enable/disable via `hermes tools` (interactive) or `hermes tools enable/disable NAME`.
 
 | Toolset | What it provides |
@@ -381,7 +434,9 @@ Enable/disable via `hermes tools` (interactive) or `hermes tools enable/disable 
 | `web` | Web search and content extraction |
 | `browser` | Browser automation (Browserbase, Camofox, or local Chromium) |
 | `terminal` | Shell commands and process management |
-| `file` | File read/write/search/patch |
+| `file` | File read/write/search/patch (all four tools) |
+| `file-read` | **Read-only file tools:** `read_file`, `search_files` (split from `file`) |
+| `file-write` | **File modification tools:** `write_file`, `patch` (split from `file`) |
 | `code_execution` | Sandboxed Python execution |
 | `vision` | Image analysis |
 | `image_gen` | AI image generation |
@@ -398,8 +453,389 @@ Enable/disable via `hermes tools` (interactive) or `hermes tools enable/disable 
 | `rl` | Reinforcement learning tools (off by default) |
 | `moa` | Mixture of Agents (off by default) |
 | `homeassistant` | Smart home control (off by default) |
+| `hermes-orchestrator` | **Orchestrator-only tools:** read context, research, plan, and delegate. No implementation tools. Used by the Hermes orchestrator profile to force delegation. |
 
 Tool changes take effect on `/reset` (new session). They do NOT apply mid-conversation to preserve prompt caching.
+
+#### Structural Delegation Enforcement (hermes-orchestrator toolset)
+
+The `hermes-orchestrator` toolset is a custom toolset designed to **structurally enforce delegation** by removing implementation tools from the orchestrator's tool schema. When an LLM cannot call `write_file` or `terminal`, it cannot implement code directly — it must delegate.
+
+**Why `file-read` and `file-write` exist:** The `disabled_toolsets` config subtracts ALL tools in a toolset. If you disable the `file` toolset, you also lose `read_file` and `search_files` — tools the orchestrator needs for context. Splitting `file` into `file-read` and `file-write` lets you disable only the write portion.
+
+**Hermes orchestrator profile config (granular toolsets — recommended):**
+```yaml
+# In ~/Aether-Agents/home/profiles/hermes/config.yaml
+toolsets:
+  - web
+  - file-read
+  - vision
+  - skills
+  - todo
+  - memory
+  - session_search
+  - clarify
+  - cronjob
+  - tts
+  - messaging
+agent:
+  disabled_toolsets:
+    - file-write      # Blocks write_file, patch
+    - terminal        # Blocks terminal, process
+    - code_execution  # Blocks execute_code
+    - delegation       # Blocks delegate_task (safety net)
+platform_toolsets:
+  cli:
+    - web
+    - file-read
+    - vision
+    - skills
+    - todo
+    - memory
+    - session_search
+    - clarify
+    - cronjob
+    - tts
+    - messaging
+  telegram:
+    - web
+    - file-read
+    - vision
+    - skills
+    - todo
+    - memory
+    - session_search
+    - clarify
+    - cronjob
+    - tts
+    - messaging
+```
+
+**Why granular toolsets instead of `hermes-orchestrator`:** The `hermes-orchestrator` composite toolset includes `delegate_task` directly. Using `disabled_toolsets: [delegation]` should remove it at the low-level tool resolution, but some code paths (TUI banner, etc.) call `get_tool_definitions()` without passing `disabled_toolsets`, causing `delegate_task` to appear available. Listing granular toolsets avoids this entirely — `delegate_task` is never included because only `delegation` and `hermes-orchestrator` contain it, and neither is listed.
+
+**Result:** Hermes has ~15 tools (read context, NO delegate), and CANNOT call write_file, patch, terminal, process, execute_code, or delegate_task. Other Daimons (Hefesto, Etalides, etc.) continue using the full `hermes-cli` toolset.
+
+**Verification script:** `scripts/verify-orchestrator-toolset.py` in the `orchestration` skill directory checks that the toolset resolution and subtraction produce the expected final toolset.
+
+**Important:** `disabled_toolsets` subtraction happens AFTER `enabled_toolsets` resolution. If both `hermes-orchestrator` (which includes `read_file`) and `disabled_toolsets: [file]` are set, `read_file` IS removed because it belongs to the `file` toolset. Use `disabled_toolsets: [file-write]` instead.
+
+**PITFALL — `delegate_task` appears in TWO toolsets:** The `delegate_task` tool is included in both the `delegation` toolset (which only contains `delegate_task`) AND the `hermes-orchestrator` toolset (which contains it alongside other orchestrator tools). This means:
+
+1. Adding `delegation` to `disabled_toolsets` attempts to remove `delegate_task`, and at the low-level tool resolution (`model_tools.py: _compute_tool_definitions`), it IS removed via `difference_update({delegate_task})`. So `disabled_toolsets: [delegation]` SHOULD work.
+
+2. HOWEVER, at the high-level platform resolution (`tools_config.py: _get_platform_tools`), `disabled_toolsets` subtracts **toolset names** from the enabled set, not tool names. So `{hermes-orchestrator} - {delegation}` = `{hermes-orchestrator}` (the names don't match, so `hermes-orchestrator` stays). Then when resolved to tools, ALL tools in `hermes-orchestrator` (including `delegate_task`) are included.
+
+3. Whether `disabled_toolsets: [delegation]` actually removes `delegate_task` depends on which code path resolves the tools. The `AIAgent` class passes `disabled_toolsets` to `get_tool_definitions()`, which performs tool-name-level subtraction (removes `delegate_task`). But some code paths (like the TUI banner) only call `get_tool_definitions(enabled_toolsets=...)` WITHOUT passing `disabled_toolsets`, so `delegate_task` can appear available even when it shouldn't be.
+
+**If `disabled_toolsets: [delegation]` doesn't reliably remove `delegate_task`, the recommended alternative is to NOT use the `hermes-orchestrator` composite toolset and instead list individual toolsets granularly in `platform_toolsets`:**
+
+```yaml
+platform_toolsets:
+  cli:
+    - web
+    - file-read
+    - vision
+    - skills
+    - todo
+    - memory
+    - session_search
+    - clarify
+    - cronjob
+    - tts
+    - messaging
+  telegram:
+    - web
+    - file-read
+    - vision
+    - skills
+    - todo
+    - memory
+    - session_search
+    - clarify
+    - cronjob
+    - tts
+    - messaging
+agent:
+  disabled_toolsets:
+    - file-write
+    - terminal
+    - code_execution
+    - delegation
+```
+
+This approach avoids the ambiguity entirely because none of the individual toolsets include `delegate_task` (only `delegation` and `hermes-orchestrator` do). The `disabled_toolsets` line is a safety net in case any MCP toolset or future composite toolset re-introduces `delegate_task`.
+
+---
+
+### `hermes config set` and YAML Falsy Values
+
+`hermes config set` does NOT quote string values. Any value that YAML interprets as boolean/null will be written without quotes and parsed incorrectly. Affected values: `off`, `on`, `yes`, `no`, `true`, `false`, `null`, `~`.
+
+```bash
+# BUG: hermes config set approvals.mode off → writes "mode: false" (boolean)
+hermes config set approvals.mode off   # WRONG — writes mode: false
+
+# FIX: Edit config.yaml directly or verify after setting
+hermes config set approvals.mode 'off'  # Still writes mode: false!
+# Must manually edit: mode: 'off'  (with quotes)
+```
+
+Always verify after setting: `grep 'mode' config.yaml`. See references/auxiliary-models.md Pitfall #0 for the full list and workaround.
+
+### Security & Privacy Toggles
+
+Common "why is Hermes doing X to my output / tool calls / commands?" toggles — and the exact commands to change them. Most of these need a fresh session (`/reset` in chat, or start a new `hermes` invocation) because they're read once at startup.
+
+### Secret redaction in tool output
+
+Secret redaction is **off by default** — tool output (terminal stdout, `read_file`, web content, subagent summaries, etc.) passes through unmodified. If the user wants Hermes to auto-mask strings that look like API keys, tokens, and secrets before they enter the conversation context and logs:
+
+```bash
+hermes config set security.redact_secrets true       # enable globally
+```
+
+**Restart required.** `security.redact_secrets` is snapshotted at import time — toggling it mid-session (e.g. via `export HERMES_REDACT_SECRETS=true` from a tool call) will NOT take effect for the running process. Tell the user to run `hermes config set security.redact_secrets true` in a terminal, then start a new session. This is deliberate — it prevents an LLM from flipping the toggle on itself mid-task.
+
+Disable again with:
+```bash
+hermes config set security.redact_secrets false
+```
+
+### PII redaction in gateway messages
+
+Separate from secret redaction. When enabled, the gateway hashes user IDs and strips phone numbers from the session context before it reaches the model:
+
+```bash
+hermes config set privacy.redact_pii true    # enable
+hermes config set privacy.redact_pii false   # disable (default)
+```
+
+### Command approval prompts
+
+By default (`approvals.mode: manual`), Hermes prompts the user before running shell commands flagged as destructive (`rm -rf`, `git reset --hard`, etc.). The modes are:
+
+- `manual` — always prompt (default)
+- `smart` — use an auxiliary LLM to auto-approve low-risk commands, prompt on high-risk
+- `off` — skip all approval prompts (equivalent to `--yolo`)
+
+```bash
+hermes config set approvals.mode smart       # recommended middle ground
+hermes config set approvals.mode off          # bypass everything (full auto-approve)
+```
+
+**PITFALL:** `hermes config set approvals.mode off` writes Python `false` to YAML instead of the string `'off'`. If you run this command, verify with `grep approvals config.yaml` — you may need to manually edit the file to change `mode: false` to `mode: 'off'`. The other string values (`manual`, `smart`) are not affected because they don't look like Python booleans.
+
+**PITFALL:** `hermes config set delegation.api_key <raw_key>` writes the key directly into `config.yaml` as plaintext instead of an env var reference (`${OPENCODE_GO_API_KEY}`). Always verify after setting and replace hardcoded keys with env var references.
+
+**WSL CUDA PITFALL:** Even after installing nvidia-cublas-cu12 etc. via pip and setting LD_LIBRARY_PATH in `.bashrc`, the gateway systemd service does NOT inherit shell environment variables. You must add `Environment="LD_LIBRARY_PATH=..."` to the systemd service file (`~/.config/systemd/user/hermes-gateway-<profile>.service`) and run `systemctl --user daemon-reload && hermes gateway restart`. Without this, faster-whisper falls back to CPU in the gateway process.
+
+Per-invocation bypass without changing config:
+- `hermes --yolo …`
+- `export HERMES_YOLO_MODE=1`
+
+Note: YOLO / `approvals.mode: off` does NOT turn off secret redaction. They are independent.
+
+#### Delegation (Subagent Orchestration)
+
+Hermes can spawn child agents to handle subtasks. Key settings:
+
+```bash
+# Enable full multi-layer orchestration (agents can delegate to agents)
+hermes config set delegation.max_spawn_depth 2    # default=1, set 2 for multi-layer
+
+# Auto-approve subagent commands (no manual approval per command)
+hermes config set delegation.subagent_auto_approve true  # default=false
+
+# Other delegation settings
+hermes config set delegation.max_iterations 50           # max turns per subagent
+hermes config set delegation.max_concurrent_children 5   # parallel subagents
+hermes config set delegation.child_timeout_seconds 600   # timeout per subagent
+hermes config set delegation.inherit_mcp_toolsets true   # subagents get parent's MCP tools
+```
+
+**`max_spawn_depth`** controls delegation depth:
+- `1` (default): only Hermes can spawn subagents. Subagents cannot delegate further.
+- `2`: subagents can also delegate tasks, enabling multi-layer orchestration (Hermes → Hefesto → further subagent).
+- Higher values allow deeper chains but increase complexity.
+
+**`subagent_auto_approve`** controls whether subagent commands need manual approval:
+- `false` (default): subagent commands are subject to the same `approvals.mode` rules.
+- `true`: subagents bypass approval entirely, running commands freely.
+
+### Display Streaming
+
+By default, CLI responses arrive all at once (buffered). Enable streaming for token-by-token display:
+
+```bash
+hermes config set display.streaming true
+```
+
+After changing, run `/reset` (CLI) or restart the gateway for changes to take effect. Streaming is most noticeable in CLI sessions — gateway (Telegram, Discord) platforms handle streaming differently per platform adapter.
+
+Note: `display.streaming` is a boolean (`true`/`false`). Unlike `approvals.mode`, this value is a proper YAML boolean so `hermes config set` handles it correctly without quoting.
+
+### Shell hooks allowlist
+
+Some shell-hook integrations require explicit allowlisting before they fire. Managed via `~/.hermes/shell-hooks-allowlist.json` — prompted interactively the first time a hook wants to run.
+
+### RL Training (Tinker-Atropos)
+
+Built-in RL fine-tuning pipeline using GRPO + LoRA. Orchestrated through `rl_*` tools, requires separate services.
+
+**Requirements:**
+- `TINKER_API_KEY` + `WANDB_API_KEY` (both required)
+- Python >= 3.11
+- `tinker-atropos/` submodule in Hermes root
+
+**Available tools (off by default, enable with `hermes tools enable rl`):**
+
+| Tool | Purpose |
+|------|---------|
+| `rl_list_environments` | Discover available environments (e.g., GSM8K) |
+| `rl_select_environment` | Load an environment and show config |
+| `rl_get_current_config` | View configurable and locked fields |
+| `rl_edit_config` | Modify group_size, batch_size, etc. |
+| `rl_start_training` | Launch training (3 processes: Atropos API, Tinker Trainer, Environment) |
+| `rl_check_status` | Monitor progress + WandB metrics |
+| `rl_stop_training` | Stop running job |
+| `rl_get_results` | Final metrics + LoRA weights path |
+| `rl_list_runs` | List active and completed runs |
+| `rl_test_inference` | Quick test via OpenRouter (no Tinker key needed) |
+
+**Architecture:**
+- Your machine runs Atropos (trajectory API, localhost:8000) + the environment (dataset + scoring)
+- Tinker cloud (thinkingmachines.ai) runs GPU training (forward-backward, LoRA updates, checkpoints)
+- Output: LoRA adapter weights saved locally
+
+**Config example:**
+```yaml
+# The rl toolset auto-enables when TINKER_API_KEY + WANDB_API_KEY are present
+# No config.yaml changes needed — credentials go in .env
+```
+
+This is a research/ML feature. For daily use (coding, automation, chat), it's irrelevant. For fine-tuning workflows, see the [RL Training docs](https://hermes-agent.nousresearch.com/docs/user-guide/features/rl-training).
+
+**Cost reality check:** Tinker charges per million tokens (prefill, sample, train). For Qwen3.6-35B-A3B: prefill $0.36/M, sample $0.89/M, train $1.07/M. With default settings (batch_size=128, group_size=16), each training step costs ~$6.19. Realistic scenarios:
+- 50-100 steps (PoC test): $310-620
+- 300-500 steps (basic agent): $1,850-3,100
+- 1000-2000 steps (functional agent): $6,200-12,400
+- 3000-5000 steps (production quality): $18,600-31,000+
+
+A more practical approach: generate SFT data with `save_trajectories: true`, fine-tune locally with Unsloth on a rented A100 ($1-2/hr on RunPod), and only consider Tinker RL if SFT results need refinement. See the `unsloth` skill for GPU selection and cost estimates.
+
+### Self-Improvement & Background Maintenance (Heartbeats)
+
+Hermes runs several background loops that maintain and improve itself without user intervention. These are triggered by activity patterns, not by explicit cron schedules:
+
+**1. Curator (skill maintenance)**
+Runs every 7 days (configurable) when the agent has been idle 2+ hours. Two-phase process:
+- Phase 1 (deterministic): Skills unused 30+ days → stale, 90+ days → archived (not deleted, recoverable with `hermes curator restore`)
+- Phase 2 (LLM review): Auxiliary model reviews skills, proposes consolidations/patches
+
+Config:
+```yaml
+curator:
+  enabled: true
+  interval_hours: 168        # 7 days
+  min_idle_hours: 2          # Only run when idle
+  stale_after_days: 30
+  archive_after_days: 90
+  backup:
+    enabled: true
+    keep: 5                   # Keep 5 snapshots before pruning
+```
+
+Uses `auxiliary.curator` model slot (set to a cheap model like deepseek-v4-flash).
+
+CLI commands:
+```bash
+hermes curator status         # Last run, counts, pinned list, LRU top 5
+hermes curator run            # Trigger review now
+hermes curator run --dry-run  # Preview only, no mutations
+hermes curator run --sync     # Block until LLM pass finishes
+hermes curator backup         # Manual snapshot
+hermes curator rollback       # Restore from newest snapshot
+hermes curator rollback --list
+hermes curator pin <skill>    # Protect from auto-transitions
+hermes curator unpin <skill>
+hermes curator restore <skill>  # Move archived skill back to active
+hermes curator pause/resume
+```
+
+**Pinned skills** are off-limits to both curator auto-transitions AND the agent's `skill_manage` tool. Pin important skills before the first curator run.
+
+**2. Memory Nudge & Flush**
+- `nudge_interval: 10` — every 10 user turns, reminds the agent to consider saving memories
+- `flush_min_turns: 6` — before context loss (compression, /new, /reset, exit), gives the agent one turn to save memories (only if session had 6+ user turns)
+
+**3. Skill Creation Nudge**
+- `creation_nudge_interval: 15` — every 15 tool-calling iterations, reminds the agent to consider saving a skill
+
+**4. Cron Ticker (gateway only)**
+Gateway runs a background thread that ticks every 60 seconds. Each tick:
+1. Checks cron job schedules, fires due jobs
+2. Cleans up expired sessions
+3. Flushes memory before session expiry
+4. Refreshes model/provider caches
+
+**5. Session Auto-Reset (messaging platforms)**
+```yaml
+session_reset:
+  mode: both         # both | idle | daily | none
+  idle_minutes: 1440  # 24 hours
+  at_hour: 4          # 4 AM local time
+```
+Before reset, agent gets one turn to save memories and skills.
+
+**First-run safety:** The curator does NOT run immediately after installation. The first observation seeds `last_run_at` to "now" and defers the first real pass by one full `interval_hours`. This gives you time to pin important skills or opt out before any mutations happen.
+
+### Saving Conversations as Training Data
+
+Hermes can save conversations in ShareGPT-compatible JSONL format for fine-tuning. This is the primary way to generate SFT training data from agent interactions.
+
+```yaml
+# config.yaml — enable trajectory saving
+agent:
+  save_trajectories: true   # default: false
+```
+
+When enabled, each completed conversation is appended to `trajectory_samples.jsonl` in the working directory. Failed/incomplete conversations go to `failed_trajectories.jsonl`.
+
+**What gets saved:**
+- Full conversation in ShareGPT format (`from: system/human/gpt/tool`, `value: content`)
+- Tool calls normalized to `｢sched｣...｣/sched｣` XML tags with parsed JSON arguments
+- Tool responses grouped by parent assistant turn
+- Reasoning normalized to `｢think｣...｣/think｣` tags (regardless of original format)
+- Metadata: model name, timestamp, `completed` flag
+- Every `gpt` turn guaranteed to have a `｢think｣` block (empty if no reasoning)
+
+**Batch processing** for generating large datasets:
+```bash
+python batch_runner.py \
+    --dataset_file=data/prompts.jsonl \
+    --batch_size=20 \
+    --run_name=my_run \
+    --model=anthropic/claude-sonnet-4.6 \
+    --num_workers=4 \
+    --max_turns=15
+```
+
+Batch runner adds extra fields: `tool_stats`, `tool_error_counts`, `toolsets_used`, `api_calls`, `prompt_index`. Output goes to `data/<run_name>/trajectories.jsonl`.
+
+**Privacy:** Use `ephemeral_system_prompt` to set a system prompt that guides behavior but is NOT saved to trajectory files (keeps training data clean):
+```python
+agent = AIAgent(
+    model="...",
+    save_trajectories=True,
+    ephemeral_system_prompt="You are a SQL expert. Only answer database questions.",
+)
+```
+
+**PITFALL: `platform_toolsets` overrides `toolsets` top-level.** When Hermes starts via a platform (CLI, Telegram, etc.), it resolves tools from `platform_toolsets.<platform>`, NOT from the top-level `toolsets` key. If you change `toolsets: [hermes-orchestrator]` at the top but leave `platform_toolsets.cli` listing old per-toolset names (like `file`, `terminal`, `code_execution`), the old tools OVERRIDE the top-level config. Always update BOTH the top-level `toolsets` AND the `platform_toolsets` section for every platform the agent operates on. The `agent.disabled_toolsets` key is a global safety net that applies AFTER platform resolution, but don't rely on it alone — set both layers consistently.
+
+### Disabling the web/browser/image-gen tools
+
+To keep the model away from network or media tools entirely, open `hermes tools` and toggle per-platform. Takes effect on next session (`/reset`). See the Tools & Skills section above.
 
 ---
 
@@ -422,9 +858,10 @@ stt:
   provider: local        # local, groq, openai, mistral
   local:
     model: base          # tiny, base, small, medium, large-v3
+    language: ''         # empty = auto-detect, or set 'es', 'en', etc.
 ```
 
-### TTS (Text → Voice)
+**GPU verification script:** After configuring STT, run `bash scripts/verify_cuda_stt.sh` from the hermes-agent skill directory to confirm faster-whisper is using GPU (CUDA) and not falling back to CPU.
 
 | Provider | Env var | Free? |
 |----------|---------|-------|
@@ -564,11 +1001,189 @@ Common gateway problems:
 - **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
 - **Windows HTTP 400 "No models provided"**: Config file encoding issue (BOM). Ensure `config.yaml` is saved as UTF-8 without BOM.
 
-### Auxiliary models not working
-If `auxiliary` tasks (vision, compression, session_search) fail silently, the `auto` provider can't find a backend. Either set `OPENROUTER_API_KEY` or `GOOGLE_API_KEY`, or explicitly configure each auxiliary task's provider:
+### Configuring Auxiliary Models
+
+Auxiliary models handle side tasks separate from the main LLM. **10 sub-task slots** can each have their own `provider`, `model`, `base_url`, `api_key`, `timeout`, and `extra_body`. See the "Auxiliary Model Slots" table above for the full list.
+
+**Quick check — what's configured?**
 ```bash
-hermes config set auxiliary.vision.provider <your_provider>
-hermes config set auxiliary.vision.model <model_name>
+hermes config | grep -A10 "Auxiliary"
+```
+
+**Cost optimization pattern — set all non-vision auxiliaries to a fast cheap model:**
+```bash
+# Example: all auxiliaries on deepseek-v4-flash via opencode-go
+for slot in compression web_extract session_search skills_hub title_generation approval mcp curator flush_memories; do
+  hermes config set auxiliary.$slot.provider opencode-go
+  hermes config set auxiliary.$slot.model deepseek-v4-flash
+  hermes config set auxiliary.$slot.base_url https://opencode.ai/zen/go/v1
+  hermes config set auxiliary.$slot.api_key '${OPENCODE_GO_API_KEY}'
+done
+
+# Then set vision to a multimodal model (ONLY slot that must support images)
+hermes config set auxiliary.vision.provider opencode-go
+hermes config set auxiliary.vision.model qwen3.6-plus
+hermes config set auxiliary.vision.base_url https://opencode.ai/zen/go/v1
+hermes config set auxiliary.vision.api_key '${OPENCODE_GO_API_KEY}'
+```
+
+**CRITICAL:** Use `${OPENCODE_GO_API_KEY}` for OpenCode Go, NOT `${GLM_API_KEY}`. The GLM_API_KEY is only for Z.AI's direct API and returns HTTP 401 on the OpenCode Go endpoint.
+
+**Set up vision (most common auxiliary):**
+```bash
+# Option 1: Google Gemini (free tier, excellent vision)
+hermes config set auxiliary.vision.provider google
+hermes config set auxiliary.vision.model gemini-2.5-flash
+# Requires GOOGLE_API_KEY in .env
+
+# Option 2: OpenRouter (multiple models through one key)
+hermes config set auxiliary.vision.provider openrouter
+hermes config set auxiliary.vision.model google/gemini-2.5-flash
+# Requires OPENROUTER_API_KEY in .env
+
+# Option 3: OpenAI
+hermes config set auxiliary.vision.provider openai
+hermes config set auxiliary.vision.model gpt-4o
+# Requires OPENAI_API_KEY in .env
+```
+
+**Important:** Model name format depends on provider. OpenRouter uses `provider/model` (e.g., `google/gemini-2.5-flash`). Direct providers use just the model name (e.g., `gemini-2.5-flash`). After config changes, `/reset` or restart session.
+
+**PITFALL — `hermes config set` type coercion:** Setting string values like `off`, `true`, `false` via `hermes config set` may convert them to Python booleans instead of YAML strings. For example, `hermes config set approvals.mode off` writes `mode: false` instead of `mode: 'off'`. For config keys that expect string values (`approvals.mode`: manual/smart/off), always verify the written value with `hermes config` or `cat config.yaml`, and patch manually if needed.
+
+**OpenCode Go vision:** If using an OpenCode Go plan, the recommended vision models are `kimi-k2.5` (best value, native multimodal, chat/completions format) or `qwen3.6-plus` (1M context, strong vision). All use the same API key/endpoint. **CRITICAL:** Many Go models are text-only — see `references/auxiliary-models.md` for the full comparison table, including DeepSeek V4 (text-only despite marketing), GLM-5/5.1 (text-only), and Kimi K2.6 (text-only despite K2.5 being multimodal). When researching which models support a modality, check EVERY model in the plan, not just the well-known ones.
+
+**Hindsight as Memory Provider:**
+
+```bash
+# 1. Start daemon and create bank (bank does NOT auto-create)
+hindsight-embed daemon start --profile hermes
+curl -X PUT http://localhost:9100/v1/default/banks/hermes -H 'Content-Type: application/json' -d '{}'
+
+# 2. Create plugin config at <profile>/hindsight/config.json
+# This controls auto_retain, recall_prefetch_method (reflect vs recall), memory_mode, etc.
+# Without it, Hermes uses defaults.
+mkdir -p <profile_dir>/hindsight
+cat > <profile_dir>/hindsight/config.json << 'EOF'
+{
+  "auto_retain": true,
+  "memory_mode": "hybrid",
+  "recall_prefetch_method": "reflect",
+  "recall_budget": "mid",
+  "bank_id": "hermes"
+}
+EOF
+
+# 3. Enable in Hermes config
+hermes config set memory.provider hindsight
+hermes memory status   # verify
+```
+
+Key config.json options:
+- `recall_prefetch_method`: `recall` (raw facts, fast) or `reflect` (LLM-synthesized context, higher quality, +1-3s per turn)
+- `memory_mode`: `simple` (facts), `hybrid` (facts + experiences), `rich` (full context)
+- `llm_*` keys: override the LLM used for reflect synthesis (default: same as Hindsight profile env). Use a fast cheap model like deepseek-v4-flash.
+
+**PITFALL: Bank creation.** The bank matching the profile name (e.g., "hermes") does NOT auto-create on first retain. You must create it manually via the API. Without it, auto-retain silently fails.
+
+**PITFALL: Plugin config.json.** Without `<profile>/hindsight/config.json`, Hermes uses hardcoded defaults. To customize recall behavior, auto_retain, LLM for reflect, etc., create this file. It lives under the profile directory (e.g., `~/Aether-Agents/home/profiles/hermes/hindsight/config.json`), NOT under `~/.hindsight/`.
+
+Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
+
+**Full reference:** See `references/auxiliary-models.md` for detailed config schema, all auxiliary sections, provider/model pairs, and common pitfalls.
+
+**OpenCode Go models:** See `references/opencode-go-models.md` for model IDs, multimodal support matrix, usage limits, and configuration patterns.
+
+**Training data & fine-tuning costs:** See `references/training-data-and-costs.md` for ShareGPT trajectory format, Tinker RL pricing, RunPod GPU selection, Unsloth SFT setup, and cost estimates per training scenario.
+
+**Compression tuning:** See `references/compression-tuning.md` for orchestration-optimized compression settings vs defaults, visual diagrams, and commands.
+
+### Auxiliary models not working
+Three common failure modes — the first two are subtle and the third is the most common:
+
+**Silent failure (no error visible):** The `auto` provider can't find a backend with credentials. Fix: set `OPENROUTER_API_KEY` or `GOOGLE_API_KEY`, or explicitly configure each auxiliary task's provider.
+
+**HTTP 401 "Invalid API key" — WRONG KEY:** OpenCode Go has TWO keys: `GLM_API_KEY` (for Z.AI direct API at `api.z.ai`) and `OPENCODE_GO_API_KEY` (for OpenCode Go at `opencode.ai/zen/go/v1`). They are NOT interchangeable — `GLM_API_KEY` returns 401 on the OpenCode Go endpoint and vice versa. When configuring auxiliary models with `hermes config set`, always use `${OPENCODE_GO_API_KEY}` for the `opencode.ai/zen/go/v1` endpoint. Verify with: `curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $OPENCODE_GO_API_KEY" -H "Content-Type: application/json" -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"max_tokens":5}' https://opencode.ai/zen/go/v1/chat/completions`. A 200 response confirms the correct key.
+
+**HTTP 401 "Invalid API key" — AUTO PROXY FALLBACK (MOST COMMON):** When `provider: "auto"` is set (the default for all auxiliary tasks), the auto-detection chain tries providers in order: OpenRouter → Nous Portal → Custom endpoint → Codex OAuth → API-key providers. If `OPENROUTER_API_KEY` is missing or invalid, auxiliary tasks fail with 401 **before ever reaching your configured custom endpoint** (e.g., OpenCode Go). This means even though you have valid OpenCode Go credentials, the auxiliary task never tries them because OpenRouter is tried first and fails first.
+
+**This is the #1 cause of "Auxiliary title generation failed: HTTP 401: Invalid API key" errors.** The fix is to never leave auxiliary tasks on `auto` — explicitly set each one:
+
+```yaml
+auxiliary:
+  vision:
+    provider: "opencode-go"
+    model: "qwen3.6-plus"
+  title_generation:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  compression:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  web_extract:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  session_search:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  curator:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  skills_hub:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+  approval:
+    provider: "opencode-go"
+    model: "deepseek-v4-flash"
+```
+
+Or via CLI:
+```bash
+# All text auxiliaries on opencode-go with the CORRECT key
+for slot in compression web_extract session_search skills_hub title_generation approval mcp curator flush_memories; do
+  hermes config set auxiliary.$slot.provider opencode-go
+  hermes config set auxiliary.$slot.model deepseek-v4-flash
+  hermes config set auxiliary.$slot.base_url https://opencode.ai/zen/go/v1
+  hermes config set auxiliary.$slot.api_key '${OPENCODE_GO_API_KEY}'
+done
+# Vision needs multimodal
+hermes config set auxiliary.vision.provider opencode-go
+hermes config set auxiliary.vision.model qwen3.6-plus
+hermes config set auxiliary.vision.base_url https://opencode.ai/zen/go/v1
+hermes config set auxiliary.vision.api_key '${OPENCODE_GO_API_KEY}'
+```
+See `references/auxiliary-models.md` → Pitfall #8 for full diagnosis.
+
+### Memory Configuration
+
+Hermes has built-in persistent memory (MEMORY.md + USER.md, 2200/1375 chars) plus 8 optional external providers. Only one external provider can be active at a time; built-in memory always runs alongside it.
+
+```bash
+hermes memory status   # Check current provider
+hermes memory setup    # Interactive picker for providers
+hermes memory off      # Disable external provider
+```
+
+**Provider recommendations by use case:**
+- **Programming / long sessions / cross-session knowledge** → **Hindsight** (knowledge graph + `reflect` synthesis + stale detection)
+- **Zero config / max privacy** → **Holographic** (local SQLite, no external deps)
+- **Hands-off auto-extraction** → **Mem0** (pre-installed, local ChromaDB mode)
+- **Structured navigation / filesystem hierarchy** → **OpenViking** (6 categories, tiered retrieval)
+- **Multi-agent user modeling** → **Honcho** (dialectic reasoning, peer cards)
+
+**Critical:** Only one external provider active at a time. Built-in MEMORY.md/USER.md always runs alongside.
+
+**Memory limits are tight by default** (2200 chars for MEMORY.md, 1375 for USER.md). If filling up: increase limits in config (`memory_char_limit`, `user_char_limit`) or add an external provider for depth.
+
+**Context file limits are hardcoded** — SOUL.md, AGENTS.md, .hermes.md, CLAUDE.md, and .cursorrules all share a **20,000 character hard limit** in `_truncate_content()` (agent/prompt_builder.py). This is NOT configurable via config.yaml — only MEMORY.md and USER.md have adjustable limits. Truncation uses a head/tail strategy: preserves 70% of the beginning and 20% of the end, with a marker indicating the removed middle section. Example truncation message: `[...truncated AGENTS.md: kept 14000+4000 of 25000 chars. Use file tools to read the full file.]`. SKILL.md has a separate 100,000 char limit with a 1,024 char description limit.
+
+Full memory provider comparison, Hindsight configuration, and `reflect` vs `recall` explanation: see `references/auxiliary-models.md`.
+
+### Timezone
+
+```bash
+hermes config set timezone 'America/Mexico_City'
+# IANA timezone strings: 'America/New_York', 'Europe/Madrid', 'America/Bogota', etc.
 ```
 
 ---

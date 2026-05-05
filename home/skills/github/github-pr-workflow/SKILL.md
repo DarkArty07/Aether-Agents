@@ -1,6 +1,6 @@
 ---
 name: github-pr-workflow
-description: Full pull request lifecycle — create branches, commit changes, open PRs, monitor CI status, auto-fix failures, and merge. Works with gh CLI or falls back to git + GitHub REST API via curl.
+description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
 version: 1.1.0
 author: Hermes Agent
 license: MIT
@@ -76,10 +76,27 @@ Branch naming conventions:
 
 ## 2. Making Commits
 
+### Pitfall: Files Ignored by .gitignore
+
+Some config files (e.g., `home/profiles/hermes/config.yaml`) are in `.gitignore` because they contain API keys or are machine-specific. If you need to commit a **structural configuration change** (like toolset definitions) that is not a secret, `git add` will silently skip it — no error, no warning, and the file won't appear in `git status`.
+
+**Detect:** If `git diff <file>` and `git status <file>` show nothing but you know the file was modified, check `.gitignore`:
+```bash
+git ls-files <file>     # empty = not tracked, possibly ignored
+git check-ignore -v <file>  # shows which rule ignores it
+```
+
+**Fix:** Force-track with `-f`:
+```bash
+git add -f path/to/ignored-file.yaml
+```
+
+**Caution:** Only force-track files whose content you've reviewed. Never force-add files that contain real secrets (hardcoded passwords, API keys as literal values). Files using `${ENV_VAR}` references for secrets are safe to track.
+
 Use the agent's file tools (`write_file`, `patch`) to make changes, then commit:
 
 ```bash
-# Stage specific files
+# Stage specific files (use -f for gitignored files)
 git add src/auth.py src/models/user.py tests/test_auth.py
 
 # Commit with a conventional commit message

@@ -3,7 +3,7 @@
 Olympus is the MCP server that powers Aether Agents' multi-agent orchestration. It exposes three tools to Hermes (or any MCP-compatible agent):
 
 - **`discover`** — List available Daimons and their capabilities
-- **`talk_to`** — Communicate with Daimons (open, message, poll, wait, cancel, close)
+- **`talk_to`** — Communicate with Daimons (open, message, poll, cancel, close)
 - **`run_workflow`** — Execute structured multi-step workflows with Human-in-the-Loop (HITL)
 
 ---
@@ -218,18 +218,16 @@ Returns: { "agents": [...], "total": N }
 
 ### `mcp_olympus_talk_to`
 
-Direct communication channel with a single Daimon. Session-based (open → message → poll/wait → close).
+Direct communication channel with a single Daimon. Session-based (open → message → poll → close).
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `agent` | string | Yes | Daimon name: ariadna, hefesto, etalides, daedalus, athena. Use `?` to discover. |
-| `action` | string | Yes | One of: discover, open, message, poll, wait, cancel, close |
+| `action` | string | Yes | One of: discover, open, message, poll, cancel, close |
 | `prompt` | string | Only for `message` | Self-contained prompt with CONTEXT/TASK/CONSTRAINTS/OUTPUT FORMAT |
-| `session_id` | string | For poll/wait/cancel/close | Returned by `open` |
-| `timeout` | int | Optional | Wait timeout in seconds (default 120, max 300) |
-
+| `session_id` | string | For poll/cancel/close | Returned by `open` |
 **Actions:**
 
 | Action | Description | Returns |
@@ -238,18 +236,17 @@ Direct communication channel with a single Daimon. Session-based (open → messa
 | `open` | Create ACP session on a Daimon | `{ status: "open", session_id: "..." }` |
 | `message` | Send prompt (async, returns immediately) | Confirmation |
 | `poll` | Check session progress (thoughts, messages, tool_calls) | Current state + last activity |
-| `wait` | Block until session completes or timeout | Final response + stop_reason |
 | `cancel` | Abort a running session | Cancellation confirmation |
 | `close` | Close session (agent stays alive for keep-alive) | Close confirmation |
 
 **Session lifecycle:**
 ```
-discover → open → message → poll (optional) → wait (or cancel) → close
+open → message → poll → close
 ```
 
 **Key behaviors:**
 - Daimons are **keep-alive** — spawned on first `open`, stay alive between sessions
-- `message` is **async** — returns immediately. Use `poll` to check progress or `wait` to block
+- `message` is **async** — returns immediately. Use `poll` to check progress until done.
 - Self-talk prevention: sending to "hermes" or "olympus" returns an error
 - Unknown agents trigger automatic discovery before returning an error
 

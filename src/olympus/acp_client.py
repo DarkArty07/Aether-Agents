@@ -296,6 +296,8 @@ class ACPManager:
             session_id=olympus_session_id,
             agent_name=agent_name,
         )
+        # Ensure the event starts unset for each new session
+        session.completion_event.clear()
         # Store ACP session ID for mapping
         session.acp_connection = acp_session_id
         agent.sessions[olympus_session_id] = session
@@ -340,7 +342,7 @@ class ACPManager:
                 # response text via streaming notifications, and the PromptResponse
                 # only contains stop_reason (no text). Without this yield,
                 # the final messages may not yet be in session.messages.
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.05)
 
                 # Collect the final response from session messages
                 full_response = "".join(session.messages) if session.messages else ""

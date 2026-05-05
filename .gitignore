@@ -60,6 +60,18 @@ home/profiles/*/pastes/
 home/profiles/*/spawn-trees/
 home/profiles/*/processes.json
 home/profiles/*/skins
+home/profiles/*/cache/
+home/profiles/*/hindsight/
+home/profiles/*/state-snapshots/
+home/profiles/*/.restart_last_processed.json
+home/profiles/*/kanban.db
+home/profiles/*/honcho.json
+
+# --- Home-level runtime (not per-profile) ---
+home/config.yaml
+home/memories/
+home/hindsight/
+home/skills/.curator_state
 
 # --- Python ---
 __pycache__/
