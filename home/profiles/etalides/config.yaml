@@ -45,3 +45,7 @@ display:
   personality: none
 
 max_iterations: 80
+
+# Auto-approve commands — Daimons have no interactive user for approval prompts
+approvals:
+  mode: 'off'

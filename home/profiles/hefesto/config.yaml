@@ -42,3 +42,11 @@ display:
   personality: none
 
 max_iterations: 80
+
+# Auto-approve commands — Daimons have no interactive user for approval prompts
+approvals:
+  mode: 'off'
+
+# Auto-approve subagent commands — hefesto delegates to Ergates
+delegation:
+  subagent_auto_approve: true
