@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] — 2026-05-05
+
+### Added
+
+- ACP polling transparency: `substantive_thoughts` field in SessionState — spinner thoughts filtered at ingestion time, O(1) per poll instead of O(n) filtering
+- Differential polling: `new_since_last_poll` in poll responses — Hermes sees only what changed since the last poll, not the entire session history
+- Wider truncation limits: `substantive_thoughts[-20:]`, `messages[-10:]`, `tool_calls[-10:]` (was [-5:], [-3:], [-5:])
+- Progress metadata in poll responses: `progress` field with `total_thoughts`, `substantive_thoughts`, `total_messages`, `total_tool_calls`, `elapsed_seconds`
+- Configurable poll interval: `olympus.poll_interval` in config.yaml (default 15s). Returned in `open` and `poll` responses as `poll_interval`
+- `poll_interval` field to `OlympusConfig` dataclass (default 15)
+- `config.yaml.example` updated with `olympus.poll_interval` documentation
+
+### Changed
+
+- **Hermes toolset architecture**: replaced monolithic `hermes-orchestrator` toolset with 11 granular toolsets (`web`, `file-read`, `vision`, `skills`, `todo`, `memory`, `session_search`, `clarify`, `cronjob`, `tts`, `messaging`). This structurally prevents `delegate_task` from being available to Hermes, enforcing orchestrator-only behavior
+- **Disabled `delegate_task` tool**: added to `disabled_toolsets` and removed from Hermes' available tools via the granular toolset split. Hermes now delegates exclusively via `talk_to` and `run_workflow`
+- Consolidated 10 individual skill files into a single `aether-agents` umbrella skill with SKILL.md + references/ directory
+- All 5 Daimon SOUL.md files updated and consolidated — removed line number prefixes, improved protocol definitions, added Known Issues sections
+- `.gitignore` updated to exclude runtime state files (kanban.db, cache/, hindsight/, state-snapshots/, etc.)
+- Removed `home/profiles/hermes/config.yaml` from git tracking (was previously committed despite .gitignore)
+
+### Fixed
+
+- ACP stall detection: `poll()` no longer truncates away substantive reasoning — thoughts are classified at ingestion, not during poll
+- `completion_event.clear()` bug fixed in `open_session()` — sessions no longer carry stale completion events
+- `time.sleep(0)` race condition changed to `time.sleep(0.05)` for 50ms yield in ACP client
+- Daimon identity: `--profile <name>` flag added to ACP spawn command in `acp_client.py`
+
+### Removed
+
+- `talk_to(action="wait")` — removed from valid actions. Only `open, message, poll, cancel, close` are valid. Polling with configurable interval replaces blocking wait
+
+---
+
 ## [0.3.0] — 2026-04-29
 
 ### Fixed
@@ -125,5 +159,7 @@ The Olympus MCP server was rebuilt from scratch to support structured multi-step
 - Session lifecycle management (open, message, poll, wait, cancel, close)
 - Basic orchestration via Hermes agent
 
+[0.4.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.2.0...v0.3.0
 [2.0.0]: https://github.com/DarkArty07/Aether-Agents/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0
