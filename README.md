@@ -1,6 +1,6 @@
 # Aether Agents
 
-[![Version](https://img.shields.io/badge/version-5.0.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through typed RPC workflows with Human-in-the-Loop approval gates.
