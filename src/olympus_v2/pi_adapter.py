@@ -21,6 +21,7 @@ import os
 import subprocess
 import threading
 import time
+import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -94,6 +95,8 @@ class PiSession:
     accumulated_reasoning: str = ""
     thoughts_count: int = 0
     tool_calls_count: int = 0
+    # Session directory (for --session-dir cleanup)
+    session_dir: str | None = None
     # Status tracking
     is_done: bool = False
     final_response: str = ""
@@ -111,7 +114,10 @@ class PiAdapter:
         self._lock = asyncio.Lock()
 
     def spawn_agent(self, agent_config: PiDaimonConfig) -> PiSession:
-        """Spawn a Pi Agent process in RPC mode.
+        """Spawn a Pi Agent process in RPC mode with persistent sessions.
+
+        Uses --session-dir instead of --no-session so Pi stays alive for
+        multi-turn conversations and tool execution.
 
         Args:
             agent_config: Configuration for the agent to spawn.
@@ -123,7 +129,11 @@ class PiAdapter:
             RuntimeError: If the process fails to start.
         """
         session_id = f"pi_{agent_config.name}_{uuid.uuid4().hex[:8]}"
-        spawn_args = agent_config.build_spawn_args()
+
+        # Create a session directory for Pi to persist state
+        # This keeps Pi alive between prompts (no --no-session ephemeral mode)
+        session_dir = tempfile.mkdtemp(prefix=f"pi_session_{agent_config.name}_")
+        spawn_args = agent_config.build_spawn_args(session_dir=session_dir)
 
         logger.info(f"[pi_adapter] Spawning Pi Agent: {' '.join(spawn_args)}")
 
@@ -153,6 +163,7 @@ class PiAdapter:
             agent_name=agent_config.name,
             process=process,
             config=agent_config,
+            session_dir=session_dir,
         )
 
         # Start the stdout reader thread

@@ -318,8 +318,9 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
         )]
 
     # Check if the process is still alive
+    # With --session-dir, Pi stays alive between prompts. Process death is unexpected.
     if not adapter.is_process_alive(session_id):
-        # Process has exited — drain remaining events and mark done
+        # Process died unexpectedly — drain remaining events and mark done
         events = adapter.read_events(session_id)
         if events:
             translate_events_batch(events, buffer)
@@ -328,6 +329,7 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
         if not buffer.final_response:
             buffer.final_response = buffer.accumulated_text
 
+        # Clean up session (terminate + remove session dir)
         adapter.terminate(session_id)
         buffers.pop(session_id, None)
 
@@ -339,6 +341,7 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
                 "response": buffer.final_response or "",
+                "stop_reason": buffer.stop_reason or "process_terminated",
             }),
         )]
 

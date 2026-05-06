@@ -41,16 +41,24 @@ class PiDaimonConfig:
     cwd: Path | None = None  # Working directory for the Pi process
     project_root: Path = Path()  # Derived from AETHER_HOME parent
 
-    def build_spawn_args(self) -> list[str]:
+    def build_spawn_args(self, session_dir: str | None = None) -> list[str]:
         """Build the full `pi` command arguments for spawning this agent in RPC mode.
 
+        Args:
+            session_dir: If provided, use --session-dir for persistent sessions
+                (required for tool execution). If None, uses --no-session (ephemeral).
+        
         Returns a list of command-line arguments suitable for subprocess.Popen.
         """
         args = [
             "pi",
             "--mode", "rpc",
-            "--no-session",
         ]
+        
+        if session_dir:
+            args.extend(["--session-dir", session_dir])
+        else:
+            args.append("--no-session")
 
         if self.thinking:
             args.extend(["--thinking", self.thinking])
