@@ -127,6 +127,44 @@ def translate_event(event: dict[str, Any], buffer: SessionBuffer) -> dict[str, A
     elif event_type == "agent_end":
         return _translate_agent_end(event, buffer)
 
+    elif event_type == "tool_execution_start":
+        # Pi sends this when it starts executing a tool (after toolcall_end)
+        tool_name = event.get("toolName", "unknown")
+        tool_call_id = event.get("toolCallId", "")
+        logger.debug(f"[event_translator] Tool execution started: {tool_name} ({tool_call_id})")
+        # Increment tool_calls_count for each actual execution
+        buffer.tool_calls_count += 1
+        buffer.tool_calls_detail.append({
+            "name": tool_name,
+            "id": tool_call_id,
+            "status": "executing",
+        })
+        return {
+            "status": "active",
+            "thoughts": buffer.thoughts_count,
+            "tool_calls": buffer.tool_calls_count,
+            "response": buffer.accumulated_text,
+            "tool_calls_detail": buffer.tool_calls_detail,
+        }
+
+    elif event_type == "tool_execution_end":
+        # Pi sends this when tool execution completes
+        tool_name = event.get("toolName", "unknown")
+        tool_call_id = event.get("toolCallId", "")
+        # Update the last matching tool detail to "completed"
+        for detail in reversed(buffer.tool_calls_detail):
+            if detail.get("id") == tool_call_id or detail.get("name") == tool_name:
+                detail["status"] = "completed"
+                break
+        logger.debug(f"[event_translator] Tool execution completed: {tool_name} ({tool_call_id})")
+        return {
+            "status": "active",
+            "thoughts": buffer.thoughts_count,
+            "tool_calls": buffer.tool_calls_count,
+            "response": buffer.accumulated_text,
+            "tool_calls_detail": buffer.tool_calls_detail,
+        }
+
     elif event_type == "response":
         # Internal acknowledgment from Pi — don't report to Hermes
         logger.debug(f"[event_translator] Skipping response event: {event}")
@@ -234,7 +272,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "response": buffer.accumulated_text,
             }
 
-        elif ame_type == "tool_call_start":
+        elif ame_type in ("tool_call_start", "toolcall_start"):
             buffer.tool_calls_count += 1
             tool_name = ""
             if isinstance(ame.get("name"), str):
@@ -251,7 +289,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "tool_calls_detail": buffer.tool_calls_detail,
             }
 
-        elif ame_type == "tool_call_delta":
+        elif ame_type in ("tool_call_delta", "toolcall_delta"):
             # Intermediate tool call data — no buffer changes needed
             return {
                 "status": "active",
@@ -261,7 +299,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "tool_calls_detail": buffer.tool_calls_detail,
             }
 
-        elif ame_type == "tool_call_end":
+        elif ame_type in ("tool_call_end", "toolcall_end"):
             if buffer.tool_calls_detail:
                 buffer.tool_calls_detail[-1]["status"] = "completed"
             return {
