@@ -81,6 +81,30 @@ gh repo clone owner/repo-name
 gh repo clone owner/repo-name -- --depth 1
 ```
 
+### When Target Directory Already Exists
+
+If `git clone` fails because the target directory already exists, don't default to "delete and re-clone." Check the existing directory first:
+
+```bash
+# 1. Check if it's already a git repo pointing to the same remote
+cd "/path/to/existing/dir" && git remote -v
+
+# 2. If same remote → just pull to update
+cd "/path/to/existing/dir" && git pull origin main
+
+# 3. If different remote or not a git repo → ask the user:
+#    - Overwrite? (ONLY with explicit per-item permission — never delete without asking)
+#    - Clone to a different path?
+#    - Keep as-is?
+```
+
+**CRITICAL:** Never delete or overwrite a directory without explicit per-item user permission. A "duplicate" folder may be the MORE advanced version. Always present options and WAIT for approval.
+
+**Paths with spaces** (common on Windows/WSL): Always quote the target path in `git clone`:
+```bash
+git clone https://github.com/owner/repo-name.git "/mnt/c/Users/name/Desktop/My Project"
+```
+
 ## 2. Creating Repositories
 
 **With gh:**

@@ -355,6 +355,34 @@ When fixing bugs:
 3. Fix the root cause (GREEN)
 4. The test proves the fix and prevents regression
 
+## Anti-Patterns: Default Cascade
+
+**"Default Cascade"** — When a value flows through multiple layers and each layer has its own fallback default for that value, a missing or null value at any layer silently triggers the default instead of raising an error. When all defaults are the same wrong value, this creates **silent data corruption** with no error message.
+
+**Example (ATLAS-ERP DISPMAG bug):** A "BAJA" (02) movement type flows Frontend → API Schema → Service → Adapter → Engine. At 7 separate points, the default is "08" (ALTA). If the type gets lost at any layer (null serialization, missing key, Optional field), it silently becomes ALTA — the user generates a low FILE that's actually an ALTA, with no error anywhere in the stack.
+
+**How to detect during Phase 1:**
+1. Trace the value at EVERY layer boundary (log/print at each handoff point)
+2. Search for all `default`, `or`, `get("key", fallback)`, `Optional[X] = fallback` across the data flow path
+3. If you find 3+ defaults for the same value that all match → you have a default cascade
+4. The fix: make the value REQUIRED (no default) at the first layer, and raise immediately if it's missing
+
+**Red flags:**
+- 3+ locations defaulting to the same value for the same field
+- `Optional[field] = most_common_value` in Pydantic schemas
+- `data.get("key", most_common_value)` in dict lookups
+- `arg or most_common_value` in function signatures
+- Legacy endpoints with hardcoded values ("for now")
+- Any `movement_type` or `status` field with a "reasonable default" — these should NEVER default silently
+
+**Fix pattern:**
+```
+Before: def process(type: Optional[str] = "08")  # Silent default
+After:  def process(type: str)                    # Required — fail loudly
+Before: data.get("tipo_movimiento", "08")         # Silent default
+After:  data["tipo_movimiento"]                   # KeyError if missing — catch upstream
+```
+
 ## Real-World Impact
 
 From debugging sessions:

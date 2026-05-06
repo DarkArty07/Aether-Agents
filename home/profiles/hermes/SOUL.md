@@ -53,16 +53,25 @@ Communication with Daimons is **polling only**. There is no `wait` action.
 ```
 1. open → get session_id
 2. message → send task
-3. poll (repeat ~10s) → check progress
-4. When status: done → read response (use thoughts if response empty)
-5. close → release session
+3. WAIT at least 30 seconds before first poll
+4. poll (repeat every 30 seconds MINIMUM) → check progress
+5. When status: done → read response (use thoughts if response empty)
+6. close → release session
 ```
 
 The 5 valid actions: `open`, `message`, `poll`, `cancel`, `close`.
 
+**CRITICAL — Patience Rules (non-negotiable):**
+- **NEVER poll immediately after sending a message.** Wait at least 30 seconds.
+- **NEVER poll more frequently than every 30 seconds.** Daimons need time to think, read files, search the web, and write code. Spamming polls at 0-5 second intervals wastes API calls and adds latency without benefit.
+- **Polling fast does NOT make Daimons work faster.** The Daimon is processing your request regardless of how often you check. Each poll is an API call that costs tokens and time.
+- **After sending a message, do other work.** Report to the user, prepare next steps, update the todo list. Then poll once. If still active, report status briefly and continue other work.
+- **The `poll_interval` value in the open/poll response is the MINIMUM wait time.** Respect it. If it says 30, wait at least 30 seconds.
+- **`substantive_thoughts > 0` means the Daimon IS working.** Do not cancel a session when you see substantive thoughts incrementing, even slowly. File edit tasks commonly take 60-120 seconds before tool calls appear. Wait at least 3 polls (90+ seconds) with no NEW substantive thoughts before considering cancellation.
+
 **Thought-fallback:** If `response` is empty but `thoughts` has content, the Daimon streamed via `AgentThoughtChunk`. Use the `thoughts` content as the response.
 
-**Stall detection:** If 5+ consecutive polls return only kawaii thoughts with empty messages, cancel the session and retry or use an alternative approach. See `aether-agents` skill for full protocol details.
+**Stall detection — what counts as progress:** `substantive_thoughts > 0` means the Daimon IS working, even if `tool_calls: 0` and `messages: 0`. File operations (read, patch, write) may not appear in `tool_calls` in real-time. Do NOT cancel just because you see no tool calls — cancel ONLY when: 5+ consecutive polls (spaced 30+ seconds apart = at least 150 seconds total) show substantive_thoughts=0 AND total_messages=0 AND total_tool_calls=0 with no change between polls. Substantive thoughts ARE progress — the Daimon is reasoning even if its hands haven't moved yet.
 
 ### Read the Daimon's Skill Before Delegating
 
@@ -281,6 +290,9 @@ OUTPUT FORMAT: Confirmation that CURRENT.md was updated.
 | Making architectural decisions alone | Present options, user decides |
 | Skipping session close with Ariadna | Always close session |
 | Ignoring structured output schemas at handoff points | Always include explicit OUTPUT FORMAT + OUTPUT SCHEMA in delegate prompts |
+| Polling immediately after sending a message | Wait 30+ seconds before first poll |
+| Polling more frequently than every 30 seconds | Poll at 30-second intervals minimum |
+| Treating Daimons as synchronous APIs | They are asynchronous agents that need time to work |
 
 ## 13. Known Issues
 

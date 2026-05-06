@@ -353,6 +353,20 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
             text=json.dumps({"error": f"Unknown session: {session_id}"}),
         )]
 
+    config = get_config()
+    now = time.time()
+    min_interval = config.poll_interval
+
+    # Soft rate limiting: if polls arrive faster than poll_interval,
+    # return current state without updating differential indexes.
+    # This doesn't reject the request — it returns data but signals
+    # the client should wait, preventing index drift.
+    rate_limited = False
+    retry_after = 0
+    if session.last_poll_timestamp > 0 and (now - session.last_poll_timestamp) < min_interval:
+        rate_limited = True
+        retry_after = int(min_interval - (now - session.last_poll_timestamp))
+
     # Filter spinners from thoughts — show only substantive content
     substantive = session.substantive_thoughts
 
@@ -360,7 +374,7 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
         "session_id": session.session_id,
         "agent": session.agent_name,
         "status": session.status.value,
-        "poll_interval": get_config().poll_interval,
+        "poll_interval": config.poll_interval,
         "progress": {
             "total_thoughts": len(session.thoughts),
             "substantive_thoughts": len(substantive),
@@ -381,12 +395,17 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
             "tool_calls": session.tool_calls[session.last_poll_tool_call_idx:],
         },
         "last_updated": session.last_updated,
+        "rate_limited": rate_limited,
+        "retry_after": retry_after,
     }
 
     # Update differential tracking indexes AFTER building the response
-    session.last_poll_thought_idx = len(session.thoughts)
-    session.last_poll_message_idx = len(session.messages)
-    session.last_poll_tool_call_idx = len(session.tool_calls)
+    # Only update on non-rate-limited polls to prevent index drift
+    if not rate_limited:
+        session.last_poll_thought_idx = len(session.thoughts)
+        session.last_poll_message_idx = len(session.messages)
+        session.last_poll_tool_call_idx = len(session.tool_calls)
+        session.last_poll_timestamp = time.time()
 
     if session.status in (SessionStatus.DONE, SessionStatus.ERROR, SessionStatus.CANCELLED):
         result["response"] = session.final_response

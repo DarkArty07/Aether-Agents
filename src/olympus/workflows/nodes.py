@@ -27,17 +27,22 @@ STALL_TIMEOUT = 120   # 2 minutes without activity = STALLED
 # instead of AgentMessageChunk. This filter helps separate signal from noise
 # when falling back to the thoughts channel.
 _SPINNER_PATTERN = re.compile(
-    r'^[\(\[（【].*?[\)\]）】]'            # Brackets: (...), [...], （...）
-    r'|(°ロ°|´･_･`|•̀ᴗ•́|ᕕᐛᕗ|◝ᴗ◝|◕ᴗ◕|ᕙᐛᕗ|¯\\_?\\(ツ\\)_?/¯)'  # Kawaii faces
-    r'|^\s*(thinking|analyzing|processing|brainstorming|working|loading)\.{1,3}\s*$',  # Status text
+    # 1. Brackets wrapping content (kawaii faces in parens, square brackets, etc.)
+    r'^[\(\[（【].*?[\)\]）】]'
+    # 2. Known kawaii faces (expanded list)
+    r'|(°ロ°|´･_･`|•̀ᴗ•́|ᕕᐛᕗ|◝ᴗ◝|◕ᴗ◕|ᕙᐛᕗ|¯\\_?\\(ツ\\)_?/¯'
+    r'|⌐□_□|ヽ\(>∀<☆\)☆|ヽ\(>∀<\)★|\\(´・ω・\\)|\\(╯°□°\\)╯|⊙_⊙|◉_◉|◕‿◕|\\(⌐□_□\\))'
+    # 3. Status words with ellipsis (expanded) — anchored to avoid false positives
+    r'|^\s*(thinking|analyzing|processing|brainstorming|working|loading'
+    r'|ruminating|cogitating|mulling|pondering|reflecting|synthesizing'
+    r'|contemplating|deliberating|musing|meditating|calculating|formulating)\.{1,3}\s*$',
     re.IGNORECASE
 )
-
 
 def _is_spinner_noise(text: str) -> bool:
     """Filter out kawaii spinner patterns that aren't substantive content."""
     text = text.strip()
-    if not text or len(text) < 5:
+    if not text or len(text) < 3:
         return True
     return bool(_SPINNER_PATTERN.match(text))
 

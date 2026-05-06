@@ -52,6 +52,7 @@ class SessionState:
     last_poll_thought_idx: int = 0
     last_poll_message_idx: int = 0
     last_poll_tool_call_idx: int = 0
+    last_poll_timestamp: float = 0.0
 
     # Final response when session completes
     final_response: str | None = None

@@ -117,3 +117,7 @@ PROMPT_OPUS.md
 CLAUDE.md
 docs/sesiones/
 docs/setup/
+
+# Old locations (moved to src/ and home/ level)
+home/profiles/hermes/olympus_v2/
+home/profiles/hermes/.pi-daimons/
