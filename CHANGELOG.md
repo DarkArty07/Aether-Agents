@@ -1,165 +1,127 @@
 # Changelog
 
-All notable changes to Aether Agents will be documented in this file.
+All notable changes to Aether Agents are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [5.0.0] - 2026-05-07
 
----
+### 🔥 Breaking Change: ACP → Pi Agent RPC
 
-## [0.4.0] — 2026-05-05
+All 5 Daimons (Hefesto, Etalides, Ariadna, Athena, Daedalus) now use **Pi Agent RPC** instead of Hermes Agent's ACP protocol for sub-agent communication. ACP remains available as instant rollback (`backend: acp` in config).
 
-### Added
+### Why This Change
 
-- ACP polling transparency: `substantive_thoughts` field in SessionState — spinner thoughts filtered at ingestion time, O(1) per poll instead of O(n) filtering
-- Differential polling: `new_since_last_poll` in poll responses — Hermes sees only what changed since the last poll, not the entire session history
-- Wider truncation limits: `substantive_thoughts[-20:]`, `messages[-10:]`, `tool_calls[-10:]` (was [-5:], [-3:], [-5:])
-- Progress metadata in poll responses: `progress` field with `total_thoughts`, `substantive_thoughts`, `total_messages`, `total_tool_calls`, `elapsed_seconds`
-- Configurable poll interval: `olympus.poll_interval` in config.yaml (default 15s). Returned in `open` and `poll` responses as `poll_interval`
-- `poll_interval` field to `OlympusConfig` dataclass (default 15)
-- `config.yaml.example` updated with `olympus.poll_interval` documentation
+ACP had 3 critical bugs that made Daimon delegation unreliable:
 
-### Changed
+1. **Spinner noise (Bug A):** ACP's `AgentThoughtChunk` mixed kawaii progress indicators with substantive reasoning. A regex filter tried to separate them but leaked Unicode spinners (ಠ_ಠ), inflating `substantive_thoughts` and making stall detection unreliable.
 
-- **Hermes toolset architecture**: replaced monolithic `hermes-orchestrator` toolset with 11 granular toolsets (`web`, `file-read`, `vision`, `skills`, `todo`, `memory`, `session_search`, `clarify`, `cronjob`, `tts`, `messaging`). This structurally prevents `delegate_task` from being available to Hermes, enforcing orchestrator-only behavior
-- **Disabled `delegate_task` tool**: added to `disabled_toolsets` and removed from Hermes' available tools via the granular toolset split. Hermes now delegates exclusively via `talk_to` and `run_workflow`
-- Consolidated 10 individual skill files into a single `aether-agents` umbrella skill with SKILL.md + references/ directory
-- All 5 Daimon SOUL.md files updated and consolidated — removed line number prefixes, improved protocol definitions, added Known Issues sections
-- `.gitignore` updated to exclude runtime state files (kanban.db, cache/, hindsight/, state-snapshots/, etc.)
-- Removed `home/profiles/hermes/config.yaml` from git tracking (was previously committed despite .gitignore)
+2. **Tool calls invisible (Bug B):** `total_tool_calls` was always `0` even when the Daimon executed 8+ tools. The ACP event stream never emitted tool execution events, making it impossible to distinguish a working agent from a frozen one.
 
-### Fixed
+3. **No reasoning visibility (Bug C):** Provider chain-of-thought (DeepSeek `reasoning_content`, Anthropic `thinking`) was never forwarded. LLMs that stream via thoughts had their reasoning lost entirely, causing empty responses from Daimons.
 
-- ACP stall detection: `poll()` no longer truncates away substantive reasoning — thoughts are classified at ingestion, not during poll
-- `completion_event.clear()` bug fixed in `open_session()` — sessions no longer carry stale completion events
-- `time.sleep(0)` race condition changed to `time.sleep(0.05)` for 50ms yield in ACP client
-- Daimon identity: `--profile <name>` flag added to ACP spawn command in `acp_client.py`
+These bugs meant Daimon sessions could: stall for minutes with zero output, complete work but report no tool calls, or return empty responses when the LLM used the thoughts channel exclusively.
 
-### Removed
+### What Pi Agent RPC Solves
 
-- `talk_to(action="wait")` — removed from valid actions. Only `open, message, poll, cancel, close` are valid. Polling with configurable interval replaces blocking wait
+| Feature | ACP (old) | Pi RPC (new) |
+|---------|-----------|---------------|
+| Event protocol | ACP binary (spinner noise) | Typed JSONL (text_delta, thinking_delta, tool_call) |
+| Tool calls | Always 0 (Bug B) | Explicit `tool_execution_start/end` events |
+| Reasoning visibility | None (Bug C) | `thinking_delta` events, configurable via `set_thinking_level` |
+| Spinner filtering | Regex whitelist (leaks) | Not needed — events are typed |
+| Steering (live intervention) | None | `steer` command mid-stream |
+| Thinking levels | None | `off/minimal/low/medium/high/xhigh` |
+| Session persistence | None | Built-in with `--session-dir` |
+| Model switching | Restart required | `set_model` at runtime |
+| Compaction | Manual | `compact` + auto-compaction |
 
----
+### New: `delegate` Action (Single-Call Auto-Poll)
 
-## [0.3.0] — 2026-04-29
+The biggest UX improvement: `delegate` replaces the entire open→message→poll→close cycle with one MCP call.
 
-### Fixed
+**Before (10-20 tool calls, LLM-driven polling):**
+```
+open(agent) → session_id
+message(session_id, prompt) → active
+poll(session_id) → active ... (repeat 8-15 times)
+poll(session_id) → done
+close(session_id) → closed
+```
 
-- Unified project version across README (0.2.0), pyproject.toml (0.1.0), and CHANGELOG (2.0.0) to 0.3.0
-- Added `langgraph-checkpoint-sqlite>=2.0.0` to pyproject.toml dependencies (was missing but required by server.py)
-- Fixed QUICKSTART.md: `pip install -e ./src/olympus` → `pip install -e .` (pyproject.toml is at root)
-- Replaced `langchain_core.utils.uuid.uuid7` with stdlib `uuid.uuid4()` in runner.py (removes fragile dependency)
-- Fixed Olympus README: "two tools" → "three tools" (discover, talk_to, run_workflow)
-- Removed redundant `talk_to(action="discover")` — `mcp_olympus_discover` is the canonical tool
-- Documented that STALL_TIMEOUT=120s is the only timeout (removed phantom "30 min hard limit" reference)
-- Created `home/config.yaml.example` for MCP server configuration
+**After (1 tool call, server-driven polling):**
+```
+delegate(agent, prompt, poll_interval=15, timeout=300) → done
+```
 
-### Changed
+The MCP server handles polling internally with `asyncio.sleep(poll_interval)`. Parameters:
+- `poll_interval`: seconds between polls (default 15, min 1)
+- `timeout`: max seconds to wait (default 300, max 600)
 
-- `shutdown_agent` now terminates process (`proc.terminate()` + `proc.wait()`) instead of only setting status to DEAD
-- Added `modification_feedback` field to WorkflowState for HITL modify decision routing
-- Added permission audit logging in `request_permission()` — auto-approve still default, but now logged
-- Created `tests/test_workflows.py` with basic workflow compilation tests
+Returns final result with `delegate: {timed_out, elapsed_seconds, poll_iterations}` metadata. On timeout: returns last known state WITHOUT closing session (allows manual follow-up).
 
-### Security
+Manual `open/message/poll/close` actions remain available for fine-grained control.
 
-- Auto-approve of Daimon permissions is now logged with agent name, permission type, and timestamp
-- Created `SECURITY.md` documenting the permission model and current MVP auto-approve behavior
+### Architecture
 
----
+- **Hermes** continues using Hermes Agent (orchestrator with MCP, memory, skills)
+- **Daimons** now use Pi Agent RPC (headless subprocess, `@mariozechner/pi-coding-agent`)
+- **Olympus v2** MCP server bridges the two — same `talk_to` interface, different backend
+- **Per-agent backend** in `config.yaml`: `backend: pi_rpc` (default) or `backend: acp` (rollback)
+- **Pi configs** at `home/.pi-daimons/{name}/.pi/` with SYSTEM.md, settings.json, extensions
 
-## [2.0.0] — 2025-04-24
+### 5 Optimizations to Olympus MCP v2 Server
 
-### Olympus Workflow Engine v2 — Complete Rewrite
+1. **Buffer reset timing fix (CRITICAL):** Moved from `_action_poll` (after done) to `_action_message` (before new prompt). Prevents losing the final response between polls.
 
-The Olympus MCP server was rebuilt from scratch to support structured multi-step workflows with Human-in-the-Loop (HITL) using LangGraph. This replaces the previous ad-hoc Daimon communication with 6 pre-defined workflows, persistent checkpointing, and conversational HITL.
+2. **Response truncation (HIGH):** Responses >4000 chars auto-truncate with `response_truncated: true` + `response_total_length` metadata. Prevents MCP token overflow.
 
-#### Added
+3. **Progress metadata (MEDIUM):** `progress` field in every poll: `{total_thoughts, substantive_thoughts, total_messages, total_tool_calls, elapsed_seconds}`. Enables stall detection.
 
-- **6 workflow definitions** (`workflows/definitions.py`):
-  - `project-init` (3 nodes, no HITL) — Quick project bootstrap
-  - `feature` (11 nodes, 3 HITL) — Full feature lifecycle: research → design → implement → audit with review checkpoints
-  - `bug-fix` (6 nodes, 1 HITL) — Research → diagnose → confirm → fix → audit loop
-  - `security-review` (7 nodes, 1 HITL) — Security audit with fix loop
-  - `research` (3 nodes, no HITL) — Simple research pipeline
-  - `refactor` (6 nodes, 1 HITL) — Scope approval → implement → audit loop
+4. **Better error messages (MEDIUM):** Distinct `"expired"` (process terminated) vs `"unknown"` (never existed) session errors.
 
-- **Human-in-the-Loop (HITL) system** (`workflows/nodes.py`, `server.py`):
-  - Conversational format — agent presents context naturally, user decides
-  - LangGraph `interrupt()` with `Command(goto=...)` for resuming workflow after user decision
-  - 5 HITL nodes: `research_review`, `design_review`, `audit_review`, `diagnosis_review`, `findings_review`, `scope_review`
-  - `make_node_hitl()` factory for creating HITL nodes with custom questions and routing
+5. **Tool name fallbacks (LOW):** Chain: `name` → `toolName` → `function.name` → `"unknown"`. Fixed empty tool names in `tool_calls_detail`.
 
-- **Persistent checkpointing** with `AsyncSqliteSaver`:
-  - Workflows survive server restarts
-  - Database stored at `{AETHER_HOME}/.olympus_checkpoints.db`
-  - Lazy initialization with async context manager lifecycle
-  - Proper shutdown via `_shutdown_checkpointer()`
+### SOUL.md Reinforcement (Hermes Orchestrator)
 
-- **WorkflowRunner** (`workflows/runner.py`):
-  - `run()` executes workflows with timeout and stall detection (120s stall, 30min hard limit)
-  - `resume()` restarts interrupted HITL workflows using `ainvoke()` (async, required by AsyncSqliteSaver)
-  - Serializes LangGraph `Interrupt` objects to JSON for MCP transport
-  - `time.time()` wall-clock timestamps (not `time.monotonic()` which is meaningless across restarts)
+Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 
-- **WorkflowState** (`workflows/state.py`):
-  - Shared TypedDict across all workflows
-  - `errors` and `hitl_decisions` use `operator.add` (not `add_messages` — which coerces strings to `HumanMessage`)
-  - Workflow routing fields: `needs_research`, `has_ui`, `workflow_type`
-  - Lifecycle fields: `status`, `started_at`, `node_name`
+1. **HARD RULES** (§1): Never edit configs, never write SYSTEM.md, never execute implementation commands, never work >2 turns without delegating, never bypass Daimons, never poll >5 times without reporting.
+2. **Delegation checkpoint** (§2): Mandatory check before starting any task — "Can a Daimon do this?"
+3. **Expanded anti-patterns** (§12): 6 new rows covering config editing, SYSTEM.md writing, implementation, answering+implementing, solo architecture decisions, session close skipping.
+4. **Known issues update** (§13): GLM-5.1 AgentThoughtChunk, LLM delegation reluctance, workflow MCP timeout, personality override, platform_toolsets override.
 
-- **Node factories** (`workflows/nodes.py`):
-  - `make_node_design()`, `make_node_implement()`, `make_node_audit()`, `make_node_research()`, `make_node_onboard()`
-  - `make_node_hitl()` — HITL node factory with interrupt + Command routing
-  - `node_finalize()` — Terminal node that formats results
-  - `should_terminate_on_error()` — Error check conditional edge
+### All 5 Daimons Migrated
 
-- **`run_workflow` MCP tool** (`server.py`):
-  - Accepts `workflow`, `prompt`, `params`, `max_review_cycles`, `thread_id`, `resume`
-  - Returns conversational HITL instructions on interrupt (question, context, options, thread_id)
-  - Returns final result on completion
+| Daimon | Backend | Tools | Thinking | Status |
+|--------|---------|-------|----------|--------|
+| Hefesto | pi_rpc | read/write/edit/bash/grep/find/ls | medium | ✅ Production |
+| Etalides | pi_rpc | read/write/edit/bash/grep/find/ls | medium | ✅ Production |
+| Ariadna | pi_rpc | read/write/edit/bash | medium | ✅ Production |
+| Athena | pi_rpc | read/write/edit/bash/grep/find/ls | high | ✅ Production |
+| Daedalus | pi_rpc | read/write/edit/bash/grep/find/ls | medium | ✅ Production |
 
-- **Olympus README** (`src/olympus/README.md`) — Complete documentation of architecture, workflows, HITL, and configuration
+### 10 Bugs Fixed (Olympus V2 Development)
 
-#### Changed
+| # | Bug | Fix |
+|---|-----|-----|
+| A | auth.json `${ENV_VAR}` not resolved | Hardcode real key, extension reads process.env |
+| B | `--provider` validated before extension loads | Use settings.json instead of CLI flags |
+| C | `--cwd` CLI flag doesn't exist in Pi | Use `subprocess.Popen(cwd=...)` |
+| D | registerProvider models[] requires per-model apiKey | Remove models[], let Pi auto-discover via /v1/models |
+| E | No stderr reader thread | Added _stderr_reader() daemon |
+| F | OPENCODE_GO_API_KEY not in subprocess env | Added _load_dotenv() to read AETHER_HOME/.env |
+| G | event_translator didn't handle Pi's JSONL format | Rewrote for assistantMessageEvent nesting |
+| H | Server deleted session before draining events | Drain buffer on process death |
+| I | agent_end killed Pi process with --session-dir | Reset buffer for next turn, keep process alive |
+| J | `arguments` vs `args` NameError in _action_delegate | Fixed parameter name in route handler |
 
-- **Project structure** — `src/olympus/` now contains `workflows/` subdirectory with state, nodes, definitions, and runner
-- **Provider-agnostic design** — All fixes work across all LLM providers, not just specific ones
+### Files Changed
 
-#### Removed
-
-- **Dead code cleanup** (-299 lines, 12.1% reduction):
-  - `prompts.py` — All prompts are now inline in `nodes.py` via `get_prompt()` calls
-  - `log.py` — Placeholder module never imported
-  - `should_audit_pass_feature()` — Never called (feature workflow uses should_reaudit_pass)
-  - `should_retry_implementation()` — Never called
-  - Unused imports: `OlympusConfig`, `AgentStatus`, `aiosqlite`, `Literal`
-  - Dead exports from `__init__.py`: `should_retry_implementation`, `get_prompt`
-  - Config fields: `log_file`, `session_timeout`, `shutdown_timeout`
-  - Registry fields: `_discovered_profiles`, `acp_process`
-
-#### Fixed
-
-- **Critical:** `add_messages` reducer on `errors` and `hitl_decisions` → `operator.add` — LangGraph was converting strings to `HumanMessage`, crashing on `'; '.join()`
-- **Critical:** `app.invoke()` → `app.ainvoke()` for resume — InMemorySaver and AsyncSqliteSaver both require async invocation
-- **Critical:** InMemorySaver loses checkpoints on restart → AsyncSqliteSaver with persistent SQLite database
-- **Redundant edge** in feature workflow — removed `add_edge(START, "research")` that conflicted with `add_conditional_edges`
-- **Narrow exception catching** — `RuntimeError` → `Exception` in all 5 node factories
-- **Meaningless timestamps** — `time.monotonic()` → `time.time()` for cross-restart wall-clock times
-
----
-
-## [1.0.0] — 2025-03-xx
-
-### Initial Release
-
-- Olympus MCP server with `talk_to` and `discover` tools
-- 5 Daimon profiles (Hefesto, Ariadna, Etalides, Daedalus, Athena)
-- ACP protocol client for Daimon communication
-- Session lifecycle management (open, message, poll, wait, cancel, close)
-- Basic orchestration via Hermes agent
-
-[0.4.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.2.0...v0.3.0
-[2.0.0]: https://github.com/DarkArty07/Aether-Agents/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/DarkArty07/Aether-Agents/releases/tag/v1.0.0
+- `src/olympus_v2/server.py` — delegate action, buffer reset, truncation, progress metadata, error messages
+- `src/olympus_v2/event_translator.py` — tool name fallbacks, progress metadata builder
+- `src/olympus_v2/pi_adapter.py` — get_state, multi-turn fixes, session-dir support
+- `home/profiles/hermes/SOUL.md` — HARD RULES, delegation checkpoint, anti-patterns
+- `home/.pi-daimons/ariadna/` — Pi config (SYSTEM.md, settings.json, extension)
+- `home/.pi-daimons/athena/` — Pi config (SYSTEM.md, settings.json, extension)
+- `home/.pi-daimons/daedalus/` — Pi config (SYSTEM.md, settings.json, extension)
+- `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
+- `.gitignore` — Removed old profile-level pi-daimons entry
