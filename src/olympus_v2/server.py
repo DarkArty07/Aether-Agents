@@ -369,10 +369,20 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
     result["session_id"] = session_id
     result["poll_interval"] = _get_config().poll_interval
 
-    # If done, clean up the session
+    # If done, reset buffer for next turn (multi-turn support)
+    # With --session-dir, Pi stays alive between prompts.
+    # is_done means "this turn completed", NOT "kill the process".
+    # Only terminate on explicit close action from Hermes.
     if buffer.is_done:
-        adapter.terminate(session_id)
-        buffers.pop(session_id, None)
+        # Reset buffer for next turn — keep Pi process alive for multi-turn
+        buffer.is_done = False
+        buffer.accumulated_text = ""
+        buffer.accumulated_reasoning = ""
+        buffer.thoughts_count = 0
+        buffer.tool_calls_count = 0
+        buffer.final_response = ""
+        buffer.stop_reason = ""
+        buffer.tool_calls_detail = []
 
     return [mcp_types.TextContent(
         type="text",
