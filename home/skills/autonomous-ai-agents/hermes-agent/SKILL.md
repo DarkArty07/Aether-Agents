@@ -463,7 +463,7 @@ The `hermes-orchestrator` toolset is a custom toolset designed to **structurally
 
 **Why `file-read` and `file-write` exist:** The `disabled_toolsets` config subtracts ALL tools in a toolset. If you disable the `file` toolset, you also lose `read_file` and `search_files` — tools the orchestrator needs for context. Splitting `file` into `file-read` and `file-write` lets you disable only the write portion.
 
-**Hermes orchestrator profile config (granular toolsets — recommended):**
+**Hermes orchestrator profile config (granular toolsets with terminal write restriction — recommended):**
 ```yaml
 # In ~/Aether-Agents/home/profiles/hermes/config.yaml
 toolsets:
@@ -478,12 +478,19 @@ toolsets:
   - cronjob
   - tts
   - messaging
+  - terminal              # Terminal ENABLED for git, systemctl, cp, rm, etc.
 agent:
   disabled_toolsets:
     - file-write      # Blocks write_file, patch
-    - terminal        # Blocks terminal, process
     - code_execution  # Blocks execute_code
     - delegation       # Blocks delegate_task (safety net)
+  # NOTE: terminal is NOT disabled — write commands are filtered by pre_tool_call hook
+hooks:
+  pre_tool_call:
+    - matcher: "terminal"
+      command: "/home/prometeo/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh"
+      timeout: 5
+hooks_auto_accept: false
 platform_toolsets:
   cli:
     - web
@@ -497,6 +504,7 @@ platform_toolsets:
     - cronjob
     - tts
     - messaging
+    - terminal
   telegram:
     - web
     - file-read
@@ -509,11 +517,14 @@ platform_toolsets:
     - cronjob
     - tts
     - messaging
+    - terminal
 ```
+
+This creates **defense-in-depth**: `disabled_toolsets` removes `write_file`/`patch`/`execute_code`/`delegate_task` from the tool schema (the LLM can't even see them), while the `pre_tool_call` hook blocks write commands in terminal via regex (the LLM can see terminal but can't use it to write files). Terminal allows `git push`, `systemctl restart`, `cp`, `mv`, `rm`, `pip install`, and read-only commands. See `references/terminal-write-restriction.md` for full details.
 
 **Why granular toolsets instead of `hermes-orchestrator`:** The `hermes-orchestrator` composite toolset includes `delegate_task` directly. Using `disabled_toolsets: [delegation]` should remove it at the low-level tool resolution, but some code paths (TUI banner, etc.) call `get_tool_definitions()` without passing `disabled_toolsets`, causing `delegate_task` to appear available. Listing granular toolsets avoids this entirely — `delegate_task` is never included because only `delegation` and `hermes-orchestrator` contain it, and neither is listed.
 
-**Result:** Hermes has ~15 tools (read context, NO delegate), and CANNOT call write_file, patch, terminal, process, execute_code, or delegate_task. Other Daimons (Hefesto, Etalides, etc.) continue using the full `hermes-cli` toolset.
+**Result:** Hermes has ~15 tools (read context, NO delegate), and CANNOT call `write_file`, `patch`, `execute_code`, or `delegate_task` — these are removed from the tool schema by `disabled_toolsets`. However, **terminal write commands are NOT blocked in TUI mode** because the `pre_tool_call` hook is not registered by `tui_gateway/` at startup (only CLI and gateway modes register hooks). Terminal is available and unrestricted for writes in TUI. Other Daimons (Hefesto, Etalides, etc.) continue using the full `hermes-cli` toolset.
 
 **Verification script:** `scripts/verify-orchestrator-toolset.py` in the `orchestration` skill directory checks that the toolset resolution and subtraction produce the expected final toolset.
 
@@ -527,7 +538,7 @@ platform_toolsets:
 
 3. Whether `disabled_toolsets: [delegation]` actually removes `delegate_task` depends on which code path resolves the tools. The `AIAgent` class passes `disabled_toolsets` to `get_tool_definitions()`, which performs tool-name-level subtraction (removes `delegate_task`). But some code paths (like the TUI banner) only call `get_tool_definitions(enabled_toolsets=...)` WITHOUT passing `disabled_toolsets`, so `delegate_task` can appear available even when it shouldn't be.
 
-**If `disabled_toolsets: [delegation]` doesn't reliably remove `delegate_task`, the recommended alternative is to NOT use the `hermes-orchestrator` composite toolset and instead list individual toolsets granularly in `platform_toolsets`:**
+**If `disabled_toolsets: [delegation]` doesn't reliably remove `delegate_task`, the recommended alternative is to NOT use the `hermes-orchestrator` composite toolset and instead list individual toolsets granularly in `platform_toolsets` with terminal write restriction via `pre_tool_call` hook:**
 
 ```yaml
 platform_toolsets:
@@ -543,6 +554,7 @@ platform_toolsets:
     - cronjob
     - tts
     - messaging
+    - terminal
   telegram:
     - web
     - file-read
@@ -555,17 +567,41 @@ platform_toolsets:
     - cronjob
     - tts
     - messaging
+    - terminal
 agent:
   disabled_toolsets:
     - file-write
-    - terminal
     - code_execution
     - delegation
+hooks:
+  pre_tool_call:
+    - matcher: "terminal"
+      command: "<profile_dir>/agent-hooks/block-write-commands.sh"
+      timeout: 5
 ```
 
-This approach avoids the ambiguity entirely because none of the individual toolsets include `delegate_task` (only `delegation` and `hermes-orchestrator` do). The `disabled_toolsets` line is a safety net in case any MCP toolset or future composite toolset re-introduces `delegate_task`.
+This approach avoids the ambiguity entirely because none of the individual toolsets include `delegate_task` (only `delegation` and `hermes-orchestrator` do). The `disabled_toolsets` line is a safety net in case any MCP toolset or future composite toolset re-introduces `delegate_task`. Terminal is enabled at platform level but write commands are filtered by the hook.
 
 ---
+
+### `pre_tool_call` Hooks — Terminal Write Restriction (⚠️ RUNTIME GAP)
+
+The `pre_tool_call` hook for terminal write restriction blocks 14+ command patterns in the script logic. Three rounds of script-level penetration testing closed all known bypass vectors. **However, as of 2026-05-06, the hook is NOT executing at runtime** — the Hermes gateway does not invoke the `pre_tool_call` hook before terminal tool calls despite correct config. All 12 write vectors (redirect, heredoc, python -c, tee, sed -i, perl -e, node -e, dd of=, install -m, awk, printf, curl -o) pass through unblocked. Only Layer 1 (`disabled_toolsets`) is active. See `references/terminal-write-restriction.md` for the full documentation, audit results, and setup steps.
+
+**Key design decisions:**
+- **No `/tmp/` exception** — allowing redirects to `/tmp/` creates a two-step bypass (write script to `/tmp/`, execute it). Only `/dev/` redirects are allowed.
+- **All `python -c` blocked** — multiline strings bypass same-line regex detection of `open()`. Blocking all `python -c` is simpler and more bulletproof than pattern-matching dangerous functions.
+- **All `perl -e` blocked** — same rationale as `python -c`. Perl one-liners can write files without `-i` via `open()`.
+- **`curl -o` / `wget -O` blocked** — download-to-disk is file creation. Use `pip install` for packages.
+- **`dd of=` blocked** — arbitrary file writing via dd output.
+- **`install -m` blocked** — creates files with permissions.
+
+**Three-layer defense:**
+1. `disabled_toolsets: [file-write, code_execution, delegation]` — removes tools from schema (architectural)
+2. `pre_tool_call` hook with `block-write-commands.sh` — regex filter on terminal commands (architectural)
+3. SOUL.md "NEVER implement" rule — behavioral reinforcement (prompt-based, not architectural)
+
+The corrected script template is at `scripts/block-write-commands.sh` — copy it to `<profile_dir>/agent-hooks/` and `chmod +x`.
 
 ### `hermes config set` and YAML Falsy Values
 
@@ -581,6 +617,30 @@ hermes config set approvals.mode 'off'  # Still writes mode: false!
 ```
 
 Always verify after setting: `grep 'mode' config.yaml`. See references/auxiliary-models.md Pitfall #0 for the full list and workaround.
+
+### `pre_tool_call` Hooks (Command Filtering)
+
+Hermes supports shell hooks that fire before every tool execution. The `pre_tool_call` hook receives JSON on stdin with `{tool_name, tool_input: {command: "..."}}` and returns either `{}` (allow) or `{"decision": "block", "reason": "..."}` (block).
+
+**Configuration in config.yaml:**
+```yaml
+hooks:
+  pre_tool_call:
+    - matcher: "terminal"          # Regex matching tool name
+      command: "/path/to/script.sh" # Shell script to execute
+      timeout: 5                    # Seconds
+hooks_auto_accept: false           # Prompt before accepting new hooks
+```
+
+**Hook script protocol:**
+1. Script receives JSON on stdin
+2. Parse `tool_input.command` with `jq`
+3. Match against dangerous patterns
+4. Return `{"decision": "block", "reason": "..."}` to block, or `{}` to allow
+
+**Orchestrator write-restriction pattern** — When using `disabled_toolsets: [file-write]` to block `write_file`/`patch` tools but still needing terminal for `git push`, `systemctl`, etc., add a `pre_tool_call` hook to block write commands in terminal. This creates defense-in-depth: tool-level blocking (tools removed from schema) + command-level blocking (regex filter). See `references/terminal-write-restriction.md` for the full script template and config.
+
+**Python hook variant** — You can also register hooks via Python plugin with `ctx.register_hook("pre_tool_call", callback)`. The callback receives `(tool_name, args, task_id, **kwargs)` and can return `{"action": "block", "message": "..."}` to block. Python hooks run before shell hooks.
 
 ### Security & Privacy Toggles
 
@@ -673,6 +733,79 @@ hermes config set display.streaming true
 After changing, run `/reset` (CLI) or restart the gateway for changes to take effect. Streaming is most noticeable in CLI sessions — gateway (Telegram, Discord) platforms handle streaming differently per platform adapter.
 
 Note: `display.streaming` is a boolean (`true`/`false`). Unlike `approvals.mode`, this value is a proper YAML boolean so `hermes config set` handles it correctly without quoting.
+
+### Terminal Write Restriction Hook (Orchestrator Pattern)
+
+When using Hermes as a pure orchestrator (no direct implementation), restrict terminal write commands via a `pre_tool_call` shell hook. This enforces delegation architecturally — the LLM physically cannot write files via terminal, even if the SOUL.md rule is ignored.
+
+**Three-layer defense:**
+1. `disabled_toolsets: [file-write, code_execution, delegation]` — removes `write_file`, `patch`, `execute_code`, `delegate_task` from tool schema
+2. `pre_tool_call` hook — bash script that blocks write patterns in terminal commands
+3. SOUL.md — behavioral instruction ("NEVER implement")
+
+**Config:**
+```yaml
+agent:
+  disabled_toolsets:
+    - file-write      # Blocks write_file, patch
+    - code_execution  # Blocks execute_code
+    - delegation       # Blocks delegate_task (safety net)
+
+hooks:
+  pre_tool_call:
+    - matcher: "terminal"
+      command: "/path/to/profile/agent-hooks/block-write-commands.sh"
+      timeout: 5
+
+# Terminal MUST be added to platform_toolsets (it was removed from disabled_toolsets)
+platform_toolsets:
+  cli:
+    - web
+    - file-read
+    - vision
+    - skills
+    - todo
+    - memory
+    - session_search
+    - clarify
+    - cronjob
+    - tts
+    - messaging
+    - terminal
+  telegram:
+    # ... same list including terminal
+```
+
+**Hook script** (`agent-hooks/block-write-commands.sh`) — blocks 15+ write patterns:
+- `sed -i / --in-place`, `perl -i`, `perl -e`
+- `patch`
+- File redirects (`>`, `>>`) — only `/dev/` exempt (NO `/tmp/` exemption — prevents two-step bypass)
+- `tee` to files (not `/dev/`)
+- `python -c`, `node -e writeFile`, `ruby -e File.write`
+- Heredocs feeding interpreters (`python3 <<`, `bash <<`, `node <<`, etc.)
+- `awk >`, `curl -o`, `wget -O`, `dd of=`, `install -m`
+
+**Role-reinforcing messages:** Block reasons use Spanish: `"Delega a Hefesto — eres orquestador, no implementador. [specific reason]."` instead of technical `"blocked: ..."`.
+
+**Key pitfalls:**
+- `/tmp/` exemption enables a two-step bypass (write script to /tmp/, execute it). Remove it.
+- Multiline `python -c` with `open()` on a different line escapes single-line regex detection of `open()`. Block ALL `python -c`.
+- `perl -e` without `-i` can still write files. Block ALL `perl -e`, not just `perl -i`.
+- Heredoc feeding (`python3 << 'EOF'`) bypasses `-c` detection. Block interpreter+heredoc patterns.
+- The hook path MUST use the profile directory (e.g., `~/Aether-Agents/home/profiles/hermes/agent-hooks/`), NOT `~/.hermes/agent-hooks/`.
+- `hooks_auto_accept: false` ensures hooks fire every time without prompting.
+
+**⚠️ KNOWN ISSUE — Hook not executing in TUI mode (2026-05-06):**
+The `pre_tool_call` hook script works correctly when tested manually, but it is NOT invoked when running `hermes --tui`. Root cause confirmed: `tui_gateway/server.py` never calls `register_from_config()` during startup, so shell hooks are never registered in the plugin manager. CLI mode (`hermes chat`) and gateway mode (`hermes gateway run`) both register hooks correctly. **Only Layer 1 (disabled_toolsets) is active in TUI mode.** Layer 2 (shell hook) is dead in TUI but works in CLI/gateway. Fix: add `register_from_config(load_config(), accept_hooks=False)` to TUI gateway startup. See `references/terminal-write-restriction.md` for full details, source code evidence, and verification commands.
+
+**Verification after setup:**
+```bash
+echo '{"tool_name":"terminal","tool_input":{"command":"echo test > file.py"}}' | bash /path/to/block-write-commands.sh
+# Expected: {"decision": "block", "reason": "Delega a Hefesto — ..."}
+
+echo '{"tool_name":"terminal","tool_input":{"command":"git status"}}' | bash /path/to/block-write-commands.sh
+# Expected: {}
+```
 
 ### Shell hooks allowlist
 

@@ -462,7 +462,7 @@ Only **one external provider** can be active at a time (`memory.provider` in con
 | Knowledge graph, cross-session connections, `reflect` reasoning | **Hindsight** ★ | Knowledge graph connects facts across sessions. `reflect` synthesizes insights from multiple memories. Stale detection. Best for programming/long sessions. |
 | Deep user modeling, multi-agent user alignment | **Honcho** | Dialectic reasoning about the user. 5 tools. Best for multi-agent setups sharing user context. Needs PostgreSQL + Redis + LLM + embeddings. |
 
-**★ Recommendation for programming-focused users:** Hindsight. Programming creates deep cross-session knowledge (decisions, bugs, patterns, architectures) that benefits most from knowledge graph connections and `reflect` synthesis. Also see the detailed Hindsight configuration section below.
+**★ Recommendation for multi-agent orchestration:** **Honcho**. Provides dialectic reasoning about users and peers, structured conclusions (`honcho_conclude`), and cross-session user modeling. 5 tools: `honcho_profile`, `honcho_search`, `honcho_context`, `honcho_reasoning`, `honcho_conclude`. Self-hosted via Docker (PostgreSQL + Redis). See `mlops/honcho` skill for setup. Also see the detailed Hindsight configuration section below.
 
 ### Recommended: Hindsight (for programming/long sessions)
 

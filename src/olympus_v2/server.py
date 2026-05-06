@@ -149,6 +149,79 @@ def create_server() -> Server:
                     "properties": {},
                 },
             ),
+            mcp_types.Tool(
+                name="consult",
+                description=(
+                    "Consulting workflow with Pi Agent Daimons.\n"
+                    "Actions:\n"
+                    "- start: Create a new consulting session with selected agents\n"
+                    "- run: Consult a specific agent for enrichments + contract\n"
+                    "- sign: Get an agent to sign a final contract\n"
+                    "- add_agent: Add an agent to an ongoing session\n"
+                    "- status: Get current session status\n"
+                    "- complete: Close a consulting session"
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["start", "run", "sign", "add_agent", "status", "complete"],
+                            "description": (
+                                "Action to execute. "
+                                "start: create session. "
+                                "run: consult agent. "
+                                "sign: agent signs contract. "
+                                "add_agent: add agent to session. "
+                                "status: get session status. "
+                                "complete: close session."
+                            ),
+                        },
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID (required for run, sign, status, complete, add_agent)",
+                        },
+                        "plan": {
+                            "type": "string",
+                            "description": "Plan text (required for start)",
+                        },
+                        "agents": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of agent names for start (e.g. [\"daedalus\", \"athena\"])",
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": "Additional context for the plan (optional, for start)",
+                        },
+                        "project_root": {
+                            "type": "string",
+                            "description": "Project root path (optional)",
+                        },
+                        "agent": {
+                            "type": "string",
+                            "description": "Agent name for run/sign (e.g. \"daedalus\" or \"athena\")",
+                        },
+                        "tasks": {
+                            "type": "array",
+                            "description": "List of task dicts for sign action",
+                        },
+                        "new_agent": {
+                            "type": "string",
+                            "description": "Agent name to add (for add_agent action)",
+                        },
+                        "role": {
+                            "type": "string",
+                            "description": "Role for the new agent (for add_agent action)",
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Reason for adding the agent (for add_agent action)",
+                        },
+                    },
+                    "required": ["action"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -158,6 +231,8 @@ def create_server() -> Server:
             return await _handle_discover()
         elif name == "talk_to":
             return await _handle_talk_to(arguments)
+        elif name == "consult":
+            return await _handle_consult(arguments)
         else:
             return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -243,7 +318,7 @@ async def _action_delegate(arguments: dict) -> list[mcp_types.TextContent]:
     agent_name = arguments.get("agent", "")
     prompt_text = arguments.get("prompt", "")
     poll_interval = max(1, arguments.get("poll_interval", 15))
-    timeout = min(600, max(1, arguments.get("timeout", 300)))
+    timeout = min(1200, max(1, arguments.get("timeout", 1200)))
 
     logger.info(
         f"[olympus_v2] delegate start: agent={agent_name}, "
@@ -288,6 +363,26 @@ async def _action_delegate(arguments: dict) -> list[mcp_types.TextContent]:
         poll_result = await _action_poll(session_id)
         poll_data = json.loads(poll_result[0].text)
         last_result_data = poll_data
+
+        # Detailed diagnostic log for delegate poll iteration
+        _buf = buffers.get(session_id)
+        if _buf:
+            logger.info(
+                f"[olympus_v2] delegate {agent_name} poll iter={iteration} "
+                f"elapsed={elapsed:.1f}s events=poll "
+                f"text={len(_buf.accumulated_text)}c reasoning={len(_buf.accumulated_reasoning)}c "
+                f"thoughts={_buf.thoughts_count} tool_calls={_buf.tool_calls_count} "
+                f"done={_buf.is_done} stop={_buf.stop_reason or '-'}"
+            )
+        else:
+            # Buffer cleaned up (process died / session closed)
+            logger.info(
+                f"[olympus_v2] delegate {agent_name} poll iter={iteration} "
+                f"elapsed={elapsed:.1f}s events=poll "
+                f"text={len(poll_data.get('response', ''))}c reasoning=0c "
+                f"thoughts={poll_data.get('thoughts', 0)} tool_calls={poll_data.get('tool_calls', 0)} "
+                f"done=True stop={poll_data.get('stop_reason', '-')}"
+            )
 
         if poll_data.get("status") == "done":
             logger.info(
@@ -437,6 +532,8 @@ async def _action_message(session_id: str, prompt_text: str) -> list[mcp_types.T
     buffer.thoughts_count = 0
     buffer.tool_calls_count = 0
     buffer.final_response = ""
+    buffer.last_turn_response = ""
+    buffer.turn_count = 0
     buffer.stop_reason = ""
     buffer.tool_calls_detail = []
 
@@ -506,8 +603,14 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
             translate_events_batch(events, buffer)
 
         buffer.is_done = True
+        # Final response priority: last_turn_response (clean, from Pi Agent structured event)
+        # > accumulated_text (may contain tool output from current turn, useful as fallback)
+        # > accumulated_reasoning (available for debugging only, never used as response)
         if not buffer.final_response:
-            buffer.final_response = buffer.accumulated_text
+            if buffer.last_turn_response:
+                buffer.final_response = buffer.last_turn_response
+            elif buffer.accumulated_text:
+                buffer.final_response = buffer.accumulated_text
 
         # Clean up session (terminate + remove session dir)
         adapter.terminate(session_id)
@@ -528,6 +631,15 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
 
     # Read new events from the adapter
     events = adapter.read_events(session_id) if session_id in adapter.sessions else []
+
+    if events:
+        event_types = {}
+        for ev in events:
+            ev_type = ev.get("type", "unknown")
+            event_types[ev_type] = event_types.get(ev_type, 0) + 1
+        logger.info(
+            f"[olympus_v2] poll {session_id} events breakdown: {event_types}"
+        )
 
     if not events and not buffer.is_done:
         # No new events — return current state
@@ -656,6 +768,28 @@ async def _action_close(session_id: str) -> list[mcp_types.TextContent]:
             "response": buffer.accumulated_text or "",
         }),
     )]
+
+
+async def _handle_consult(arguments: dict[str, Any]) -> list[mcp_types.TextContent]:
+    """Handle consult action — consulting workflow with Pi-backed Daimons."""
+    from .consult_action import handle_consult_action
+
+    result = await handle_consult_action(
+        action=arguments.get("action", ""),
+        adapter=adapter,
+        buffers=buffers,
+        session_id=arguments.get("session_id"),
+        plan=arguments.get("plan"),
+        agents=arguments.get("agents"),
+        context=arguments.get("context"),
+        project_root=arguments.get("project_root"),
+        agent=arguments.get("agent"),
+        tasks=arguments.get("tasks"),
+        new_agent=arguments.get("new_agent"),
+        role=arguments.get("role"),
+        reason=arguments.get("reason"),
+    )
+    return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 async def main() -> None:

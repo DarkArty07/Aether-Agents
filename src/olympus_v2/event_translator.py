@@ -62,6 +62,8 @@ class SessionBuffer:
     stop_reason: str = ""
     final_response: str = ""
     started_at: float = field(default_factory=time.time)
+    last_turn_response: str = ""   # Extracted from turn_end.message — the clean response from the last completed turn
+    turn_count: int = 0           # Number of turns completed
 
 
 def is_spinner_noise(text: str) -> bool:
@@ -95,25 +97,39 @@ def translate_event(event: dict[str, Any], buffer: SessionBuffer) -> dict[str, A
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
         }
 
     elif event_type == "turn_start":
-        # Turn started — signal active state
+        # Turn started — reset per-turn accumulators so tool output from previous turns
+        # doesn't contaminate the text buffer for subsequent turns.
+        buffer.accumulated_text = ""
+        buffer.accumulated_reasoning = ""
         return {
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
         }
 
     elif event_type == "turn_end":
-        # Turn ended — still active (agent may continue)
+        # Turn ended — extract the assistant's message from this turn.
+        # turn_end.message contains the COMPLETE assistant response for this turn,
+        # clean of any tool output from previous turns.
+        message = event.get("message", {})
+        if isinstance(message, dict):
+            content = message.get("content", [])
+            if isinstance(content, list):
+                text = _extract_text_from_content(content)
+                if text:
+                    buffer.last_turn_response = text
+
+        buffer.turn_count += 1
         return {
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
         }
 
     elif event_type == "message_start":
@@ -145,7 +161,7 @@ def translate_event(event: dict[str, Any], buffer: SessionBuffer) -> dict[str, A
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
             "tool_calls_detail": buffer.tool_calls_detail,
         }
 
@@ -163,7 +179,7 @@ def translate_event(event: dict[str, Any], buffer: SessionBuffer) -> dict[str, A
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
             "tool_calls_detail": buffer.tool_calls_detail,
         }
 
@@ -182,7 +198,7 @@ def translate_event(event: dict[str, Any], buffer: SessionBuffer) -> dict[str, A
             "error": error_msg,
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
         }
 
     else:
@@ -209,7 +225,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
                 "reasoning": buffer.accumulated_reasoning or None,
             }
 
@@ -222,7 +238,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
                 "reasoning": buffer.accumulated_reasoning or None,
             }
 
@@ -236,7 +252,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
                 "reasoning": buffer.accumulated_reasoning or None,
             }
 
@@ -245,7 +261,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
             }
 
         elif ame_type == "text_delta":
@@ -258,7 +274,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
             }
 
         elif ame_type == "text_end":
@@ -266,12 +282,12 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
             content = ame.get("content", "")
             if content and not buffer.accumulated_text:
                 buffer.accumulated_text = content
-            buffer.final_response = buffer.accumulated_text
+            buffer.final_response = buffer.last_turn_response or buffer.accumulated_text
             return {
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
             }
 
         elif ame_type in ("tool_call_start", "toolcall_start"):
@@ -290,7 +306,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
                 "tool_calls_detail": buffer.tool_calls_detail,
             }
 
@@ -300,7 +316,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
                 "tool_calls_detail": buffer.tool_calls_detail,
             }
 
@@ -312,7 +328,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
                 "tool_calls_detail": buffer.tool_calls_detail,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
             }
 
         else:
@@ -322,7 +338,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
                 "status": "active",
                 "thoughts": buffer.thoughts_count,
                 "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
+                "response": buffer.last_turn_response or buffer.accumulated_text,
             }
 
     # ── Fallback: old content.* format (backwards compat) ──────────────────
@@ -380,7 +396,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
         "status": "active",
         "thoughts": buffer.thoughts_count,
         "tool_calls": buffer.tool_calls_count,
-        "response": buffer.accumulated_text,
+        "response": buffer.last_turn_response or buffer.accumulated_text,
         "reasoning": buffer.accumulated_reasoning if buffer.accumulated_reasoning else None,
         "tool_calls_detail": buffer.tool_calls_detail if buffer.tool_calls_detail else None,
     }
@@ -417,15 +433,20 @@ def _translate_message_end(event: dict[str, Any], buffer: SessionBuffer) -> dict
 
     buffer.stop_reason = stop_reason
 
-    # If we haven't accumulated text yet, extract from the message content
-    if not buffer.accumulated_text and message:
+    # Extract text from message content if available (structured event)
+    if message:
         content = message.get("content", [])
         if isinstance(content, list):
             extracted = _extract_text_from_content(content)
             if extracted:
-                buffer.accumulated_text = extracted
+                buffer.last_turn_response = extracted
 
-    buffer.final_response = buffer.accumulated_text
+    # Final response priority: last_turn_response (clean, from structured event)
+    # > accumulated_text (may contain tool output, but still useful as fallback)
+    if buffer.last_turn_response:
+        buffer.final_response = buffer.last_turn_response
+    elif buffer.accumulated_text:
+        buffer.final_response = buffer.accumulated_text
 
     if stop_reason in ("end_turn", "stop"):
         buffer.is_done = True
@@ -442,7 +463,7 @@ def _translate_message_end(event: dict[str, Any], buffer: SessionBuffer) -> dict
             "status": "active",
             "thoughts": buffer.thoughts_count,
             "tool_calls": buffer.tool_calls_count,
-            "response": buffer.accumulated_text,
+            "response": buffer.last_turn_response or buffer.accumulated_text,
             "stop_reason": stop_reason,
         }
 
@@ -457,21 +478,27 @@ def _translate_agent_end(event: dict[str, Any], buffer: SessionBuffer) -> dict[s
     buffer.is_done = True
 
     # If we don't have a final response yet, try extracting from messages array
-    if not buffer.final_response and not buffer.accumulated_text:
-        messages = event.get("messages", [])
-        if isinstance(messages, list) and messages:
-            # Walk backwards to find the last assistant message with text
-            for msg in reversed(messages):
-                if isinstance(msg, dict) and msg.get("role") == "assistant":
-                    content = msg.get("content", [])
-                    if isinstance(content, list):
-                        extracted = _extract_text_from_content(content)
-                        if extracted:
-                            buffer.accumulated_text = extracted
-                            break
-
-    if not buffer.final_response and buffer.accumulated_text:
-        buffer.final_response = buffer.accumulated_text
+    # Walk backwards to find the last assistant message with text content
+    if not buffer.final_response:
+        # First try last_turn_response (clean, from turn_end)
+        if buffer.last_turn_response:
+            buffer.final_response = buffer.last_turn_response
+        else:
+            # Fallback: extract from agent_end messages array
+            messages = event.get("messages", [])
+            if isinstance(messages, list) and messages:
+                for msg in reversed(messages):
+                    if isinstance(msg, dict) and msg.get("role") == "assistant":
+                        content = msg.get("content", [])
+                        if isinstance(content, list):
+                            extracted = _extract_text_from_content(content)
+                            if extracted:
+                                buffer.last_turn_response = extracted
+                                buffer.final_response = extracted
+                                break
+            # Last fallback: accumulated_text from current turn only
+            if not buffer.final_response and buffer.accumulated_text:
+                buffer.final_response = buffer.accumulated_text
 
     return {
         "status": "done",
@@ -502,7 +529,7 @@ def translate_events_batch(
         "status": "active",
         "thoughts": buffer.thoughts_count,
         "tool_calls": buffer.tool_calls_count,
-        "response": buffer.accumulated_text,
+        "response": buffer.last_turn_response or buffer.accumulated_text,
     }
 
     for event in events:

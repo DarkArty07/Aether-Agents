@@ -1,4 +1,7 @@
 {
+  "defaultProvider": "opencode-go",
+  "defaultModel": "deepseek-v4-flash",
+  "defaultThinkingLevel": "medium",
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,

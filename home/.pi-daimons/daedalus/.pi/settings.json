@@ -1,4 +1,7 @@
 {
+  "defaultProvider": "opencode-go",
+  "defaultModel": "mimo-v2-omni",
+  "defaultThinkingLevel": "medium",
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,

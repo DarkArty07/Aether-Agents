@@ -1,4 +1,7 @@
 {
+  "defaultProvider": "opencode-go",
+  "defaultModel": "kimi-k2.5",
+  "defaultThinkingLevel": "medium",
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
