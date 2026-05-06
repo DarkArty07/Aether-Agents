@@ -30,6 +30,7 @@ class OlympusConfig:
     profiles_dir: Path
     project_root: Path  # Resolved from AETHER_HOME — Daimons' working directory
     log_level: str = "INFO"
+    poll_interval: int = 15  # Seconds between poll calls (returned to clients)
 
     @classmethod
     def from_env(cls) -> OlympusConfig:
@@ -51,11 +52,26 @@ class OlympusConfig:
         log_dir = aether_home / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
 
+        # Load poll_interval from AETHER_HOME/config.yaml (olympus section)
+        config_path = aether_home / "config.yaml"
+        poll_interval = 15  # default
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    cfg = yaml.safe_load(f)
+                if cfg and isinstance(cfg, dict):
+                    olympus_cfg = cfg.get("olympus", {})
+                    if isinstance(olympus_cfg, dict):
+                        poll_interval = int(olympus_cfg.get("poll_interval", 15))
+            except Exception:
+                pass  # keep default
+
         return cls(
             aether_home=aether_home,
             profiles_dir=profiles_dir,
             project_root=project_root,
             log_level=os.environ.get("OLYMPUS_LOG_LEVEL", "INFO"),
+            poll_interval=poll_interval,
         )
 
 

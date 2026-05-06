@@ -1,6 +1,6 @@
 ---
 name: github-pr-workflow
-description: Full pull request lifecycle — create branches, commit changes, open PRs, monitor CI status, auto-fix failures, and merge. Works with gh CLI or falls back to git + GitHub REST API via curl.
+description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
 version: 1.1.0
 author: Hermes Agent
 license: MIT
@@ -76,10 +76,65 @@ Branch naming conventions:
 
 ## 2. Making Commits
 
+### Pitfall 1: Files Ignored by .gitignore (can't stage)
+
+Some config files (e.g., `home/profiles/hermes/config.yaml`) are in `.gitignore` because they contain API keys or are machine-specific. If you need to commit a **structural configuration change** (like toolset definitions) that is not a secret, `git add` will silently skip it — no error, no warning, and the file won't appear in `git status`.
+
+**Detect:** If `git diff <file>` and `git status <file>` show nothing but you know the file was modified, check `.gitignore`:
+```bash
+git ls-files <file>     # empty = not tracked, possibly ignored
+git check-ignore -v <file>  # shows which rule ignores it
+```
+
+**Fix:** Force-track with `-f`:
+```bash
+git add -f path/to/ignored-file.yaml
+```
+
+**Caution:** Only force-track files whose content you've reviewed. Never force-add files that contain real secrets (hardcoded passwords, API keys as literal values). Files using `${ENV_VAR}` references for secrets are safe to track.
+
+### Pitfall 2: Already-tracked files still staged despite .gitignore
+
+Adding a file to `.gitignore` does **NOT** stop git from tracking changes to it if it was already committed. `git add -A` will happily stage modifications to a tracked file that matches `.gitignore` rules. This is a common source of accidentally committed secrets or runtime configs.
+
+**Detect:** After staging, check for files that should be gitignored but appear in the diff:
+```bash
+# Show all staged files — scan for anything that should be local
+git diff --cached --name-only
+
+# Specifically check if a gitignored file is still tracked
+git ls-files path/to/file.yaml   # non-empty = still tracked
+```
+
+**Fix:** Remove from the index (keeps the local file):
+```bash
+git rm --cached path/to/local-config.yaml
+git commit -m "chore: stop tracking local config (already in .gitignore)"
+```
+
+After `git rm --cached`, future `git add -A` will correctly skip the file.
+
+### Pitfall 3: Untracked runtime files staged by git add -A
+
+When a project has accumulated runtime artifacts (SQLite databases, caches, session state, JSON dumps) that aren't in `.gitignore`, `git add -A` stages everything indiscriminately. Before committing any bulk staging:
+
+1. **Audit untracked files before staging** — run `git status --short` and review `??` entries for runtime state
+2. **Update `.gitignore` first** — add patterns for any runtime files/dirs discovered (e.g., `*.db`, `cache/`, `hindsight/`, `state-snapshots/`, `.curator_state`)
+3. **Then `git add -A`** — newly gitignored files won't appear
+
+Common runtime artifacts to exclude:
+- `kanban.db`, `*.db-shm`, `*.db-wal` — local databases
+- `cache/`, `state-snapshots/` — derived/cached data
+- `hindsight/`, `*.lock` — session/temp state
+- `*.restart_*.json`, `.curator_state` — daemon/runtime metadata
+- Per-profile configs with API keys or machine-specific settings
+
 Use the agent's file tools (`write_file`, `patch`) to make changes, then commit:
 
+**Before `git add -A`:** audit untracked files for runtime state (see Pitfall 3). Update `.gitignore` first if needed, and `git rm --cached` any tracked files that should be gitignored (see Pitfall 2).
+
 ```bash
-# Stage specific files
+# Stage specific files (use -f for gitignored files you intentionally want to track)
 git add src/auth.py src/models/user.py tests/test_auth.py
 
 # Commit with a conventional commit message

@@ -1,0 +1,123 @@
+# Hermes Agent — Full Documentation Index (llms.txt)
+> Source: https://hermes-agent.nousresearch.com/docs/assets/files/llms-b5c838e3a0e08d2ec440e0228eaa3b61.txt
+> Downloaded: 2026-05-03
+> This is the official llms.txt file from the Hermes Agent docs site.
+> It contains the complete documentation map with links to every section.
+> When you need details about Hermes Agent's own behavior, configuration, or internals,
+> consult this file first, then use Context7 (mcp_context7_resolve_library_id + mcp_context7_query_docs)
+> with library /nousresearch/hermes-agent for detailed content.
+
+## Getting Started
+- Installation: https://hermes-agent.nousresearch.com/docs/getting-started/installation
+- Quickstart: https://hermes-agent.nousresearch.com/docs/getting-started/quickstart
+- Learning Path: https://hermes-agent.nousresearch.com/docs/getting-started/learning-path
+- Updating: https://hermes-agent.nousresearch.com/docs/getting-started/updating
+- Termux: https://hermes-agent.nousresearch.com/docs/getting-started/termux
+- Nix Setup: https://hermes-agent.nousresearch.com/docs/getting-started/nix-setup
+
+## Using Hermes
+- CLI: https://hermes-agent.nousresearch.com/docs/user-guide/cli
+- TUI: https://hermes-agent.nousresearch.com/docs/user-guide/tui
+- Configuration: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+- Configuring Models: https://hermes-agent.nousresearch.com/docs/user-guide/configuring-models
+- Sessions: https://hermes-agent.nousresearch.com/docs/user-guide/sessions
+- Profiles: https://hermes-agent.nousresearch.com/docs/user-guide/profiles
+- Git Worktrees: https://hermes-agent.nousresearch.com/docs/user-guide/git-worktrees
+- Docker Backend: https://hermes-agent.nousresearch.com/docs/user-guide/docker
+- Security: https://hermes-agent.nousresearch.com/docs/user-guide/security
+- Checkpoints & Rollback: https://hermes-agent.nousresearch.com/docs/user-guide/checkpoints-and-rollback
+
+## Core Features
+- Features Overview: https://hermes-agent.nousresearch.com/docs/user-guide/features/overview
+- Tools: https://hermes-agent.nousresearch.com/docs/user-guide/features/tools
+- Skills System: https://hermes-agent.nousresearch.com/docs/user-guide/features/skills
+- Curator: https://hermes-agent.nousresearch.com/docs/user-guide/features/curator
+- Memory: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
+- Memory Providers: https://hermes-agent.nousresearch.com/docs/user-guide/features/memory-providers
+- Context Files: https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files
+- Context References: https://hermes-agent.nousresearch.com/docs/user-guide/features/context-references
+- Personality & SOUL.md: https://hermes-agent.nousresearch.com/docs/user-guide/features/personality
+- Plugins: https://hermes-agent.nousresearch.com/docs/user-guide/features/plugins
+- Built-in Plugins: https://hermes-agent.nousresearch.com/docs/user-guide/features/built-in-plugins
+
+## Automation
+- Cron Jobs: https://hermes-agent.nousresearch.com/docs/user-guide/features/cron
+- Delegation: https://hermes-agent.nousresearch.com/docs/user-guide/features/delegation
+- Kanban Multi-Agent: https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban
+- Persistent Goals: https://hermes-agent.nousresearch.com/docs/user-guide/features/goals
+- Code Execution: https://hermes-agent.nousresearch.com/docs/user-guide/features/code-execution
+- Hooks: https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks
+- Batch Processing: https://hermes-agent.nousresearch.com/docs/user-guide/features/batch-processing
+
+## Media & Web
+- Voice Mode: https://hermes-agent.nousresearch.com/docs/user-guide/features/voice-mode
+- Browser: https://hermes-agent.nousresearch.com/docs/user-guide/features/browser
+- Vision: https://hermes-agent.nousresearch.com/docs/user-guide/features/vision
+- Image Generation: https://hermes-agent.nousresearch.com/docs/user-guide/features/image-generation
+- TTS: https://hermes-agent.nousresearch.com/docs/user-guide/features/tts
+
+## Messaging Platforms
+- Overview: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/index
+- Telegram: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/telegram
+- Discord: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/discord
+- Slack: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/slack
+- WhatsApp: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/whatsapp
+- Signal: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/signal
+- Email: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/email
+- SMS: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/sms
+- Matrix: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/matrix
+- Mattermost: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/mattermost
+- Webhooks: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/webhooks
+
+## Integrations
+- Overview: https://hermes-agent.nousresearch.com/docs/integrations/index
+- Providers: https://hermes-agent.nousresearch.com/docs/integrations/providers
+- MCP: https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+- ACP: https://hermes-agent.nousresearch.com/docs/user-guide/features/acp
+- API Server: https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server
+- Provider Routing: https://hermes-agent.nousresearch.com/docs/user-guide/features/provider-routing
+- Fallback Providers: https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers
+- Credential Pools: https://hermes-agent.nousresearch.com/docs/user-guide/features/credential-pools
+
+## Guides & Tutorials
+- Tips: https://hermes-agent.nousresearch.com/docs/guides/tips
+- Local LLMs on Mac: https://hermes-agent.nousresearch.com/docs/guides/local-llm-on-mac
+- Daily Briefing Bot: https://hermes-agent.nousresearch.com/docs/guides/daily-briefing-bot
+- Team Telegram Assistant: https://hermes-agent.nousresearch.com/docs/guides/team-telegram-assistant
+- Python Library: https://hermes-agent.nousresearch.com/docs/guides/python-library
+- Use MCP with Hermes: https://hermes-agent.nousresearch.com/docs/guides/use-mcp-with-hermes
+- Voice Mode Guide: https://hermes-agent.nousresearch.com/docs/guides/use-voice-mode-with-hermes
+- SOUL.md Guide: https://hermes-agent.nousresearch.com/docs/guides/use-soul-with-hermes
+- Build a Plugin: https://hermes-agent.nousresearch.com/docs/guides/build-a-hermes-plugin
+- Automate with Cron: https://hermes-agent.nousresearch.com/docs/guides/automate-with-cron
+- Work with Skills: https://hermes-agent.nousresearch.com/docs/guides/work-with-skills
+- Delegation Patterns: https://hermes-agent.nousresearch.com/docs/guides/delegation-patterns
+- GitHub PR Review: https://hermes-agent.nousresearch.com/docs/guides/github-pr-review-agent
+
+## Developer Guide
+- Contributing: https://hermes-agent.nousresearch.com/docs/developer-guide/contributing
+- Architecture: https://hermes-agent.nousresearch.com/docs/developer-guide/architecture
+- Agent Loop: https://hermes-agent.nousresearch.com/docs/developer-guide/agent-loop
+- Prompt Assembly: https://hermes-agent.nousresearch.com/docs/developer-guide/prompt-assembly
+- Context Compression & Caching: https://hermes-agent.nousresearch.com/docs/developer-guide/context-compression-and-caching
+- Gateway Internals: https://hermes-agent.nousresearch.com/docs/developer-guide/gateway-internals
+- Session Storage: https://hermes-agent.nousresearch.com/docs/developer-guide/session-storage
+- Provider Runtime: https://hermes-agent.nousresearch.com/docs/developer-guide/provider-runtime
+- Adding Tools: https://hermes-agent.nousresearch.com/docs/developer-guide/adding-tools
+- Adding Providers: https://hermes-agent.nousresearch.com/docs/developer-guide/adding-providers
+- Adding Platform Adapters: https://hermes-agent.nousresearch.com/docs/developer-guide/adding-platform-adapters
+- Creating Skills: https://hermes-agent.nousresearch.com/docs/developer-guide/creating-skills
+- Extending the CLI: https://hermes-agent.nousresearch.com/docs/developer-guide/extending-the-cli
+
+## Reference
+- CLI Commands: https://hermes-agent.nousresearch.com/docs/reference/cli-commands
+- Slash Commands: https://hermes-agent.nousresearch.com/docs/reference/slash-commands
+- Profile Commands: https://hermes-agent.nousresearch.com/docs/reference/profile-commands
+- Environment Variables: https://hermes-agent.nousresearch.com/docs/reference/environment-variables
+- Tools Reference: https://hermes-agent.nousresearch.com/docs/reference/tools-reference
+- Toolsets Reference: https://hermes-agent.nousresearch.com/docs/reference/toolsets-reference
+- MCP Config Reference: https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference
+- Model Catalog: https://hermes-agent.nousresearch.com/docs/reference/model-catalog
+- Skills Catalog: https://hermes-agent.nousresearch.com/docs/reference/skills-catalog
+- Optional Skills Catalog: https://hermes-agent.nousresearch.com/docs/reference/optional-skills-catalog
+- FAQ & Troubleshooting: https://hermes-agent.nousresearch.com/docs/reference/faq

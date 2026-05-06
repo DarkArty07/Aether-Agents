@@ -1,169 +1,106 @@
 # Aether Agents
 
-A **provider-agnostic** multi-agent system built on the **hermes-agent** framework. Orchestrates 5 specialized Daimons for collaborative software development with structured workflows and Human-in-the-Loop (HITL) approval gates.
+[![Version](https://img.shields.io/badge/version-5.0.0-blue)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through typed RPC workflows with Human-in-the-Loop approval gates.
 
 ---
 
 ## What is Aether Agents?
 
-Aether Agents is an AI agent ecosystem where specialized agents work in coordination following a 5-phase methodology:
+Aether Agents is a 5-phase agent ecosystem:
 
 ```
 IDEA → RESEARCH → DESIGN → PLAN → CODE
 ```
 
-**Hermes** orchestrates all communication. **5 Daimons** handle their specialties. Communication flows through **Olympus MCP**:
+- **Hermes** — The orchestrator. Uses Hermes Agent (MCP, memory, skills) to route tasks, synthesize output, and manage workflows.
+- **5 Daimons** — Specialized sub-agents that execute within their domain.
+- **Olympus v2** — MCP server that bridges Hermes to Daimons. Same `talk_to` interface, backend-agnostic.
+
+**Communication stack:**
+- Hermes ↔ **MCP** ↔ Olympus v2 ↔ **Pi Agent RPC** ↔ Daimon subprocess
+
+Any OpenAI-compatible provider works — OpenAI, Anthropic, Google, DeepSeek, Qwen, OpenRouter, Ollama, and more. Each Daimon can use a different model.
+
+---
+
+## v5.0.0 — Pi Agent RPC
+
+**Headline:** All Daimons now use **Pi Agent RPC** instead of ACP for sub-agent communication. ACP remains available as instant rollback (`backend: acp` in `config.yaml`).
+
+### Why we replaced ACP
+
+ACP had 3 critical bugs that made Daimon delegation unreliable:
+
+1. **Spinner noise** — `AgentThoughtChunk` mixed progress spinners with reasoning. Regex filters leaked Unicode artifacts, breaking stall detection.
+2. **Invisible tool calls** — `total_tool_calls` was always `0`, even when 8+ tools ran. No execution events were emitted.
+3. **No reasoning visibility** — Provider chain-of-thought (DeepSeek `reasoning_content`, Anthropic `thinking`) was silently dropped, causing empty Daimon responses.
+
+### ACP vs Pi Agent RPC
+
+| Feature | ACP (old) | Pi RPC (new) |
+|---------|-----------|--------------|
+| Protocol | Binary stream (spinner noise) | Typed JSONL (`text_delta`, `thinking_delta`, `tool_call`) |
+| Tool calls | Always 0 | Explicit `tool_execution_start/end` events |
+| Reasoning | Lost | `thinking_delta` events + configurable levels |
+| Live steering | None | `steer` command mid-stream |
+| Thinking levels | None | `off/minimal/low/medium/high/xhigh` |
+| Session persistence | None | Built-in with `--session-dir` |
+| Model switching | Restart required | `set_model` at runtime |
+| Compaction | Manual | `compact` + auto-compaction |
+
+### New: `delegate` Action (Single-Call Auto-Poll)
+
+One MCP call replaces the entire open→message→poll→close cycle:
 
 ```
-Hermes → talk_to() / run_workflow() → Olympus MCP (ACP protocol) → Target Daimon
+delegate(agent, prompt, poll_interval=15, timeout=300) → done
 ```
 
-### Provider Compatibility
-
-Aether Agents inherits the same extensive provider compatibility as hermes-agent. Any provider with an OpenAI-compatible API endpoint works — OpenAI, Anthropic, Google, Zhipu AI, DeepSeek, Qwen, OpenRouter, Ollama, vLLM, and many more. Each Daimon can use a different model/provider. No vendor lock-in.
+The server polls internally. Returns final result with `delegate: {timed_out, elapsed_seconds, poll_iterations}` metadata. Manual `open/message/poll/close` remains available for fine-grained control.
 
 ---
 
-## Agents
-
-| Agent | Role | Specialty |
-|-------|------|-----------|
-| **Hermes** | Orchestrator | Coordinates, designs architecture, delegates, synthesizes |
-| **Ariadna** | Project Manager | Tracks state, detects blockers, manages `.eter/`, session audits |
-| **Hefesto** | Senior Developer | Implements specs, coordinates Ergates (sub-agents by role), debugging |
-| **Etalides** | Web Researcher | Searches, extracts, verifies web sources. 10-link budget. No opinions. |
-| **Daedalus** | UX/UI Designer | User flows, layouts, prototypes, design systems, accessibility |
-| **Athena** | Security Engineer | STRIDE threat modeling, code audit, dependency CVE review |
-
----
-
-## Olympus MCP — Workflow Engine
-
-Olympus exposes 3 MCP tools to the orchestrator:
-
-| Tool | Purpose |
-|------|---------|
-| `talk_to` | Direct communication with a single Daimon (open → message → poll → close) |
-| `discover` | List available Daimons and their capabilities |
-| `run_workflow` | Execute multi-agent LangGraph workflows with Human-in-the-Loop |
-
-### 6 Predefined Workflows
-
-| Workflow | Purpose | HITL Points | Daimons |
-|----------|---------|-------------|---------|
-| `project-init` | Initialize new project `.eter/` structure | None | Ariadna |
-| `feature` | Full feature lifecycle (research→design→code→audit) | 3 | Etalides, Daedalus, Hefesto, Athena |
-| `bug-fix` | Diagnose → fix → verify | 1 | Etalides, Hefesto, Athena |
-| `security-review` | CVE research → audit → fix loop | 1 | Etalides, Athena, Hefesto |
-| `research` | Pure knowledge gathering | None | Etalides |
-| `refactor` | Scope → implement → audit | 1 | Etalides, Hefesto, Athena |
-
-### Human-in-the-Loop (HITL)
-
-Workflows pause at decision points for user approval. The orchestrator presents findings conversationally and the user decides: `approve`, `reject`, `modify`, `confirm`, or `accept_risk`. Workflow state persists via AsyncSqliteSaver.
-
----
-
-## Project Status
-
-**Current version:** v0.3.0 — External Audit Fixes
-
-| Component | Status | Description |
-|-----------|--------|-------------|
-| Olympus MCP server | ✅ Working | `talk_to`, `discover`, `run_workflow` functional |
-| LangGraph workflows | ✅ Working | 6 canonical workflows with HITL gates |
-| AsyncSqliteSaver | ✅ Working | Persistent checkpointing across sessions |
-| Progress Watchdog | ✅ Working | Stall detection (no hard timeouts on LLM tasks) |
-| .eter/ project state | ✅ Working | Persistent project state across sessions |
-| SOUL.md convention | ✅ Working | 7-section structure, DRY execution context |
-| Skills architecture | ✅ Working | Shared external_dirs, single source of truth |
-| Daimon identity | ✅ Fixed | `--profile` flag ensures correct SOUL.md loading |
-| MCP tool propagation | ✅ Patched | Subagents receive Olympus tools via delegation |
-| ACP response collection | ✅ Fixed | Race condition resolved, thoughts recovery path |
-| Collaborative multi-turn | 🔜 Planned | Multi-turn Daimon sessions (MCP supports it, skill doesn't use it yet) |
-| Website landing page | ✅ Working | Static site in `website/` |
-
----
-
-## Project Structure
+## Architecture
 
 ```
-Aether-Agents/
-├── home/                              ← HERMES_HOME root
-│   ├── skills/                        ← Shared skills (single source of truth)
-│   │   ├── aether-agents/             ← Framework skills (10 skills)
-│   │   ├── productivity/              ← Generic skill categories
-│   │   ├── research/
-│   │   └── ... (27 categories total)
-│   ├── profiles/                      ← Agent profiles (HERMES_HOME per agent)
-│   │   ├── hermes/                    ← Orchestrator (SOUL.md + .env.example + config.yaml.template)
-│   │   ├── ariadna/                   ← Project Manager
-│   │   ├── hefesto/                   ← Senior Developer
-│   │   ├── etalides/                  ← Web Researcher
-│   │   ├── daedalus/                  ← UX/UI Designer
-│   │   └── athena/                    ← Security Engineer
-│   ├── sessions/                      ← Auto-created by hermes
-│   └── logs/                          ← Auto-created by hermes
-│
-├── src/olympus/                       ← MCP server + workflow engine
-│   ├── server.py                      ← MCP server (tools: talk_to, discover, run_workflow)
-│   ├── acp_client.py                  ← ACP protocol client
-│   ├── discovery.py                   ← Agent profile discovery
-│   ├── registry.py                    ← Session tracking
-│   ├── config.py                      ← Olympus configuration
-│   └── workflows/                     ← LangGraph workflow engine
-│       ├── state.py                   ← WorkflowState TypedDict
-│       ├── nodes.py                   ← Node factories + HITL
-│       ├── definitions.py             ← 6 workflow graphs
-│       └── runner.py                  ← WorkflowRunner (invoke, resume)
-│
-├── website/                           ← Landing page
-├── scripts/                           ← Setup scripts
-├── .eter/                             ← Project state (gitignored, local)
-├── pyproject.toml                     ← Olympus package definition
-└── .gitignore
+Hermes (Hermes Agent)
+    │
+    ▼
+Olympus v2 MCP Server
+    │
+    ├── backend: pi_rpc  →  Pi Agent RPC subprocess  →  Daimon
+    └── backend: acp     →  ACP protocol (rollback)
 ```
 
-### Skills Architecture
-
-Skills live in ONE place: `home/skills/`. Each profile's `config.yaml` points to this shared directory via `skills.external_dirs`. No symlinks, no duplicates.
-
-- **Aether skills** (`home/skills/aether-agents/`): Custom framework skills for orchestration, workflow design, diagnostics, and agent creation
-- **Generic skills** (`home/skills/{category}/`): Standard hermes-agent skill categories (productivity, research, github, etc.)
-
-Each agent's SOUL.md references the skills relevant to their specialty.
+- **Per-agent backend** — Each Daimon selects `pi_rpc` or `acp` independently in `config.yaml`.
+- **Pi configs** — Live at `home/.pi-daimons/{name}/.pi/` (SYSTEM.md, settings.json, extensions).
 
 ---
 
-## SOUL.md Convention
+## Daimons
 
-All agent profiles follow a 7-section structure:
-
-1. **Identity** — who I am, eponym, role
-2. **Execution Context** — how I'm invoked, project root, session scope (DRY for 5 Daimons)
-3. **Core Responsibilities** — what I do
-4. **Limits** — what I MUST NOT do
-5. **Skills** — skills I load (with 1-line descriptions)
-6. **Output Format** — how I structure my responses
-7. **In Workflow Context** — how I operate inside LangGraph workflows
+| Daimon | Role | Backend | Tools | Thinking |
+|--------|------|---------|-------|----------|
+| **Hefesto** | Senior Developer / Implementation Lead | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
+| **Etalides** | Web Researcher | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
+| **Ariadna** | Project Manager | `pi_rpc` | read, write, edit, bash | medium |
+| **Athena** | Security Engineer | `pi_rpc` | read, write, edit, bash, grep, find, ls | high |
+| **Daedalus** | UX/UI Designer | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
 
 ---
 
-## Project State (`.eter/`)
+## Quick Start
 
-Every project uses `.eter/` for persistence:
+### Prerequisites
 
-```
-PROJECT_ROOT/.eter/
-├── .hermes/        ← DESIGN.md (append-top v{N}) + PLAN.md (append-top Sprint{N})
-├── .ariadna/       ← CURRENT.md (overwrite) + LOG.md (append-bottom)
-├── .hefesto/       ← TASKS.md (overwrite with cycles)
-└── .etalides/      ← RESEARCH.md (append-bottom)
-```
+- Python 3.11+
+- Node.js 18+ (for Pi Agent RPC backend)
+- npm
 
----
-
-## Installation
+### Install
 
 ```bash
 git clone https://github.com/DarkArty07/Aether-Agents.git
@@ -174,12 +111,14 @@ source venv/bin/activate
 pip install -e .
 ```
 
-### Configure environment
+### Configure
 
 ```bash
-# Each profile needs API keys
 cp home/profiles/hermes/.env.example home/profiles/hermes/.env
-# Edit .env with your keys — supports any OpenAI-compatible provider
+# Edit .env with your API keys
+
+cp home/config.yaml.example home/config.yaml
+# Edit paths and provider settings for your system
 ```
 
 ### Start
@@ -190,49 +129,52 @@ HERMES_HOME=/path/to/Aether-Agents/home hermes --profile hermes
 
 ---
 
-## Best Practices
+## Configuration
 
-### 1. Read the Aether skills before coding
+Daimons are declared under the `daimons` key in `home/config.yaml`:
 
-When starting a new coding session, ask Hermes to load the Aether skills first. These contain project-specific conventions, workflow protocols, and known pitfalls that aren't obvious from the code alone. Without them, Hermes may miss routing rules, HITL checkpoints, or the delegation matrix.
+```yaml
+daimons:
+  hefesto:
+    backend: pi_rpc      # or acp for rollback
+    provider: opencode-go
+    model: deepseek-v4-flash
+    thinking: medium     # off/minimal/low/medium/high/xhigh
+    tools:
+      - read
+      - write
+      - edit
+      - bash
+      - grep
+      - find
+      - ls
+```
 
-### 2. Populate USER.md before your first session
-
-Before doing meaningful work, fill out `home/profiles/hermes/memories/USER.md` (or let Hermes ask you). Include basics: your name, preferred language, coding style, tech stack, and project context. This lets Hermes personalize interactions and avoid assumptions about what you know or prefer.
-
-### 3. Use talk_to for design-phase opinions
-
-During the DESIGN phase, ask for specialist opinions through `talk_to()`. Each Daimon offers a unique lens:
-
-- **Etalides** — "Are there established patterns or libraries for this?"
-- **Daedalus** — "Is the user flow intuitive? What would the UI look like?"
-- **Athena** — "What are the security implications of this architecture?"
-- **Hefesto** — "Is this technically feasible? What are the implementation trade-offs?"
-
-Don't jump to CODE without consulting at least one Daimon during DESIGN.
-
-### 4. Let Hermes decide the workflow
-
-When a task needs multiple agents, tell Hermes *what* you want done — not *how* to orchestrate it. Hermes will choose the right Olympus workflow based on the task type:
-
-- New feature? → `feature` workflow (4 Daimons, 3 HITL gates)
-- Bug? → `bug-fix`
-- Security audit? → `security-review`
-- Pure research? → `research`
-- Refactor? → `refactor`
-- New project? → `project-init`
-
-Trying to manually chain `talk_to` calls loses context, skips approval gates, and has no error recovery. Trust the workflow engine.
+Each entry points to a profile directory at `home/.pi-daimons/{name}/` containing SYSTEM.md, settings.json, and optional extensions.
 
 ---
 
-## Documentation
+## Project Structure
 
-- **Olympus MCP**: [`src/olympus/README.md`](src/olympus/README.md) — API reference, HITL guide, pitfalls
-- **Home directory**: [`home/README.md`](home/README.md) — profiles, skills architecture, adding new Daimons
-- **Team playbook**: `home/skills/aether-agents/orchestration/SKILL.md` — 5-phase pipeline, decision matrix, assignment rules
-- **Workflow engine**: `home/skills/aether-agents/workflow-design/SKILL.md` — technical reference
-- **Diagnostics**: `home/skills/aether-agents/aether-diagnostics/SKILL.md` — health checks
+```
+Aether-Agents/
+├── src/
+│   └── olympus_v2/              ← MCP server + Pi RPC adapter
+│       ├── server.py            ← MCP tools (talk_to, delegate, discover, run_workflow)
+│       ├── pi_adapter.py        ← Pi Agent RPC lifecycle
+│       └── event_translator.py  ← JSONL → MCP events
+│
+├── home/
+│   ├── .pi-daimons/             ← Pi Agent profiles (hefesto, athena, ...)
+│   ├── profiles/hermes/         ← Orchestrator profile + SOUL.md
+│   ├── skills/                  ← Shared skills (single source of truth)
+│   └── config.yaml              ← Daimon backends, providers, models
+│
+├── tests/                       ← Test suite
+├── website/                     ← Landing page
+├── CHANGELOG.md
+└── LICENSE
+```
 
 ---
 
