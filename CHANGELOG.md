@@ -2,7 +2,7 @@
 
 All notable changes to Aether Agents are documented here.
 
-## [5.0.0] - 2026-05-07
+## [0.5.0] - 2026-05-07
 
 ### 🔥 Breaking Change: ACP → Pi Agent RPC
 
