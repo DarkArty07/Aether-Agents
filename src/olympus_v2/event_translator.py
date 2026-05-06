@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -60,6 +61,7 @@ class SessionBuffer:
     is_done: bool = False
     stop_reason: str = ""
     final_response: str = ""
+    started_at: float = field(default_factory=time.time)
 
 
 def is_spinner_noise(text: str) -> bool:
@@ -274,9 +276,12 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
 
         elif ame_type in ("tool_call_start", "toolcall_start"):
             buffer.tool_calls_count += 1
-            tool_name = ""
-            if isinstance(ame.get("name"), str):
-                tool_name = ame["name"]
+            tool_name = (
+                ame.get("name", "")
+                or ame.get("toolName", "")
+                or (ame.get("function", {}).get("name", "") if isinstance(ame.get("function"), dict) else "")
+                or "unknown"
+            )
             buffer.tool_calls_detail.append({
                 "name": tool_name,
                 "status": "started",
@@ -342,7 +347,7 @@ def _translate_message_update(event: dict[str, Any], buffer: SessionBuffer) -> d
         buffer.tool_calls_count += 1
         tool_name = ""
         if isinstance(tool_call_start, dict):
-            tool_name = tool_call_start.get("name", tool_call_start.get("function", ""))
+            tool_name = tool_call_start.get("toolName", tool_call_start.get("name", tool_call_start.get("function", "unknown")))
         elif isinstance(tool_call_start, str):
             tool_name = tool_call_start
 

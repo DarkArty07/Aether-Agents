@@ -234,6 +234,35 @@ class PiAdapter:
                 f"Process may have crashed. stderr: {stderr_output[:500]}"
             )
 
+    def send_get_state(self, session_id: str) -> dict[str, Any] | None:
+        """Send get_state command and read the response.
+        
+        Returns the state dict if successful, None on error.
+        Used before sending multi-turn prompts to verify Pi is ready.
+        """
+        session = self.sessions.get(session_id)
+        if session is None:
+            raise KeyError(f"Unknown session: {session_id}")
+
+        if session.process.poll() is not None:
+            return None
+
+        # Send get_state command
+        self.send_command(session_id, {"type": "get_state"})
+        
+        # Wait briefly for response
+        time.sleep(0.2)
+        
+        # Read events to find the response
+        events = self.read_events(session_id)
+        for event in events:
+            if event.get("type") == "response" and event.get("command") == "get_state":
+                result = event.get("result", {})
+                if result.get("success", False):
+                    return result.get("state", {})
+        
+        return None
+
     def read_events(self, session_id: str) -> list[dict[str, Any]]:
         """Read and drain all accumulated events from the session's stdout buffer.
 

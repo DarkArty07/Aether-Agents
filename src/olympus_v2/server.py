@@ -39,6 +39,18 @@ from .event_translator import SessionBuffer, translate_events_batch
 from .pi_adapter import PiAdapter, PiSession
 from .soul_to_system import find_system_prompt
 
+import time as _time
+
+def _build_progress(buffer: SessionBuffer) -> dict:
+    """Build progress metadata matching V1 format for stall detection."""
+    return {
+        "total_thoughts": buffer.thoughts_count,
+        "substantive_thoughts": buffer.thoughts_count,  # In V2 all thoughts are substantive (no spinners in RPC)
+        "total_messages": 1 if buffer.accumulated_text else 0,
+        "total_tool_calls": buffer.tool_calls_count,
+        "elapsed_seconds": round(_time.time() - buffer.started_at, 1),
+    }
+
 # Configure logging to stderr (stdout is reserved for MCP protocol)
 logging.basicConfig(
     level=logging.INFO,
@@ -96,14 +108,15 @@ def create_server() -> Server:
                         },
                         "action": {
                             "type": "string",
-                            "enum": ["open", "message", "poll", "cancel", "close"],
+                            "enum": ["open", "message", "poll", "cancel", "close", "delegate"],
                             "description": (
                                 "Action to execute. "
                                 "open: spawn Pi process, create session. "
                                 "message: send prompt (async). "
                                 "poll: read events, check status. "
                                 "cancel: abort session. "
-                                "close: terminate process, cleanup."
+                                "close: terminate process, cleanup. "
+                                "delegate: open + message + auto-poll until done or timeout."
                             ),
                         },
                         "prompt": {
@@ -113,6 +126,16 @@ def create_server() -> Server:
                         "session_id": {
                             "type": "string",
                             "description": "Session ID (returned by action=open)",
+                        },
+                        "poll_interval": {
+                            "type": "integer",
+                            "description": "Seconds between polls. Only with action=delegate",
+                            "default": 15,
+                        },
+                        "timeout": {
+                            "type": "integer",
+                            "description": "Max seconds to wait for completion. Only with action=delegate",
+                            "default": 300,
                         },
                     },
                     "required": ["agent", "action"],
@@ -201,11 +224,95 @@ async def _handle_talk_to(args: dict[str, Any]) -> list[mcp_types.TextContent]:
     elif action == "close":
         return await _action_close(session_id)
 
+    elif action == "delegate":
+        return await _action_delegate(args)
+
     else:
         return [mcp_types.TextContent(
             type="text",
             text=json.dumps({"error": f"Unknown action: {action}. Valid: open, message, poll, cancel, close"}),
         )]
+
+
+async def _action_delegate(arguments: dict) -> list[mcp_types.TextContent]:
+    """Delegate: open, message, and auto-poll until done or timeout.
+
+    One-shot action that spawns a session, sends a prompt, and polls
+    automatically until the session completes or the timeout is reached.
+    """
+    agent_name = arguments.get("agent", "")
+    prompt_text = arguments.get("prompt", "")
+    poll_interval = max(1, arguments.get("poll_interval", 15))
+    timeout = min(600, max(1, arguments.get("timeout", 300)))
+
+    logger.info(
+        f"[olympus_v2] delegate start: agent={agent_name}, "
+        f"timeout={timeout}s, poll_interval={poll_interval}s"
+    )
+
+    # Open session
+    open_result = await _action_open(agent_name, "")
+    open_data = json.loads(open_result[0].text)
+    if "error" in open_data:
+        logger.error(f"[olympus_v2] delegate open failed: {open_data['error']}")
+        return open_result
+
+    session_id = open_data.get("session_id")
+    if not session_id:
+        return [mcp_types.TextContent(
+            type="text",
+            text=json.dumps({"error": "delegate failed: open did not return session_id"}),
+        )]
+
+    # Send message
+    message_result = await _action_message(session_id, prompt_text)
+    message_data = json.loads(message_result[0].text)
+    if "error" in message_data:
+        logger.error(f"[olympus_v2] delegate message failed: {message_data['error']}")
+        return message_result
+
+    # Poll loop
+    start_time = _time.time()
+    last_result_data: dict = {}
+    iteration = 0
+
+    while True:
+        await asyncio.sleep(poll_interval)
+        iteration += 1
+        elapsed = _time.time() - start_time
+        logger.info(
+            f"[olympus_v2] delegate poll iteration={iteration}, "
+            f"elapsed={elapsed:.1f}s, session_id={session_id}"
+        )
+
+        poll_result = await _action_poll(session_id)
+        poll_data = json.loads(poll_result[0].text)
+        last_result_data = poll_data
+
+        if poll_data.get("status") == "done":
+            logger.info(
+                f"[olympus_v2] delegate complete: session_id={session_id}, "
+                f"elapsed={elapsed:.1f}s"
+            )
+            await _action_close(session_id)
+            poll_data["delegate"] = {
+                "timed_out": False,
+                "elapsed_seconds": round(elapsed, 1),
+                "poll_iterations": iteration,
+            }
+            return [mcp_types.TextContent(type="text", text=json.dumps(poll_data))]
+
+        if elapsed >= timeout:
+            logger.info(
+                f"[olympus_v2] delegate timeout reached: session_id={session_id}, "
+                f"elapsed={elapsed:.1f}s"
+            )
+            last_result_data["delegate"] = {
+                "timed_out": True,
+                "elapsed_seconds": round(elapsed, 1),
+                "poll_iterations": iteration,
+            }
+            return [mcp_types.TextContent(type="text", text=json.dumps(last_result_data))]
 
 
 async def _action_open(agent_name: str, initial_prompt: str = "") -> list[mcp_types.TextContent]:
@@ -281,10 +388,57 @@ async def _action_message(session_id: str, prompt_text: str) -> list[mcp_types.T
     """Send a prompt to an active Pi Agent session."""
     buffer = buffers.get(session_id)
     if buffer is None:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": f"Unknown session: {session_id}"}),
-        )]
+        # Distinguish between expired and never-existed sessions
+        session_exists = session_id in adapter.sessions
+        if session_exists:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Session expired or process terminated: {session_id}",
+                    "status": "expired",
+                }),
+            )]
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Unknown session: {session_id}. Never opened or already closed.",
+                    "status": "unknown",
+                }),
+            )]
+
+    # For multi-turn: check Pi state before sending
+    # If the previous turn ended (buffer was reset), verify Pi is ready
+    if buffer.thoughts_count == 0 and buffer.tool_calls_count == 0 and not buffer.accumulated_text:
+        # This might be a new turn in an existing session — check Pi state
+        try:
+            state = adapter.send_get_state(session_id)
+            if state is not None:
+                is_streaming = state.get("isStreaming", False)
+                logger.info(
+                    f"[olympus_v2] Pi state before multi-turn prompt: "
+                    f"streaming={is_streaming}, "
+                    f"messages={state.get('messageCount', '?')}"
+                )
+                # If Pi is still streaming, use follow_up semantics
+                # (we still send prompt, but Pi will queue it)
+                if is_streaming:
+                    logger.warning(
+                        f"[olympus_v2] Pi is still streaming for session {session_id}, "
+                        f"sending prompt anyway"
+                    )
+        except Exception as e:
+            logger.debug(f"[olympus_v2] get_state failed (may be first turn): {e}")
+
+    # Reset buffer for new turn (multi-turn support)
+    buffer.is_done = False
+    buffer.accumulated_text = ""
+    buffer.accumulated_reasoning = ""
+    buffer.thoughts_count = 0
+    buffer.tool_calls_count = 0
+    buffer.final_response = ""
+    buffer.stop_reason = ""
+    buffer.tool_calls_detail = []
 
     try:
         adapter.send_command(session_id, {
@@ -297,6 +451,18 @@ async def _action_message(session_id: str, prompt_text: str) -> list[mcp_types.T
             type="text",
             text=json.dumps({"error": f"Failed to send prompt: {e}"}),
         )]
+
+    # Give Pi a moment to start processing the prompt and drain any
+    # stale events left over from a previous turn.  Without this, the
+    # next poll can pick up leftover events that contaminate the new
+    # turn's response (causing 0 thoughts / 0 tool_calls echo).
+    await asyncio.sleep(0.5)
+    stale_events = adapter.read_events(session_id)
+    if stale_events:
+        logger.info(
+            f"[olympus_v2] Drained {len(stale_events)} stale events "
+            f"before new turn for session {session_id}"
+        )
 
     return [mcp_types.TextContent(
         type="text",
@@ -312,10 +478,24 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
     """Poll for new events from a Pi Agent session."""
     buffer = buffers.get(session_id)
     if buffer is None:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": f"Unknown session: {session_id}"}),
-        )]
+        # Distinguish between expired and never-existed sessions
+        session_exists = session_id in adapter.sessions
+        if session_exists:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Session expired or process terminated: {session_id}",
+                    "status": "expired",
+                }),
+            )]
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Unknown session: {session_id}. Never opened or already closed.",
+                    "status": "unknown",
+                }),
+            )]
 
     # Check if the process is still alive
     # With --session-dir, Pi stays alive between prompts. Process death is unexpected.
@@ -342,6 +522,7 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
                 "tool_calls": buffer.tool_calls_count,
                 "response": buffer.final_response or "",
                 "stop_reason": buffer.stop_reason or "process_terminated",
+                "progress": _build_progress(buffer),
             }),
         )]
 
@@ -350,39 +531,44 @@ async def _action_poll(session_id: str) -> list[mcp_types.TextContent]:
 
     if not events and not buffer.is_done:
         # No new events — return current state
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({
-                "status": "active",
-                "session_id": session_id,
-                "thoughts": buffer.thoughts_count,
-                "tool_calls": buffer.tool_calls_count,
-                "response": buffer.accumulated_text,
-                "poll_interval": _get_config().poll_interval,
-            }),
-        )]
+        response_text = buffer.accumulated_text
+        truncated_response = response_text
+        truncated = False
+        total_len = 0
+        if response_text and len(response_text) > 4000:
+            truncated_response = response_text[:4000] + f"\n... [TRUNCATED: {len(response_text)} total chars]"
+            truncated = True
+            total_len = len(response_text)
+
+        result_data = {
+            "status": "active",
+            "session_id": session_id,
+            "thoughts": buffer.thoughts_count,
+            "tool_calls": buffer.tool_calls_count,
+            "response": truncated_response,
+            "poll_interval": _get_config().poll_interval,
+            "progress": _build_progress(buffer),
+        }
+        if truncated:
+            result_data["response_truncated"] = True
+            result_data["response_total_length"] = total_len
+        return [mcp_types.TextContent(type="text", text=json.dumps(result_data))]
 
     # Translate all new events
     result = translate_events_batch(events, buffer)
 
+    # Truncate response to avoid sending 20KB+ payloads
+    MAX_RESPONSE_LEN = 4000
+    response_text = result.get("response", "")
+    if response_text and len(response_text) > MAX_RESPONSE_LEN:
+        result["response"] = response_text[:MAX_RESPONSE_LEN] + f"\n... [TRUNCATED: {len(response_text)} total chars]"
+        result["response_truncated"] = True
+        result["response_total_length"] = len(response_text)
+
     # Add session_id to result
     result["session_id"] = session_id
     result["poll_interval"] = _get_config().poll_interval
-
-    # If done, reset buffer for next turn (multi-turn support)
-    # With --session-dir, Pi stays alive between prompts.
-    # is_done means "this turn completed", NOT "kill the process".
-    # Only terminate on explicit close action from Hermes.
-    if buffer.is_done:
-        # Reset buffer for next turn — keep Pi process alive for multi-turn
-        buffer.is_done = False
-        buffer.accumulated_text = ""
-        buffer.accumulated_reasoning = ""
-        buffer.thoughts_count = 0
-        buffer.tool_calls_count = 0
-        buffer.final_response = ""
-        buffer.stop_reason = ""
-        buffer.tool_calls_detail = []
+    result["progress"] = _build_progress(buffer)
 
     return [mcp_types.TextContent(
         type="text",
@@ -394,10 +580,24 @@ async def _action_cancel(session_id: str) -> list[mcp_types.TextContent]:
     """Cancel (abort) an active Pi Agent session."""
     buffer = buffers.get(session_id)
     if buffer is None:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": f"Unknown session: {session_id}"}),
-        )]
+        # Distinguish between expired and never-existed sessions
+        session_exists = session_id in adapter.sessions
+        if session_exists:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Session expired or process terminated: {session_id}",
+                    "status": "expired",
+                }),
+            )]
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Unknown session: {session_id}. Never opened or already closed.",
+                    "status": "unknown",
+                }),
+            )]
 
     # Send abort command
     adapter.abort(session_id)
@@ -425,10 +625,24 @@ async def _action_close(session_id: str) -> list[mcp_types.TextContent]:
     """Close a Pi Agent session and clean up."""
     buffer = buffers.get(session_id)
     if buffer is None:
-        return [mcp_types.TextContent(
-            type="text",
-            text=json.dumps({"error": f"Unknown session: {session_id}"}),
-        )]
+        # Distinguish between expired and never-existed sessions
+        session_exists = session_id in adapter.sessions
+        if session_exists:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Session expired or process terminated: {session_id}",
+                    "status": "expired",
+                }),
+            )]
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": f"Unknown session: {session_id}. Never opened or already closed.",
+                    "status": "unknown",
+                }),
+            )]
 
     # Terminate the process
     adapter.terminate(session_id)

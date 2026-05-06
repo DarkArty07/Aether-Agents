@@ -118,6 +118,10 @@ CLAUDE.md
 docs/sesiones/
 docs/setup/
 
+# --- Pi Agent Daimon configs (auth.json already gitignored by **/auth.json) ---
+
 # Old locations (moved to src/ and home/ level)
 home/profiles/hermes/olympus_v2/
+
+# Old pi-daimons location (moved to home/.pi-daimons/)
 home/profiles/hermes/.pi-daimons/
