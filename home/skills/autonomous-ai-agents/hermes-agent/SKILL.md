@@ -419,9 +419,64 @@ Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/con
 | OpenCode Go | API key | `OPENCODE_GO_API_KEY` |
 | Qwen OAuth | OAuth | `hermes login --provider qwen-oauth` |
 | Custom endpoint | Config | `model.base_url` + `model.api_key` in config.yaml |
-| GitHub Copilot ACP | External | `COPILOT_CLI_PATH` or Copilot CLI |
+| Custom endpoint | Config | `model.base_url` + `model.api_key` in config.yaml |
+
+### Custom Providers (Third-Party Proxies & Local Endpoints)
+
+For Anthropic-compatible proxies, local LLMs, or any endpoint not in the built-in list:
+
+```yaml
+```yaml
+custom_providers:
+  - name: aiprimetech
+    base_url: https://aiprimetech.io          # NO /v1 — Hermes adds /v1/messages for anthropic_messages
+    api_key: sk-...                             # Direct key (use if key_env fails with systemd)
+    # key_env: AIPRIMETECH_API_KEY             # Alt: env var name (may not work with systemd)
+    api_mode: anthropic_messages                # REQUIRED for Anthropic-compatible proxies
+    models:                                     # REQUIRED — no /v1/models endpoint
+      claude-sonnet-4-6:
+        context_length: 256000
+      claude-opus-4-6:
+        context_length: 256000
+```
+
+Then reference as `custom:<name>`:
+```yaml
+model:
+  provider: custom:aiprimetech
+  default: claude-opus-4-6
+```
+
+**`api_mode` values:**
+- `chat_completions` — OpenAI-compatible (default, auto-detected from URL patterns like `/v1/`)
+- `anthropic_messages` — Required for Anthropic-native endpoints (aiprimetech.io, Azure Anthropic proxies). Without this, Hermes sends OpenAI-format messages to an Anthropic endpoint → authentication errors, empty responses, or garbled output.
+
+**Pitfall:** For any Anthropic-compatible proxy (aiprimetech.io, Azure Anthropic, etc.), you MUST set `api_mode: anthropic_messages`. The auto-detection only works for recognizable URL patterns (`anthropic.com`, `openai.com`), not third-party domains.
+
+**Pitfall:** `key_env` takes an **environment variable NAME**, not a raw API key. Put the key in `.env` and reference it: `key_env: MY_PROXY_API_KEY` → `export MY_PROXY_API_KEY=sk-...` in `.env`. **However**, when Hermes runs as a systemd service, it does NOT load `~/.bashrc` — so env vars defined there are invisible. If `key_env` fails with "Token prefix: no-key-requi..." or 401 auth errors, use `api_key: sk-...` directly in `config.yaml` instead. The key is stored in `.env` (gitignored) via `config.yaml` which Hermes reads directly.
+
+**Pitfall — base_url for Anthropic-mode:** When `api_mode: anthropic_messages`, Hermes appends `/v1/messages` to `base_url` automatically. Do NOT include `/v1` in the base_url — it will double to `/v1/v1/messages`. Use `base_url: https://aiprimetech.io` (NOT `https://aiprimetech.io/v1`). For `chat_completions` mode, do include `/v1` since Hermes appends `/chat/completions` (not `/v1/chat/completions`).
+
+**Pitfall — Zero models on Anthropic-mode custom providers:** Custom providers with `api_mode: anthropic_messages` do NOT have a `/v1/models` endpoint (that's an OpenAI convention). Without a models list, Hermes shows "0 models" when switching, even though the API works fine via curl. **You MUST add a `models` dict** with each model name and its context length. Without it, `/model custom:<name>` returns zero models and the provider appears broken.
+
+```yaml
+custom_providers:
+  - name: aiprimetech
+    base_url: https://aiprimetech.io/v1
+    key_env: AIPRIMETECH_API_KEY
+    api_mode: anthropic_messages
+    models:                               # ← REQUIRED for Anthropic-mode providers
+      claude-sonnet-4-6:
+        context_length: 200000
+      claude-opus-4-6:
+        context_length: 200000
+```
+
+Then switch with: `/model custom:aiprimetech:claude-opus-4-6`
 
 Full provider docs: https://hermes-agent.nousresearch.com/docs/integrations/providers
+
+**API model verification:** When testing whether a proxy serves legitimate models, use the three-test protocol (identity probe → physical reasoning → logic puzzle) and structural fingerprinting. See `references/api-model-verification.md`.
 
 ### Toolsets
 
@@ -742,6 +797,8 @@ When using Hermes as a pure orchestrator (no direct implementation), restrict te
 1. `disabled_toolsets: [file-write, code_execution, delegation]` — removes `write_file`, `patch`, `execute_code`, `delegate_task` from tool schema
 2. `pre_tool_call` hook — bash script that blocks write patterns in terminal commands
 3. SOUL.md — behavioral instruction ("NEVER implement")
+
+**Pitfall — `yaml.dump` loses comments:** When modifying `config.yaml` via Python (`yaml.safe_load` → modify dict → `yaml.dump`), ALL comments are stripped. This happened during the Olympus v3 implementation (2026-05-08) — the entire comments section of config.yaml was lost. `ruamel.yaml` preserves comments but is not installed by default. Alternatives: (1) Use `hermes config set` for simple key=value changes (but watch for YAML falsy coercion — `off` becomes `false`), (2) Use Python `sed`-like line replacement for surgical edits that preserve comments, (3) Install `ruamel.yaml` (`pip install ruamel.yaml`) and use `YAML().load()` / `YAML().dump()`. If comments are lost, reconstruct from memory or git history — don't leave the config bare.
 
 **Config:**
 ```yaml
@@ -1308,7 +1365,21 @@ hermes memory off      # Disable external provider
 
 **Memory limits are tight by default** (2200 chars for MEMORY.md, 1375 for USER.md). If filling up: increase limits in config (`memory_char_limit`, `user_char_limit`) or add an external provider for depth.
 
-**Context file limits are hardcoded** — SOUL.md, AGENTS.md, .hermes.md, CLAUDE.md, and .cursorrules all share a **20,000 character hard limit** in `_truncate_content()` (agent/prompt_builder.py). This is NOT configurable via config.yaml — only MEMORY.md and USER.md have adjustable limits. Truncation uses a head/tail strategy: preserves 70% of the beginning and 20% of the end, with a marker indicating the removed middle section. Example truncation message: `[...truncated AGENTS.md: kept 14000+4000 of 25000 chars. Use file tools to read the full file.]`. SKILL.md has a separate 100,000 char limit with a 1,024 char description limit.
+**Context file loading uses two systems** — see `references/context-files.md` for the full mechanism, cross-tool compatibility (Hermes/Cursor/Claude Code), and recommendations.
+
+**System 1: Startup Context** (loaded once at session start, system prompt). Priority is **first-match-wins** — only ONE source is loaded:
+1. `.hermes.md` / `HERMES.md` (walks cwd → git root, highest priority)
+2. `AGENTS.md` / `agents.md` (cwd only)
+3. `CLAUDE.md` / `claude.md` (cwd only)
+4. `.cursorrules` + `.cursor/rules/*.mdc` (cwd only, all .mdc loaded together)
+
+If `.hermes.md` is found, `AGENTS.md`/`CLAUDE.md`/`.cursorrules` are silently skipped. Do NOT place both in the same project.
+
+**System 2: Subdirectory Hints** (loaded on-demand when tools access files in new dirs). Searches for `AGENTS.md`/`CLAUDE.md`/`.cursorrules` in ancestor dirs (up to 5 levels). Loads ALL found hints (not first-match-wins). Truncated to 8,000 chars. Does NOT search for `.hermes.md`. Injected as tool-result suffix, NOT in system prompt.
+
+**Recommendation:** Use `AGENTS.md` — it's the only format natively supported by all three systems (Hermes, Cursor, Claude Code). Hermes does NOT have `/init` to auto-generate project context (Claude Code does).
+
+**Startup context files have a 20,000 char hard limit** in `_truncate_content()` (70% head / 20% tail / 10% marker). Subdirectory hints have an 8,000 char limit. Neither is configurable via config.yaml — only MEMORY.md and USER.md have adjustable limits. SKILL.md has a separate 100,000 char limit with a 1,024 char description limit.
 
 Full memory provider comparison, Hindsight configuration, and `reflect` vs `recall` explanation: see `references/auxiliary-models.md`.
 

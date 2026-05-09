@@ -208,6 +208,10 @@ Success criteria:
 - Command exits without provider/model errors
 - For code tasks: expected files changed and tests pass
 
+## Reference Files
+
+- `references/testing-anthopic-proxies.md` — How to verify custom Anthropic API proxy endpoints (custom baseURL, model IDs, thinking support).
+
 ## Rules
 
 1. Prefer `opencode run` for one-shot automation — it's simpler and doesn't need pty.

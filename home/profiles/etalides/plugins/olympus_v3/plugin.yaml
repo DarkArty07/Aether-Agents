@@ -1,0 +1,9 @@
+name: olympus_v3
+version: 0.1.0
+description: "Olympus v3 observability plugin — writes per-turn data to SQLite for MCP polling. Registers post_llm_call, post_tool_call, on_session_end, pre_llm_call hooks."
+author: Aether Agents
+hooks:
+  - post_llm_call
+  - post_tool_call
+  - on_session_end
+  - pre_llm_call

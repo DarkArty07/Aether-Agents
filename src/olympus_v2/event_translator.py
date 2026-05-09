@@ -477,28 +477,38 @@ def _translate_agent_end(event: dict[str, Any], buffer: SessionBuffer) -> dict[s
     """
     buffer.is_done = True
 
-    # If we don't have a final response yet, try extracting from messages array
-    # Walk backwards to find the last assistant message with text content
-    if not buffer.final_response:
-        # First try last_turn_response (clean, from turn_end)
-        if buffer.last_turn_response:
-            buffer.final_response = buffer.last_turn_response
-        else:
-            # Fallback: extract from agent_end messages array
-            messages = event.get("messages", [])
-            if isinstance(messages, list) and messages:
-                for msg in reversed(messages):
-                    if isinstance(msg, dict) and msg.get("role") == "assistant":
-                        content = msg.get("content", [])
-                        if isinstance(content, list):
-                            extracted = _extract_text_from_content(content)
-                            if extracted:
-                                buffer.last_turn_response = extracted
-                                buffer.final_response = extracted
-                                break
-            # Last fallback: accumulated_text from current turn only
-            if not buffer.final_response and buffer.accumulated_text:
-                buffer.final_response = buffer.accumulated_text
+    # CANONICAL RESPONSE EXTRACTION: agent_end.messages is the single source of truth.
+    # It contains ALL messages from the session with clear roles:
+    #   role="assistant" → model-generated text (what we want)
+    #   role="toolResult" → tool execution output (SKIP — can be 48K+ chars of noise)
+    #   role="user" → user messages (skip)
+    #
+    # We ALWAYS check agent_end.messages first, regardless of what last_turn_response
+    # says (last_turn_response from message_end/turn_end can contain tool output
+    # for models like kimi-k2.6 and mimo-v2-omni that don't produce text_delta after tools).
+    messages = event.get("messages", [])
+    canonical_text = ""
+    if isinstance(messages, list) and messages:
+        # Walk BACKWARDS to find the LAST assistant message with substantive text
+        for msg in reversed(messages):
+            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    extracted = _extract_text_from_content(content)
+                    if extracted:
+                        canonical_text = extracted
+                        break
+
+    if canonical_text:
+        # Canonical source found — override any potentially contaminated buffers
+        buffer.last_turn_response = canonical_text
+        buffer.final_response = canonical_text
+    elif buffer.last_turn_response:
+        # No text in agent_end.messages? Fall back to turn_end extraction
+        buffer.final_response = buffer.last_turn_response
+    elif buffer.accumulated_text:
+        # Last resort: accumulated_text from current turn
+        buffer.final_response = buffer.accumulated_text
 
     return {
         "status": "done",

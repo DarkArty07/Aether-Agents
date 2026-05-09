@@ -2,6 +2,62 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.6.0] - 2026-05-09
+
+### 🔥 Architecture: Pi Agent RPC → ACP + Plugin Hooks + SQLite (Olympus v3)
+
+Replaced Pi Agent RPC with Olympus v3: ACP protocol for session lifecycle, hermes-agent plugin hooks for per-turn observability, and SQLite as the shared data channel between Daimon and orchestrator.
+
+### Why This Change
+
+Pi Agent was a black box: `prompt → black box → agent_end`. We could OBSERVE events but not CONTROL them. Two critical problems:
+
+1. **No per-turn visibility:** Pi Agent's `agent_end` event did not guarantee a text response. Daimons frequently completed sessions without synthesizing their analysis. The `event_translator.py` was fragile and required constant patches for different model behaviors (kimi-k2.6, mimo-v2-omni).
+
+2. **No controllability:** The only real control endpoints were `prompt` (send message) and `agent_end` (session over). We could not inject steering directives, audit tool calls in real-time, or guarantee session completion.
+
+Olympus v3 solves both by moving observability INTO the agent process via plugin hooks:
+
+| Feature | Pi Agent RPC (v2) | Olympus v3 (ACP + Plugin + SQLite) |
+|---------|-------------------|--------------------------------------|
+| Per-turn visibility | Accumulated buffer (fragile) | `post_llm_call` hook writes each turn to SQLite |
+| Tool audit trail | Partial (Bug B: always 0) | `post_tool_call` hook captures every invocation |
+| Session completion | `agent_end` not guaranteed | `on_session_end` always fires |
+| Mid-conversation steering | Impossible | `pre_llm_call` reads steering directives from SQLite |
+| Response extraction | Fragile (3 fallback sources) | Canonical: `agent_end.messages` → SQLite turn |
+| Protocol | Pi JSONL (typed but black-box) | ACP (standard) + Plugin (inside agent) + SQLite (shared) |
+
+### What's New
+
+- **Olympus v3 MCP server** (`src/olympus_v3/`): talk_to, discover, consult via ACP
+- **Plugin hooks** (`olympus_v3_hooks/`): 4 hooks (post_llm_call, post_tool_call, on_session_end, pre_llm_call)
+- **SQLite persistence** (`db.py`): 4 tables (sessions, turns, tool_calls, steering) with WAL mode
+- **ACP Manager** (`acp_manager.py`): spawns hermes-agent processes as ACP servers
+- **Consult workflow** (`consult_action.py`): migrated from v2, uses ACPManager + SQLite
+- **Config loader** (`config_loader.py`): discovers 7 Daimon profiles from AETHER_HOME
+- **Ictinus**: New Level 1 Consultant (Backend Architect)
+- **Write restrictions** restored: file-write in disabled_toolsets + pre_tool_call hook
+
+### Breaking Changes
+
+- Pi Agent config (`.pi/` directories) is NO LONGER USED — replaced by hermes-agent profiles
+- `event_translator.py` and `pi_adapter.py` removed from v3 (kept in v2 for rollback)
+- DB path unified: AETHER_HOME/.olympus/olympus_v3.db (not HERMES_HOME)
+
+### Migration
+
+1. Install olympus_v3 plugin in each Daimon profile
+2. Enable `olympus_v3` MCP server in Hermes config
+3. Set `plugins.enabled: [olympus_v3]` in each Daimon config
+4. Restart gateway: `systemctl --user restart hermes-gateway-hermes`
+
+### Full Commit History
+
+- f3dfc07: feat: olympus v3 implementation (T1-T7)
+- 153e0d3: fix: restore write restrictions (T8)
+- eb3ff1f: feat: olympus v3 improvements - stale session cleanup + DB path unification
+- c49418d: docs: update PLAN.md with full implementation status
+
 ## [0.5.0] - 2026-05-07
 
 ### 🔥 Breaking Change: ACP → Pi Agent RPC
@@ -125,3 +181,6 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 - `home/.pi-daimons/daedalus/` — Pi config (SYSTEM.md, settings.json, extension)
 - `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
 - `.gitignore` — Removed old profile-level pi-daimons entry
+
+[0.6.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.5.1...v0.6.0
+[0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0

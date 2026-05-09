@@ -50,3 +50,7 @@ approvals:
 # Auto-approve subagent commands — hefesto delegates to Ergates
 delegation:
   subagent_auto_approve: true
+# Olympus v3 observability plugin
+plugins:
+  enabled:
+    - olympus_v3
