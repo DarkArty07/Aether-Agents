@@ -71,6 +71,7 @@ class SessionInfo:
     session_id: str
     agent_name: str
     acp_session_id: str | None = None
+    project_root: str | None = None  # cwd used for session, needed for .aether_home
     status: str = "active"  # active, completed, error, cancelled
 
 
@@ -220,7 +221,7 @@ class ACPManager:
             logger.info("Reusing existing agent %s (idle)", agent_name)
         else:
             # Spawn new process
-            await self._spawn_process(agent)
+            await self._spawn_process(agent, project_root=project_root)
 
         # Create ACP session
         if agent.connection is None:
@@ -238,6 +239,7 @@ class ACPManager:
             session_id=sid,
             agent_name=agent_name,
             acp_session_id=acp_session_id,
+            project_root=cwd,
         )
         self.sessions[sid] = session
         agent.acp_session_ids[sid] = acp_session_id
@@ -254,7 +256,7 @@ class ACPManager:
         logger.info("Session opened: %s (ACP: %s) on agent %s", sid, acp_session_id, agent_name)
         return sid
 
-    async def _spawn_process(self, agent: AgentState) -> None:
+    async def _spawn_process(self, agent: AgentState, project_root: str | None = None) -> None:
         """Spawn a hermes-agent process with ACP server mode."""
         hermes_bin = (
             shutil.which("hermes")
@@ -270,10 +272,11 @@ class ACPManager:
         env_extra = {
             "HERMES_HOME": str(agent.profile_path),
         }
-        # AETHER_HOME is critical for shared DB path resolution
-        aether_home = os.environ.get("AETHER_HOME")
-        if aether_home:
-            env_extra["AETHER_HOME"] = aether_home
+        # AETHER_HOME: always set to project_root (cwd of the session)
+        # This ensures Daimon plugin hooks can find .aether/ regardless of
+        # whether the server has AETHER_HOME in its own environment.
+        aether_home = project_root or os.environ.get("AETHER_HOME") or str(Path.cwd())
+        env_extra["AETHER_HOME"] = str(aether_home)
         # PYTHONPATH so the Daimon process can import olympus_v3 modules (plugin hooks)
         pythonpath = os.environ.get("PYTHONPATH", "")
         src_dir = str(Path(__file__).parent.parent)  # olympus_v3/src -> src
@@ -407,6 +410,15 @@ class ACPManager:
             logger.debug("Wrote .olympus_db_path for %s: %s", agent.name, db_path)
         except Exception as e:
             logger.warning("Failed to write .olympus_db_path for %s: %s", agent.name, e)
+
+        # Write .aether_home so Daimon plugin hooks can find the project root
+        try:
+            aether_home_value = session.project_root or os.environ.get("AETHER_HOME") or str(Path.cwd().resolve())
+            aether_home_file = Path(agent.profile_path) / ".aether_home"
+            aether_home_file.write_text(aether_home_value)
+            logger.debug("Wrote .aether_home for %s: %s", agent.name, aether_home_value)
+        except Exception as e:
+            logger.warning("Failed to write .aether_home for %s: %s", agent.name, e)
 
         # Send prompt as background task
         async def _run_prompt():

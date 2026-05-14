@@ -50,3 +50,4 @@ approvals:
 plugins:
   enabled:
     - olympus_v3
+    - aether

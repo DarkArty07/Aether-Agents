@@ -1,0 +1,10 @@
+name: aether
+version: 0.1.0
+description: "Aether continuity plugin — project state injection and auto-capture via hooks. Provides hot start context to Daimons."
+author: Aether Agents
+hooks:
+  - on_session_start
+  - post_tool_call
+  - on_post_llm_call
+  - on_session_end
+  - pre_llm_call
