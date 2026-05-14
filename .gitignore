@@ -125,3 +125,6 @@ home/profiles/hermes/olympus_v2/
 
 # Old pi-daimons location (moved to home/.pi-daimons/)
 home/profiles/hermes/.pi-daimons/
+
+# Auto-generated observations
+.aether/OBSERVATIONS.md
