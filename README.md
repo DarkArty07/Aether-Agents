@@ -2,6 +2,9 @@
 
 [![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through ACP sessions with plugin-powered observability and Human-in-the-Loop approval gates.
 
