@@ -1,6 +1,6 @@
 [project]
 name = "olympus-mcp"
-version = "0.4.0"
+version = "0.7.0"
 description = "Olympus MCP Server — Aether Agents orchestrator. Manages Daimon lifecycle and inter-agent communication via ACP."
 license = "MIT"
 requires-python = ">=3.11"
@@ -8,11 +8,15 @@ authors = [
     { name = "Christopher (DarkArty07)" },
 ]
 readme = "README.md"
-keywords = ["multi-agent", "mcp", "ai", "orchestration"]
+keywords = ["multi-agent", "mcp", "ai", "orchestration", "daimons", "aether"]
 classifiers = [
-        "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Intended Audience :: Developers",
 ]
 dependencies = [
     "mcp>=1.0.0",
@@ -21,6 +25,9 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=2.0.0",
     "pyyaml>=6.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4"]
 
 [project.scripts]
 olympus = "olympus.server:main"
@@ -35,3 +42,23 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 olympus = ["py.typed"]
+
+[project.urls]
+Homepage = "https://github.com/DarkArty07/Aether-Agents"
+Documentation = "https://github.com/DarkArty07/Aether-Agents#readme"
+Repository = "https://github.com/DarkArty07/Aether-Agents"
+Changelog = "https://github.com/DarkArty07/Aether-Agents/blob/main/CHANGELOG.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
