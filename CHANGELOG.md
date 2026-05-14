@@ -2,6 +2,60 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.7.0] - 2026-05-14
+
+### 🔥 .aether — Project Continuity System
+
+Three-layer architecture for providing hot start context to Daimons. When Hermes delegates to a Daimon, the only context the Daimon receives is the prompt string. If Hermes doesn't include enough context, the Daimon works blind. `.aether` solves this by automatically capturing, curating, and injecting project context.
+
+| Layer | Component | What it does |
+|-------|-----------|--------------|
+| 1. Capture | Plugin hooks | Automatically capture session data, file changes, decisions, issues in `aether.db` |
+| 2. Curation | Ariadna via `aether_curate` | Synthesize aether.db into readable `.aether/CONTEXT.md` (5 sections, max 1500 chars) |
+| 3. Injection | `pre_llm_call` hook | On first turn, inject `[.aether Context]` into Daimon if CONTEXT.md exists |
+
+### Why This Change
+
+Session crossover bugs occurred when Hermes delegated to a Daimon — the Daimon had no project identity and could respond about the wrong project. The `.eter/` system (Scrum Master, CURRENT.md, LOG.md) was manual and never maintained. `.aether` replaces `.eter/` with an automated 3-layer system that ensures Daimons always know what project they're in.
+
+### What's New
+
+- **aether_db.py** (689 lines): 5 tables (hot_state, sessions, file_changes, decisions, issues), async + sync DB classes, `get_aether_db_path()` with 3-tier resolution
+- **aether_hooks/hooks.py** (511 lines): 5 hooks — `pre_llm_call` (injects CONTEXT.md on first turn), `on_session_start`, `post_tool_call`, `on_post_llm_call`, `on_session_end`
+- **3 MCP tools for Hermes**: `aether_status` (read state), `aether_update` (7 intentional update actions), `aether_curate` (invoke Ariadna to synthesize CONTEXT.md)
+- **Plugin in 6 Daimons**: hefesto, etalides, ariadna, daedalus, athena, ictinus (NOT Hermes)
+- **Ariadna reworked**: From Scrum Master (200+ lines, .eter/, CURRENT.md, sprints) to Context Curator (~73 lines, .aether/CONTEXT.md, 5 sections, 1500 chars max)
+- **Hermes SOUL.md**: §3 .eter/ → .aether/, §4 full .aether 3-layer architecture, §6/§10/§11 updated
+- **acp_manager.py**: Always passes `AETHER_HOME` to Daimon. `SessionInfo.project_root` added. `.aether_home` writes project_root
+- **talk_to schema**: New `project_root` parameter
+- **CONTEXT_SCHEMA.md**: 5-section convention, max 1500 chars
+- **AGENTS.md**: Git conventions + .aether documentation
+
+### Breaking Changes
+
+- `.eter/` NO LONGER USED — replaced by `.aether/` (gitignored, project-local)
+- Ariadna: Scrum Master → Context Curator. CURRENT.md/LOG.md workflow removed
+- Raw `hot_start` injection removed — if no CONTEXT.md, no injection (no raw fallback)
+- Session management: `delegate ariadna` → MCP tools (`aether_status`, `aether_update`, `aether_curate`)
+
+### Bugs Fixed
+
+- **AETHER_HOME not passed to Daimon**: Only passed if in server env. Now always set with project_root > env > cwd priority
+- **`.aether_home` wrote wrong path**: Used `Path.cwd()` instead of `session.project_root`. Fixed
+- **CONTEXT.md staleness race condition**: Hooks updated `updated_at` after curate, marking CONTEXT.md as stale immediately. Fix: removed staleness check — CONTEXT.md always injected if exists
+
+### Migration
+
+1. Run `aether_curate(project_root="/path/to/project")` to generate initial CONTEXT.md
+2. Use `aether_status` / `aether_update` instead of delegating to Ariadna
+3. Remove `.eter/` directories (no longer used)
+4. Plugin auto-creates `.aether/aether.db` on first Daimon session
+
+### Full Commit History
+
+- 3d17a3c: feat: add .aether continuity system — 3-layer architecture for Daimon context injection
+- 3b89281: Merge pull request #11 from DarkArty07/feature/aether-continuity
+
 ## [0.6.0] - 2026-05-09
 
 ### 🔥 Architecture: Pi Agent RPC → ACP + Plugin Hooks + SQLite (Olympus v3)
@@ -182,5 +236,6 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 - `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
 - `.gitignore` — Removed old profile-level pi-daimons entry
 
+[0.7.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.5.1...v0.6.0
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
