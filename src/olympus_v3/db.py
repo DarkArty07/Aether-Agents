@@ -399,39 +399,28 @@ class OlympusDB:
             - last_turn: latest assistant turn content (or None)
             - last_reasoning: latest reasoning content (or None)
         """
-        # Session status
-        session = await self.get_session(session_id)
-        status = session["status"] if session else "unknown"
-
-        # Count turns
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-            (session_id,),
+            """
+            SELECT
+                (SELECT status FROM sessions WHERE session_id = ?) as status,
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant') as thoughts,
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != '') as messages,
+                (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?) as tool_calls,
+                (SELECT content FROM turns WHERE session_id = ? AND role = 'assistant' ORDER BY turn_num DESC LIMIT 1) as last_turn,
+                (SELECT reasoning FROM turns WHERE session_id = ? AND role = 'assistant' ORDER BY turn_num DESC LIMIT 1) as last_reasoning
+            """,
+            (session_id, session_id, session_id, session_id, session_id, session_id),
         )
-        thoughts = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
 
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
-
-        # Count tool calls
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-        )
-        tool_calls_count = (await cursor.fetchone())[0]
-
-        # Latest turn
-        latest = await self.get_latest_turn(session_id)
-
+        # Optimization: use a single query instead of 5 separate ones.
         return {
-            "thoughts": thoughts,
-            "messages": messages,
-            "tool_calls": tool_calls_count,
-            "status": status,
-            "last_turn": latest["content"] if latest else None,
-            "last_reasoning": latest["reasoning"] if latest else None,
+            "thoughts": row[1] if row else 0,
+            "messages": row[2] if row else 0,
+            "tool_calls": row[3] if row else 0,
+            "status": row[0] if row[0] is not None else "unknown",
+            "last_turn": row[4] if row else None,
+            "last_reasoning": row[5] if row else None,
         }
 
 
@@ -631,47 +620,28 @@ class OlympusDBSync:
         """Get progress summary synchronously."""
         conn = self._connect()
         try:
-            # Session status
             cursor = conn.execute(
-                "SELECT status FROM sessions WHERE session_id = ?", (session_id,)
+                """
+                SELECT
+                    (SELECT status FROM sessions WHERE session_id = ?) as status,
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant') as thoughts,
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != '') as messages,
+                    (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?) as tool_calls,
+                    (SELECT content FROM turns WHERE session_id = ? AND role = 'assistant' ORDER BY turn_num DESC LIMIT 1) as last_turn,
+                    (SELECT reasoning FROM turns WHERE session_id = ? AND role = 'assistant' ORDER BY turn_num DESC LIMIT 1) as last_reasoning
+                """,
+                (session_id, session_id, session_id, session_id, session_id, session_id),
             )
             row = cursor.fetchone()
-            status = row[0] if row else "unknown"
 
-            # Count turns
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-                (session_id,),
-            )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
-
-            # Count tool calls
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-            )
-            tool_calls_count = cursor.fetchone()[0]
-
-            # Latest turn
-            cursor = conn.execute(
-                "SELECT content, reasoning FROM turns WHERE session_id = ? AND role = 'assistant' "
-                "ORDER BY turn_num DESC LIMIT 1",
-                (session_id,),
-            )
-            latest = cursor.fetchone()
-
+            # Optimization: use a single query instead of 5 separate ones.
             return {
-                "thoughts": thoughts,
-                "messages": messages,
-                "tool_calls": tool_calls_count,
-                "status": status,
-                "last_turn": latest[0] if latest else None,
-                "last_reasoning": latest[1] if latest else None,
+                "thoughts": row[1] if row else 0,
+                "messages": row[2] if row else 0,
+                "tool_calls": row[3] if row else 0,
+                "status": row[0] if row[0] is not None else "unknown",
+                "last_turn": row[4] if row else None,
+                "last_reasoning": row[5] if row else None,
             }
         finally:
             conn.close()

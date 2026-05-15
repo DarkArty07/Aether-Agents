@@ -1,0 +1,3 @@
+## 2024-05-15 - DB Progress Polling Optimization
+**Learning:** Performing multiple sequential database queries (`execute()`) in async Python code loops creates significant overhead due to both database roundtrips and asyncio event loop yielding. A single SQLite query with multiple sub-selects executes ~100x faster than 5 separate queries for progress tracking.
+**Action:** When aggregating multiple metrics or values from different tables for a single object (like a session progress state), always prefer one query with scalar sub-selects over executing multiple consecutive queries. Ensure fallback behavior handles truthy unpopulated tuples properly (e.g., `row[0] is not None` instead of just `row`).
