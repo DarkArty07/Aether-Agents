@@ -6,7 +6,7 @@ Replace Olympus v2 (Pi Agent RPC) with v3 (ACP + Plugin hooks + SQLite). Single 
 
 **Design doc:** src/olympus_v3/DESIGN.md
 **Codebase:** src/olympus_v3/
-**Existing v2 code:** src/olympus_v2/ (3,735 lines across 7 files)
+**Existing v2 code:** src/olympus_v3/ (3,735 lines across 7 files)
 **Existing v1 code:** git commit 732f60f, src/olympus/ (acp_client.py 450+ lines reusable)
 
 ## Implementation Order
@@ -231,10 +231,10 @@ After T7 passes:
 
 | File | Lines | Reason |
 |------|-------|--------|
-| src/olympus_v2/pi_adapter.py | 438 | Replaced by acp_manager.py |
-| src/olympus_v2/event_translator.py | 549 | Replaced by SQLite + hooks |
-| src/olympus_v2/soul_to_system.py | 163 | Daimons use hermes-agent SOUL.md |
-| src/olympus_v2/config_loader.py | 257 | Replaced by v3 config_loader |
+| src/olympus_v3/pi_adapter.py | 438 | Replaced by acp_manager.py |
+| src/olympus_v3/event_translator.py | 549 | Replaced by SQLite + hooks |
+| src/olympus_v3/soul_to_system.py | 163 | Daimons use hermes-agent SOUL.md |
+| src/olympus_v3/config_loader.py | 257 | Replaced by v3 config_loader |
 
 **Keep:** consulting_db.py (moves to v3 unchanged)
 

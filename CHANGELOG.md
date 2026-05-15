@@ -226,9 +226,9 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 
 ### Files Changed
 
-- `src/olympus_v2/server.py` — delegate action, buffer reset, truncation, progress metadata, error messages
-- `src/olympus_v2/event_translator.py` — tool name fallbacks, progress metadata builder
-- `src/olympus_v2/pi_adapter.py` — get_state, multi-turn fixes, session-dir support
+- `src/olympus_v3/server.py` — delegate action, buffer reset, truncation, progress metadata, error messages
+- `src/olympus_v3/event_translator.py` — tool name fallbacks, progress metadata builder
+- `src/olympus_v3/pi_adapter.py` — get_state, multi-turn fixes, session-dir support
 - `home/profiles/hermes/SOUL.md` — HARD RULES, delegation checkpoint, anti-patterns
 - `home/.pi-daimons/ariadna/` — Pi config (SYSTEM.md, settings.json, extension)
 - `home/.pi-daimons/athena/` — Pi config (SYSTEM.md, settings.json, extension)
