@@ -12,6 +12,7 @@ home/sessions/
 home/logs/
 home/plugins/
 home/.cache/
+home/.olympus/
 home/active_profile
 home/bin/
 **/sessions/
@@ -127,4 +128,4 @@ home/profiles/hermes/olympus_v2/
 home/profiles/hermes/.pi-daimons/
 
 # Auto-generated observations
-.aether/OBSERVATIONS.md
+.aether/
