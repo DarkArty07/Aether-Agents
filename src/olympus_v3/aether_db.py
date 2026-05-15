@@ -152,6 +152,47 @@ def get_aether_db_path() -> Path:
     return Path.cwd() / ".aether" / "aether.db"
 
 
+def resolve_aether_db(project_root: str) -> Path:
+    """Resolve aether database path from project_root.
+
+    Used by MCP tools (aether_status, aether_update, aether_curate) to
+    ensure each project reads/writes its own database. Unlike
+    get_aether_db_path() which uses AETHER_HOME, this function always
+    resolves relative to the given project_root.
+
+    Args:
+        project_root: Absolute path to the project root directory.
+
+    Returns:
+        Path to {project_root}/.aether/aether.db
+
+    Auto-creates the .aether/ directory if it doesn't exist.
+    """
+    db_path = Path(project_root) / ".aether" / "aether.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.info("resolve_aether_db: %s", db_path)
+    return db_path
+
+
+def resolve_aether_dir(project_root: str) -> Path:
+    """Resolve the .aether/ directory path from project_root.
+
+    Convenience function that returns just the .aether/ directory
+    without the database filename.
+
+    Args:
+        project_root: Absolute path to the project root directory.
+
+    Returns:
+        Path to {project_root}/.aether/
+
+    Auto-creates the directory if it doesn't exist.
+    """
+    aether_dir = Path(project_root) / ".aether"
+    aether_dir.mkdir(parents=True, exist_ok=True)
+    return aether_dir
+
+
 # ---------------------------------------------------------------------------
 # Async database (for MCP server)
 # ---------------------------------------------------------------------------

@@ -14,7 +14,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from olympus_v3.aether_db import AetherDBSync, get_aether_db_path
+from olympus_v3.acp_manager import ACPManager
+from olympus_v3.aether_db import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
 from olympus_v3.aether_hooks import hooks as hooks_module
 
 
@@ -659,3 +660,389 @@ class TestOnSessionEnd:
         # last_error should be set
         hot_state_kwargs = mock_db.update_hot_state.call_args[1]
         assert hot_state_kwargs["last_error"] == "Session interrupted"
+
+
+# ===========================================================================
+# resolve_aether_db / resolve_aether_dir tests
+# ===========================================================================
+
+
+class TestResolveAetherDB:
+    """Test resolve_aether_db() for project-root-based DB path resolution."""
+
+    def test_returns_correct_path(self, tmp_path: Path) -> None:
+        """resolve_aether_db returns {project_root}/.aether/aether.db."""
+        project_root = str(tmp_path / "myproject")
+        result = resolve_aether_db(project_root)
+        assert result == Path(project_root) / ".aether" / "aether.db"
+
+    def test_creates_aether_directory(self, tmp_path: Path) -> None:
+        """resolve_aether_db auto-creates .aether/ if it doesn't exist."""
+        project_root = str(tmp_path / "newproject" / "deep")
+        result = resolve_aether_db(project_root)
+        assert (Path(project_root) / ".aether").is_dir()
+
+    def test_path_with_spaces(self, tmp_path: Path) -> None:
+        """resolve_aether_db handles paths containing spaces."""
+        project_root = str(tmp_path / "my project" / "with spaces")
+        result = resolve_aether_db(project_root)
+        assert result == Path(project_root) / ".aether" / "aether.db"
+        assert (Path(project_root) / ".aether").is_dir()
+
+    def test_path_with_special_chars(self, tmp_path: Path) -> None:
+        """resolve_aether_db handles paths with special characters."""
+        project_root = str(tmp_path / "proj-foo_bar")
+        result = resolve_aether_db(project_root)
+        assert result == Path(project_root) / ".aether" / "aether.db"
+
+    def test_does_not_use_aether_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """resolve_aether_db ignores AETHER_HOME env var — always uses project_root."""
+        monkeypatch.setenv("AETHER_HOME", "/completely/different/path")
+        project_root = str(tmp_path / "project")
+        result = resolve_aether_db(project_root)
+        # Must resolve to project_root, NOT to AETHER_HOME
+        assert str(result).startswith(project_root)
+        assert "/completely/different/path" not in str(result)
+
+    def test_different_projects_different_dbs(self, tmp_path: Path) -> None:
+        """Different project_roots resolve to different DB paths."""
+        project_a = str(tmp_path / "project-a")
+        project_b = str(tmp_path / "project-b")
+        path_a = resolve_aether_db(project_a)
+        path_b = resolve_aether_db(project_b)
+        assert path_a != path_b
+        assert "project-a" in str(path_a)
+        assert "project-b" in str(path_b)
+
+
+class TestResolveAetherDir:
+    """Test resolve_aether_dir() for project-root-based .aether/ directory."""
+
+    def test_returns_correct_path(self, tmp_path: Path) -> None:
+        project_root = str(tmp_path / "myproject")
+        result = resolve_aether_dir(project_root)
+        assert result == Path(project_root) / ".aether"
+
+    def test_creates_directory(self, tmp_path: Path) -> None:
+        project_root = str(tmp_path / "newproject" / "deep")
+        result = resolve_aether_dir(project_root)
+        assert result.is_dir()
+
+    def test_db_path_inside_dir(self, tmp_path: Path) -> None:
+        """DB path from resolve_aether_db is inside dir from resolve_aether_dir."""
+        project_root = str(tmp_path / "myproject")
+        db_path = resolve_aether_db(project_root)
+        dir_path = resolve_aether_dir(project_root)
+        assert db_path.parent == dir_path
+
+
+# ===========================================================================
+# Multi-project isolation tests
+# ===========================================================================
+
+
+class TestMultiProjectIsolation:
+    """Test that different project_roots lead to completely isolated databases."""
+
+    def test_different_projects_separate_data(self, tmp_path: Path) -> None:
+        """Writes to project A do not appear in project B's DB."""
+        project_a = tmp_path / "project-a"
+        project_b = tmp_path / "project-b"
+
+        db_a = AetherDBSync(db_path=resolve_aether_db(str(project_a)))
+        db_a.ensure_tables()
+        db_b = AetherDBSync(db_path=resolve_aether_db(str(project_b)))
+        db_b.ensure_tables()
+
+        # Write to project A
+        db_a.update_hot_state(project_name="Project A", current_phase="code")
+        db_a.insert_session("sess-a1", agent="hefesto")
+        db_a.insert_decision(title="Use SQLite", decision="SQLite for A")
+
+        # Write to project B
+        db_b.update_hot_state(project_name="Project B", current_phase="idea")
+        db_b.insert_session("sess-b1", agent="ariadna")
+
+        # Verify isolation
+        state_a = db_a.get_hot_state()
+        state_b = db_b.get_hot_state()
+        assert state_a["project_name"] == "Project A"
+        assert state_b["project_name"] == "Project B"
+
+        sessions_a = db_a.get_recent_sessions(limit=10)
+        sessions_b = db_b.get_recent_sessions(limit=10)
+        assert len(sessions_a) == 1
+        assert len(sessions_b) == 1
+        assert sessions_a[0]["session_id"] == "sess-a1"
+        assert sessions_b[0]["session_id"] == "sess-b1"
+
+    def test_db_reads_from_project_root_not_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """resolve_aether_db uses project_root even when AETHER_HOME points elsewhere."""
+        # Set AETHER_HOME to a different location
+        other_home = tmp_path / "other_home"
+        other_home.mkdir()
+        monkeypatch.setenv("AETHER_HOME", str(other_home))
+
+        project_root = str(tmp_path / "myproject")
+        db_path = resolve_aether_db(project_root)
+
+        # Verify the path is under project_root, not AETHER_HOME
+        assert str(db_path).startswith(project_root)
+        assert str(other_home) not in str(db_path)
+
+    def test_reads_write_to_correct_db(self, tmp_path: Path) -> None:
+        """Data written via resolve_aether_db reads back correctly from the same project."""
+        project_root = str(tmp_path / "myproject")
+        db = AetherDBSync(db_path=resolve_aether_db(project_root))
+        db.ensure_tables()
+
+        db.update_hot_state(
+            project_name="IsolationTest",
+            current_phase="test",
+            project_root=project_root,
+        )
+        db.insert_session("sess-iso1", agent="hefesto")
+        db.insert_issue(description="Test issue", error_type="TestError")
+
+        # Read back from same path
+        state = db.get_hot_state()
+        assert state["project_name"] == "IsolationTest"
+        assert state["current_phase"] == "test"
+        assert state["project_root"] == project_root
+
+        sessions = db.get_recent_sessions(limit=10)
+        assert len(sessions) == 1
+        assert sessions[0]["session_id"] == "sess-iso1"
+
+        assert db.get_open_issue_count() == 1
+
+
+# ===========================================================================
+# Hook project_root tests
+# ===========================================================================
+
+
+class TestHookProjectRoot:
+    """Test that on_post_llm_call and on_session_end write project_root to hot_state."""
+
+    def test_post_llm_call_writes_project_root(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+        """on_post_llm_call writes AETHER_HOME as project_root on first turn."""
+        mock_db = fresh_hooks["db"]
+
+        monkeypatch.setenv("AETHER_HOME", "/my/project/root")
+        with patch.object(hooks_module, "_get_session_id", return_value=None):
+            hooks_module.on_post_llm_call(
+                session_id="sess-1",
+                user_message="hello",
+                assistant_response="hi",
+                conversation_history=[],
+                model="gpt-4",
+                platform="openai",
+            )
+
+        # Verify project_root was included in update_hot_state call
+        call_kwargs = mock_db.update_hot_state.call_args[1]
+        assert "project_root" in call_kwargs
+        assert call_kwargs["project_root"] == "/my/project/root"
+
+    def test_post_llm_call_no_project_root_without_aether_home(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+        """on_post_llm_call does not set project_root if AETHER_HOME is not set."""
+        mock_db = fresh_hooks["db"]
+
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+        with patch.object(hooks_module, "_get_session_id", return_value=None):
+            hooks_module.on_post_llm_call(
+                session_id="sess-1",
+                user_message="hello",
+                assistant_response="hi",
+                conversation_history=[],
+                model="gpt-4",
+                platform="openai",
+            )
+
+        call_kwargs = mock_db.update_hot_state.call_args[1]
+        assert "project_root" not in call_kwargs
+
+    def test_session_end_writes_project_root(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+        """on_session_end writes AETHER_HOME as project_root."""
+        mock_db = fresh_hooks["db"]
+        mock_db.get_hot_state.return_value = {"total_sessions": 1}
+
+        monkeypatch.setenv("AETHER_HOME", "/my/project/root")
+        with (
+            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
+            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
+            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
+        ):
+            mock_olympus_cls.side_effect = ImportError("No olympus db")
+            hooks_module.on_session_end(
+                session_id="local-sess-end",
+                completed=True,
+                interrupted=False,
+                model="gpt-4",
+                platform="openai",
+            )
+
+        call_kwargs = mock_db.update_hot_state.call_args[1]
+        assert "project_root" in call_kwargs
+        assert call_kwargs["project_root"] == "/my/project/root"
+
+    def test_session_end_no_project_root_without_aether_home(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+        """on_session_end does not set project_root if AETHER_HOME is not set."""
+        mock_db = fresh_hooks["db"]
+        mock_db.get_hot_state.return_value = {"total_sessions": 1}
+
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+        with (
+            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
+            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
+            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
+        ):
+            mock_olympus_cls.side_effect = ImportError("No olympus db")
+            hooks_module.on_session_end(
+                session_id="local-sess-end",
+                completed=True,
+                interrupted=False,
+                model="gpt-4",
+                platform="openai",
+            )
+
+        call_kwargs = mock_db.update_hot_state.call_args[1]
+        assert "project_root" not in call_kwargs
+
+
+# ===========================================================================
+# PID-suffixed session/home file tests
+# ===========================================================================
+
+
+class TestPIDSessionFiles:
+    """Test that hooks read PID-suffixed files correctly for concurrent Daimon isolation.
+
+    When multiple Daimons share the same HERMES_HOME, PID-suffixed files
+    (.olympus_session.{pid}, .aether_home.{pid}) take priority over their
+    generic counterparts (.olympus_session, .aether_home).
+    """
+
+    def test_session_id_reads_pid_file_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_session_id() reads .olympus_session.{pid} over generic .olympus_session."""
+        pid = os.getpid()
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        # Write PID-suffixed file (priority)
+        pid_file = hermes_home / f".olympus_session.{pid}"
+        pid_file.write_text("olympus-sess-pid-123")
+
+        # Write generic file (should be ignored when PID file exists)
+        generic_file = hermes_home / ".olympus_session"
+        generic_file.write_text("olympus-sess-generic")
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
+
+        # Reset module-level cached session ID
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+        result = hooks_module._get_session_id()
+        assert result == "olympus-sess-pid-123"
+
+        # Cleanup module state
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+    def test_session_id_falls_back_to_generic(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_session_id() falls back to generic .olympus_session when no PID file exists."""
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        # Write generic file only (no PID file)
+        generic_file = hermes_home / ".olympus_session"
+        generic_file.write_text("olympus-sess-generic")
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
+
+        # Reset module-level cached session ID
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+        result = hooks_module._get_session_id()
+        assert result == "olympus-sess-generic"
+
+        # Cleanup module state
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+    def test_aether_db_reads_pid_home_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_aether_db() reads .aether_home.{pid} and uses its path over standard resolution."""
+        pid = os.getpid()
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        project_path = tmp_path / "my_project"
+        project_path.mkdir()
+
+        # Write PID-suffixed .aether_home file pointing to project path
+        pid_home_file = hermes_home / f".aether_home.{pid}"
+        pid_home_file.write_text(str(project_path))
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+
+        # Reset module-level cached DB
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+        db = hooks_module._get_aether_db()
+        expected_db_path = project_path / ".aether" / "aether.db"
+        assert db.db_path == expected_db_path
+
+        # Cleanup module state
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+    def test_aether_db_falls_back_to_standard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_aether_db() falls back to standard get_aether_db_path() when no PID home file exists."""
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+
+        # Reset module-level cached DB
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+        # No .aether_home.{pid} and no .aether_home file — should fall back to cwd
+        db = hooks_module._get_aether_db()
+        expected_path = Path.cwd() / ".aether" / "aether.db"
+        assert db.db_path == expected_path
+
+        # Cleanup module state
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+
+# ===========================================================================
+# Keyed agent key tests
+# ===========================================================================
+
+
+class TestKeyedAgentKey:
+    """Test ACPManager._agent_key() — the compound key for multi-project isolation."""
+
+    def test_agent_key_with_project_root(self) -> None:
+        """_agent_key with a project_root returns (name, project_root)."""
+        key = ACPManager._agent_key("hefesto", "/project/A")
+        assert key == ("hefesto", "/project/A")
+
+    def test_agent_key_without_project_root(self) -> None:
+        """_agent_key with None project_root returns (name, empty string)."""
+        key = ACPManager._agent_key("hefesto", None)
+        assert key == ("hefesto", "")
+
+    def test_different_projects_different_keys(self) -> None:
+        """Different project_roots produce different keys for the same agent."""
+        key_a = ACPManager._agent_key("hefesto", "/project/A")
+        key_b = ACPManager._agent_key("hefesto", "/project/B")
+        assert key_a != key_b
+
+    def test_same_project_same_key(self) -> None:
+        """Same agent + project_root produces the same key (dict lookup works)."""
+        key1 = ACPManager._agent_key("hefesto", "/project/A")
+        key2 = ACPManager._agent_key("hefesto", "/project/A")
+        assert key1 == key2
