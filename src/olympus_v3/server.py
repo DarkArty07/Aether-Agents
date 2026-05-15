@@ -532,22 +532,19 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
                     "SELECT * FROM decisions ORDER BY created_at DESC LIMIT 5"
                 )
                 rows = await cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                recent_decisions = [dict(zip(columns, row)) for row in rows]
+                recent_decisions = [dict(row) for row in rows]
 
                 cursor = await db._execute(
                     "SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC"
                 )
                 rows = await cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                open_issues = [dict(zip(columns, row)) for row in rows]
+                open_issues = [dict(row) for row in rows]
 
                 cursor = await db._execute(
                     "SELECT * FROM issues ORDER BY created_at DESC LIMIT 5"
                 )
                 rows = await cursor.fetchall()
-                columns = [desc[0] for desc in cursor.description]
-                recent_issues = [dict(zip(columns, row)) for row in rows]
+                recent_issues = [dict(row) for row in rows]
 
                 result = {
                     "hot_state": hot_state,
@@ -681,13 +678,11 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 
             cursor = await db._execute("SELECT * FROM decisions WHERE status = 'active' ORDER BY created_at DESC LIMIT 10")
             rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-            decisions = [dict(zip(columns, row)) for row in rows]
+            decisions = [dict(row) for row in rows]
 
             cursor = await db._execute("SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC")
             rows = await cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-            open_issues = [dict(zip(columns, row)) for row in rows]
+            open_issues = [dict(row) for row in rows]
         finally:
             await db.close()
     except Exception as e:
