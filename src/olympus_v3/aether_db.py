@@ -175,6 +175,7 @@ class AetherDB:
         """Open connection, enable WAL, create tables."""
         await self._ensure_dir()
         self._db = await aiosqlite.connect(str(self.db_path))
+        self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA foreign_keys=ON")
         for stmt in _SCHEMA_STMTS:
@@ -205,8 +206,7 @@ class AetherDB:
         row = await cursor.fetchone()
         if row is None:
             return None
-        columns = [desc[0] for desc in cursor.description]
-        return dict(zip(columns, row))
+        return dict(row)
 
     async def update_hot_state(self, **kwargs: Any) -> None:
         """Update hot_state fields.
@@ -299,8 +299,7 @@ class AetherDB:
             (limit,),
         )
         rows = await cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in rows]
+        return [dict(row) for row in rows]
 
     # -------------------------------------------------------------------
     # File changes
@@ -417,6 +416,7 @@ class AetherDBSync:
         """Open a connection with WAL mode."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
@@ -439,7 +439,6 @@ class AetherDBSync:
         """Get the single hot_state row as a dict, or None if empty."""
         conn = self._connect()
         try:
-            conn.row_factory = sqlite3.Row
             cursor = conn.execute("SELECT * FROM hot_state WHERE id = 1")
             row = cursor.fetchone()
             if row is None:
@@ -547,7 +546,6 @@ class AetherDBSync:
         """Get most recent sessions ordered by started_at descending."""
         conn = self._connect()
         try:
-            conn.row_factory = sqlite3.Row
             cursor = conn.execute(
                 "SELECT * FROM sessions ORDER BY started_at DESC LIMIT ?",
                 (limit,),
