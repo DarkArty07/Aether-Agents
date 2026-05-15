@@ -9,12 +9,14 @@ This plugin registers 5 hooks in the hermes-agent lifecycle:
 
 Session ID resolution (priority order):
 1. OLYMPUS_SESSION_ID env var (set at spawn time)
-2. {HERMES_HOME}/.olympus_session file (written by MCP server before each message)
+2. {HERMES_HOME}/.olympus_session.{pid} file (PID-suffixed, concurrent-safe)
+3. {HERMES_HOME}/.olympus_session file (generic, backward compatible)
 
 DB path resolution (priority order):
-1. AETHER_HOME env var → .aether/aether.db
-2. HERMES_HOME parent → .aether_home file → .aether/aether.db
-3. cwd → .aether/aether.db
+1. {HERMES_HOME}/.aether_home.{pid} — PID-suffixed file (concurrent-safe)
+2. AETHER_HOME env var → .aether/aether.db
+3. {HERMES_HOME}/.aether_home file → {path}/.aether/aether.db
+4. cwd → .aether/aether.db
 
 The plugin runs INSIDE the hermes-agent process. It uses synchronous
 sqlite3 (not aiosqlite) because hooks are called synchronously.
@@ -45,9 +47,32 @@ _request: str | None = None
 
 
 def _get_aether_db() -> AetherDBSync:
-    """Lazy-init the sync database connection using get_aether_db_path()."""
+    """Lazy-init the sync database connection using get_aether_db_path().
+
+    Priority for path resolution:
+    1. PID-suffixed .aether_home.{pid} file in HERMES_HOME (concurrent-safe)
+    2. Standard get_aether_db_path() resolution (AETHER_HOME env, .aether_home, cwd)
+    """
     global _aether_db
     if _aether_db is None:
+        # Try PID-suffixed .aether_home file first (concurrent-safe)
+        hermes_home = os.environ.get("HERMES_HOME")
+        if hermes_home:
+            pid = os.getpid()
+            pid_home_file = Path(hermes_home) / f".aether_home.{pid}"
+            if pid_home_file.exists():
+                try:
+                    content = pid_home_file.read_text().strip()
+                    if content:
+                        db_path = Path(content) / ".aether" / "aether.db"
+                        _aether_db = AetherDBSync(db_path=db_path)
+                        _aether_db.ensure_tables()
+                        logger.info(".aether hooks initialized with DB: %s (from PID file)", db_path)
+                        return _aether_db
+                except Exception as e:
+                    logger.debug("Could not read PID aether_home file %s: %s", pid_home_file, e)
+
+        # Fall back to standard resolution
         db_path = get_aether_db_path()
         _aether_db = AetherDBSync(db_path=db_path)
         _aether_db.ensure_tables()
@@ -56,10 +81,13 @@ def _get_aether_db() -> AetherDBSync:
 
 
 def _get_session_id(kwargs: dict[str, Any] | None = None) -> str | None:
-    """Read session ID from env var, file fallback, or kwargs.
+    """Read session ID from env var, PID-suffixed file, generic file, or kwargs.
 
-    Priority: OLYMPUS_SESSION_ID env var > {HERMES_HOME}/.olympus_session file.
-    The MCP server writes the session file before each message.
+    Priority:
+    1. OLYMPUS_SESSION_ID env var
+    2. {HERMES_HOME}/.olympus_session.{pid} — PID-suffixed file (concurrent-safe)
+    3. {HERMES_HOME}/.olympus_session — generic file (backward compatible)
+    4. Previously cached value
     """
     global _session_id
 
@@ -69,8 +97,22 @@ def _get_session_id(kwargs: dict[str, Any] | None = None) -> str | None:
         _session_id = sid
         return sid
 
-    # Priority 2: file fallback
+    # Priority 2: PID-suffixed file (concurrent-safe)
     hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        pid = os.getpid()
+        pid_session_file = Path(hermes_home) / f".olympus_session.{pid}"
+        if pid_session_file.exists():
+            try:
+                content = pid_session_file.read_text().strip()
+                if content:
+                    logger.debug("Read OLYMPUS_SESSION_ID from PID file: %s", content)
+                    _session_id = content
+                    return content
+            except Exception as e:
+                logger.debug("Could not read PID session file %s: %s", pid_session_file, e)
+
+    # Priority 3: generic file (backward compatible)
     if hermes_home:
         session_file = Path(hermes_home) / ".olympus_session"
         try:
@@ -84,7 +126,7 @@ def _get_session_id(kwargs: dict[str, Any] | None = None) -> str | None:
         except Exception as e:
             logger.debug("Could not read session file %s: %s", session_file, e)
 
-    # Priority 3: previously cached value
+    # Priority 4: previously cached value
     if _session_id:
         return _session_id
 

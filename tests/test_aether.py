@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from olympus_v3.acp_manager import ACPManager
 from olympus_v3.aether_db import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
 from olympus_v3.aether_hooks import hooks as hooks_module
 
@@ -908,3 +909,140 @@ class TestHookProjectRoot:
 
         call_kwargs = mock_db.update_hot_state.call_args[1]
         assert "project_root" not in call_kwargs
+
+
+# ===========================================================================
+# PID-suffixed session/home file tests
+# ===========================================================================
+
+
+class TestPIDSessionFiles:
+    """Test that hooks read PID-suffixed files correctly for concurrent Daimon isolation.
+
+    When multiple Daimons share the same HERMES_HOME, PID-suffixed files
+    (.olympus_session.{pid}, .aether_home.{pid}) take priority over their
+    generic counterparts (.olympus_session, .aether_home).
+    """
+
+    def test_session_id_reads_pid_file_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_session_id() reads .olympus_session.{pid} over generic .olympus_session."""
+        pid = os.getpid()
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        # Write PID-suffixed file (priority)
+        pid_file = hermes_home / f".olympus_session.{pid}"
+        pid_file.write_text("olympus-sess-pid-123")
+
+        # Write generic file (should be ignored when PID file exists)
+        generic_file = hermes_home / ".olympus_session"
+        generic_file.write_text("olympus-sess-generic")
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
+
+        # Reset module-level cached session ID
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+        result = hooks_module._get_session_id()
+        assert result == "olympus-sess-pid-123"
+
+        # Cleanup module state
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+    def test_session_id_falls_back_to_generic(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_session_id() falls back to generic .olympus_session when no PID file exists."""
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        # Write generic file only (no PID file)
+        generic_file = hermes_home / ".olympus_session"
+        generic_file.write_text("olympus-sess-generic")
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
+
+        # Reset module-level cached session ID
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+        result = hooks_module._get_session_id()
+        assert result == "olympus-sess-generic"
+
+        # Cleanup module state
+        hooks_module._session_id = None  # type: ignore[attr-defined]
+
+    def test_aether_db_reads_pid_home_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_aether_db() reads .aether_home.{pid} and uses its path over standard resolution."""
+        pid = os.getpid()
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        project_path = tmp_path / "my_project"
+        project_path.mkdir()
+
+        # Write PID-suffixed .aether_home file pointing to project path
+        pid_home_file = hermes_home / f".aether_home.{pid}"
+        pid_home_file.write_text(str(project_path))
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+
+        # Reset module-level cached DB
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+        db = hooks_module._get_aether_db()
+        expected_db_path = project_path / ".aether" / "aether.db"
+        assert db.db_path == expected_db_path
+
+        # Cleanup module state
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+    def test_aether_db_falls_back_to_standard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """_get_aether_db() falls back to standard get_aether_db_path() when no PID home file exists."""
+        hermes_home = tmp_path / "hermes_home"
+        hermes_home.mkdir()
+
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+        monkeypatch.delenv("AETHER_HOME", raising=False)
+
+        # Reset module-level cached DB
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+        # No .aether_home.{pid} and no .aether_home file — should fall back to cwd
+        db = hooks_module._get_aether_db()
+        expected_path = Path.cwd() / ".aether" / "aether.db"
+        assert db.db_path == expected_path
+
+        # Cleanup module state
+        hooks_module._aether_db = None  # type: ignore[attr-defined]
+
+
+# ===========================================================================
+# Keyed agent key tests
+# ===========================================================================
+
+
+class TestKeyedAgentKey:
+    """Test ACPManager._agent_key() — the compound key for multi-project isolation."""
+
+    def test_agent_key_with_project_root(self) -> None:
+        """_agent_key with a project_root returns (name, project_root)."""
+        key = ACPManager._agent_key("hefesto", "/project/A")
+        assert key == ("hefesto", "/project/A")
+
+    def test_agent_key_without_project_root(self) -> None:
+        """_agent_key with None project_root returns (name, empty string)."""
+        key = ACPManager._agent_key("hefesto", None)
+        assert key == ("hefesto", "")
+
+    def test_different_projects_different_keys(self) -> None:
+        """Different project_roots produce different keys for the same agent."""
+        key_a = ACPManager._agent_key("hefesto", "/project/A")
+        key_b = ACPManager._agent_key("hefesto", "/project/B")
+        assert key_a != key_b
+
+    def test_same_project_same_key(self) -> None:
+        """Same agent + project_root produces the same key (dict lookup works)."""
+        key1 = ACPManager._agent_key("hefesto", "/project/A")
+        key2 = ACPManager._agent_key("hefesto", "/project/A")
+        assert key1 == key2
