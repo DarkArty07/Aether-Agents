@@ -462,7 +462,7 @@ known_plugin_toolsets:
 custom_providers:
 - name: aiprimetech
   base_url: https://aiprimetech.io
-  api_key: sk-a4dac0663b6f416ce99799c578f43387478c004810f7323d2874d239f716aaa3
+  api_key: ${AIPRIMETECH_API_KEY}
   api_mode: anthropic_messages
   models:
     claude-sonnet-4-6:

@@ -1,9 +1,12 @@
 # Aether Agents
 
-[![Version](https://img.shields.io/badge/version-0.6.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through typed RPC workflows with Human-in-the-Loop approval gates.
+A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through ACP sessions with plugin-powered observability and Human-in-the-Loop approval gates.
 
 ---
 
@@ -16,79 +19,67 @@ IDEA → RESEARCH → DESIGN → PLAN → CODE
 ```
 
 - **Hermes** — The orchestrator. Uses Hermes Agent (MCP, memory, skills) to route tasks, synthesize output, and manage workflows.
-- **5 Daimons** — Specialized sub-agents that execute within their domain.
-- **Olympus v2** — MCP server that bridges Hermes to Daimons. Same `talk_to` interface, backend-agnostic.
+- **6 Daimons** — Specialized sub-agents that execute within their domain.
+- **Olympus v3** — MCP server that bridges Hermes to Daimons via ACP + Plugin Hooks + SQLite.
 
 **Communication stack:**
-- Hermes ↔ **MCP** ↔ Olympus v2 ↔ **Pi Agent RPC** ↔ Daimon subprocess
+- Hermes ↔ **MCP** ↔ Olympus v3 ↔ **ACP** ↔ Daimon subprocess
+- Plugin hooks write per-turn data to **SQLite** → Olympus reads it on `poll()`
 
 Any OpenAI-compatible provider works — OpenAI, Anthropic, Google, DeepSeek, Qwen, OpenRouter, Ollama, and more. Each Daimon can use a different model.
 
 ---
 
-## v5.0.0 — Pi Agent RPC
+## Olympus v3 Architecture
 
-**Headline:** All Daimons now use **Pi Agent RPC** instead of ACP for sub-agent communication. ACP remains available as instant rollback (`backend: acp` in `config.yaml`).
+Replaces Pi Agent RPC with **ACP + Plugin Hooks + SQLite**:
 
-### Why we replaced ACP
-
-ACP had 3 critical bugs that made Daimon delegation unreliable:
-
-1. **Spinner noise** — `AgentThoughtChunk` mixed progress spinners with reasoning. Regex filters leaked Unicode artifacts, breaking stall detection.
-2. **Invisible tool calls** — `total_tool_calls` was always `0`, even when 8+ tools ran. No execution events were emitted.
-3. **No reasoning visibility** — Provider chain-of-thought (DeepSeek `reasoning_content`, Anthropic `thinking`) was silently dropped, causing empty Daimon responses.
-
-### ACP vs Pi Agent RPC
-
-| Feature | ACP (old) | Pi RPC (new) |
-|---------|-----------|--------------|
-| Protocol | Binary stream (spinner noise) | Typed JSONL (`text_delta`, `thinking_delta`, `tool_call`) |
-| Tool calls | Always 0 | Explicit `tool_execution_start/end` events |
-| Reasoning | Lost | `thinking_delta` events + configurable levels |
-| Live steering | None | `steer` command mid-stream |
-| Thinking levels | None | `off/minimal/low/medium/high/xhigh` |
-| Session persistence | None | Built-in with `--session-dir` |
-| Model switching | Restart required | `set_model` at runtime |
-| Compaction | Manual | `compact` + auto-compaction |
-
-### New: `delegate` Action (Single-Call Auto-Poll)
-
-One MCP call replaces the entire open→message→poll→close cycle:
+- **ACP** — Standard session lifecycle (open, message, poll, close, delegate)
+- **Plugin hooks** — Per-turn observability INSIDE the Daimon process:
+  - `post_llm_call` → writes full turn + reasoning to SQLite
+  - `post_tool_call` → writes every tool invocation to SQLite
+  - `on_session_end` → marks session completed (always fires)
+  - `pre_llm_call` → reads steering directives from SQLite
+- **SQLite** — Shared data channel. No fragile buffer accumulation, no event translation.
 
 ```
-delegate(agent, prompt, poll_interval=15, timeout=300) → done
-```
-
-The server polls internally. Returns final result with `delegate: {timed_out, elapsed_seconds, poll_iterations}` metadata. Manual `open/message/poll/close` remains available for fine-grained control.
-
----
-
-## Architecture
-
-```
-Hermes (Hermes Agent)
-    │
+Hermes (Orchestrator)
+    │ MCP (stdio)
     ▼
-Olympus v2 MCP Server
-    │
-    ├── backend: pi_rpc  →  Pi Agent RPC subprocess  →  Daimon
-    └── backend: acp     →  ACP protocol (rollback)
+Olympus v3 MCP Server
+    │ ACP (HTTP, localhost)
+    ▼
+Daimon (hermes-agent -p <daimon>)
+    │ Plugin: olympus_v3_hooks
+    ▼
+SQLite ← both sides read/write
 ```
 
-- **Per-agent backend** — Each Daimon selects `pi_rpc` or `acp` independently in `config.yaml`.
-- **Pi configs** — Live at `home/.pi-daimons/{name}/.pi/` (SYSTEM.md, settings.json, extensions).
+### Why v3 Replaces v2
+
+| Feature | Pi Agent RPC (v2) | Olympus v3 (ACP + Plugin + SQLite) |
+|---------|-------------------|-------------------------------------|
+| Per-turn visibility | Accumulated buffer (fragile) | `post_llm_call` hook writes each turn |
+| Tool audit trail | Always reported 0 (Bug B) | `post_tool_call` captures every invocation |
+| Session completion | `agent_end` not guaranteed | `on_session_end` always fires |
+| Mid-conversation steering | Impossible | `pre_llm_call` reads steering from SQLite |
+| Response extraction | 3 fallback sources, fragile | Canonical: SQLite turn row |
+| Protocol | Pi JSONL (black-box) | ACP (standard) + Plugin (inside agent) + SQLite (shared) |
 
 ---
 
 ## Daimons
 
-| Daimon | Role | Backend | Tools | Thinking |
-|--------|------|---------|-------|----------|
-| **Hefesto** | Senior Developer / Implementation Lead | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
-| **Etalides** | Web Researcher | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
-| **Ariadna** | Project Manager | `pi_rpc` | read, write, edit, bash | medium |
-| **Athena** | Security Engineer | `pi_rpc` | read, write, edit, bash, grep, find, ls | high |
-| **Daedalus** | UX/UI Designer | `pi_rpc` | read, write, edit, bash, grep, find, ls | medium |
+| Daimon | Role | Level | Thinking |
+|--------|------|-------|----------|
+| **Hefesto** | Senior Developer / Implementation Lead | 2 | medium |
+| **Etalides** | Web Researcher | 2 | medium |
+| **Ariadna** | Project Manager | 2 | medium |
+| **Athena** | Security Engineer | 2 | high |
+| **Daedalus** | UX/UI Designer | 2 | medium |
+| **Ictinus** | Backend Architect | 1 | medium |
+
+Level 2 Daimons execute tasks. Level 1 Consultants provide expert input on demand.
 
 ---
 
@@ -97,8 +88,7 @@ Olympus v2 MCP Server
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+ (for Pi Agent RPC backend)
-- npm
+- [Hermes Agent](https://github.com/nousresearch/hermes-agent) installed
 
 ### Install
 
@@ -118,8 +108,23 @@ cp home/profiles/hermes/.env.example home/profiles/hermes/.env
 # Edit .env with your API keys
 
 cp home/config.yaml.example home/config.yaml
-# Edit paths and provider settings for your system
+# Edit provider settings for your system
 ```
+
+### Install Plugin
+
+Each Daimon profile needs the `olympus_v3` plugin:
+
+```yaml
+# home/profiles/<daimon>/config.yaml
+plugins:
+  enabled:
+    - olympus_v3
+```
+
+### Enable MCP Server
+
+Add `olympus_v3` to your Hermes MCP servers config.
 
 ### Start
 
@@ -136,21 +141,16 @@ Daimons are declared under the `daimons` key in `home/config.yaml`:
 ```yaml
 daimons:
   hefesto:
-    backend: pi_rpc      # or acp for rollback
     provider: opencode-go
     model: deepseek-v4-flash
-    thinking: medium     # off/minimal/low/medium/high/xhigh
-    tools:
-      - read
-      - write
-      - edit
-      - bash
-      - grep
-      - find
-      - ls
+    thinking: medium
+    toolsets:
+      - terminal
+      - file
+      - search_files
 ```
 
-Each entry points to a profile directory at `home/.pi-daimons/{name}/` containing SYSTEM.md, settings.json, and optional extensions.
+Each Daimon profile lives at `home/profiles/<name>/` with `config.yaml`, `SOUL.md`, and the `plugins/olympus_v3/` hook.
 
 ---
 
@@ -158,20 +158,18 @@ Each entry points to a profile directory at `home/.pi-daimons/{name}/` containin
 
 ```
 Aether-Agents/
-├── src/
-│   └── olympus_v2/              ← MCP server + Pi RPC adapter
-│       ├── server.py            ← MCP tools (talk_to, delegate, discover, run_workflow)
-│       ├── pi_adapter.py        ← Pi Agent RPC lifecycle
-│       └── event_translator.py  ← JSONL → MCP events
-│
+├── src/olympus_v3/           ← MCP server + ACP manager + SQLite
+│   ├── server.py             ← MCP tools (talk_to, discover, consult)
+│   ├── acp_manager.py        ← ACP session lifecycle
+│   ├── db.py                 ← SQLite persistence (WAL mode)
+│   ├── config_loader.py      ← Discovers Daimon profiles
+│   ├── consult_action.py     ← Consulting workflow
+│   └── olympus_v3_hooks/     ← Plugin hooks (per-turn observability)
 ├── home/
-│   ├── .pi-daimons/             ← Pi Agent profiles (hefesto, athena, ...)
-│   ├── profiles/hermes/         ← Orchestrator profile + SOUL.md
-│   ├── skills/                  ← Shared skills (single source of truth)
-│   └── config.yaml              ← Daimon backends, providers, models
-│
-├── tests/                       ← Test suite
-├── website/                     ← Landing page
+│   ├── profiles/             ← Daimon profiles (hefesto, athena, ictinus, ...)
+│   ├── skills/               ← Shared skills
+│   └── config.yaml           ← Daimon configs, providers, models
+├── tests/
 ├── CHANGELOG.md
 └── LICENSE
 ```

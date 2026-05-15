@@ -22,10 +22,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import sys
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ from mcp.server.stdio import stdio_server
 from mcp import types as mcp_types
 
 from .acp_manager import ACPManager
+from .aether_db import AetherDB, get_aether_db_path
 from .db import OlympusDB, get_db_path
 
 logger = logging.getLogger("olympus_v3")
@@ -157,6 +158,10 @@ async def list_tools() -> list[mcp_types.Tool]:
                         "description": "Max seconds for delegate action (default 300).",
                         "default": 300,
                     },
+                    "project_root": {
+                        "type": "string",
+                        "description": "Absolute path to the project root. Forces the Daimon to work in this directory and sets AETHER_HOME. Required for open and delegate actions.",
+                    },
                 },
                 "required": ["action"],
             },
@@ -165,6 +170,84 @@ async def list_tools() -> list[mcp_types.Tool]:
             name="discover",
             description="List available Daimon agents and their capabilities.",
             inputSchema={"type": "object", "properties": {}, "required": []},
+        ),
+        mcp_types.Tool(
+            name="aether_status",
+            description=(
+                "Query the .aether continuity database for project state. "
+                "Returns hot state, session/issue/decision counts (summary), "
+                "or full detail with recent sessions, file changes, decisions, and issues."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "string",
+                        "enum": ["summary", "full"],
+                        "default": "summary",
+                        "description": "Detail level: 'summary' for counts, 'full' for recent records.",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        mcp_types.Tool(
+            name="aether_update",
+            description=(
+                "Update the .aether continuity database: set phase/task, manage blockers, "
+                "add decisions and issues, resolve issues."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "set_phase", "set_task", "add_blocker", "remove_blocker",
+                            "add_decision", "add_issue", "resolve_issue",
+                        ],
+                        "description": "Action to perform.",
+                    },
+                    "phase": {"type": "string", "description": "New phase (for set_phase)."},
+                    "task": {"type": "string", "description": "New task (for set_task)."},
+                    "blocker": {"type": "string", "description": "Blocker text (for add_blocker / remove_blocker)."},
+                    "title": {"type": "string", "description": "Decision title (for add_decision)."},
+                    "decision": {"type": "string", "description": "Decision text (for add_decision)."},
+                    "rationale": {"type": "string", "description": "Decision rationale (for add_decision, optional)."},
+                    "alternatives": {"type": "string", "description": "Decision alternatives (for add_decision, optional)."},
+                    "description": {"type": "string", "description": "Issue description (for add_issue)."},
+                    "error_type": {"type": "string", "description": "Issue error type (for add_issue, optional)."},
+                    "session_id": {"type": "string", "description": "Issue session ID (for add_issue, optional)."},
+                    "issue_id": {"type": "integer", "description": "Issue ID (for resolve_issue)."},
+                    "resolution": {"type": "string", "description": "Resolution text (for resolve_issue)."},
+                    "resolved_by": {"type": "string", "description": "Who resolved it (for resolve_issue, default 'hermes')."},
+                },
+                "required": ["action"],
+            },
+        ),
+        mcp_types.Tool(
+            name="aether_curate",
+            description=(
+                "Invoke Ariadna to curate raw .aether data into a CONTEXT.md file. "
+                "Ariadna reads aether.db, synthesizes project state, and writes .aether/CONTEXT.md. "
+                "The curated context is then injected into Daimon sessions instead of raw data."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_root": {
+                        "type": "string",
+                        "description": "Absolute path to the project root. The .aether/ directory must exist here. REQUIRED.",
+                    },
+                    "focus": {
+                        "type": "string",
+                        "enum": ["full", "recent", "decisions"],
+                        "default": "recent",
+                        "description": "Focus area for curation: full (all data), recent (last 5 sessions), decisions (architectural decisions only).",
+                    },
+                },
+                "required": ["project_root"],
+            },
         ),
     ]
 
@@ -179,6 +262,12 @@ async def call_tool(name: str, arguments: dict) -> list[mcp_types.TextContent]:
         return await _handle_talk_to(arguments)
     elif name == "discover":
         return await _handle_discover()
+    elif name == "aether_status":
+        return await _handle_aether_status(arguments)
+    elif name == "aether_update":
+        return await _handle_aether_update(arguments)
+    elif name == "aether_curate":
+        return await _handle_aether_curate(arguments)
     else:
         return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -397,6 +486,306 @@ async def _handle_discover() -> list[mcp_types.TextContent]:
         "count": len(profiles),
     }
     return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
+
+
+# ---------------------------------------------------------------------------
+# aether_status handler
+# ---------------------------------------------------------------------------
+
+async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
+    """Query the .aether continuity database for project state."""
+    try:
+        db_path = get_aether_db_path()
+        if not db_path.exists():
+            return [mcp_types.TextContent(
+                type="text",
+                text=".aether database not found. Create .aether/ directory in the project root.",
+            )]
+
+        db = AetherDB(db_path=db_path)
+        await db.connect()
+        try:
+            hot_state = await db.get_hot_state()
+
+            # Counts
+            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
+            sessions_count = (await cursor.fetchone())[0]
+            cursor = await db._execute("SELECT COUNT(*) FROM issues")
+            issues_count = (await cursor.fetchone())[0]
+            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
+            decisions_count = (await cursor.fetchone())[0]
+
+            detail = args.get("detail", "summary")
+
+            if detail == "summary":
+                result = {
+                    "hot_state": hot_state,
+                    "sessions_count": sessions_count,
+                    "issues_count": issues_count,
+                    "decisions_count": decisions_count,
+                }
+            else:  # full
+                recent_sessions = await db.get_recent_sessions(limit=5)
+                recent_files = await db.get_recent_files(limit=10)
+
+                cursor = await db._execute(
+                    "SELECT * FROM decisions ORDER BY created_at DESC LIMIT 5"
+                )
+                rows = await cursor.fetchall()
+                recent_decisions = [dict(row) for row in rows]
+
+                cursor = await db._execute(
+                    "SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC"
+                )
+                rows = await cursor.fetchall()
+                open_issues = [dict(row) for row in rows]
+
+                cursor = await db._execute(
+                    "SELECT * FROM issues ORDER BY created_at DESC LIMIT 5"
+                )
+                rows = await cursor.fetchall()
+                recent_issues = [dict(row) for row in rows]
+
+                result = {
+                    "hot_state": hot_state,
+                    "recent_sessions": recent_sessions,
+                    "recent_file_changes": recent_files,
+                    "recent_decisions": recent_decisions,
+                    "open_issues": open_issues,
+                    "recent_issues": recent_issues,
+                }
+
+            return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
+        finally:
+            await db.close()
+    except Exception as e:
+        logger.error("aether_status error: %s", e)
+        return [mcp_types.TextContent(type="text", text=f"Error querying aether status: {e}")]
+
+
+# ---------------------------------------------------------------------------
+# aether_update handler
+# ---------------------------------------------------------------------------
+
+async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
+    """Update the .aether continuity database."""
+    try:
+        db_path = get_aether_db_path()
+        if not db_path.exists():
+            return [mcp_types.TextContent(
+                type="text",
+                text=".aether database not found. Create .aether/ directory in the project root.",
+            )]
+
+        db = AetherDB(db_path=db_path)
+        await db.connect()
+        try:
+            action = args.get("action", "")
+
+            if action == "set_phase":
+                phase = args.get("phase", "")
+                await db.update_hot_state(current_phase=phase)
+                return [mcp_types.TextContent(type="text", text=f"Phase updated to: {phase}")]
+
+            elif action == "set_task":
+                task = args.get("task", "")
+                await db.update_hot_state(current_task=task)
+                return [mcp_types.TextContent(type="text", text=f"Task updated to: {task}")]
+
+            elif action == "add_blocker":
+                blocker = args.get("blocker", "")
+                hot_state = await db.get_hot_state()
+                blockers_raw = hot_state.get("blockers", "[]") if hot_state else "[]"
+                blockers = json.loads(blockers_raw) if blockers_raw else []
+                blockers.append(blocker)
+                await db.update_hot_state(blockers=json.dumps(blockers))
+                return [mcp_types.TextContent(type="text", text=f"Blocker added: {blocker}")]
+
+            elif action == "remove_blocker":
+                blocker = args.get("blocker", "")
+                hot_state = await db.get_hot_state()
+                blockers_raw = hot_state.get("blockers", "[]") if hot_state else "[]"
+                blockers = json.loads(blockers_raw) if blockers_raw else []
+                blockers = [b for b in blockers if b != blocker]
+                await db.update_hot_state(blockers=json.dumps(blockers))
+                return [mcp_types.TextContent(type="text", text=f"Blocker removed: {blocker}")]
+
+            elif action == "add_decision":
+                title = args.get("title", "")
+                decision = args.get("decision", "")
+                rationale = args.get("rationale")
+                alternatives = args.get("alternatives")
+                row_id = await db.insert_decision(
+                    title=title, decision=decision,
+                    rationale=rationale, alternatives=alternatives,
+                )
+                return [mcp_types.TextContent(type="text", text=f"Decision added (id={row_id}): {title}")]
+
+            elif action == "add_issue":
+                description = args.get("description", "")
+                error_type = args.get("error_type")
+                session_id = args.get("session_id")
+                row_id = await db.insert_issue(
+                    description=description, error_type=error_type,
+                    session_id=session_id,
+                )
+                return [mcp_types.TextContent(type="text", text=f"Issue added (id={row_id}): {description}")]
+
+            elif action == "resolve_issue":
+                issue_id = args.get("issue_id")
+                resolution = args.get("resolution", "")
+                resolved_by = args.get("resolved_by", "hermes")
+                await db.resolve_issue(
+                    issue_id=int(issue_id), resolution=resolution,
+                    resolved_by=resolved_by,
+                )
+                return [mcp_types.TextContent(type="text", text=f"Issue {issue_id} resolved by {resolved_by}")]
+
+            else:
+                return [mcp_types.TextContent(type="text", text=f"Unknown action: {action}")]
+        finally:
+            await db.close()
+    except Exception as e:
+        logger.error("aether_update error: %s", e)
+        return [mcp_types.TextContent(type="text", text=f"Error updating aether: {e}")]
+
+
+async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
+    """Curate .aether data into CONTEXT.md by spawning Ariadna."""
+    project_root = args.get("project_root", "")
+    if not project_root:
+        return [mcp_types.TextContent(type="text", text="Error: 'project_root' is required for aether_curate.")]
+
+    focus = args.get("focus", "recent")
+    project_path = Path(project_root)
+    aether_dir = project_path / ".aether"
+
+    if not aether_dir.exists():
+        return [mcp_types.TextContent(type="text", text=f"Error: .aether directory not found at {aether_dir}. Create .aether/ first.")]
+
+    # Read current aether status for context
+    try:
+        db_path = get_aether_db_path()
+        if not db_path.exists():
+            return [mcp_types.TextContent(type="text", text=f"Error: aether.db not found at {db_path}.")]
+
+        db = AetherDB(db_path=db_path)
+        await db.connect()
+        try:
+            hot_state = await db.get_hot_state()
+            recent_sessions = await db.get_recent_sessions(limit=5)
+            recent_files = await db.get_recent_files(limit=10)
+
+            cursor = await db._execute("SELECT * FROM decisions WHERE status = 'active' ORDER BY created_at DESC LIMIT 10")
+            rows = await cursor.fetchall()
+            decisions = [dict(row) for row in rows]
+
+            cursor = await db._execute("SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC")
+            rows = await cursor.fetchall()
+            open_issues = [dict(row) for row in rows]
+        finally:
+            await db.close()
+    except Exception as e:
+        logger.error("aether_curate error reading DB: %s", e)
+        return [mcp_types.TextContent(type="text", text=f"Error reading aether.db: {e}")]
+
+    # Build context summary for Ariadna
+    context_parts = []
+    if hot_state:
+        context_parts.append(f"Project: {hot_state.get('project_name', 'Unknown')}")
+        context_parts.append(f"Phase: {hot_state.get('current_phase', 'unknown')}")
+        context_parts.append(f"Current Task: {hot_state.get('current_task', 'unknown')}")
+        context_parts.append(f"Total Sessions: {hot_state.get('total_sessions', 0)}")
+        if hot_state.get('blockers'):
+            context_parts.append(f"Blockers: {hot_state['blockers']}")
+
+    if recent_sessions:
+        context_parts.append("\nRecent Sessions:")
+        for s in recent_sessions:
+            agent = s.get('agent', '?')
+            status = s.get('status', '?')
+            summary = (s.get('result_summary') or 'No summary')[:100]
+            context_parts.append(f"  - {agent} ({status}): {summary}")
+
+    if decisions:
+        context_parts.append("\nActive Decisions:")
+        for d in decisions:
+            context_parts.append(f"  - {d.get('title', '?')}: {d.get('decision', '?')[:100]}")
+
+    if open_issues:
+        context_parts.append(f"\nOpen Issues: {len(open_issues)}")
+        for i in open_issues[:5]:
+            context_parts.append(f"  - #{i.get('id')}: {i.get('description', '?')[:80]}")
+
+    context_summary = "\n".join(context_parts)
+
+    # Spawn Ariadna to curate
+    manager = _get_manager()
+    
+    # Read CONTEXT_SCHEMA if it exists for reference
+    schema_path = aether_dir / "CONTEXT_SCHEMA.md"
+    schema_text = ""
+    if schema_path.exists():
+        try:
+            schema_text = schema_path.read_text()
+        except Exception:
+            pass
+    
+    # Sessions count for footer
+    sessions_count = hot_state.get('total_sessions', 0) if hot_state else 0
+    
+    prompt = (
+        f"PROJECT_ROOT: {project_root}\n\n"
+        f"You are curating the .aether project continuity data for this project.\n\n"
+        f"Here is the current raw project state from aether.db:\n\n{context_summary}\n\n"
+        f"TASK: Write a CONTEXT.md file at {aether_dir}/CONTEXT.md that synthesizes "
+        f"this raw data into an actionable project brief for incoming sessions.\n\n"
+        f"Focus: {focus}\n\n"
+        f"STRICT FORMAT RULES:\n"
+        f"1. MAX 1500 CHARACTERS. If your output exceeds 1500 chars, cut it down.\n"
+        f"2. Exactly 5 sections: Title+Phase, Estado actual, Archivos recientes, "
+        f"Decisiones activas, Proximo paso.\n"
+        f"3. End with footer: — Curated: {datetime.now().strftime('%Y-%m-%d')} | "
+        f"focus: {focus} | sessions: {sessions_count}\n"
+        f"4. No tables, no JSON, no HTML. Plain markdown only.\n"
+        f"5. No project root path. No Overview section.\n"
+        f"6. Actionable, not historical. A cold Daimon needs to know what to DO.\n"
+        f"7. Write in the project's working language (Spanish if project uses Spanish).\n\n"
+        f"FORMAT:\n"
+        f"# [Project Name] — Phase: [phase] | Task: [task]\n\n"
+        f"## Estado actual\n"
+        f"[2-4 sentences about current state]\n\n"
+        f"## Archivos recientes\n"
+        f"- `path/file.py` — one-line description\n\n"
+        f"## Decisiones activas\n"
+        f"- **[Title]**: one-line summary\n\n"
+        f"## Proximo paso\n"
+        f"1. [Most urgent]\n"
+        f"2. [Second]\n\n"
+        f"— Curated: YYYY-MM-DD | focus: {focus} | sessions: N\n\n"
+        f"Write the file using write_file tool. Path: {aether_dir}/CONTEXT.md"
+    )
+
+    try:
+        session_id = await manager.spawn_agent(agent_name="ariadna", project_root=project_root)
+        result = await manager.send_message(session_id, prompt)
+        # Close the session after curation
+        try:
+            await manager.close_session(session_id)
+        except Exception:
+            pass
+
+        # Post-curate staleness sync removed: CONTEXT.md is now always injected
+        # if it exists and has content, regardless of mtime vs updated_at.
+        # Freshness is managed by aether_curate — Hermes decides when to re-curate.
+
+        return [mcp_types.TextContent(
+            type="text",
+            text=f"Curated context written to {aether_dir}/CONTEXT.md",
+        )]
+    except Exception as e:
+        logger.error("aether_curate spawn error: %s", e)
+        return [mcp_types.TextContent(type="text", text=f"Error spawning Ariadna: {e}")]
 
 
 # ---------------------------------------------------------------------------
