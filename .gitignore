@@ -39,8 +39,9 @@ home/profiles/*/skills/*
 **/.bundled_manifest
 
 # --- Per-profile configs (tracked — contain agent: discovery for Olympus) ---
-# Only the hermes config has API keys that should stay local
-home/profiles/hermes/config.yaml
+
+# --- Deprecated hermes profile (renamed to orchestrator) ---
+home/profiles/hermes/
 
 # --- Per-profile runtime state ---
 home/profiles/*/memories/
@@ -119,12 +120,6 @@ docs/sesiones/
 docs/setup/
 
 # --- Pi Agent Daimon configs (auth.json already gitignored by **/auth.json) ---
-
-# Old locations (moved to src/ and home/ level)
-home/profiles/hermes/olympus_v2/
-
-# Old pi-daimons location (moved to home/.pi-daimons/)
-home/profiles/hermes/.pi-daimons/
 
 # Auto-generated observations
 .aether/OBSERVATIONS.md

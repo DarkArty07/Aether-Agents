@@ -21,8 +21,6 @@ classifiers = [
 dependencies = [
     "mcp>=1.0.0",
     "agent-client-protocol>=0.1.0",
-    "langgraph>=0.2.0",
-    "langgraph-checkpoint-sqlite>=2.0.0",
     "pyyaml>=6.0",
 ]
 
@@ -30,7 +28,6 @@ dependencies = [
 dev = ["pytest>=7.0", "ruff>=0.4"]
 
 [project.scripts]
-olympus = "olympus.server:main"
 olympus-v3 = "olympus_v3.server:main"
 
 [build-system]
@@ -41,7 +38,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-olympus = ["py.typed"]
+olympus_v3 = ["py.typed"]
 
 [project.urls]
 Homepage = "https://github.com/DarkArty07/Aether-Agents"
