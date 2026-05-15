@@ -34,7 +34,7 @@ from mcp.server.stdio import stdio_server
 from mcp import types as mcp_types
 
 from .acp_manager import ACPManager
-from .aether_db import AetherDB, get_aether_db_path
+from .aether_db import AetherDB, resolve_aether_db, resolve_aether_dir
 from .db import OlympusDB, get_db_path
 
 logger = logging.getLogger("olympus_v3")
@@ -181,6 +181,10 @@ async def list_tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "project_root": {
+                        "type": "string",
+                        "description": "Absolute path to the project root. Used to resolve the .aether database path. REQUIRED.",
+                    },
                     "detail": {
                         "type": "string",
                         "enum": ["summary", "full"],
@@ -188,7 +192,7 @@ async def list_tools() -> list[mcp_types.Tool]:
                         "description": "Detail level: 'summary' for counts, 'full' for recent records.",
                     },
                 },
-                "required": [],
+                "required": ["project_root"],
             },
         ),
         mcp_types.Tool(
@@ -200,6 +204,10 @@ async def list_tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
+                    "project_root": {
+                        "type": "string",
+                        "description": "Absolute path to the project root. Used to resolve the .aether database path. REQUIRED.",
+                    },
                     "action": {
                         "type": "string",
                         "enum": [
@@ -222,7 +230,7 @@ async def list_tools() -> list[mcp_types.Tool]:
                     "resolution": {"type": "string", "description": "Resolution text (for resolve_issue)."},
                     "resolved_by": {"type": "string", "description": "Who resolved it (for resolve_issue, default 'hermes')."},
                 },
-                "required": ["action"],
+                "required": ["action", "project_root"],
             },
         ),
         mcp_types.Tool(
@@ -494,14 +502,12 @@ async def _handle_discover() -> list[mcp_types.TextContent]:
 
 async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
     """Query the .aether continuity database for project state."""
-    try:
-        db_path = get_aether_db_path()
-        if not db_path.exists():
-            return [mcp_types.TextContent(
-                type="text",
-                text=".aether database not found. Create .aether/ directory in the project root.",
-            )]
+    project_root = args.get("project_root", "")
+    if not project_root:
+        return [mcp_types.TextContent(type="text", text="Error: 'project_root' is required for aether_status.")]
 
+    try:
+        db_path = resolve_aether_db(project_root)
         db = AetherDB(db_path=db_path)
         await db.connect()
         try:
@@ -569,14 +575,12 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
 
 async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
     """Update the .aether continuity database."""
-    try:
-        db_path = get_aether_db_path()
-        if not db_path.exists():
-            return [mcp_types.TextContent(
-                type="text",
-                text=".aether database not found. Create .aether/ directory in the project root.",
-            )]
+    project_root = args.get("project_root", "")
+    if not project_root:
+        return [mcp_types.TextContent(type="text", text="Error: 'project_root' is required for aether_update.")]
 
+    try:
+        db_path = resolve_aether_db(project_root)
         db = AetherDB(db_path=db_path)
         await db.connect()
         try:
@@ -658,17 +662,11 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 
     focus = args.get("focus", "recent")
     project_path = Path(project_root)
-    aether_dir = project_path / ".aether"
-
-    if not aether_dir.exists():
-        return [mcp_types.TextContent(type="text", text=f"Error: .aether directory not found at {aether_dir}. Create .aether/ first.")]
+    aether_dir = resolve_aether_dir(project_root)
 
     # Read current aether status for context
     try:
-        db_path = get_aether_db_path()
-        if not db_path.exists():
-            return [mcp_types.TextContent(type="text", text=f"Error: aether.db not found at {db_path}.")]
-
+        db_path = resolve_aether_db(project_root)
         db = AetherDB(db_path=db_path)
         await db.connect()
         try:

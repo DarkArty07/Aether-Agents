@@ -119,7 +119,7 @@ class ACPManager:
     """
 
     def __init__(self, profiles_dir: Path | None = None, db: Any = None):
-        self.agents: dict[str, AgentState] = {}
+        self.agents: dict[tuple[str, str], AgentState] = {}
         self.sessions: dict[str, SessionInfo] = {}
         self.profiles_dir = profiles_dir or self._default_profiles_dir()
         self.db = db  # OlympusDB instance (set later via set_db)
@@ -143,6 +143,16 @@ class ACPManager:
     def set_db(self, db: Any) -> None:
         """Set the OlympusDB instance for poll operations."""
         self.db = db
+
+    @staticmethod
+    def _agent_key(agent_name: str, project_root: str | None) -> tuple[str, str]:
+        """Build the compound key for the agents dict: (agent_name, project_root)."""
+        return (agent_name, project_root or "")
+
+    def get_agent(self, agent_name: str, project_root: str | None = None) -> AgentState | None:
+        """Look up an agent by name and project_root."""
+        key = self._agent_key(agent_name, project_root)
+        return self.agents.get(key)
 
     # -------------------------------------------------------------------
     # Discovery
@@ -206,19 +216,20 @@ class ACPManager:
         if not profile_path.exists():
             raise ValueError(f"Profile not found: {agent_name} at {profile_path}")
 
-        # Create or reuse agent state
-        agent = self.agents.get(agent_name)
+        # Create or reuse agent state keyed by (agent_name, project_root)
+        key = self._agent_key(agent_name, project_root)
+        agent = self.agents.get(key)
         if agent is None or agent.status in ("dead",):
             agent = AgentState(
                 name=agent_name,
                 profile_path=profile_path,
                 status="spawning",
             )
-            self.agents[agent_name] = agent
+            self.agents[key] = agent
 
-        # If agent is already idle, reuse it
+        # If agent is already idle for the SAME project, reuse it
         if agent.status in ("idle",) and agent.connection is not None:
-            logger.info("Reusing existing agent %s (idle)", agent_name)
+            logger.info("Reusing existing agent %s for project %s (idle)", agent_name, project_root)
         else:
             # Spawn new process
             await self._spawn_process(agent, project_root=project_root)
@@ -385,7 +396,7 @@ class ACPManager:
         if session is None:
             raise ValueError(f"Unknown session: {session_id}")
 
-        agent = self.agents.get(session.agent_name)
+        agent = self.agents.get(self._agent_key(session.agent_name, session.project_root))
         if agent is None or agent.connection is None:
             raise RuntimeError(f"Agent for session {session_id} has no connection")
 
@@ -393,32 +404,31 @@ class ACPManager:
         if acp_session_id is None:
             raise RuntimeError(f"Session {session_id} has no ACP session ID")
 
-        # Write session mapping files so the Daimon's plugin hooks can
-        # discover the current session ID and DB path.  This is the
-        # fallback mechanism when OLYMPUS_SESSION_ID is not set in env
-        # (which it cannot be — the process is spawned before any session
-        # exists, and env vars cannot be injected into a running process).
+        # Write PID-suffixed session mapping files so the Daimon's plugin hooks can
+        # discover the current session ID and DB path. PID-suffixed files avoid
+        # race conditions when multiple Daimon processes share the same profile dir.
+        pid = agent.pid or os.getpid()
         try:
-            self._atomic_write(agent.profile_path / ".olympus_session", session_id)
-            logger.debug("Wrote .olympus_session for %s: %s", agent.name, session_id)
+            self._atomic_write(agent.profile_path / f".olympus_session.{pid}", session_id)
+            logger.debug("Wrote .olympus_session.%d for %s: %s", pid, agent.name, session_id)
         except Exception as e:
-            logger.warning("Failed to write .olympus_session for %s: %s", agent.name, e)
+            logger.warning("Failed to write .olympus_session.%d for %s: %s", pid, agent.name, e)
 
         try:
             db_path = str(get_db_path())
-            self._atomic_write(agent.profile_path / ".olympus_db_path", db_path)
-            logger.debug("Wrote .olympus_db_path for %s: %s", agent.name, db_path)
+            self._atomic_write(agent.profile_path / f".olympus_db_path.{pid}", db_path)
+            logger.debug("Wrote .olympus_db_path.%d for %s: %s", pid, agent.name, db_path)
         except Exception as e:
-            logger.warning("Failed to write .olympus_db_path for %s: %s", agent.name, e)
+            logger.warning("Failed to write .olympus_db_path.%d for %s: %s", pid, agent.name, e)
 
-        # Write .aether_home so Daimon plugin hooks can find the project root
+        # Write PID-suffixed .aether_home so Daimon plugin hooks can find the project root
         try:
             aether_home_value = session.project_root or os.environ.get("AETHER_HOME") or str(Path.cwd().resolve())
-            aether_home_file = Path(agent.profile_path) / ".aether_home"
+            aether_home_file = Path(agent.profile_path) / f".aether_home.{pid}"
             aether_home_file.write_text(aether_home_value)
-            logger.debug("Wrote .aether_home for %s: %s", agent.name, aether_home_value)
+            logger.debug("Wrote .aether_home.%d for %s: %s", pid, agent.name, aether_home_value)
         except Exception as e:
-            logger.warning("Failed to write .aether_home for %s: %s", agent.name, e)
+            logger.warning("Failed to write .aether_home.%d for %s: %s", pid, agent.name, e)
 
         # Send prompt as background task
         async def _run_prompt():
@@ -483,7 +493,7 @@ class ACPManager:
         if session is None:
             raise ValueError(f"Unknown session: {session_id}")
 
-        agent = self.agents.get(session.agent_name)
+        agent = self.agents.get(self._agent_key(session.agent_name, session.project_root))
 
         # Close ACP session
         if agent and agent.connection and session.acp_session_id:
@@ -516,7 +526,7 @@ class ACPManager:
         if session is None:
             raise ValueError(f"Unknown session: {session_id}")
 
-        agent = self.agents.get(session.agent_name)
+        agent = self.agents.get(self._agent_key(session.agent_name, session.project_root))
 
         # Cancel via ACP
         if agent and agent.connection and session.acp_session_id:
@@ -679,45 +689,81 @@ class ACPManager:
                     pass
                 return progress
 
-    async def shutdown_agent(self, name: str) -> dict:
-        """Gracefully shut down a Daimon process."""
-        agent = self.agents.get(name)
-        if agent is None:
-            return {"status": "already_dead", "agent": name}
+    async def shutdown_agent(self, name: str, project_root: str | None = None) -> dict:
+        """Gracefully shut down a Daimon process.
 
-        if agent.status == "dead":
-            return {"status": "already_dead", "agent": name}
+        If project_root is provided, shut down the specific agent for that project.
+        If project_root is None, shut down ALL agents with the given name across
+        all projects.
+        """
+        if project_root is not None:
+            # Shut down specific agent for this project
+            key = self._agent_key(name, project_root)
+            agent = self.agents.get(key)
+            if agent is None:
+                return {"status": "already_dead", "agent": name}
+            agents_to_shutdown = [(key, agent)]
+        else:
+            # Shut down ALL agents with this name across all projects
+            agents_to_shutdown = [
+                (k, v) for k, v in self.agents.items() if k[0] == name
+            ]
+            if not agents_to_shutdown:
+                return {"status": "already_dead", "agent": name}
 
-        # Close all sessions
-        for sid in list(agent.acp_session_ids.keys()):
-            try:
-                await self.close(sid)
-            except Exception as e:
-                logger.warning("Error closing session %s during shutdown: %s", sid, e)
+        results = []
+        for key, agent in agents_to_shutdown:
+            if agent.status == "dead":
+                results.append({"status": "already_dead", "agent": name, "project_root": key[1]})
+                continue
 
-        # Close ACP connection
-        if agent.connection:
-            try:
-                await agent.connection.close()
-            except Exception as e:
-                logger.warning("Error closing ACP connection for %s: %s", name, e)
-
-        # Terminate process
-        agent.status = "dead"
-        if agent.process is not None:
-            try:
-                agent.process.terminate()
+            # Close all sessions
+            for sid in list(agent.acp_session_ids.keys()):
                 try:
-                    await asyncio.wait_for(agent.process.wait(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    agent.process.kill()
-                    await agent.process.wait()
-                logger.info("Terminated process for %s (PID: %s)", name, agent.pid)
-            except ProcessLookupError:
-                logger.info("Process for %s already terminated", name)
-            except Exception as e:
-                logger.warning("Error terminating process for %s: %s", name, e)
+                    await self.close(sid)
+                except Exception as e:
+                    logger.warning("Error closing session %s during shutdown: %s", sid, e)
 
-        self.agents.pop(name, None)
-        logger.info("Agent %s shut down", name)
-        return {"status": "shutdown", "agent": name}
+            # Close ACP connection
+            if agent.connection:
+                try:
+                    await agent.connection.close()
+                except Exception as e:
+                    logger.warning("Error closing ACP connection for %s: %s", name, e)
+
+            # Terminate process
+            agent.status = "dead"
+            if agent.process is not None:
+                try:
+                    agent.process.terminate()
+                    try:
+                        await asyncio.wait_for(agent.process.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        agent.process.kill()
+                        await agent.process.wait()
+                    logger.info("Terminated process for %s (PID: %s)", name, agent.pid)
+                except ProcessLookupError:
+                    logger.info("Process for %s already terminated", name)
+                except Exception as e:
+                    logger.warning("Error terminating process for %s: %s", name, e)
+
+            # Clean up PID-suffixed files
+            pid = agent.pid
+            if pid is not None:
+                for suffix in [f".olympus_session.{pid}", f".olympus_db_path.{pid}", f".aether_home.{pid}"]:
+                    fpath = agent.profile_path / suffix
+                    if fpath.exists():
+                        try:
+                            fpath.unlink(missing_ok=True)
+                            logger.debug("Cleaned up %s for %s (PID %s)", suffix, name, pid)
+                        except Exception as e:
+                            logger.warning("Failed to clean up %s for %s: %s", suffix, name, e)
+
+            self.agents.pop(key, None)
+            logger.info("Agent %s (project %s) shut down", name, key[1])
+            results.append({"status": "shutdown", "agent": name, "project_root": key[1]})
+
+        # Return single result if only one agent was shut down, otherwise list
+        if len(results) == 1:
+            return results[0]
+        return {"status": "shutdown", "agent": name, "shutdown_count": len(results), "details": results}
