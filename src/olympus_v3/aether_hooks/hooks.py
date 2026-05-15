@@ -406,7 +406,12 @@ def on_post_llm_call(
         if _turn_counter == 0:
             request_preview = (user_message or "")[:200]
             db = _get_aether_db()
-            db.update_hot_state(last_request=request_preview)
+            updates = {"last_request": request_preview}
+            # Write project_root from AETHER_HOME to hot_state for project identity
+            aether_home = os.environ.get("AETHER_HOME")
+            if aether_home:
+                updates["project_root"] = aether_home
+            db.update_hot_state(**updates)
             _request = request_preview
             logger.debug("on_post_llm_call: updated hot_state.last_request")
 
@@ -478,6 +483,11 @@ def on_session_end(
         }
         if interrupted:
             hot_state_updates["last_error"] = "Session interrupted"
+
+        # Write project_root from AETHER_HOME to hot_state for project identity
+        aether_home = os.environ.get("AETHER_HOME")
+        if aether_home:
+            hot_state_updates["project_root"] = aether_home
 
         db.update_hot_state(**hot_state_updates)
 
