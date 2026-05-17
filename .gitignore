@@ -67,6 +67,7 @@ home/profiles/*/state-snapshots/
 home/profiles/*/.restart_last_processed.json
 home/profiles/*/kanban.db
 home/profiles/*/honcho.json
+home/profiles/*/.env.bak*
 
 # --- Home-level runtime (not per-profile) ---
 home/config.yaml
@@ -129,3 +130,15 @@ home/profiles/hermes/.pi-daimons/
 
 # Auto-generated observations
 .aether/
+
+# --- Pi Agent PID-suffixed session files (concurrent Daimon isolation) ---
+**/.olympus_session
+**/.olympus_session.*
+**/.olympus_db_path
+**/.olympus_db_path.*
+**/.aether_home
+**/.aether_home.*
+**/.clean_shutdown
+
+# --- Subagent-driven-development runtime ---
+home/skills/software-development/subagent-driven-development/references/
