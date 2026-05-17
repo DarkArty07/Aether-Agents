@@ -1,227 +1,302 @@
-# Installation Guide
+# Installation Guide — Aether Agents v0.8.0
 
-Complete instructions for installing Aether Agents from scratch.
+Complete instructions for installing and configuring Aether Agents.
 
 ---
 
 ## 1. Prerequisites
 
-| Requirement       | Details                                |
-|-------------------|----------------------------------------|
-| Operating system  | Linux, macOS, or WSL2 (Windows)        |
-| Python            | 3.11 or newer                          |
-| git               | Any recent version                     |
-| curl              | For the hermes-agent installer         |
-| API key           | OpenAI, Anthropic, or compatible provider |
+| Requirement | Details |
+|-------------|---------|
+| **OS** | Linux, macOS, or WSL2 (Windows) |
+| **Python** | 3.11 or newer |
+| **Git** | Any recent version |
+| **NVIDIA GPU** | Optional — required for local STT via faster-whisper |
 
 Verify Python:
 
 ```bash
-python --version   # must show 3.11+
+python3 --version   # must show 3.11+
+```
+
+On Ubuntu/Debian, install Python and venv support:
+
+```bash
+sudo apt install python3.12 python3.12-venv python3.12-dev
+```
+
+On macOS:
+
+```bash
+brew install python@3.12
 ```
 
 ---
 
-## 2. Install hermes-agent
-
-### Option A — Curl installer (recommended)
+## 2. Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+bash scripts/setup.sh
 ```
 
-This downloads hermes-agent and makes the `hermes` CLI available in your `PATH`.
+`setup.sh` automates the entire installation:
 
-### Option B — From source
+1. **Checks Python** — verifies Python 3.11+ is available
+2. **Creates venv** — at `home/.venv-hermes/` inside the project
+3. **Installs hermes-agent** — from PyPI via `pip install hermes-agent`
+4. **Installs olympus_v3** — editable `pip install -e .` from `pyproject.toml`
+5. **Installs CUDA extras** — if `nvidia-smi` is detected, installs faster-whisper
+6. **Generates config.yaml** — copies `.yaml.template` → `config.yaml` per profile, substituting `__AETHER_ROOT__` and `__HERMES_PYTHON__` with real paths
+7. **Creates .env files** — copies `.env.example` → `.env` per profile (skips existing)
+8. **Creates wrapper scripts** — `aether` and `hermes` in `~/.local/bin/`
+9. **Sets HERMES_HOME** — adds export to `~/.bashrc`
+10. **Updates .gitignore** — adds `home/.venv-hermes/`
 
-If you prefer to build from source or need a specific branch:
+The script is **idempotent** — safe to re-run. It preserves existing `config.yaml` and `.env` files.
+
+After setup, restart your terminal (or run `source ~/.bashrc`) and start Aether:
 
 ```bash
-git clone https://github.com/NousResearch/hermes-agent.git
-cd hermes-agent
-bash scripts/setup-hermes.sh
-```
-
-Verify the installation:
-
-```bash
-hermes --version
+aether
 ```
 
 ---
 
-## 3. Clone Aether Agents
+## 3. Manual Install (Step-by-Step)
+
+If you prefer not to use `setup.sh`, follow these steps:
+
+### 3.1 Clone the repository
 
 ```bash
 git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 ```
 
-The default branch is `dev`.
-
----
-
-## 4. Create Virtual Environment and Install Olympus
-
-Olympus is the MCP server that connects all Daimons. Install it in editable mode:
+### 3.2 Create and activate the virtual environment
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ./src/olympus
+python3 -m venv home/.venv-hermes
+source home/.venv-hermes/bin/activate
 ```
 
----
-
-## 5. Run configure.sh
-
-`configure.sh` performs one-time project setup:
-
-- Detects the absolute path to your Python interpreter inside `.venv`.
-- Substitutes that path into every Daimon profile's `config.yaml` (`launch_command` field).
-- Sets the project root path in the root `home/config.yaml`.
+### 3.3 Install packages
 
 ```bash
-bash scripts/configure.sh
+pip install hermes-agent
+pip install -e .
 ```
 
-### Override the Python path
+> The `pip install -e .` installs the `olympus_v3` MCP server from `src/olympus_v3/` in editable mode using the project's `pyproject.toml`.
 
-If you want to use a specific Python binary instead of the auto-detected one:
+### 3.4 Generate config.yaml for each profile
+
+For every profile that has a `config.yaml.template`:
 
 ```bash
-HERMES_PYTHON=/usr/bin/python3.12 bash scripts/configure.sh
-```
-
----
-
-## 6. Set HERMES_HOME Permanently
-
-`HERMES_HOME` tells hermes-agent where to find the Aether Agents configuration tree. Add it to your shell profile so it persists:
-
-```bash
-# For Bash users
-echo 'export HERMES_HOME="$HOME/Aether-Agents/home"' >> ~/.bashrc
-source ~/.bashrc
-
-# For Zsh users
-echo 'export HERMES_HOME="$HOME/Aether-Agents/home"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-The `home/` directory structure:
-
-```
-home/
-├── config.yaml          # Root configuration (model, toolsets, MCP servers, …)
-├── SOUL.md              # Shared agent identity
-├── active_profile       # Currently active profile name
-└── profiles/
-    ├── hermes/          # Orchestrator
-    ├── ariadna/         # Project Manager
-    ├── hefesto/         # Developer
-    ├── etalides/        # Researcher
-    ├── athena/          # Security
-    └── daedalus/        # UX
-```
-
-Each profile directory contains its own `config.yaml`, `SOUL.md`, `.env`, and optional `skills/` folder.
-
----
-
-## 7. Configure API Keys
-
-Every Daimon profile ships an `.env.example` file. Copy it and fill in at least one provider key:
-
-```bash
-# Hermes (orchestrator) — required for first run
-cp home/profiles/hermes/.env.example home/profiles/hermes/.env
-```
-
-Edit the `.env` file:
-
-```
-OPENAI_API_KEY=sk-...
-# or
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Repeat for other profiles if you want them to use different models or keys:
-
-```bash
-for profile in ariadna hefesto etalides athena daedalus; do
-  cp "home/profiles/${profile}/.env.example" "home/profiles/${profile}/.env"
+for template in home/profiles/*/config.yaml.template; do
+    config="${template%.template}"
+    cp "$template" "$config"
+    sed -i "s|__AETHER_ROOT__|$(pwd)|g" "$config"
+    sed -i "s|__HERMES_PYTHON__|$(pwd)/home/.venv-hermes/bin/python|g" "$config"
 done
 ```
 
-> If a profile has no `.env`, it inherits the root model configuration from `home/config.yaml`.
+> On macOS, use `sed -i ''` instead of `sed -i`.
 
----
+### 3.5 Create .env files
 
-## 8. Verify the Ecosystem
-
-Run the built-in verification script:
+For every profile that has an `.env.example`:
 
 ```bash
-bash scripts/start.sh
+for example in home/profiles/*/.env.example; do
+    envfile="${example%.example}"
+    [ -f "$envfile" ] || cp "$example" "$envfile"
+done
 ```
 
-This script checks that:
+### 3.6 Set HERMES_HOME permanently
 
-1. The virtual environment is active.
-2. `hermes` CLI is on `PATH`.
-3. `HERMES_HOME` points to the correct directory.
-4. Olympus MCP server can start and discover all six Daimon profiles.
-
-A successful run ends with a summary table of discovered Daimons.
-
----
-
-## 9. First Run
-
-Launch the orchestrator:
+Add to your shell profile (`~/.bashrc` or `~/.zshrc`):
 
 ```bash
-hermes --profile hermes
+export HERMES_HOME="/path/to/Aether-Agents/home"
 ```
 
-Hermes connects to Olympus over the ACP protocol and registers the other five Daimons as callable agents. You can now issue tasks and Hermes will coordinate delegation automatically.
-
-To launch a specific Daimon directly (for testing):
+Then reload:
 
 ```bash
-hermes --profile hefesto
+source ~/.bashrc   # or source ~/.zshrc
 ```
 
 ---
 
-## 10. Common Install Issues
+## 4. WSL Setup (Windows Users)
+
+Aether Agents runs on **WSL2 only** — WSL1 does not support the required filesystem and networking features.
+
+- `setup.sh` auto-detects WSL and adjusts output messages accordingly.
+- **NVIDIA GPU in WSL**: install the CUDA toolkit inside your WSL distribution for faster-whisper STT support.
+- **Paths**: Windows paths (`C:\Users\...`) do not work in `config.yaml`. Always use Linux paths (`/home/<user>/...`).
+- **Permissions**: if you encounter `Permission denied` on scripts, run:
+
+```bash
+chmod +x scripts/*.sh
+```
+
+---
+
+## 5. GPU / CUDA Setup (Optional — faster-whisper STT)
+
+### 5.1 Check for NVIDIA GPU
+
+```bash
+nvidia-smi
+```
+
+### 5.2 If GPU is available
+
+Install CUDA-accelerated STT packages inside the venv:
+
+```bash
+source home/.venv-hermes/bin/activate
+pip install faster-whisper nvidia-cublas-cu12
+```
+
+Then in each profile's `config.yaml`, set:
+
+```yaml
+stt:
+  enabled: true
+  provider: local
+  local:
+    model: medium
+    language: en
+```
+
+### 5.3 If no GPU
+
+Use cloud-based STT (OpenAI Whisper API). In `config.yaml`:
+
+```yaml
+stt:
+  enabled: true
+  provider: openai
+  openai:
+    model: whisper-1
+```
+
+This requires `OPENAI_API_KEY` set in the profile's `.env` file.
+
+---
+
+## 6. Configuration
+
+### 6.1 API Keys
+
+Edit the `.env` file in each profile to set your API keys. At minimum, configure the orchestrator:
+
+```bash
+nano home/profiles/orchestrator/.env
+```
+
+Available providers (uncomment and fill in the ones you need):
+
+| Variable | Provider |
+|----------|----------|
+| `OPENAI_API_KEY` | OpenAI |
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `OPENROUTER_API_KEY` | OpenRouter (aggregates multiple providers) |
+| `DEEPSEEK_API_KEY` | DeepSeek |
+| `GLM_API_KEY` | Zhipu AI (GLM models) |
+| `MOONSHOT_API_KEY` | Moonshot (Kimi) |
+| `MINIMAX_API_KEY` | MiniMax |
+| `AIPRIMETECH_API_KEY` | AI Prime Tech |
+
+See each profile's `.env.example` for the full list.
+
+### 6.2 config.yaml Templates
+
+Each profile ships a `config.yaml.template` containing two placeholders:
+
+- `__AETHER_ROOT__` — replaced with the absolute path to the Aether-Agents repo
+- `__HERMES_PYTHON__` — replaced with the venv Python path (`<repo>/home/.venv-hermes/bin/python`)
+
+`setup.sh` handles substitution automatically. For manual install, see [§3.4](#34-generate-configyaml-for-each-profile).
+
+For the full configuration reference, see [CONFIGURATION.md](./CONFIGURATION.md).
+
+---
+
+## 7. Updating
+
+To update Aether Agents to the latest version:
+
+```bash
+bash scripts/update.sh
+```
+
+`update.sh` performs:
+
+1. **git pull** — fetches latest changes (stashes local changes if needed)
+2. **pip upgrade hermes-agent** — updates to the latest PyPI release
+3. **pip install -e .** — reinstalls olympus_v3 in editable mode
+4. **Checks config.yaml** — regenerates only if placeholders are still unresolved
+
+It **preserves** your local `config.yaml`, `.env` files, and the venv. It does **not** overwrite `config.yaml` unless it contains unresolved `__AETHER_ROOT__` or `__HERMES_PYTHON__` placeholders.
+
+To force regeneration of all config files from templates:
+
+```bash
+bash scripts/update.sh --regen-config
+```
+
+---
+
+## 8. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `hermes: command not found` | hermes-agent not on PATH | Re-run the hermes installer or open a new terminal |
-| `ModuleNotFoundError: olympus` | Olympus not installed in venv | Run `pip install -e ./src/olympus` with venv active |
-| `HERMES_HOME is not set` | Environment variable missing | Add the export to your shell profile (step 6) |
-| Olympus does not discover Daimons | `configure.sh` not run | Run `bash scripts/configure.sh` again |
-| Python version errors | Python < 3.11 | Upgrade Python and recreate the venv |
+| `aether: command not found` | Wrapper script not on PATH | Restart terminal or run `source ~/.bashrc` |
+| `python3: command not found` | Python not installed | Install Python 3.11+ (`sudo apt install python3.12` on Ubuntu) |
+| `ModuleNotFoundError: olympus_v3` | Olympus not installed in venv | Run `bash scripts/setup.sh` again |
+| venv creation fails | `python3-venv` package missing | `sudo apt install python3-venv` (Ubuntu/Debian) |
+| `nvidia-smi not found` | No NVIDIA drivers installed | Install CUDA toolkit or use cloud STT (`provider: openai`) |
+| `pip install` fails (SSL errors) | Corporate proxy or cert issues | `pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org hermes-agent` |
+| Hermes can't find Daimons | `HERMES_HOME` not set | `setup.sh` adds it to `~/.bashrc`; restart terminal |
+| `Permission denied` on scripts | No execute permission | `chmod +x scripts/*.sh` |
+| `hermes` works but `aether` doesn't | Missing wrapper script | Run `bash scripts/setup.sh` to create the `aether` wrapper |
 
-For more in-depth troubleshooting, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
-
----
-
-## Quick Reference
-
-| Step | Command |
-|------|---------|
-| Install hermes-agent | `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \| bash` |
-| Clone repo | `git clone https://github.com/DarkArty07/Aether-Agents.git` |
-| Create venv | `python -m venv .venv && source .venv/bin/activate` |
-| Install Olympus | `pip install -e ./src/olympus` |
-| Configure paths | `bash scripts/configure.sh` |
-| Set HERMES_HOME | `export HERMES_HOME="$HOME/Aether-Agents/home"` |
-| Verify | `bash scripts/start.sh` |
-| Launch | `hermes --profile hermes` |
+For more help, see [QUICKSTART.md](./QUICKSTART.md).
 
 ---
 
-**Next:** [CONFIGURATION.md](./CONFIGURATION.md) · [QUICKSTART.md](./QUICKSTART.md) · [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
+## 9. Upgrading from v0.7.x
+
+v0.8.0 introduces significant structural changes. Key migrations:
+
+| v0.7.x (Old) | v0.8.0 (New) |
+|---------------|---------------|
+| `~/.hermes/hermes-agent/` venv | `home/.venv-hermes/` inside project |
+| `~/.local/bin/hermes` symlink | `~/.local/bin/aether` and `~/.local/bin/hermes` wrapper scripts |
+| `HERMES_HOME=~/.hermes/hermes-agent/home` | `HERMES_HOME=<project>/home/` |
+| `configure.sh` (manual steps) | `setup.sh` (full automation) |
+| `pip install -e .` (project root) | `pip install hermes-agent` + `pip install -e .` (olympus_v3) |
+
+To upgrade:
+
+```bash
+cd Aether-Agents
+git pull
+bash scripts/setup.sh
+```
+
+`setup.sh` is idempotent and will clean up old artifacts. It overwrites the wrapper scripts in `~/.local/bin/` and updates `HERMES_HOME` in your shell profile.
+
+> **Note**: If you had a venv at `~/.hermes/hermes-agent/`, you can safely remove it after `setup.sh` completes — the new venv lives at `home/.venv-hermes/` inside the project.
+
+For detailed migration instructions, see the pip-installation migration guide in the hermes-agent documentation.
+
+**Next:** [CONFIGURATION.md](./CONFIGURATION.md) · [QUICKSTART.md](./QUICKSTART.md)

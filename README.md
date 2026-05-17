@@ -1,46 +1,42 @@
 # Aether Agents
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-A **provider-agnostic** multi-agent orchestration system for collaborative software development. Hermes delegates to specialized Daimons through ACP sessions with plugin-powered observability and Human-in-the-Loop approval gates.
+A **provider-agnostic** 5-phase agent ecosystem: **IDEA → RESEARCH → DESIGN → PLAN → CODE**. Hermes orchestrates 6 specialized Daimons through Olympus v3, an MCP server with ACP sessions and plugin-powered observability.
+
+Any OpenAI-compatible provider works — OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, and more. Each Daimon can use a different model.
 
 ---
 
-## What is Aether Agents?
+## Quick Start
 
-Aether Agents is a 5-phase agent ecosystem:
-
+```bash
+git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+bash scripts/setup.sh
 ```
-IDEA → RESEARCH → DESIGN → PLAN → CODE
-```
 
-- **Hermes** — The orchestrator. Uses Hermes Agent (MCP, memory, skills) to route tasks, synthesize output, and manage workflows.
-- **6 Daimons** — Specialized sub-agents that execute within their domain.
-- **Olympus v3** — MCP server that bridges Hermes to Daimons via ACP + Plugin Hooks + SQLite.
+Then: edit `.env` with your API keys, restart your terminal, and run `aether`.
 
-**Communication stack:**
-- Hermes ↔ **MCP** ↔ Olympus v3 ↔ **ACP** ↔ Daimon subprocess
-- Plugin hooks write per-turn data to **SQLite** → Olympus reads it on `poll()`
-
-Any OpenAI-compatible provider works — OpenAI, Anthropic, Google, DeepSeek, Qwen, OpenRouter, Ollama, and more. Each Daimon can use a different model.
+That's it. `setup.sh` handles venv, pip dependencies, config templating, and shell wrappers automatically.
 
 ---
 
-## Olympus v3 Architecture
+## Requirements
 
-Replaces Pi Agent RPC with **ACP + Plugin Hooks + SQLite**:
+- **Python 3.11+**
+- **Git**
+- NVIDIA GPU optional (for STT with faster-whisper)
 
-- **ACP** — Standard session lifecycle (open, message, poll, close, delegate)
-- **Plugin hooks** — Per-turn observability INSIDE the Daimon process:
-  - `post_llm_call` → writes full turn + reasoning to SQLite
-  - `post_tool_call` → writes every tool invocation to SQLite
-  - `on_session_end` → marks session completed (always fires)
-  - `pre_llm_call` → reads steering directives from SQLite
-- **SQLite** — Shared data channel. No fragile buffer accumulation, no event translation.
+For detailed installation options, see [docs/guides/INSTALLATION.md](docs/guides/INSTALLATION.md).
+
+---
+
+## Architecture
 
 ```
 Hermes (Orchestrator)
@@ -55,16 +51,56 @@ Daimon (hermes-agent -p <daimon>)
 SQLite ← both sides read/write
 ```
 
-### Why v3 Replaces v2
+- **ACP** — Standard session lifecycle (open, message, poll, close, delegate)
+- **Plugin Hooks** — Per-turn observability inside the Daimon process (`post_llm_call`, `post_tool_call`, `on_session_end`, `pre_llm_call`)
+- **SQLite** — Shared data channel; no fragile buffer accumulation or event translation
 
-| Feature | Pi Agent RPC (v2) | Olympus v3 (ACP + Plugin + SQLite) |
-|---------|-------------------|-------------------------------------|
-| Per-turn visibility | Accumulated buffer (fragile) | `post_llm_call` hook writes each turn |
-| Tool audit trail | Always reported 0 (Bug B) | `post_tool_call` captures every invocation |
-| Session completion | `agent_end` not guaranteed | `on_session_end` always fires |
-| Mid-conversation steering | Impossible | `pre_llm_call` reads steering from SQLite |
-| Response extraction | 3 fallback sources, fragile | Canonical: SQLite turn row |
-| Protocol | Pi JSONL (black-box) | ACP (standard) + Plugin (inside agent) + SQLite (shared) |
+---
+
+## Project Structure
+
+```
+Aether-Agents/
+├── home/
+│   ├── profiles/         ← Daimon profiles (hefesto, athena, etc.)
+│   ├── skills/            ← Shared skills
+│   ├── .venv-hermes/      ← Hermes venv (created by setup.sh)
+│   └── config.yaml        ← Root Daimon configuration
+├── src/olympus_v3/        ← MCP server, ACP manager, SQLite, plugin hooks
+├── scripts/
+│   ├── setup.sh           ← Full automated setup
+│   ├── update.sh          ← Git pull + pip upgrade
+│   └── start-gateway.sh   ← Systemd gateway manager
+├── docs/guides/           ← Installation, configuration, quickstart guides
+├── tests/
+└── Makefile
+```
+
+---
+
+## Available Scripts
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| setup.sh | `bash scripts/setup.sh` | Full automated setup (venv, pip, config, wrappers) |
+| update.sh | `bash scripts/update.sh` | Git pull + pip upgrade (preserves config) |
+| start-gateway.sh | `bash scripts/start-gateway.sh start` | Start/stop/restart Hermes gateway service |
+| Makefile | `make setup` / `make doctor` | Shortcuts for common tasks |
+
+---
+
+## Configuration
+
+Copy and edit the provided templates:
+
+```bash
+cp home/config.yaml.template home/config.yaml   # Edit providers, models, toolsets
+cp .env.example .env                             # Add your API keys
+```
+
+`config.yaml.template` uses `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them automatically.
+
+For full configuration docs, see [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md).
 
 ---
 
@@ -83,99 +119,12 @@ Level 2 Daimons execute tasks. Level 1 Consultants provide expert input on deman
 
 ---
 
-## Quick Start
+## Contributing
 
-### Prerequisites
-
-- Python 3.11+
-- [Hermes Agent](https://github.com/nousresearch/hermes-agent) installed
-
-### Install
-
-```bash
-git clone https://github.com/DarkArty07/Aether-Agents.git
-cd Aether-Agents
-
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .
-```
-
-### Configure
-
-```bash
-cp home/profiles/hermes/.env.example home/profiles/hermes/.env
-# Edit .env with your API keys
-
-cp home/config.yaml.example home/config.yaml
-# Edit provider settings for your system
-```
-
-### Install Plugin
-
-Each Daimon profile needs the `olympus_v3` plugin:
-
-```yaml
-# home/profiles/<daimon>/config.yaml
-plugins:
-  enabled:
-    - olympus_v3
-```
-
-### Enable MCP Server
-
-Add `olympus_v3` to your Hermes MCP servers config.
-
-### Start
-
-```bash
-HERMES_HOME=/path/to/Aether-Agents/home hermes --profile hermes
-```
-
----
-
-## Configuration
-
-Daimons are declared under the `daimons` key in `home/config.yaml`:
-
-```yaml
-daimons:
-  hefesto:
-    provider: opencode-go
-    model: deepseek-v4-flash
-    thinking: medium
-    toolsets:
-      - terminal
-      - file
-      - search_files
-```
-
-Each Daimon profile lives at `home/profiles/<name>/` with `config.yaml`, `SOUL.md`, and the `plugins/olympus_v3/` hook.
-
----
-
-## Project Structure
-
-```
-Aether-Agents/
-├── src/olympus_v3/           ← MCP server + ACP manager + SQLite
-│   ├── server.py             ← MCP tools (talk_to, discover, consult)
-│   ├── acp_manager.py        ← ACP session lifecycle
-│   ├── db.py                 ← SQLite persistence (WAL mode)
-│   ├── config_loader.py      ← Discovers Daimon profiles
-│   ├── consult_action.py     ← Consulting workflow
-│   └── olympus_v3_hooks/     ← Plugin hooks (per-turn observability)
-├── home/
-│   ├── profiles/             ← Daimon profiles (hefesto, athena, ictinus, ...)
-│   ├── skills/               ← Shared skills
-│   └── config.yaml           ← Daimon configs, providers, models
-├── tests/
-├── CHANGELOG.md
-└── LICENSE
-```
+PRs are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## License
 
-MIT License. See [LICENSE](LICENSE) for details.
+[MIT](LICENSE)
