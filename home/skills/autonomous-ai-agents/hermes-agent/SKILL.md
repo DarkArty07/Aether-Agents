@@ -1291,7 +1291,7 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 
 **Full reference:** See `references/auxiliary-models.md` for detailed config schema, all auxiliary sections, provider/model pairs, and common pitfalls.
 
-**Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, and version-specific pitfalls.
+**Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, version-specific pitfalls, Daimon config template requirements, and post-migration repo cleanup audit.
 
 **OpenCode Go models:** See `references/opencode-go-models.md` for model IDs, multimodal support matrix, usage limits, and configuration patterns.
 

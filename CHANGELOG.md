@@ -2,6 +2,36 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.1] - 2026-05-18
+
+### 🧹 Repository Cleanup
+
+Removed deprecated and obsolete files after pip install migration (v0.8.0). The repository now contains only active, maintained code and documentation.
+
+### Removed
+
+- `scripts/configure.sh` — replaced by `scripts/setup.sh` in v0.8.0. Referenced obsolete `~/.hermes/` paths.
+- `scripts/start.sh` — replaced by `scripts/setup.sh` + `scripts/start-gateway.sh` in v0.8.0. Referenced Olympus v2 and obsolete paths.
+- `src/olympus_v2/` — entire directory (9 files). Olympus v2 was deprecated in v0.7.0, replaced by v3. Removed: `__init__.py`, `config_loader.py`, `consult_action.py`, `consulting_db.py`, `event_translator.py`, `pi_adapter.py`, `requirements.txt`, `server.py`, `soul_to_system.py`.
+- `home/.pi-daimons/` — entire directory (18 files). Pi Agent RPC was deprecated in v0.7.0, replaced by ACP. Removed all 6 Daimon `.pi/` directories with SYSTEM.md, extensions, and settings.json.
+- `tests/olympus/` — entire directory (3 files). Tests for olympus_v2 module.
+- `docs/hermes-profile-setup.md` — referenced obsolete `~/.hermes/` paths.
+- `docs/workflow-engine-experiment.md` — experiment document, not official guide.
+- `home/config.yaml.example` — confusing duplication of per-profile templates.
+
+### Changed
+
+- **Daimon configs are now templates**: All 6 Daimon `config.yaml` files (ariadna, hefesto, etalides, athena, daedalus, ictinus) are no longer tracked in git. Each now has a `config.yaml.template` with `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders. `setup.sh` generates the live `config.yaml` from templates.
+- **`home/profiles/hermes/config.yaml`** untracked from git (was already gitignored, now properly removed from tracking). The `config.yaml.template` is the tracked version.
+- **`.gitignore`** updated with entries for all Daimon live configs, `home/config.yaml`, and `home/profiles/orchestrator/config.yaml`.
+- **`home/profiles/hermes/config.yaml.template`** comment updated to reference `setup.sh` instead of `configure.sh`.
+- **`scripts/setup.sh`** already iterates over all profiles with `config.yaml.template` files — no changes needed.
+- **References updated**: AGENTS.md, CONFIGURATION.md, INSTALLATION.md, website HTML, and other docs updated to reference `setup.sh` instead of deprecated scripts.
+
+### Migration from v0.8.0
+
+No action required. If you already ran `setup.sh` in v0.8.0, your config files are already generated. If cloning fresh, `setup.sh` will generate all Daimon configs from templates.
+
 ## [0.8.0] - 2026-05-17
 
 ### 🚀 Distribution & Installation Overhaul

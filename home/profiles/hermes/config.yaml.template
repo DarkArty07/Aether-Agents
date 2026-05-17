@@ -1,5 +1,5 @@
 # Hermes Orchestrator — Aether Agents profile config
-# Template: run scripts/configure.sh to generate config.yaml from this file.
+# Template: run scripts/setup.sh to generate config.yaml from this file.
 # Replaces __AETHER_ROOT__ and __HERMES_PYTHON__ with machine-specific paths.
 
 agent:

@@ -282,7 +282,7 @@ v0.8.0 introduces significant structural changes. Key migrations:
 | `~/.hermes/hermes-agent/` venv | `home/.venv-hermes/` inside project |
 | `~/.local/bin/hermes` symlink | `~/.local/bin/aether` and `~/.local/bin/hermes` wrapper scripts |
 | `HERMES_HOME=~/.hermes/hermes-agent/home` | `HERMES_HOME=<project>/home/` |
-| `configure.sh` (manual steps) | `setup.sh` (full automation) |
+| `configure.sh` (removed in v0.8.1) | `setup.sh` (full automation) |
 | `pip install -e .` (project root) | `pip install hermes-agent` + `pip install -e .` (olympus_v3) |
 
 To upgrade:
