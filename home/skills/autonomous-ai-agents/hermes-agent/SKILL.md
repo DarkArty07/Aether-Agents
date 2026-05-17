@@ -35,8 +35,14 @@ People use Hermes for software development, research, system administration, dat
 ## Quick Start
 
 ```bash
-# Install
+# Install (v0.14.0+ — PyPI)
+pip install hermes-agent
+
+# Alternative: shell installer (Linux/macOS/WSL2)
 curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+
+# Alternative: Windows PowerShell (early beta)
+irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 | iex
 
 # Interactive chat (default)
 hermes
@@ -1282,6 +1288,8 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 
 **Full reference:** See `references/auxiliary-models.md` for detailed config schema, all auxiliary sections, provider/model pairs, and common pitfalls.
 
+**Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, and version-specific pitfalls.
+
 **OpenCode Go models:** See `references/opencode-go-models.md` for model IDs, multimodal support matrix, usage limits, and configuration patterns.
 
 **Training data & fine-tuning costs:** See `references/training-data-and-costs.md` for ShareGPT trajectory format, Tinker RL pricing, RunPod GPU selection, Unsloth SFT setup, and cost estimates per training scenario.
@@ -1410,7 +1418,9 @@ hermes config set timezone 'America/Mexico_City'
 | CLI commands | `hermes --help` or [CLI reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands) |
 | Gateway logs | `~/.hermes/logs/gateway.log` |
 | Session files | `~/.hermes/sessions/` or `hermes sessions browse` |
-| Source code | `~/.hermes/hermes-agent/` |
+| Source code | `~/.hermes/hermes-agent/` (git-clone install only — not present with pip install) |
+
+**Note:** With `pip install hermes-agent` (v0.14.0+), source code is not installed locally. Use `pip show hermes-agent` to find package location, or clone the repo separately if needed.
 
 ---
 
