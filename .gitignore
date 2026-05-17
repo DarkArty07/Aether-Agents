@@ -39,9 +39,15 @@ home/profiles/*/skills/*
 # --- Per-profile bundled manifests (auto-generated) ---
 **/.bundled_manifest
 
-# --- Per-profile configs (tracked — contain agent: discovery for Olympus) ---
-# Only the hermes config has API keys that should stay local
+# --- Per-profile live config (generated from templates) ---
 home/profiles/hermes/config.yaml
+home/profiles/orchestrator/config.yaml
+home/profiles/ariadna/config.yaml
+home/profiles/hefesto/config.yaml
+home/profiles/etalides/config.yaml
+home/profiles/athena/config.yaml
+home/profiles/daedalus/config.yaml
+home/profiles/ictinus/config.yaml
 
 # --- Per-profile agent hooks (local for security) ---
 home/profiles/*/agent-hooks/
@@ -126,14 +132,6 @@ PROMPT_OPUS.md
 CLAUDE.md
 docs/sesiones/
 docs/setup/
-
-# --- Pi Agent Daimon configs (auth.json already gitignored by **/auth.json) ---
-
-# Old locations (moved to src/ and home/ level)
-home/profiles/hermes/olympus_v2/
-
-# Old pi-daimons location (moved to home/.pi-daimons/)
-home/profiles/hermes/.pi-daimons/
 
 # Auto-generated observations
 .aether/

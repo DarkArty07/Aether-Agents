@@ -74,7 +74,7 @@ Use the GitHub issue templates:
 
 Never commit:
 - `home/profiles/hermes/config.yaml` — Live config with secrets
-- `home/.pi-daimons/*/auth.json` — Credentials (gitignored)
+- `home/profiles/orchestrator/config.yaml` — Live config with secrets
 - `home/profiles/hermes/.env` — Environment variables (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 - `.aether/` — Runtime state (gitignored)

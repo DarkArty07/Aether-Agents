@@ -30,6 +30,14 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.1 (2026-05-18)
+
+- **chore**: Removed deprecated scripts (configure.sh, start.sh), olympus_v2 code, .pi-daimons, and obsolete docs
+- **chore**: Untracked Daimon config.yaml files — now generated from config.yaml.template by setup.sh
+- **chore**: Removed home/config.yaml.example (replaced by per-profile templates)
+- **refactor**: Daimon configs use __AETHER_ROOT__ placeholders instead of hardcoded paths
+- **refactor**: Updated all doc references from configure.sh/start.sh to setup.sh/start-gateway.sh
+
 ### v0.8.0 (2026-05-17)
 
 - **feat**: `scripts/setup.sh` — automated installation (Python venv, pip install, config generation, wrapper scripts)
@@ -103,7 +111,7 @@ The website should be updated alongside or immediately after the README.
 
 Never commit:
 - `home/profiles/hermes/config.yaml` — Contains live config
-- `home/.pi-daimons/*/auth.json` — Credentials (gitignored)
+- `home/profiles/orchestrator/config.yaml` — Contains live config
 - `home/profiles/hermes/.env` — Secrets (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 

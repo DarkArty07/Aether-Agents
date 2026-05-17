@@ -409,6 +409,99 @@ git push -u origin HEAD
 # 8. Merge when green (see Section 6)
 ```
 
+## 8. Release Workflow
+
+Complete versioned release pipeline: branch → changes → commit → tag → PR → merge → release.
+
+### Branch and Version Bump
+
+```bash
+# Start from clean main
+git checkout main && git pull origin main
+
+# Create release branch
+git checkout -b release/v0.8.0
+
+# Bump version in pyproject.toml, CHANGELOG.md, AGENTS.md, etc.
+# (Delegate to Hefesto or make changes directly)
+
+# Stage ONLY intended files — never git add -A in repos with runtime data
+git add pyproject.toml CHANGELOG.md AGENTS.md README.md scripts/ Makefile
+git commit -m "release: v0.8.0 — automated setup scripts, docs overhaul"
+```
+
+### Tag and Push
+
+```bash
+# Create annotated tag
+git tag v0.8.0
+
+# Push branch + tag
+git push origin release/v0.8.0 --tags
+```
+
+### Create PR and Merge
+
+```bash
+# Create PR targeting main
+gh pr create \
+  --base main \
+  --head release/v0.8.0 \
+  --title "release: v0.8.0 — description" \
+  --body "## v0.8.0 — Title
+
+### What's New
+- feat: new feature description
+
+### Breaking Changes
+- None (or description)
+
+### Migration from v0.7.x
+- Run bash scripts/setup.sh"
+
+# Squash merge + delete branch (cleanest for releases)
+gh pr merge 25 --squash --delete-branch
+```
+
+### Create GitHub Release
+
+```bash
+gh release create v0.8.0 \
+  --title "v0.8.0 — Title" \
+  --notes "## v0.8.0 — Title
+
+### Quick Start
+\`\`\`bash
+git clone https://github.com/OWNER/REPO.git
+cd REPO
+bash scripts/setup.sh
+\`\`\`
+
+### What's New
+- bullet points
+
+### Upgrade from v0.7.x
+- Migration instructions"
+```
+
+### Post-Release Cleanup
+
+```bash
+# Switch back to main and pull the merge
+git checkout main
+git pull origin main
+
+# Delete local branch (remote already deleted by --delete-branch)
+git branch -d release/v0.8.0
+```
+
+### Pitfalls
+
+- **Never `git add -A`**: Stage specific files only. Repos with runtime data (databases, sessions, caches, local configs) will stage everything. Use `git add <file1> <file2> ...` or `git diff --cached --stat` to review before committing.
+- **Version must match everywhere**: pyproject.toml, CHANGELOG.md, AGENTS.md (versioning section), README.md (badge). Miss any one and the release is inconsistent.
+- **Tag after commit**: Create the tag AFTER the commit is made, not before. The tag points to the commit hash.
+- **Squash merge for releases**: Use `--squash --delete-branch` for release PRs. This keeps main history clean with a single commit per release. Feature branches can use regular merge if needed.
+
 ## Useful PR Commands Reference
 
 | Action | gh | git + curl |

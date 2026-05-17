@@ -1,3 +1,5 @@
+# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
+
 # Daedalus configuration — Aether Agents Daimon (Level 1 Consultant)
 
 # Agent discovery field — Olympus reads this to register the Daimon
@@ -34,7 +36,7 @@ toolsets:
 
 skills:
   external_dirs:
-    - /home/prometeo/Aether-Agents/home/skills
+    - __AETHER_ROOT__/home/skills
 
 # Session settings
 # Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
