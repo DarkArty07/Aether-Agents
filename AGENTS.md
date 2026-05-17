@@ -30,6 +30,17 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.7.2 (2026-05-17)
+
+- **feat**: pip installation migration guide (references/pip-installation-migration.md) — full plan to migrate from git-clone to `pip install hermes-agent`
+- **feat**: orchestrator profile .env.example template
+- **docs**: hermes-agent SKILL.md updated for v0.14.0 (pip install, lazy deps, cold start improvements)
+- **docs**: hermes-agent terminal-write-restriction.md updated with TUI hook bug confirmation
+- **docs**: hermes-agent profile-alias-wrapper.sh template updated
+- **docs**: test-driven-development SKILL.md updated with module-level globals pitfall
+- **chore**: gitignore PID-suffixed runtime files (.olympus_session*, .olympus_db_path*, .aether_home*, .clean_shutdown)
+- **chore**: gitignore .env.bak files, subagent-driven-development references
+
 ### Commits
 
 Format: `type: concise subject line`
