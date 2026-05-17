@@ -2,74 +2,79 @@
 
 Get Aether Agents running in under five minutes.
 
-## 1. Prerequisites
-
-| Requirement | Minimum Version |
-|-------------|-----------------|
-| Python      | 3.11+           |
-| git         | Any recent      |
-| hermes-agent| Latest          |
-
-Install hermes-agent:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
-```
-
-## 2. Clone and Install
+## 1. Clone and Setup
 
 ```bash
 git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
-bash scripts/configure.sh
+bash scripts/setup.sh
 ```
 
-`configure.sh` is a one-time setup that substitutes absolute paths into config files so every Daimon profile can find the correct Python interpreter and project root.
+`setup.sh` is idempotent — safe to re-run. It handles Python detection, venv creation, hermes-agent installation, config generation, and shell wrappers.
 
-## 3. Configure API Key
+## 2. Configure API Key
 
-Copy the example environment file into the Hermes profile and add your key:
+Edit the orchestrator profile environment file and add at least one provider key:
 
 ```bash
-cp home/profiles/hermes/.env.example home/profiles/hermes/.env
+nano home/profiles/orchestrator/.env
 ```
 
-Edit `home/profiles/hermes/.env` and set at least one provider API key:
-
 ```
+# Uncomment and set your key:
 OPENAI_API_KEY=sk-...
-# or
-ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## 4. Start
+## 3. Launch
+
+**Restart your terminal first** — `setup.sh` updates your PATH and `HERMES_HOME`.
 
 ```bash
-export HERMES_HOME=~/Aether-Agents/home
-hermes --profile hermes
+aether
 ```
 
-> Tip: add the `HERMES_HOME` export to your `~/.bashrc` or `~/.zshrc` so it persists across sessions.
+Or run directly without the wrapper:
 
-## 5. Verify
+```bash
+home/.venv-hermes/bin/hermes --profile orchestrator
+```
 
-When Hermes starts it connects to the Olympus MCP server. You should see log output confirming that Olympus discovered the six Daimon profiles:
+## 4. Verify
+
+On startup, Olympus discovers Daimon profiles. You should see something like:
 
 ```
 [olympus] discovered: ariadna, athena, daedalus, etalides, hefesto, hermes
 ```
 
-If all six appear, the system is ready. You can also run a quick smoke test:
+Quick smoke test:
 
 ```bash
-bash scripts/start.sh
+make doctor
 ```
 
-## 6. Next Steps
+## 5. First Delegation
+
+Talk to a Daimon right from the Hermes prompt:
+
+```
+> Talk to Hefesto about implementing a feature
+```
+
+Or use `delegate_task` in a session to hand work to a specific agent.
+
+## 6. Gateway (Optional)
+
+For an always-on background service:
+
+```bash
+bash scripts/start-gateway.sh start
+# or:
+make gateway ARGS=start
+```
+
+## 7. Next Steps
 
 - **Full installation walkthrough:** [INSTALLATION.md](./INSTALLATION.md)
 - **Configuration reference:** [CONFIGURATION.md](./CONFIGURATION.md)
-- **Troubleshooting:** [TROUBLESHOOTING.md](./TROUBLESHOOTING.md)

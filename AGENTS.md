@@ -30,6 +30,20 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.0 (2026-05-17)
+
+- **feat**: `scripts/setup.sh` — automated installation (Python venv, pip install, config generation, wrapper scripts)
+- **feat**: `scripts/update.sh` — git pull + pip upgrade + config regeneration
+- **feat**: `scripts/start-gateway.sh` — systemd gateway service manager (start/stop/restart/status)
+- **feat**: `Makefile` — common commands (setup, update, gateway, doctor, clean, test)
+- **feat**: `home/profiles/orchestrator/config.yaml.template` — machine-independent config template
+- **feat**: `home/profiles/orchestrator/.env.example` — API key template (from v0.7.2)
+- **docs**: README.md rewritten with Quick Start, installation scripts, architecture
+- **docs**: INSTALLATION.md rewritten (setup.sh, manual install, WSL, GPU, troubleshooting)
+- **docs**: QUICKSTART.md rewritten (clone, setup, .env, run)
+- **chore**: .gitignore updated (home/.venv-hermes/, home/kanban.db)
+- **chore**: Deprecated scripts/configure.sh and scripts/start.sh (replaced by setup.sh)
+
 ### v0.7.2 (2026-05-17)
 
 - **feat**: pip installation migration guide (references/pip-installation-migration.md) — full plan to migrate from git-clone to `pip install hermes-agent`
