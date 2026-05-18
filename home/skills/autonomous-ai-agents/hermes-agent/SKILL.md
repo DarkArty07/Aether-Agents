@@ -209,6 +209,10 @@ hermes profile import FILE  Import from archive
 
 **⚠ Reserved profile name "hermes":** `hermes profile alias hermes` fails with `Error: 'hermes' is a reserved name`. The workaround is to create the wrapper script manually — see `templates/profile-alias-wrapper.sh`. A bare symlink silently uses the default profile instead of the named one, which is the #1 cause of "my SOUL.md isn't loading" bugs.
 
+**Default Profile with Custom HERMES_HOME:** When `HERMES_HOME` is set to a custom path outside `~/.hermes` (e.g., `~/Aether-Agents/home`), the framework uses that directory directly as the default profile — no `-p` flag needed. This means `SOUL.md`, `config.yaml`, `.env`, `auth.json`, `agent-hooks/`, and all runtime state live in `HERMES_HOME/` itself, not in a subdirectory under `profiles/`. Named Daimon profiles (e.g., `-p hefesto`) still use `profiles/hefesto/`. The wrapper script simply does `exec hermes "$@"` without `-p`. This is the canonical architecture for custom deployments (Docker, Aether Agents, etc.) — cleaner than a named profile because it eliminates one level of indirection and the `-p` flag.
+
+**MCP DB path resolution:** The `olympus_v3` MCP server resolves its database path with priority: `OLYMPUS_DB_PATH` env var > `AETHER_HOME/.olympus/olympus_v3.db` > `HERMES_HOME/.olympus/olympus_v3.db` > `~/.hermes/.olympus/olympus_v3.db`. The canonical location for shared deployments is `AETHER_HOME/.olympus/` because all Daimon profiles share the same DB. Do NOT put it inside a profile directory.
+
 **⚠ Wrapper-script alias conflict (THE #2 CAUSE OF PROFILE ISSUES):** If `/home/YOURUSER/.local/bin/hermes` is a custom bash wrapper that injects `-p hermes`, then `hermes profile alias <name>` creates scripts that call `exec hermes -p <name>`, which expands to `exec hermes -p hermes -p <name>`. The pre-parser `_apply_profile_override()` takes the first `-p` (`hermes`), strips it from argv, and argparse then sees `<name>` as a positional subcommand → `error: invalid choice: '<name>'`. **Fix:** All profile alias scripts must call the venv binary directly, NOT via the `hermes` wrapper. Template: `exec /home/YOURUSER/.hermes/hermes-agent/venv/bin/hermes -p <name> "$@"`, plus `export HERMES_HOME=/home/YOURUSER/Aether-Agents/home`. Never use `exec hermes -p <name>` in an alias script if the `hermes` command is itself a wrapper.
 
 ### Credential Pools
@@ -1292,6 +1296,8 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 **Full reference:** See `references/auxiliary-models.md` for detailed config schema, all auxiliary sections, provider/model pairs, and common pitfalls.
 
 **Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, version-specific pitfalls, Daimon config template requirements, and post-migration repo cleanup audit.
+
+**Default Profile Migration reference:** See `references/default-profile-migration.md` for the pattern of migrating from a named profile (`-p orchestrator`) to the default profile when using a custom HERMES_HOME. Includes complete checklist, architecture comparison table, and pitfalls.
 
 **OpenCode Go models:** See `references/opencode-go-models.md` for model IDs, multimodal support matrix, usage limits, and configuration patterns.
 

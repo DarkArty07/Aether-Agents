@@ -1,20 +1,30 @@
 #!/bin/sh
-# Hermes profile alias wrapper — GENERIC template for any named profile
-# Replace <PROFILE> and paths below with your actual values.
-# Usage: cp to ~/.local/bin/<profile-name> && chmod +x
+# Hermes wrapper — GENERIC template
+# Replace paths below with your actual values.
+# Usage: cp to ~/.local/bin/hermes && chmod +x
 #
-# WHY: "hermes profile alias <name>" creates `exec hermes -p <name> "$@"`.
-# If the `hermes` command is itself a wrapper that injects `-p hermes`,
-# the result is `-p hermes -p <name>` — the pre-parser takes the first
-# `-p`, argparse sees <name> as a subcommand, and you get
-# "error: invalid choice: '<name>'". This template calls the venv binary
-# directly, avoiding the conflict.
+# DEFAULT PROFILE (recommended for orchestrator):
+# When HERMES_HOME points to a custom directory (not ~/.hermes), the framework
+# uses that directory as the default profile. No -p flag needed — SOUL.md,
+# config.yaml, .env, auth.json are read from HERMES_HOME/ directly.
 #
-# CRITICAL: Set HERMES_HOME to your Aether Agents home directory.
-# Without it, the profile's config.yaml, SOUL.md, skills, and sessions
-# won't be found.
+# NAMED PROFILE (for Daimons):
+# Add `-p <profile-name>` after the hermes binary path. Examples:
+#   exec "${HERMES_BIN}" -p hefesto "$@"
+#   exec "${HERMES_BIN}" -p etalides "$@"
+#
+# WHY NOT "hermes profile alias": The `hermes profile alias <name>` command
+# creates `exec hermes -p <name>`. If the `hermes` command is itself a wrapper
+# that injects `-p hermes`, the result is `-p hermes -p <name>` — the
+# pre-parser takes the first `-p`, argparse sees <name> as a subcommand, and
+# you get "error: invalid choice: '<name>'". This template calls the venv
+# binary directly, avoiding the conflict.
+#
+# CRITICAL: Set HERMES_HOME to your project's home directory.
+# Without it, config.yaml, SOUL.md, skills, and sessions won't be found.
 
-export HERMES_HOME=/home/YOURUSER/Aether-Agents/home
-exec /home/YOURUSER/Aether-Agents/home/.venv-hermes/bin/hermes -p <PROFILE> "$@"
-# For git-clone installs, replace the venv path with:
-#   /home/YOURUSER/.hermes/hermes-agent/venv/bin/hermes
+HERMES_HOME="/home/YOURUSER/Aether-Agents/home"
+HERMES_BIN="${HERMES_HOME}/.venv-hermes/bin/hermes"
+
+export HERMES_HOME
+exec "${HERMES_BIN}" "$@"
