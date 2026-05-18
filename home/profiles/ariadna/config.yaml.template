@@ -1,50 +1,47 @@
-# Etalides configuration — Aether Agents Daimon (Level 2)
+# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
+
+# Ariadna configuration — Aether Agents Daimon (Level 2)
 
 # Agent discovery field — Olympus reads this to register the Daimon
 agent:
-  name: etalides
-  role: web-researcher
-  description: "Web Researcher puro. Busca, extrae, y entrega información verificable. Nunca opina."
+  name: ariadna
+  role: project-manager
+  description: "Project Manager y Agile Coach del equipo. Trackea, anticipa, facilita."
   capabilities:
     - receives_from
-    - web-search
-    - web-extract
-    - link-budget
-    - structured-output
+    - project-tracking
+    - blocker-detection
+    - session-audit
+    - sprint-tracking
   launch_command: "hermes acp"
   keep_alive: true
 
 # Model configuration
 model:
-  default: deepseek-v4-flash
+  api_mode: chat_completions
+  default: kimi-k2.5
   provider: opencode-go
   base_url: https://opencode.ai/zen/go/v1
 
-# Web search backend — Exa for high-quality research
-web:
-  backend: "exa"
-
-# Toolsets — web research tools
+# Toolsets — PM tools only
 toolsets:
-  - web
-  - browser
   - file
-
-# Link budget for research tasks
-link_budget:
-  max_links: 10
-  fast_mode: 5
+  - terminal
+  - memory
+  - session_search
+  - todo
+  - clarify
 
 skills:
   external_dirs:
-    - /home/prometeo/Aether-Agents/home/skills
+    - __AETHER_ROOT__/home/skills
 
 # Session settings
 # Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
 display:
   personality: none
 
-max_iterations: 80
+max_iterations: 50
 
 # Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:

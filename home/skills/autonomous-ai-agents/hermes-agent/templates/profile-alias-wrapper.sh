@@ -15,4 +15,6 @@
 # won't be found.
 
 export HERMES_HOME=/home/YOURUSER/Aether-Agents/home
-exec /home/YOURUSER/.hermes/hermes-agent/venv/bin/hermes -p <PROFILE> "$@"
+exec /home/YOURUSER/Aether-Agents/home/.venv-hermes/bin/hermes -p <PROFILE> "$@"
+# For git-clone installs, replace the venv path with:
+#   /home/YOURUSER/.hermes/hermes-agent/venv/bin/hermes

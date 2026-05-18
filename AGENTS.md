@@ -30,6 +30,45 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.2 (2026-05-18)
+
+- **fix**: olympus_v3 hooks `_get_session_id()` now reads PID-suffixed `.olympus_session.{PID}` files (fixes ACP delegation returning empty results)
+- **fix**: All 6 Daimon config.yaml templates now include `api_mode: chat_completions`
+- **docs**: README rewritten with hermes-agent attribution, Daimon personality table, .aether architecture diagram
+
+### v0.8.1 (2026-05-18)
+
+- **chore**: Removed deprecated scripts (configure.sh, start.sh), olympus_v2 code, .pi-daimons, and obsolete docs
+- **chore**: Untracked Daimon config.yaml files — now generated from config.yaml.template by setup.sh
+- **chore**: Removed home/config.yaml.example (replaced by per-profile templates)
+- **refactor**: Daimon configs use __AETHER_ROOT__ placeholders instead of hardcoded paths
+- **refactor**: Updated all doc references from configure.sh/start.sh to setup.sh/start-gateway.sh
+
+### v0.8.0 (2026-05-17)
+
+- **feat**: `scripts/setup.sh` — automated installation (Python venv, pip install, config generation, wrapper scripts)
+- **feat**: `scripts/update.sh` — git pull + pip upgrade + config regeneration
+- **feat**: `scripts/start-gateway.sh` — systemd gateway service manager (start/stop/restart/status)
+- **feat**: `Makefile` — common commands (setup, update, gateway, doctor, clean, test)
+- **feat**: `home/profiles/orchestrator/config.yaml.template` — machine-independent config template
+- **feat**: `home/profiles/orchestrator/.env.example` — API key template (from v0.7.2)
+- **docs**: README.md rewritten with Quick Start, installation scripts, architecture
+- **docs**: INSTALLATION.md rewritten (setup.sh, manual install, WSL, GPU, troubleshooting)
+- **docs**: QUICKSTART.md rewritten (clone, setup, .env, run)
+- **chore**: .gitignore updated (home/.venv-hermes/, home/kanban.db)
+- **chore**: Deprecated scripts/configure.sh and scripts/start.sh (replaced by setup.sh)
+
+### v0.7.2 (2026-05-17)
+
+- **feat**: pip installation migration guide (references/pip-installation-migration.md) — full plan to migrate from git-clone to `pip install hermes-agent`
+- **feat**: orchestrator profile .env.example template
+- **docs**: hermes-agent SKILL.md updated for v0.14.0 (pip install, lazy deps, cold start improvements)
+- **docs**: hermes-agent terminal-write-restriction.md updated with TUI hook bug confirmation
+- **docs**: hermes-agent profile-alias-wrapper.sh template updated
+- **docs**: test-driven-development SKILL.md updated with module-level globals pitfall
+- **chore**: gitignore PID-suffixed runtime files (.olympus_session*, .olympus_db_path*, .aether_home*, .clean_shutdown)
+- **chore**: gitignore .env.bak files, subagent-driven-development references
+
 ### Commits
 
 Format: `type: concise subject line`
@@ -78,7 +117,7 @@ The website should be updated alongside or immediately after the README.
 
 Never commit:
 - `home/profiles/hermes/config.yaml` — Contains live config
-- `home/.pi-daimons/*/auth.json` — Credentials (gitignored)
+- `home/profiles/orchestrator/config.yaml` — Contains live config
 - `home/profiles/hermes/.env` — Secrets (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 

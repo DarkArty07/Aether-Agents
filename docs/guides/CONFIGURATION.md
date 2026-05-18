@@ -35,12 +35,12 @@ home/profiles/<daimon>/
 ### config.yaml vs config.yaml.template
 
 - `config.yaml.template` — Tracked in git. Contains placeholders like `__AETHER_ROOT__` and `__HERMES_PYTHON__`. Safe to share.
-- `config.yaml` — **Gitignored**. Generated from the template by `configure.sh`. Contains actual paths and may include API keys. Never commit this file.
+- `config.yaml` — **Gitignored**. Generated from the template by `setup.sh`. Contains actual paths and may include API keys. Never commit this file.
 
 After cloning, run:
 
 ```bash
-bash scripts/configure.sh
+bash scripts/setup.sh
 ```
 
 This generates `config.yaml` from each profile's template, substituting machine-specific paths.

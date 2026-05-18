@@ -39,9 +39,16 @@ home/profiles/*/skills/*
 # --- Per-profile bundled manifests (auto-generated) ---
 **/.bundled_manifest
 
-# --- Per-profile configs (tracked — contain agent: discovery for Olympus) ---
-# Only the hermes config has API keys that should stay local
-home/profiles/hermes/config.yaml
+# --- Per-profile live config (generated from templates) ---
+home/profiles/ariadna/config.yaml
+home/profiles/hefesto/config.yaml
+home/profiles/etalides/config.yaml
+home/profiles/athena/config.yaml
+home/profiles/daedalus/config.yaml
+home/profiles/ictinus/config.yaml
+
+# --- Per-profile agent hooks (local for security) ---
+home/profiles/*/agent-hooks/
 
 # --- Per-profile runtime state ---
 home/profiles/*/memories/
@@ -57,22 +64,31 @@ home/profiles/*/ollama_cloud_models_cache.json
 home/profiles/*/bin/
 home/profiles/*/sandboxes/
 home/profiles/*/cron/
+home/profiles/*/lsp/
 home/profiles/*/pastes/
 home/profiles/*/spawn-trees/
 home/profiles/*/processes.json
 home/profiles/*/skins
 home/profiles/*/cache/
 home/profiles/*/hindsight/
-home/profiles/*/state-snapshots/
 home/profiles/*/.restart_last_processed.json
+home/kanban.db
 home/profiles/*/kanban.db
 home/profiles/*/honcho.json
+home/profiles/*/.env.bak*
 
 # --- Home-level runtime (not per-profile) ---
 home/config.yaml
 home/memories/
 home/hindsight/
+home/agent-hooks/
+home/pastes/
+home/cron/
+home/sandboxes/
+home/shell-hooks-allowlist.json
+home/shell-hooks-allowlist.json.lock
 home/skills/.curator_state
+home/skills/.curator_backups/
 
 # --- Python ---
 __pycache__/
@@ -84,6 +100,9 @@ build/
 .eggs/
 venv/
 .venv/
+
+# --- Hermes venv (pip install target) ---
+home/.venv-hermes/
 
 # --- OS ---
 .DS_Store
@@ -119,13 +138,17 @@ CLAUDE.md
 docs/sesiones/
 docs/setup/
 
-# --- Pi Agent Daimon configs (auth.json already gitignored by **/auth.json) ---
-
-# Old locations (moved to src/ and home/ level)
-home/profiles/hermes/olympus_v2/
-
-# Old pi-daimons location (moved to home/.pi-daimons/)
-home/profiles/hermes/.pi-daimons/
-
 # Auto-generated observations
 .aether/
+
+# --- Pi Agent PID-suffixed session files (concurrent Daimon isolation) ---
+**/.olympus_session
+**/.olympus_session.*
+**/.olympus_db_path
+**/.olympus_db_path.*
+**/.aether_home
+**/.aether_home.*
+**/.clean_shutdown
+
+# --- Subagent-driven-development runtime ---
+home/skills/software-development/subagent-driven-development/references/

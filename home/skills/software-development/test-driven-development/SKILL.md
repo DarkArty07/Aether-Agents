@@ -332,6 +332,40 @@ Never fix bugs without a test.
 - **Happy path only** — always test edge cases, errors, and boundaries
 - **Brittle tests** — tests should verify behavior, not structure; refactoring shouldn't break them
 
+## Pitfall: Module-Level Globals in Python
+
+When testing functions that depend on module-level state (caches, singletons, `_db = None`, `_session_id = None`), you **must** reset those globals both before AND after each test — otherwise stale state from one test leaks into the next, causing order-dependent failures that vanish when run in isolation.
+
+**Wrong** (only reset before):
+```python
+def test_session_id_reads_file():
+    hooks_module._session_id = None  # reset before
+    result = hooks_module._get_session_id()
+    assert result == "expected"
+    # _session_id is now cached — next test sees stale value!
+```
+
+**Right** (reset both before and after, or use a fixture):
+```python
+@pytest.fixture()
+def fresh_hooks(tmp_path):
+    mock_db = MagicMock(spec=AetherDBSync)
+    hooks_module._aether_db = None
+    hooks_module._session_id = None
+    hooks_module._agent_name = None
+    yield {"db": mock_db, "tmp_path": tmp_path}
+    # Cleanup — even if test failed, next test gets clean state
+    hooks_module._aether_db = None
+    hooks_module._session_id = None
+    hooks_module._agent_name = None
+```
+
+**Why both directions?** Reset-before ensures the test starts clean. Reset-after (in fixture teardown) ensures a failing test doesn't poison the next one. Without teardown, `pytest -x` stops at the first failure but `pytest` (full suite) cascades false failures.
+
+**Pattern: direct attribute set on the module.** Use `hooks_module._session_id = None` (direct attribute assignment), not `import hooks; hooks._session_id = None` from a different import path — Python module identity depends on import path, and test files may import via a different path than the module's own internal references.
+
+**Pattern: PID-suffixed files for concurrent isolation.** When multiple processes share a directory (e.g., `HERMES_HOME`), use `{filename}.{os.getpid()}` for files that identify the current process. In tests, write files using `os.getpid()` to match what the production code reads, not hardcoded PIDs. The PID file takes priority over the generic (non-PID) file, with fallback to the generic file for single-process or backward-compatible mode.
+
 ## Final Rule
 
 ```
