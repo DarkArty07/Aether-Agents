@@ -2,6 +2,36 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.6] — 2026-05-18
+
+### Changed
+- **README rewritten** — Aether Agents now positioned as an extension of hermes-agent framework, not a standalone tool
+  - Tagline: "A multi-agent team built on hermes-agent"
+  - "What is Aether Agents?" section explains hermes-agent first, then what Aether adds
+  - Key Features clarifies each Daimon is a hermes-agent instance
+  - Architecture diagram updated (removed `-p` flag confusion)
+  - License section streamlined
+
+### Fixed
+- **Stale reference cleanup (3-pass audit):**
+  - Docs: INSTALLATION, QUICKSTART, USER_PROFILE, CONFIGURATION, CONTRIBUTING, Makefile, deploy-site.yml
+  - Source: acp_manager.py, config_loader.py comments (profiles/hermes → default home dir)
+  - Daimon configs: .env.example broken PROVIDERS.md link → CONFIGURATION.md
+  - Skills: hermes-agent SKILL.md, auxiliary-models.md, verify_cuda_stt.sh, github-pr-workflow
+  - hefesto SOUL.md: removed "Ergates" and TASKS.md legacy references
+- **consulting_db.py**: `.eter` → `.aether` path (3 locations)
+- **4 Daimon SOUL.md**: `.eter` → `.aether`
+- **Website**: `.eter` → `.aether`, `profiles/hermes` → default profile
+- **.eter directory**: migrated consulting.db to .aether/, deleted legacy .eter/
+
+### Removed
+- PLAN.md (completed v0.8.0 multi-project isolation plan)
+- .eter/ directory (migrated to .aether/)
+
+### Chore
+- Deleted 7 stale git branches (3 local, 4 remote)
+- Pruned remote tracking branches
+
 ## [0.8.5] — 2026-05-18
 
 ### Changed
