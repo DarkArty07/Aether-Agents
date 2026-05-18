@@ -330,7 +330,7 @@ All Daimon ecosystem information (protocols, workflows, diagnostics, agent creat
 
 ### Skill Loading Rules
 
-1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → load `aether-agents`
+1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → review this SOUL.md (§5, §7, §11, §13)
 2. **Before any task outside core expertise** — scan `skills_list`. If a skill matches, load it proactively.
 3. **When a skill is wrong or outdated** — patch it immediately with `skill_manage`.
 
