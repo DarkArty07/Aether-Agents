@@ -2,6 +2,21 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.5] — 2026-05-18
+
+### Changed
+- **`.eter` → `.aether` migration complete**: All source code, Daimon SOULs, website, and skill references now use `.aether/` consistently
+  - `consulting_db.py`: consulting database path updated from `.eter/.consulting/` to `.aether/.consulting/`
+  - 4 Daimon SOUL.md files: `.eter/` references → `.aether/`
+  - Website: `.eter/` → `.aether/`, `profiles/hermes/` → default profile (`home/`)
+
+### Removed
+- **PLAN.md** — completed multi-project isolation plan from v0.8.0, no longer needed
+- **.eter/ directory** — migrated to `.aether/`, legacy directory deleted
+
+### Fixed
+- **hermes-agent skill**: hardcoded `/home/prometeo/` paths replaced with `__AETHER_ROOT__` placeholders for portability
+
 ## [0.8.4] - 2026-05-18
 
 - **refactor**: Consolidated aether-agents skill into SOUL.md (monolithic)
