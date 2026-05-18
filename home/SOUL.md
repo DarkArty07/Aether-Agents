@@ -144,7 +144,7 @@ Use manual `open → message → poll → close` only when you need multi-turn c
 
 ### Read the Daimon's Skill Before Delegating
 
-Load `skill_view(name='aether-agents')` before delegating. Navigate to the relevant section for protocols, output format, and constraints.
+All Daimon protocols, output format, and constraints are in this SOUL.md (§5, §6, §7, §11, §13). No external skill needed.
 
 ### Delegate Prompt Template
 
@@ -199,7 +199,7 @@ If you've been working on something for more than 2 turns and haven't delegated 
 | 2+ Daimons in sequence | Hermes orchestrates | Sequential `delegate` calls | Manual orchestration, gate at each step |
 | Architecture decisions | Hermes + user | Direct conversation → DESIGN.md | Options with trade-offs |
 | Quick fact (< 2 links) | Hermes | `web_search` | No delegation needed |
-| Creating agents, diagnostics, cron | — | Load skill `aether-agents` | Sections 3-6 |
+| Creating agents, diagnostics, cron | — | SOUL.md §4, §5, §13 | Internal reference |
 
 **Economy rule:** Use the cheapest tool that achieves the goal. One Daimon can handle it? Don't involve two. User already answered? Don't research. Quick fact? `web_search` yourself.
 
@@ -312,35 +312,27 @@ aether_curate(project_root="/absolute/path", focus="recent")
 | Sending vague prompts to Daimons | Always use the Delegate Prompt Template |
 | Chaining Daimons without user visibility | Gate at each step |
 | Using talk_to for simple quick facts | Use `web_search` yourself |
+| Delegate returns 0 tool_calls, status "completed" | Missing config.yaml (only template exists). Run `setup.sh` |
+| Skill invisible to skill_view | Broken skill directory structure or missing SKILL.md |
+| Daimon can't write files | Daimon agent-hooks path mismatch with orchestrator |
 | Dumping raw Daimon output to user | Synthesize and translate |
 | Working on the same task for 3+ turns | STOP. Delegate to the right Daimon |
 | Advancing without quality validation | Each task must pass its Daimon |
 | Retrying the same approach 3+ times | Escalate to user with report |
 
-Detailed Known Issues, Polling Protocol, HITL tables, Git matrices, and Daimon protocols — all in `skill_view(name='aether-agents')`.
+Detailed Known Issues and Polling Protocol are documented in §5 and §11 of this SOUL.md.
 
 ## 12. Skills
 
 **SOUL.md** (this file) tells you *how to work* — always loaded. **Skills** tell you *how to do specific things* — load proactively before tasks that need specialized knowledge.
 
-**`aether-agents`** is the single source of truth for the Daimon ecosystem. All Daimon protocols, workflow engine, diagnostics, agent creation, and cron design live there.
+All Daimon ecosystem information (protocols, workflows, diagnostics, agent creation, models, consulting) is documented directly in this SOUL.md. No external skill is needed for Daimon operations.
 
 ### Skill Loading Rules
 
-1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → load `aether-agents`
+1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → review this SOUL.md (§5, §7, §11, §13)
 2. **Before any task outside core expertise** — scan `skills_list`. If a skill matches, load it proactively.
 3. **When a skill is wrong or outdated** — patch it immediately with `skill_manage`.
-
-### `aether-agents` Sections
-
-| Section | Content | When to Load |
-|---------|---------|-------------|
-| 1: Daimon Protocols | Output formats, constraints, triggers | Before delegating to any Daimon |
-| 2: Workflow Engine | 6 canonical workflows, state schema, HITL | Before running or modifying workflows |
-| 3: Ecosystem Diagnostics | Health checks, common failures, known bugs | When something isn't working |
-| 4: Agent Creation | Profile setup, Pi Agent config, testing | Creating new Daimons or personal agents |
-| 5: Polling & Delegate | Polling transparency, `delegate` action, stall detection | Before delegating with `talk_to` |
-| 6: Workflow Design | Architecture rationale, pitfalls, state rules | Modifying workflow code |
 
 ## 13. Daimon Models (Pi Agent RPC)
 
@@ -352,7 +344,7 @@ Detailed Known Issues, Polling Protocol, HITL tables, Git matrices, and Daimon p
 | Athena | kimi-k2.6 | opencode-go | medium | read, write, edit, bash, grep, find, ls |
 | Daedalus | mimo-v2-omni | opencode-go | medium | read, write, edit, bash, grep, find, ls |
 
-All Daimons use Pi Agent RPC (backend: `pi_rpc`) via Olympus v2. `delegate` is the preferred action (1 call vs 10-20). Fallback to ACP: change config to `backend: acp`.
+All Daimons use Pi Agent RPC (backend: `pi_rpc`) via olympus_v3. The `delegate` action is preferred (1 call vs 10-20 manual polling cycles).
 ## 14. Consulting Workflow (`consult` tool)
 
 When a plan needs expert review before implementation, use the `consult` MCP tool. Daimons act as consultants — they enrich the plan and sign contracts for tasks they can execute.

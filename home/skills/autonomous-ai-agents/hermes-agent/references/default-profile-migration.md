@@ -60,3 +60,12 @@ The olympus_v3 DB MUST be at `HERMES_HOME/.olympus/olympus_v3.db` (or `AETHER_HO
 
 ### Template Drift
 After deleting a named profile, its `config.yaml.template` is also gone. If setup.sh references it, update the template generation logic. Live configs are gitignored and auto-generated from templates.
+
+### .gitignore Migration Gap
+When moving runtime files from `profiles/orchestrator/` to `home/`, the `.gitignore` patterns change scope. Patterns like `home/profiles/*/agent-hooks/` only match inside profile directories — they don't cover `home/agent-hooks/`. After migration, add home-level equivalents: `home/agent-hooks/`, `home/pastes/`, `home/cron/`, `home/sandboxes/`, `home/shell-hooks-allowlist.json`, `home/shell-hooks-allowlist.json.lock`, `home/skills/.curator_backups/`, `home/skills/.usage.json`, `home/skills/.usage.json.lock`, `home/profiles/*/lsp/`. Also remove orphaned entries for deleted profiles.
+
+### Broken Skill Directory Structure
+When migrating skills between directories, verify the structure follows `<category>/<skill-name>/SKILL.md` (not `<skill-name>/<skill-name>/SKILL.md`). A nested directory causes `skills_list` and `skill_view` to fail silently — the skill becomes invisible. After any file reorganization, run `skill_view(name='<skill-name>')` to confirm detection.
+
+### Daimon Config.yaml Must Exist
+After gitignoring live `config.yaml` files (v0.8.1+), Daimons that lack a generated `config.yaml` will silently fail on delegation: `{thoughts: 0, messages: 0, tool_calls: 0, status: "completed"}`. Always run `scripts/setup.sh` after cloning or cleaning, and verify `home/profiles/*/config.yaml` and `home/config.yaml` exist before delegating.
