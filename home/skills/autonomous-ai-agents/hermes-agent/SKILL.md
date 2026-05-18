@@ -1309,7 +1309,9 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 
 **Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, version-specific pitfalls, Daimon config template requirements, and post-migration repo cleanup audit.
 
-**Post-migration stale reference audit:** See `references/post-migration-audit.md` for the systematic methodology to find and fix dead paths, old conventions, and hardcoded references after any major migration (path changes, module renames, profile reorganization, convention shifts). Includes classification by priority, verification protocol, and common patterns (hardcoded user paths, deleted profiles, database path migrations).
+**Post-migration stale reference audit:** See `references/post-migration-audit.md` for the systematic methodology to find and fix dead paths, old conventions, and hardcoded references after any major migration (path changes, module renames, profile reorganization, convention shifts). Includes multi-pass approach (3-4 passes typical), classification by priority, branch cleanup, atomic commit strategy, and common miss patterns (skill subdirectories, "works by accident" with old directories still on disk, database path migrations).
+
+**PITFALL — "Works by accident" after migration:** When old directories still exist on disk, code referencing old paths continues to work. This masks bugs until the old directory is deleted. The v0.8.5 audit found `consulting_db.py` still referencing `.eter/.consulting/` — it worked because `.eter/` hadn't been deleted yet. **Always migrate on-disk state, delete the old directory, THEN verify.** Only deleting the old directory reveals the real state of your code.
 
 **Default Profile Migration reference:** See `references/default-profile-migration.md` for the pattern of migrating from a named profile (`-p orchestrator`) to the default profile when using a custom HERMES_HOME. Includes complete checklist, architecture comparison table, and pitfalls.
 

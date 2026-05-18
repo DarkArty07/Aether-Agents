@@ -2,7 +2,7 @@
 
 # 🏛️ Aether Agents
 
-**Multi-agent orchestration. Six specialists. One orchestrator. Zero lock-in.**
+**A multi-agent team built on [hermes-agent](https://github.com/NousResearch/hermes-agent)**
 
 [![Version](https://img.shields.io/badge/version-0.8.5-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -10,11 +10,11 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+**[hermes-agent](https://github.com/NousResearch/hermes-agent)** is a self-improving AI agent framework by [Nous Research](https://nousresearch.com). It handles LLM routing, tool execution, memory, skills, cron scheduling, and multi-platform gateways (Telegram, Discord, Slack, CLI). You give it a persona (SOUL.md), a config (config.yaml), and API keys — it becomes an autonomous agent.
+
+**Aether Agents** extends hermes-agent into a multi-agent team. Six specialized Daimons — each a hermes-agent instance with its own model, personality, and toolset — are orchestrated by Hermes through **Olympus v3**, an MCP server that manages sessions, routes tasks, and maintains project continuity via **.aether**. The result: a crew of experts that think independently but coordinate through structured delegation. Any OpenAI-compatible provider. Any model per Daimon.
+
 </div>
-
----
-
-> Aether Agents is a **multi-agent orchestration system** built on [hermes-agent](https://github.com/NousResearch/hermes-agent) — the self-improving AI agent framework by [Nous Research](https://nousresearch.com). Hermes delegates to six specialized Daimons through Olympus v3, an MCP server with ACP sessions and plugin-powered observability. Any OpenAI-compatible provider. Any model. Each Daimon thinks independently.
 
 ---
 
@@ -36,7 +36,7 @@ Edit `.env` with your API keys, restart your terminal, and run `aether`.
 
 | | Feature | Description |
 |---|---------|-------------|
-| 🧠 | **6 Specialized Daimons** | Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. Each with a different model and role. |
+| 🧠 | **6 Specialized Daimons** | Each a hermes-agent instance with its own model, persona (SOUL.md), and tools. Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. |
 | 🏛️ | **Olympus v3 MCP** | ACP sessions, plugin hooks, SQLite shared state. The bridge between orchestrator and executors. |
 | 📜 | **.aether Continuity** | Automatic capture → curation → injection. Daimons always know what project they're on. No blind delegations. |
 | 🔄 | **5-Phase Pipeline** | IDEA → RESEARCH → DESIGN → PLAN → CODE. Sequential quality gates. Hermes decides, Daimons execute. |
@@ -60,7 +60,7 @@ Olympus v3 Server
   │ ACP (HTTP, localhost)
   ▼
 ┌─────────────────────────────────────┐
-│  Daimon (hermes-agent -p <name>)   │
+│  Daimon (hermes-agent instance)    │
 │  ┌─────────────────────────────┐   │
 │  │ Plugin: olympus_v3_hooks    │   │
 │  └─────────────────────────────┘   │
@@ -142,12 +142,7 @@ Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — 
 
 **Aether Agents** is [MIT licensed](LICENSE) © Christopher (DarkArty07).
 
-Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) — the self-improving AI agent framework by [Nous Research](https://nousresearch.com), also [MIT licensed](https://github.com/NousResearch/hermes-agent/blob/main/LICENSE). Aether Agents uses hermes-agent as its runtime engine and extends it with:
-
-- **Olympus v3** — MCP server for multi-agent orchestration via ACP
-- **.aether** — Project continuity system (capture → curate → inject)
-- **6 Daimon profiles** — Pre-configured specialists with SOUL.md personalities
-- **Automated setup scripts** — Reproducible deployments with `setup.sh`
+Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com) (MIT). Aether Agents extends it with Olympus v3 (MCP/ACP orchestration), .aether (project continuity), 6 Daimon profiles, and automated setup.
 
 ---
 
