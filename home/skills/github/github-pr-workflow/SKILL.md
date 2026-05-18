@@ -495,12 +495,35 @@ git pull origin main
 git branch -d release/v0.8.0
 ```
 
+### Pre-Release Documentation Audit
+
+After any release that removes files, changes installation method, moves paths, or deprecates commands, run a string audit BEFORE tagging:
+
+```bash
+# 1. Find references to deleted/moved files in tracked content
+git ls-files | xargs grep -l 'configure\.sh\|start\.sh\|olympus_v2\|\.pi-daimons\|~/.hermes/' 2>/dev/null
+
+# 2. Find paths that should be placeholders
+grep -rn '/home/[^/]\+/Aether-Agents' --include='*.md' --include='*.yaml' --include='*.html' 2>/dev/null | grep -v '.template'
+
+# 3. Check version badge matches pyproject.toml
+grep 'version' pyproject.toml | head -1
+grep 'version-' README.md | head -1
+grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' CHANGELOG.md | head -1
+
+# 4. Check website references (if applicable)
+grep -rn 'pip install -e \.\|configure\.sh\|start\.sh\|~/.hermes/' website/ 2>/dev/null
+```
+
+Fix all findings, commit, then proceed with tagging. This prevents dangling references in documentation that survive releases.
+
 ### Pitfalls
 
 - **Never `git add -A`**: Stage specific files only. Repos with runtime data (databases, sessions, caches, local configs) will stage everything. Use `git add <file1> <file2> ...` or `git diff --cached --stat` to review before committing.
 - **Version must match everywhere**: pyproject.toml, CHANGELOG.md, AGENTS.md (versioning section), README.md (badge). Miss any one and the release is inconsistent.
 - **Tag after commit**: Create the tag AFTER the commit is made, not before. The tag points to the commit hash.
 - **Squash merge for releases**: Use `--squash --delete-branch` for release PRs. This keeps main history clean with a single commit per release. Feature branches can use regular merge if needed.
+- **Dangling references after cleanup**: When removing deprecated files (scripts, code dirs, docs), always audit for references in README, website, and remaining docs. Deleted code leaves ghost references that confuse new users.
 
 ## Useful PR Commands Reference
 
