@@ -159,6 +159,17 @@ After deleting `profiles/hermes/` or `profiles/orchestrator/`:
 
 Skills live in `home/skills/<category>/<name>/` — often 3-4 levels deep. A grep at the project root will find them, but manual file-by-file review often skips them. In the v0.8.5 audit, the first 3 passes missed stale `profiles/hermes/` references inside skill SKILL.md files because they were in `home/skills/autonomous-ai-agents/hermes-agent/SKILL.md` (a 400+ line file with references scattered across 5 locations).
 
+### README positioning when project extends a framework
+
+When a project is built as an extension of another framework (e.g., Aether Agents extends hermes-agent), the README must explain the relationship clearly. The pattern:
+
+1. **Tagline** — Name the foundation framework explicitly: _"A multi-agent team built on hermes-agent"_
+2. **"What is X?" block** — Two paragraphs: first explains the base framework, second explains what the extension adds
+3. **Architecture diagram** — Show instances of the base framework (Daimons = hermes-agent processes) rather than abstract boxes
+4. **Key Features row 1** — Lead with the framework dependency to set expectations
+
+This prevents confusion where visitors think the project is standalone or re-implements what the base framework provides.
+
 **Tip:** After the initial grep sweep, do a targeted second sweep specifically for skill directories:
 ```bash
 grep -rn "OLD_PATTERN" home/skills/ --include="*.md" --include="*.sh" --include="*.py"
@@ -171,3 +182,68 @@ When a module's database path changes (e.g., `.eter/.consulting/` → `.aether/.
 2. Migrate the physical database file
 3. Verify the new path works (open/close the DB)
 4. Delete the old directory only after confirmation
+
+### Config template references to non-existent docs
+
+`.env.example` and `config.yaml.template` files often reference documentation files that no longer exist (or were renamed). Example from v0.8.5: five Daimon `.env.example` files referenced `PROVIDERS.md` which had been renamed to `CONFIGURATION.md`. These aren't functional bugs (templates don't run), but they confuse users who follow the reference and find nothing.
+
+**Pattern:**
+```bash
+# Find doc references in config templates
+grep -rn '\.md' home/profiles/*/.env.example home/profiles/*/config.yaml.template \
+  --include="*.example" --include="*.template" 2>/dev/null
+```
+
+For each reference found, verify the file exists:
+```bash
+for doc in $(grep -oh '[A-Za-z_]*\.md' home/profiles/*/.env.example | sort -u); do
+  find . -name "$doc" -not -path "./.git/*" 2>/dev/null || echo "MISSING: $doc"
+done
+```
+
+### Source code comments with stale paths
+
+Comments referencing old paths aren't functional bugs but confuse future developers who search for paths and find outdated references. They often survive multiple audit passes because grep patterns focus on code, not comments.
+
+**Pattern:**
+```bash
+# Find path-like references in comments
+grep -rn '#.*profiles/hermes\|#.*\.eter\|#.*~/.hermes/' src/ --include="*.py" 2>/dev/null
+```
+
+In the v0.8.5 audit, `acp_manager.py` line 132 and `config_loader.py` line 63 both had comments referencing `profiles/hermes/orchestrator` — these were missed in the first 3 passes because they were comments, not code.
+
+**Treatment:** Update comments to reflect current architecture. Change `profiles/hermes/orchestrator` to `home dir (default profile)` or similar. Don't delete informative comments — update them.
+
+### Makefile and CI version strings
+
+Makefiles and CI workflow files often contain version strings or action versions that lag behind. These are easy to miss because they live outside the main source tree.
+
+**Pattern:**
+```bash
+# Check version consistency across key files
+grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' Makefile pyproject.toml README.md scripts/setup.sh | sort | uniq -c
+
+# Check CI action versions
+grep -rn 'uses:.*@v[0-9]' .github/workflows/
+```
+
+In the v0.8.5 audit, `Makefile` referenced v0.8.0 while `pyproject.toml` was at v0.8.5, and `deploy-site.yml` used `upload-pages-artifact@v3` (outdated).
+
+### Post-migration MCP tool verification
+
+After any migration that touches MCP server paths, database locations, or Daimon profile configs, verify that every MCP tool still works end-to-end. Functional tests catch bugs that grep cannot — the `.eter→.aether` migration left all source references correct but the physical database hadn't been migrated yet, which only surfaced when tools were actually invoked.
+
+**Verification checklist:**
+
+| MCP Tool | What to test | Pass criteria |
+|----------|-------------|---------------|
+| `aether_status` | Read with `detail=full` | Returns hot_state with correct phase, task, session count |
+| `aether_update` | Test all sub-actions: `set_phase`, `set_task`, `add_decision`, `add_issue`, `resolve_issue`, `add_blocker`, `remove_blocker` | Each returns success confirmation; verify in DB with `sqlite3 .aether/aether.db` |
+| `aether_curate` | Run with `focus=recent` | CONTEXT.md regenerated, size <1,500 chars, reflects current state |
+| `discover` | List available agents | Returns all expected agents with correct `profile_path` |
+| `delegate` | Send a trivial task to a Daimon (e.g., create+verify a test file) | Returns `status: completed` with non-zero `tool_calls` and `messages` |
+
+**Pitfall — aether_curate staleness:** `aether_curate` reads the DB at the time it runs. If you call `aether_update(set_task, ...)` AFTER a `curate`, the CONTEXT.md will contain the OLD task until the next curate. Always run `aether_curate` AFTER all `aether_update` calls to get the current state reflected. The DB itself is always correct — only the CONTEXT.md cache can be stale.
+
+**Cleanup after testing:** Remove any test artifacts (decision id for test, test issue, test files). Restore the phase/task to their real values before testing. If you created a test decision or issue, resolve it rather than deleting — the DB auto-increments IDs and gaps are normal.

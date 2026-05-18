@@ -2,6 +2,11 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.7] — 2025-05-18
+
+### Changed
+- **Skill updates:** post-migration audit patterns added to hermes-agent and github-pr-workflow skills
+
 ## [0.8.6] — 2026-05-18
 
 ### Changed

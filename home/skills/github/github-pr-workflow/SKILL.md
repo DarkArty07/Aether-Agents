@@ -1,7 +1,7 @@
 ---
 name: github-pr-workflow
 description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -508,12 +508,16 @@ git ls-files | xargs grep -l 'configure\.sh\|start\.sh\|olympus_v2\|\.pi-daimons
 # 2. Find paths that should be placeholders
 grep -rn '/home/[^/]\+/Aether-Agents' --include='*.md' --include='*.yaml' --include='*.html' 2>/dev/null | grep -v '.template'
 
-# 3. Check version badge matches pyproject.toml
+# 3. Check version badge matches across ALL version-carrying files
 grep 'version' pyproject.toml | head -1
 grep 'version-' README.md | head -1
 grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' CHANGELOG.md | head -1
+grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' Makefile scripts/setup.sh | sort | uniq -c  # easy to miss
 
-# 4. Check website references (if applicable)
+# 4. Check CI action versions aren't outdated
+grep -rn 'uses:.*@v[0-9]' .github/workflows/
+
+# 5. Check website references (if applicable)
 grep -rn 'pip install -e \.\|configure\.sh\|start\.sh\|~/.hermes/' website/ 2>/dev/null
 ```
 
