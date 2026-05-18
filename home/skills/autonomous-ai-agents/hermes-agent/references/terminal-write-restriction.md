@@ -36,20 +36,20 @@ The "NEVER implement" rule in SOUL.md. Soft layer — reinforces the hard layers
 ## File Location
 
 ```
-~/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh
+__AETHER_ROOT__/home/agent-hooks/block-write-commands.sh
 ```
 
 **NOT** `~/.hermes/agent-hooks/` — must be in the profile directory.
 
 ## Config Location
 
-In `~/Aether-Agents/home/profiles/hermes/config.yaml`:
+In `__AETHER_ROOT__/home/config.yaml`:
 
 ```yaml
 hooks:
   pre_tool_call:
     - matcher: "terminal"
-      command: "/home/prometeo/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh"
+      command: "__AETHER_ROOT__/home/agent-hooks/block-write-commands.sh"
       timeout: 5
 hooks_auto_accept: false
 ```
@@ -165,7 +165,7 @@ Despite the script-level audit showing 0 bypasses, a live runtime test revealed 
 ### Diagnosis
 
 - **Hook script logic**: ✅ Correct — manual test confirms all patterns blocked
-- **Hook script path in config**: ✅ Correct — `/home/prometeo/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh`
+- **Hook script path in config**: ✅ Correct — `__AETHER_ROOT__/home/agent-hooks/block-write-commands.sh`
 - **Hook script executable**: ✅ `-rwxr-xr-x`
 - **Hook config matcher**: ✅ `"terminal"` matches the tool name
 - **Hook execution by gateway**: ❌ NOT HAPPENING — no evidence of hook invocation before terminal calls
@@ -181,7 +181,7 @@ Despite the script-level audit showing 0 bypasses, a live runtime test revealed 
 
 The TUI flow: `hermes --tui` → `_launch_tui()` (subprocess) → `tui_gateway/entry.py` → `AIAgent` instances run `run_conversation()` → `get_pre_tool_call_block_message()` is called inside `run_agent.py` but returns `None` because no shell hook callbacks are registered in the plugin manager.
 
-**Allowlist state:** The allowlist file (`~/Aether-Agents/home/profiles/hermes/shell-hooks-allowlist.json`) is correctly populated (hook approved 2026-05-06). The hook script itself works perfectly. The gap is purely in the TUI startup code not wiring the hook into the plugin system.
+**Allowlist state:** The allowlist file (`__AETHER_ROOT__/home/shell-hooks-allowlist.json`) is correctly populated (hook approved 2026-05-06). The hook script itself works perfectly. The gap is purely in the TUI startup code not wiring the hook into the plugin system.
 
 **CLI mode** (`hermes chat`) and **gateway mode** (`hermes gateway run`) both register hooks. Only `hermes --tui` misses registration.
 
@@ -201,7 +201,7 @@ except Exception:
 ```bash
 # 1. Test hook script works in isolation
 echo '{"tool_name":"terminal","tool_input":{"command":"echo test > /tmp/file"}}' | \
-  bash ~/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh
+  bash __AETHER_ROOT__/home/agent-hooks/block-write-commands.sh
 # Expected: {"decision": "block", "reason": "..."}
 
 # 2. Check if hook is registered in current session
@@ -233,7 +233,7 @@ grep -n "register_from_config" ~/.hermes/hermes-agent/gateway/run.py
 
 To add a new blocked pattern:
 
-1. Edit `/home/prometeo/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh`
+1. Edit `__AETHER_ROOT__/home/agent-hooks/block-write-commands.sh`
 2. Add a new block before `# Everything else is allowed`:
    ```bash
    # Block <PATTERN_NAME>

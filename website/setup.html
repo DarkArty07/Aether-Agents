@@ -71,16 +71,24 @@ pip install -e .">Copy</button>
                     <div class="step-num">2</div>
                     <div class="step-content">
                         <h4>Configure API Keys</h4>
-                        <p class="step-note">Each Daimon reads its own <code>.env</code> file from <code>profiles/&lt;name&gt;/.env</code>. This keeps keys isolated — Hermes can use OpenAI while Hefesto uses Anthropic.</p>
+                        <p class="step-note">Each Daimon reads its own <code>.env</code> file. The orchestrator reads from <code>home/.env</code> (default profile), Daimons from their profile directory. Run <code>setup.sh</code> to generate all configs, or copy manually:</p>
                         <div class="code-block-wrap">
-                            <pre class="code-block"><code>cp home/profiles/hermes/.env.example home/profiles/hermes/.env
-# Repeat for each profile:
+                            <pre class="code-block"><code># Automated (recommended):
+bash scripts/setup.sh
+
+# Manual — default profile (orchestrator):
+cp home/.env.example home/.env
+
+# Manual — per Daimon profile:
 cp home/profiles/ariadna/.env.example home/profiles/ariadna/.env
 cp home/profiles/hefesto/.env.example home/profiles/hefesto/.env
 cp home/profiles/etalides/.env.example home/profiles/etalides/.env
 cp home/profiles/daedalus/.env.example home/profiles/daedalus/.env
 cp home/profiles/athena/.env.example home/profiles/athena/.env</code></pre>
-                            <button class="copy-btn" data-copy="cp home/profiles/hermes/.env.example home/profiles/hermes/.env
+                            <button class="copy-btn" data-copy="bash scripts/setup.sh
+
+cp home/.env.example home/.env
+
 cp home/profiles/ariadna/.env.example home/profiles/ariadna/.env
 cp home/profiles/hefesto/.env.example home/profiles/hefesto/.env
 cp home/profiles/etalides/.env.example home/profiles/etalides/.env

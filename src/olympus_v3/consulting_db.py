@@ -1,7 +1,7 @@
 """Olympus Consulting DB — SQLite persistence for Daimon consultation sessions.
 
 Manages sessions, agent consultations, and task contracts for the consult workflow.
-Database is stored at <project_root>/.eter/.consulting/consulting.db and is
+Database is stored at <project_root>/.aether/.consulting/consulting.db and is
 auto-created on first use.
 
 All methods are async and use aiosqlite.  Error handling returns error dicts,
@@ -685,10 +685,10 @@ _db_instances: dict[str, ConsultingDB] = {}
 async def get_consulting_db(project_root: str) -> ConsultingDB:
     """Get or create the ConsultingDB for a given project root.
 
-    The database is stored at <project_root>/.eter/.consulting/consulting.db.
+    The database is stored at <project_root>/.aether/.consulting/consulting.db.
     """
     if project_root not in _db_instances:
-        db_path = Path(project_root) / ".eter" / ".consulting" / "consulting.db"
+        db_path = Path(project_root) / ".aether" / ".consulting" / "consulting.db"
         db = ConsultingDB(db_path)
         await db._ensure_db()
         _db_instances[project_root] = db

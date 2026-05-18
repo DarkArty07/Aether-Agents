@@ -207,9 +207,17 @@ hermes profile export NAME  Export to tar.gz
 hermes profile import FILE  Import from archive
 ```
 
-**⚠ Daimon config.yaml must exist (not just template):** After v0.8.1, live `config.yaml` files are gitignored and only `config.yaml.template` ships in the repo. If a Daimon's `config.yaml` is missing, `delegate` returns `{thoughts: 0, messages: 0, tool_calls: 0}` — a completely empty result with no error message. This is the #1 cause of silent delegation failures after a fresh clone. **Fix:** Run `scripts/setup.sh` to regenerate all configs from templates, or manually `sed` the `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders. Verify with `ls home/profiles/*/config.yaml` — every Daimon must have a live config.
+**⚠ Daimon config.yaml must exist (not just template):** After v0.8.1, live `config.yaml` files are gitignored and only `config.yaml.template` ships in the repo. If a Daimon's `config.yaml` is missing, `delegate` returns `{thoughts: 0, messages: 0, tool_calls: 0}` — a completely empty result with no error message. This is the #1 cause of silent delegation failures after a fresh clone.
+
+**Diagnosis steps:**
+1. Check `ls home/profiles/*/config.yaml` — every Daimon must have a live config
+2. If configs are missing, run `bash scripts/setup.sh` to regenerate all from templates
+3. Verify after regeneration: `ls home/profiles/*/config.yaml && ls home/config.yaml`
+4. If `setup.sh` fails, manually generate: `sed -e "s|__AETHER_ROOT__|$(pwd)/home|g" -e "s|__HERMES_PYTHON__|$(pwd)/home/.venv-hermes/bin/python3.11|g" home/profiles/hefesto/config.yaml.template > home/profiles/hefesto/config.yaml`
 
 **⚠ Skill directory structure must be `<category>/<name>/SKILL.md`:** Skills with nested directories like `<name>/<name>/SKILL.md` or `<name>/<name>/references/` are invisible to `skill_view` and `skills_list` — the system expects exactly one level of nesting under a category directory. If a skill doesn't appear in `skills_list`, check the directory structure first.
+
+**⚠ Monolithic SOUL.md Principle for project-specific Daimon info:** When an orchestrator agent's ecosystem information (Daimon protocols, routing, diagnostics, models) is duplicated between SOUL.md and a separate skill, the two sources drift apart. The v0.8.3 `aether-agents` skill had 80% overlap with SOUL.md and was never committed to git (missing SKILL.md, broken directory nesting). **Principle:** Project-specific operational knowledge that is always needed (Daimon protocols, routing, diagnostics) belongs in SOUL.md. General-purpose reusable knowledge (how to set up hermes-agent, API reference, provider config) belongs in skills. If a skill's content is mostly duplicated by SOUL.md, consolidate into SOUL.md and delete the skill — this eliminates a source of truth conflict, simplifies installation, and makes commits cleaner.
 
 **⚠ Reserved profile name "hermes":** `hermes profile alias hermes` fails with `Error: 'hermes' is a reserved name'`. The workaround is to create the wrapper script manually — see `templates/profile-alias-wrapper.sh`. A bare symlink silently uses the default profile instead of the named one, which is the #1 cause of "my SOUL.md isn't loading" bugs.
 
