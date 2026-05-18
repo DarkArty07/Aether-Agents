@@ -78,18 +78,34 @@ def _get_db() -> OlympusDBSync:
 
 
 def _get_session_id() -> str | None:
-    """Read session ID from env var or file fallback.
-    
-    Priority: OLYMPUS_SESSION_ID env var > {HERMES_HOME}/.olympus_session file.
-    The MCP server writes the session file before each message.
+    """Read session ID from env var, PID-suffixed file, or file fallback.
+
+    Priority:
+    1. OLYMPUS_SESSION_ID env var
+    2. {HERMES_HOME}/.olympus_session.{PID} (written by acp_manager)
+    3. {HERMES_HOME}/.olympus_session (legacy fallback)
     """
     # Priority 1: env var
     sid = os.environ.get("OLYMPUS_SESSION_ID")
     if sid:
         return sid
-    
-    # Priority 2: file fallback
+
+    # Priority 2: PID-suffixed file (written by acp_manager for ACP sessions)
     hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        pid = os.getpid()
+        pid_file = Path(hermes_home) / f".olympus_session.{pid}"
+        try:
+            content = pid_file.read_text().strip()
+            if content:
+                logger.debug("Read OLYMPUS_SESSION_ID from PID file %s: %s", pid_file, content)
+                return content
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            logger.debug("Could not read PID session file %s: %s", pid_file, e)
+
+    # Priority 3: legacy non-suffixed file
     if hermes_home:
         session_file = Path(hermes_home) / ".olympus_session"
         try:
@@ -101,7 +117,7 @@ def _get_session_id() -> str | None:
             pass
         except Exception as e:
             logger.debug("Could not read session file %s: %s", session_file, e)
-    
+
     return None
 
 

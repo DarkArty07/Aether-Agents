@@ -30,6 +30,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.2 (2026-05-18)
+
+- **fix**: olympus_v3 hooks `_get_session_id()` now reads PID-suffixed `.olympus_session.{PID}` files (fixes ACP delegation returning empty results)
+- **fix**: All 6 Daimon config.yaml templates now include `api_mode: chat_completions`
+- **docs**: README rewritten with hermes-agent attribution, Daimon personality table, .aether architecture diagram
+
 ### v0.8.1 (2026-05-18)
 
 - **chore**: Removed deprecated scripts (configure.sh, start.sh), olympus_v2 code, .pi-daimons, and obsolete docs
