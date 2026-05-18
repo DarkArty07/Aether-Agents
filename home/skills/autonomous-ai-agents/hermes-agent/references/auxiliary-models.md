@@ -847,7 +847,7 @@ When using Hermes profiles (the `-p` flag, e.g., `hermes -p hermes`), all profil
 
 ```bash
 # Check where YOUR profile actually lives
-hermes config path    # e.g., ~/Aether-Agents/home/profiles/hermes/config.yaml
+hermes config path    # e.g., ~/Aether-Agents/home/config.yaml
 
 # The profile directory contains:
 # config.yaml, .env, SOUL.md, memories/, skills/, sessions/, cron/, logs/, state.db

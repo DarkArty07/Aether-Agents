@@ -7,15 +7,15 @@ MODEL="${1:-medium}"
 
 # Set LD_LIBRARY_PATH for CUDA libs (adjust path for your venv)
 # For pip installs:
-VENV_LIB="/home/prometeo/Aether-Agents/home/.venv-hermes/lib/python3.11/site-packages"
+VENV_LIB="__AETHER_ROOT__/home/.venv-hermes/lib/python3.11/site-packages"
 # For git-clone installs (legacy):
-# VENV_LIB="/home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages"
+# VENV_LIB="~/.hermes/hermes-agent/venv/lib/python3.11/site-packages"
 export LD_LIBRARY_PATH="${VENV_LIB}/nvidia/cublas/lib:${VENV_LIB}/nvidia/cudnn/lib:${VENV_LIB}/nvidia/cufft/lib:${VENV_LIB}/nvidia/curand/lib:${VENV_LIB}/nvidia/cusolver/lib:${VENV_LIB}/nvidia/cusparse/lib:${VENV_LIB}/nvidia/cuda_runtime/lib:${VENV_LIB}/nvidia/cuda_nvrtc/lib:${VENV_LIB}/nvidia/nvjitlink/lib:/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # For pip installs:
-PYTHON="/home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3"
+PYTHON="__AETHER_ROOT__/home/.venv-hermes/bin/python3"
 # For git-clone installs (legacy):
-# PYTHON="/home/prometeo/.hermes/hermes-agent/venv/bin/python3"
+# PYTHON="~/.hermes/hermes-agent/venv/bin/python3"
 
 echo "=== faster-whisper GPU verification ==="
 echo "Model: ${MODEL}"
