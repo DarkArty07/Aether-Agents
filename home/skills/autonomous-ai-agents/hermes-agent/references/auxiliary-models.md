@@ -857,7 +857,7 @@ hermes config path    # e.g., ~/Aether-Agents/home/config.yaml
 ```
 
 **Profile directory mapping:**
-- Config/Env/SOUL.md/Memories/Skills/Sessions/Cron/Logs/State DB: `~/Aether-Agents/home/profiles/hermes/`
+- Config/Env/SOUL.md/Memories/Skills/Sessions/Cron/Logs/State DB: `~/Aether-Agents/home/`
 - Aether shared skills: `~/Aether-Agents/home/skills/`
 - Installation/Venv: `~/.hermes/hermes-agent/` (shared, NOT in profile)
 - Binary: `~/.hermes/hermes-agent/venv/bin/hermes`

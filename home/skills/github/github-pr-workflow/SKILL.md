@@ -78,7 +78,7 @@ Branch naming conventions:
 
 ### Pitfall 1: Files Ignored by .gitignore (can't stage)
 
-Some config files (e.g., `home/profiles/hermes/config.yaml`) are in `.gitignore` because they contain API keys or are machine-specific. If you need to commit a **structural configuration change** (like toolset definitions) that is not a secret, `git add` will silently skip it — no error, no warning, and the file won't appear in `git status`.
+Some config files (e.g., `home/config.yaml`) are in `.gitignore` because they contain API keys or are machine-specific. If you need to commit a **structural configuration change** (like toolset definitions) that is not a secret, `git add` will silently skip it — no error, no warning, and the file won't appear in `git status`.
 
 **Detect:** If `git diff <file>` and `git status <file>` show nothing but you know the file was modified, check `.gitignore`:
 ```bash

@@ -348,7 +348,7 @@ $HERMES_HOME/skills/        Installed skills
 
 Profiles use `~/.hermes/profiles/<name>/` with the same layout. **Always run `hermes config path` to find the ACTIVE profile directory** — it may NOT be `~/.hermes/`. When using `hermes -p <name>`, the profile home is typically `~/Aether-Agents/home/profiles/<name>/` and contains config.yaml, .env, SOUL.md, memories/, skills/, sessions/, cron/, logs/, state.db. The installation directory (`~/.hermes/hermes-agent/`) is always shared across profiles.
 
-**PITFALL:** Editing `~/.hermes/config.yaml` when the active profile is at `~/Aether-Agents/home/profiles/hermes/config.yaml` changes the WRONG file. Always check with `hermes config path` first.
+**PITFALL:** Editing `~/.hermes/config.yaml` when the active profile is at `~/Aether-Agents/home/config.yaml` changes the WRONG file. Always check with `hermes config path` first.
 
 ### Config Sections
 
@@ -542,7 +542,7 @@ The `hermes-orchestrator` toolset is a custom toolset designed to **structurally
 
 **Hermes orchestrator profile config (granular toolsets with terminal write restriction — recommended):**
 ```yaml
-# In ~/Aether-Agents/home/profiles/hermes/config.yaml
+# In ~/Aether-Agents/home/config.yaml
 toolsets:
   - web
   - file-read
@@ -565,7 +565,7 @@ agent:
 hooks:
   pre_tool_call:
     - matcher: "terminal"
-      command: "/home/prometeo/Aether-Agents/home/profiles/hermes/agent-hooks/block-write-commands.sh"
+      command: "__AETHER_ROOT__/home/agent-hooks/block-write-commands.sh"
       timeout: 5
 hooks_auto_accept: false
 platform_toolsets:
@@ -871,7 +871,7 @@ platform_toolsets:
 - Multiline `python -c` with `open()` on a different line escapes single-line regex detection of `open()`. Block ALL `python -c`.
 - `perl -e` without `-i` can still write files. Block ALL `perl -e`, not just `perl -i`.
 - Heredoc feeding (`python3 << 'EOF'`) bypasses `-c` detection. Block interpreter+heredoc patterns.
-- The hook path MUST use the profile directory (e.g., `~/Aether-Agents/home/profiles/hermes/agent-hooks/`), NOT `~/.hermes/agent-hooks/`.
+- The hook path MUST use the home directory (e.g., `~/Aether-Agents/home/agent-hooks/`), NOT `~/.hermes/agent-hooks/`.
 - `hooks_auto_accept: false` ensures hooks fire every time without prompting.
 
 **⚠️ KNOWN ISSUE — Hook not executing in TUI mode (2026-05-06):**
@@ -1301,7 +1301,7 @@ Key config.json options:
 
 **PITFALL: Bank creation.** The bank matching the profile name (e.g., "hermes") does NOT auto-create on first retain. You must create it manually via the API. Without it, auto-retain silently fails.
 
-**PITFALL: Plugin config.json.** Without `<profile>/hindsight/config.json`, Hermes uses hardcoded defaults. To customize recall behavior, auto_retain, LLM for reflect, etc., create this file. It lives under the profile directory (e.g., `~/Aether-Agents/home/profiles/hermes/hindsight/config.json`), NOT under `~/.hindsight/`.
+**PITFALL: Plugin config.json.** Without `<home>/hindsight/config.json`, Hermes uses hardcoded defaults. To customize recall behavior, auto_retain, LLM for reflect, etc., create this file. It lives under the home directory (e.g., `~/Aether-Agents/home/hindsight/config.json`), NOT under `~/.hindsight/`.
 
 Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 
