@@ -2,6 +2,17 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.4] - 2026-05-18
+
+- **refactor**: Consolidated aether-agents skill into SOUL.md (monolithic)
+  - All Daimon ecosystem info (protocols, workflows, diagnostics, agent creation, models) now lives exclusively in SOUL.md
+  - Deleted home/skills/devops/aether-agents/ (was broken: nested directory, missing SKILL.md, never committed to git)
+  - Added 3 diagnostic rows to §11 Anti-Patterns (0 tool_calls, invisible skill, agent-hooks mismatch)
+  - Fixed §13 "Olympus v2" → "olympus_v3"
+  - Removed all aether-agents skill references from §5, §6, §11, §12
+- **docs**: Added Daimon config pitfall, skill structure warning, and monolithic SOUL.md note to hermes-agent skill
+- **chore**: Removed tracked .usage.json and .usage.json.lock, added to .gitignore
+
 ## [0.8.2] - 2026-05-18
 
 - **fix**: ACP delegation returned empty results — PID-suffixed file mismatch in olympus_v3 hooks (`_get_session_id()` read `.olympus_session` but `acp_manager` writes `.olympus_session.{PID}`)
