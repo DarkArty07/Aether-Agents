@@ -30,6 +30,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.4 (2026-05-18)
+
+- **refactor**: Consolidated aether-agents skill into SOUL.md — deleted skill directory, absorbed diagnostics into Anti-Patterns table, fixed Olympus v2 reference
+- **docs**: Added Daimon config pitfall, skill directory structure warning, and monolithic SOUL.md note to hermes-agent skill references
+- **chore**: Removed tracked .usage.json files, added to .gitignore
+
 ### v0.8.2 (2026-05-18)
 
 - **fix**: olympus_v3 hooks `_get_session_id()` now reads PID-suffixed `.olympus_session.{PID}` files (fixes ACP delegation returning empty results)
