@@ -30,6 +30,13 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.6 (2026-05-18)
+
+- **docs**: README rewritten — Aether positioned as hermes-agent extension with clear framework/team relationship
+- **fix**: 3-pass stale reference audit — docs, source comments, Daimon configs, skills, website
+- **fix**: consulting_db.py .eter→.aether, 4 Daimon SOULs, hefesto Ergates/TASKS.md legacy
+- **chore**: Deleted 7 stale branches, pruned remotes
+
 ### v0.8.5 (2026-05-18)
 
 - **refactor**: `.eter` → `.aether` migration — consulting_db.py, 4 Daimon SOULs, website, skill references
