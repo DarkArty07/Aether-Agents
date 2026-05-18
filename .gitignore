@@ -40,8 +40,6 @@ home/profiles/*/skills/*
 **/.bundled_manifest
 
 # --- Per-profile live config (generated from templates) ---
-home/profiles/hermes/config.yaml
-home/profiles/orchestrator/config.yaml
 home/profiles/ariadna/config.yaml
 home/profiles/hefesto/config.yaml
 home/profiles/etalides/config.yaml
@@ -66,13 +64,13 @@ home/profiles/*/ollama_cloud_models_cache.json
 home/profiles/*/bin/
 home/profiles/*/sandboxes/
 home/profiles/*/cron/
+home/profiles/*/lsp/
 home/profiles/*/pastes/
 home/profiles/*/spawn-trees/
 home/profiles/*/processes.json
 home/profiles/*/skins
 home/profiles/*/cache/
 home/profiles/*/hindsight/
-home/profiles/*/state-snapshots/
 home/profiles/*/.restart_last_processed.json
 home/kanban.db
 home/profiles/*/kanban.db
@@ -83,7 +81,14 @@ home/profiles/*/.env.bak*
 home/config.yaml
 home/memories/
 home/hindsight/
+home/agent-hooks/
+home/pastes/
+home/cron/
+home/sandboxes/
+home/shell-hooks-allowlist.json
+home/shell-hooks-allowlist.json.lock
 home/skills/.curator_state
+home/skills/.curator_backups/
 
 # --- Python ---
 __pycache__/
