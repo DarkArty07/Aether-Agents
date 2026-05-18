@@ -2,6 +2,13 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.8.2] - 2026-05-18
+
+- **fix**: ACP delegation returned empty results — PID-suffixed file mismatch in olympus_v3 hooks (`_get_session_id()` read `.olympus_session` but `acp_manager` writes `.olympus_session.{PID}`)
+- **fix**: Added `api_mode: chat_completions` to all 6 Daimon config.yaml templates (hefesto, etalides, ariadna, athena, daedalus, ictinus)
+- **docs**: README rewritten with impact-first design, hermes-agent attribution, Daimon personality table, and .aether architecture
+- **refactor**: Daimon config templates include `api_mode: chat_completions` for proper ACP compatibility
+
 ## [0.8.1] - 2026-05-18
 
 ### 🧹 Repository Cleanup
