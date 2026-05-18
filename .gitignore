@@ -152,3 +152,7 @@ docs/setup/
 
 # --- Subagent-driven-development runtime ---
 home/skills/software-development/subagent-driven-development/references/
+
+# --- Skills usage tracking (local only) ---
+home/skills/.usage.json
+home/skills/.usage.json.lock
