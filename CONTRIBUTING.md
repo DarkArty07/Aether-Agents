@@ -73,9 +73,9 @@ Use the GitHub issue templates:
 ## What NOT to Commit
 
 Never commit:
-- `home/profiles/hermes/config.yaml` — Live config with secrets
-- `home/profiles/orchestrator/config.yaml` — Live config with secrets
-- `home/profiles/hermes/.env` — Environment variables (gitignored)
+- `home/config.yaml` — Orchestrator live config with secrets (gitignored)
+- `home/.env` — Environment variables (gitignored)
+- `home/profiles/<daimon>/config.yaml` — Daimon live configs (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 - `.aether/` — Runtime state (gitignored)
 

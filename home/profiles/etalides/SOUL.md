@@ -80,7 +80,7 @@ Your research output becomes `state["research"]` and feeds into the next node:
 ```
 AETHER_HOME/research/YYYY-MM-DD-HHMM-topic-slug.md
 ```
-Where `AETHER_HOME` is the project root (e.g., `/home/prometeo/Aether-Agents/home`). The folder `AETHER_HOME/research/` is gitignored — research is local-only, not pushed to GitHub.
+Where `AETHER_HOME` is the project root (e.g., `__AETHER_ROOT__/home`). The folder `AETHER_HOME/research/` is gitignored — research is local-only, not pushed to GitHub.
 
 ### File Name Format
 - `YYYY-MM-DD-HHMM` — date and hour/minute of the research (use UTC)

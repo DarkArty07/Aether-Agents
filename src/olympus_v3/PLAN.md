@@ -155,7 +155,7 @@ Hooks run inside the hermes-agent process at specific lifecycle points. The plug
 - run uses acp_manager.delegate() to send prompt to consultant Daimon
 - Response extraction reads from SQLite turns table (not SessionBuffer)
 - sign action reads consultant response from SQLite
-- consulting_db stays SQLite at <project_root>/.eter/.consulting/consulting.db
+- consulting_db stays SQLite at <project_root>/.aether/.consulting/consulting.db
 - ROLE_LABELS, ROLE_DESCRIPTIONS, ROLE_LEVELS constants preserved from v2
 
 ---

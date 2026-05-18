@@ -60,7 +60,7 @@ def _default_profiles_dir() -> Path:
     """Resolve profiles directory from HERMES_HOME or AETHER_HOME.
     
     Priority: HERMES_HOME parent > AETHER_HOME/profiles > ~/.hermes parent
-    HERMES_HOME points to the profile dir itself (e.g., .../profiles/hermes),
+    HERMES_HOME points to the home dir (e.g., .../home),
     so its parent is the profiles directory.
     """
     hermes_home = os.environ.get("HERMES_HOME")

@@ -52,7 +52,7 @@ Each profile's `config.yaml` points here via `skills.external_dirs`:
 ```yaml
 skills:
   external_dirs:
-    - /home/prometeo/Aether-Agents/home/skills
+    - __AETHER_ROOT__/home/skills
 ```
 
 Skills are loaded based on their **trigger conditions** (YAML frontmatter), not by directory filtering. Each Daimon's SOUL.md references the skills relevant to their specialty.

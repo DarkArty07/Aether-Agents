@@ -12,7 +12,7 @@ Aether Agents uses three layers of configuration, resolved in order of specifici
 |-------|------|-------|----------|
 | **Root** | `home/config.yaml` | All Daimons (fallback) | Lowest |
 | **Profile** | `home/profiles/<name>/config.yaml` | Single Daimon | Overrides root |
-| **User** | `~/.hermes/config.yaml` | User's local CLI | Highest |
+| **User** | `~/.hermes/config.yaml` | User's global CLI config (not a project file) | Highest |
 
 When a Daimon starts, it merges: profile config → root config → user config. The most specific value wins.
 

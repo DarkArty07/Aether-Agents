@@ -131,7 +131,7 @@ Aether-Agents/
 
 ```bash
 # After setup, edit API keys:
-vim home/profiles/orchestrator/.env
+nano home/.env
 ```
 
 Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them to your machine's paths. See [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md) for full options.

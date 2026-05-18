@@ -142,7 +142,7 @@ As of v0.8.3, the orchestrator runs as the **default profile** (no `-p` flag), n
 | **default** (orchestrator) | `~/Aether-Agents/home/` | CLI/TUI, SOUL.md orchestration | glm-5.1 via opencode-go | `hermes` command (no `-p`) |
 | **prometeo** | `~/.prometeo/profiles/prometeo/` | Gateway (Telegram, cron) | mimo-v2.5-pro via opencode-go | systemd service |
 
-How it works: When `HERMES_HOME` is set to a custom path (not `~/.hermes`), the framework uses that directory directly as the default profile — `config.yaml`, `SOUL.md`, `.env`, `auth.json`, `agent-hooks/` all live in `HERMES_HOME/` itself. Named Daimon profiles (hefesto, etalides, athena, etc.) still use `profiles/<name>/`.
+How it works: When `HERMES_HOME` is set to a custom path (not `~/.hermes`), the framework uses that directory directly as the default profile — `config.yaml`, `SOUL.md`, `.env`, `auth.json`, `agent-hooks/` all live in `HERMES_HOME/` itself. Named Daimon profiles (hefesto, etalides, athena, daedalus, etc.) still use `profiles/<name>/`.
 
 The `profiles/hermes/` directory was deleted (reserved name, stale config). The `profiles/orchestrator/` directory was deleted (migrated to default profile).
 
@@ -168,6 +168,7 @@ The orchestrator `.env` has a `LD_LIBRARY_PATH` with 8 nvidia library paths poin
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cusolver/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cusparse/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cuda_runtime/lib:
+/home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/curand/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:
 ```
@@ -231,7 +232,7 @@ After changing the venv location, the `olympus_v3` MCP server command in `config
 
 **Symptom**: MCP tools silently absent from tool list. No error message — the MCP server just fails to start because the command path doesn't exist.
 
-**Fix**: In `<profile>/config.yaml`, update `mcp_servers.olymus_v3.command`:
+**Fix**: In `<profile>/config.yaml`, update `mcp_servers.olympus_v3.command`:
 
 ```yaml
 # BEFORE (dead path after migration):
@@ -348,3 +349,5 @@ After migrating from git clone to pip install, several files in the repo are obs
 2. References to old paths (`~/.hermes/`, old venv)
 3. Deprecated code and docs pointing to removed features
 4. Config files with secrets vs. templates (should be `.gitignore`d)
+
+**Critical pitfall — "works by accident"**: After a path migration (e.g., `.eter/` → `.aether/`), code that still references the old path may continue working if the old directory still exists on disk. This creates a false sense of correctness. The v0.8.5 audit found `consulting_db.py` still referencing `.eter/.consulting/` — it worked because the `.eter/` directory hadn't been deleted yet. **Always migrate on-disk state first, then delete the old directory, then verify**. Only deleting the old directory reveals the bug.
