@@ -207,7 +207,11 @@ hermes profile export NAME  Export to tar.gz
 hermes profile import FILE  Import from archive
 ```
 
-**⚠ Reserved profile name "hermes":** `hermes profile alias hermes` fails with `Error: 'hermes' is a reserved name`. The workaround is to create the wrapper script manually — see `templates/profile-alias-wrapper.sh`. A bare symlink silently uses the default profile instead of the named one, which is the #1 cause of "my SOUL.md isn't loading" bugs.
+**⚠ Daimon config.yaml must exist (not just template):** After v0.8.1, live `config.yaml` files are gitignored and only `config.yaml.template` ships in the repo. If a Daimon's `config.yaml` is missing, `delegate` returns `{thoughts: 0, messages: 0, tool_calls: 0}` — a completely empty result with no error message. This is the #1 cause of silent delegation failures after a fresh clone. **Fix:** Run `scripts/setup.sh` to regenerate all configs from templates, or manually `sed` the `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders. Verify with `ls home/profiles/*/config.yaml` — every Daimon must have a live config.
+
+**⚠ Skill directory structure must be `<category>/<name>/SKILL.md`:** Skills with nested directories like `<name>/<name>/SKILL.md` or `<name>/<name>/references/` are invisible to `skill_view` and `skills_list` — the system expects exactly one level of nesting under a category directory. If a skill doesn't appear in `skills_list`, check the directory structure first.
+
+**⚠ Reserved profile name "hermes":** `hermes profile alias hermes` fails with `Error: 'hermes' is a reserved name'`. The workaround is to create the wrapper script manually — see `templates/profile-alias-wrapper.sh`. A bare symlink silently uses the default profile instead of the named one, which is the #1 cause of "my SOUL.md isn't loading" bugs.
 
 **Default Profile with Custom HERMES_HOME:** When `HERMES_HOME` is set to a custom path outside `~/.hermes` (e.g., `~/Aether-Agents/home`), the framework uses that directory directly as the default profile — no `-p` flag needed. This means `SOUL.md`, `config.yaml`, `.env`, `auth.json`, `agent-hooks/`, and all runtime state live in `HERMES_HOME/` itself, not in a subdirectory under `profiles/`. Named Daimon profiles (e.g., `-p hefesto`) still use `profiles/hefesto/`. The wrapper script simply does `exec hermes "$@"` without `-p`. This is the canonical architecture for custom deployments (Docker, Aether Agents, etc.) — cleaner than a named profile because it eliminates one level of indirection and the `-p` flag.
 
