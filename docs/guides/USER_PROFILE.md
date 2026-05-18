@@ -5,7 +5,7 @@
 The `USER.md` file tells Hermes (and other Daimons) who you are and how you like to work. It lives in:
 
 ```
-home/profiles/hermes/memories/USER.md
+home/memories/USER.md
 ```
 
 This file is **personal** — it is loaded into the Hermes context at runtime and adapts the entire Aether Agents experience to your preferences. It is **not** meant to be shared or committed to public repositories.
@@ -65,8 +65,8 @@ Works in PST timezone. Active on GitHub — prefers PR-based workflow.
 
 | File | Purpose |
 |------|---------|
-| `home/profiles/hermes/memories/USER.md` | Your personal preferences (this file) |
-| `home/profiles/hermes/memories/MEMORY.md` | Hermes' notes about your environment and projects |
+| `home/memories/USER.md` | Your personal preferences (this file) |
+| `home/memories/MEMORY.md` | Hermes' notes about your environment and projects |
 | `home/profiles/<daimon>/SOUL.md` | Identity and rules for each Daimon |
 
 ## FAQ

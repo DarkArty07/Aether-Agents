@@ -1309,6 +1309,8 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 
 **Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, version-specific pitfalls, Daimon config template requirements, and post-migration repo cleanup audit.
 
+**Post-migration stale reference audit:** See `references/post-migration-audit.md` for the systematic methodology to find and fix dead paths, old conventions, and hardcoded references after any major migration (path changes, module renames, profile reorganization, convention shifts). Includes classification by priority, verification protocol, and common patterns (hardcoded user paths, deleted profiles, database path migrations).
+
 **Default Profile Migration reference:** See `references/default-profile-migration.md` for the pattern of migrating from a named profile (`-p orchestrator`) to the default profile when using a custom HERMES_HOME. Includes complete checklist, architecture comparison table, and pitfalls.
 
 **OpenCode Go models:** See `references/opencode-go-models.md` for model IDs, multimodal support matrix, usage limits, and configuration patterns.

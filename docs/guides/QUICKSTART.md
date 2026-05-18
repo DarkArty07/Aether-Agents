@@ -17,7 +17,7 @@ bash scripts/setup.sh
 Edit the orchestrator profile environment file and add at least one provider key:
 
 ```bash
-nano home/profiles/orchestrator/.env
+nano home/.env
 ```
 
 ```

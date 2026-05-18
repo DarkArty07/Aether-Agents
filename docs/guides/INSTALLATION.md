@@ -1,4 +1,4 @@
-# Installation Guide — Aether Agents v0.8.0
+# Installation Guide — Aether Agents v0.8.5
 
 Complete instructions for installing and configuring Aether Agents.
 
@@ -199,7 +199,7 @@ This requires `OPENAI_API_KEY` set in the profile's `.env` file.
 Edit the `.env` file in each profile to set your API keys. At minimum, configure the orchestrator:
 
 ```bash
-nano home/profiles/orchestrator/.env
+nano home/.env
 ```
 
 Available providers (uncomment and fill in the ones you need):

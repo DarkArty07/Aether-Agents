@@ -497,7 +497,9 @@ git branch -d release/v0.8.0
 
 ### Pre-Release Documentation Audit
 
-After any release that removes files, changes installation method, moves paths, or deprecates commands, run a string audit BEFORE tagging:
+After any release that removes files, changes installation method, moves paths, or deprecates commands, run a string audit BEFORE tagging. This is a scoped version of the general post-migration audit (see `autonomous-ai-agents/hermes-agent/references/post-migration-audit.md` for the full methodology).
+
+**Quick audit — version consistency and dangling references:**
 
 ```bash
 # 1. Find references to deleted/moved files in tracked content
@@ -515,7 +517,11 @@ grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' CHANGELOG.md | head -1
 grep -rn 'pip install -e \.\|configure\.sh\|start\.sh\|~/.hermes/' website/ 2>/dev/null
 ```
 
-Fix all findings, commit, then proceed with tagging. This prevents dangling references in documentation that survive releases.
+**Full migration audit — after path changes, convention shifts, or module renames:**
+
+For major refactoring (`.eter/` → `.aether/`, profile restructuring, script renaming), follow the comprehensive post-migration audit methodology: catalog old conventions, grep for each pattern, classify by priority (functional code > agent configs > docs > CHANGELOG), fix in order, migrate on-disk state, verify clean. See `references/post-migration-audit.md` in the `hermes-agent` skill.
+
+Fix all findings, commit, then proceed with tagging.
 
 ### Pitfalls
 
