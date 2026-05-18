@@ -30,6 +30,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.8.5 (2026-05-18)
+
+- **refactor**: `.eter` → `.aether` migration — consulting_db.py, 4 Daimon SOULs, website, skill references
+- **chore**: Remove PLAN.md (completed v0.8.0), remove .eter/ directory (migrated to .aether/)
+- **fix**: hermes-agent skill hardcoded paths → `__AETHER_ROOT__` placeholders
+
 ### v0.8.4 (2026-05-18)
 
 - **refactor**: Consolidated aether-agents skill into SOUL.md — deleted skill directory, absorbed diagnostics into Anti-Patterns table, fixed Olympus v2 reference

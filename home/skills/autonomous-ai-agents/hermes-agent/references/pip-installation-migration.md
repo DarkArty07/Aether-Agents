@@ -58,8 +58,8 @@ The wrapper scripts solve the "binary in ~/.hermes/hermes-agent/ but config in A
    ```bash
    #!/bin/bash
    # Default profile — no -p flag needed
-   export HERMES_HOME=/home/prometeo/Aether-Agents/home
-   exec /home/prometeo/Aether-Agents/home/.venv-hermes/bin/hermes "$@"
+   export HERMES_HOME=__AETHER_ROOT__/home
+   exec __AETHER_ROOT__/home/.venv-hermes/bin/hermes "$@"
    ```
 
 5. **Create aether alias** (`~/.local/bin/aether`) — same content as hermes wrapper if desired
@@ -174,7 +174,7 @@ The orchestrator `.env` has a `LD_LIBRARY_PATH` with 8 nvidia library paths poin
 
 **After migration**: These 8 paths must be updated to point to the new venv:
 ```
-/home/prometeo/Aether-Agents/home/.venv-hermes/lib/python3.11/site-packages/nvidia/cublas/lib:
+__AETHER_ROOT__/home/.venv-hermes/lib/python3.11/site-packages/nvidia/cublas/lib:
 ... (same pattern, replacing .hermes/hermes-agent/venv with .venv-hermes)
 ```
 
@@ -198,7 +198,7 @@ Three service files reference the old venv binary and need updating:
    - HERMES_HOME: `/home/prometeo/.prometeo/profiles/prometeo`
 
 2. **`hermes-gateway-hermes.service`** — Legacy gateway (profile: hermes)
-   - Same ExecStart pattern, HERMES_HOME: `/home/prometeo/Aether-Agents/home/profiles/hermes`
+   - Same ExecStart pattern, HERMES_HOME: `__AETHER_ROOT__/home`
 
 3. **`hermes-gateway.service`** — Default gateway (no profile)
    - ExecStart: `/home/prometeo/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main gateway run --replace`
@@ -215,7 +215,7 @@ If you have XFCE/GNOME `.desktop` files for Hermes launchers, update their paths
 grep -rl "\.hermes/hermes-agent" ~/.local/share/applications/ ~/Desktop/ 2>/dev/null
 
 # Example: Update aether.desktop
-sed -i 's|/home/prometeo/.hermes/hermes-agent/venv/bin/python|/home/prometeo/Aether-Agents/home/.venv-hermes/bin/python|g' ~/.local/share/applications/aether.desktop
+sed -i 's|/home/prometeo/.hermes/hermes-agent/venv/bin/python|__AETHER_ROOT__/home/.venv-hermes/bin/python|g' ~/.local/share/applications/aether.desktop
 
 # Verify
 cat ~/.local/share/applications/aether.desktop | grep Exec
@@ -243,20 +243,20 @@ olympus_v3:
   enabled: true
   timeout: 600
   env:
-    AETHER_HOME: /home/prometeo/Aether-Agents/home
-    PYTHONPATH: /home/prometeo/Aether-Agents/src
+    AETHER_HOME: __AETHER_ROOT__/home
+    PYTHONPATH: __AETHER_ROOT__/src
 
 # AFTER (new venv path):
 olympus_v3:
-  command: /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3.11
+  command: __AETHER_ROOT__/home/.venv-hermes/bin/python3.11
   args:
     - -m
     - olympus_v3.server
   enabled: true
   timeout: 600
   env:
-    AETHER_HOME: /home/prometeo/Aether-Agents/home
-    PYTHONPATH: /home/prometeo/Aether-Agents/src
+    AETHER_HOME: __AETHER_ROOT__/home
+    PYTHONPATH: __AETHER_ROOT__/src
 ```
 
 **Note**: Use the explicit `python3.11` binary (not `python`) to avoid ambiguity with system Python. After updating config.yaml, restart Hermes (`/restart` in TUI or new session) for the MCP server to load.
