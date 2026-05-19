@@ -1,18 +1,16 @@
 # Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
 
-# Athena configuration — Aether Agents Daimon (Level 2)
+# Athena configuration — Aether Agents Daimon (Consultant-Analyst)
 
 # Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: athena
-  role: security-engineer
-  description: "Security Engineer del ecosistema. Protección proactiva, threat modeling, security review."
+  role: security-analyst
+  description: "Security Analyst (Consultant-Analyst). Threat modeling, security review, dependency audit. Reads code, never implements."
   capabilities:
     - receives_from
     - threat-modeling
     - security-review
-    - dependency-audit
-    - risk-communication
   launch_command: "hermes acp"
   keep_alive: true
 
@@ -23,14 +21,11 @@ model:
   provider: opencode-go
   base_url: https://opencode.ai/zen/go/v1
 
-# Toolsets — security analysis tools
+# Toolsets — each has a documented justification
 toolsets:
-  - terminal
-  - file
-  - search_files
-  - execute_code
-  - memory
-  - skills
+  - file        # read_file, search_files for code audit; write_file/patch available but SOUL.md prohibits use (Consultant-Analyst)
+  - terminal    # git log, grep, find, wc — secondary audit tool for security checks
+  - skills     # load athena-security-checklists and other references on-demand
 
 skills:
   external_dirs:
