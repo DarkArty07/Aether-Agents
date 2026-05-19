@@ -1,20 +1,18 @@
 # Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
 
-# Hefesto configuration — Aether Agents Daimon (Level 2)
+# Hefesto configuration — Aether Agents Daimon (Senior Developer)
 
 # Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: hefesto
-  role: senior-developer
-  description: "Senior Developer y Tech Lead de implementación. Descompone por rol, delega, revisa, integra."
+  role: senior-developer                              # Implements atomic tasks from Hermes, does not decompose
+  description: "Senior Developer. Implements specs, code reviews, integrates, debugs. Receives atomic tasks from Hermes — does not decompose or delegate."
   capabilities:
-    - receives_from
-    - delegate_task
-    - implementation
-    - code-review
-    - integration
-    - debugging
-    - estimation
+    - receives_from           # Receives atomic tasks from Hermes
+    - implementation          # Writes production code
+    - code-review             # Self-reviews before reporting
+    - integration             # Consolidates work across files
+    - debugging               # Root cause analysis
   launch_command: "hermes acp"
   keep_alive: true
 
@@ -25,15 +23,16 @@ model:
   provider: opencode-go
   base_url: https://opencode.ai/zen/go/v1
 
-# Toolsets — implementation tools only
+# Toolsets — implementation tools
+# delegate_task removed: Hermes decomposes and delegates. Hefesto receives atomic tasks.
+# subagent-driven-development skill removed: obsolete (Ergates concept removed in v0.11.0)
 toolsets:
-  - terminal
-  - file
-  - search_files
-  - patch
-  - execute_code
-  - delegate_task
-  - skills
+  - terminal            # Running commands, builds, installs, tests
+  - file                # Reading and writing source files
+  - search_files        # Finding files and patterns in the codebase
+  - patch               # Precise file edits
+  - execute_code        # Running code snippets for verification
+  - skills              # On-demand skill loading
 
 skills:
   external_dirs:
@@ -50,9 +49,6 @@ max_iterations: 80
 approvals:
   mode: 'off'
 
-# Auto-approve subagent commands — hefesto delegates to Ergates
-delegation:
-  subagent_auto_approve: true
 # Olympus v3 observability plugin
 plugins:
   enabled:
