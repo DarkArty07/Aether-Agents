@@ -156,3 +156,8 @@ home/skills/software-development/subagent-driven-development/references/
 # --- Skills usage tracking (local only) ---
 home/skills/.usage.json
 home/skills/.usage.json.lock
+home/.olympus_v3.db
+home/channel_directory.json
+home/gateway.lock
+home/gateway.pid
+home/gateway_state.json
