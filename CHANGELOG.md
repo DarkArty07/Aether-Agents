@@ -2,6 +2,17 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.9.0] — 2026-05-19
+
+### Added
+- **Bidirectional ACP communication** — Daimon sessions are now persistent (tmux-like). `delegate()` returns `session_id` and keeps the session open for follow-ups via `message()`. `poll()` returns rich progress data: `last_turn`, `last_reasoning`, `recent_tool_calls`, `clarification_needed`, `heartbeat_timestamp`. `steer()` injects mid-flight directives into working Daimons. Sessions detect `CLARIFICATION NEEDED` patterns and stay open for response.
+- **Poll visibility fix** — `PRAGMA wal_checkpoint = TRUNCATE` before reads in `get_session_progress()` ensures async readers see data written by sync hooks. Fallback indicator `[Working] tool_name(args) → status` when `last_turn` is null but tool calls exist.
+- **SOUL.md rewrite** — Sections 5 (Communication), 6 (Routing), 9 (Multi-Daimon Coordination), 10 (Session Management) rewritten for persistent sessions. Anti-patterns table expanded with session management pitfalls. §13 Daimon Models table removed (models change, static table misleads).
+
+### Changed
+- **SOUL.md §7** — Orchestration patterns updated from "sequential delegate calls" to "delegate, open/message/poll, and steer" with parallel session support.
+- **SOUL.md §7 Dev-QA Loop** — Added note on parallel Athena validation with steer() for mid-flight redirection.
+
 ## [0.8.7] — 2025-05-18
 
 ### Changed

@@ -164,13 +164,13 @@ The orchestrator `.env` has a `LD_LIBRARY_PATH` with 8 nvidia library paths poin
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cublas/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cudnn/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cufft/lib:
-/home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/curand/lib:
+/home/prometeo/.hermes-agent/venv/lib/python3.11/site-packages/nvidia/curand/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cusolver/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cusparse/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cuda_runtime/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/curand/lib:
 /home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib:
-/home/prometeo/.hermes/hermes-agent/venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:
+/home/prometeo/.hermes/hermes-agent/venv/lib/python/nvjitlink/lib:
 ```
 
 **After migration**: These 8 paths must be updated to point to the new venv:
@@ -206,6 +206,21 @@ Three service files reference the old venv binary and need updating:
    - HERMES_HOME: `/home/prometeo/.prometeo`
 
 **After migration**: Change all ExecStart, WorkingDirectory, and VIRTUAL_ENV to point to `.venv-hermes`. The HERMES_HOME values remain the same.
+
+### Systemd PATH Requirement (CRITICAL)
+
+The systemd service `Environment="PATH=..."` **must include standard Linux directories** at the beginning. Unlike a login shell, systemd does not source `/etc/profile` or `~/.bashrc`, so the PATH starts empty and only contains what you explicitly set. If `/bin` and `/usr/bin` are missing, **`npx` spawns `sh` and fails with "ENOENT spawn sh"** because it can't find the shell binary. MCP servers that use `npm exec` (context7, todoist, etc.) will fail silently or crash.
+
+**Required PATH prefix**: `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`
+
+Also remove the stale git-clone path `~/.hermes/hermes-agent/node_modules/.bin` — it no longer exists after migration and `npx` uses its own cache at `~/.npm/_npx/` instead.
+
+**Correct PATH order**:
+```
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/USER/Aether-Agents/home/.venv-hermes/bin:/home/USER/.nvm/versions/node/v25.6.0/bin:/home/USER/.local/bin:/home/USER/go/bin:..."
+```
+
+**Diagnosis**: If MCP servers using `npm exec` fail with `ENOENT spawn sh` in the stderr log, check the service file's PATH. The MCP stderr log (`<profile>/logs/mcp-stderr.log`) will show `npm error errno -2` and `npm error enoent spawn sh ENOENT`.
 
 ### .desktop File Updates (GUI Launchers)
 
@@ -351,3 +366,31 @@ After migrating from git clone to pip install, several files in the repo are obs
 4. Config files with secrets vs. templates (should be `.gitignore`d)
 
 **Critical pitfall — "works by accident"**: After a path migration (e.g., `.eter/` → `.aether/`), code that still references the old path may continue working if the old directory still exists on disk. This creates a false sense of correctness. The v0.8.5 audit found `consulting_db.py` still referencing `.eter/.consulting/` — it worked because the `.eter/` directory hadn't been deleted yet. **Always migrate on-disk state first, then delete the old directory, then verify**. Only deleting the old directory reveals the bug.
+
+### Secret Redaction `.env` Corruption (v0.13+)
+
+When `security.redact_secrets: true` is set in `config.yaml`, hermes-agent redacts API keys and tokens in chat output and logs. **However**, if the agent writes to `.env` files while a session is active, it may write the redacted display format (e.g., `869628...YFCo` with literal `...` dots) back to the file instead of the real token value. This silently corrupts the token, causing `"The token was rejected by the server"` errors.
+
+**Symptoms**: Gateway connects to Telegram but processes zero inbound messages. `hermes gateway status` shows `"Telegram startup failed: The token ... was rejected by the server"`. `grep TELEGRAM_BOT_TOKEN .env` shows truncated tokens with `...`.
+
+**Diagnosis**: Use `xxd .env | grep -A2 BOT_TOK` — if the hex shows literal dots (`2e2e2e`) instead of the full token characters, the file is corrupted.
+
+**Fix**: Replace the corrupted line with the complete token. The profile-specific `.env` (e.g., `profiles/prometeo/.env`) often still has the correct token since it may not have been written to by the agent. Copy the real token from there or from a backup.
+
+**Prevention**: After editing `.env` files, always verify token integrity with `xxd` or `wc -c`. The `security.redact_secrets` feature affects runtime display only — it should never modify the on-disk `.env` file. If you see token corruption, report it as a bug.
+
+### Gateway `session_reset` and Restart Messages
+
+When the gateway restarts, two behaviors cause "new session" messages:
+
+1. **Auto-resume**: If a session was active when the gateway stopped, it's marked as resumable and resumed on restart. This sends an empty message (`msg=''`) to the model, which often responds with a greeting as if starting a new conversation.
+
+2. **`session_reset` mode**: Controls automatic session rotation. Settings:
+   - `none` — Never reset sessions automatically. Only `/new` or `/reset` commands create new sessions. **Recommended for gateway bots** to avoid unexpected greetings on restart.
+   - `idle` — Reset after `idle_minutes` of inactivity (default 1440 = 24h).
+   - `daily` — Reset at `at_hour` every day.
+   - `both` — Reset on either trigger, whichever comes first. **Causes restart greetings on every gateway restart or daily at 4am.**
+
+**Fix for restart greetings**: Set `session_reset: mode: none` in the gateway profile's `config.yaml`. This prevents automatic session resets and eliminates the "new session" message after gateway restarts.
+
+**Note**: The `idle` and `daily` modes are useful forCLI/TUI sessions where you want a fresh context periodically, but they cause unwanted behavior in always-on gateway bots that should maintain continuous conversations.

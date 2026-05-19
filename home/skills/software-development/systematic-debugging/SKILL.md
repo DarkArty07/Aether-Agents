@@ -1,7 +1,7 @@
 ---
 name: systematic-debugging
 description: "4-phase root cause debugging: understand bugs before fixing."
-version: 1.1.0
+version: 1.1.1
 author: Hermes Agent (adapted from obra/superpowers)
 license: MIT
 metadata:
@@ -354,6 +354,18 @@ When fixing bugs:
 2. Debug systematically to find root cause
 3. Fix the root cause (GREEN)
 4. The test proves the fix and prevents regression
+
+### Cross-Process Hook & Guard-Condition Debugging
+
+See `references/cross-process-hook-debugging.md` for debugging data flow across ACP process boundaries (Hermes ←→ Daimon). This covers:
+
+- **The guard-condition bug pattern**: hooks silently blocked by `if condition:` guards — `post_tool_call` fires, `post_llm_call` doesn't, and the discrepancy is the only signal.
+- **Multi-layer trace technique**: tracing data through 4 layers (MCP server → ACP manager → ACP protocol → Daimon hooks → SQLite).
+- **Cross-process session ID resolution**: how PID-suffixed files bridge Olympus session IDs between orchestrator and Daimon.
+- **Diagnostic steps**: identifying which hooks fire, finding guards, tracing guard variables, understanding interrupt chains.
+- **Fix options**: unconditional hook firing, fallback values, content capture from tool-calling turns.
+
+Use this reference when tool_calls are populated but turns are not, or any similar hook-data discrepancy across process boundaries.
 
 ## Anti-Patterns: Default Cascade
 

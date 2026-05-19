@@ -30,6 +30,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.9.0 (2026-05-19)
+
+- **feat**: Bidirectional ACP communication — persistent sessions, enriched poll, steer action, clarification detection
+- **feat**: Poll visibility fix — WAL checkpoint + fallback indicator for `get_session_progress()`
+- **refactor**: SOUL.md rewrite for persistent sessions, removed Daimon model table, added session anti-patterns
+
 ### v0.8.7 (2025-05-18)
 
 - **docs**: Skill updates — post-migration audit patterns added to hermes-agent and github-pr-workflow skills

@@ -32,6 +32,8 @@ People use Hermes for software development, research, system administration, dat
 
 **PREFERENCE:** When looking up documentation for any framework, library, or project, ALWAYS use Context7 MCP (`mcp_context7_resolve_library_id` → `mcp_context7_query_docs`) instead of searching the filesystem or doing a generic `web_search`. Context7 is faster and more accurate for official docs. Only fall back to `web_search` or `web_extract` when Context7 doesn't have the library or the answer isn't in the indexed docs.
 
+**PREFERENCE:** When diagnosing a configuration or setup problem with hermes-agent (gateway not responding, tokens rejected, model failures), ALWAYS consult the Context7 docs and `hermes doctor` / `hermes gateway status` BEFORE inspecting logs, reading `.env` files, or trial-and-error. The docs contain the official troubleshooting steps and configuration schema; guessing wastes turns and misses root causes like secret redaction corruption that aren't obvious from logs alone.
+
 ## Quick Start
 
 ```bash
@@ -106,7 +108,8 @@ hermes config set KEY VAL   Set a config value
 hermes config path          Print config.yaml path
 hermes config env-path      Print .env path
 hermes config check         Check for missing/outdated config
-hermes config migrate       Update config with new options
+hermes config migrate       Update config with new options (adds missing keys, renames deprecated ones)
+hermes config check         Check for missing/outdated config
 hermes login [--provider P] OAuth login (nous, openai-codex)
 hermes logout               Clear stored auth
 hermes doctor [--fix]       Check dependencies and config
@@ -607,6 +610,8 @@ This creates **defense-in-depth**: `disabled_toolsets` removes `write_file`/`pat
 
 **Important:** `disabled_toolsets` subtraction happens AFTER `enabled_toolsets` resolution. If both `hermes-orchestrator` (which includes `read_file`) and `disabled_toolsets: [file]` are set, `read_file` IS removed because it belongs to the `file` toolset. Use `disabled_toolsets: [file-write]` instead.
 
+**Daimon delegation patterns:** See `references/daimon-delegation-patterns.md` for timeout guidance (complex tasks need 600s), structured output schema patterns for Daimon prompts, and recovery from stuck manual sessions.
+
 **PITFALL — `delegate_task` appears in TWO toolsets:** The `delegate_task` tool is included in both the `delegation` toolset (which only contains `delegate_task`) AND the `hermes-orchestrator` toolset (which contains it alongside other orchestrator tools). This means:
 
 1. Adding `delegation` to `disabled_toolsets` attempts to remove `delegate_task`, and at the low-level tool resolution (`model_tools.py: _compute_tool_definitions`), it IS removed via `difference_update({delegate_task})`. So `disabled_toolsets: [delegation]` SHOULD work.
@@ -738,6 +743,19 @@ Disable again with:
 hermes config set security.redact_secrets false
 ```
 
+**⚠ PITFALL — Secret redaction can corrupt `.env` files:** When `security.redact_secrets` is enabled, Hermes redacts secret values in tool output, logs, and chat responses. In some scenarios, the redacted representation (e.g., `869628...YFCo`) can be written back to the `.env` file itself, replacing the real value. This breaks any service that reads the token from `.env` — the Telegram gateway will fail to connect, API calls will return 401, etc. **Symptom:** A token or API key that was working suddenly stops, and the `.env` file contains a truncated/dotted value instead of the full value. **Root cause:** The LLM reads the redacted value from tool output or logs, then uses `patch`/`write_file`/`sed` to update the `.env` file, writing the redacted form instead of the real value. **Prevention:** Never let an agent modify `.env` files based on redacted tool output. If you need to fix a `.env` value, read the correct value from a different source (profile-specific `.env`, backup, or manual input). **Diagnosis:** Use `xxd` (hex dump) to verify secret values in files — `read_file` and `grep` also apply redaction, so they show `***` or `...` instead of the real value. Example: `sed -n '40p' ~/.prometeo/.env | xxd | head -5` shows the raw bytes and confirms whether the full token is present.
+
+**Fix:** Replace the corrupted value with the correct one from a known-good source:
+```bash
+# Replace the redacted value with the real token
+sed -i 's/TELEGRAM_BOT_TOKEN=869628\.\.\.YFCo/TELEGRAM_BOT_TOKEN=<real_full_token>/' ~/.prometeo/.env
+
+# Verify the fix using xxd (grep/read_file will redact the output)
+sed -n '40p' ~/.prometeo/.env | xxd | head -5
+```
+
+After fixing `.env`, restart the gateway: `systemctl --user restart hermes-gateway-<profile>.service`
+
 ### PII redaction in gateway messages
 
 Separate from secret redaction. When enabled, the gateway hashes user IDs and strips phone numbers from the session context before it reaches the model:
@@ -766,6 +784,11 @@ hermes config set approvals.mode off          # bypass everything (full auto-app
 
 **WSL CUDA PITFALL:** Even after installing nvidia-cublas-cu12 etc. via pip and setting LD_LIBRARY_PATH in `.bashrc`, the gateway systemd service does NOT inherit shell environment variables. You must add `Environment="LD_LIBRARY_PATH=..."` to the systemd service file (`~/.config/systemd/user/hermes-gateway-<profile>.service`) and run `systemctl --user daemon-reload && hermes gateway restart`. Without this, faster-whisper falls back to CPU in the gateway process.
 
+**SYSTEMD PATH PITFALL:** The systemd service file's `Environment="PATH=..."` **must include standard Linux directories** (`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`) at the beginning, because systemd does NOT inherit the user's shell PATH. If these directories are missing, **`npx` fails with "ENOENT spawn sh"** and MCP servers using `npm exec` (context7, todoist, etc.) cannot spawn subprocesses. Also remove the stale git-clone path (`~/.hermes/hermes-agent/node_modules/.bin`) after pip migration — it no longer exists. The correct PATH order is: `standard-linux-dirs` → `venv/bin` → `nvm/bin` → `custom-dirs`. Example:
+```
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/USER/Aether-Agents/home/.venv-hermes/bin:/home/USER/.nvm/versions/node/v25.6.0/bin:/home/USER/.local/bin:..."
+```
+
 Per-invocation bypass without changing config:
 - `hermes --yolo …`
 - `export HERMES_YOLO_MODE=1`
@@ -789,6 +812,14 @@ hermes config set delegation.max_concurrent_children 5   # parallel subagents
 hermes config set delegation.child_timeout_seconds 600   # timeout per subagent
 hermes config set delegation.inherit_mcp_toolsets true   # subagents get parent's MCP tools
 ```
+
+**⚠ Delegation spec precision prevents implementation drift.** When delegating to Hefesto (or any code Daimon), specs that allow multiple interpretations lead to the most straightforward implementation — which may not match your intent. A spec saying "detect when the agent finishes and send follow-up context" was interpreted as "add a new `clarify` MCP action + `continue_session()` method" instead of "detect the pattern in `delegate()` and reuse existing `message`/`poll` actions." **Always include negative constraints**: "do NOT create new MCP actions, methods, or schema fields" leaves no room for drift. See `references/daimon-delegation-patterns.md` → Pitfall.
+
+**⚠ Daimons cannot ask clarifying questions mid-task.** This is an architectural constraint in three layers: (1) Olympus ACP is unidirectional (prompt → response, no mid-turn question channel), (2) plugin hooks are one-way (no "pause and ask" capability), (3) `delegate_tool.py` blocks `clarify` in its subagent toolset (though Aether Daimons use Olympus ACP, not `delegate_task`). Daimon SOULs work around this by returning "CLARIFICATION NEEDED" strings, which currently require full session restart. **Option B (persistent ACP session) was empirically verified on 2026-05-18** — multi-turn context persistence and clarification detection both work; a race condition in `poll()` after follow-up messages is the only blocker (see `references/olympus-acp-architecture.md` for test results). The correct implementation reuses existing `message`/`poll` actions in the same session — NOT a new `clarify` MCP action (that approach was implemented and reverted, see `references/daimon-delegation-patterns.md` → Pitfall). For the full bidirectional communication analysis and implementation protocol, see `references/daimon-delegation-patterns.md`.
+
+**⚠ Daimons with severity/classification checklists over-escalate without contextualization steps.** Athena's audit rated `.env` plaintext as CRITICAL despite gitignore + permissions 600 on a personal dev machine. The fix: add a step in the Daimon's SOUL.md requiring evaluation of deployment context and existing mitigations before assigning severity. See `references/daimon-delegation-patterns.md` for the full pattern.
+
+**⚠ Aether Daimons use Olympus ACP, not `delegate_task`.** The `DELEGATE_BLOCKED_TOOLS` list in `delegate_tool.py` only applies to hermes-agent's built-in subagent delegation. Aether Agents' Daimons (Hefesto, Athena, etc.) are spawned as full hermes-agent processes via `acp_manager.py` with their own config.yaml, SOUL.md, tools, and plugin hooks. They are NOT subject to `delegate_task`'s tool restrictions. The `talk_to` MCP tool in SOUL.md §5 is the correct interface. See `references/olympus-acp-architecture.md` for the internal architecture.
 
 **`max_spawn_depth`** controls delegation depth:
 - `1` (default): only Hermes can spawn subagents. Subagents cannot delegate further.
@@ -1048,6 +1079,35 @@ agent = AIAgent(
 
 **PITFALL: `platform_toolsets` overrides `toolsets` top-level.** When Hermes starts via a platform (CLI, Telegram, etc.), it resolves tools from `platform_toolsets.<platform>`, NOT from the top-level `toolsets` key. If you change `toolsets: [hermes-orchestrator]` at the top but leave `platform_toolsets.cli` listing old per-toolset names (like `file`, `terminal`, `code_execution`), the old tools OVERRIDE the top-level config. Always update BOTH the top-level `toolsets` AND the `platform_toolsets` section for every platform the agent operates on. The `agent.disabled_toolsets` key is a global safety net that applies AFTER platform resolution, but don't rely on it alone — set both layers consistently.
 
+**Removing a single tool from a platform.** `disabled_toolsets` removes ALL tools in a toolset (e.g., disabling `clarify` toolset removes the `clarify` tool). But if you want to keep a toolset available on one platform but not another, or if you want finer control, edit `platform_toolsets.<platform>` and remove the toolset name from that platform's list. For example, to remove `clarify` only from Telegram:
+
+```yaml
+platform_toolsets:
+  cli:
+    - web
+    - file-read
+    - clarify          # still available in CLI
+    # ...
+  telegram:
+    - web
+    - file-read
+    # clarify removed — agent cannot ask clarifying questions on Telegram
+    # ...
+```
+
+To remove it from all platforms, remove it from every `platform_toolsets` list AND from the top-level `toolsets` list. A tool only appears if it's in the platform's list — absence means the tool is not available on that platform.
+
+### Verifying .env values (xxd technique)
+
+When `security.redact_secrets` is enabled, **all file-reading tools also redact output** — `read_file`, `grep`, and even `sed -n 'Np'` will show masked values like `869628***` or `869628...YFCo` instead of the real token. To verify that a `.env` file has the correct full value, use `xxd` (hex dump):
+
+```bash
+# Check if line 40 of .env contains the full unmasked value
+sed -n '40p' ~/.prometeo/.env | xxd | head -5
+```
+
+This displays the raw hex bytes. If the value is corrupted (redacted form), you'll see `2e2e2e` (hex for `...`) in the middle. If it's correct, you'll see the full alphanumeric token bytes. This technique works for any sensitive value that Hermes redacts in tool output.
+
 ### Disabling the web/browser/image-gen tools
 
 To keep the model away from network or media tools entirely, open `hermes tools` and toggle per-platform. Takes effect on next session (`/reset`). See the Tools & Skills section above.
@@ -1206,10 +1266,37 @@ Check logs first:
 grep -i "failed to send\|error" ~/.hermes/logs/gateway.log | tail -20
 ```
 
+**Diagnostic file hierarchy** (check in this order):
+1. `gateway_state.json` — Gateway process state, platform connection status, and error details. Shows `telegram.state: "connected"/"retrying"` and `error_message` with the exact error (e.g., "Telegram startup failed: The token was rejected"). Located at `<HERMES_HOME>/gateway_state.json` or `<HERMES_HOME>/profiles/<name>/gateway_state.json` for named profiles.
+2. `gateway.pid` / `gateway.lock` — PID and lock file confirming gateway process identity.
+3. `logs/gateway.log` — Platform connection events, startup sequence, shutdown context.
+4. `logs/mcp-stderr.log` — MCP server stderr output. Critical for diagnosing `npx`/`npm` failures (shows `ENOENT spawn sh` when systemd PATH is missing `/bin:/usr/bin`).
+5. `logs/errors.log` — MCP connection retries and failures, aggregated warnings.
+6. `logs/agent.log` — Agent-level errors during conversations.
+7. `logs/gateway-exit-diag.log` — Structured JSON diagnostics on non-zero exits (includes Python version, argv, signal info).
+8. `channel_directory.json` — Built channel list (confirms Telegram discovered the user's chat).
+
+**Common patterns in `mcp-stderr.log`:**
+- `npm error enoent spawn sh ENOENT` → systemd PATH missing `/bin:/usr/bin:/sbin:/usr/sbin` (see SYSTEMD PATH PITFALL above)
+- `Connection closed` after 3 retries → MCP server process crashed or never started
+- `ECONNREFUSED` → MCP server URL unreachable (HTTP-type MCP servers)
+
 Common gateway problems:
+- **Telegram gateway "token rejected" or silent failure after config migration**: Check if `TELEGRAM_BOT_TOKEN` in the root `.env` (not the profile `.env`) was corrupted by secret redaction — it may contain `869628...YFCo` instead of the full token. Use `sed -n '<line>p' <file> | xxd` to verify (grep/read_file also redact). See the "Secret redaction can corrupt .env files" pitfall above.
 - **Gateway dies on SSH logout**: Enable linger: `sudo loginctl enable-linger $USER`
 - **Gateway dies on WSL2 close**: WSL2 requires `systemd=true` in `/etc/wsl.conf` for systemd services to work. Without it, gateway falls back to `nohup` (dies when session closes).
 - **Gateway crash loop**: Reset the failed state: `systemctl --user reset-failed hermes-gateway`
+- **MCP servers failing after pip migration**: Check `mcp-stderr.log` for `ENOENT spawn sh` — the systemd service PATH must include standard Linux directories (see SYSTEMD PATH PITFALL above). After fixing PATH, run `systemctl --user daemon-reload && systemctl --user restart hermes-gateway-<profile>.service` and verify MCP servers connect in the gateway startup logs.
+- **Bot connected but not processing messages (zero inbound)**: The gateway log shows "Connected to Telegram" but no messages arrive. Root causes in priority order: (1) **Secret redaction corrupted .env token** — `security.redact_secrets: true` can write the display format (`869628...YFCo` with literal dots) back into `.env`, replacing the real token. The gateway silently connects with the corrupted token and long-polls return empty. Verify with `xxd` on the `.env` file to check for `2e2e2e` (literal `...`) in the token value. Fix: restore the full token from a backup or the profile `.env`. (2) **Stale polling offset** — after a multi-day offline period, the bot's `update_id` may have advanced past queued messages. Send a new message and check if it arrives. (3) **Webhook conflict** — a competing webhook intercepts updates before polling. Check with `curl https://api.telegram.org/bot<TOKEN>/getWebhookInfo`; if `url` is non-empty, clear it with `deleteWebhook`. Always run `hermes gateway status` and `hermes doctor` as your first two diagnostic commands before digging into logs.
+- **Bot sends "new session" or greeting message on every gateway restart:** By default, `session_reset.mode: both` causes the gateway to auto-resume the last session AND send a "new session" message to the user each time the gateway process restarts (systemctl restart, server reboot, etc.). On Telegram, this means the bot sends an unsolicited message to the user every time the service restarts. Fix: set `session_reset.mode: none` in config.yaml (no auto-resume, no greeting on restart). Other values: `idle` (resume only if last message was > idle_minutes ago) and `daily` (resume once per day at at_hour). Apply with `hermes config set session_reset.mode none` then `systemctl --user restart hermes-gateway-<profile>.service`.
+- **Multiple bots on the same machine**: Each profile gets its own systemd service (`hermes-gateway.service` for default, `hermes-gateway-<profile>.service` for named profiles). Check the correct one with `hermes -p <profile> gateway status`. A stale service using `-p hermes` (reserved name) will fail silently — use the default profile (no `-p`) for the main agent instead. Root `.env` values shadow profile `.env` values for the same variable, so a corrupted root token breaks all profiles.
+- **Token rejected by Telegram**: `hermes gateway status` shows "Telegram startup failed: The token `...` was rejected by the server." This means the TELEGRAM_BOT_TOKEN in the active `.env` is invalid or corrupted. Do NOT assume the token is fine just because the profile `.env` looks correct — check the ROOT `.env` (one directory up) as well, since hermes-agent loads both and the root may override or conflict.
+
+**First-line gateway diagnostics** (run these BEFORE inspecting logs):
+1. `hermes -p <profile> gateway status` — shows platform connection state, PID, token rejection errors
+2. `hermes -p <profile> doctor` — checks config version, auth providers, API connectivity, directory structure
+3. If both pass but bot is silent: inspect `.env` token with `xxd` (look for `2e2e2e` literal dots), then call Telegram API `getWebhookInfo` and `getUpdates` directly with the token
+4. Only then check `gateway.log`, `errors.log`, `mcp-stderr.log`
 
 ### Platform-specific issues
 - **Discord bot silent**: Must enable **Message Content Intent** in Bot → Privileged Gateway Intents.
@@ -1308,6 +1395,8 @@ Full Hindsight setup guide: see the `hindsight` skill (`mlops/hindsight`).
 **Full reference:** See `references/auxiliary-models.md` for detailed config schema, all auxiliary sections, provider/model pairs, and common pitfalls.
 
 **Installation & Migration reference:** See `references/pip-installation-migration.md` for v0.14.0 pip install changes, git-clone→pip migration steps, wrapper script updates, systemd service paths, version-specific pitfalls, Daimon config template requirements, and post-migration repo cleanup audit.
+
+**Gateway Troubleshooting reference:** See `references/gateway-troubleshooting.md` for the bot-connected-but-silent case study (secret redaction corrupting .env tokens), diagnostic methodology, and webhook conflict resolution.
 
 **Post-migration stale reference audit:** See `references/post-migration-audit.md` for the systematic methodology to find and fix dead paths, old conventions, and hardcoded references after any major migration (path changes, module renames, profile reorganization, convention shifts). Includes multi-pass approach (3-4 passes typical), classification by priority, branch cleanup, atomic commit strategy, common miss patterns (skill subdirectories, config template doc references, source code comments, Makefile/CI version strings, "works by accident" with old directories still on disk, database path migrations), and post-migration MCP tool verification checklist (aether_status, aether_update, aether_curate, discover, delegate) with the aether_curate staleness pitfall.
 

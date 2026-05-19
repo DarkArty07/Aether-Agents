@@ -236,6 +236,33 @@ A subagent that doesn't understand this is display formatting will write back th
 3. **After subagent rewrites files**, always verify with `head -5 path/to/file` that no line number prefixes appear.
 4. **For translations/refactors across many files**, prefer targeted `patch` calls over bulk `read_file` + `write_file` cycles.
 
+## Pitfalls — Monolithic Document Cross-References
+
+### When a subagent edits sections of a monolithic document (SOUL.md, DESIGN.md, etc.)
+
+Monolithic documents have sections that **cross-reference each other**. When a subagent rewrites or updates one section, it almost never updates the sections that depend on it. The spec reviewer must check not just "did the changed section meet its brief?" but also "do all other sections that reference these concepts still hold?"
+
+**Concrete pattern (SOUL.md incident, bidirectional-comm feature):**
+
+§5 (Communication with Daimons) was rewritten to add persistent sessions, `steer`, and `poll` enrichment. The subagent did a great job on §5, §6, §9. But four cross-reference gaps were missed:
+
+| Gap | Changed section | Dependent section that wasn't updated |
+|-----|-----------------|---------------------------------------|
+| §13 still said "delegate preferred (1 call vs 10-20 polling)" — contradicts the new tmux-like model | §5 | §13 Daimon Models |
+| §11 Anti-Patterns had no entries for persistent-session pitfalls (forgetting `close()`, blocking on one Daimon) | §5 | §11 Anti-Patterns |
+| §13 model table missing Ictinus (mentioned in §6 routing table) | §6 | §13 Daimon Models |
+| §7 Dev-QA Loop describes sequential Hefesto→Athena but doesn't mention parallel capability | §9 | §7 Workflow Patterns |
+
+**Review checklist for monolithic document changes:**
+
+1. List all sections that were touched
+2. For each concept introduced/changed (e.g., "persistent sessions", "steer action"), search the ENTIRE document for mentions of that concept
+3. Verify every mention is consistent with the new definition
+4. Specifically check: model/role tables, anti-pattern lists, workflow descriptions, and "see §X" cross-references
+5. Look for sections that describe "how to do X" that should now reference the new capability
+
+**Prevention:** Include in the reviewer context: "This document is monolithic with cross-referencing sections. Verify that ALL sections referencing the changed concepts are still consistent."
+
 ## Handling Issues
 
 ### If Subagent Asks Questions
@@ -348,6 +375,37 @@ If a subagent encounters bugs during implementation:
 [Run full test suite: all passing]
 [Done!]
 ```
+
+## Pitfalls — ACP Delegation Returning `last_turn: null`
+
+### When `delegate()` or `poll()` returns `{thoughts: 0, messages: 0, last_turn: null}`
+
+This is a **timing gap**, not a missing feature. The ACP data pipeline has two hooks:
+
+1. `post_tool_call` — writes to `tool_calls` table **during** execution (real-time)
+2. `post_llm_call` — writes to `turns` table **after** the full agent turn completes (one write, at the end)
+
+If `delegate()` times out before the agent finishes its final response, the `post_llm_call` hook never fires, so `turns` is empty and `last_turn` is null — even though `recent_tool_calls` shows the agent was working.
+
+**The data may actually exist in SQLite** — it just arrives after the polling loop exits. Always check the `turns` table directly before concluding data is lost.
+
+**Quick diagnostic:** Query `SELECT turn_id, role, length(content) FROM turns WHERE session_id = '...'` — if rows exist, the hook works but the timing was off. If rows are missing, the hook didn't fire (agent was interrupted or produced empty `final_response`).
+
+**Root cause (confirmed May 2026):** Two distinct issues:
+1. **WAL snapshot staleness** — The async `OlympusDB` connection (used by `get_session_progress()`) couldn't see writes from the sync `OlympusDBSync` connection (used by hooks) because SQLite WAL mode keeps uncommitted pages in the `-wal` file. The async reader saw a stale snapshot. **Fix:** `PRAGMA wal_checkpoint = TRUNCATE` before reading the `turns` table forces consolidation.
+2. **`post_llm_call` never fires for interrupted/timeout sessions** — The upstream guard `if final_response and not interrupted:` means long-running agents that hit `delegate()` timeout never get their turn written. **Fix:** Fallback indicator constructs `[Working] tool_name(args...) → status` from `recent_tool_calls` when `last_turn` is null.
+
+Both fixes live in `src/olympus_v3/db.py` (branch `fix/poll-visibility`). No upstream changes needed.
+
+**E2E verification (May 2026):** All bidirectional capabilities tested and passing:
+- `delegate()` → `last_turn`, `thoughts`, `messages`, `last_reasoning`, `heartbeat_timestamp` all populated correctly (was all null/0 before fix)
+- `steer()` → returns `{status: "steered", steering_id: N}`, directive injected into Daimon context
+- `clarification_needed` → `{status: "clarification_needed", clarification_needed: true}`, session stays open for follow-up `message()`
+- Fallback indicator → `[Working] tool_name(args...) → status` shown during active work before `post_llm_call` fires
+- `close()` → returns `response` field with full agent text
+- All tested on Etalides (research + clarification) and Athena (simple task) agents
+
+See `references/acp-delegation-debugging.md` for full diagnostic queries, root cause analysis, and E2E test results.
 
 ## Remember
 
