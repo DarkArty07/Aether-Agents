@@ -30,6 +30,11 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.10.1 (2026-05-19)
+
+- **feat**: Daedalus reworked as Consultant-Creator — SOUL.md 296→~120 lines, config updated, consultation workflow in Hermes SOUL.md
+- **docs**: Hermes SOUL.md §6, §7, §13 updated — Consultation Workflow with delegate-based flow, Agent Types taxonomy
+
 ### v0.10.0 (2026-05-19)
 
 - **feat**: Etalides reworked as web+codebase researcher — SOUL.md 417→125 lines, config.yaml.template synchronized, research/ vault created
@@ -108,6 +113,10 @@ Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 - **docs**: test-driven-development SKILL.md updated with module-level globals pitfall
 - **chore**: gitignore PID-suffixed runtime files (.olympus_session*, .olympus_db_path*, .aether_home*, .clean_shutdown)
 - **chore**: gitignore .env.bak files, subagent-driven-development references
+
+### Language
+
+All commit messages, GitHub releases, and changelog entries must be in **English**. No Spanish or other languages in version-controlled content.
 
 ### Commits
 
