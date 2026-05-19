@@ -2,6 +2,20 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.10.1] — 2026-05-19
+
+### Changed
+- **Daedalus reworked as Consultant-Creator**: SOUL.md rewritten from 296 to ~120 lines
+  - Identity: Consultant-Creator — UX/UI Designer (was Frontend Developer)
+  - Eponym: Daedalus, architect of the Labyrinth — his lesson: a design so complex that users cannot escape is a design failure
+  - Output format: Observations / Risks / Recommendations / Prototype (if applicable)
+  - Removed §7 Workflow Context (Hermes handles pipeline), §8 long protocols (consolidated into core), and few-shot examples
+  - Hard limits: never implement production code, never make product decisions, never research the web, never decide tech stack, never talk to user directly
+- **Hermes SOUL.md §13 rewritten**: Consultation Workflow now documents the real delegate-based flow (the `consult` tool does not exist). Includes Agent Types taxonomy (Actor / Consultant-Creator / Consultant-Analyst), structured consultation prompt format, and sequential consultation pattern
+- **Hermes SOUL.md §6 updated**: Daedalus routing row changed from "UX/UI design" to "Design consultation", added Consultation rule
+- **Hermes SOUL.md §7 updated**: Feature workflow pattern now shows Daedalus as consultation step: `Etalides → Daedalus (consult) → Hefesto → Athena`
+- **Daedalus config.yaml.template updated**: role changed to `consultant-creator`, description updated, toolsets documented with YAML comments, removed `patch` and `execute_code` (not needed for prototypes)
+
 ## [0.10.0] — 2026-05-19
 
 ### Changed
@@ -394,6 +408,7 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 - `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
 - `.gitignore` — Removed old profile-level pi-daimons entry
 
+[0.10.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.8.7...v0.9.0
 [0.8.7]: https://github.com/DarkArty07/Aether-Agents/compare/v0.8.6...v0.8.7
