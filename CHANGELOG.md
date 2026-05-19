@@ -2,16 +2,36 @@
 
 All notable changes to Aether Agents are documented here.
 
-## [0.9.0] — 2026-05-19
-
-### Added
-- **Bidirectional ACP communication** — Daimon sessions are now persistent (tmux-like). `delegate()` returns `session_id` and keeps the session open for follow-ups via `message()`. `poll()` returns rich progress data: `last_turn`, `last_reasoning`, `recent_tool_calls`, `clarification_needed`, `heartbeat_timestamp`. `steer()` injects mid-flight directives into working Daimons. Sessions detect `CLARIFICATION NEEDED` patterns and stay open for response.
-- **Poll visibility fix** — `PRAGMA wal_checkpoint = TRUNCATE` before reads in `get_session_progress()` ensures async readers see data written by sync hooks. Fallback indicator `[Working] tool_name(args) → status` when `last_turn` is null but tool calls exist.
-- **SOUL.md rewrite** — Sections 5 (Communication), 6 (Routing), 9 (Multi-Daimon Coordination), 10 (Session Management) rewritten for persistent sessions. Anti-patterns table expanded with session management pitfalls. §13 Daimon Models table removed (models change, static table misleads).
+## [0.10.0] — 2026-05-19
 
 ### Changed
-- **SOUL.md §7** — Orchestration patterns updated from "sequential delegate calls" to "delegate, open/message/poll, and steer" with parallel session support.
-- **SOUL.md §7 Dev-QA Loop** — Added note on parallel Athena validation with steer() for mid-flight redirection.
+- **Etalides reworked as web+codebase researcher**: SOUL.md rewritten from 417 to 125 lines
+  - Identity: Researcher (web + codebase), not just web researcher
+  - Dual persistence model: web research → Obsidian vault (`research/`), code research → direct response to Hermes
+  - Code Research Protocol: search_files → read_file → terminal (escalation hierarchy)
+  - Action budget: renamed from "link budget" to "action budget", counting web, file, and terminal actions
+  - Removed 4 of 5 few-shot examples, duplicated output format sections, and curl fallback technique
+- **Etalides config.yaml.template updated**: added `terminal` toolset, `code-search` capability, English description, documented YAML comments
+- **Hermes SOUL.md routing updated**: separate rows for web research and code research in §6, Code research rule added
+- **Research vault created**: `research/` directory with Obsidian config (`.obsidian/`), `INDEX.md`, and `README.md`
+
+### Fixed
+- **Etalides config.yaml.template drift**: synchronized template with live config (role, description, capabilities, toolsets)
+
+## [0.9.0] — 2026-05-19
+
+### Changed
+- **Bidirectional ACP communication**: sessions are now persistent (like tmux) — `delegate()` returns `session_id` and keeps session open
+- **`steer()` action**: inject directives into a working Daimon without interrupting its current turn
+- **`clarification_needed` detection**: Daimons that need clarification are detected and sessions stay open for follow-up
+- **Enriched `poll()`**: `last_turn`, `last_reasoning`, `recent_tool_calls`, `heartbeat_timestamp`, `clarification_needed`
+- **Progress indicator**: when `last_turn` is null but tool calls are active, `[Working] tool_name(args) → status` fallback
+- **SOUL.md rewritten**: §5 persistent sessions, §6 routing with situation→tool patterns, §9 multi-Daimon coordination, §10 session management, §11 anti-patterns, §13 Daimon models table removed
+- **WAL checkpoint fix**: `PRAGMA wal_checkpoint = TRUNCATE` before reads in `get_session_progress()` to prevent stale data
+
+### Fixed
+- **WAL snapshot staleness**: async/sync readers in SQLite now see fresh data with explicit checkpoint before reads
+- **Session persistence**: `delegate` keeps session open after completion, enabling follow-up `message()` calls
 
 ## [0.8.7] — 2025-05-18
 
@@ -374,6 +394,9 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 - `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
 - `.gitignore` — Removed old profile-level pi-daimons entry
 
+[0.10.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.9.0...v0.10.0
+[0.9.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.8.7...v0.9.0
+[0.8.7]: https://github.com/DarkArty07/Aether-Agents/compare/v0.8.6...v0.8.7
 [0.7.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.5.1...v0.6.0
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
