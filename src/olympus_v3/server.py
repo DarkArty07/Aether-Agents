@@ -463,6 +463,15 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
                 progress["elapsed_seconds"] = round(elapsed, 1)
                 progress["poll_iterations"] = poll_iterations
                 progress["session_id"] = session_id
+
+                # Detect CLARIFICATION NEEDED pattern
+                last_turn = progress.get("last_turn") or ""
+                if status == "completed" and "CLARIFICATION" in last_turn.upper() and "NEEDED" in last_turn.upper():
+                    progress["status"] = "clarification_needed"
+                    progress["clarification_needed"] = True
+                    # Session stays open for follow-up
+                    return [mcp_types.TextContent(type="text", text=json.dumps(progress, indent=2))]
+
                 # Don't auto-close session on completion — Hermes can continue with message() or close it explicitly
                 # Only auto-close on error or cancelled (safety)
                 if status == "error":
@@ -508,6 +517,7 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
 
             # Safety limit
             if poll_iterations >= MAX_POLL_ITERATIONS:
+                progress["session_id"] = session_id
                 progress["timed_out"] = True
                 progress["elapsed_seconds"] = round(elapsed, 1)
                 progress["poll_iterations"] = poll_iterations

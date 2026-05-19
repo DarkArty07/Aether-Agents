@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 
 from olympus_v3.db import get_db_path
@@ -627,6 +628,20 @@ class ACPManager:
                 progress["timed_out"] = False
                 progress["elapsed_seconds"] = round(elapsed, 1)
                 progress["poll_iterations"] = poll_iterations
+
+                # Detect CLARIFICATION NEEDED pattern in last response
+                last_turn = progress.get("last_turn") or ""
+                if status == "completed" and re.search(r"CLARIFICATION\s+NEEDED", last_turn, re.IGNORECASE):
+                    progress["status"] = "clarification_needed"
+                    progress["clarification_needed"] = True
+                    logger.info(
+                        "[delegate] %s needs clarification (iterations=%d)",
+                        agent_name, poll_iterations,
+                    )
+                    # Session stays open — Hermes can send follow-up message
+                    return progress
+
+                # Normal completion — session stays open for follow-up
                 logger.info(
                     "[delegate] %s completed in %.1fs (iterations=%d)",
                     agent_name, elapsed, poll_iterations,
