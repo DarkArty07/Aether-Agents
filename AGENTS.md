@@ -30,6 +30,23 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.10.0 (2026-05-19)
+
+- **feat**: Etalides reworked as web+codebase researcher — SOUL.md 417→125 lines, config.yaml.template synchronized, research/ vault created
+- **feat**: Bidirectional ACP communication — persistent sessions, steer(), clarification_needed detection
+- **feat**: Enriched poll() — last_turn, last_reasoning, recent_tool_calls, heartbeat_timestamp, clarification_needed
+- **fix**: WAL checkpoint staleness — explicit PRAGMA wal_checkpoint = TRUNCATE before reads
+- **fix**: Session persistence — delegate keeps session open after completion
+- **docs**: Hermes SOUL.md §5-§13 rewritten with persistent sessions, routing patterns, anti-patterns
+
+### v0.9.0 (2026-05-19)
+
+- **feat**: Bidirectional ACP communication — persistent sessions (tmux-like), steer(), clarification_needed detection
+- **feat**: Enriched poll() — last_turn, last_reasoning, recent_tool_calls, heartbeat_timestamp, clarification_needed
+- **fix**: WAL snapshot staleness — async/sync readers now see fresh data
+- **fix**: Session persistence — delegate keeps session open after completion
+- **docs**: Hermes SOUL.md rewritten — §5 persistent sessions, §6 routing patterns, §9 multi-Daimon coordination
+
 ### v0.8.7 (2025-05-18)
 
 - **docs**: Skill updates — post-migration audit patterns added to hermes-agent and github-pr-workflow skills
