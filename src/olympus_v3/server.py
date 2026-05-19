@@ -1,7 +1,7 @@
 """Olympus v3 MCP Server — ACP + Plugin hooks + SQLite.
 
 Exposes 3 MCP tools to Hermes:
-- talk_to: open, message, poll, close, cancel, delegate Daimon sessions
+- talk_to: open, message, poll, close, cancel, delegate, steer Daimon sessions
 - discover: list available Daimon profiles
 - consult: consulting workflow (start, run, sign, add_agent, status, complete)
 
@@ -126,7 +126,8 @@ async def list_tools() -> list[mcp_types.Tool]:
                 "Communicate with Aether Daimon agents via ACP. "
                 "Actions: open (spawn agent), message (send prompt), "
                 "poll (check progress), close (end session), "
-                "cancel (force-terminate), delegate (auto-poll until done)."
+                "cancel (force-terminate), delegate (auto-poll until done), "
+                "steer (inject directive into Daimon context)."
             ),
             inputSchema={
                 "type": "object",
@@ -137,7 +138,7 @@ async def list_tools() -> list[mcp_types.Tool]:
                     },
                     "action": {
                         "type": "string",
-                        "enum": ["open", "message", "poll", "close", "cancel", "delegate"],
+                        "enum": ["open", "message", "poll", "close", "cancel", "delegate", "steer"],
                         "description": "Action to perform.",
                     },
                     "session_id": {
@@ -161,6 +162,15 @@ async def list_tools() -> list[mcp_types.Tool]:
                     "project_root": {
                         "type": "string",
                         "description": "Absolute path to the project root. Forces the Daimon to work in this directory and sets AETHER_HOME. Required for open and delegate actions.",
+                    },
+                    "directive": {
+                        "type": "string",
+                        "description": "Directive text to inject into Daimon's context (required for steer action).",
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "description": "Priority for steering directive (default 0, higher = more important).",
+                        "default": 0,
                     },
                 },
                 "required": ["action"],
@@ -371,6 +381,24 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
             return [mcp_types.TextContent(type="text", text=f"Error cancelling session: {e}")]
 
     # ------------------------------------------------------------------
+    # STEER — inject directive into Daimon context
+    # ------------------------------------------------------------------
+    elif action == "steer":
+        session_id = args.get("session_id", "")
+        directive = args.get("directive", "")
+        if not session_id:
+            return [mcp_types.TextContent(type="text", text="Error: 'session_id' is required for steer action.")]
+        if not directive:
+            return [mcp_types.TextContent(type="text", text="Error: 'directive' is required for steer action.")]
+        try:
+            db = _get_db()
+            row_id = await db.insert_steering(session_id, directive, args.get("priority", 0))
+            return [mcp_types.TextContent(type="text", text=json.dumps({"status": "steered", "steering_id": row_id, "session_id": session_id}, indent=2))]
+        except Exception as e:
+            logger.error("Steer error for session %s: %s", session_id, e)
+            return [mcp_types.TextContent(type="text", text=f"Error steering session: {e}")]
+
+    # ------------------------------------------------------------------
     # DELEGATE — open + message + auto-poll until done
     # ------------------------------------------------------------------
     elif action == "delegate":
@@ -434,6 +462,14 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
                 progress["timed_out"] = False
                 progress["elapsed_seconds"] = round(elapsed, 1)
                 progress["poll_iterations"] = poll_iterations
+                progress["session_id"] = session_id
+                # Don't auto-close session on completion — Hermes can continue with message() or close it explicitly
+                # Only auto-close on error or cancelled (safety)
+                if status == "error":
+                    try:
+                        await manager.close(session_id)
+                    except Exception:
+                        pass
                 return [mcp_types.TextContent(type="text", text=json.dumps(progress, indent=2))]
 
             # Check for timeout
@@ -441,6 +477,7 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
                 progress["timed_out"] = True
                 progress["elapsed_seconds"] = round(elapsed, 1)
                 progress["poll_iterations"] = poll_iterations
+                progress["session_id"] = session_id
                 return [mcp_types.TextContent(type="text", text=json.dumps(progress, indent=2))]
 
             # Check for stall (no progress for STALL_TIMEOUT seconds)
@@ -460,6 +497,7 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
                     progress["stalled"] = True
                     progress["elapsed_seconds"] = round(elapsed, 1)
                     progress["poll_iterations"] = poll_iterations
+                    progress["session_id"] = session_id
                     return [mcp_types.TextContent(type="text", text=json.dumps(progress, indent=2))]
             else:
                 stall_count = 0
