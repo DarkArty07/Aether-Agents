@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -398,10 +399,16 @@ class OlympusDB:
             - status: session status
             - last_turn: latest assistant turn content (or None)
             - last_reasoning: latest reasoning content (or None)
+            - recent_tool_calls: last 5 tool calls (name, truncated args, status, timestamp)
+            - clarification_needed: True if last_turn matches CLARIFICATION NEEDED pattern
+            - heartbeat_timestamp: timestamp of most recent turn (or None)
         """
         # Session status
         session = await self.get_session(session_id)
         status = session["status"] if session else "unknown"
+
+        # Force WAL checkpoint so async reader sees fresh data from sync hook writes
+        await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
         # Count turns
         cursor = await self._execute(
@@ -424,14 +431,56 @@ class OlympusDB:
 
         # Latest turn
         latest = await self.get_latest_turn(session_id)
+        last_turn_content = latest["content"] if latest else None
+        last_reasoning_content = latest["reasoning"] if latest else None
+
+        # Recent tool calls (last 5)
+        cursor = await self._execute(
+            "SELECT tool_name, arguments, status, timestamp FROM tool_calls "
+            "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 5",
+            (session_id,),
+        )
+        rows = await cursor.fetchall()
+        recent_tool_calls = [
+            {
+                "tool_name": row[0],
+                "arguments_truncated": (row[1] or "")[:200],
+                "status": row[2],
+                "timestamp": row[3],
+            }
+            for row in rows
+        ]
+
+        # Fallback: if last_turn is null but we have recent tool calls,
+        # construct a progress indicator so Hermes can see the agent is working
+        if last_turn_content is None and recent_tool_calls:
+            last_tc = recent_tool_calls[0]  # most recent (already DESC ordered)
+            args_preview = last_tc.get("arguments_truncated", "")[:60]
+            last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
+
+        # Clarification needed flag
+        clarification_needed = bool(
+            re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
+        ) if last_turn_content else False
+
+        # Heartbeat timestamp
+        cursor = await self._execute(
+            "SELECT MAX(timestamp) FROM turns WHERE session_id = ?",
+            (session_id,),
+        )
+        row = await cursor.fetchone()
+        heartbeat_timestamp = row[0] if row and row[0] is not None else None
 
         return {
             "thoughts": thoughts,
             "messages": messages,
             "tool_calls": tool_calls_count,
             "status": status,
-            "last_turn": latest["content"] if latest else None,
-            "last_reasoning": latest["reasoning"] if latest else None,
+            "last_turn": last_turn_content,
+            "last_reasoning": last_reasoning_content,
+            "recent_tool_calls": recent_tool_calls,
+            "clarification_needed": clarification_needed,
+            "heartbeat_timestamp": heartbeat_timestamp,
         }
 
 
@@ -628,7 +677,19 @@ class OlympusDBSync:
     # -------------------------------------------------------------------
 
     def get_session_progress(self, session_id: str) -> dict[str, Any]:
-        """Get progress summary synchronously."""
+        """Get progress summary synchronously.
+
+        Returns dict with:
+            - thoughts: number of assistant turns
+            - messages: number of turns with content
+            - tool_calls: number of tool calls
+            - status: session status
+            - last_turn: latest assistant turn content (or None)
+            - last_reasoning: latest reasoning content (or None)
+            - recent_tool_calls: last 5 tool calls (name, truncated args, status, timestamp)
+            - clarification_needed: True if last_turn matches CLARIFICATION NEEDED pattern
+            - heartbeat_timestamp: timestamp of most recent turn (or None)
+        """
         conn = self._connect()
         try:
             # Session status
@@ -637,6 +698,9 @@ class OlympusDBSync:
             )
             row = cursor.fetchone()
             status = row[0] if row else "unknown"
+
+            # Force WAL checkpoint so reader sees fresh data from sync hook writes
+            cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
             # Count turns
             cursor = conn.execute(
@@ -664,14 +728,56 @@ class OlympusDBSync:
                 (session_id,),
             )
             latest = cursor.fetchone()
+            last_turn_content = latest[0] if latest else None
+            last_reasoning_content = latest[1] if latest else None
+
+            # Recent tool calls (last 5)
+            cursor = conn.execute(
+                "SELECT tool_name, arguments, status, timestamp FROM tool_calls "
+                "WHERE session_id = ? ORDER BY timestamp DESC LIMIT 5",
+                (session_id,),
+            )
+            rows = cursor.fetchall()
+            recent_tool_calls = [
+                {
+                    "tool_name": row[0],
+                    "arguments_truncated": (row[1] or "")[:200],
+                    "status": row[2],
+                    "timestamp": row[3],
+                }
+                for row in rows
+            ]
+
+            # Fallback: if last_turn is null but we have recent tool calls,
+            # construct a progress indicator so Hermes can see the agent is working
+            if last_turn_content is None and recent_tool_calls:
+                last_tc = recent_tool_calls[0]  # most recent (already DESC ordered)
+                args_preview = last_tc.get("arguments_truncated", "")[:60]
+                last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
+
+            # Clarification needed flag
+            clarification_needed = bool(
+                re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
+            ) if last_turn_content else False
+
+            # Heartbeat timestamp
+            cursor = conn.execute(
+                "SELECT MAX(timestamp) FROM turns WHERE session_id = ?",
+                (session_id,),
+            )
+            row = cursor.fetchone()
+            heartbeat_timestamp = row[0] if row and row[0] is not None else None
 
             return {
                 "thoughts": thoughts,
                 "messages": messages,
                 "tool_calls": tool_calls_count,
                 "status": status,
-                "last_turn": latest[0] if latest else None,
-                "last_reasoning": latest[1] if latest else None,
+                "last_turn": last_turn_content,
+                "last_reasoning": last_reasoning_content,
+                "recent_tool_calls": recent_tool_calls,
+                "clarification_needed": clarification_needed,
+                "heartbeat_timestamp": heartbeat_timestamp,
             }
         finally:
             conn.close()
