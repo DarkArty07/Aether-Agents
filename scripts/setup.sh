@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.10.1 — Setup Script
+# Aether Agents v0.11.1 — Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Automated installation: Python venv, pip packages, config generation, wrappers.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.11.0"
+SCRIPT_VERSION="0.11.1"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────

@@ -92,6 +92,8 @@ A SOUL.md should contain:
 - **Consultant-Creator needs write_file for prototypes:** Daedalus must write HTML/CSS files to prototype and iterate. Don't strip `file` (which bundles write_file) from Consultant-Creators. But DO strip `patch` and `execute_code` — those are Actor tools for modifying production code, not creating new prototypes.
 - **CHANGELOG gap before release:** Always run `git tag -l` and compare tags against CHANGELOG headings before cutting a release. Tags can exist with GitHub releases but no CHANGELOG entry (v0.9.0 was missing from CHANGELOG). The release sequence must include verifying and filling any gaps.
 - **Config-template identity drift:** When a Daimon's role evolves (e.g., Etalides: web-researcher → researcher, Daedalus: frontend-developer → consultant-creator, Ariadna: project-manager → context-curator), the config.yaml.template often still has the OLD role, description, capabilities, and toolsets. Always audit config.yaml.template against the new SOUL.md after a rework. The #1 contradiction pattern: config says one identity, SOUL.md says another.
+- **Non-English config descriptions:** Old configs sometimes had Spanish descriptions (e.g., Athena v0.10.x: "Security Engineer del ecosistema. Protección proactiva, threat modeling, security review."). Always rewrite descriptions in English. The model reads the description field; mixed-language configs confuse role identity.
+- **Content extraction is the primary SOUL reduction mechanism:** For Consultant-Analyst agents (Athena, Ictinus), the biggest line savings come from moving detailed checklists, protocols, and few-shot examples into a dedicated skill. Athena went from 342→121 lines primarily by extracting ~60 lines of checklists + ~60 lines of few-shots into `athena-security-checklists`. The SOUL.md keeps a compact reference ("For detailed checklists, load the `athena-security-checklists` skill") and the full content lives in `SKILL.md` + `references/`. This pattern should be applied to any Consultant whose SOUL exceeds 130 lines.
 - **Function agents don't need session toolsets:** Agents invoked programmatically (Ariadna via `aether_curate`) don't need `memory`, `session_search`, `todo`, `clarify`, or `terminal`. They run single-turn, auto-close. Check the invocation path in server.py before deciding toolsets.
 - **`gh pr create --body` breaks with special characters** — quotes, parentheses, em-dashes, and other shell-problematic characters in PR body text cause `gh` to misparse arguments. Always use `--body-file /tmp/pr-body.md` instead. Write body to temp file, then reference it.
 - **Batch delegation for releases:** When doing multiple releases in one session (e.g., v0.10.0 + v0.10.1 + v0.10.2), provide ALL tasks in a single delegation to Hefesto. Don't gate-check between steps — include EXACT content for every file change so Hefesto can execute without ambiguity.
@@ -176,13 +178,15 @@ When reworking a Daimon agent, follow this sequence:
 1. **Diagnose current state** — read SOUL.md, config.yaml, check sessions in .aether
 2. **Define the role** — what is this agent FOR? (Chris decides, Hermes proposes)
 3. **Design SOUL.md** — apply the design principles above, target 80-130 lines
-4. **Select toolsets** — use the Agent Type Taxonomy to determine which toolsets
-5. **Create/verify persistence** — research vault, template directories
-6. **Update Hermes SOUL.md** — routing table must reflect new role
-7. **Implement** — delegate to Hefesto for file writes
-8. **Test** — delegate a real task to the agent and verify output format, tool usage, and role adherence
-9. **Sync template** — update config.yaml.template with same changes as live config
-10. **Commit, push, and release** — feature branch → PR → dev → merge → tag → GitHub Release (see `references/release-workflow.md` for the full sequence)
+4. **Extract domain content to skills** — if SOUL.md contains detailed checklists, protocols, or few-shot examples that push it past 130 lines, extract them into a dedicated skill under the appropriate category (e.g., `red-teaming/athena-security-checklists` for Athena's checklists). Skill loads on-demand; SOUL.md loads every turn. This is the primary reduction mechanism for Consultant-Analyst SOULs. Add a one-line reference in SOUL.md §5 (Skills) pointing to the extracted skill.
+5. **Select toolsets** — use the Agent Type Taxonomy to determine which toolsets
+6. **Create/verify persistence** — research vault, template directories
+7. **Update Hermes SOUL.md** — routing table must reflect new role
+8. **Implement** — delegate to Hefesto for file writes
+9. **Test** — delegate a real task to the agent and verify output format, tool usage, and role adherence
+10. **Sync template** — update config.yaml.template with same changes as live config
+11. **Add design reference** — create `references/<agent>-v<version>-rework-design.md` under the daimon-design skill, documenting what changed, what was removed, and where content moved
+12. **Commit, push, and release** — feature branch → PR → dev → merge → tag → GitHub Release (see `references/release-workflow.md` for the full sequence)
 
 ## Consultant Workflow (delegate-based, v0.10.1+)
 
@@ -234,6 +238,36 @@ A critical architectural lesson from the Hefesto rework (v0.11.0 planning): **ta
 1. **Hermes already decomposes tasks** — in every session, Hermes reads the user's request, breaks it into atomic tasks, and delegates each one to the right Daimon with a structured prompt.
 2. **Hefesto should receive atomic tasks, not decompose further** — when Hermes says "update config.yaml.template and sync the live config", Hefesto should execute it, not decompose it into sub-tasks.
 3. **The Role Catalog is a reference for Hermes** — the granularity of roles (backend, frontend, devops) helps Hermes decide who gets what task, not Hefesto.
+
+### Athena Rework (v0.11.1) — COMPLETED
+
+Athena was reworked from a generic Daimon with LangGraph workflow context to a **Consultant-Analyst** (342 → 121 lines):
+
+| What | Before | After |
+|------|--------|-------|
+| Type | Generic Daimon with LangGraph workflows | Consultant-Analyst (reads code, never implements) |
+| Role | security-engineer | security-analyst |
+| Toolsets | terminal, file, search_files, execute_code, memory, skills | file, terminal, skills |
+| Capabilities | +dependency-audit, +risk-communication | removed (merged into security-review) |
+| Config description | Spanish text | English |
+
+Removed from SOUL.md:
+- §7 "In Workflow Context" (LangGraph/workflows don't exist in olympus_v3)
+- Duplicate Protocol 5 and dead reference to non-existent file
+- Detailed security checklists → moved to `athena-security-checklists` skill
+- Few-shot Examples A and B → moved to `athena-security-checklists` skill
+- "Communicate with Ariadna" → Athena reports to Hermes only
+- `execute_code` toolset (Athena doesn't execute code)
+- `memory` toolset (single-turn consultant, no persistent state)
+- `search_files` separate toolset (already bundled in `file`)
+
+Added to SOUL.md:
+- Context-aware severity guidance ("plaintext .env on dev laptop is LOW risk, same on prod server is CRITICAL")
+- Explicit "Do NOT write files" hard limit (Consultant-Analyst boundary)
+- Skill reference to `athena-security-checklists` for on-demand loading
+- Compact STRIDE table (was verbose list)
+
+Key lesson: Athena over-escalated severity without considering deployment context. The new SOUL.md includes explicit context-aware severity guidance.
 
 ### Hefesto Rework (v0.11.0) — COMPLETED
 
@@ -290,6 +324,26 @@ The following in Hefesto's SOUL.md (v0.10.x, 284 lines) were obsolete and **were
 | Skill `subagent-driven-development` | §5 | Obsolete — Hefesto no longer spawns sub-agents | ✅ Removed from config |
 
 What Hefesto kept (v0.11.0, ~114 lines): Protocols 1 (Receiving a Spec → Protocol 1), 4 (Code Review → Protocol 2), 6 (Debugging → Protocol 3), Output Format, Identity, Limits, and Example B (Debugging). Protocol 5 (Integration) was consolidated into "Core Responsibilities".
+
+### Athena Rework (v0.11.1) — COMPLETED
+
+Athena went from Security Engineer (generic Daimon with LangGraph workflows) to Security Analyst (Consultant-Analyst). The primary reduction mechanism was **content extraction to a domain skill**.
+
+| Metric | Before | After |
+|--------|--------|-------|
+| SOUL.md | 342 lines | 121 lines |
+| Role | security-engineer | security-analyst |
+| Type | Generic Daimon | Consultant-Analyst |
+| Toolsets | terminal, file, search_files, execute_code, memory, skills | file, terminal, skills |
+| Capabilities | receives_from, threat-modeling, security-review, dependency-audit, risk-communication | receives_from, threat-modeling, security-review |
+
+**What moved to `athena-security-checklists` skill:** ~60 lines of security review checklists, ~15 lines of dependency audit detail, ~60 lines of few-shot examples. SOUL.md keeps compact references ("For detailed checklists, load the `athena-security-checklists` skill").
+
+**What was removed entirely:** §7 "In Workflow Context" (LangGraph), Protocol 4 (Risk Communication to Ariadna — Athena reports to Hermes only), duplicate Protocol 5 (output format appeared twice). `dependency-audit` and `risk-communication` merged into `security-review`.
+
+**Key design pattern validated:** Consultant-Analyst SOULs benefit most from content extraction because their domain expertise (checklists, protocols, examples) is highly structured and self-contained — perfect for on-demand skill loading. This reduced Athena's per-turn token cost by 65% without any capability loss.
+
+See `references/athena-v0.11.1-rework-design.md` for full before/after analysis.
 
 ## References
 

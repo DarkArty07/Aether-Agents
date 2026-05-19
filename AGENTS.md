@@ -30,6 +30,13 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.11.1 (2026-05-19)
+
+- **changed**: Athena SOUL.md rewritten 342→121 lines — removed LangGraph workflow context, duplicate protocols, detailed checklists, few-shot examples
+- **changed**: Athena type → Consultant-Analyst, role → security-analyst, config → removed execute_code/memory/search_files toolsets and dependency-audit/risk-communication capabilities
+- **added**: Context-aware severity guidance (deployment context), "Do NOT write files" hard limit, athena-security-checklists skill (red-teaming/)
+- **removed**: §7 "In Workflow Context", duplicate Protocol 5, execute_code toolset, memory toolset, search_files toolset, dependency-audit capability, risk-communication capability
+
 ### v0.10.1 (2026-05-19)
 
 - **feat**: Daedalus reworked as Consultant-Creator — SOUL.md 296→~120 lines, config updated, consultation workflow in Hermes SOUL.md

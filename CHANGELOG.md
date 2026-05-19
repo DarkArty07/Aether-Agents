@@ -2,25 +2,48 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.11.1] — 2026-05-19
+
+### Changed
+- **Athena SOUL.md rewritten**: 342 → 121 lines. Removed LangGraph workflow context (§7), duplicate Protocol 5, Ariadna reference, detailed checklists, and few-shot examples
+- **Athena type**: Generic Daimon → Consultant-Analyst (reads code, produces audits, never implements)
+- **Athena role**: `security-engineer` → `security-analyst`
+- **Athena config**: Removed `execute_code`, `memory`, `search_files` toolsets; removed `dependency-audit`, `risk-communication` capabilities; added YAML comments justifying toolsets; English description
+- **Athena config template**: Uses `__AETHER_ROOT__` placeholders instead of hardcoded paths
+
+### Added
+- **Context-aware severity guidance**: Athena now evaluates deployment context (local dev vs production) when assigning severity levels
+- **"Do NOT write files" hard limit**: Explicit Consultant-Analyst boundary in SOUL.md
+- **athena-security-checklists skill**: Moved content from SOUL.md (checklists, dependency audit protocol, STRIDE detail, few-shot examples) into an on-demand skill under `red-teaming/`
+- **Design reference**: `daimon-design/references/athena-v0.11.1-rework-design.md`
+
+### Removed
+- §7 "In Workflow Context" (LangGraph/workflows don't exist in olympus_v3)
+- Duplicate Protocol 5 and dead reference to non-existent file
+- `execute_code` toolset (Consultant-Analyst doesn't execute code)
+- `memory` toolset (single-turn consultant, no persistent state)
+- `search_files` separate toolset (already bundled in `file`)
+- `dependency-audit` capability (merged into `security-review`)
+- `risk-communication` capability (all Daimons communicate via Hermes)
+
 ## [0.11.0] — 2026-05-19
 
 ### Changed
-- **Hefesto SOUL.md rewritten**: 284 → ~120 lines. Removed Ergates, LangGraph workflow context, delegate_task sub-agent template, Role-Based Task Decomposition protocol, and few-shot examples A and C
-- **Hefesto identity**: "Senior Developer / Tech Lead" → "Senior Developer" (Hermes is the lead, Hefesto implements)
-- **Hefesto responsibilities**: Removed "decompose by role" and "coordinate Ergates" — Hermes decomposes and assigns, Hefesto receives atomic tasks
-- **Hefesto limits**: Added "Do NOT decompose tasks" — that is Hermes' responsibility
-- **Hefesto config**: Removed `delegate_task` toolset and `delegation` section. Added documented YAML comments. English description. Updated capabilities
-- **Hermes SOUL.md §1**: Manifesto updated from "I plan, I delegate, I synthesize" to "I plan, I decompose, I delegate, I synthesize"
-- **Hermes SOUL.md §1**: Added Hard Rule #10: never delegate vague tasks — decompose into atomic tasks first
-- **Hermes SOUL.md §6**: Added Task Decomposition section with Role Catalog, atomic task format, and decomposition protocol
+- **Hefesto SOUL.md rewritten**: 284 → 114 lines
+- **Hefesto identity**: "Senior Developer / Tech Lead" → "Senior Developer"
+- **Hefesto responsibilities**: Removed "decompose by role" and "coordinate Ergates"
+- **Hefesto limits**: Added "Do NOT decompose tasks"
+- **Hefesto config**: Removed `delegate_task` toolset and `delegation` section. Added documented YAML comments. English description
+- **Hermes SOUL.md §1**: Manifesto "I plan, I delegate, I synthesize" → "I plan, I decompose, I delegate, I synthesize"
+- **Hermes SOUL.md §1**: Added Hard Rule #10: never delegate vague tasks
+- **Hermes SOUL.md §6**: Added Task Decomposition section with Role Catalog
 
 ### Removed
-- Hefesto: Ergates concept (sub-agent coordination)
-- Hefesto: `delegate_task` toolset and subagent-driven-development skill reference
-- Hefesto: LangGraph workflow context (§7 — `run_workflow`, `state["workflow_type"]`, `state["context"]`)
-- Hefesto: Role-Based Task Decomposition protocol (moved to Hermes §6 as Role Catalog)
-- Hefesto: Sub-Agent Template protocol (Hermes uses `talk_to(action="delegate")`)
-- Hefesto: `.hefesto/TASKS.md` tracking (obsolete, `.aether/` replaces it)
+- Hefesto: Ergates concept, delegate_task toolset, subagent-driven-development skill
+- Hefesto: LangGraph workflow context (§7)
+- Hefesto: Role-Based Task Decomposition protocol (moved to Hermes §6)
+- Hefesto: Sub-Agent Template protocol
+- Hefesto: `.hefesto/TASKS.md` tracking
 
 ## [0.10.2] — 2026-05-19
 
@@ -439,6 +462,8 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 - `home/.pi-daimons/etalides/` — Pi config (SYSTEM.md, settings.json, extension)
 - `.gitignore` — Removed old profile-level pi-daimons entry
 
+[0.11.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.11.0...v0.11.1
+[0.11.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.10.2...v0.11.0
 [0.10.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.8.7...v0.9.0
