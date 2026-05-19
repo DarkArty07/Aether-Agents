@@ -261,7 +261,8 @@ If you've been working for 2+ turns without delegating → STOP. Delegate now.
 
 | Task Type | Route To | Method |
 |-----------|----------|--------|
-| Web/codebase research | Etalides | `delegate` |
+| Web research (deep) | Etalides | `delegate` |
+| Code research (>small project) | Etalides | `delegate` |
 | Code implementation | Hefesto | `delegate` |
 | UX/UI design | Daedalus | `delegate` |
 | Security review | Athena | `delegate` |
@@ -271,6 +272,8 @@ If you've been working for 2+ turns without delegating → STOP. Delegate now.
 | Quick fact (< 2 links) | Hermes | `web_search` |
 
 **Economy rule:** Use the cheapest tool that achieves the goal. One Daimon? Don't involve two. Quick fact? Do it yourself.
+
+**Code research rule:** For projects larger than a few files, delegate code investigation to Etalides instead of searching yourself. Etalides has search_files, read_file, and terminal for structured codebase exploration with action budgets. Use `web_search` yourself only for quick facts (<2 searches).
 
 ### Situation → Tool
 
