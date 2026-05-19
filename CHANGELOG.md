@@ -2,6 +2,26 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.11.0] — 2026-05-19
+
+### Changed
+- **Hefesto SOUL.md rewritten**: 284 → ~120 lines. Removed Ergates, LangGraph workflow context, delegate_task sub-agent template, Role-Based Task Decomposition protocol, and few-shot examples A and C
+- **Hefesto identity**: "Senior Developer / Tech Lead" → "Senior Developer" (Hermes is the lead, Hefesto implements)
+- **Hefesto responsibilities**: Removed "decompose by role" and "coordinate Ergates" — Hermes decomposes and assigns, Hefesto receives atomic tasks
+- **Hefesto limits**: Added "Do NOT decompose tasks" — that is Hermes' responsibility
+- **Hefesto config**: Removed `delegate_task` toolset and `delegation` section. Added documented YAML comments. English description. Updated capabilities
+- **Hermes SOUL.md §1**: Manifesto updated from "I plan, I delegate, I synthesize" to "I plan, I decompose, I delegate, I synthesize"
+- **Hermes SOUL.md §1**: Added Hard Rule #10: never delegate vague tasks — decompose into atomic tasks first
+- **Hermes SOUL.md §6**: Added Task Decomposition section with Role Catalog, atomic task format, and decomposition protocol
+
+### Removed
+- Hefesto: Ergates concept (sub-agent coordination)
+- Hefesto: `delegate_task` toolset and subagent-driven-development skill reference
+- Hefesto: LangGraph workflow context (§7 — `run_workflow`, `state["workflow_type"]`, `state["context"]`)
+- Hefesto: Role-Based Task Decomposition protocol (moved to Hermes §6 as Role Catalog)
+- Hefesto: Sub-Agent Template protocol (Hermes uses `talk_to(action="delegate")`)
+- Hefesto: `.hefesto/TASKS.md` tracking (obsolete, `.aether/` replaces it)
+
 ## [0.10.2] — 2026-05-19
 
 ### Changed
