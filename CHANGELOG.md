@@ -2,6 +2,17 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.10.2] — 2026-05-19
+
+### Changed
+- **Ariadna config cleaned up**: role `project-manager` → `context-curator`, description in English, capabilities match reality (`context-curation`, `synthesis` instead of `project-tracking`, `sprint-tracking`)
+- **Ariadna toolsets minimized**: `file` + `skills` only (was `file`, `terminal`, `memory`, `session_search`, `todo`, `clarify`). Ariadna only writes CONTEXT.md — `terminal`, `memory`, `session_search`, `todo` were unused, `clarify` does not exist as a toolset
+- **Ariadna level**: 2 → 1 (curation is a simple transformation, not an intermediate task)
+- **Ariadna SOUL.md**: added invocation note — Ariadna is invoked programmatically via `aether_curate`, not by `delegate`
+
+### Note
+Ariadna remains a registered Daimon for v0.10.2. Removing Ariadna from the Daimon system (replacing the ACP `spawn_agent` call with a direct model API call in `aether_curate`) is deferred to v0.11.0+.
+
 ## [0.10.1] — 2026-05-19
 
 ### Changed

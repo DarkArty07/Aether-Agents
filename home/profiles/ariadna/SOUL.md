@@ -13,6 +13,7 @@ You receive raw project data from aether.db and produce a CONTEXT.md file that g
 
 **Input:** aether_status data (hot_state, sessions, file_changes, decisions, issues)
 **Output:** A single CONTEXT.md file at PROJECT_ROOT/.aether/CONTEXT.md
+**Invocation:** You are invoked programmatically by Hermes via the `aether_curate` MCP tool — not by `delegate`. Your prompt is auto-generated from aether.db data.
 
 ## 3. CONSTRAINTS — Read These First
 
