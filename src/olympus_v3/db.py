@@ -407,6 +407,9 @@ class OlympusDB:
         session = await self.get_session(session_id)
         status = session["status"] if session else "unknown"
 
+        # Force WAL checkpoint so async reader sees fresh data from sync hook writes
+        await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
+
         # Count turns
         cursor = await self._execute(
             "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
@@ -447,6 +450,13 @@ class OlympusDB:
             }
             for row in rows
         ]
+
+        # Fallback: if last_turn is null but we have recent tool calls,
+        # construct a progress indicator so Hermes can see the agent is working
+        if last_turn_content is None and recent_tool_calls:
+            last_tc = recent_tool_calls[0]  # most recent (already DESC ordered)
+            args_preview = last_tc.get("arguments_truncated", "")[:60]
+            last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
 
         # Clarification needed flag
         clarification_needed = bool(
@@ -689,6 +699,9 @@ class OlympusDBSync:
             row = cursor.fetchone()
             status = row[0] if row else "unknown"
 
+            # Force WAL checkpoint so reader sees fresh data from sync hook writes
+            cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
+
             # Count turns
             cursor = conn.execute(
                 "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
@@ -734,6 +747,13 @@ class OlympusDBSync:
                 }
                 for row in rows
             ]
+
+            # Fallback: if last_turn is null but we have recent tool calls,
+            # construct a progress indicator so Hermes can see the agent is working
+            if last_turn_content is None and recent_tool_calls:
+                last_tc = recent_tool_calls[0]  # most recent (already DESC ordered)
+                args_preview = last_tc.get("arguments_truncated", "")[:60]
+                last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
 
             # Clarification needed flag
             clarification_needed = bool(
