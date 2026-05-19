@@ -201,6 +201,24 @@ Hermes interacts with .aether via MCP tools (aether_status, aether_update), NOT 
 - `decisions` — architectural decisions (title, rationale, alternatives, status)
 - `issues` — blockers and errors (description, resolution, status)
 
+### Observations and Issues
+
+Hermes (the orchestrator) must log important findings to the `.aether` continuity database, not just store them in memory. This ensures observations are tracked in project state and visible across sessions.
+
+Use `aether_update(action="add_issue")` for:
+
+- **Observations** — architectural insights, codebase patterns discovered during work
+- **Discomforts** — inconsistencies, smells, or potential problems noticed
+- **Debug findings** — root causes identified during systematic debugging
+- **Preferences** — user-stated or inferred preferences that should persist
+
+Parameters:
+- `description` (required) — clear summary of the finding
+- `error_type` (optional) — `"observation"` for non-error findings, `"bug"` / `"deployment"` / `"config"` for actual errors
+- `session_id` (optional) — links the issue to the current session
+
+**Rule:** If a finding would be valuable to a *future session*, it belongs in `.aether` as an issue, not just in ephemeral memory.
+
 ### Plugin vs MCP
 
 - **Plugin (aether_hooks)**: installed in ALL Daimons (hefesto, etalides, ariadna, daedalus, athena, ictinus). NOT in Hermes.
