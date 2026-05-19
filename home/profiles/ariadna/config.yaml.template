@@ -1,20 +1,19 @@
 # Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
 
-# Ariadna configuration — Aether Agents Daimon (Level 2)
+# Ariadna configuration — Aether Agents Daimon (Context Curator)
 
 # Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: ariadna
-  role: project-manager
-  description: "Project Manager y Agile Coach del equipo. Trackea, anticipa, facilita."
+  role: context-curator                              # Invoked by aether_curate, not by delegate
+  description: "Context Curator. Reads aether.db, synthesizes project state, writes .aether/CONTEXT.md for incoming Daimon sessions."
   capabilities:
-    - receives_from
-    - project-tracking
-    - blocker-detection
-    - session-audit
-    - sprint-tracking
+    - receives_from           # Receives auto-generated prompts from aether_curate
+    - context-curation        # Synthesizes raw project data into CONTEXT.md
+    - synthesis               # Distills sessions, decisions, issues into actionable brief
   launch_command: "hermes acp"
   keep_alive: true
+  level: 1
 
 # Model configuration
 model:
@@ -23,14 +22,11 @@ model:
   provider: opencode-go
   base_url: https://opencode.ai/zen/go/v1
 
-# Toolsets — PM tools only
+# Toolsets — minimal: only needs file to write CONTEXT.md
+# Skills loaded on-demand if needed (unlikely for curation tasks)
 toolsets:
-  - file
-  - terminal
-  - memory
-  - session_search
-  - todo
-  - clarify
+  - file            # write_file for CONTEXT.md; read_file for reference if needed
+  - skills          # on-demand skill loading (currently unused but available)
 
 skills:
   external_dirs:
@@ -46,6 +42,7 @@ max_iterations: 50
 # Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:
   mode: 'off'
+
 # Olympus v3 observability plugin
 plugins:
   enabled:
