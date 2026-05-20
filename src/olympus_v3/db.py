@@ -113,9 +113,9 @@ _SCHEMA_STMTS = (
 
 def get_db_path() -> Path:
     """Resolve database path from env var or defaults.
-    
+
     Priority: OLYMPUS_DB_PATH > AETHER_HOME/.olympus > HERMES_HOME/.olympus > ~/.hermes/.olympus
-    
+
     The canonical location is AETHER_HOME/.olympus/olympus_v3.db because
     it is shared across all processes (MCP server + plugin hooks inside Daimons).
     HERMES_HOME points to a specific profile dir, so using it would create
@@ -410,18 +410,19 @@ class OlympusDB:
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-        # Count turns
+        # Count turns using a single query with conditional aggregation to reduce I/O
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN content IS NOT NULL AND content != '' THEN 1 ELSE 0 END), 0)
+            FROM turns WHERE session_id = ?
+            """,
             (session_id,),
         )
-        thoughts = (await cursor.fetchone())[0]
-
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
+        thoughts = row[0]
+        messages = row[1]
 
         # Count tool calls
         cursor = await self._execute(
@@ -702,18 +703,19 @@ class OlympusDBSync:
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-            # Count turns
+            # Count turns using a single query with conditional aggregation to reduce I/O
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN content IS NOT NULL AND content != '' THEN 1 ELSE 0 END), 0)
+                FROM turns WHERE session_id = ?
+                """,
                 (session_id,),
             )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            thoughts = row[0]
+            messages = row[1]
 
             # Count tool calls
             cursor = conn.execute(
