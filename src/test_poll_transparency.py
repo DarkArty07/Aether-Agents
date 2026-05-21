@@ -13,7 +13,7 @@ print("=" * 60)
 
 # Test 1a: registry import (includes SessionState)
 try:
-    from olympus.registry import SessionState, SessionStatus, OlympusRegistry
+    from olympus_v3.registry import SessionState, SessionStatus, OlympusRegistry
     print("✓ registry imports OK (SessionState, SessionStatus, OlympusRegistry)")
 except Exception as e:
     print(f"✗ registry import FAILED: {e}")
@@ -21,7 +21,7 @@ except Exception as e:
 
 # Test 1b: _is_spinner_noise from its original location
 try:
-    from olympus.workflows.nodes import _is_spinner_noise
+    from olympus_v3.workflows.nodes import _is_spinner_noise
     print("✓ _is_spinner_noise import from workflows.nodes OK")
 except Exception as e:
     print(f"✗ _is_spinner_noise import FAILED: {e}")
@@ -29,7 +29,7 @@ except Exception as e:
 
 # Test 1c: server import (includes _action_poll and _is_spinner_noise)
 try:
-    from olympus.server import _action_poll
+    from olympus_v3.server import _action_poll
     print("✓ server import OK (_action_poll)")
 except Exception as e:
     print(f"✗ server import FAILED: {e}")
@@ -39,7 +39,7 @@ except Exception as e:
 
 # Test 1d: _is_spinner_noise also importable via server
 try:
-    from olympus.workflows.nodes import _is_spinner_noise as sn2
+    from olympus_v3.workflows.nodes import _is_spinner_noise as sn2
     print("✓ _is_spinner_noise accessible from workflows.nodes (server imports from same)")
 except Exception as e:
     print(f"✗ _is_spinner_noise indirect import FAILED: {e}")
@@ -90,8 +90,8 @@ session.update_from_message('I will implement the feature as follows:')
 session.update_from_tool_call({'name': 'read_file', 'args': {'path': '/test.py'}})
 
 # Import additional registry types for the mock
-from olympus.registry import AgentState, AgentStatus
-from olympus.config import DaimonProfile
+from olympus_v3.registry import AgentState, AgentStatus
+from olympus_v3.config import DaimonProfile
 
 mock_profile = DaimonProfile(name='test_agent', role='test', description='test agent', capabilities=[])
 agent = AgentState(name='test_agent', profile=mock_profile, status=AgentStatus.IDLE)
@@ -99,7 +99,7 @@ agent.sessions['test_poll'] = session
 reg.agents['test_agent'] = agent
 
 # Override registry in server module
-import olympus.server as srv
+import olympus_v3.server as srv
 original_registry = srv.registry
 srv.registry = reg
 
