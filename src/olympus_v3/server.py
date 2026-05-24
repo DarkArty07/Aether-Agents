@@ -24,14 +24,12 @@ import json
 import logging
 import sys
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
+from mcp import types as mcp_types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp import types as mcp_types
 
 from .acp_manager import ACPManager
 from .aether_db import AetherDB, resolve_aether_db, resolve_aether_dir
@@ -562,12 +560,17 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
             hot_state = await db.get_hot_state()
 
             # Counts
-            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
-            sessions_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM issues")
-            issues_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
-            decisions_count = (await cursor.fetchone())[0]
+            # ⚡ Bolt: Combine multiple sequential COUNT(*) queries using scalar subqueries
+            # to reduce connection and I/O overhead.
+            cursor = await db._execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM sessions),
+                    (SELECT COUNT(*) FROM issues),
+                    (SELECT COUNT(*) FROM decisions)
+                """
+            )
+            sessions_count, issues_count, decisions_count = await cursor.fetchone()
 
             detail = args.get("detail", "summary")
 
@@ -767,7 +770,7 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 
     # Spawn Ariadna to curate
     manager = _get_manager()
-    
+
     # Read CONTEXT_SCHEMA if it exists for reference
     schema_path = aether_dir / "CONTEXT_SCHEMA.md"
     schema_text = ""
@@ -776,10 +779,10 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
             schema_text = schema_path.read_text()
         except Exception:
             pass
-    
+
     # Sessions count for footer
     sessions_count = hot_state.get('total_sessions', 0) if hot_state else 0
-    
+
     prompt = (
         f"PROJECT_ROOT: {project_root}\n\n"
         f"You are curating the .aether project continuity data for this project.\n\n"
