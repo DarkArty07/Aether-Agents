@@ -1,0 +1,3 @@
+## 2025-05-25 - Batch SQLite aggregate queries using scalar subqueries
+**Learning:** Combining multiple independent SQLite aggregate queries (like `COUNT(*)`) across different tables into a single `SELECT` statement with scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM table1), (SELECT COUNT(*) FROM table2)`) significantly reduces connection overhead and I/O wait times compared to executing them sequentially.
+**Action:** Always batch multiple sequential aggregate queries into a single query using scalar subqueries where possible.

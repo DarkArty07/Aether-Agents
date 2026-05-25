@@ -18,14 +18,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import re
-import time
-
-from olympus_v3.db import get_db_path
 import logging
 import os
+import re
 import shutil
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +38,8 @@ from acp.schema import (
     RequestPermissionResponse,
     ToolCall,
 )
+
+from olympus_v3.db import get_db_path
 
 try:
     from acp import spawn_agent_process, text_block

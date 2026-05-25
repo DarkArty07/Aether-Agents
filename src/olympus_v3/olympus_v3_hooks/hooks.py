@@ -66,11 +66,11 @@ def _get_db() -> OlympusDBSync:
                     pass
                 except Exception as e:
                     logger.debug("Could not read DB path file %s: %s", db_path_file, e)
-        
+
         # Priority 3: fallback
         if not db_path:
             db_path = get_db_path()
-        
+
         _db = OlympusDBSync(db_path=Path(db_path) if db_path else None)
         _db.ensure_tables()
         logger.info("Olympus v3 hooks initialized with DB: %s", db_path)
