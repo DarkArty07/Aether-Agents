@@ -138,6 +138,37 @@ Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — 
 
 ---
 
+## 🧠 Memory Provider (Honcho)
+
+Aether Agents uses [Honcho](https://github.com/plastic-labs/honcho) as a self-hosted memory layer for all Daimons. Honcho provides:
+
+- **Persistent user profiles** — traits, preferences, communication style
+- **Semantic memory search** — cross-session context recall
+- **Dialectic reasoning** — synthesized answers from accumulated observations
+
+### Setup
+
+    make setup-honcho
+
+This initializes the Honcho git submodule, generates honcho-server/.env from template (using your OPENCODE_GO_API_KEY), and starts all services.
+
+### Commands
+
+    make honcho-up       # Start services (api, deriver, postgres, redis)
+    make honcho-down     # Stop services
+    make honcho-logs     # Follow logs
+    make honcho-status   # Check service health
+
+### Architecture
+
+Honcho runs as 4 containers on localhost:8010 (API), localhost:5434 (Postgres+pgvector), localhost:6380 (Redis). All Daimons query Honcho via MCP tools (honcho_profile, honcho_search, honcho_reasoning).
+
+The submodule includes 4 patches for DeepSeek/OpenCode Go compatibility (3-level structured output fallback, thinking disable, embedding dimensions, config validation). See honcho-server/PATCHES.md for details.
+
+Full documentation: docs/honcho-setup.md
+
+---
+
 ## 📜 License & Attribution
 
 **Aether Agents** is [MIT licensed](LICENSE) © Christopher (DarkArty07).

@@ -19,6 +19,24 @@ update: ## Update repo and upgrade dependencies
 gateway: ## Delegate to start-gateway.sh (pass extra args: make gateway ARGS="start")
 	bash scripts/start-gateway.sh $(ARGS)
 
+# ── Honcho (Memory Provider) ───────────────────────────────────────────────────
+
+.PHONY: setup-honcho
+setup-honcho: ## Setup Honcho: submodule, .env, docker compose up
+	bash scripts/setup-honcho.sh
+
+.PHONY: honcho-up
+honcho-up: ## Start Honcho services (docker compose up -d)
+	docker compose up -d
+
+.PHONY: honcho-down
+honcho-down: ## Stop Honcho services (docker compose down)
+	docker compose down
+
+.PHONY: honcho-logs
+honcho-logs: ## Follow Honcho service logs
+	docker compose logs -f
+
 # ── Health Check ───────────────────────────────────────────────────────────────
 
 .PHONY: doctor
