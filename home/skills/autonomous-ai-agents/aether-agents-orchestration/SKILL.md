@@ -308,6 +308,59 @@ The most common cost leak. Hefesto is the most-used Daimon and receives pre-deco
 
 > **Cost optimization applied (May 2026):** Hefesto downgraded from deepseek-v4-pro to deepseek-v4-flash — single largest cost win. Etalides role expanded: now serves as Hermes' exclusive file-reading and web-research delegate (Hermes Pure Orchestrator pattern).
 
+## Backup Recovery Workflow
+
+When reverting from a failed experiment or release, follow this pattern to recover valuable work without dragging in junk.
+
+### 6-Step Pattern
+
+1. **Create backup branch** before reverting: `git branch backup/pre-<version>`
+2. **Reset to clean state**: `git reset --hard <clean_tag_or_commit>`
+3. **Diff backup vs clean**: `git diff clean..backup --stat` to see everything that changed
+4. **Categorize each changed file**:
+   - **Valuable** — skills, references, design docs, case studies
+   - **Junk** — config backups (*.bak.*), cache files, runtime artifacts, duplicate images
+   - **Dangerous** — modified config.yaml, SOUL.md changes from the experiment
+5. **Cherry-pick only valuable files** to a feature branch from clean state
+6. **Verify structure** before committing — directory layouts may have changed between versions
+
+### Critical: Verify Directory Structure
+
+The most common mistake in backup recovery is copying files to the wrong paths because the project structure changed between the backup version and the current version.
+
+**Real example from this project:**
+- Backup (v0.13.0 experiment): skills lived at `home/skills/`
+- Current (v0.12.0): skills live at `skills/` (repo root)
+- Wrong: `cp -r home/skills/ .` → creates duplicate `home/skills/` directory
+- Right: Extract each file to its current correct path
+
+**Before writing any recovered file:**
+```bash
+# Check where the file lives in current HEAD
+git ls-tree HEAD --name-only | grep '<filename>'
+
+# If the path differs from the backup, extract to the CURRENT path
+git show backup/pre-v0.13.0:home/skills/devops/kanban/SKILL.md > skills/devops/kanban/SKILL.md
+```
+
+### What to Recover vs. What to Discard
+
+| Recover | Discard |
+|---------|---------|
+| Skills (SKILL.md + references/) | Config backups (`*.bak.*`, `config.yaml.bak*`) |
+| Design docs and case studies | Cache files (`*.json` caches, `model_catalog.json`) |
+| Skin definitions | Runtime artifacts (`processes.json`, `.update_check`) |
+| Research references | Duplicate clipboard images |
+| Prototypes and mockups | Modified configs from the failed experiment |
+
+### Post-Recovery Checklist
+
+- [ ] All files are in the correct directory structure for the current version
+- [ ] No duplicate or nested directory structures (`home/skills/` inside `skills/`)
+- [ ] No junk files staged (run `git status --short` and review `??` entries)
+- [ ] No dangerous config changes included (diff config.yaml, SOUL.md root)
+- [ ] Commit is clean: only intended files, no runtime artifacts
+
 ## Project Structure
 
 ```
@@ -325,3 +378,7 @@ The most common cost leak. Hefesto is the most-used Daimon and receives pre-deco
 ## References
 
 - `references/honcho-integration.md` — How to integrate Honcho as memory provider (submodule, unified .env, docker-compose)
+- `references/hermes-pure-orchestrator.md` — Full Pure Orchestrator implementation plan, post-mortem, and failure analysis
+- `references/cost-optimization.md` — Detailed cost audit methodology with concrete findings
+- `references/delegation-patterns.md` — Blocking vs background delegation, monitoring protocols
+- `references/api-key-management.md` — API key setup and rotation procedures

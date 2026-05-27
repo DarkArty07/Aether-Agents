@@ -67,6 +67,8 @@ git checkout main && git pull origin main
 git checkout -b feat/add-user-authentication
 ```
 
+**Branching model note:** This workflow assumes `feature → main` direct (no integration branch). If your team uses `feature → dev → main`, branch from `dev` instead. See `references/branching-models.md` for both models, migration guide, and when to use each.
+
 Branch naming conventions:
 - `feat/description` — new features
 - `fix/description` — bug fixes
@@ -534,6 +536,8 @@ Fix all findings, commit, then proceed with tagging.
 - **Tag after commit**: Create the tag AFTER the commit is made, not before. The tag points to the commit hash.
 - **Squash merge for releases**: Use `--squash --delete-branch` for release PRs. This keeps main history clean with a single commit per release. Feature branches can use regular merge if needed.
 - **Dangling references after cleanup**: When removing deprecated files (scripts, code dirs, docs), always audit for references in README, website, and remaining docs. Deleted code leaves ghost references that confuse new users.
+- **Merging with uncommitted local changes**: `git checkout` or `git merge` will abort if local modifications would be overwritten. Always `git status --short` before branch operations. Stash (`git stash push`), commit, or discard changes first. See `references/branching-models.md` for the full pattern.
+- **Backup recovery with wrong directory structure**: When cherry-picking from an old backup branch, the directory structure may have changed (e.g., `home/skills/` in backup vs `skills/` in current HEAD). Extract content to the CURRENT structure, not the backup's structure. Verify destination paths before writing. See `references/branching-models.md`.
 
 ## Useful PR Commands Reference
 
@@ -545,3 +549,9 @@ Fix all findings, commit, then proceed with tagging.
 | Request review | `gh pr edit N --add-reviewer user` | `curl -X POST .../pulls/N/requested_reviewers -d '{"reviewers":["user"]}'` |
 | Close PR | `gh pr close N` | `curl -X PATCH .../pulls/N -d '{"state":"closed"}'` |
 | Check out someone's PR | `gh pr checkout N` | `git fetch origin pull/N/head:pr-N && git checkout pr-N` |
+
+## References
+
+- `references/conventional-commits.md` — Commit message format and type reference
+- `references/ci-troubleshooting.md` — Common CI failure patterns and fixes
+- `references/branching-models.md` — When to use `feature → dev → main` vs `feature → main`, migration guide, stash patterns, and backup recovery pitfalls
