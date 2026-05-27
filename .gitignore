@@ -6,6 +6,7 @@
 .env
 *.env
 !.env.example
+honcho-server/.env
 
 # --- Runtime (auto-generated) ---
 home/sessions/

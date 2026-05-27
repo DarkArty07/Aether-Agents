@@ -1,0 +1,3 @@
+[submodule "honcho-server"]
+	path = honcho-server
+	url = https://github.com/plastic-labs/honcho.git
