@@ -1,5 +1,15 @@
 # Changelog
 
+### v0.12.0 (2026-05-27)
+
+- **feat**: Integrate Honcho as official memory provider for Aether Agents — persistent user profiles, semantic memory search, and dialectic reasoning across sessions.
+- **feat**: Honcho added as git submodule at honcho-server/ (plastic-labs/honcho) with 4 documented patches for DeepSeek/OpenCode Go compatibility.
+- **feat**: Unified API key — Honcho uses OPENCODE_GO_API_KEY from parent .env, eliminating manual sync across 11 config locations.
+- **feat**: Docker Compose at project root with services (api, deriver, postgres, redis) on ports 8010/5434/6380.
+- **feat**: Setup script scripts/setup-honcho.sh + Makefile targets (setup-honcho, honcho-up/down/logs/status).
+- **feat**: Hermes profile max context window set to 256k (context_length: 256000).
+- **docs**: README "Memory Provider (Honcho)" section, docs/honcho-setup.md, honcho-server/PATCHES.md.
+
 All notable changes to Aether Agents are documented here.
 
 ## [0.12.0] — 2026-05-27
