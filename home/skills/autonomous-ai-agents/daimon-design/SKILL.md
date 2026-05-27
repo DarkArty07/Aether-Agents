@@ -171,6 +171,71 @@ tags: [topic, framework, category]
 
 Wikilinks `[[YYYY-MM-DD-topic-slug]]` connect related research. Anyone cloning the repo can open `research/` as an Obsidian vault.
 
+## Toolset Dependency Audit
+
+When adding or removing a toolset from a Daimon — especially the orchestrator (Hermes) — you must audit ALL references to that toolset's individual tools across the system. A toolset removal from `config.yaml` is only half the change; the SOUL.md and platform configuration will still reference the removed tools by name.
+
+### What to scan after removing a toolset from Hermes
+
+After removing a toolset from Hermes' `config.yaml:toolsets` list, check these locations for references to any tool from that toolset:
+
+**1. config.yaml — platform_toolsets (lines 477+):**
+The `platform_toolsets.cli` and `platform_toolsets.telegram` (or other platforms) each list every available toolset independently. Removing from `toolsets:` does NOT remove from `platform_toolsets:` — you must remove from BOTH.
+
+```
+platform_toolsets:
+  cli:
+  - file-read     ← must be removed here too
+  - web
+  ...
+  telegram:
+  - file-read     ← and here
+  - web
+  ...
+```
+
+**2. Hermes SOUL.md — routing rules that assume the tool is available:**
+These sections typically reference tools by capability (e.g., `web_search`, `read_file`) even though the capability was provided by the now-removed toolset:
+
+| Section | What to check | Example finding |
+|---------|---------------|-----------------|
+| §6 Routing & Assignment (The Delegation Checkpoint, line ~257) | Rules like "Quick fact → Do it yourself" that assume `web_search` is available | `3. Quick fact? (<2 web searches) → Do it yourself` |
+| §6 Routing & Assignment (Routing table, line ~273) | Rows that route to Hermes' own tools | `\| Quick fact (< 2 links) \| Hermes \| web_search \|` |
+| §6 Routing & Assignment (Economy rule / Code research rule, line ~275-277) | Rules that define when Hermes uses the tool directly vs. delegates | `Use web_search yourself only for quick facts` |
+| §6 Situation → Tool table (line ~281) | Any row that assumes Hermes has direct access | n/a |
+| §11 Anti-Patterns table (line ~461) | Anti-patterns that reference the now-removed tool | `\| Using talk_to for simple quick facts \| Use web_search yourself \|` |
+| §5 Poll examples | Code snippets showing tool_calls (Daimon examples are usually fine, Hermes examples need checking) | `{tool_name: "read_file", ...}` in Daimon context example = stays |
+
+**3. Other Daimon SOULs that reference Hermes capabilities:**
+Check if other Daimons' SOUL.md assumes Hermes handles certain tasks (e.g., "quick fact check from Hermes"). If you're removing `web` from Hermes, update anything that says "ask Hermes for a quick fact."
+
+**4. Etalides' readiness (if delegating file-reading to Etalides):**
+When file-reading moves from Hermes to Etalides, verify:
+- Etalides' `config.yaml.template` has `file` in toolsets (it does — verified)
+- Etalides' SOUL.md explicitly lists `search_files + read_file` as core responsibilities
+- Etalides has appropriate action budgets for codebase research (fast=5, standard=10)
+
+### Audit pattern
+
+For each toolset being removed:
+1. List every tool in that toolset (e.g., `file-read` → `read_file`, `search_files`, `write_file`, `patch`)
+2. Grep SOUL.md for each tool name (case-insensitive)
+3. Classify each match: (a) Hermes using it → must change, (b) example of Daimon output → stays, (c) descriptive text about who has the tool → update if needed
+4. Update routing table + economy rules + anti-patterns in SOUL.md
+5. Update `platform_toolsets` in config.yaml
+6. Document the change scope before implementing
+
+### Example (this session)
+
+Removing `file-read` (and optionally `web`) from Hermes required changes to:
+- **config.yaml**: `toolsets:` (remove `file-read`), `platform_toolsets.cli` and `.telegram` (remove `file-read`)
+- **SOUL.md §6**: The Delegation Checkpoint (line 257), Routing table (line 273), Economy rule (line 275), Code research rule (line 277)
+- **SOUL.md §11**: Anti-patterns table (line 461)
+
+Scope: ~1 line in config.yaml + ~5 lines in SOUL.md = ~6 lines total. Feasible, low risk.
+
+`daimon-design` already has the toolset-trimming pattern as "Cost Optimization → Layer 2 — Toolset Trimming (MEDIUM impact)". That section describes WHAT toolsets to consider removing. This Toolset Dependency Audit section describes HOW to trace and clean up references AFTER removing one. They are complementary: the Cost section tells you what to trim, the Audit section tells you what to fix as a consequence.
+
 ## Rework Process
 
 When reworking a Daimon agent, follow this sequence:

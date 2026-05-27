@@ -1,0 +1,78 @@
+name: hermes-cyberpunk
+description: Cyberpunk neon skin — cyan data signals, lila structure, deep navy void
+
+colors:
+  banner_border: "#E040FB"
+  banner_title: "#18FFFF"
+  banner_accent: "#B388FF"
+  banner_dim: "#CE93D8"
+  banner_text: "#B2EBF2"
+  ui_accent: "#00BCD4"
+  ui_label: "#CE93D8"
+  ui_ok: "#00E676"
+  ui_error: "#FF1744"
+  ui_warn: "#FFD740"
+  prompt: "#E040FB"
+  input_rule: "#BA68C8"
+  response_border: "#7C4DFF"
+  session_label: "#18FFFF"
+  session_border: "#E040FB"
+  status_bar_bg: "#0A0E27"
+  voice_status_bg: "#0A0E27"
+  selection_bg: "#9C27B0"
+  completion_menu_bg: "#0A0E27"
+  completion_menu_current_bg: "#AB47BC"
+  completion_menu_meta_bg: "#0A0E27"
+  completion_menu_meta_current_bg: "#AB47BC"
+
+spinner:
+  waiting_faces:
+    - "(◈)"
+    - "(⏣)"
+    - "(⎔)"
+  thinking_faces:
+    - "(⫿)"
+    - "(⊩)"
+    - "(⧫)"
+  thinking_verbs:
+    - "routing"
+    - "decrypting"
+    - "synthesizing"
+    - "compiling"
+  wings:
+    - ["⟪◈", "◈⟫"]
+    - ["⟪⫿", "⫿⟫"]
+
+branding:
+  agent_name: "Hermes"
+  welcome: "◈ HERMES — Orchestrator Online ◈  /help for commands"
+  goodbye: "Link closed. ◈"
+  response_label: " ◈ Hermes ◈ "
+  prompt_symbol: "◈"
+  help_header: "(◈) Commands"
+
+tool_prefix: "┊"
+
+tool_emojis:
+  terminal: "⌨"
+  web_search: "⊿"
+  read_file: "◈"
+  write_file: "✎"
+  delegate: "☿"
+  memory: "⊞"
+  skill_manage: "⧉"
+  aether_update: "⏣"
+  aether_status: "◉"
+  cronjob: "⏱"
+  honcho_reasoning: "◍"
+
+banner_logo: |
+  [bold #18FFFF]    __  ____________  __  ______________[/]
+  [bold #18FFFF]   / / / / ____/ __ \/  |/  / ____/ ___/[/]
+  [bold #18FFFF]  / /_/ / __/ / /_/ / /|_/ / __/  \__ \ [/]
+  [bold #18FFFF] / __  / /___/ _, _/ /  / / /___ ___/ / [/]
+  [bold #E040FB]/_/ /_/_____/_/ |_/_/  /_/_____//____/  [/]
+
+banner_hero: |
+  [#B388FF]  ┌───◈ signal relay active ───◈┐  [/]
+  [#B388FF]  └───◈ orchestrator online ───◈┘  [/]
