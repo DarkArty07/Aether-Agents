@@ -7,18 +7,16 @@ This file is the canonical project context. It is read automatically by hermes-a
 ### Branching Model
 
 ```
-feature/{name}  →  dev  →  main
+feature/{name}  →  main
 ```
 
-- **`main`** — Production-ready. Only receives merges from `dev` tagged with a release.
-- **`dev`** — Integration branch. All feature branches merge here first.
-- **`feature/{name}`** — Individual features. Branch from `dev`, merge back to `dev`.
+- **`main`** — Production-ready. Feature branches merge here directly via PR.
+- **`feature/{name}`** — Individual features. Branch from `main`, merge back to `main`.
 
 **Rules:**
-1. Never commit directly to `main`. Always merge from `dev`.
-2. Never work directly on `main`. Always branch from `dev`.
-3. After a release merge, `dev` and `main` must be at the same commit.
-4. Delete feature branches after merging.
+1. Never commit directly to `main`. Always merge via PR from a feature branch.
+2. Never work directly on `main`. Always branch from `main`.
+3. Delete feature branches after merging.
 
 ### Versioning
 
