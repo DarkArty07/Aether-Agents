@@ -2,6 +2,22 @@
 
 All notable changes to Aether Agents are documented here.
 
+## [0.12.0] — 2026-05-27
+
+### Added
+- **Honcho as official memory provider**: Persistent user profiles, semantic memory search, and dialectic reasoning synthesized from accumulated observations across sessions.
+- **Honcho git submodule**: Added at `honcho-server/` (plastic-labs/honcho) with 4 documented patches for DeepSeek/OpenCode Go compatibility (3-level structured output fallback, thinking disable, embedding dimensions, config validation).
+- **Unified API key management**: Honcho now uses the same `OPENCODE_GO_API_KEY` as all Daimons, eliminating manual key synchronization across 11 config locations.
+- **Docker Compose integration**: Root `docker-compose.yml` with services (api, deriver, postgres, redis) on ports 8010/5434/6380 — includes deriver service for automatic observation processing.
+- **Setup script**: `scripts/setup-honcho.sh` automates submodule initialization, `.env` generation, and service startup.
+- **Makefile targets**: `setup-honcho`, `honcho-up`, `honcho-down`, `honcho-logs`, `honcho-status`.
+- **256k max context window**: Hermes profile configured with `context_length: 256000` on the orchestrator config.
+
+### Documentation
+- **README**: New "Memory Provider (Honcho)" section covering setup, commands, and architecture.
+- **docs/honcho-setup.md**: Complete service configuration, troubleshooting, and data persistence guide.
+- **honcho-server/PATCHES.md**: Catalog of all applied patches with upgrade notes.
+
 ## [0.11.1] — 2026-05-19
 
 ### Changed
