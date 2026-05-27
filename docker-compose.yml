@@ -1,0 +1,87 @@
+# ==============================================================================
+# Aether Agents — Docker Compose
+# ==============================================================================
+# Spins up Honcho (memory provider) alongside any future Aether services.
+#
+# Usage:
+#   docker compose up -d              # start all services
+#   docker compose down               # stop and remove
+#   docker compose logs -f            # follow logs
+#   docker compose ps                 # check status
+#
+# The Honcho server is self-contained under honcho-server/.
+# Its .env file (honcho-server/.env) is generated from .env.template
+# by scripts/setup-honcho.sh.
+# ==============================================================================
+
+services:
+  # ── Honcho API + Deriver ──────────────────────────────────────────────────
+  api:
+    build:
+      context: ./honcho-server
+      dockerfile: Dockerfile
+    entrypoint: ["sh", "docker/entrypoint.sh"]
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2).read()",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    env_file:
+      - path: ./honcho-server/.env
+        required: false
+    restart: unless-stopped
+
+  # ── PostgreSQL + pgvector ────────────────────────────────────────────────
+  database:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5432:5432"
+    command: ["postgres", "-c", "max_connections=200"]
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./honcho-server/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - honcho_pgdata:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:8.2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - honcho_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+# ── Persistent Volumes ──────────────────────────────────────────────────────
+volumes:
+  honcho_pgdata:
+  honcho_redis_data:
