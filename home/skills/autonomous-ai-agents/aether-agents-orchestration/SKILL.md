@@ -1,7 +1,7 @@
 ---
 name: aether-agents-orchestration
 description: "Orchestrate Daimon specialists in Aether Agents — delegation, monitoring, Pure Orchestrator pattern, cost optimization, and common pitfalls."
-version: 1.3.0
+version: 1.5.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -27,6 +27,11 @@ Aether Agents uses 6 Daimon specialists (Hefesto, Etalides, Athena, Daedalus, Ar
 - Long-running tasks (> 5 minutes)
 - User wants to continue working on other things
 - Multi-phase implementations
+
+**When to SKIP investigation and act directly:**
+- User explicitly says "just do it", "don't ask", "proceed"
+- The path is obvious from context (e.g., restoring tools after a known experiment)
+- User prefers execution over options: *"no me preguntes termina el plan original"*
 
 **Background pattern:**
 ```python
@@ -190,7 +195,179 @@ terminal(background=true, command="docker compose up -d", notify_on_complete=tru
 
 **Example (this session):** Hefesto claimed docker-compose.yml was done but it was missing the `deriver` service, had wrong DB credentials (postgres/postgres vs honcho/honcho), and containers showed "Created" but never "Running". Caught by verification.
 
+### 9. The Pure Orchestrator Experiment — When Removing Tools Breaks the Product
+
+**Context:** In v0.13.0, Hermes' toolset was stripped to 7 toolsets (removed `file-read`, `web`, `terminal`, `tts`) to reduce API costs. The theory: Hermes reasons only, all execution delegates to Daimons. The experiment was reverted within hours.
+
+**What failed:**
+
+1. **Unacceptable latency on trivial operations.** Checking `git tag -l` — a 200ms terminal command — required delegating to Etalides, which took 2+ seconds. The user explicitly called this unacceptable: *"tener que bajar a cualquier termino a leer un enlace es demasiado lento."*
+
+2. **Lost programming capability.** The user: *"te limite tanto las herramientas que ya no podias hacer la esencia del proyecto, programar."* Hermes could no longer write code, edit configs, or fix problems directly — the core value proposition of the system.
+
+3. **Diagnostic paralysis + hallucination.** Without `read_file`, Hermes could not diagnose configuration problems (e.g., web search returning "No provider configured"). Unable to verify the actual config, Hermes hallucinated a fictional "config caching" problem — which the user immediately caught and called out.
+
+**Root cause:** The Pure Orchestrator pattern works structurally (Etalides CAN read files, Hefesto CAN execute) but the delegation overhead makes it unsuitable for interactive, latency-sensitive work. Every trivial operation becomes a full session lifecycle: open → message → poll → wait → retrieve.
+
+**Correct optimization (what actually works):**
+
+| Approach | Status | Why |
+|----------|--------|-----|
+| Remove tools from Hermes | ❌ Reverted | Breaks UX, adds latency, destroys programming capability |
+| Model-tier separation | ✅ Active | Hermes = flagship, Hefesto = cheaper tier — biggest cost win |
+| Aggressive decomposition | ✅ Active | More atomic tasks → cheaper models viable for Daimons |
+| SOUL compression | ✅ Active | Shorter system prompts = fewer tokens per turn |
+
+**Rule:** Hermes MUST retain `terminal`, `web_search`, and `read_file` for interactive work. The viable cost optimization is **model-tier separation + aggressive decomposition**, NOT removing tools from the orchestrator.
+
+### 10. web_search Fails Despite Correct Config — THREE Root Causes
+
+**Problem:** `web_search` returns "No web search provider configured" even though `config.yaml` has:
+```yaml
+web:
+  backend: exa
+  search_backend: exa
+```
+And `EXA_API_KEY` appears to be present in `.env`.
+
+**CRITICAL: There are THREE distinct causes for this error. Diagnose in order.**
+
+---
+
+#### Cause A: `$HERMES_HOME` Not Set (MOST COMMON — pip install users)
+
+**When this happens:** You installed hermes-agent via `pip install` and run it directly. The binary (`~/.venv-hermes/bin/hermes`) does NOT set `HERMES_HOME`. The framework's `load_hermes_dotenv()` falls back to `~/.hermes/.env`, which doesn't exist.
+
+**Diagnosis:**
+```bash
+echo $HERMES_HOME         # Empty? → Cause A
+ls -la ~/.hermes/.env     # Missing? → Confirmed
+```
+
+**Fix:** Set `HERMES_HOME` permanently, create a wrapper, or symlink the .env. See Pitfall 10 Cause A for the original diagnosis.
+
+---
+
+#### Cause B: `.env` File Actually Corrupted (RARE — verify with xxd first)
+
+**When this happens:** Older versions of hermes-agent with `security.redact_secrets: true` physically wrote `***` into .env files.
+
+**Diagnosis:**
+```bash
+grep "EXA_API_KEY" .env | xxd | grep "2a2a2a"
+# Any matches → CORRUPTED (real asterisks on disk)
+# No matches → File is fine, the `***` you see is output redaction
+```
+
+**Fix:** Restore keys from backup, disable `security.redact_secrets`, verify with xxd.
+
+**Important:** ALWAYS verify with `xxd` before concluding corruption. `cat`/`grep` output is redacted by the framework even when the file is intact.
+
+---
+
+#### Cause C: Missing `plugin.yaml` in Bundled Web Plugins (hermes-agent v0.14.0 pip install)
+
+**When this happens:** `EXA_API_KEY` IS in `os.environ`, `web.backend: exa` IS in config.yaml, but `web_search` STILL returns "No web search provider configured".
+
+**Root cause:** Hermes Agent v0.14.0 was packaged for pip without `plugin.yaml` manifest files in `plugins/web/*/`. The plugin scanner skips directories without `plugin.yaml`, so `register()` is never called and `web_search_registry._providers` remains empty.
+
+**Confirmed chain of failure:**
+```
+config.yaml: web.backend: exa        ✓
+  → plugin scanner finds plugins/web/exa/  ✓
+      → looks for plugin.yaml        ✗ NOT PACKAGED
+          → _scan_directory_level() skips dir
+              → register() NEVER called
+                  → _providers = {}
+                      → get_provider("exa") → None
+                          → "No web search provider configured"
+```
+
+**Diagnosis:**
+```bash
+# Check if plugin.yaml exists
+ls ~/.venv-hermes/lib/python3.11/site-packages/plugins/web/exa/plugin.yaml
+# "No such file" → Cause C confirmed
+
+# Check if providers are registered (via Python in venv)
+python -c "
+from agent.web_search_registry import list_providers
+providers = list_providers()
+print(f'Registered: {[p.name for p in providers]}')
+print(f'Count: {len(providers)}')
+"
+# Output: "Registered: []", "Count: 0" → Confirmed
+```
+
+**Fix:**
+```bash
+# Create plugin.yaml for exa
+cat > ~/.venv-hermes/lib/python3.11/site-packages/plugins/web/exa/plugin.yaml << 'EOF'
+name: exa
+version: "1.0"
+description: Exa web search and content extraction
+author: Nous Research
+kind: backend
+EOF
+```
+Then restart Hermes. The scanner discovers the plugin on startup and registers the provider.
+
+**⚠️ Persistence:** The fix lives inside `.venv-hermes/` which is gitignored. If you recreate the venv or run `pip install --upgrade hermes-agent`, the fix is lost. Keep this documented.
+
+**Full investigation:** See `references/plugin-yaml-missing-bug.md` for the complete diagnostic chain (5-pass investigation, xxd verification, registry inspection, scanner source analysis).
+
+## Toolset Recovery (Post-Experiment)
+
+When reverting from a failed toolset experiment (like v0.13.0 Pure Orchestrator), follow this procedure to restore Hermes' capabilities without reintroducing cost leaks.
+
+### Recovery Checklist
+
+1. **Read current config** — Check `~/Aether-Agents/home/config.yaml` toolsets lists
+2. **Add read tools** — Ensure `file-read`, `terminal`, `web` are in:
+   - `toolsets:` (main list)
+   - `platform_toolsets.cli:`
+   - `platform_toolsets.telegram:`
+3. **Keep write tools blocked** — Ensure `file-write` is NOT in any list (it contains `write_file`, `patch`)
+4. **Verify web backend** — Check `web.search_backend` is set to `exa` (or your provider)
+5. **Test each tool** — Before declaring recovery complete:
+   - `terminal`: run `echo test`
+   - `read_file`: read a known file
+   - `web_search`: run a test query (may fail due to hermes-agent bug — see Pitfall 10)
+6. **Restart gateway** — If config was modified, restart `hermes-gateway.service` to reload
+
+### When the Primary Daimon is Unavailable
+
+If Hefesto is blocked (quota exhausted, provider down), use fallback options:
+
+| Fallback | Method | When to use |
+|----------|--------|-------------|
+| Another coding agent | Claude Code, Codex, OpenCode | Hefesto quota exhausted |
+| Manual edit | User edits config.yaml directly | Quick fix, user is technical |
+| Etalides | For read-only investigation | Hefesto blocked, need diagnosis only |
+
+**Prompt template for alternative agent:**
+```
+TAREA: Restaurar herramientas de LECTURA al perfil de Hermes en hermes-agent.
+
+ARCHIVOS:
+- ~/Aether-Agents/home/config.yaml (perfil principal)
+- ~/.prometeo/profiles/prometeo/config.yaml (si existe, perfil Telegram)
+
+CAMBIOS:
+- En toolsets: AGREGAR file-read, terminal, web
+- En platform_toolsets.cli: AGREGAR file-read, terminal, web
+- En platform_toolsets.telegram: AGREGAR file-read, terminal, web
+- Asegurar que NO esté: file-write
+- En web.search_backend: exa (si falta)
+
+NO reiniciar servicios. Solo modificar archivos y reportar.
+```
+
 ## Hermes Pure Orchestrator (Architectural Cost Optimization)
+
+> ⚠️ **EXPERIMENT STATUS: TESTED AND REVERTED (v0.13.0 → v0.12.0)**
+> 
+> The Pure Orchestrator pattern was implemented in v0.13.0 and reverted within hours. It works structurally but breaks interactive UX. See **Pitfall 9** below for the full post-mortem. The correct cost optimization is **model-tier separation + aggressive decomposition**, NOT removing tools from the orchestrator.
 
 The highest-impact cost optimization is NOT downgrading Daimon models — it's removing tools from Hermes himself. Every tool in Hermes' system prompt costs tokens every turn. Each file Hermes reads directly burns expensive model context. The solution is architectural: strip Hermes to reasoning + delegation only.
 
@@ -238,7 +415,49 @@ For quick facts, use fast mode (≤5 action budget). For codebase investigation,
 
 When API costs spike, the instinct is to tweak Daimon configs (downgrade models, trim toolsets). The user explicitly redirected away from this: *"lo demas que dices no tiene sentido, nuestro ahorro tiene que ser a nivel arquitectura."* The correct first response to cost problems is: **what tools can Hermes lose?** — not what tools can Daimons trim.
 
-> **Reference:** `references/hermes-pure-orchestrator.md` — Full implementation plan with exact line numbers, config.yaml + SOUL.md changes, and risk assessment.
+### Anti-pattern: Over-Investigation Before Action
+
+When the user asks for a concrete action (restore tools, fix config, run command), the instinct is to investigate first ("let me check how this works", "I need to research the hook mechanism"). The user explicitly rejected this: *"Mejor pide directamente a hefesto que te restablezca las herramientas"* — when the path is clear, act immediately. Investigation is for ambiguous problems, not for known procedures.
+
+### Autonomy Levels — When to Interrupt the User
+
+The user has explicitly defined when Hermes should act autonomously vs. when to ask for help. This is a hard rule, not a suggestion.
+
+**Level 1 — FULL AUTONOMY (do NOT interrupt):**
+- The user says "eres autonomo", "no me interrumpas", "adelante", "proceed", "BUSCALO"
+- The task is investigation, diagnosis, or analysis — even if complex
+- The path forward is clear from context — just execute
+- The user explicitly says "no me preguntes termina el plan original"
+
+**Level 2 — REPORT ONLY (interrupt only at completion or blockage):**
+- Long-running tasks with clear acceptance criteria
+- Multi-step investigations where intermediate results aren't useful
+- The user says "dime cuando termine" or "let me know when done"
+- For batch workflows: "adelante no me interrumpas hasta que acaben" — single uninterrupted delegation, no gate-checking between steps
+
+**Level 3 — CONSULT USER (interrupt for decisions):**
+- Architectural decisions with trade-offs (model selection, provider change)
+- Irreversible actions (deleting data, changing production configs)
+- 3+ consecutive failures on the same task — escalate with failure report
+- External blockers (missing credentials, provider down, quota exhausted)
+
+**Anti-pattern: Interrupting for trivial confirmations or options**
+
+**Wrong (user will be annoyed):**
+> "Should I search for the error in the logs or check the config first?"
+> "Do you want me to delegate to Etalides or do it myself?"
+> "I found the problem. Should I fix it?"
+> "Here are 3 options: A, B, C. Which do you prefer?"
+
+**Right (user's explicit preference):**
+> [silently investigates, finds root cause, presents solution]
+> "Found it: `$HERMES_HOME/.env` doesn't have EXA_API_KEY. The profile .env has it but the framework reads from `$HERMES_HOME/.env`. Two fixes: (A) copy key to `$HERMES_HOME/.env`, (B) set symlink. Implementing (A) now."
+
+**The user's explicit words:** *"ERES AUTONOMO, no me interrumpas hasta que de verdad necesites mi ayuda. Caray"* — Act autonomously. Only interrupt when genuinely stuck or when a decision is required.
+
+**Additional user preference on monitoring:** When delegating long tasks, do NOT narrate each poll. The user said: *"no me hables cada rato solo verifica el estatus final"* — wait for completion or report status only if stuck >2 minutes. Don't describe each intermediate step.
+
+> **Reference:** `references/hermes-pure-orchestrator.md` — Full implementation plan with exact line numbers, config.yaml + SOUL.md changes, risk assessment, and **failure post-mortem documenting why the experiment was reverted**.
 
 ---
 
@@ -361,7 +580,78 @@ git show backup/pre-v0.13.0:home/skills/devops/kanban/SKILL.md > skills/devops/k
 - [ ] No dangerous config changes included (diff config.yaml, SOUL.md root)
 - [ ] Commit is clean: only intended files, no runtime artifacts
 
-## Project Structure
+## Framework Source Investigation
+
+When a framework tool behaves unexpectedly, the default instinct is to guess at causes ("config caching", "race condition", "framework bug"). This produces hallucinations. The correct approach is to read the framework source code.
+
+### When to Investigate Source Code
+
+- Tool returns an error that contradicts visible configuration
+- Documentation is ambiguous or contradicts observed behavior
+- You find yourself saying "probably" or "likely" about framework internals
+- User explicitly says "BUSCALO" or challenges your assumption
+
+### How to Read Framework Source
+
+**1. Find the installed package:**
+```bash
+# For hermes-agent
+ls .venv-hermes/lib/python3.*/site-packages/hermes_cli/
+
+# For any pip-installed package
+python -c "import hermes_cli; print(hermes_cli.__file__)"
+```
+
+**2. Search for relevant functions:**
+```bash
+grep -r "load_dotenv\|\.env" hermes_cli/
+grep -r "web_search\|search_backend" hermes_cli/
+```
+
+**3. Read the actual source code:**
+```bash
+cat hermes_cli/env_loader.py
+```
+
+**4. Trace call sites:**
+```bash
+grep -r "load_hermes_dotenv" hermes_cli/
+```
+
+**5. Check wrapper scripts and environment variables:**
+```bash
+cat ~/.local/bin/hermes
+echo $HERMES_HOME
+```
+
+### What the Source Code Revealed (This Session)
+
+**Initial assumption (hallucination):** "CLI mode doesn't load .env automatically — that's why EXA_API_KEY is missing."
+
+**What the source actually shows:**
+- `env_loader.py` DOES load `.env` automatically in ALL modes
+- But it loads from `$HERMES_HOME/.env`, NOT from the profile directory
+- The wrapper sets `HERMES_HOME` before running Python
+- Without the wrapper, `HERMES_HOME` falls back to `~/.hermes`
+- The profile's `.env` (`~/.prometeo/profiles/prometeo/.env`) is never read by the framework
+
+**Correct conclusion:** The `.env` IS loaded in CLI mode — but from `$HERMES_HOME/.env`. The issue was not "CLI mode doesn't load .env" but "the key exists in the profile .env but the framework reads from `$HERMES_HOME/.env`".
+
+### Anti-pattern: Guessing Framework Behavior
+
+**Wrong:**
+> "Probably the framework caches the config and needs a restart."
+> "Likely there's a race condition in the provider initialization."
+> "I think CLI mode doesn't load .env."
+
+**Right:**
+> "Let me read `env_loader.py` to see exactly how .env is loaded."
+> "The source shows `load_hermes_dotenv()` is called in `main.py` line 212. Let me check what arguments are passed."
+> "`env_loader.py` line 45 shows it loads from `$HERMES_HOME/.env`, not the profile directory."
+
+### Reference
+
+- `references/hermes-agent-env-loading-source-analysis.md` — Complete source code analysis of `env_loader.py`, `main.py`, and wrapper scripts from this session.
 
 ```
 ~/Aether-Agents/
@@ -382,3 +672,8 @@ git show backup/pre-v0.13.0:home/skills/devops/kanban/SKILL.md > skills/devops/k
 - `references/cost-optimization.md` — Detailed cost audit methodology with concrete findings
 - `references/delegation-patterns.md` — Blocking vs background delegation, monitoring protocols
 - `references/api-key-management.md` — API key setup and rotation procedures
+- `references/web-search-backend-bug.md` — hermes-agent web_search initialization bug: diagnosis and workarounds
+- `references/hermes-agent-env-loading-source-analysis.md` — Source code analysis of `env_loader.py` and `main.py`: how .env loading actually works
+- `references/dotenv-corruption-analysis.md` — **CRITICAL:** How `security.redact_secrets: true` physically corrupts `.env` files (xxd evidence, recovery steps)
+- `references/plugin-yaml-missing-bug.md` — **CRITICAL:** hermes-agent v0.14.0 pip package missing `plugin.yaml` in bundled web plugins (registry stays empty, web_search fails silently)
+- `references/fallback-providers.md` — Provider failover for Daimons: config format, per-profile setup, supported providers (from hermes-agent skill)
