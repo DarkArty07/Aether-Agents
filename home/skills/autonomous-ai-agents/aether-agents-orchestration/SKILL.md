@@ -649,6 +649,35 @@ echo $HERMES_HOME
 > "The source shows `load_hermes_dotenv()` is called in `main.py` line 212. Let me check what arguments are passed."
 > "`env_loader.py` line 45 shows it loads from `$HERMES_HOME/.env`, not the profile directory."
 
+### Diagnosing "Works in Isolation, Not in Production"
+
+The most frustrating class of bug: a function works when called directly (Hefesto verifies `load_hermes_dotenv()` loads `EXA_API_KEY` into `os.environ`), but doesn't work in the running process. The gap is usually: the running process started before the fix, or has a different environment than expected.
+
+**Key technique — Inspect process environment directly:**
+```bash
+# 1. Find the Hermes process PID
+ps aux | grep "hermes " | grep -v grep
+
+# 2. Read its environment (null-separated)
+cat /proc/PID/environ | tr '\0' '\n' | grep KEY_NAME
+# e.g., cat /proc/459942/environ | tr '\0' '\n' | grep EXA
+
+# Compare with your shell's environment
+env | grep KEY_NAME
+```
+
+**Diagnostic flow when a tool fails but config/env look correct:**
+1. Verify file on disk is intact → `xxd file | grep "2a2a2a"` (check for actual `***` bytes, not redacted output)
+2. Verify env var in process → `cat /proc/PID/environ | tr '\0' '\n' | grep KEY`
+3. If env var IS present but tool still fails → the problem is NOT env loading. Check registries, plugin loading, initialization order.
+4. If env var is NOT present → trace why `load_hermes_dotenv()` didn't fire (wrong `HERMES_HOME`, missing fallback .env)
+
+**Real example (this session):**
+- Step 1: `xxd` showed 0 occurrences of `2a2a2a` → .env NOT corrupted
+- Step 2: `cat /proc/459942/environ` showed `EXA_API_KEY=4e1d19...f413` → key IS loaded
+- Step 3: web_search still failed → problem is NOT env. Delegated to Hefesto to inspect `web_search_registry._providers` → found empty dict → traced to missing `plugin.yaml`
+- Without Step 2, we would have spent hours debugging env loading for a problem that was already solved.
+
 ### Reference
 
 - `references/hermes-agent-env-loading-source-analysis.md` — Complete source code analysis of `env_loader.py`, `main.py`, and wrapper scripts from this session.
