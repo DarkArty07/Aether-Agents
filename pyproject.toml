@@ -31,6 +31,7 @@ dependencies = [
 dev = ["pytest>=7.0", "ruff>=0.4"]
 
 [project.scripts]
+aether-setup = "olympus_v3.cli.setup:main"
 olympus = "olympus.server:main"
 olympus-v3 = "olympus_v3.server:main"
 
