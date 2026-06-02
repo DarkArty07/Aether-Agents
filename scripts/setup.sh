@@ -235,6 +235,10 @@ setup_env_files() {
                 ok "${profile_name}/.env created from .env.example"
                 created=$((created + 1))
             fi
+        elif [ "$profile_name" = "ictinus" ]; then
+            info "→ ${profile_name}: no .env.example (Level 1 Consultant — config-only)"
+        else
+            warn "→ ${profile_name}: no .env.example found"
         fi
     done
 
