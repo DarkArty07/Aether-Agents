@@ -1,7 +1,7 @@
 ---
 name: aether-agents-orchestration
 description: "Orchestrate Daimon specialists in Aether Agents — delegation, monitoring, Pure Orchestrator pattern, cost optimization, and common pitfalls."
-version: 1.5.0
+version: 1.8.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -195,6 +195,19 @@ terminal(background=true, command="docker compose up -d", notify_on_complete=tru
 
 **Example (this session):** Hefesto claimed docker-compose.yml was done but it was missing the `deriver` service, had wrong DB credentials (postgres/postgres vs honcho/honcho), and containers showed "Created" but never "Running". Caught by verification.
 
+#### Code Implementation Verification
+
+Daimons sometimes report implementation as "complete" when the code has import errors, missing dependencies, or broken logic. File existence ≠ working code. Always run a smoke test.
+
+**Verification checklist after code delegation:**
+1. **Import resolution** — Can the target Python actually import all modules? Don't trust "installed" claims — run `python -c "import module"` yourself
+2. **Correct toolchain** — If multiple Pythons exist (venv vs Homebrew, pip vs pip3.14), verify the Daimon used the right one. Daimons may install deps in a different Python's site-packages
+3. **Execution test** — Run the entry point. A CLI that exits with `ModuleNotFoundError` on import is not "done", regardless of tests passing
+4. **Config integrity** — Check API keys aren't truncated with literal "..." placeholders. Verify with `xxd` if redaction is suspected
+5. **Acceptance criteria match** — Re-read your own prompt. Did you ask for "CLI running" but only got "all files created"? Close the gap
+
+**Example (ZeusAgent session):** Hefesto reported all 18 tests passing, all files created. Actual audit found: (a) `prompt_toolkit` not installed in Python 3.14 (only in Hermes venv), (b) `compress()` inserted summary with `role: "system"` breaking OpenAI alternation, (c) API key truncated with literal "..." in config.yaml. None of these were caught by the test suite. All blocked the CLI from actually running.
+
 ### 9. The Pure Orchestrator Experiment — When Removing Tools Breaks the Product
 
 **Context:** In v0.13.0, Hermes' toolset was stripped to 7 toolsets (removed `file-read`, `web`, `terminal`, `tts`) to reduce API costs. The theory: Hermes reasons only, all execution delegates to Daimons. The experiment was reverted within hours.
@@ -222,7 +235,58 @@ terminal(background=true, command="docker compose up -d", notify_on_complete=tru
 
 ### 10. web_search Fails Despite Correct Config — THREE Root Causes
 
-**Problem:** `web_search` returns "No web search provider configured" even though `config.yaml` has:
+[... content unchanged, see references/web-search-backend-bug.md]
+
+### 11. Olympus v3 ACP Returns "Internal error" or "ClosedResourceError"
+
+**Problem:** `talk_to(action="delegate")` consistently returns "Error spawning agent: Internal error" or "ClosedResourceError" for ALL Daimons, even though gateway is running and `talk_to(action="open", agent="?")` returns the agent list.
+
+**Root causes (in diagnostic order):**
+
+1. **Multiple olympus processes** (most common) — competing for SQLite DB
+2. **Session interrupted without cleanup** — leaves olympus orphans + corrupt WAL
+3. **`raise err from None`** in `acp/connection.py:248` — suppresses real exception, you only see "Internal error"
+4. **RequestError details lost** in `server.py:315,425` — `{e}` doesn't include `.data`/`.code`
+5. **Daimon missing .env** — `acp_manager.py` loads `agent.profile_path / ".env"` but only orchestrator has one
+6. **stdin PermissionError** — asyncio can't read stdin in subprocess, breaks ACP handshake
+7. **ClosedResourceError** — MCP client pipe broken after gateway restart
+
+**Quick fix (covers #1):**
+```bash
+kill $(ps aux | grep 'olympus_v3.server' | grep -v grep | awk '{print $2}')
+systemctl --user restart hermes-gateway.service
+ps aux | grep olympus | grep -v grep  # verify exactly 1
+```
+
+**If "ClosedResourceError" after restart:** Retry once. If it persists after 3 retries with clean single-olympus state, escalate for **chat session restart** — the MCP pipe is permanently broken.
+
+**Full diagnostic flow with all 7 patterns, log paths, and code-level root causes:** `references/olympus-acp-debugging.md`
+
+### 12. Reading Files Manually Instead of Querying Graphify First
+
+**Problem:** Hermes reads source files with `read_file` to understand dependencies, imports, or call chains. This burns expensive model context (~15K tokens for 3-4 file reads) when a single Graphify query (~500 tokens) would return the same information.
+
+**User directive:** Graphify is a PRIMARY codebase navigation tool for Hermes, not optional. The user explicitly said: "hacerlo una herramienta principal de hermes."
+
+**Solution:** Query Graphify FIRST, then read files only for implementation details (specific line content, exact values).
+
+| Task | Before (slow, expensive) | After (fast, cheap) |
+|------|--------------------------|---------------------|
+| Trace imports | `read_file` × 3 + `search_files` | `get_neighbors("node_id")` — 1 call |
+| Understand a class | `read_file` + grep + manual tracing | `get_node` → `get_neighbors` — 2 calls |
+| Find call chain | `grep` + `read_file` × 4 | `shortest_path` with method labels — 1 call |
+| Explore subsystem | Manual file hopping | `get_community(community_id)` — 1 call |
+
+**Noise reduction:** Use `context_filter` on `query_graph` to exclude skill/doc content when searching for code relationships:
+- `["call","method","contains"]` — code structure tracing
+- `["imports","imports_from"]` — dependency analysis
+- Omit filter only for truly open-ended exploration
+
+**Skip Graphify when:** code area is already well-known from this session, task is trivial (single-file edit), or user explicitly says they know the code.
+
+**Reference:** `references/graphify-usage-patterns.md` for full query patterns, pitfalls, and extraction modes.
+
+## Toolset Recovery (Post-Experiment)
 ```yaml
 web:
   backend: exa
@@ -366,6 +430,8 @@ NO reiniciar servicios. Solo modificar archivos y reportar.
 ## Hermes Pure Orchestrator (Architectural Cost Optimization)
 
 > ⚠️ **EXPERIMENT STATUS: TESTED AND REVERTED (v0.13.0 → v0.12.0)**
+>
+> **Standalone implementation exists:** The Pure Orchestrator pattern was successfully reimplemented as Zeus Agent — a natively autonomous orchestrator built from scratch with NO tools, minimal system prompt (3 lines), and JSON session persistence. See `daimon-design` skill → `references/zeus-minimal-orchestrator.md` for the full case study. Zeus validates the pattern architecturally; it failed on Hermes because of UX expectations (latency, programming capability), not because the pattern itself is invalid.
 > 
 > The Pure Orchestrator pattern was implemented in v0.13.0 and reverted within hours. It works structurally but breaks interactive UX. See **Pitfall 9** below for the full post-mortem. The correct cost optimization is **model-tier separation + aggressive decomposition**, NOT removing tools from the orchestrator.
 
@@ -696,6 +762,7 @@ env | grep KEY_NAME
 
 ## References
 
+- `references/graphify-usage-patterns.md` — **Graphify MCP query patterns, pitfalls, and extraction modes** — tested June 2026 on feature/graphify-integration branch. Covers: BFS/DFS Honcho bias, ambiguous shortest_path, focused extraction scope, provider config, context_filter noise reduction, shortest_path with method labels.
 - `references/honcho-integration.md` — How to integrate Honcho as memory provider (submodule, unified .env, docker-compose)
 - `references/hermes-pure-orchestrator.md` — Full Pure Orchestrator implementation plan, post-mortem, and failure analysis
 - `references/cost-optimization.md` — Detailed cost audit methodology with concrete findings
@@ -705,4 +772,5 @@ env | grep KEY_NAME
 - `references/hermes-agent-env-loading-source-analysis.md` — Source code analysis of `env_loader.py` and `main.py`: how .env loading actually works
 - `references/dotenv-corruption-analysis.md` — **CRITICAL:** How `security.redact_secrets: true` physically corrupts `.env` files (xxd evidence, recovery steps)
 - `references/plugin-yaml-missing-bug.md` — **CRITICAL:** hermes-agent v0.14.0 pip package missing `plugin.yaml` in bundled web plugins (registry stays empty, web_search fails silently)
+- `references/olympus-acp-debugging.md` — Olympus v3 ACP spawn failures: "Internal error" / "ClosedResourceError" diagnosis (stale processes, SQLite contention, MCP reconnection)
 - `references/fallback-providers.md` — Provider failover for Daimons: config format, per-profile setup, supported providers (from hermes-agent skill)
