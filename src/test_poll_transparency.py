@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Verification tests for polling transparency improvements."""
 
-import sys
+import asyncio
+import json
 import os
+import sys
 
 # Add the src directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,7 +15,7 @@ print("=" * 60)
 
 # Test 1a: registry import (includes SessionState)
 try:
-    from olympus.registry import SessionState, SessionStatus, OlympusRegistry
+    from olympus.registry import OlympusRegistry, SessionState
     print("✓ registry imports OK (SessionState, SessionStatus, OlympusRegistry)")
 except Exception as e:
     print(f"✗ registry import FAILED: {e}")
@@ -21,7 +23,6 @@ except Exception as e:
 
 # Test 1b: _is_spinner_noise from its original location
 try:
-    from olympus.workflows.nodes import _is_spinner_noise
     print("✓ _is_spinner_noise import from workflows.nodes OK")
 except Exception as e:
     print(f"✗ _is_spinner_noise import FAILED: {e}")
@@ -39,7 +40,6 @@ except Exception as e:
 
 # Test 1d: _is_spinner_noise also importable via server
 try:
-    from olympus.workflows.nodes import _is_spinner_noise as sn2
     print("✓ _is_spinner_noise accessible from workflows.nodes (server imports from same)")
 except Exception as e:
     print(f"✗ _is_spinner_noise indirect import FAILED: {e}")
@@ -75,9 +75,6 @@ print("=" * 60)
 print("TEST 3: _action_poll returns new schema format")
 print("=" * 60)
 
-import asyncio
-import json
-
 # Set up a registry with a mock session
 reg = OlympusRegistry()
 
@@ -90,8 +87,8 @@ session.update_from_message('I will implement the feature as follows:')
 session.update_from_tool_call({'name': 'read_file', 'args': {'path': '/test.py'}})
 
 # Import additional registry types for the mock
-from olympus.registry import AgentState, AgentStatus
-from olympus.config import DaimonProfile
+from olympus.config import DaimonProfile  # noqa: E402
+from olympus.registry import AgentState, AgentStatus  # noqa: E402
 
 mock_profile = DaimonProfile(name='test_agent', role='test', description='test agent', capabilities=[])
 agent = AgentState(name='test_agent', profile=mock_profile, status=AgentStatus.IDLE)
@@ -99,7 +96,8 @@ agent.sessions['test_poll'] = session
 reg.agents['test_agent'] = agent
 
 # Override registry in server module
-import olympus.server as srv
+import olympus.server as srv  # noqa: E402
+
 original_registry = srv.registry
 srv.registry = reg
 
@@ -115,12 +113,12 @@ try:
     assert len(data['thoughts']) == 2, f'Expected 2 thoughts in snapshot (spinners filtered), got {len(data["thoughts"])}'
     assert data['progress']['total_messages'] == 1, f'Expected 1 message, got {data["progress"]["total_messages"]}'
     assert data['progress']['total_tool_calls'] == 1, f'Expected 1 tool call, got {data["progress"]["total_tool_calls"]}'
-    
+
     # Check differential fields have content
     assert len(data['new_since_last_poll']['thoughts']) == 3, f'Expected 3 new thoughts, got {len(data["new_since_last_poll"]["thoughts"])}'
     assert len(data['new_since_last_poll']['messages']) == 1, f'Expected 1 new message, got {len(data["new_since_last_poll"]["messages"])}'
     assert len(data['new_since_last_poll']['tool_calls']) == 1, f'Expected 1 new tool call, got {len(data["new_since_last_poll"]["tool_calls"])}'
-    
+
     print('✓ Poll schema verification passed!')
     print(json.dumps(data, indent=2))
 finally:
