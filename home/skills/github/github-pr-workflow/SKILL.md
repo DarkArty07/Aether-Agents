@@ -1,7 +1,7 @@
 ---
 name: github-pr-workflow
 description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
-version: 1.2.0
+version: 1.3.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -538,6 +538,138 @@ Fix all findings, commit, then proceed with tagging.
 - **Dangling references after cleanup**: When removing deprecated files (scripts, code dirs, docs), always audit for references in README, website, and remaining docs. Deleted code leaves ghost references that confuse new users.
 - **Merging with uncommitted local changes**: `git checkout` or `git merge` will abort if local modifications would be overwritten. Always `git status --short` before branch operations. Stash (`git stash push`), commit, or discard changes first. See `references/branching-models.md` for the full pattern.
 - **Backup recovery with wrong directory structure**: When cherry-picking from an old backup branch, the directory structure may have changed (e.g., `home/skills/` in backup vs `skills/` in current HEAD). Extract content to the CURRENT structure, not the backup's structure. Verify destination paths before writing. See `references/branching-models.md`.
+
+## 9. Merge Conflict Resolution
+
+When `git merge` (or `git pull` which runs merge) encounters conflicting changes, git pauses and marks files as **unmerged**. The merge is incomplete — you must resolve before committing.
+
+### 9.1 Detecting Conflicts
+
+After a merge attempt:
+
+```bash
+git status
+```
+
+Look for these indicators:
+
+| Status | Meaning |
+|--------|---------|
+| `both modified: <file>` | modify/modify — same file changed in both branches |
+| `both added: <file>` | add/add — same file created in both branches |
+| `deleted by us: <file>` | deleted on current branch, modified on theirs |
+| `deleted by them: <file>` | modified on current branch, deleted on theirs |
+| `Unmerged paths:` section | Summary of files needing resolution |
+| `All conflicts fixed but you are still merging.` | All marked resolved, ready to commit |
+
+### 9.2 Ours vs Theirs Semantics
+
+During `git merge <other>` while on `current-branch`:
+
+- **Ours** = `current-branch` (the branch you're merging INTO)
+- **Theirs** = `<other>` (the branch being merged FROM)
+
+```bash
+# Keep current branch's version
+git checkout --ours path/to/file
+
+# Keep the other branch's version
+git checkout --theirs path/to/file
+```
+
+**CRITICAL:** These flags only work for files listed under `Unmerged paths`. For files listed under `Changes not staged for commit` (unstaged modifications that aren't part of the conflict), use `git checkout origin/main -- path/to/file` to reset to the remote's version.
+
+### 9.3 Add/Add Conflicts (Both Added)
+
+This happens when the same file was created independently in both branches. **Neither side may have the full content.** Always inspect both versions:
+
+```bash
+git checkout --ours path/to/file   # inspect current branch's version
+git checkout --theirs path/to/file # inspect the other branch's version
+```
+
+**Manual union strategy:** When neither side alone has the complete desired content (e.g., each PR added different tests in the same file), you must manually construct the union:
+
+1. Start with one version (`--theirs` or `--ours`) as the base
+2. Use `patch`/`write_file` to add the missing content from the other side
+3. Verify the result (e.g., `grep -c "def test_"` to confirm total test count)
+4. Stage with `git add`
+
+### 9.4 Modify/Modify Conflicts
+
+Same file changed differently in both branches. The file on disk contains merge conflict markers:
+
+```
+<<<<<<< HEAD
+// our version (current branch)
+=======
+// their version (branch being merged)
+>>>>>>> branch-name
+```
+
+Resolution options:
+
+```bash
+# Accept one side entirely
+git checkout --ours path/to/file   # keep current branch's version
+git checkout --theirs path/to/file # keep other branch's version
+
+# Or edit the file manually to pick specific changes from both sides
+# (remove the <<<<<<<, =======, >>>>>>> markers and keep the desired content)
+```
+
+### 9.5 Verification After Resolution
+
+**Always verify** the resolved file has correct content before staging:
+
+```bash
+# For test files: count test functions
+grep -c "^def test_" tests/test_file.py
+
+# Check for remaining conflict markers (bad!)
+grep -rn "<<<<<<< \|=======\|>>>>>>>" path/to/file
+
+# For modify/modify: ensure expected content is present
+grep "specific_function_or_import" path/to/file
+
+# Show the resolved diff
+git diff path/to/file
+```
+
+### 9.6 Staging and Committing
+
+```bash
+# Stage resolved files — only the ones you resolved
+git add path/to/file1 path/to/file2
+
+# Verify staging
+git status
+git diff --cached --name-status
+
+# Complete the merge (auto-generates a merge commit message)
+git commit --no-edit
+
+# Or write a custom message
+git commit -m "Merge branch 'main' into feature/my-feature"
+```
+
+### Pitfall: Task descriptions may be wrong about ours/theirs
+
+Always verify the actual state on disk rather than blindly trusting instructions. The task may say `--theirs` but the context may contradict it. Cross-check:
+
+1. Check actual conflict type from `git status`
+2. Inspect both versions (`--ours` then `--theirs`)
+3. Verify the resolved content has what you expect before staging
+
+### Pitfall: Add/add conflicts may require manual union
+
+Neither side may be "correct" — both branches may have added different subsets of the same logical file. The guardrail "if checkout resolves to wrong version, stop" is useful, but the better response is to manually merge both versions rather than reporting failure.
+
+### Pitfall: "Changes not staged for commit" vs "Unmerged paths"
+
+A file showing as `modified` under "Changes not staged for commit" during a merge is NOT part of the conflict — it's an unrelated working-tree change. Do NOT use `git checkout --ours/--theirs` on it. Use `git checkout origin/main -- <file>` to reset it.
+
+---
 
 ## Useful PR Commands Reference
 
