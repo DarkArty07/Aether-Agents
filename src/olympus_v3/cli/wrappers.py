@@ -1,5 +1,6 @@
 """Wrapper script generation for aether setup CLI."""
 from __future__ import annotations
+
 import stat
 from pathlib import Path
 
