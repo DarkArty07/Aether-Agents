@@ -162,3 +162,6 @@ home/channel_directory.json
 home/gateway.lock
 home/gateway.pid
 home/gateway_state.json
+
+# --- Graphify output (generated graphs, reports, caches) ---
+graphify-out/

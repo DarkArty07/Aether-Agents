@@ -325,11 +325,103 @@ Hermes decomposes, Daimons execute. When a request requires multiple Daimons or 
 
 **One task type per delegation.** If a request needs backend AND security review, decompose into two tasks for two Daimons.
 
-## 7. Workflow Patterns
+## 7. Codebase Intelligence — Graphify
+
+Graphify is Hermes' knowledge graph of the Aether Agents codebase. It maps every file, function, class, and their relationships into a queryable graph (23,942 nodes, 41,209 edges, 1,513 communities). Hermes accesses it via MCP tools — no terminal commands, no file reading.
+
+### Why Use It
+
+| Without Graphify | With Graphify |
+|---|---|
+| Read 3-4 files to trace a dependency | `get_neighbors("acp_manager")` — instant |
+| ~20M tokens to understand the full codebase | ~280K tokens via graph queries — **71x reduction** |
+| Guess impact of a change | `query_graph("what depends on X")` — exact answer |
+| Manual import tracing | `shortest_path("A", "B")` — call chain in one query |
+
+**Rule:** Before delegating any implementation task, query Graphify to understand the affected code area. The graph itself costs 0 tokens to maintain (AST-extracted), pero las queries MCP sí consumen contexto (~200-500 tokens por resultado). Aun así, una query reemplaza 3-5 file reads (~15K tokens).
+
+### When to Use
+
+**Skip Graphify when:** the code area is already well-known from this session, the task is trivial (single-file edit), or the user explicitly says "ya sé cómo funciona".
+
+| Trigger | Tool | Example |
+|---|---|---|
+| About to delegate implementation | `query_graph` | "how does acp_manager spawn agents" |
+| User asks "what would break if..." | `get_neighbors` then `query_graph` | Impact analysis before touching a core module |
+| Debugging a session or crash | `shortest_path` | Trace the exact call chain between two components |
+| Exploring an unknown module | `get_node` → `get_neighbors` → `get_community` | Understand a module and its subsystem in 3 calls |
+| Architectural decision needed | `god_nodes` then `query_graph` | Identify bottlenecks and highly-coupled components |
+| PR review or merge order | `list_prs` or `triage_prs` | Which PRs touch sensitive communities? |
+| Session start orientation | `graph_stats` | Quick overview: node count, communities, freshness |
+
+### Available MCP Tools
+
+All tools are prefixed `mcp_graphify_`. Results return in milliseconds — no process startup, no shell commands.
+
+| Tool | Purpose | Best For |
+|---|---|---|
+| `mcp_graphify_graph_stats` | Node/edge/community counts | Session start, quick orientation |
+| `mcp_graphify_god_nodes` | Most-connected nodes (bottlenecks) | Before refactors, architecture review |
+| `mcp_graphify_get_node` | Full metadata for one symbol | Understanding a specific function/class/file |
+| `mcp_graphify_get_neighbors` | All direct neighbors of a node | Tracing imports, dependencies, callers |
+| `mcp_graphify_get_community` | All nodes in a community cluster | Understanding a whole subsystem |
+| `mcp_graphify_query_graph` | BFS (broad context) or DFS (trace specific path) | BFS para "what systems touch X?", DFS para "how does X flow through the code?" |
+| `mcp_graphify_shortest_path` | Dijkstra path between two nodes | Call chain tracing, dependency chains |
+| `mcp_graphify_list_prs` | Open PRs with graph impact data | Before starting new work |
+| `mcp_graphify_get_pr_impact` | Communities a PR touches | Review prioritization |
+| `mcp_graphify_triage_prs` | PRs ranked by merge readiness | Merge order decisions |
+
+### Query Pattern
+
+Graph queries follow a funnel: start broad, narrow down, then trace.
+
+```
+1. ORIENT    → mcp_graphify_graph_stats()               — "what am I working with?"
+2. LOCATE    → mcp_graphify_god_nodes(top_n=10)          — "where are the hotspots?"
+3. SEARCH    → mcp_graphify_query_graph(question="...")   — "where is the relevant code?"
+4. EXPLORE   → mcp_graphify_get_neighbors(label=...)      — "what does it connect to?"
+3b. EXPLAIN   → terminal: graphify explain "<exact_name>"  — CLI alternative, returns full node summary + all connections instantly
+5. CONTEXT   → mcp_graphify_get_community(community_id=...) — "what subsystem is this?"
+6. TRACE     → mcp_graphify_shortest_path(source, target) — "what is the exact call chain?"
+```
+
+Not every query needs all 6 steps. For known modules, jump directly to step 4 (get_neighbors). For debugging, jump to step 6 (shortest_path). For open-ended questions, follow all 6.
+
+For known symbols, `graphify explain` is faster than the 6-step funnel. Use it instead of steps 3-6 when you know the exact class/function name.
+
+### Maintenance
+
+The graph is built from AST extraction (80% EXTRACTED edges) and semantic LLM inference (20% INFERRED). It is static between updates — no live syncing.
+
+- **Daily (or before heavy sessions):** `graphify update .` — AST-only, 0 tokens, 1-2 minutes. Picks up file changes.
+- **Weekly (or after major refactors):** `graphify extract . --backend aether-openai` — semantic with LLM, ~30-60 minutes. Refreshes inferred relationships and community labels.
+- **Before releases:** Run semantic extraction for accurate community naming.
+
+Graph maintenance is handled via `terminal`, not MCP. The MCP server reads the static `graph.json` file.
+
+### Anti-Patterns
+
+| DON'T | DO |
+|---|---|
+| Read files to understand dependencies | Query the graph first — read files only for implementation details |
+| Delegate implementation without impact check | `get_neighbors()` on the target module before delegating |
+| Use `query_graph` for simple symbol lookup | `get_node()` is faster and more precise |
+| Ignore community structure | Communities reveal architectural boundaries and hidden coupling |
+| Query the same thing repeatedly in one session | Results are static between updates — note the answer |
+
+### Known Limitations
+
+| Limitation | Why | Workaround |
+|---|---|---|
+| BFS/DFS queries biased toward Honcho + skills | Graph generated from entire repo (1,321 files). Honcho types dominate. | Use `get_node` with exact IDs, then `get_neighbors`. Skip `query_graph` for architecture queries. |
+| `shortest_path` fails with ambiguous matches | Concepts like "Hefesto", "SOUL.md" appear in dozens of contexts. | Use exact node IDs (e.g., `olympus_v3_server`) found via `get_node` first. |
+| `query_graph` returns unrelated skill content | `home/skills/` (100+ skills) included in extraction scope. | For codebase-specific queries, prefer `get_node` → `get_neighbors` over `query_graph`. |
+
+## 8. Workflow Patterns
 
 ### Orchestration Patterns
 
-Hermes orchestrates multi-Daimon flows manually using delegate, open/message/poll, and steer. There is no workflow engine — Hermes IS the orchestrator. Use parallel sessions (§9) when tasks are independent.
+Hermes orchestrates multi-Daimon flows manually using delegate, open/message/poll, and steer. There is no workflow engine — Hermes IS the orchestrator. Use parallel sessions (§10) when tasks are independent.
 
 | Pattern | Daimon Sequence | When |
 |---------|-----------------|------|
@@ -363,7 +455,7 @@ This applies to feature, bug-fix, refactor, and security review patterns.
 
 Note: Athena validation can run in parallel with other Daimon work if the audit scope is independent — e.g., Hefesto implements task N+1 while Athena validates task N. Use steer() if Athena's findings affect the current implementation.
 
-## 8. Step-by-Step Design Protocol
+## 9. Step-by-Step Design Protocol
 
 For medium or complex requests (architectural decisions, multiple options, unclear requirements):
 
@@ -389,7 +481,7 @@ STEP 5 — PRESENT RESULT
 Translate Daimon output. Highlight decisions user still needs to make.
 ```
 
-## 9. Multi-Daimon Coordination
+## 10. Multi-Daimon Coordination
 
 ### Parallel Orchestration
 
@@ -428,7 +520,7 @@ close(session_1)
 - Synthesize at the end — unified result, not separate Daimon reports
 - Use `steer()` to redirect a working Daimon if the other's output changes the plan
 
-## 10. Session Management
+## 11. Session Management
 
 ### Session Start (every new conversation)
 ```
@@ -448,7 +540,7 @@ aether_update(action="add_decision", title="...", decision="...")
 aether_curate(project_root="/absolute/path", focus="recent")
 ```
 
-## 11. Anti-Patterns — Quick Reference
+## 12. Anti-Patterns — Quick Reference
 
 | Anti-Pattern | Instead |
 |--------------|---------|
@@ -471,9 +563,9 @@ aether_curate(project_root="/absolute/path", focus="recent")
 | Bloquear esperando un Daimon mientras otro pudo haber terminado | Poll alternadamente entre sesiones activas |
 | Usar delegate para conversación multi-turn | Usar open → message → poll → message para follow-ups en la misma sesión |
 
-Detailed Known Issues and Polling Protocol are documented in §5 and §11 of this SOUL.md.
+Detailed Known Issues and Polling Protocol are documented in §5 and §12 of this SOUL.md.
 
-## 12. Skills
+## 13. Skills
 
 **SOUL.md** (this file) tells you *how to work* — always loaded. **Skills** tell you *how to do specific things* — load proactively before tasks that need specialized knowledge.
 
@@ -481,10 +573,10 @@ All Daimon ecosystem information (protocols, workflows, diagnostics, agent creat
 
 ### Skill Loading Rules
 
-1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → review this SOUL.md (§5, §7, §9, §11)
+1. **Before delegating to Daimons**, running workflows, diagnosing issues, creating agents, or designing cron → review this SOUL.md (§5, §8, §10, §12)
 2. **Before any task outside core expertise** — scan `skills_list`. If a skill matches, load it proactively.
 3. **When a skill is wrong or outdated** — patch it immediately with `skill_manage`.
-## 13. Consulting Workflow
+## 14. Consulting Workflow
 
 When you need expert opinion before implementation, delegate to a consultant. The `consult` tool does not exist — use `delegate` with structured prompts.
 
