@@ -1,5 +1,27 @@
 # Changelog
 
+### v0.15.0 (2026-06-02)
+
+- **feat**: `aether setup` CLI skeleton — modern Python CLI with 7 subcommands (init, status, doctor, daimon, keys, model, reset) replacing legacy `scripts/setup.sh` UX.
+- **feat**: ASCII art banner "OLYMPUS THE FORGE" displayed on CLI startup.
+- **feat**: Wrapper auto-generation — `scripts/setup.sh` v0.13.0 creates `~/.local/bin/aether-setup` on each run, matching the `hermes`/`aether`/`hefesto` wrapper pattern.
+- **feat**: `aether-setup` entry point registered in `pyproject.toml [project.scripts]` — installable globally via `pip install -e .`.
+- **test**: 13 unit tests in `tests/test_aether_setup_cli.py` (9 CLI + 4 wrapper helper).
+
+## [0.15.0] — 2026-06-02
+
+### Added
+- **`aether setup` CLI skeleton** (`src/olympus_v3/cli/setup.py`): Modern Python CLI replacing the legacy `scripts/setup.sh` UX. Provides 7 subcommands — `init` (bootstrap project), `status` (check health), `doctor` (diagnose issues), `daimon` (manage agents), `keys` (manage API keys), `model` (configure AI models), `reset` (factory reset). Entry point `aether-setup` available globally or via `python -m olympus_v3.cli.setup` from the repo root.
+- **ASCII art banner** (`src/olympus_v3/cli/ui/banner.py`): "OLYMPUS THE FORGE" ASCII art displayed on CLI startup, matching the Aether Agents visual identity.
+- **Wrapper auto-generation** (`src/olympus_v3/cli/wrappers.py`): `scripts/setup.sh` now auto-generates a `~/.local/bin/aether-setup` wrapper script on each run, following the same pattern used for `hermes`, `aether`, and `hefesto` wrappers.
+
+### Changed
+- **`scripts/setup.sh`**: Now detects the project root and generates `~/.local/bin/aether-setup` wrapper pointing to the local `aether-setup` entry point.
+- **New Python module**: `src/olympus_v3/cli/setup.py` (main CLI), `src/olympus_v3/cli/ui/banner.py` (ASCII banner), `src/olympus_v3/cli/wrappers.py` (wrapper generation logic).
+
+### Testing
+- **13 new unit tests** in `tests/test_aether_setup_cli.py`: 9 CLI tests covering all subcommands and flags; 4 wrapper helper tests for path resolution, shebang generation, wrapper installation, and idempotent re-installation.
+
 ### v0.13.0 (2026-06-02)
 
 - **feat**: Graphify integrated as primary codebase intelligence tool — 71x token reduction for architecture navigation, replaces 3-5 manual file reads per codebase query.
