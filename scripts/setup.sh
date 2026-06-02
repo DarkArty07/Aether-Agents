@@ -245,6 +245,16 @@ setup_env_files() {
     if [ "$created" -eq 0 ] && [ "$existing" -eq 0 ]; then
         info "No .env.example files found in profiles"
     fi
+
+    # Create orchestrator-level home/.env from template
+    if [ -f "$PROJECT_ROOT/home/.env.example" ] && [ ! -f "$PROJECT_ROOT/home/.env" ]; then
+        cp "$PROJECT_ROOT/home/.env.example" "$PROJECT_ROOT/home/.env"
+        ok "Created home/.env from template"
+    elif [ -f "$PROJECT_ROOT/home/.env" ]; then
+        ok "home/.env already exists — skipping"
+    else
+        info "No home/.env.example template found — skipping"
+    fi
 }
 
 # ── Step 7: Generate config.yaml from templates ──────────────────────────────
