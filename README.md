@@ -146,11 +146,16 @@ Aether Agents uses [Honcho](https://github.com/plastic-labs/honcho) as a self-ho
 - **Semantic memory search** — cross-session context recall
 - **Dialectic reasoning** — synthesized answers from accumulated observations
 
+### Prerequisites
+
+- **Docker Engine** (20.10+) with **Docker Compose** (v2+ or standalone `docker-compose`)
+- 4 GB free RAM for the 4 containers (PostgreSQL + pgvector, Redis, API, deriver)
+
 ### Setup
 
     make setup-honcho
 
-This initializes the Honcho git submodule, generates honcho-server/.env from template (using your OPENCODE_GO_API_KEY), and starts all services.
+This checks Docker availability, initializes the Honcho git submodule, generates honcho-server/.env from template (using your OPENCODE_GO_API_KEY), and starts all services.
 
 ### Commands
 
