@@ -77,6 +77,14 @@ detect_wsl() {
     fi
 }
 
+# ── Init submodules (for users who cloned without --recurse-submodules) ───────
+init_submodules() {
+    if [ -f ".gitmodules" ]; then
+        info "Initializing git submodules..."
+        git submodule update --init --recursive 2>/dev/null && ok "Submodules initialized" || warn "Submodule init skipped (no network or not a git repo)"
+    fi
+}
+
 # ── Step 1: Detect Python 3.11+ ───────────────────────────────────────────────
 detect_python() {
     step 1 "Detecting Python 3.11+"
@@ -452,6 +460,7 @@ main() {
 
     verify_repo
     detect_wsl
+    init_submodules
     detect_python
     create_venv
     install_hermes_agent
