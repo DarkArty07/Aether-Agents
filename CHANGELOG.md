@@ -1,5 +1,31 @@
 # Changelog
 
+### v0.13.0 (2026-06-02)
+
+- **feat**: Graphify integrated as primary codebase intelligence tool — 71x token reduction for architecture navigation, replaces 3-5 manual file reads per codebase query.
+- **feat**: `graphifyy>=0.8.0` dependency added with custom `aether-openai` provider in `.graphify/providers.json` (deepseek-v4-flash model via opencode-go endpoint).
+- **feat**: Hermes SOUL.md §7 "Codebase Intelligence — Graphify" documents 7 MCP tools, 6-step query funnel, and known limitations.
+- **feat**: New reference `graphify-usage-patterns.md` — query patterns, pitfalls, extraction modes, advanced techniques (context_filter, method labels for shortest_path).
+- **feat**: Knowledge graph covers entire codebase — 23,942 nodes, 41,209 edges, 1,513 communities (80% AST-extracted, 20% semantically inferred).
+
+## [0.13.0] — 2026-06-02
+
+### Added
+- **Graphify as primary codebase intelligence tool**: Hermes can now navigate the Aether Agents codebase as a knowledge graph (23,942 nodes, 41,209 edges) via 7 MCP tools — `query_graph`, `get_node`, `get_neighbors`, `shortest_path`, `graph_stats`, `god_nodes`, `get_community`, plus 3 PR-impact tools. Architecture queries that previously required opening 3-4 files (read 3-5K tokens) now resolve in a single MCP call (~500 tokens) — a 71x token reduction.
+- **graphifyy dependency**: `graphifyy>=0.8.0` added to `pyproject.toml`. The package handles AST extraction (zero tokens) and optional LLM semantic inference.
+- **aether-openai custom provider**: `.graphify/providers.json` configured to use the same `OPENCODE_API_KEY` as the rest of the system, pointing to opencode-go v1 endpoint with `deepseek-v4-flash` as default model. Provider is overridable via `GRAPHIFY_AETHER_MODEL` env var.
+- **Hermes SOUL.md §7**: New section "Codebase Intelligence — Graphify" (91 lines) with: when to use / when to skip, all 7 MCP tools documented, 6-step query funnel (ORIENT→LOCATE→SEARCH→EXPLORE→CONTEXT→TRACE), maintenance schedule, anti-patterns, and known limitations (BFS/DFS Honcho bias, shortest_path ambiguity, context_filter workaround).
+- **graphify-usage-patterns.md reference**: New support file under `aether-agents-orchestration/references/` documenting query patterns, pitfalls, extraction modes (AST vs LLM), CLI quick reference, provider configuration, and advanced techniques (context_filter for edge-type filtering, method labels for shortest_path).
+- **Graph generation scope**: Knowledge graph built from 1,321 source files across `src/`, `home/profiles/`, `home/skills/`, and `honcho-server/`. AST extraction covers 80% of edges; semantic LLM inference (via `aether-openai`/`deepseek-v4-flash`) covers 20% and produces community labels.
+
+### Documentation
+- **Hermes SOUL.md §7**: Updated with 5 corrections after live testing — "0 tokens" clarification, skip-when-known rule, BFS vs DFS guidance, `graphify explain` CLI alternative, and Known Limitations table.
+- **aether-agents-orchestration SKILL.md**: Added reference pointer to new `graphify-usage-patterns.md` and pitfall #12 "Reading Files Manually Instead of Querying Graphify First".
+
+### Performance
+- **Token reduction**: Graph queries consume ~200-500 tokens per result vs ~15K tokens for 3-5 manual file reads — a 71x reduction in context cost for codebase navigation tasks.
+- **Response latency**: Graph MCP queries return in milliseconds (no process startup, no shell commands) vs ~2 seconds for delegated file reading.
+
 ### v0.12.0 (2026-05-27)
 
 - **feat**: Integrate Honcho as official memory provider for Aether Agents — persistent user profiles, semantic memory search, and dialectic reasoning across sessions.
