@@ -1,5 +1,13 @@
 # Changelog
 
+### Fixed
+- **Gateway MCP servers now inherit `home/.env`**: Drop-in systemd override added at `~/.config/systemd/user/hermes-gateway.service.d/override.conf` with `EnvironmentFile=` pointing to `home/.env`. Previously, MCP servers like Graphify (semantic retrieval) failed silently when invoked by the gateway because the unit file only injected PATH/VIRTUAL_ENV/HERMES_HOME. See skill `aether-agents-orchestration` pitfall #N and `references/gateway-mcp-env-injection.md` for the full diagnostic chain.
+
+### Documentation
+- **aether-agents-orchestration v1.11.0**: New pitfall "Gateway MCP Servers Don't Inherit home/.env" with drop-in fix recipe.
+- **task-delegation v1.4.0**: New pitfall "Hefesto Over-Investigates Source Code on Diagnostic Prompts" with prompt-writing pattern.
+- **New reference `gateway-mcp-env-injection.md`**: 3-step diagnostic chain + drop-in override fix + rationale.
+
 ### v0.15.0 (2026-06-02)
 
 - **feat**: `aether setup` CLI skeleton — modern Python CLI with 7 subcommands (init, status, doctor, daimon, keys, model, reset) replacing legacy `scripts/setup.sh` UX.
