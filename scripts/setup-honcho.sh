@@ -40,6 +40,32 @@ echo ""
 echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.15.0 ═══${NC}"
 echo ""
 
+# ── Pre-check: Docker ─────────────────────────────────────────────────────────
+info "Checking Docker prerequisites..."
+if ! command -v docker &>/dev/null; then
+    echo ""
+    fail "Docker not found."
+    echo ""
+    echo "  Docker is required to run Honcho (memory provider)."
+    echo "  Install Docker first, then re-run this script:"
+    echo ""
+    echo "    https://docs.docker.com/engine/install/"
+    echo ""
+    exit 1
+fi
+
+if ! docker compose version &>/dev/null && ! docker-compose --version &>/dev/null; then
+    echo ""
+    fail "Docker Compose not found."
+    echo ""
+    echo "  Install Docker Compose (included with Docker Desktop / Docker Engine)."
+    echo "  See: https://docs.docker.com/compose/install/"
+    echo ""
+    exit 1
+fi
+
+ok "Docker and Docker Compose detected"
+
 # ── Step 1: Git Submodule ──────────────────────────────────────────────────
 step "1/5" "Initializing git submodules"
 if git submodule update --init --recursive; then
