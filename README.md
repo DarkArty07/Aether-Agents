@@ -21,7 +21,7 @@
 ## ⚡ Quick Start
 
 ```bash
-git clone https://github.com/DarkArty07/Aether-Agents.git
+git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 bash scripts/setup.sh
 ```
