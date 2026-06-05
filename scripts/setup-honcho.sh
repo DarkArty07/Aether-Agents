@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.11.1 — Honcho Setup Script
+# Aether Agents v0.15.0 — Honcho Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Sets up Honcho (memory provider) as a Docker Compose service.
@@ -37,7 +37,7 @@ ENV_FILE="$HONCHO_DIR/.env"
 HOME_ENV="$PROJECT_ROOT/home/.env"
 
 echo ""
-echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.11.1 ═══${NC}"
+echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.15.0 ═══${NC}"
 echo ""
 
 # ── Step 1: Git Submodule ──────────────────────────────────────────────────

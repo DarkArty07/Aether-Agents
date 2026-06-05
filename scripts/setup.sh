@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.11.1 — Setup Script
+# Aether Agents v0.15.0 — Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Automated installation: Python venv, pip packages, config generation, wrappers.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.11.1"
+SCRIPT_VERSION="0.15.0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
@@ -243,11 +243,25 @@ setup_env_files() {
                 ok "${profile_name}/.env created from .env.example"
                 created=$((created + 1))
             fi
+        elif [ "$profile_name" = "ictinus" ]; then
+            info "→ ${profile_name}: no .env.example (Level 1 Consultant — config-only)"
+        else
+            warn "→ ${profile_name}: no .env.example found"
         fi
     done
 
     if [ "$created" -eq 0 ] && [ "$existing" -eq 0 ]; then
         info "No .env.example files found in profiles"
+    fi
+
+    # Create orchestrator-level home/.env from template
+    if [ -f "$PROJECT_ROOT/home/.env.example" ] && [ ! -f "$PROJECT_ROOT/home/.env" ]; then
+        cp "$PROJECT_ROOT/home/.env.example" "$PROJECT_ROOT/home/.env"
+        ok "Created home/.env from template"
+    elif [ -f "$PROJECT_ROOT/home/.env" ]; then
+        ok "home/.env already exists — skipping"
+    else
+        info "No home/.env.example template found — skipping"
     fi
 }
 
@@ -357,9 +371,12 @@ setup_bashrc() {
     # Create .bashrc if it doesn't exist
     [ -f "$bashrc" ] || touch "$bashrc"
 
-    # Add HERMES_HOME export if not present
+    # Add or update HERMES_HOME export (handles re-install at different paths)
     if grep -qF "HERMES_HOME" "$bashrc" 2>/dev/null; then
-        ok "HERMES_HOME already configured in ~/.bashrc — skipping"
+        # Replace the existing line — handles re-install at a different PROJECT_ROOT
+        sed -i.bak "s|^export HERMES_HOME=.*|export HERMES_HOME=\"${PROJECT_ROOT}/home\"|" "$bashrc"
+        rm -f "$bashrc.bak"
+        ok "Updated HERMES_HOME in ~/.bashrc to ${PROJECT_ROOT}/home"
     else
         {
             echo ""
@@ -367,6 +384,13 @@ setup_bashrc() {
             echo "$export_line"
         } >> "$bashrc"
         ok "Added HERMES_HOME to ~/.bashrc"
+    fi
+
+    # Verify exactly one HERMES_HOME export line exists
+    local hermes_count
+    hermes_count=$(grep -c "^export HERMES_HOME=" "$bashrc" 2>/dev/null || echo 0)
+    if [ "$hermes_count" -ne 1 ]; then
+        warn "Expected 1 HERMES_HOME export in ~/.bashrc, found ${hermes_count}"
     fi
 
     # Add ~/.local/bin to PATH if not already there
