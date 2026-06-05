@@ -1,7 +1,7 @@
 ---
 name: aether-agents-orchestration
 description: "Orchestrate Daimon specialists in Aether Agents — delegation, monitoring, Pure Orchestrator pattern, cost optimization, and common pitfalls."
-version: 1.8.0
+version: 1.11.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -285,6 +285,137 @@ ps aux | grep olympus | grep -v grep  # verify exactly 1
 **Skip Graphify when:** code area is already well-known from this session, task is trivial (single-file edit), or user explicitly says they know the code.
 
 **Reference:** `references/graphify-usage-patterns.md` for full query patterns, pitfalls, and extraction modes.
+
+### 13. "Ghost Merge" — Code Is in Repo, Absent from Runtime
+
+**Problem:** A feature (PR #42 Graphify) was merged to main with full code, dependency declaration, SOUL.md documentation, knowledge graph generation, and a CHANGELOG entry. The user later reports the feature is "no longer available" and asks for investigation. Investigation finds: code is present, tag exists, git log shows the merge commit, `pyproject.toml` declares the dependency. But the runtime tools (`mcp_graphify_*`) are NOT loaded by Hermes.
+
+**Root cause:** The PR added everything EXCEPT the `mcp_servers.<feature>` block in `home/config.yaml`. The merge to main succeeded because config.yaml was either:
+- Already in a clean state when the PR was opened, so the diff looked complete
+- Modified locally post-merge for unrelated reasons, dropping the MCP server block
+- The PR author tested with the MCP server block in a local config override, never committed it
+
+The gateway loads MCP servers exclusively from `mcp_servers:` in `home/config.yaml`. No MCP server block = no tools loaded, regardless of how much code/SOUL.md/dependency exists in the repo.
+
+**Diagnostic flow when "feature is gone but PR is merged":**
+
+1. **Verify the merge** — `git log --oneline --all | grep <keyword>` to confirm the feature commit is on main
+2. **Verify code artifacts** — check `pyproject.toml`, SOUL.md, generated artifacts (`graphify-out/graph.json`), provider configs
+3. **Verify the package** — `home/.venv-hermes/bin/pip show <package>` and `python -m <module> --help`
+4. **CHECK THE MCP SERVER BLOCK** — `cat home/config.yaml | grep -A 10 mcp_servers`. If the feature isn't there, that's the bug.
+5. **Compare to working MCPs** — if `context7` and `olympus_v3` are present but `<feature>` is missing, you have a config drift, not a code bug
+6. **Check for merged-but-not-rebuilt** — if a sub-quirk requires absolute paths (like `graphify.serve` needing the full `graph.json` path, not the default relative `graphify-out/graph.json`), the fix may need argv injection
+
+**Fix procedure (5 steps):**
+```yaml
+# 1. Add the missing mcp_servers block in home/config.yaml
+mcp_servers:
+  <feature>:
+    command: /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3.11
+    args:
+      - -m
+      - <feature>.serve
+      # Include absolute paths if the module resolves relative paths from site-packages
+      - /home/prometeo/Aether-Agents/<generated>/<artifact>
+    enabled: true
+    env:
+      <REQUIRED_ENV>: ${<REQUIRED_ENV>}
+    timeout: 600
+```
+
+```bash
+# 2. Verify the env var is loaded in the gateway environment
+grep <KEY> home/.env
+
+# 3. Restart the gateway
+systemctl --user restart hermes-gateway.service
+sleep 5 && systemctl --user status hermes-gateway.service
+
+# 4. Verify the MCP server started (no errors in stderr log)
+tail -30 home/logs/mcp-stderr.log | grep -i <feature>
+
+# 5. Smoke test — load the artifact directly to confirm it's not corrupt
+python -c "from <feature>.serve import _load_graph; g = _load_graph('<artifact>'); print(f'nodes={g.number_of_nodes()}, edges={g.number_of_edges()}')"
+```
+
+**Sub-quirk — relative paths from MCP server context:** MCP servers launched by the gateway have a CWD that may NOT be the project root. If `<module>.serve` resolves a default relative path (e.g., `graphify-out/graph.json`), it may resolve against `site-packages/` instead of the project. **Always pass absolute paths as `argv` arguments** when the module has a path argument.
+
+**Anti-pattern: blaming the package or the venv**
+
+When `pip show <package>` returns "not found" but the code is clearly in the repo, don't conclude the package is broken or the venv is corrupt. The `pip show` failure often comes from the venv being orphaned, but the MCP server can still run from the existing site-packages. Investigate the config first, the package second.
+
+**Reference:** `references/ghost-merge-diagnosis.md` — full transcript of the Graphify v0.13.0 → v0.15.0 ghost merge, with exact diagnostic steps, the `graphify.serve` argv quirk, and the verification chain.
+
+### 14. Gateway MCP Servers Lack `.env` Environment Variables
+
+**Problem:** A restored MCP server (e.g., graphify) works correctly when invoked from a shell with the right env vars, but the gateway's MCP process does NOT receive them. Symptom: AST queries work, semantic/LLM-dependent calls fail silently or with 401/403. The MCP server block is in `config.yaml`, the `.env` file has the keys, but `/proc/<gateway-PID>/environ` is missing them.
+
+**Root cause:** The `hermes-gateway.service` systemd unit loads `VIRTUAL_ENV` and `PATH` but does NOT load `home/.env`. The shell where you run smoke tests has the `.env` sourced or exported, so direct invocations succeed — but the gateway's child MCP processes inherit the gateway's clean environment.
+
+**Diagnosis (when MCP server "works in shell, fails from gateway"):**
+```bash
+# 1. Confirm the .env has the key the MCP server needs
+grep -E "^(OPENCODE_API_KEY|EXA_API_KEY|GRAPHIFY_)" home/.env
+
+# 2. Confirm the gateway process does NOT have it
+GW_PID=$(systemctl --user show -p MainPID hermes-gateway.service | cut -d= -f2)
+cat /proc/$GW_PID/environ | tr '\0' '\n' | grep -E "OPENCODE|EXA|GRAPHIFY"
+# Empty result → confirmed: gateway env missing these vars
+
+# 3. Confirm MCP server works from shell with the same key (rules out other bugs)
+OPENCODE_API_KEY="..." python -m graphify.serve /abs/path/graph.json
+```
+
+**Fix (two options — pick one):**
+
+**Option A — `EnvironmentFile=` in the systemd unit (preferred for production):**
+```ini
+# ~/.config/systemd/user/hermes-gateway.service
+[Service]
+EnvironmentFile=/home/prometeo/Aether-Agents/home/.env
+ExecStart=/home/prometeo/Aether-Agents/home/.venv-hermes/bin/python -m hermes_cli.main
+```
+```bash
+systemctl --user daemon-reload
+systemctl --user restart hermes-gateway.service
+```
+
+**Option B — `set -a; source` in the start script (preferred for dev simplicity):**
+```bash
+# scripts/start-gateway.sh — add BEFORE exec
+set -a
+. /home/prometeo/Aether-Agents/home/.env
+set +a
+exec /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python -m hermes_cli.main
+```
+
+**Why this matters beyond graphify:** ANY MCP server that calls out to a third-party API (exa, context7, a custom LLM-backed tool) needs its env vars in the gateway's process. If you're using Option B, you don't need to edit the unit file when adding new MCP servers — the .env is the single source of truth. If you're using Option A, you need to restart the gateway every time `.env` changes.
+
+**Reference:** `references/gateway-mcp-env-injection.md` — full diagnostic transcript for the graphify restoration (June 2026) including the shell-vs-gateway comparison, the systemd unit diff, and the verification chain.
+
+### Pitfall #15 — Gateway MCP Servers Don't Inherit home/.env
+
+**Síntoma:** Un MCP server local (graphify, ollama, lo que sea) funciona perfectamente desde la shell del usuario (`OPENCODE_API_KEY=$(grep ... home/.env) python -m foo.serve`), pero falla silenciosamente cuando lo invoca el gateway (`hermes-gateway.service`). El gateway corre, el MCP arranca, pero las llamadas que requieren LLM devuelven 401/403 o errores de autenticación.
+
+**Causa raíz:** El unit file `~/.config/systemd/user/hermes-gateway.service` solo inyecta `Environment=PATH`, `Environment=VIRTUAL_ENV` y `Environment=HERMES_HOME`. **NO** carga `home/.env`, así que las API keys (OPENCODE_API_KEY, OPENCODE_GO_API_KEY, ANTHROPIC_API_KEY, etc.) nunca llegan al proceso del gateway ni a sus subprocesos MCP. Verificar con: `cat /proc/$(systemctl --user show -p MainPID hermes-gateway.service | cut -d= -f2)/environ | tr '\0' '\n' | grep OPENCODE` → si está vacío, este es tu bug.
+
+**Fix estándar (drop-in override, NO editar el unit file):**
+
+```bash
+mkdir -p ~/.config/systemd/user/hermes-gateway.service.d
+cat > ~/.config/systemd/user/hermes-gateway.service.d/override.conf <<'EOF'
+[Service]
+EnvironmentFile=/home/prometeo/Aether-Agents/home/.env
+EOF
+systemctl --user daemon-reload
+systemctl --user restart hermes-gateway.service
+```
+
+El drop-in override sobrevive `git pull` y updates de repo porque NO modifica el unit file original en el repo. Convención systemd estándar para personalizaciones locales.
+
+**Alternativa (si no quieres drop-in):** Agregar `set -a; source /home/prometeo/Aether-Agents/home/.env; set +a` antes del `exec` en `scripts/start-gateway.sh`. Pero el drop-in es más limpio.
+
+**Anti-pattern:** NO hardcodear keys en el unit file (`Environment=OPENCODE_API_KEY=sk-agI7...`) — quedan en git log, no rotan fácil, son inseguras. SIEMPRE via EnvironmentFile apuntando a .env (que está gitignored).
 
 ## Toolset Recovery (Post-Experiment)
 ```yaml
@@ -773,4 +904,5 @@ env | grep KEY_NAME
 - `references/dotenv-corruption-analysis.md` — **CRITICAL:** How `security.redact_secrets: true` physically corrupts `.env` files (xxd evidence, recovery steps)
 - `references/plugin-yaml-missing-bug.md` — **CRITICAL:** hermes-agent v0.14.0 pip package missing `plugin.yaml` in bundled web plugins (registry stays empty, web_search fails silently)
 - `references/olympus-acp-debugging.md` — Olympus v3 ACP spawn failures: "Internal error" / "ClosedResourceError" diagnosis (stale processes, SQLite contention, MCP reconnection)
-- `references/fallback-providers.md` — Provider failover for Daimons: config format, per-profile setup, supported providers (from hermes-agent skill)
+- `references/gateway-mcp-env-injection.md` — **NEW (June 2026):** Gateway MCP servers lack `.env` env vars — diagnostic chain, both fix options (EnvironmentFile vs set -a; source), and the Graphify restoration transcript
+- `references/fallback-providers.md` — Provider failover for Daimons: config format, per-profile setup, supported providers (from hermes-agent skill)"
