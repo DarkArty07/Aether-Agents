@@ -1,0 +1,3 @@
+## 2025-06-05 - Optimize Multiple COUNT Queries in db.py and server.py
+**Learning:** When executing multiple independent `COUNT(*)` queries sequentially in SQLite/aiosqlite against different tables or with different conditions (like counting sessions, issues, decisions, or different types of turns), it incurs multiple rounds of network/connection overhead and query parsing.
+**Action:** Combined multiple `COUNT(*)` queries into a single query using scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`), fetching all counts in a single database roundtrip while remaining readable and performing just as well natively.
