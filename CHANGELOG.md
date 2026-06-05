@@ -2,6 +2,9 @@
 
 ### Fixed
 - **Gateway MCP servers now inherit `home/.env`**: Drop-in systemd override added at `~/.config/systemd/user/hermes-gateway.service.d/override.conf` with `EnvironmentFile=` pointing to `home/.env`. Previously, MCP servers like Graphify (semantic retrieval) failed silently when invoked by the gateway because the unit file only injected PATH/VIRTUAL_ENV/HERMES_HOME. See skill `aether-agents-orchestration` pitfall #N and `references/gateway-mcp-env-injection.md` for the full diagnostic chain.
+- **task-delegation v1.4.1→v1.4.2**: New pitfall "Hefesto 'Nothing to Save' Last-Turn Is Unreliable" with prompt-framing mitigation.
+- **github-pr-workflow v1.4.0→v1.5.0**: Two new pitfalls — "GitHub Self-Approve Not Possible for Same-Author PRs" (audit trail alternatives) and "Pre-Existing CI Failures Don't Block Merge of Unrelated PRs" (decision policy for repo personal).
+- **hermes-agent v2.1.0→v2.2.0**: New pitfall "Graphify `serve` Uses Relative Path, Breaks from Gateway CWD" with absolute-path fix and diagnostic chain.
 
 ### Documentation
 - **aether-agents-orchestration v1.11.0**: New pitfall "Gateway MCP Servers Don't Inherit home/.env" with drop-in fix recipe.

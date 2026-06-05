@@ -1,7 +1,7 @@
 ---
 name: task-delegation
 description: "Delegate tasks to specialist Daimons — decompose, delegate, monitor, and report results."
-version: 1.4.0
+version: 1.4.2
 author: Hermes Agent
 license: MIT
 metadata:
@@ -80,6 +80,8 @@ Synthesize results for the user:
 
 - **docker compose up -d blocked by Hermes terminal** — Hermes detects `docker compose up -d` as a "long-lived server" even though `-d` detaches immediately. Always delegate Docker start/stop commands to Hefesto, or use `terminal(background=true, notify_on_complete=true)` if doing it directly.
 
+- **Hefesto's "Nothing to save" last_turn is unreliable after structured task delegation** — When a structured task has clear PASS/FAIL-shaped tool calls (e.g., 4 git commands, 3 file writes, all completed) but the final `last_turn` is a meta-reflection like "Nothing to save — this was mechanical" or "Nothing to learn from this session", DO NOT trust the last_turn alone. Verify actual state directly: `git diff` for commits, `ls -la` for new files, `head -5 <file>` for version bumps. The "Nothing to save" line is Hefesto's reflection on the meta-session (whether the conversation itself produced a skill-worthy insight), not on the task (which is often done correctly). Pattern: when last_turn is reflective AND recent_tool_calls show completed work, treat the work as done and verify directly. Pattern: when last_turn is reflective AND recent_tool_calls show a stall or skipped work, then trust the "Nothing to save" signal.
+
 ### Pitfall #N — Hefesto Over-Investigates Source Code on Diagnostic Prompts
 
 **Síntoma:** Le pides a Hefesto un smoke test (curl + python + verificar resultado). En vez de ejecutar, abre el código fuente de la herramienta (`__main__.py`, `llm.py`, etc.) y se queda leyendo/grep-eando durante 5+ minutos. 50+ tool calls, ningún comando de smoke test ejecutado. La sesión se alarga innecesariamente.
@@ -104,6 +106,30 @@ Synthesize results for the user:
 **Regla de oro para smoke tests:** El prompt debe contener comandos copy-pasteables Y una frase de prohibición explícita: "NO leas código fuente, NO investigues, NO busques flags — solo ejecuta y reporta". Sin esa frase, Hefesto puede caer en modo investigación.
 
 **Cuándo SÍ dejar investigar:** Si el problema es genuinamente un bug de comportamiento y no hay comandos obvios para verificar. En ese caso, sí se justifica leer source. Pero el smoke test puro (verificar que algo funciona) NUNCA debe requerir leer código.
+
+### Pitfall #N — Hefesto "Nothing to Save" Last-Turn Is Unreliable
+
+**Síntoma:** Le delegas una tarea estructurada y con comandos copy-pasteables a Hefesto. Hefesto ejecuta todos los comandos correctamente, hace el trabajo, pero su `last_turn` final en el `poll()` reporta `"Nothing to save. This session was purely mechanical"` en vez del reporte estructurado que pediste. El reporte SÍ existe en sus tool calls, pero su `last_turn` final es una meta-reflexión en vez del output consolidado.
+
+**Por qué pasa:** Hefesto corre con un system prompt que lo instruye a revisar sesiones y guardar aprendizajes. Cuando termina una tarea mecánica (aplicar 4 patches, hacer un commit, ejecutar 8 comandos), su último turn reflexiona sobre la sesión meta en vez de reportar el resultado. El `last_turn` se vuelve ruido.
+
+**Mitigación (cómo escribir el prompt de delegación):**
+
+- **MAL:** Delegar 4 tareas con contenido exacto y esperar reporte. Hefesto ejecuta bien pero su `last_turn` se va a "Nothing to save".
+
+- **BIEN:** Agregar al final del prompt una instrucción explícita y destacada:
+
+```markdown
+REPORTE FINAL OBLIGATORIO: al terminar, tu `last_turn` debe ser la tabla de resultados consolidada (PASS/FAIL/SKIP por paso). NO reflexiones sobre la sesión. NO digas "Nothing to save". NO analices si hubo aprendizaje. Solo la tabla y la línea final.
+```
+
+Esa sola frase bloquea la meta-reflexión y fuerza a Hefesto a devolver la tabla que pediste.
+
+**Verificación post-delegación:** Cuando recibas el `last_turn` de Hefesto:
+- Si empieza con "Nothing to save" o "This session was purely mechanical" → RELÉE el poll completo y extrae los resultados de los tool calls tú mismo. NO confíes en el `last_turn`.
+- Si empieza con la tabla de resultados o el reporte consolidado → OK, el `last_turn` es confiable.
+
+**Anti-pattern:** Confiar ciegamente en `last_turn` y reportar "Nothing to save" al usuario. Chris odia esto ("nunca dejes aprendizajes sin anotar pendientes"). El trabajo SÍ se hizo, solo hay que extraer el reporte de los tool calls.
 
 ## Multi-Task Coordination
 
