@@ -1,7 +1,7 @@
 ---
 name: github-pr-workflow
 description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
-version: 1.3.0
+version: 1.5.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -265,6 +265,34 @@ for i in $(seq 1 20); do
 done
 ```
 
+### Detecting Pre-existing CI Failures (Not Introduced by the PR)
+
+When reviewing multiple PRs and all show the same CI failure pattern, verify whether the failure already exists on `main` before writing the PR off:
+
+```bash
+# Check if main branch CI also fails with the same check
+gh run list --branch main --limit 1 --json conclusion,workflowName
+
+# View the failed log from main for comparison
+gh run view <RUN_ID> --log-failed | grep -E "error|failure|exit code" | head -10
+
+# Cross-reference the same check name on the PR branch
+gh pr checks <PR_NUMBER> --json name,description,state
+```
+
+**Decision logic for pre-existing failures:**
+
+| Main CI | PR CI | Assessment |
+|---------|-------|------------|
+| ✅ passing | ❌ failing | Likely introduced by PR — do NOT merge until fixed |
+| ❌ failing | ❌ failing (same error) | **Pre-existing** — failure existed before the PR. Safe to merge if PR changes are orthogonal to the failing checks |
+| ❌ failing | ✅ passing | PR fixed or bypassed a broken check — unusual, verify manually |
+| ❌ failing | ❌ failing (different error) | Mixed — verify PR didn't add new failures on top of pre-existing ones |
+
+**Confirming orthogonality:** If the PR touches only docs, config templates, setup scripts, or skill files — and the CI failure is a lint error in `src/` or a unit test in a module the PR never touched — the failure is orthogonal and pre-existing.
+
+**Pitfall — don't merge when in doubt:** If you can't tell whether the CI failure is pre-existing or introduced, treat it as blocking. Run the failing CI step on the PR branch directly (`gh run view --log-failed`) and compare the error to a fresh run on main.
+
 ## 5. Auto-Fixing CI Failures
 
 When CI fails, diagnose and fix. This loop works with either auth method.
@@ -375,12 +403,75 @@ Merge methods: `"merge"` (merge commit), `"squash"`, `"rebase"`
 PR_NODE_ID=$(curl -s \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/repos/$OWNER/$REPO/pulls/$PR_NUMBER \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['node_id'])")
-
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['node_id'])")\n
 curl -s -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/graphql \
   -d "{\"query\": \"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { clientMutationId } }\"}"
+```
+
+### Pitfalls
+
+#### Cannot approve your own pull request
+
+`gh pr review --approve` fails with: `GraphQL: Review Can not approve your own pull request`. This happens when the authenticated GitHub user is also the PR author.
+
+**Solution:** If you have merge permissions on the repo and no external review is required by branch protection rules, skip the approval step entirely and proceed directly to merge:
+
+```bash
+# Instead of: gh pr review N --approve && gh pr merge N --squash --delete-branch
+# Just merge directly:
+gh pr merge N --squash --delete-branch
+```
+
+**Detection:** Before attempting approve, check if the PR author matches the authenticated user:
+```bash
+PR_AUTHOR=$(gh pr view N --json author --jq .author.login)
+GH_USER=$(gh api user --jq .login)
+if [ "$PR_AUTHOR" = "$GH_USER" ]; then
+  echo "Self-PR detected: skipping approval, merging directly"
+  gh pr merge N --squash --delete-branch
+else
+  gh pr review N --approve
+  gh pr merge N --squash --delete-branch
+fi
+```
+
+#### gh pr merge with local working tree changes
+
+When there are local uncommitted modifications, `gh pr merge` may produce a confusing partial result:
+
+1. ✅ **The remote merge succeeds via the GitHub API** — the PR is merged on GitHub
+2. ❌ **The local git operations fail** — `git checkout`, branch deletion, and `git pull` all abort
+3. The remote branch is **NOT deleted** (--delete-branch never executed)
+4. The PR state shows `MERGED` but the local repo is on the old branch with dirty state
+
+**Fix — before merging:** Always check and stash local changes first:
+```bash
+if [ -n "$(git status --porcelain)" ]; then
+  git stash push -m "pre-merge-autostash"
+  gh pr merge N --squash --delete-branch
+  git stash pop
+else
+  gh pr merge N --squash --delete-branch
+fi
+```
+
+**Recovery if you already merged and the local step failed:**
+```bash
+# Delete the remote branch manually (the API merge already happened)
+git push origin --delete <feature-branch>
+
+# Switch to main and sync
+git stash  # or commit local changes
+git checkout main
+git pull origin main
+
+# Restore local changes
+git stash pop
+
+# Verify the remote branch was deleted
+git fetch --prune origin
 ```
 
 ## 7. Complete Workflow Example
@@ -537,7 +628,65 @@ Fix all findings, commit, then proceed with tagging.
 - **Squash merge for releases**: Use `--squash --delete-branch` for release PRs. This keeps main history clean with a single commit per release. Feature branches can use regular merge if needed.
 - **Dangling references after cleanup**: When removing deprecated files (scripts, code dirs, docs), always audit for references in README, website, and remaining docs. Deleted code leaves ghost references that confuse new users.
 - **Merging with uncommitted local changes**: `git checkout` or `git merge` will abort if local modifications would be overwritten. Always `git status --short` before branch operations. Stash (`git stash push`), commit, or discard changes first. See `references/branching-models.md` for the full pattern.
-- **Backup recovery with wrong directory structure**: When cherry-picking from an old backup branch, the directory structure may have changed (e.g., `home/skills/` in backup vs `skills/` in current HEAD). Extract content to the CURRENT structure, not the backup's structure. Verify destination paths before writing. See `references/branching-models.md`.
+|- **Backup recovery with wrong directory structure**: When cherry-picking from an old backup branch, the directory structure may have changed (e.g., `home/skills/` in backup vs `skills/` in current HEAD). Extract content to the CURRENT structure, not the backup's structure. Verify destination paths before writing. See `references/branching-models.md`.
+
+### Pitfall #N — GitHub Self-Approve Not Possible for Same-Author PRs
+
+**Síntoma:** Ejecutas `gh pr review <N> --approve` en un PR abierto por ti mismo (DarkArty07). GitHub rechaza con error `gh: Cannot approve your own pull request`. El merge con `gh pr merge --squash` SÍ funciona sin aprobación, pero queda sin audit trail de review.
+
+**Por qué:** Regla de GitHub — un usuario no puede aprobar su propio PR. `gh pr review --approve` falla con 422 si el revisor es el autor.
+
+**Opciones para batch self-merge:**
+
+1. **Aceptar el merge sin aprobación** (lo que hicimos en sesión 06-04 con 5 PRs):
+   ```bash
+   gh pr merge <N> --squash --delete-branch
+   ```
+   Funciona si el PR es MERGEABLE y la branch protection no requiere review. Si requiere review, este comando falla con "Reviews required".
+
+2. **Configurar branch protection para permitir merge sin review** (recomendado para repo personal):
+   - Settings → Branches → main → Edit → "Require pull request reviews before merging" → OFF
+   - Permite merge directo sin approvals
+
+3. **Habilitar auto-approve con ruleset + GitHub Actions** (más limpio):
+   - Crear `.github/workflows/auto-approve.yml` que aprueba PRs del owner
+   - Útil si trabajas con colaboradores externos que necesiten review humano
+
+**Para repos personales de un solo owner (caso de Aether):** Opción 2 es la más limpia. Un solo toggle, sin CI, sin reglas.
+
+**Cuándo SÍ requerir review humano:** Repo con colaboradores externos, código de producción sensible, cambios en CI/CD.
+
+**Audit trail alternativo:** Si quieres saber que "alguien revisó" sin aprobación humana, usa `gh pr view <N> --json reviews,comments` post-merge para extraer el diff y los comentarios dejados. Pero sin `gh pr review --approve`, no hay línea formal de aprobación.
+
+### Pitfall #N — Pre-Existing CI Failures Don't Block Merge of Unrelated PRs
+
+**Síntoma:** Tu repo tiene CI rojo en main (ej. Ruff lint con 28 errores en `src/olympus_v3/server.py` que ya existían antes de tu PR). Quieres mergear 5 PRs que NO tocan `src/` — solo tocan `home/skills/`, `docs/`, `scripts/`, `CHANGELOG.md`. La tentación es no mergear ninguno hasta arreglar el lint.
+
+**Decisión correcta:** Mergear las PRs que no tocan `src/` y arreglar el lint en una PR separada de cleanup.
+
+**Por qué:**
+- El CI rojo pre-existente en main no fue introducido por tus PRs. Mergearlas no empeora nada.
+- Bloquear features/docs/fixes legítimos por tech debt de lint es contraproducente.
+- Una PR de cleanup dedicada (e.g. `feature/fix-ruff-lint-server`) es más fácil de revisar que un mega-PR que mezcla features con refactors de lint.
+
+**Cómo identificar si el CI failure es pre-existente:**
+```bash
+# En main, antes de mergear
+git checkout main
+gh pr checks <PR_NUMBER> 2>&1 | head -20
+
+# Si el check fallido es del estilo "ruff lint failed on src/X.py" y main también tiene ese error:
+git checkout main
+.venv-hermes/bin/python -m ruff check src/X.py
+# Si el error aparece aquí también → es pre-existente
+```
+
+**Política recomendada para repo personal:**
+- CI rojo pre-existente en main: OK mergear PRs que no tocan el código en rojo
+- CI rojo en una PR: NO mergear, fix en la misma PR
+- CI amarillo (warnings, no errors): OK mergear
+
+**Naming convention para la PR de cleanup:** `feature/fix-ruff-lint-<module>` o `chore/fix-pre-existing-lint` para que sea buscable después.
 
 ## 9. Merge Conflict Resolution
 
@@ -687,3 +836,6 @@ A file showing as `modified` under "Changes not staged for commit" during a merg
 - `references/conventional-commits.md` — Commit message format and type reference
 - `references/ci-troubleshooting.md` — Common CI failure patterns and fixes
 - `references/branching-models.md` — When to use `feature → dev → main` vs `feature → main`, migration guide, stash patterns, and backup recovery pitfalls
+- `references/smoke-testing-setup-scripts.md` — Single-PR fresh-clone smoke test for setup script changes
+- `references/multi-pr-smoke-test-remote.md` — Multi-PR consolidated smoke test on a remote machine via SSH; `check()` function pattern, submodule cloning pitfalls, `eval` + `cd` side effects, `exec > >(tee)` buffering over SSH, and broad grep false positives
+- `references/batch-pr-cleanup.md` — Multi-PR autonomous sweep checklist: discovery, classification, self-approval bypass, pre-existing CI detection, batch execution, post-merge sync, and anti-patterns
