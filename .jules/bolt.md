@@ -1,0 +1,3 @@
+## 2024-05-30 - Combine SQLite COUNT queries with scalar subqueries
+**Learning:** In async applications using `aiosqlite`, performing multiple independent aggregate queries (like `COUNT(*)`) across different tables or conditions incurs significant connection and I/O overhead. We observed a performance improvement from 0.27s to 0.04s for 100 queries by combining them into a single `SELECT` statement using scalar subqueries.
+**Action:** When gathering multiple counts (e.g. session progress stats like turn count, message count, tool call count), combine them into a single query like `SELECT (SELECT COUNT(...) FROM t1), (SELECT COUNT(...) FROM t2)` to avoid the overhead of multiple `await` calls and database roundtrips.
