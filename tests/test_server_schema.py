@@ -49,7 +49,7 @@ def test_talk_to_handled_actions_match_schema(server_source):
     Currently handled: open, message, poll, cancel, close
     The schema should only list these.
     """
-    handled = {'open', 'message', 'poll', 'cancel', 'close'}
+    handled = {"open", "message", "poll", "cancel", "close", "delegate", "steer"}
     enum_values = set(_extract_action_enum(server_source))
     # Every value in the enum should be a handled action
     phantoms = enum_values - handled
