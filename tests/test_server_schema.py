@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture
 def server_source():
     """Get the source code of the server module."""
-    from olympus import server as server_module
+    from olympus_v3 import server as server_module
     return inspect.getsource(server_module)
 
 
