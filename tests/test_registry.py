@@ -1,7 +1,7 @@
 import time
 import pytest
-from olympus.registry import SessionState, SessionStatus, AgentState, AgentStatus, OlympusRegistry
-from olympus.config import DaimonProfile
+from olympus_v3.registry import SessionState, SessionStatus, AgentState, AgentStatus, OlympusRegistry
+from olympus_v3.config import DaimonProfile
 from pathlib import Path
 
 

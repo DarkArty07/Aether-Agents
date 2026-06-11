@@ -1,6 +1,6 @@
 import os
 import pytest
-from olympus.config import OlympusConfig, DaimonProfile, get_config, reset_config
+from olympus_v3.config import OlympusConfig, DaimonProfile, get_config, reset_config
 from pathlib import Path
 
 
