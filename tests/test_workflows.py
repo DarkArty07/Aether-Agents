@@ -11,7 +11,7 @@ import os
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from olympus.workflows.state import WorkflowState
+from olympus_v3.workflows.state import WorkflowState
 
 
 class TestWorkflowState:
@@ -84,49 +84,49 @@ class TestWorkflowCompilation:
 
     def test_feature_workflow_compiles(self):
         """Feature workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("feature", acp)
         assert graph is not None
 
     def test_bug_fix_workflow_compiles(self):
         """Bug-fix workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("bug-fix", acp)
         assert graph is not None
 
     def test_research_workflow_compiles(self):
         """Research workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("research", acp)
         assert graph is not None
 
     def test_security_review_workflow_compiles(self):
         """Security review workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("security-review", acp)
         assert graph is not None
 
     def test_refactor_workflow_compiles(self):
         """Refactor workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("refactor", acp)
         assert graph is not None
 
     def test_project_init_workflow_compiles(self):
         """Project init workflow graph should compile without errors."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         graph = get_workflow("project-init", acp)
         assert graph is not None
 
     def test_invalid_workflow_raises(self):
         """Invalid workflow name should raise ValueError."""
-        from olympus.workflows.definitions import get_workflow
+        from olympus_v3.workflows.definitions import get_workflow
         acp = self._get_mock_acp()
         with pytest.raises(ValueError):
             get_workflow("nonexistent", acp)
@@ -137,23 +137,23 @@ class TestConditionalEdges:
 
     def test_should_enter_research_true(self):
         """needs_research=True should route to research node."""
-        from olympus.workflows.definitions import should_research as should_enter_research
+        from olympus_v3.workflows.definitions import should_research as should_enter_research
         # Note: TypedDict doesn't enforce at runtime, so we test the function directly
         assert should_enter_research({"needs_research": True}) == "research"
 
     def test_should_enter_research_false(self):
         """needs_research=False should skip research."""
-        from olympus.workflows.definitions import should_research as should_enter_research
+        from olympus_v3.workflows.definitions import should_research as should_enter_research
         assert should_enter_research({"needs_research": False}) == "design"
 
     def test_should_terminate_on_error_no_errors(self):
         """No errors should continue."""
-        from olympus.workflows.nodes import should_terminate_on_error
+        from olympus_v3.workflows.nodes import should_terminate_on_error
         assert should_terminate_on_error({"errors": []}) == "continue"
 
     def test_should_terminate_on_error_with_errors(self):
         """Errors should terminate."""
-        from olympus.workflows.nodes import should_terminate_on_error
+        from olympus_v3.workflows.nodes import should_terminate_on_error
         assert should_terminate_on_error({"errors": ["something failed"]}) == "finalize"
 
 
@@ -162,7 +162,7 @@ class TestSTALLTIMEOUT:
 
     def test_stall_timeout_is_120(self):
         """STALL_TIMEOUT should be 120 seconds (2 minutes)."""
-        from olympus.workflows.nodes import STALL_TIMEOUT
+        from olympus_v3.workflows.nodes import STALL_TIMEOUT
         assert STALL_TIMEOUT == 120
 
     def test_no_1800_timeout_in_runner(self):
