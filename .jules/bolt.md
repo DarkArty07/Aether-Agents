@@ -1,0 +1,3 @@
+## 2024-05-16 - Combine multiple independent SQLite Aggregate Queries
+**Learning:** This codebase uses `sqlite3` and `aiosqlite` with many back-to-back independent queries for gathering stats (e.g., counting rows across different tables or conditions for a single view). Executing these sequentially adds unnecessary connection and I/O overhead.
+**Action:** When gathering multiple counts or unrelated scalar stats in a single function, combine them into one SQL statement using scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`) to reduce overhead and improve performance.
