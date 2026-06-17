@@ -2,8 +2,8 @@ import os
 import pytest
 import yaml
 from pathlib import Path
-from olympus.config import OlympusConfig, DaimonProfile
-from olympus.discovery import discover_agents
+from olympus_v3.config import OlympusConfig, DaimonProfile
+from olympus_v3.discovery import discover_agents
 import tempfile
 
 
