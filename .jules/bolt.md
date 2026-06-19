@@ -1,0 +1,3 @@
+## 2025-03-01 - [Batching Scalar SQLite Queries]
+**Learning:** In the `get_session_progress` routines inside `OlympusDB`, utilizing separate independent queries for simple COUNT operations caused observable latency due to the high I/O overhead and context switching required for each roundtrip to the SQLite engine.
+**Action:** Always prefer combining multiple independent scalar aggregations (like COUNT or MAX) into a single query using subqueries in the `SELECT` clause (e.g. `SELECT (SELECT COUNT(*) FROM X), (SELECT COUNT(*) FROM Y)`) when working within an environment that supports fast internal index scans.
