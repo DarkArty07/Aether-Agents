@@ -410,24 +410,18 @@ class OlympusDB:
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-        # Count turns
+        # Count turns and tool calls
+        # Optimization: combine independent counts into a single query to reduce connection/IO overhead
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-            (session_id,),
+            """
+            SELECT
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+            """,
+            (session_id, session_id, session_id)
         )
-        thoughts = (await cursor.fetchone())[0]
-
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
-
-        # Count tool calls
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-        )
-        tool_calls_count = (await cursor.fetchone())[0]
+        thoughts, messages, tool_calls_count = await cursor.fetchone()
 
         # Latest turn
         latest = await self.get_latest_turn(session_id)
@@ -702,24 +696,18 @@ class OlympusDBSync:
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-            # Count turns
+            # Count turns and tool calls
+            # Optimization: combine independent counts into a single query to reduce connection/IO overhead
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-                (session_id,),
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                    (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+                """,
+                (session_id, session_id, session_id)
             )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
-
-            # Count tool calls
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-            )
-            tool_calls_count = cursor.fetchone()[0]
+            thoughts, messages, tool_calls_count = cursor.fetchone()
 
             # Latest turn
             cursor = conn.execute(
