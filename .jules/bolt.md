@@ -1,0 +1,3 @@
+## 2024-06-22 - Combine independent SQLite scalar subqueries
+**Learning:** Multiple independent `COUNT(*)` (or similar scalar queries) on SQLite databases execute noticeably faster when combined into a single `SELECT` statement using subqueries (e.g., `SELECT (SELECT COUNT(*) FROM table1), (SELECT COUNT(*) FROM table2)`), due to reduced Python function call overhead, less async event loop overhead, and fewer round-trips over the database connection.
+**Action:** When performing multiple independent aggregation queries on different tables/conditions, always look to merge them into a single `SELECT` using scalar subqueries.

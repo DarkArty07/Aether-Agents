@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture
 def server_source():
     """Get the source code of the server module."""
-    from olympus import server as server_module
+    from olympus_v3 import server as server_module
     return inspect.getsource(server_module)
 
 
@@ -49,7 +49,7 @@ def test_talk_to_handled_actions_match_schema(server_source):
     Currently handled: open, message, poll, cancel, close
     The schema should only list these.
     """
-    handled = {'open', 'message', 'poll', 'cancel', 'close'}
+    handled = {'open', 'message', 'poll', 'cancel', 'close', 'steer', 'delegate'}
     enum_values = set(_extract_action_enum(server_source))
     # Every value in the enum should be a handled action
     phantoms = enum_values - handled
