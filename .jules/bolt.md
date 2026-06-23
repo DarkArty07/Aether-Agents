@@ -1,0 +1,3 @@
+## 2024-05-24 - Batch SQLite Aggregate Queries
+**Learning:** This application makes many small, independent SQLite aggregate queries (like `COUNT(*)`) across different tables or conditions sequentially (e.g., `thoughts`, `messages`, `tool_calls` in `get_session_progress()`). This sequential execution incurs multiple connection roundtrips, which creates a measurable I/O overhead.
+**Action:** Always combine multiple independent scalar queries into a single `SELECT` statement using subqueries (e.g., `SELECT (SELECT COUNT(*) FROM t1), (SELECT COUNT(*) FROM t2)`) to reduce I/O roundtrips from N to 1.
