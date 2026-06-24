@@ -113,9 +113,9 @@ _SCHEMA_STMTS = (
 
 def get_db_path() -> Path:
     """Resolve database path from env var or defaults.
-    
+
     Priority: OLYMPUS_DB_PATH > AETHER_HOME/.olympus > HERMES_HOME/.olympus > ~/.hermes/.olympus
-    
+
     The canonical location is AETHER_HOME/.olympus/olympus_v3.db because
     it is shared across all processes (MCP server + plugin hooks inside Daimons).
     HERMES_HOME points to a specific profile dir, so using it would create
@@ -410,24 +410,21 @@ class OlympusDB:
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-        # Count turns
+        # Counts
+        # ⚡ Bolt: Combine COUNT queries into a single round-trip to reduce async/I/O overhead
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-            (session_id,),
+            """
+            SELECT
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+            """,
+            (session_id, session_id, session_id),
         )
-        thoughts = (await cursor.fetchone())[0]
-
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
-
-        # Count tool calls
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-        )
-        tool_calls_count = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
+        thoughts = row[0]
+        messages = row[1]
+        tool_calls_count = row[2]
 
         # Latest turn
         latest = await self.get_latest_turn(session_id)
@@ -702,24 +699,21 @@ class OlympusDBSync:
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-            # Count turns
+            # Counts
+            # ⚡ Bolt: Combine COUNT queries into a single round-trip to reduce SQLite connection/I/O overhead
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-                (session_id,),
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                    (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+                """,
+                (session_id, session_id, session_id),
             )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
-
-            # Count tool calls
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-            )
-            tool_calls_count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            thoughts = row[0]
+            messages = row[1]
+            tool_calls_count = row[2]
 
             # Latest turn
             cursor = conn.execute(
