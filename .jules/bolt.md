@@ -1,0 +1,3 @@
+## 2025-06-25 - [Optimize multiple independent SQLite aggregate queries]
+**Learning:** SQLite processes queries sequentially. When counting rows in multiple tables or with multiple conditions simultaneously, making multiple `.execute()` calls adds significant round-trip latency and connection overhead, particularly in synchronous contexts or loops.
+**Action:** Always combine multiple independent aggregate queries (like COUNT(*)) across different tables/conditions into a single `SELECT` statement using scalar subqueries: `SELECT (SELECT COUNT(...) FROM table1), (SELECT COUNT(...) FROM table2)`. This single database execution will return all variables unpacked together, avoiding sequential execution wait times and substantially improving performance.
