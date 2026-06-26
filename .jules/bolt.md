@@ -1,0 +1,3 @@
+## 2024-06-26 - [Combine Multiple COUNT Queries]
+**Learning:** SQLite supports executing multiple scalar `COUNT(*)` queries natively in a single `SELECT` block. This codebase previously executed up to three sequential `COUNT(*)` database calls for session and status reports.
+**Action:** Combine independent, sequential `COUNT(*)` statements or small scalar aggregate queries into a single SQL command with sub-selects to significantly cut down connection overhead and asynchronous waiting. Be careful, however, to remove associated side-effect lines fully when cleaning up linter warnings (e.g. `F841`) to avoid executing dead I/O code.
