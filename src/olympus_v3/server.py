@@ -561,13 +561,19 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
         try:
             hot_state = await db.get_hot_state()
 
-            # Counts
-            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
-            sessions_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM issues")
-            issues_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
-            decisions_count = (await cursor.fetchone())[0]
+            # Counts - Combine multiple COUNT queries into a single query to reduce connection/I/O overhead
+            cursor = await db._execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM sessions),
+                    (SELECT COUNT(*) FROM issues),
+                    (SELECT COUNT(*) FROM decisions)
+                """
+            )
+            counts_row = await cursor.fetchone()
+            sessions_count = counts_row[0] if counts_row else 0
+            issues_count = counts_row[1] if counts_row else 0
+            decisions_count = counts_row[2] if counts_row else 0
 
             detail = args.get("detail", "summary")
 
