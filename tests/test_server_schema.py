@@ -8,7 +8,7 @@ import pytest
 @pytest.fixture
 def server_source():
     """Get the source code of the server module."""
-    from olympus import server as server_module
+    from olympus_v3 import server as server_module
     return inspect.getsource(server_module)
 
 
@@ -46,10 +46,10 @@ def test_talk_to_no_timeout_parameter(server_source):
 def test_talk_to_handled_actions_match_schema(server_source):
     """The actions actually handled by _handle_talk_to should match the schema enum.
     
-    Currently handled: open, message, poll, cancel, close
+    Currently handled: open, message, poll, cancel, close, delegate, steer
     The schema should only list these.
     """
-    handled = {'open', 'message', 'poll', 'cancel', 'close'}
+    handled = {'open', 'message', 'poll', 'cancel', 'close', 'delegate', 'steer'}
     enum_values = set(_extract_action_enum(server_source))
     # Every value in the enum should be a handled action
     phantoms = enum_values - handled
