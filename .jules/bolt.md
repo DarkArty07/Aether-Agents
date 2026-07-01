@@ -1,0 +1,3 @@
+## 2025-01-01 - Optimizing Independent SQLite Aggregate Queries
+**Learning:** This codebase relies heavily on SQLite (via aiosqlite/sqlite3) for state management. Running multiple independent aggregate queries (like `COUNT(*)`) sequentially incurs unnecessary connection and I/O overhead, which can be a bottleneck given the frequent database accesses in the async event loop.
+**Action:** When querying multiple independent counts or aggregates, combine them into a single `SELECT` statement using scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM table1), (SELECT COUNT(*) FROM table2)`) to minimize database roundtrips.
