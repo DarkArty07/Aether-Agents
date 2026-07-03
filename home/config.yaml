@@ -1,7 +1,6 @@
 model:
-  default: deepseek-v4-pro
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
+  default: glm-5.2
+  provider: llmgateway
   api_mode: chat_completions
   context_length: 256000
 providers: {}
@@ -58,7 +57,6 @@ terminal:
   singularity_image: docker://nikolaik/python-nodejs:python3.11-nodejs20
   modal_image: nikolaik/python-nodejs:python3.11-nodejs20
   daytona_image: nikolaik/python-nodejs:python3.11-nodejs20
-  vercel_runtime: node24
   container_cpu: 1
   container_memory: 5120
   container_disk: 51200
@@ -68,6 +66,7 @@ terminal:
   docker_extra_args: []
   docker_run_as_host_user: false
   persistent_shell: true
+  vercel_runtime: node24
 web:
   backend: exa
   search_backend: ''
@@ -115,11 +114,12 @@ tool_loop_guardrails:
     idempotent_no_progress: 5
 compression:
   enabled: true
-  threshold: 0.5
+  threshold: 0.8
   target_ratio: 0.3
   protect_last_n: 30
   hygiene_hard_message_limit: 300
   protect_first_n: 3
+  abort_on_summary_failure: false
 prompt_caching:
   cache_ttl: 5m
 openrouter:
@@ -160,14 +160,6 @@ auxiliary:
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 120
     extra_body: {}
-  session_search:
-    provider: opencode-go
-    model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-    max_concurrency: 3
   skills_hub:
     provider: opencode-go
     model: deepseek-v4-flash
@@ -203,6 +195,20 @@ auxiliary:
     api_key: ''
     timeout: 120
     extra_body: {}
+  kanban_decomposer:
+    provider: auto
+    model: ''
+    base_url: ''
+    api_key: ''
+    timeout: 180
+    extra_body: {}
+  profile_describer:
+    provider: auto
+    model: ''
+    base_url: ''
+    api_key: ''
+    timeout: 60
+    extra_body: {}
   curator:
     provider: opencode-go
     model: deepseek-v4-flash
@@ -210,6 +216,14 @@ auxiliary:
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 600
     extra_body: {}
+  session_search:
+    provider: opencode-go
+    model: deepseek-v4-flash
+    base_url: https://opencode.ai/zen/go/v1
+    api_key: ${OPENCODE_GO_API_KEY}
+    timeout: 30
+    extra_body: {}
+    max_concurrency: 3
   flush_memories:
     provider: opencode-go
     model: deepseek-v4-flash
@@ -221,6 +235,11 @@ display:
   compact: false
   personality: none
   resume_display: full
+  resume_exchanges: 10
+  resume_max_user_chars: 300
+  resume_max_assistant_chars: 200
+  resume_max_assistant_lines: 3
+  resume_skip_tool_only: true
   busy_input_mode: interrupt
   tui_auto_resume_recent: false
   bell_on_complete: false
@@ -256,6 +275,10 @@ display:
 dashboard:
   theme: default
   show_token_analytics: false
+  oauth:
+    client_id: ''
+    portal_url: ''
+  public_url: ''
 privacy:
   redact_pii: false
 tts:
@@ -364,6 +387,8 @@ discord:
   channel_prompts: {}
   dm_role_auth_guild: ''
   server_actions: ''
+  allow_any_attachment: false
+  max_attachment_bytes: 33554432
 whatsapp: {}
 telegram:
   reactions: false
@@ -420,12 +445,22 @@ kanban:
   dispatch_in_gateway: true
   dispatch_interval_seconds: 60
   failure_limit: 2
+  worker_log_rotate_bytes: 2097152
+  worker_log_backup_count: 1
+  orchestrator_profile: ''
+  default_assignee: ''
+  auto_decompose: true
+  auto_decompose_per_tick: 3
+  dispatch_stale_timeout_seconds: 14400
 code_execution:
   mode: project
 logging:
   level: INFO
   max_size_mb: 5
   backup_count: 3
+  memory_monitor:
+    enabled: true
+    interval_seconds: 300
 model_catalog:
   enabled: true
   url: https://hermes-agent.nousresearch.com/docs/api/model-catalog.json
@@ -433,11 +468,17 @@ model_catalog:
   providers: {}
 network:
   force_ipv4: false
+gateway:
+  strict: false
+  media_delivery_allow_dirs: []
+  trust_recent_files: true
+  trust_recent_files_seconds: 600
 sessions:
   auto_prune: false
   retention_days: 90
   vacuum_after_prune: true
   min_interval_hours: 24
+  write_json_snapshots: false
 onboarding:
   seen:
     openclaw_residue_cleanup: true
@@ -456,6 +497,18 @@ x_search:
   model: grok-4.20-reasoning
   timeout_seconds: 180
   retries: 2
+secrets:
+  bitwarden:
+    enabled: false
+    access_token_env: BWS_ACCESS_TOKEN
+    project_id: ''
+    cache_ttl_seconds: 300
+    override_existing: true
+    auto_install: true
+    server_url: ''
+paste_collapse_threshold: 5
+paste_collapse_threshold_fallback: 5
+paste_collapse_char_threshold: 2000
 _config_version: 23
 mcp_servers:
   context7:
@@ -474,6 +527,17 @@ mcp_servers:
     env:
       AETHER_HOME: /home/prometeo/Aether-Agents/home
       PYTHONPATH: /home/prometeo/Aether-Agents/src
+  graphify:
+    command: /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3.11
+    args:
+    - -m
+    - graphify.serve
+    - /home/prometeo/Aether-Agents/graphify-out/graph.json
+    enabled: true
+    env:
+      GRAPHIFY_PROJECT: /home/prometeo/Aether-Agents
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+    timeout: 600
 platform_toolsets:
   cli:
   - cronjob
@@ -516,6 +580,13 @@ custom_providers:
       context_length: 256000
     claude-opus-4-6:
       context_length: 256000
+- name: llmgateway
+  base_url: https://api.llmgateway.io/v1
+  api_key: ${LLMGATEWAY_API_KEY}
+  api_mode: chat_completions
+  models:
+    glm-5.2:
+      context_length: 128000
 
 # ── Fallback Model ────────────────────────────────────────────────────
 # Automatic provider failover when primary is unavailable.

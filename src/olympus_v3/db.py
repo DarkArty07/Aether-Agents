@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     started_at  REAL NOT NULL,
     completed_at REAL,
     metadata    TEXT
+    last_error  TEXT,
+    error_type  TEXT
 )
 """
 
@@ -166,6 +168,15 @@ class OlympusDB:
         await self._db.execute("PRAGMA foreign_keys=ON")
         for stmt in _SCHEMA_STMTS:
             await self._db.execute(stmt)
+        # Migration: add last_error and error_type columns for existing DBs
+        try:
+            await self._db.execute("ALTER TABLE sessions ADD COLUMN last_error TEXT")
+        except Exception:
+            pass  # Column already exists
+        try:
+            await self._db.execute("ALTER TABLE sessions ADD COLUMN error_type TEXT")
+        except Exception:
+            pass  # Column already exists
         await self._db.commit()
         logger.info("OlympusDB connected: %s", self.db_path)
 
@@ -197,7 +208,7 @@ class OlympusDB:
         now = time.time()
         meta_json = json.dumps(metadata) if metadata else None
         await self._execute(
-            "INSERT INTO sessions (session_id, agent, status, started_at, metadata) "
+            "INSERT OR IGNORE INTO sessions (session_id, agent, status, started_at, metadata) "
             "VALUES (?, ?, 'active', ?, ?)",
             (sid, agent, now, meta_json),
         )
@@ -225,6 +236,13 @@ class OlympusDB:
                 "UPDATE sessions SET metadata = ? WHERE session_id = ?",
                 (json.dumps(metadata), session_id),
             )
+        await self._db.commit()
+    async def record_error(self, session_id: str, error_message: str, error_type: str = "api_error") -> None:
+        """Record an error for a session."""
+        await self._execute(
+            "UPDATE sessions SET last_error = ?, error_type = ? WHERE session_id = ?",
+            (error_message, error_type, session_id),
+        )
         await self._db.commit()
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
@@ -406,6 +424,9 @@ class OlympusDB:
         # Session status
         session = await self.get_session(session_id)
         status = session["status"] if session else "unknown"
+        # Error info
+        last_error = session["last_error"] if session else None
+        error_type = session["error_type"] if session else None
 
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
@@ -481,6 +502,8 @@ class OlympusDB:
             "recent_tool_calls": recent_tool_calls,
             "clarification_needed": clarification_needed,
             "heartbeat_timestamp": heartbeat_timestamp,
+            "last_error": last_error,
+            "error_type": error_type,
         }
 
 
@@ -513,7 +536,46 @@ class OlympusDBSync:
         try:
             for stmt in _SCHEMA_STMTS:
                 conn.execute(stmt)
+            # Force WAL checkpoint so async writes (e.g. from acp_manager)
+            # are visible to sync readers in this process.
+            conn.execute("PRAGMA wal_checkpoint = TRUNCATE")
+            # Migration: add last_error and error_type columns for existing DBs
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN last_error TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN error_type TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             conn.commit()
+        finally:
+            conn.close()
+
+    # -------------------------------------------------------------------
+    # Sessions (sync — called from on_session_start hook)
+    # -------------------------------------------------------------------
+
+    def insert_session(
+        self,
+        session_id: str | None = None,
+        agent: str = "",
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Insert a session synchronously. Returns session_id."""
+        sid = session_id or str(uuid.uuid4())
+        now = time.time()
+        meta_json = json.dumps(metadata) if metadata else None
+        conn = self._connect()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO sessions (session_id, agent, status, started_at, metadata) "
+                "VALUES (?, ?, 'active', ?, ?)",
+                (sid, agent, now, meta_json),
+            )
+            conn.commit()
+            logger.debug("Session created: %s (agent=%s)", sid, agent)
+            return sid
         finally:
             conn.close()
 
@@ -610,6 +672,17 @@ class OlympusDBSync:
             conn.commit()
         finally:
             conn.close()
+    def record_error(self, session_id: str, error_message: str, error_type: str = "api_error") -> None:
+        """Record an error for a session."""
+        conn = self._connect()
+        try:
+            conn.execute(
+                "UPDATE sessions SET last_error = ?, error_type = ? WHERE session_id = ?",
+                (error_message, error_type, session_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     # -------------------------------------------------------------------
     # Steering (sync — called from pre_llm_call hook)
@@ -694,10 +767,12 @@ class OlympusDBSync:
         try:
             # Session status
             cursor = conn.execute(
-                "SELECT status FROM sessions WHERE session_id = ?", (session_id,)
+                "SELECT status, last_error, error_type FROM sessions WHERE session_id = ?", (session_id,)
             )
             row = cursor.fetchone()
             status = row[0] if row else "unknown"
+            last_error = row[1] if row else None
+            error_type = row[2] if row else None
 
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
@@ -778,6 +853,8 @@ class OlympusDBSync:
                 "recent_tool_calls": recent_tool_calls,
                 "clarification_needed": clarification_needed,
                 "heartbeat_timestamp": heartbeat_timestamp,
+                "last_error": last_error,
+                "error_type": error_type,
             }
         finally:
             conn.close()

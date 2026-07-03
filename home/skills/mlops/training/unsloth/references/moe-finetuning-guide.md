@@ -22,13 +22,16 @@
 | Qwen3.5-27B | ~56 GB | ~16 GB | A100 80GB |
 | Llama-3.1-70B | ~56 GB | ~20 GB | A100 80GB |
 
-### MoE Models (bf16 LoRA only — QLoRA NOT supported)
+### MoE Models (bf16 LoRA only — QLoRA NOT supported for standard MoE)
 
-| Model | VRAM (bf16 LoRA) | Min GPU | Notes |
+**Exception: QAT MoE models (Gemma 4 26B A4B QAT)** support 4-bit loading because the QAT process pre-quantizes all layers including MoE routers. This drops VRAM from 63+ GB (bf16) to ~18.6 GB (q4). See `references/gemma4-qat-finetuning.md` for full details.
+
+| Model | VRAM (bf16 LoRA) | VRAM (4-bit QAT) | Min GPU | Notes |
 |-------|-----------------|---------|-------|
-| Qwen3-30B-A3B | 63 GB | 1× A100 80GB | Loading spike to 43GB, settles to ~17GB |
-| Qwen3.6-35B-A3B | 63-74 GB | 1× A100 80GB | Most common MoE for agents |
-| Qwen3.5-397B-A17B | ~256 GB | 4× A100 80GB | Requires multi-GPU |
+| Qwen3-30B-A3B | 63 GB | — | 1× A100 80GB | Loading spike to 43GB, settles to ~17GB |
+| Qwen3.6-35B-A3B | 63-74 GB | — | 1× A100 80GB | Most common MoE for agents |
+| Qwen3.5-397B-A17B | ~256 GB | — | 4× A100 80GB | Requires multi-GPU |
+| Gemma 4 26B A4B QAT | — | ~18.6 GB | RTX 3090 (24 GB) | QAT pre-quantized. See gemma4-qat-finetuning.md |
 
 **Critical:** During model loading, VRAM spikes to ~43GB+ for Qwen3-30B/35B-A3B, then drops after sharding completes. Your GPU must handle the peak.
 

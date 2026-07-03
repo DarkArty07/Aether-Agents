@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""
+Custom MCP Server Template — FastMCP (stdio)
+Copy this file and adapt for your project.
+
+Prerequisites:
+- Python 3.11+ with mcp package (pip install 'hermes-agent[mcp]')
+- Place in project/mcp/server.py
+- Register in agent/config.yaml under mcp_servers
+"""
+
+import json
+import os
+import sqlite3
+import urllib.request
+import urllib.parse
+from mcp.server import FastMCP
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+JSON_PATH = os.path.join(os.path.dirname(__file__), "data.json")
+
+server = FastMCP("project-name")
+
+
+def init_db():
+    """Create SQLite DB from JSON source if DB doesn't exist."""
+    if os.path.exists(DB_PATH):
+        return
+    if not os.path.exists(JSON_PATH):
+        return
+    with open(JSON_PATH, encoding="utf-8") as f:
+        records = json.load(f)
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    # TODO: Define your schema
+    c.execute("""CREATE TABLE records (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        category TEXT,
+        city TEXT,
+        data TEXT
+    )""")
+    for r in records:
+        # TODO: Map your JSON fields to columns
+        c.execute(
+            "INSERT INTO records VALUES (?,?,?,?,?)",
+            (r["id"], r["name"], r.get("category", ""), r.get("city", ""), json.dumps(r))
+        )
+    conn.commit()
+    conn.close()
+
+
+@server.tool()
+def search_database(query: str, category: str = "") -> str:
+    """
+    Search records in the local database.
+    
+    Args:
+        query: Search term (matched against name field)
+        category: Optional category filter
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    if category:
+        c.execute(
+            "SELECT * FROM records WHERE name LIKE ? AND category LIKE ? ORDER BY id",
+            (f"%{query}%", f"%{category}%")
+        )
+    else:
+        c.execute(
+            "SELECT * FROM records WHERE name LIKE ? ORDER BY id",
+            (f"%{query}%",)
+        )
+    
+    rows = c.fetchall()
+    conn.close()
+    
+    if not rows:
+        return json.dumps({"success": True, "results": []}, ensure_ascii=False)
+    
+    results = []
+    for r in rows:
+        results.append({
+            "id": r["id"],
+            "name": r["name"],
+            "category": r["category"],
+            "city": r["city"],
+        })
+    return json.dumps({"success": True, "results": results}, ensure_ascii=False)
+
+
+@server.tool()
+def search_external_api(lat: float, lng: float, query: str) -> str:
+    """
+    Search an external API (example: Google Maps Places).
+    
+    Args:
+        lat: Latitude
+        lng: Longitude
+        query: Search query
+    """
+    api_key = os.environ.get("EXTERNAL_API_KEY", "")
+    if not api_key or api_key == "TU_API_KEY_AQUI":
+        return json.dumps({
+            "success": False,
+            "error": "API key not configured. Set EXTERNAL_API_KEY in .env"
+        }, ensure_ascii=False)
+    
+    params = {
+        "location": f"{lat},{lng}",
+        "radius": 5000,
+        "keyword": query,
+        "key": api_key,
+    }
+    url = f"https://api.example.com/search?{urllib.parse.urlencode(params)}"
+    
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        
+        results = []
+        for item in data.get("results", [])[:10]:
+            results.append({
+                "name": item.get("name", "Unknown"),
+                "address": item.get("vicinity", "N/A"),
+            })
+        return json.dumps({"success": True, "results": results}, ensure_ascii=False)
+    
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, ensure_ascii=False)
+
+
+if __name__ == "__main__":
+    init_db()
+    server.run(transport="stdio")

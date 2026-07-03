@@ -34,7 +34,11 @@ This skill should be triggered when:
 
 This skill includes comprehensive documentation in `references/`:
 
-- **llms-txt.md** - Llms-Txt documentation
+- **gemma4-qat-finetuning.md** — Gemma 4 QAT models: VRAM, configs, training times, data prep
+- **moe-finetuning-guide.md** — MoE fine-tuning: VRAM tables, RunPod costs, code templates
+- **rtx4070ti-setup.md** — RTX 4070 Ti Super (16 GB) environment setup recipe
+- **qwen3.5-finetuning.md** — Qwen3.5-specific fine-tuning guide
+- **llms-txt.md** — Full Unsloth API reference from official docs
 
 Use `view` to read specific reference files when detailed information is needed.
 

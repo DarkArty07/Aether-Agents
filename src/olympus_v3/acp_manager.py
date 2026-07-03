@@ -246,6 +246,13 @@ class ACPManager:
         )
         acp_session_id = session_resp.session_id
 
+        # Auto-approve file edits for Daimon sessions (no interactive client to approve)
+        try:
+            await agent.connection.set_session_mode("dont_ask", acp_session_id)
+            logger.info("Session %s: edit approval mode set to 'dont_ask'", acp_session_id)
+        except Exception as e:
+            logger.warning("Could not set edit approval mode: %s", e)
+
         # Track session
         session = SessionInfo(
             session_id=sid,

@@ -1,7 +1,7 @@
 ---
 name: github-repo-management
 description: "Clone/create/fork repos; manage remotes, releases."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -123,6 +123,90 @@ gh repo create my-org/my-new-project --public --clone
 cd /path/to/existing/project
 gh repo create my-project --source . --public --push
 ```
+
+### Full Workflow: Existing Local Directory → Public GitHub Repo
+
+When initializing a project that already has design docs or code locally, follow this complete workflow — including boilerplate setup, commit, push, and post-push verification.
+
+```bash
+# 1. Create standard project files if missing
+# .gitignore (see references/gitignore-template.md for full template)
+cat > .gitignore << 'EOF'
+# Secrets
+.env
+*.env
+.env.*
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+build/
+# IDE
+.vscode/
+.idea/
+*.swp
+# OS
+.DS_Store
+Thumbs.db
+# SQLite
+*.db
+*.db-journal
+# Node
+node_modules/
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+EOF
+
+# LICENSE (MIT)
+cat > LICENSE << 'EOF'
+MIT License
+Copyright (c) 2026 <Copyright Holder>
+Permission is hereby granted...
+EOF
+
+# README.md
+cat > README.md << 'EOF'
+# Project Name
+Description...
+EOF
+
+# 2. Initialize git and commit
+git init
+git add .
+git commit -m "Initial commit: project setup"
+
+# 3. Create public repo and push
+gh repo create <owner>/<repo-name> \
+  --public \
+  --description "Short description" \
+  --source . --push
+
+# 4. Verify no secrets were committed
+echo "=== Secret scan (variable names in docs may match — check context) ==="
+grep -r "API_KEY\|SECRET\|TOKEN\|sk-" . --exclude-dir=.git --exclude=.gitignore || echo "No patterns found"
+
+echo "=== Deep scan (actual secret values) ==="
+grep -rn "sk-[a-zA-Z0-9]" . --exclude-dir=.git 2>/dev/null || echo "No sk- prefixed keys found"
+grep -rn "=[a-zA-Z0-9_\-]\{20,\}" . --exclude-dir=.git \
+  --include="*.md" --include="*.py" --include="*.yaml" --include="*.toml" --include="*.json" \
+  2>/dev/null || echo "No long string values found"
+
+echo "=== Tracked files ==="
+git ls-files
+
+echo "=== .gitignore effectiveness ==="
+git status --ignored --short
+```
+
+**Key points:**
+- Create `.gitignore` **before** `git add .` so secrets from `.env` etc. never enter the index
+- The two-pass secret scan catches false positives (variable names in docs) separately from actual values (`sk-` prefixed keys, long base64 strings)
+- Verify `.gitignore` coverage with `git status --ignored --short` after init to confirm no env files slipped through
 
 **With git + curl:**
 

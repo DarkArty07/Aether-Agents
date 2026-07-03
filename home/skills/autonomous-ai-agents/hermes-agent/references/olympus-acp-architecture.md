@@ -203,26 +203,38 @@ Hermes → close(session_id)
 |----------|------|------|
 | No-tool-calls branch | `run_agent.py` ~14991 | Where `final_response` is set |
 | `PromptResponse` | `acp_adapter/server.py` ~1349 | Where `stop_reason` is set |
-| Plugin `pre_llm_call` | `olympus_v3_hooks/hooks.py` | Consumes steering directives |
+| Plugin `on_session_start` | `olympus_v3_hooks/hooks.py` | Creates session row in olympus_v3.db BEFORE turns are written |
 | Plugin `post_llm_call` | `olympus_v3_hooks/hooks.py` | Writes turns + reasoning to SQLite |
 | Plugin `post_tool_call` | `olympus_v3_hooks/hooks.py` | Writes tool names + args to SQLite |
+| Plugin `on_session_end` | `olympus_v3_hooks/hooks.py` | Marks session as completed |
 | `get_session_progress()` | `db.py` | Returns enriched poll data |
+| `OlympusDBSync.insert_session()` | `db.py` | Sync session creation (for on_session_start hook) |
 
-### ⚠ Historical: Previous failed approach (commit 62e59c8, reverted)
+## olympus_v3 Plugin Hooks (Updated June 2026)
 
-A previous implementation added a `clarify` action to `talk_to` and a
-`continue_session()` method in `acp_manager`. This was rejected — the
-correct approach reuses existing `message`/`poll` actions in the same
-ACP session. No new inputSchema fields, no new enums, no new methods.
+The `olympus_v3` plugin has 5 hooks registered in the hermes-agent lifecycle:
 
-### Future: Native `ask_orchestrator` tool (upstream change)
+1. **`on_session_start`** — Creates session row in `olympus_v3.db.sessions` via `OlympusDBSync.insert_session()`. This ensures the FK parent row exists BEFORE `post_llm_call` or `post_tool_call` try to write to `turns` or `tool_calls`. Added June 2026 to fix the FK constraint bug.
 
-For true mid-execution dialogue (Daimon pauses to ask Hermes a question),
-a new tool in hermes-agent core would be needed:
-- New tool `tools/ask_orchestrator.py` exempt from `DELEGATE_BLOCKED_TOOLS`
-- `delegate_tool.py` intercepts the tool call, pauses the child, sends
-  the question to the parent, receives answer, injects as `tool_result`
-- This requires an upstream change to hermes-agent, not just Aether
+2. **`post_llm_call`** — Writes turn content + reasoning to `olympus_v3.db.turns`. FK reference to `sessions(session_id)`.
+
+3. **`post_tool_call`** — Writes tool name + args to `olympus_v3.db.tool_calls`. FK reference to `sessions(session_id)`.
+
+4. **`on_session_end`** — Marks session as `completed` in `olympus_v3.db.sessions`.
+
+5. **`pre_llm_call`** — Consumes steering directives from the `steering` table.
+
+### Why `on_session_start` Was Needed (FK Constraint Bug)
+
+The `acp_manager` (async, aiosqlite) calls `insert_session()` to create the session row, but this write is not guaranteed to be visible to the sync `sqlite3` connection used by the hooks. Without a sync `on_session_start` hook in the Daimon process, the `sessions` table was empty when `post_llm_call` tried to `INSERT INTO turns(session_id, ...)` — causing a `FOREIGN KEY constraint failed` error that was caught and silently logged as a WARNING.
+
+The fix: `on_session_start` fires at session start in the Daimon process, creating the session row via `OlympusDBSync.insert_session()` (sync sqlite3), with `PRAGMA wal_checkpoint = TRUNCATE` in `ensure_tables()` to force WAL checkpoint visibility for async→sync reads.
+
+**Key files modified:**
+- `src/olympus_v3/olympus_v3_hooks/hooks.py` — Added `on_session_start()` function + `ctx.register_hook("on_session_start", on_session_start)` in `register()`
+- `src/olympus_v3/db.py` — Added `OlympusDBSync.insert_session()` method + `PRAGMA wal_checkpoint = TRUNCATE` in `OlympusDBSync.ensure_tables()`
+
+**Important:** The `aether` plugin also has an `on_session_start` hook, but it writes to `aether.db` (not `olympus_v3.db`). Both hooks fire for each session, each writing to its own database. The olympus_v3 hook is necessary because its `turns` and `tool_calls` tables have FK constraints referencing `olympus_v3.db.sessions(session_id)`.
 
 ## ACP Session Lifecycle
 
@@ -233,6 +245,10 @@ new_session(cwd) → acp_session_id
   ↓
 send_message(session_id, prompt) → async task, returns immediately
   ↓  (Daimon runs: run_conversation → tool calls → final response)
+  ↓
+  ↓ on_session_start → INSERT INTO sessions (olympus_v3.db)
+  ↓ post_llm_call   → INSERT INTO turns (olympus_v3.db)
+  ↓ post_tool_call   → INSERT INTO tool_calls (olympus_v3.db)
   ↓
 poll(session_id) → {thoughts, messages, tool_calls, status, last_turn,
                      last_reasoning, recent_tool_calls, clarification_needed,
@@ -251,6 +267,44 @@ Sessions are reusable: `delegate()` now returns `session_id` and keeps
 the session open. Hermes can send `message()` for follow-up, then `close()`
 explicitly when done.
 
+## `last_turn: null` Gap — Two Root Causes (Updated June 2026)
+
+### Cause A (FIXED): FK Constraint — `sessions` table empty before `turns` INSERT
+
+**Symptom:** `delegate()` returns `last_turn: null`, `tool_calls: 0`, `messages: 0`. The `olympus_v3.db` shows 0 rows in both `sessions` and `turns` tables. Agent log shows `stop_reason=end_turn` (the Daimon completed normally).
+
+**Root cause:** The `olympus_v3_hooks` plugin registered hooks for `post_llm_call`, `post_tool_call`, `on_session_end`, and `pre_llm_call` — but NOT `on_session_start`. The `aether_hooks` plugin's `on_session_start` writes to `aether.db`, not `olympus_v3.db`. The `acp_manager`'s async `insert_session()` was not visible to the sync `sqlite3` connection used by the hooks (WAL race condition). Result: `INSERT INTO turns(session_id, ...)` failed with `FOREIGN KEY constraint failed`, silently caught by try/except, all turn data lost.
+
+**Fix (applied June 2026):** Added `on_session_start` hook to `olympus_v3_hooks` that creates the session row sync in `olympus_v3.db`. Also added `OlympusDBSync.insert_session()` method and `PRAGMA wal_checkpoint = TRUNCATE` in `ensure_tables()`.
+
+**Verification:**
+```bash
+# After fix, delegate a test task and check DB
+sqlite3 ~/Aether-Agents/home/.olympus/olympus_v3.db \
+  "SELECT session_id, agent, status FROM sessions; SELECT turn_num, role, substr(content,1,80) FROM turns;"
+# Should show: 1 session (completed), 1+ turns with content
+```
+
+### Cause B (ONGOING): Protocol mismatch in `delegate()` response retrieval
+
+**Symptom:** Even with Cause A fixed (DB now has sessions and turns), `delegate()` still returns `last_turn: null` via the MCP layer. Verified by calling `OlympusDB.get_session_progress()` directly — it returns full data including `last_turn` content.
+
+**Root cause:** The MCP server's `delegate` handler reads the ACP response but doesn't propagate the `last_turn` field correctly. This is a protocol mismatch between hermes-agent v0.15.2's ACP and olympus_v3's response format. Investigation ongoing.
+
+**Diagnosis:**
+```python
+# Direct DB query works (full data):
+from olympus_v3.db import OlympusDB, get_db_path
+db = OlympusDB(db_path=get_db_path())
+await db.connect()
+progress = await db.get_session_progress(session_id)
+# → last_turn has content, tool_calls populated
+
+# But delegate() via MCP returns null:
+talk_to(action="delegate", agent="hefesto", prompt="...")
+# → last_turn: null, tool_calls: 0
+```
+
 ## TUI Visibility Gap (Resolved May 2026)
 
 When hermes-agent runs directly (CLI/TUI), the user sees in real time:
@@ -263,181 +317,64 @@ The gap between TUI and ACP delegation has been **partially resolved**:
 
 | Data | TUI shows | poll() returns (old) | poll() returns (new) | Status |
 |------|-----------|----------------------|----------------------|--------|
-| LLM reasoning | ✅ Full panel | ❌ Not returned | ✅ `last_reasoning` | ⚠ NULL — turns table empty |
-| Response text | ✅ Streaming | ❌ Only on close() | ✅ `last_turn` | ⚠ NULL — turns table empty |
+| LLM reasoning | ✅ Full panel | ❌ Not returned | ✅ `last_reasoning` | ✅ Works (FK fixed) |
+| Response text | ✅ Streaming | ❌ Only on close() | ✅ `last_turn` | ✅ Works via DB, ❌ Via MCP delegate |
 | Tool names | ✅ With args+duration | ❌ Only count | ✅ `recent_tool_calls[].tool_name` | ✅ Works |
 | Tool arguments | ✅ Visible | ❌ Not returned | ✅ `recent_tool_calls[].args_truncated` (200 chars) | ✅ Works |
 | Session status | ✅ Always | ✅ Returned | ✅ Returned | ✅ Works |
-| Timestamp | ✅ Duration | ❌ Not returned | ✅ `heartbeat_timestamp` | ⚠ NULL — depends on turns |
-| Clarification | ✅ Full response | ❌ Not detected | ✅ `clarification_needed` | ⚠ Depends on `last_turn` being populated |
-| Steering | ✅ Via /steer command | ❌ Not available | ✅ `steer` action on talk_to | ✅ Works (writes to steering table) |
+| Timestamp | ✅ Duration | ❌ Not returned | ✅ `heartbeat_timestamp` | ✅ Works (FK fixed) |
+| Clarification | ✅ Full response | ❌ Not detected | ✅ `clarification_needed` | ✅ Works (FK fixed) |
+| Steering | ✅ Via /steer command | ❌ Not available | ✅ `steer` action on talk_to | ✅ Works |
 
-### ⚠ Confirmed Gap: `last_turn: null` after agent completion (May 2026)
-
-Enriched `recent_tool_calls` works — tool names, truncated args, status, and
-timestamps are correctly written to `tool_calls` table. But **`last_turn`
-remains null** even when the agent completes with 23 tool calls and
-`status: "completed"`. The `turns` table in `olympus_v3.db` has **0 rows**
-for the session. The `post_tool_call` hook writes to `tool_calls`, but the
-`post_llm_call` hook does NOT write the agent's text response to `turns`.
-
-This means `get_session_progress()` reads from `turns` for `last_turn` and
-`last_reasoning`, and since `turns` is empty, both fields are always null.
-
-**Test evidence (session `d5d5342e`):**
-- 23 tool calls registered in `tool_calls` table ✅
-- 0 rows in `turns` table ❌
-- `status: "completed"` ✅
-- `last_turn: null` ❌
-- `last_reasoning: null` ❌
-- `response: null` on `close()` ❌
-
-**Root cause (hypothesis):** The `post_llm_call` hook in
-`olympus_v3_hooks/hooks.py` fires inside the hermes-agent subprocess (the
-Daimon), and may be writing to a different SQLite path, or the hook is not
-firing for ACP sessions, or the turn content is being written but to a
-different database than `home/.olympus/olympus_v3.db` that
-`get_session_progress()` reads from.
-
-**Next step:** Verify which database (if any) the `post_llm_call` hook
-writes to during an ACP session, and whether the hook fires at all for
-ACP-spawned agents.
-
-### Remaining gaps (future work)
-
-- **Streaming** — poll is still interval-based, not real-time push
-- **Reasoning during execution** — `last_reasoning` is only updated on
-  turn completion, not during thinking
-- **Progress percentage** — no `step 3/8` equivalent yet
-- **Tool call results** — `recent_tool_calls` shows args but not result
-  (too large to include in poll)
-
-### Priority: Visibility Before Clarification
-
-Chris's directive (May 2026): **visibility/progress FIRST, clarification SECOND.**
-
-Quote: "Los LLM son muy desesperados" — when an orchestrator LLM sees
-`tool_calls: 10` with no context, it assumes the agent is stuck and either
-times out, re-sends the prompt, or cancels. Progress signals prevent this.
-
-The tmux analogy: what Chris wants is like tmux panes for agents.
-Each Daimon should be observable — seeing what it's doing — without
-having to kill the process to interact with it.
-
-### Priority: The End Turn Is What Matters Most
-
-Chris's directive (May 2026): **the agent's final message is the most
-important output**, more important than intermediate reasoning, tool calls,
-or token counts. The TUI shows this naturally (the response appears in
-full). The old ACP delegation hid it until `close()`. The new enriched
-poll delivers `last_turn` as soon as the agent completes a turn.
-
-When evaluating delegation success, focus on:
-1. Is `last_turn` populated with the agent's response? (not null)
-2. Does `status` accurately reflect the session state?
-3. Can you continue the conversation with `message()`?
-
-Do NOT focus on:
-- Token counts or progress bars (the LLM's "desperation" signal)
-- Reasoning content (interesting but not the deliverable)
-- Individual tool call details (the journey, not the destination)
-
-## Empirical Verification (May 2026)
+## Empirical Verification (May-June 2026)
 
 ### Test 1: Multi-turn ACP context persistence ✅
 
 **Agent:** Etalides (session `fe61b9eb`)
 **Method:** `open` → `message("Turno 1")` → `poll` → `message("Turno 2: remember Turno 1?")` → `poll`
 **Result:** Etalides correctly recalled Turno 1 details across messages in the same ACP session.
-- Progress counters: thoughts:2, messages:2 — context persisted.
-- **Conclusion:** ACP sessions maintain conversation history across multiple `message()` calls.
 
 ### Test 2: CLARIFICATION NEEDED detection ✅
 
 **Agent:** Athena (session `158b6302`)
 **Method:** `open` → `message("Necesito que audites un proyecto.")` (deliberately ambiguous) → `poll` (3x)
 **Result:** Athena returned the SOUL.md clarification pattern in `last_turn`.
-- **Conclusion:** Daimons follow their SOUL.md clarification protocol via ACP.
-  The "CLARIFICATION NEEDED" pattern is detectable in `last_turn` for routing.
 
-### Test 3: Enriched poll + session persistence ✅ (bidirectional-comm branch)
+### Test 3: Enriched poll + session persistence ✅
 
 **Agent:** Etalides (session `3a008882`)
-**Method:** `open` → `message("List files in src/olympus_v3/")` → `poll` (active) → `poll` (completed)
-  → `message("Now tell me about db.py specifically")` → `poll` (completed)
-  → `close()`
+**Result:** `recent_tool_calls` populated, `last_turn` with content, session persistence works.
+
+### Test 4: FK constraint fix verification ✅ (June 2026)
+
+**Agent:** Hefesto (session `f5a8d208`)
+**Method:** `delegate(hefesto, "Respond: Fix verificado")` after adding `on_session_start` hook
 **Result:**
-- Poll during active work showed `recent_tool_calls` with tool names and truncated args
-- Poll after completion showed `last_turn` with full response content
-- Second `message()` on same session worked — Etalides remembered the conversation
-- `clarification_needed: false`, `heartbeat_timestamp` updated correctly
-- **Conclusion:** Bidirectional communication works. Session persistence works.
-  The orchestrator can now observe progress and continue conversations.
+- `olympus_v3.db` shows: 1 session (`completed`), 1 turn (`assistant`, content: "Fix verificado — olympus_v3 on_session_start hook activo")
+- `get_session_progress()` returns full data with `last_turn` populated
+- Agent log confirms: `olympus_v3.hooks: on_session_start: session f5a8d208... created for agent`
+- FK constraint error is resolved
 
-### Test 4: Production timeout experience (before bidirectional-comm)
+### Test 5: Protocol mismatch still present (June 2026)
 
-**Agent:** Athena (security audit)
-- **Attempt 1** (delegate, timeout=300s): timed out. 11 tool_calls, no response visible.
-- **Attempt 2** (delegate, timeout=600s): MCP call timed out.
-- **Attempt 3** (manual: open → message → poll × 5): polls showed `tool_calls: 10`
-  with no content change for 2+ minutes. Response only available after `close()`.
-- **Root cause:** poll() returned counts only, last_turn was null during execution,
-  delegate() closed the session on completion.
-- **All three issues resolved by bidirectional-comm branch.**
+**Method:** `delegate()` returns `last_turn: null, tool_calls: 0, thoughts: 0, messages: 0` even though DB has full data
+**Diagnosis:** DB layer works, MCP response handler doesn't propagate `last_turn`
+**Status:** Open investigation
 
-### Test 5: Parallel orchestration ✅ (bidirectional-comm branch)
+## Pitfalls
 
-**Agents:** Hefesto + Etalides (two concurrent sessions)
-**Method:** `open(hefesto)` + `open(etalides)` → `message(hefesto, "count lines")` + `message(etalides, "what Python version?")` → alternate `poll()` on both → `message(hefesto, "what % is DB code?")` while Etalides still working → `poll()` both → `close()` both
-**Result:**
-- Both sessions ran concurrently, each with independent context
-- Hefesto completed first (5,544 lines), poll showed `status: "completed"` with `last_turn` content
-- Sent follow-up message to Hefesto while Etalides was still active — Hefesto answered (39.4%) without any conflict
-- Etalides completed separately with correct findings (Python >=3.11, SQLite)
-- `recent_tool_calls` showed each agent's tool usage independently
-- **Conclusion:** Multiple Daimon sessions can run in parallel. Hermes can
-  alternate polls, continue conversations with completed agents while
-  others are still working, and close sessions independently.
+### SQLite race condition on second message
 
-### Test 6: `last_turn: null` gap confirmed (May 2026)
+After sending a second `message()` to a completed session, `poll()` may show stale data (same counters) for 5-10 seconds before SQLite catches up. **Workaround:** Wait 5-10 seconds after `message()` before the first `poll()`, or poll multiple times looking for counter changes.
 
-**Agent:** Athena (security audit)
-**Method:** `delegate(athena, timeout=300)` → timed out at 21 tool_calls → `message("send report")` → `poll` → `close()`
-**Result:**
-- `recent_tool_calls` populated correctly ✅ (saw search_files, read_file, terminal tool calls with arguments and timestamps)
-- `tool_calls` table in `olympus_v3.db`: 23 entries ✅
-- `turns` table in `olympus_v3.db`: **0 rows** ❌
-- `last_turn: null` across all polls ❌
-- `last_reasoning: null` ❌
-- `response: null` on `close()` ❌
-- `clarification_needed: false` (correct, no clarification pattern) ✅
-- **Conclusion:** The enrichment of `recent_tool_calls` in `get_session_progress()`
-  works correctly and delivers real-time visibility into what the agent is doing.
-  However, the agent's **text response** (the final deliverable) is never
-  persisted to the `turns` table. The `post_tool_call` hook writes to
-  `tool_calls` but `post_llm_call` does NOT write to `turns` for ACP sessions.
+### `delegate()` in `server.py` vs `acp_manager.py`
 
-### Pitfall: SQLite race condition on second message
+Both files have a `delegate()` function with overlapping stall/timeout logic. Changes to clarification detection or session persistence must be applied to **both** locations.
 
-After sending a second `message()` to a completed session, `poll()` may
-show stale data (same counters) for 5-10 seconds before SQLite catches up.
-**Workaround:** Wait 5-10 seconds after `message()` before the first `poll()`,
-or poll multiple times looking for counter changes. The `close()` method
-reads in-memory session state which is more current than SQLite.
+### Same agent, same project_root → session reuse
 
-### Pitfall: `delegate()` in `server.py` vs `acp_manager.py`
+`spawn_agent()` reuses an existing agent process if it's idle for the same `(agent_name, project_root)` key. To run the same agent in parallel, use different `project_root` values or ensure the first session is closed before spawning the second.
 
-Both files have a `delegate()` function with overlapping stall/timeout
-logic. Changes to clarification detection or session persistence must be
-applied to **both** locations. The `acp_manager.py` version is used by
-`talk_to(action="delegate")`, and the `server.py` version has its own
-inline poll loop.
+### Daimon processes persist after session close
 
-### Pitfall: Same agent, same project_root → session reuse
-
-`spawn_agent()` reuses an existing agent process if it's idle for the same
-`(agent_name, project_root)` key. If you open two sessions with the same
-agent and project_root, the second `spawn_agent()` will return the existing
-idle agent — not a new process. To run the same agent in parallel, use
-different `project_root` values or ensure the first session is closed
-before spawning the second.
+ACP agent processes (`hermes acp --profile <name>`) are not killed when the session closes. They remain idle, waiting for the next prompt. To fully stop a Daimon process, kill it with `pkill -f "hermes acp --profile <name>"` or let the ACP manager reuse it.

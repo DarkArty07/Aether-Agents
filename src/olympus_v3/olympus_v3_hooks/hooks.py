@@ -1,6 +1,7 @@
 """Olympus v3 hooks — hermes-agent plugin that writes per-turn data to SQLite.
 
-This plugin registers 4 hooks in the hermes-agent lifecycle:
+This plugin registers 5 hooks in the hermes-agent lifecycle:
+- on_session_start: creates session row in olympus_v3.db
 - post_llm_call: writes complete turn content + reasoning to SQLite
 - post_tool_call: writes tool call + result to SQLite
 - on_session_end: marks session as completed in SQLite
@@ -126,6 +127,47 @@ def _get_session_id() -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def on_session_start(
+    session_id: str,
+    **kwargs: Any,
+) -> None:
+    """Hook: create a session row in olympus_v3.db when a session begins.
+
+    This ensures the sessions table has a row before post_llm_call or
+    post_tool_call try to write turns/tool_calls with FK references.
+
+    Try/except silently — never crash the agent.
+    """
+    olympus_sid = _get_session_id()
+    if not olympus_sid:
+        logger.debug("No OLYMPUS_SESSION_ID, skipping on_session_start")
+        return
+
+    try:
+        db = _get_db()
+        agent_name = kwargs.get("agent") or kwargs.get("profile", "")
+        model = kwargs.get("model")
+        platform = kwargs.get("platform")
+
+        metadata = {}
+        if model:
+            metadata["model"] = model
+        if platform:
+            metadata["platform"] = platform
+
+        db.insert_session(
+            session_id=olympus_sid,
+            agent=agent_name,
+            metadata=metadata if metadata else None,
+        )
+        logger.info(
+            "on_session_start: session %s registered for agent %s",
+            olympus_sid, agent_name,
+        )
+    except Exception as e:
+        logger.warning("on_session_start hook failed: %s", e)
+
+
 def on_post_llm_call(
     session_id: str,
     user_message: str,
@@ -247,6 +289,13 @@ def on_session_end(
     try:
         db = _get_db()
         db.update_session_status(olympus_sid, status)
+
+        # Record error info if the session ended abnormally
+        if status == "error":
+            error_msg = kwargs.get("error") or kwargs.get("last_error") or "Session ended with error"
+            error_type_val = kwargs.get("error_type") or "session_error"
+            db.record_error(olympus_sid, error_msg, error_type_val)
+
         logger.info("on_session_end: session %s marked as %s", olympus_sid, status)
     except Exception as e:
         logger.warning("on_session_end hook failed: %s", e)
@@ -304,10 +353,11 @@ def register(ctx):
           - name: olympus_v3_hooks
             path: /path/to/olympus_v3_hooks
     """
+    ctx.register_hook("on_session_start", on_session_start)
     ctx.register_hook("post_llm_call", on_post_llm_call)
     ctx.register_hook("post_tool_call", on_post_tool_call)
     ctx.register_hook("on_session_end", on_session_end)
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
 
-    logger.info("Olympus v3 hooks registered (post_llm_call, post_tool_call, "
+    logger.info("Olympus v3 hooks registered (on_session_start, post_llm_call, post_tool_call, "
                  "on_session_end, pre_llm_call)")

@@ -1,5 +1,15 @@
 #!/bin/sh
-# Hermes wrapper — GENERIC template
+# Hermes wrapper — FALLBACK template (PREFER NO-WRAPPER PATTERN)
+#
+# ⚠️  PREFERRED (Chris's rule, 2026-06-05): Symlink the venv binary directly:
+#      ln -s /path/to/venv/bin/hermes ~/.local/bin/hermes
+#      Set HERMES_HOME in .bashrc. Use default profile (config.yaml at root).
+#      See SKILL.md §"Standard Setup Without Wrappers" for the full pattern.
+#
+# This wrapper template is ONLY for the "shared venv, multiple instances" case
+# where each instance needs its own HERMES_HOME. Even then, prefer separate
+# venvs with separate symlinks over this wrapper.
+#
 # Replace paths below with your actual values.
 # Usage: cp to ~/.local/bin/hermes && chmod +x
 #

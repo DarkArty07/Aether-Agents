@@ -165,3 +165,10 @@ home/gateway_state.json
 
 # --- Graphify output (generated graphs, reports, caches) ---
 graphify-out/
+
+# Runtime caches (not version-controlled)
+home/models_dev_cache.json
+home/ollama_cloud_models_cache.json
+home/state.db*
+home/.hermes_history
+home/.skills_prompt_snapshot.json

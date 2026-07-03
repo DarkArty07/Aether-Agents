@@ -1,7 +1,7 @@
 ---
 name: debugging-tools
 description: Debug Python (pdb, debugpy), Node.js (node inspect, CDP), and Hermes TUI slash commands — breakpoints, remote debugging, and registry troubleshooting across runtimes.
-version: 1.0.0
+version: 1.1.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -93,7 +93,7 @@ set_trace(host="127.0.0.1", port=4444)
 nc 127.0.0.1 4444
 ```
 
-### Python common pitfalls
+## Python Common Pitfalls
 
 1. **pdb under xdist silently does nothing.** Use `-p no:xdist`.
 2. **`breakpoint()` in CI hangs the process.** Never commit it.
@@ -101,6 +101,7 @@ nc 127.0.0.1 4444
 4. **Threads.** pdb only debugs the current thread. Use debugpy for multithreaded.
 5. **asyncio.** pdb works in coroutines but `await` inside pdb requires 3.13+.
 6. **Forking.** Each child needs its own breakpoint.
+7. **Port conflicts when starting servers.** If `process(poll)` shows `[Errno 98] Address already in use`, use `ss -tlnp | grep <PORT>` to identify the occupying process, then `kill <PID>` (or `kill -9 <PID>` if SIGTERM ignored). See `references/port-conflict-resolution.md` for the full pattern.
 
 See `references/python-debugpy.md` for the complete guide.
 

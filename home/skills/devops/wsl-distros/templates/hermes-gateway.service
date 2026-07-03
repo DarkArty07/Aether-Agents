@@ -1,0 +1,22 @@
+[Unit]
+Description=Hermes Agent Gateway - {{NAME}}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{USER}}
+ExecStart={{VENV_PATH}}/bin/python -m hermes_cli.main gateway run --replace
+WorkingDirectory={{HERMES_HOME}}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:{{USER_HOME}}/.local/bin:{{VENV_PATH}}/bin
+Environment=HERMES_HOME={{HERMES_HOME}}
+Restart=always
+RestartSec=5
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=90
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

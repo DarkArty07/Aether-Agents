@@ -285,6 +285,7 @@ If you catch yourself thinking:
 - "Pattern says X but I'll adapt it differently"
 - "Here are the main problems: [lists fixes without investigation]"
 - Proposing solutions before tracing data flow
+- **"The user provided a fix, I'll implement it"** (without verifying it isn't already applied)
 - **"One more fix attempt" (when already tried 2+)**
 - **Each fix reveals a new problem in a different place**
 
@@ -366,6 +367,31 @@ See `references/cross-process-hook-debugging.md` for debugging data flow across 
 - **Fix options**: unconditional hook firing, fallback values, content capture from tool-calling turns.
 
 Use this reference when tool_calls are populated but turns are not, or any similar hook-data discrepancy across process boundaries.
+
+### AI SDK Streaming Error Debugging in Next.js
+
+See `references/ai-sdk-streaming-error-debugging.md` for debugging generic `{"type":"error","errorText":"An error occurred."}` responses from AI SDK streaming endpoints.
+
+**Key technique:** The generic error surface in curl hides the real diagnostic. The Next.js dev server process log (via `process(action='log')`) contains the full `AI_APICallError` object including `requestBodyValues` — which confirms whether your config (toolChoice, model, etc.) actually reached the upstream API.
+
+Use this reference when:
+- Streaming returns `"An error occurred"` with no further detail
+- You need to verify `toolChoice`, `tools`, or model config propagated to the API call
+- Authentication errors (401/403) mask tool-related issues
+- `convertToModelMessages` type errors from malformed message payloads
+
+### OAuth Token Cache Diagnostics — Pydantic Model vs Raw JSON
+
+See `references/oauth-token-cache-diagnostics.md` for debugging MCP OAuth token caching issues. This covers:
+
+- **The three-layer diagnostic pattern**: raw JSON on disk → Pydantic model via `model_validate()` → comparison for data loss.
+- **Pydantic `extra='ignore'` trap**: server-side fields like `expires_at` are silently dropped by `OAuthToken.model_validate()`.
+- **`expires_in` vs `expires_at` reconciliation**: verifying token expiry math across raw file and model.
+- **Root cause separation**: proving whether the storage layer or the calling code is at fault.
+- **Cross-distro execution on WSL**: running the diagnostic script in one WSL distro from another.
+- **Full diagnostic script template**: copy-and-run Python script for any Hermes MCP OAuth server.
+
+Use this reference when the user reports "OAuth prompt fires every time" despite valid cached tokens on disk.
 
 ## Anti-Patterns: Default Cascade
 

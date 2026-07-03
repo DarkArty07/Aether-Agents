@@ -366,6 +366,98 @@ def fresh_hooks(tmp_path):
 
 **Pattern: PID-suffixed files for concurrent isolation.** When multiple processes share a directory (e.g., `HERMES_HOME`), use `{filename}.{os.getpid()}` for files that identify the current process. In tests, write files using `os.getpid()` to match what the production code reads, not hardcoded PIDs. The PID file takes priority over the generic (non-PID) file, with fallback to the generic file for single-process or backward-compatible mode.
 
+## Pitfall: Env-Dependent Module Imports in Tests
+
+When a module computes constants from `os.environ` at import time (e.g., `DB_PATH = os.path.join(os.environ["PROJECT_ROOT"], "db.sqlite")`), tests that need to use temp directories **must** set the env var and purge `sys.modules` before importing the module.
+
+Without this, the first test to import the module caches the constant from whatever env var happened to be set (or unset) at that point, and all subsequent tests silently use that stale value regardless of their own env var changes.
+
+**The pattern:**
+
+```python
+import os
+import sys
+import importlib
+import pytest
+
+
+@pytest.fixture
+def temp_db(tmp_path):
+    """Set env var, purge cache, reimport fresh."""
+    old_val = os.environ.get("PROJECT_ROOT")
+    os.environ["PROJECT_ROOT"] = str(tmp_path)
+
+    # Create directories the module expects
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+
+    # Remove cached module so it re-evaluates DB_PATH with new env
+    for mod in list(sys.modules.keys()):
+        if mod.startswith("myproject."):
+            del sys.modules[mod]
+
+    yield tmp_path / "data" / "db.sqlite"
+
+    # Restore
+    if old_val is None:
+        del os.environ["PROJECT_ROOT"]
+    else:
+        os.environ["PROJECT_ROOT"] = old_val
+
+    # Also restore modules (so subsequent tests start clean)
+    for mod in list(sys.modules.keys()):
+        if mod.startswith("myproject."):
+            del sys.modules[mod]
+```
+
+**Key details:**
+- Use `list(sys.modules.keys())` to snapshot keys before iterating — avoids `dictionary changed size during iteration` errors
+- Clean up both `shared` and `shared.*` patterns (importing `shared.eval` also caches `shared`)
+- Purge **before** yield AND **after** yield — this ensures state is controlled even if a test fails mid-way
+- `importlib.reload(module)` is an alternative but less reliable (doesn't update references in other modules that imported `from module import X`)
+
+## Technique: Testing Modules with Hyphenated Directory Names
+
+Python module names cannot contain hyphens. A directory like `dashboard-api/` cannot be imported as `import dashboard_api`. When testing such modules, use `importlib.util.spec_from_file_location` to load the file from its absolute path:
+
+```python
+import os
+import sys
+import importlib.util
+from fastapi.testclient import TestClient
+
+# Path to the real file (not a temp copy)
+MODULE_DIR = os.path.join(PROJECT_ROOT, "dashboard-api")
+MODULE_PATH = os.path.join(MODULE_DIR, "server.py")
+
+
+@pytest.fixture
+def app(tmp_path):
+    """Load server.py from its real path with importlib."""
+    # Set up env and purge caches first
+    os.environ["PROJECT_ROOT"] = str(tmp_path)
+
+    for mod in list(sys.modules.keys()):
+        if mod == "shared" or mod.startswith("shared."):
+            del sys.modules[mod]
+
+    # Add the hyphenated dir to sys.path so intra-module imports resolve
+    if MODULE_DIR not in sys.path:
+        sys.path.insert(0, MODULE_DIR)
+
+    # Load via spec_from_file_location
+    spec = importlib.util.spec_from_file_location("server", MODULE_PATH)
+    srv = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(srv)
+
+    client = TestClient(srv.app)
+    yield client
+```
+
+**Caveats:**
+- `spec_from_file_location` loads the file as if it were named `server.py` — the module's `__name__` is the first argument, not derived from the file path. This matters for relative imports within the module.
+- The module directory must be on `sys.path` if the module does `from sibling import X` — the spec loader doesn't auto-add it.
+- This technique does NOT make the module importable as `dashboard_api` — use it only for test fixtures, never for production imports.
+
 ## Final Rule
 
 ```

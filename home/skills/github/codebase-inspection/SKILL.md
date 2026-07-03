@@ -107,6 +107,10 @@ Special pseudo-languages:
 - `__duplicate__` — files with identical content
 - `__unknown__` — unrecognized file types
 
+## Beyond LOC: Project Readiness Assessment
+
+When the user asks "what state is this project in?" or "is this ready?", LOC is just one dimension. See `references/project-readiness-assessment.md` for a structured approach covering git state, test health, roadmap comparison, and gap analysis.
+
 ## Pitfalls
 
 1. **Always exclude .git, node_modules, venv** — without `--folders-to-skip`, pygount will crawl everything and may take minutes or hang on large dependency trees.

@@ -110,6 +110,8 @@ async def _build_response(session_id: str) -> dict:
         "messages": progress.get("messages", 0),
         "tool_calls": progress.get("tool_calls", 0),
         "response": progress.get("last_turn"),
+        "last_error": progress.get("last_error"),
+        "error_type": progress.get("error_type"),
     }
 
 
@@ -132,9 +134,9 @@ async def list_tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "agent": {
+                    "daimon": {
                         "type": "string",
-                        "description": "Daimon profile name, or '?' to discover available agents.",
+                        "description": "Daimon profile name, or '?' to discover available agents. Required for open, delegate actions.",
                     },
                     "action": {
                         "type": "string",
@@ -299,9 +301,9 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
     # OPEN — spawn agent and create session
     # ------------------------------------------------------------------
     if action == "open":
-        agent = args.get("agent", "")
+        agent = args.get("daimon", "") or args.get("agent", "")
         if not agent:
-            return [mcp_types.TextContent(type="text", text="Error: 'agent' is required for open action.")]
+            return [mcp_types.TextContent(type="text", text="Error: 'daimon' is required for open action.")]
 
         try:
             session_id = await manager.spawn_agent(
@@ -402,13 +404,13 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
     # DELEGATE — open + message + auto-poll until done
     # ------------------------------------------------------------------
     elif action == "delegate":
-        agent = args.get("agent", "")
+        agent = args.get("daimon", "") or args.get("agent", "")
         prompt = args.get("prompt", "")
         poll_interval = args.get("poll_interval", POLL_INTERVAL)
         timeout = args.get("timeout", 300)
 
         if not agent:
-            return [mcp_types.TextContent(type="text", text="Error: 'agent' is required for delegate action.")]
+            return [mcp_types.TextContent(type="text", text="Error: 'daimon' is required for delegate action.")]
         if not prompt:
             return [mcp_types.TextContent(type="text", text="Error: 'prompt' is required for delegate action.")]
 
