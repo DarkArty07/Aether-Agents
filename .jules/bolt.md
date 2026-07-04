@@ -1,0 +1,3 @@
+## 2025-07-04 - SQLite Scalar Subquery Optimization
+**Learning:** Independent SQLite aggregate queries (like COUNT(*)) across different tables or conditions incur separate connection and I/O overheads when executed sequentially. In Python using `aiosqlite` or `sqlite3`, this overhead is measurable and compounds during frequently accessed paths like progress polling and status checks.
+**Action:** When making multiple independent scalar queries (e.g., retrieving counts from various tables/views), combine them into a single `SELECT` statement using scalar subqueries: `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`. This minimizes asynchronous and synchronous execution overhead.

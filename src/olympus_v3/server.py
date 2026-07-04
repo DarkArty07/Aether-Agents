@@ -24,14 +24,12 @@ import json
 import logging
 import sys
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
+from mcp import types as mcp_types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp import types as mcp_types
 
 from .acp_manager import ACPManager
 from .aether_db import AetherDB, resolve_aether_db, resolve_aether_dir
@@ -101,7 +99,6 @@ async def _build_response(session_id: str) -> dict:
     """
     db = _get_db()
     progress = await db.get_session_progress(session_id)
-    session = await db.get_session(session_id)
 
     return {
         "session_id": session_id,
@@ -561,13 +558,19 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
         try:
             hot_state = await db.get_hot_state()
 
-            # Counts
-            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
-            sessions_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM issues")
-            issues_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
-            decisions_count = (await cursor.fetchone())[0]
+            # Counts in a single query
+            cursor = await db._execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM sessions),
+                    (SELECT COUNT(*) FROM issues),
+                    (SELECT COUNT(*) FROM decisions)
+                """
+            )
+            row = await cursor.fetchone()
+            sessions_count = row[0]
+            issues_count = row[1]
+            decisions_count = row[2]
 
             detail = args.get("detail", "summary")
 
@@ -709,7 +712,6 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
         return [mcp_types.TextContent(type="text", text="Error: 'project_root' is required for aether_curate.")]
 
     focus = args.get("focus", "recent")
-    project_path = Path(project_root)
     aether_dir = resolve_aether_dir(project_root)
 
     # Read current aether status for context
@@ -720,7 +722,6 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
         try:
             hot_state = await db.get_hot_state()
             recent_sessions = await db.get_recent_sessions(limit=5)
-            recent_files = await db.get_recent_files(limit=10)
 
             cursor = await db._execute("SELECT * FROM decisions WHERE status = 'active' ORDER BY created_at DESC LIMIT 10")
             rows = await cursor.fetchall()
@@ -767,19 +768,13 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 
     # Spawn Ariadna to curate
     manager = _get_manager()
-    
+
     # Read CONTEXT_SCHEMA if it exists for reference
     schema_path = aether_dir / "CONTEXT_SCHEMA.md"
-    schema_text = ""
-    if schema_path.exists():
-        try:
-            schema_text = schema_path.read_text()
-        except Exception:
-            pass
-    
+
     # Sessions count for footer
     sessions_count = hot_state.get('total_sessions', 0) if hot_state else 0
-    
+
     prompt = (
         f"PROJECT_ROOT: {project_root}\n\n"
         f"You are curating the .aether project continuity data for this project.\n\n"
@@ -814,7 +809,7 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 
     try:
         session_id = await manager.spawn_agent(agent_name="ariadna", project_root=project_root)
-        result = await manager.send_message(session_id, prompt)
+        await manager.send_message(session_id, prompt)
         # Close the session after curation
         try:
             await manager.close_session(session_id)
