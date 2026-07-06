@@ -1,0 +1,3 @@
+## 2025-05-18 - Batching Aggregate Queries
+**Learning:** Multiple independent aggregate queries (`COUNT(*)` or `MAX()`) executed sequentially incur multiple connection and I/O overheads, especially critical in both sync and async SQLite usage.
+**Action:** Always combine independent aggregate queries on different conditions or tables into a single scalar subquery operation `SELECT (SELECT ...), (SELECT ...)`. This reduces round-trips to the DB from N to 1.
