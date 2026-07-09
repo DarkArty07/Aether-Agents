@@ -1,23 +1,27 @@
 model:
-  default: deepseek-v4-pro
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
+  default: glm-5.2
+  provider: llmgateway
+  base_url: 'https://api.llmgateway.io/v1'
   api_mode: chat_completions
   context_length: 256000
-providers: {}
+  api_key: ''
+providers:
+  llmgateway:
+    base_url: https://api.llmgateway.io/v1
+    key_env: LLMGATEWAY_API_KEY
 fallback_providers: []
 credential_pool_strategies: {}
 toolsets:
-- web
-- file
-- vision
-- skills
-- todo
-- memory
-- session_search
-- cronjob
-- tts
-- messaging
+  - web
+  - file
+  - vision
+  - skills
+  - todo
+  - memory
+  - session_search
+  - cronjob
+  - tts
+  - messaging
 agent:
   max_turns: 90
   gateway_timeout: 1800
@@ -31,13 +35,14 @@ agent:
   gateway_auto_continue_freshness: 3600
   image_input_mode: auto
   disabled_toolsets:
-  - code_execution
-  - delegation
+    - code_execution
+    - delegation
   capabilities:
-  - receives_from
-  - discover
-  - all
-  description: "Technical Lead, arquitecto e implementador. Investiga, dise\xF1a, orquesta, delega y implementa ajustes finos."
+    - receives_from
+    - discover
+    - all
+  description: Technical Lead, arquitecto e implementador. Investiga, diseña, 
+    orquesta, delega y implementa ajustes finos.
   keep_alive: true
   launch_command: hermes acp
   name: hermes
@@ -137,60 +142,60 @@ bedrock:
     trace: disabled
 auxiliary:
   vision:
-    provider: opencode-go
+    provider: llmgateway
     model: qwen3.6-plus
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 120
     extra_body: {}
     download_timeout: 30
   web_extract:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 360
     extra_body: {}
   compression:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 120
     extra_body: {}
   session_search:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
     max_concurrency: 3
   skills_hub:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
   approval:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
   mcp:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
   title_generation:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
@@ -202,16 +207,16 @@ auxiliary:
     timeout: 120
     extra_body: {}
   curator:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 600
     extra_body: {}
   flush_memories:
-    provider: opencode-go
+    provider: llmgateway
     model: deepseek-v4-flash
-    base_url: https://opencode.ai/zen/go/v1
+    base_url: https://api.llmgateway.io/v1
     api_key: ${OPENCODE_GO_API_KEY}
     timeout: 30
     extra_body: {}
@@ -246,9 +251,9 @@ display:
   runtime_footer:
     enabled: false
     fields:
-    - model
-    - context_pct
-    - cwd
+      - model
+      - context_pct
+      - cwd
   copy_shortcut: auto
   tool_progress: all
 dashboard:
@@ -312,8 +317,8 @@ memory:
   provider: honcho
 delegation:
   model: deepseek-v4-flash
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
+  provider: llmgateway
+  base_url: https://api.llmgateway.io/v1
   api_key: ${OPENCODE_GO_API_KEY}
   api_mode: ''
   inherit_mcp_toolsets: true
@@ -329,7 +334,7 @@ goals:
   max_turns: 20
 skills:
   external_dirs:
-  - /home/arty/Escritorio/agentes/aether/home/skills
+    - __AETHER_ROOT__/home/skills
   template_vars: true
   inline_shell: false
   inline_shell_timeout: 10
@@ -383,13 +388,13 @@ approvals:
   mcp_reload_confirm: true
   destructive_slash_confirm: true
 command_allowlist:
-- script execution via heredoc
-- script execution via -e/-c flag
-- stop/restart system service
-- recursive delete
-- stop/restart hermes gateway (kills running agents)
-- delete in root path
-- overwrite project env/config via redirection
+  - script execution via heredoc
+  - script execution via -e/-c flag
+  - stop/restart system service
+  - recursive delete
+  - stop/restart hermes gateway (kills running agents)
+  - delete in root path
+  - overwrite project env/config via redirection
 quick_commands: {}
 hooks_auto_accept: false
 personalities: {}
@@ -408,7 +413,7 @@ security:
   allow_lazy_installs: true
 cron:
   wrap_response: true
-  max_parallel_jobs: null
+  max_parallel_jobs:
 kanban:
   dispatch_in_gateway: true
   dispatch_interval_seconds: 60
@@ -453,92 +458,70 @@ _config_version: 23
 mcp_servers:
   context7:
     args:
-    - -y
-    - '@upstash/context7-mcp'
+      - -y
+      - '@upstash/context7-mcp'
     command: npx
     enabled: true
   olympus_v3:
-    command: /home/arty/.hermes/hermes-agent/venv/bin/python3.11
+    command: __PYTHON_BIN__
     args:
-    - -m
-    - olympus_v3.server
+      - -m
+      - olympus_v3.server
     enabled: true
     timeout: 600
     env:
-      AETHER_HOME: /home/arty/Escritorio/agentes/aether/home
-      PYTHONPATH: /home/arty/Escritorio/agentes/aether/src
+      AETHER_HOME: __AETHER_ROOT__/home
+      PYTHONPATH: __AETHER_ROOT__/src
   graphify:
-    command: /home/arty/.hermes/hermes-agent/venv/bin/python3.11
+    command: __PYTHON_BIN__
     args:
-    - -m
-    - graphify.serve
-    - /home/arty/Escritorio/agentes/aether/graphify-out/graph.json
+      - -m
+      - graphify.serve
+      - __AETHER_ROOT__/graphify-out/graph.json
     enabled: true
     env:
-      GRAPHIFY_PROJECT: /home/arty/Escritorio/agentes/aether
+      GRAPHIFY_PROJECT: __AETHER_ROOT__
       OPENCODE_API_KEY: ${OPENCODE_API_KEY}
     timeout: 600
 platform_toolsets:
   cli:
-  - cronjob
-  - file
-  - memory
-  - messaging
-  - session_search
-  - skills
-  - terminal
-  - todo
-  - tts
-  - vision
-  - web
+    - cronjob
+    - file
+    - memory
+    - messaging
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - tts
+    - vision
+    - web
   telegram:
-  - cronjob
-  - file
-  - memory
-  - messaging
-  - session_search
-  - skills
-  - terminal
-  - todo
-  - tts
-  - vision
-  - web
+    - cronjob
+    - file
+    - memory
+    - messaging
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - tts
+    - vision
+    - web
 session_reset:
   at_hour: 4
   idle_minutes: 1440
   mode: both
 known_plugin_toolsets:
   cli:
-  - spotify
+    - spotify
 custom_providers:
-- name: aiprimetech
-  base_url: https://aiprimetech.io
-  api_key: ${AIPRIMETECH_API_KEY}
-  api_mode: anthropic_messages
-  models:
-    claude-sonnet-4-6:
-      context_length: 256000
-    claude-opus-4-6:
-      context_length: 256000
-
-# ── Fallback Model ────────────────────────────────────────────────────
-# Automatic provider failover when primary is unavailable.
-# Uncomment and configure to enable. Triggers on rate limits (429),
-# overload (529), service errors (503), or connection failures.
-#
-# Supported providers:
-#   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
-#   zai          (ZAI_API_KEY)         — Z.AI / GLM
-#   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
-#   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
-#   minimax      (MINIMAX_API_KEY)     — MiniMax
-#   minimax-cn   (MINIMAX_CN_API_KEY)  — MiniMax (China)
-#   bedrock      (AWS IAM / boto3)     — AWS Bedrock (Converse API)
-#
-# For custom OpenAI-compatible endpoints, add base_url and key_env.
-#
-# fallback_model:
-#   provider: openrouter
-#   model: anthropic/claude-sonnet-4
+  - name: aiprimetech
+    base_url: https://aiprimetech.io
+    api_key: ${AIPRIMETECH_API_KEY}
+    api_mode: anthropic_messages
+    models:
+      claude-sonnet-4-6:
+        context_length: 256000
+      claude-opus-4-6:
+        context_length: 256000

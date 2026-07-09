@@ -8,6 +8,10 @@
 !.env.example
 honcho-server/.env
 
+# --- Hermes orchestrator config (user-specific: model, provider, paths) ---
+# Use config.yaml.template as base, copy to config.yaml and customize
+home/config.yaml
+
 # --- Runtime (auto-generated) ---
 home/sessions/
 home/logs/
