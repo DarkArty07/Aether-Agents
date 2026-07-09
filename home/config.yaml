@@ -9,7 +9,7 @@ fallback_providers: []
 credential_pool_strategies: {}
 toolsets:
 - web
-- file-read
+- file
 - vision
 - skills
 - todo
@@ -33,13 +33,11 @@ agent:
   disabled_toolsets:
   - code_execution
   - delegation
-  - file-write
   capabilities:
   - receives_from
   - discover
   - all
-  description: "Technical Lead y arquitecto del equipo. Investiga, dise\xF1a, orquesta\
-    \ y decide."
+  description: "Technical Lead, arquitecto e implementador. Investiga, dise\xF1a, orquesta, delega y implementa ajustes finos."
   keep_alive: true
   launch_command: hermes acp
   name: hermes
@@ -331,7 +329,7 @@ goals:
   max_turns: 20
 skills:
   external_dirs:
-  - /home/prometeo/Aether-Agents/home/skills
+  - /home/arty/Escritorio/agentes/aether/home/skills
   template_vars: true
   inline_shell: false
   inline_shell_timeout: 10
@@ -393,11 +391,6 @@ command_allowlist:
 - delete in root path
 - overwrite project env/config via redirection
 quick_commands: {}
-hooks:
-  pre_tool_call:
-  - matcher: terminal
-    command: /home/prometeo/Aether-Agents/home/agent-hooks/block-write-commands.sh
-    timeout: 5
 hooks_auto_accept: false
 personalities: {}
 security:
@@ -465,19 +458,30 @@ mcp_servers:
     command: npx
     enabled: true
   olympus_v3:
-    command: /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3.11
+    command: /home/arty/.hermes/hermes-agent/venv/bin/python3.11
     args:
     - -m
     - olympus_v3.server
     enabled: true
     timeout: 600
     env:
-      AETHER_HOME: /home/prometeo/Aether-Agents/home
-      PYTHONPATH: /home/prometeo/Aether-Agents/src
+      AETHER_HOME: /home/arty/Escritorio/agentes/aether/home
+      PYTHONPATH: /home/arty/Escritorio/agentes/aether/src
+  graphify:
+    command: /home/arty/.hermes/hermes-agent/venv/bin/python3.11
+    args:
+    - -m
+    - graphify.serve
+    - /home/arty/Escritorio/agentes/aether/graphify-out/graph.json
+    enabled: true
+    env:
+      GRAPHIFY_PROJECT: /home/arty/Escritorio/agentes/aether
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+    timeout: 600
 platform_toolsets:
   cli:
   - cronjob
-  - file-read
+  - file
   - memory
   - messaging
   - session_search
@@ -489,7 +493,7 @@ platform_toolsets:
   - web
   telegram:
   - cronjob
-  - file-read
+  - file
   - memory
   - messaging
   - session_search
