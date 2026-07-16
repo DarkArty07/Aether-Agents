@@ -438,11 +438,29 @@ class ACPManager:
                     session_id=acp_session_id,
                     prompt=[text_block(message)],
                 )
-                logger.info("Prompt completed for session %s (stop_reason=%s)",
-                            session_id, response.stop_reason)
-                # Update in-memory session status so poll() can detect completion
+                stop_reason = getattr(response, "stop_reason", None)
+                reason_value = getattr(stop_reason, "value", stop_reason)
+                reason_value = getattr(reason_value, "name", reason_value)
+                reason = str(reason_value).strip().lower()
+                if reason == "end_turn":
+                    terminal_status = "completed"
+                elif reason == "cancelled":
+                    terminal_status = "cancelled"
+                else:
+                    terminal_status = "error"
+
+                logger.info(
+                    "Prompt ended for session %s (stop_reason=%r, status=%s)",
+                    session_id,
+                    stop_reason,
+                    terminal_status,
+                )
+                # Update both in-memory and SQLite state so poll() cannot turn a
+                # non-normal ACP termination into a successful completion.
                 if session_id in self.sessions:
-                    self.sessions[session_id].status = "completed"
+                    self.sessions[session_id].status = terminal_status
+                if self.db:
+                    await self.db.update_session_status(session_id, terminal_status)
             except Exception as e:
                 logger.error("Prompt error for session %s: %s", session_id, e)
                 if session_id in self.sessions:
@@ -488,8 +506,11 @@ class ACPManager:
     # Session lifecycle
     # -------------------------------------------------------------------
 
-    async def close(self, session_id: str) -> dict:
-        """Close a session and mark it completed in SQLite."""
+    async def close(self, session_id: str, *, terminal_status: str | None = None) -> dict:
+        """Close a session, optionally recording a validated terminal outcome."""
+        if terminal_status not in (None, "completed", "error", "cancelled"):
+            raise ValueError("terminal_status must be completed, error, or cancelled")
+
         session = self.sessions.get(session_id)
         if session is None:
             raise ValueError(f"Unknown session: {session_id}")
@@ -503,12 +524,20 @@ class ACPManager:
             except Exception as e:
                 logger.warning("Error closing ACP session %s: %s", session.acp_session_id, e)
 
-        # Update SQLite
+        # Never overwrite an ACP-reported failure with a successful cleanup.
+        if session.status in ("error", "cancelled"):
+            final_status = session.status
+        elif terminal_status is not None:
+            final_status = terminal_status
+        elif session.status == "completed":
+            final_status = "completed"
+        else:
+            final_status = "completed"
         if self.db:
-            await self.db.update_session_status(session_id, "completed")
+            await self.db.update_session_status(session_id, final_status)
 
         # Cleanup
-        session.status = "completed"
+        session.status = final_status
         if agent and session_id in agent.acp_session_ids:
             del agent.acp_session_ids[session_id]
         if session_id in self.sessions:
@@ -518,8 +547,8 @@ class ACPManager:
         if agent and not agent.acp_session_ids:
             agent.status = "idle"
 
-        logger.info("Session closed: %s", session_id)
-        return {"status": "completed", "session_id": session_id}
+        logger.info("Session closed: %s (status=%s)", session_id, final_status)
+        return {"status": final_status, "session_id": session_id}
 
     async def cancel(self, session_id: str) -> dict:
         """Force-cancel a stuck session."""
