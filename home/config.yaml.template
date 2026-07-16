@@ -1,7 +1,7 @@
 model:
-  default: glm-5.2
-  provider: llmgateway
-  base_url: 'https://api.llmgateway.io/v1'
+  default: gpt-5.6-sol
+  provider: openai-codex
+  base_url: https://chatgpt.com/backend-api/codex
   api_mode: chat_completions
   context_length: 256000
   api_key: ''
@@ -10,18 +10,17 @@ providers:
     base_url: https://api.llmgateway.io/v1
     key_env: LLMGATEWAY_API_KEY
 fallback_providers: []
-credential_pool_strategies: {}
 toolsets:
-  - web
-  - file
-  - vision
-  - skills
-  - todo
-  - memory
-  - session_search
-  - cronjob
-  - tts
-  - messaging
+- web
+- file
+- vision
+- skills
+- todo
+- memory
+- session_search
+- cronjob
+- tts
+- messaging
 agent:
   max_turns: 90
   gateway_timeout: 1800
@@ -35,18 +34,18 @@ agent:
   gateway_auto_continue_freshness: 3600
   image_input_mode: auto
   disabled_toolsets:
-    - code_execution
-    - delegation
+  - code_execution
+  - delegation
   capabilities:
-    - receives_from
-    - discover
-    - all
-  description: Technical Lead, arquitecto e implementador. Investiga, diseña, 
-    orquesta, delega y implementa ajustes finos.
+  - receives_from
+  - discover
+  - all
+  description: Technical Lead, arquitecto e implementador. Investiga, diseña, orquesta, delega y implementa ajustes finos.
   keep_alive: true
   launch_command: hermes acp
   name: hermes
   role: hermes
+  verify_on_stop: false
 terminal:
   backend: local
   modal_mode: auto
@@ -57,11 +56,9 @@ terminal:
   auto_source_bashrc: true
   docker_image: nikolaik/python-nodejs:python3.11-nodejs20
   docker_forward_env: []
-  docker_env: {}
   singularity_image: docker://nikolaik/python-nodejs:python3.11-nodejs20
   modal_image: nikolaik/python-nodejs:python3.11-nodejs20
   daytona_image: nikolaik/python-nodejs:python3.11-nodejs20
-  vercel_runtime: node24
   container_cpu: 1
   container_memory: 5120
   container_disk: 51200
@@ -71,10 +68,11 @@ terminal:
   docker_extra_args: []
   docker_run_as_host_user: false
   persistent_shell: true
+  vercel_runtime: node24
 web:
   backend: exa
-  search_backend: ''
-  extract_backend: ''
+  search_backend: exa
+  extract_backend: exa
   use_gateway: false
 browser:
   inactivity_timeout: 120
@@ -118,11 +116,15 @@ tool_loop_guardrails:
     idempotent_no_progress: 5
 compression:
   enabled: true
-  threshold: 0.5
+  threshold: 0.7
   target_ratio: 0.3
   protect_last_n: 30
   hygiene_hard_message_limit: 300
   protect_first_n: 3
+kanban:
+  dispatch_in_gateway: true
+  dispatch_interval_seconds: 60
+  failure_limit: 2
 prompt_caching:
   cache_ttl: 5m
 openrouter:
@@ -142,82 +144,73 @@ bedrock:
     trace: disabled
 auxiliary:
   vision:
-    provider: llmgateway
-    model: qwen3.6-plus
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 120
-    extra_body: {}
-    download_timeout: 30
-  web_extract:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 360
-    extra_body: {}
-  compression:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 120
-    extra_body: {}
-  session_search:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-    max_concurrency: 3
-  skills_hub:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-  approval:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-  mcp:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-  title_generation:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
-    timeout: 30
-    extra_body: {}
-  triage_specifier:
-    provider: auto
-    model: ''
+    provider: openai-codex
+    model: gpt-5.6-luna
     base_url: ''
     api_key: ''
     timeout: 120
-    extra_body: {}
+    download_timeout: 30
+  web_extract:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 360
+  compression:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 120
+  skills_hub:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 30
+  approval:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 30
+  mcp:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 30
+  title_generation:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 30
+  triage_specifier:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 120
   curator:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
     timeout: 600
+  session_search:
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
+    timeout: 30
     extra_body: {}
+    max_concurrency: 3
   flush_memories:
-    provider: llmgateway
-    model: deepseek-v4-flash
-    base_url: https://api.llmgateway.io/v1
-    api_key: ${OPENCODE_GO_API_KEY}
+    provider: openai-codex
+    model: gpt-5.6-luna
+    base_url: ''
+    api_key: ''
     timeout: 30
     extra_body: {}
 display:
@@ -244,16 +237,14 @@ display:
     last_lines: 2
   interim_assistant_messages: true
   tool_progress_command: false
-  tool_progress_overrides: {}
   tool_preview_length: 0
   ephemeral_system_ttl: 0
-  platforms: {}
   runtime_footer:
     enabled: false
     fields:
-      - model
-      - context_pct
-      - cwd
+    - model
+    - context_pct
+    - cwd
   copy_shortcut: auto
   tool_progress: all
 dashboard:
@@ -334,7 +325,7 @@ goals:
   max_turns: 20
 skills:
   external_dirs:
-    - __AETHER_ROOT__/home/skills
+  - __AETHER_ROOT__/home/skills
   template_vars: true
   inline_shell: false
   inline_shell_timeout: 10
@@ -348,13 +339,12 @@ curator:
   backup:
     enabled: true
     keep: 5
-honcho: {}
+  consolidate: false
 timezone: America/Mexico_City
 slack:
   require_mention: true
   free_response_channels: ''
   allowed_channels: ''
-  channel_prompts: {}
 discord:
   require_mention: true
   free_response_channels: ''
@@ -364,19 +354,15 @@ discord:
   history_backfill: true
   history_backfill_limit: 50
   reactions: true
-  channel_prompts: {}
   dm_role_auth_guild: ''
   server_actions: ''
-whatsapp: {}
 telegram:
   reactions: false
-  channel_prompts: {}
   allowed_chats: ''
 mattermost:
   require_mention: true
   free_response_channels: ''
   allowed_channels: ''
-  channel_prompts: {}
 matrix:
   require_mention: true
   free_response_rooms: ''
@@ -388,16 +374,14 @@ approvals:
   mcp_reload_confirm: true
   destructive_slash_confirm: true
 command_allowlist:
-  - script execution via heredoc
-  - script execution via -e/-c flag
-  - stop/restart system service
-  - recursive delete
-  - stop/restart hermes gateway (kills running agents)
-  - delete in root path
-  - overwrite project env/config via redirection
-quick_commands: {}
+- script execution via heredoc
+- script execution via -e/-c flag
+- stop/restart system service
+- recursive delete
+- stop/restart hermes gateway (kills running agents)
+- delete in root path
+- overwrite project env/config via redirection
 hooks_auto_accept: false
-personalities: {}
 security:
   allow_private_urls: false
   redact_secrets: true
@@ -413,11 +397,6 @@ security:
   allow_lazy_installs: true
 cron:
   wrap_response: true
-  max_parallel_jobs:
-kanban:
-  dispatch_in_gateway: true
-  dispatch_interval_seconds: 60
-  failure_limit: 2
 code_execution:
   mode: project
 logging:
@@ -427,8 +406,7 @@ logging:
 model_catalog:
   enabled: true
   url: https://hermes-agent.nousresearch.com/docs/api/model-catalog.json
-  ttl_hours: 24
-  providers: {}
+  ttl_hours: 1
 network:
   force_ipv4: false
 sessions:
@@ -449,24 +427,23 @@ lsp:
   wait_mode: document
   wait_timeout: 5.0
   install_strategy: auto
-  servers: {}
 x_search:
   model: grok-4.20-reasoning
   timeout_seconds: 180
   retries: 2
-_config_version: 23
+_config_version: 32
 mcp_servers:
   context7:
     args:
-      - -y
-      - '@upstash/context7-mcp'
+    - -y
+    - '@upstash/context7-mcp'
     command: npx
     enabled: true
   olympus_v3:
     command: __PYTHON_BIN__
     args:
-      - -m
-      - olympus_v3.server
+    - -m
+    - olympus_v3.server
     enabled: true
     timeout: 600
     env:
@@ -475,53 +452,57 @@ mcp_servers:
   graphify:
     command: __PYTHON_BIN__
     args:
-      - -m
-      - graphify.serve
-      - __AETHER_ROOT__/graphify-out/graph.json
+    - -m
+    - graphify.serve
+    - __AETHER_ROOT__/graphify-out/graph.json
     enabled: true
     env:
       GRAPHIFY_PROJECT: __AETHER_ROOT__
-      OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+      OPENAI_API_KEY: ${LLMGATEWAY_API_KEY}
+      OPENAI_BASE_URL: https://api.llmgateway.io/v1
+      OPENAI_MODEL: deepseek-v4-flash
     timeout: 600
 platform_toolsets:
   cli:
-    - cronjob
-    - file
-    - memory
-    - messaging
-    - session_search
-    - skills
-    - terminal
-    - todo
-    - tts
-    - vision
-    - web
+  - browser
+  - cronjob
+  - file
+  - kanban
+  - memory
+  - messaging
+  - session_search
+  - skills
+  - terminal
+  - todo
+  - tts
+  - vision
+  - web
   telegram:
-    - cronjob
-    - file
-    - memory
-    - messaging
-    - session_search
-    - skills
-    - terminal
-    - todo
-    - tts
-    - vision
-    - web
+  - cronjob
+  - file
+  - memory
+  - messaging
+  - session_search
+  - skills
+  - terminal
+  - todo
+  - tts
+  - vision
+  - web
 session_reset:
   at_hour: 4
   idle_minutes: 1440
   mode: both
 known_plugin_toolsets:
   cli:
-    - spotify
+  - spotify
 custom_providers:
-  - name: aiprimetech
-    base_url: https://aiprimetech.io
-    api_key: ${AIPRIMETECH_API_KEY}
-    api_mode: anthropic_messages
-    models:
-      claude-sonnet-4-6:
-        context_length: 256000
-      claude-opus-4-6:
-        context_length: 256000
+- name: aiprimetech
+  base_url: https://aiprimetech.io
+  api_key: ${AIPRIMETECH_API_KEY}
+  api_mode: anthropic_messages
+  models:
+    claude-sonnet-4-6:
+      context_length: 256000
+    claude-opus-4-6:
+      context_length: 256000
