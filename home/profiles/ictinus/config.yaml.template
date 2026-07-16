@@ -1,56 +1,37 @@
-# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
-
-# Ictinus configuration — Aether Agents Daimon (Level 1 Consultant)
-
-# Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: ictinus
   role: backend-architect
-  description: "Backend Architect specializing in scalable system design, database architecture, API development, and cloud infrastructure. Designs robust, secure, performant server-side systems. Does not implement production frontend."
+  description: Backend Architect (Consultant-Analyst). Reviews system design, databases, APIs, scalability, infrastructure topology, and security posture. Does not execute or implement.
   capabilities:
-    - receives_from
-    - system-architecture
-    - database-design
-    - api-design
-    - cloud-infrastructure
-    - security-review
-    - performance-optimization
-  launch_command: "hermes acp"
+  - receives_from
+  - architecture-review
+  - database-design
+  - api-design
+  - scalability-analysis
+  - security-posture
+  - trade-off-analysis
+  launch_command: hermes acp
   keep_alive: true
   level: 1
-
-# Model configuration
 model:
   api_mode: chat_completions
-  default: glm-5.1
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
-
-# Toolsets — architecture and specification tools
+  default: gpt-5.6-terra
+  provider: openai-codex
+fallback_providers:
+- provider: openrouter
+  model: zai/glm-5.1
 toolsets:
-  - terminal
-  - file
-  - search_files
-  - patch
-  - execute_code
-  - skills
-
+- file
+- skills
 skills:
   external_dirs:
-    - __AETHER_ROOT__/home/skills
-
-# Session settings
-# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+  - __AETHER_ROOT__/home/skills
 display:
   personality: none
-
 max_iterations: 50
-
-# Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:
   mode: 'off'
-# Olympus v3 observability plugin
 plugins:
   enabled:
-    - olympus_v3
-    - aether
+  - olympus_v3
+  - aether

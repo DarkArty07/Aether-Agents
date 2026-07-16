@@ -113,9 +113,9 @@ _SCHEMA_STMTS = (
 
 def get_db_path() -> Path:
     """Resolve database path from env var or defaults.
-    
+
     Priority: OLYMPUS_DB_PATH > AETHER_HOME/.olympus > HERMES_HOME/.olympus > ~/.hermes/.olympus
-    
+
     The canonical location is AETHER_HOME/.olympus/olympus_v3.db because
     it is shared across all processes (MCP server + plugin hooks inside Daimons).
     HERMES_HOME points to a specific profile dir, so using it would create

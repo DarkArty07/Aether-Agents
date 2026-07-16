@@ -1,56 +1,36 @@
-# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
-
-# Daedalus configuration — Aether Agents Daimon (Consultant-Creator)
-
-# Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: daedalus
-  role: consultant-creator                              # Design consultation and prototyping — no production code
-  description: "Consultant-Creator — UX/UI Designer. User flows, layout specs, design systems, prototypes. Consults and prototypes — does not implement production code."
+  role: consultant-creator
+  description: Consultant-Creator — UX/UI Designer. User flows, layout specs, design systems, prototypes. Consults and prototypes — does not implement production code.
   capabilities:
-    - receives_from           # Receives tasks from Hermes
-    - ux-design               # User flow design, layout specs
-    - prototyping             # HTML/CSS mockups to demonstrate UX
-    - design-systems           # Color, typography, spacing specs
-    - accessibility-review    # WCAG compliance review
-  launch_command: "hermes acp"
+  - receives_from
+  - ux-design
+  - prototyping
+  - design-systems
+  - accessibility-review
+  launch_command: hermes acp
   keep_alive: true
   level: 1
-
-# Model configuration
 model:
   api_mode: chat_completions
-  default: mimo-v2-omni
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
-
-# Toolsets — file needed for prototypes, search_files for reading project files
-# terminal: secondary tool for running local dev servers to test prototypes
-# skills: on-demand skill loading (creative: architecture-diagram, excalidraw)
-# NOTE: patch and execute_code removed — Consultant-Creator writes prototypes, not production patches
+  default: gpt-5.6-terra
+  provider: openai-codex
+fallback_providers:
+- provider: openrouter
+  model: minimax/mimo-v2-omni
 toolsets:
-  - file            # read_file + write_file for prototypes and reading specs; NOT for production code
-  - search_files    # reading project structure and existing code
-  - terminal        # secondary: running local servers to preview prototypes
-  - skills          # on-demand: creative:architecture-diagram, creative:excalidraw
-
+- file
+- terminal
+- skills
 skills:
   external_dirs:
-    - __AETHER_ROOT__/home/skills
-
-# Session settings
-# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+  - __AETHER_ROOT__/home/skills
 display:
   personality: none
-
 max_iterations: 50
-
-# Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:
   mode: 'off'
-
-# Olympus v3 observability plugin
 plugins:
   enabled:
-    - olympus_v3
-    - aether
+  - olympus_v3
+  - aether

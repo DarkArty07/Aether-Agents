@@ -1,7 +1,8 @@
 # Honcho Memory Provider Setup
 
 Honcho is a self-hosted memory layer for AI agents. Aether Agents integrates
-Honcho as a Git submodule at `honcho-server/`.
+Honcho as a Git submodule at `honcho-server/`. It can run with Docker Compose
+or rootless Podman Compose.
 
 ## Architecture
 
@@ -19,12 +20,12 @@ Aether-Agents/
 
 ## Services
 
-| Service    | Internal Port | Host Port   | Description                          |
-|------------|---------------|-------------|--------------------------------------|
-| `api`      | 8000          | 127.0.0.1:8010 | FastAPI server, hosts Dialectic agent |
-| `deriver`  | —             | —           | Background worker (deriver, dreamer, summarizer) |
-| `database` | 5432          | 127.0.0.1:5434 | PostgreSQL 15 + pgvector            |
-| `redis`    | 6379          | 127.0.0.1:6380 | Redis 8.2 cache                     |
+| Service    | Host binding     | Description |
+|------------|------------------|-------------|
+| `api`      | `127.0.0.1:8010` | FastAPI server, hosts Dialectic agent |
+| `deriver`  | —                | Background worker (deriver, dreamer, summarizer) |
+| `database` | —                | PostgreSQL 15 + pgvector |
+| `redis`    | —                | Redis 8.2 cache |
 
 ## Quick Start
 
@@ -33,11 +34,21 @@ Aether-Agents/
 bash scripts/setup-honcho.sh
 ```
 
-This will:
-1. Initialize the Honcho git submodule
-2. Generate `honcho-server/.env` from `honcho-server/.env.template`
-3. Verify `OPENCODE_GO_API_KEY` is set in `home/.env`
-4. Start all services: `docker compose up -d`
+The script prefers Docker Compose when it is available; otherwise it uses
+Podman Compose. Check the selected runtime without initializing the submodule,
+writing `.env`, or starting containers:
+
+```bash
+bash scripts/setup-honcho.sh --detect-compose
+```
+
+The normal setup will:
+
+1. Detect Docker Compose or Podman Compose
+2. Initialize the Honcho git submodule
+3. Generate `honcho-server/.env` from `honcho-server/.env.template`
+4. Verify `OPENCODE_GO_API_KEY` is set in `home/.env`
+5. Start all services with the detected Compose runtime
 
 ## Manual Setup
 
@@ -51,7 +62,7 @@ Required parent variables (in `home/.env`):
 
 Optional:
 - `OPENROUTER_API_KEY` — OpenRouter API key (for embeddings; if not set,
-  the setup script preserves the embedded key from the last generated `.env`)
+  the setup script leaves its template placeholder unchanged)
 
 ### 2. LLM Configuration
 
@@ -77,12 +88,20 @@ Critical patches:
 
 ### 4. Starting Services
 
+Run the commands for the Compose runtime installed on your host:
+
 ```bash
-# From Aether-Agents root
-docker compose up -d                # Start all services
-docker compose logs -f honcho-api   # Follow API logs
-docker compose ps                   # Check service status
-docker compose down                 # Stop all services
+# Docker Compose
+docker compose up -d
+docker compose logs -f api
+docker compose ps
+docker compose down
+
+# Podman Compose
+podman compose up -d
+podman compose logs -f api
+podman compose ps
+podman compose down
 ```
 
 ### 5. Health Check
@@ -91,41 +110,54 @@ docker compose down                 # Stop all services
 # API should respond with 200
 curl http://localhost:8010/health
 
-# Or check via docker
+# Check service status with the runtime in use
 docker compose ps | grep honcho
+# or
+podman compose ps | grep honcho
 ```
 
 ### 6. Data Persistence
 
-- PostgreSQL data: Docker volume `pgdata`
-- Redis data: Docker volume `redis-data`
+- PostgreSQL data: Compose volume `pgdata`
+- Redis data: Compose volume `redis-data`
 - Database init: `honcho-server/database/init.sql`
 
 To reset all data:
+
 ```bash
+# Docker Compose
 docker compose down -v   # Removes volumes!
+
+# Podman Compose
+podman compose down -v   # Removes volumes!
 ```
 
 ## Troubleshooting
 
 ### "Structured output unsupported by provider"
+
 This is normal for DeepSeek V4 — the 3-level fallback kicks in automatically.
 Check logs for "falling back to prompt-only JSON" messages.
 
 ### Container won't start
+
 ```bash
 # Check if .env exists and has valid API keys
 grep -c 'API_KEY=' honcho-server/.env
 
-# Check Docker daemon
+# Check the available container runtime
 docker info
+# or
+podman info
 
 # View service logs
-docker compose logs honcho-api
-docker compose logs honcho-deriver
+docker compose logs api
+# or
+podman compose logs api
 ```
 
 ### Submodule not initialized
+
 ```bash
 git submodule update --init --recursive
 ```

@@ -1,92 +1,85 @@
-"""Validate that the Olympus MCP server tool schemas are consistent
-with the actual implementation — no phantom actions or parameters."""
-import re
-import inspect
+"""Validate Olympus v3 MCP tool schemas against their registered tool objects."""
+
+import asyncio
+
 import pytest
 
-
-@pytest.fixture
-def server_source():
-    """Get the source code of the server module."""
-    from olympus import server as server_module
-    return inspect.getsource(server_module)
+from olympus_v3 import server
 
 
-def test_talk_to_action_enum_no_wait(server_source):
-    """talk_to action enum MUST NOT contain 'wait' — it was removed."""
-    enum_values = _extract_action_enum(server_source)
-    assert 'wait' not in enum_values, \
-        f"talk_to action enum still contains 'wait' — this action was removed. Found: {enum_values}"
+TALK_TO_ACTIONS = {"open", "message", "poll", "close", "cancel", "delegate", "steer"}
+TALK_TO_PROPERTIES = {
+    "agent",
+    "action",
+    "session_id",
+    "prompt",
+    "poll_interval",
+    "timeout",
+    "project_root",
+    "directive",
+    "priority",
+}
 
 
-def test_talk_to_action_enum_no_discover(server_source):
-    """talk_to action enum MUST NOT contain 'discover' — it's a separate tool.
-    
-    'discover' appears in the talk_to tool's enum but is NOT handled by the
-    talk_to handler — it falls through to the error path. The else clause says:
-    'For discovery, use the discover tool.' So it's a phantom action that
-    shouldn't be in the enum.
-    """
-    enum_values = _extract_action_enum(server_source)
-    assert 'discover' not in enum_values, \
-        f"talk_to action enum still contains 'discover' — it's a phantom action. Found: {enum_values}"
+def _registered_tools():
+    """Return the MCP Tool objects exposed by the v3 server registration."""
+    return {tool.name: tool for tool in asyncio.run(server.list_tools())}
 
 
-def test_talk_to_no_timeout_parameter(server_source):
-    """talk_to schema MUST NOT have a 'timeout' parameter — it's phantom.
-    
-    The 'timeout' parameter was only used by the removed 'wait' action.
-    It is now unused in _handle_talk_to.
-    """
-    timeout_keys = _extract_property_keys(server_source)
-    assert 'timeout' not in timeout_keys, \
-        f"talk_to schema still has 'timeout' parameter — it's phantom and was removed. Found keys: {timeout_keys}"
+def test_v3_registers_expected_tools():
+    """The registered schema exposes the current v3 MCP tool surface."""
+    tools = _registered_tools()
+
+    assert set(tools) == {
+        "talk_to",
+        "discover",
+        "aether_status",
+        "aether_update",
+        "aether_curate",
+    }
 
 
-def test_talk_to_handled_actions_match_schema(server_source):
-    """The actions actually handled by _handle_talk_to should match the schema enum.
-    
-    Currently handled: open, message, poll, cancel, close
-    The schema should only list these.
-    """
-    handled = {'open', 'message', 'poll', 'cancel', 'close'}
-    enum_values = set(_extract_action_enum(server_source))
-    # Every value in the enum should be a handled action
-    phantoms = enum_values - handled
-    assert not phantoms, \
-        f"Schema has phantom action(s) not handled by code: {phantoms}. " \
-        f"Handled actions: {handled}"
+def test_talk_to_schema_matches_v3_actions_and_properties():
+    """talk_to's public schema includes every current action and its inputs."""
+    schema = _registered_tools()["talk_to"].inputSchema
+
+    assert set(schema["properties"]["action"]["enum"]) == TALK_TO_ACTIONS
+    assert set(schema["properties"]) == TALK_TO_PROPERTIES
+    assert schema["required"] == ["action"]
+    assert schema["properties"]["timeout"]["default"] == 300
+    assert schema["properties"]["poll_interval"]["default"] == 15
 
 
-# ---- Helper functions ----
+def test_aether_tool_schemas_expose_current_actions_and_required_roots():
+    """Continuity tools keep their registered actions and project-root contract."""
+    tools = _registered_tools()
 
-def _extract_action_enum(source: str) -> list[str]:
-    """Extract the action enum list from talk_to's inputSchema."""
-    # Find the inputSchema block for talk_to
-    # Strategy: find the talk_to tool definition, then its inputSchema, then action's enum
-    idx = source.find('"talk_to"')
-    if idx == -1:
-        return []
-    # Find the enum in the action property within this tool
-    talk_to_block = source[idx:idx + 2000]
-    match = re.search(r'"enum":\s*\[(.*?)\]', talk_to_block)
-    if not match:
-        return []
-    items = match.group(1)
-    return [item.strip().strip('"') for item in items.split(',')]
+    assert tools["discover"].inputSchema == {"type": "object", "properties": {}, "required": []}
+    assert tools["aether_status"].inputSchema["required"] == ["project_root"]
+    assert set(tools["aether_status"].inputSchema["properties"]["detail"]["enum"]) == {"summary", "full"}
+    assert tools["aether_update"].inputSchema["required"] == ["action", "project_root"]
+    assert set(tools["aether_update"].inputSchema["properties"]["action"]["enum"]) == {
+        "set_phase",
+        "set_task",
+        "add_blocker",
+        "remove_blocker",
+        "add_decision",
+        "add_issue",
+        "resolve_issue",
+    }
+    assert tools["aether_curate"].inputSchema["required"] == ["project_root"]
+    assert set(tools["aether_curate"].inputSchema["properties"]["focus"]["enum"]) == {
+        "full",
+        "recent",
+        "decisions",
+    }
 
 
-def _extract_property_keys(source: str) -> list[str]:
-    """Extract the top-level property key names from the talk_to inputSchema."""
-    idx = source.find('"talk_to"')
-    if idx == -1:
-        return []
-    talk_to_block = source[idx:idx + 2000]
-    # Find the properties block
-    match = re.search(r'"properties":\s*\{(.*?)\}', talk_to_block)
-    if not match:
-        return []
-    props_block = match.group(1)
-    # Extract all quoted keys before ': {' or ': {'
-    keys = re.findall(r'"(\w+)":\s*\{', props_block)
-    return keys
+@pytest.mark.parametrize("action", sorted(TALK_TO_ACTIONS))
+def test_every_talk_to_schema_action_reaches_a_handler_branch(monkeypatch, action):
+    """Each advertised talk_to action is handled rather than rejected as unknown."""
+    monkeypatch.setattr(server, "_manager", object())
+
+    response = asyncio.run(server._handle_talk_to({"action": action}))
+
+    assert "Unknown action" not in response[0].text

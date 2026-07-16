@@ -30,6 +30,10 @@ services:
     env_file:
       - path: ./honcho-server/.env
         required: true
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://honcho:honcho@database:5432/honcho
+      CACHE_ENABLED: "true"
+      CACHE_URL: redis://redis:6379/0?suppress=true
     restart: unless-stopped
 
   deriver:
@@ -45,13 +49,15 @@ services:
     env_file:
       - path: ./honcho-server/.env
         required: true
+    environment:
+      DB_CONNECTION_URI: postgresql+psycopg://honcho:honcho@database:5432/honcho
+      CACHE_ENABLED: "true"
+      CACHE_URL: redis://redis:6379/0?suppress=true
     restart: unless-stopped
 
   database:
-    image: pgvector/pgvector:pg15
+    image: docker.io/pgvector/pgvector:pg15
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:5434:5432"
     command: ["postgres", "-c", "max_connections=200"]
     environment:
       - POSTGRES_DB=honcho
@@ -68,10 +74,8 @@ services:
       retries: 5
 
   redis:
-    image: redis:8.2
+    image: docker.io/library/redis:8.2
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:6380:6379"
     volumes:
       - honcho_redis_data:/data
     healthcheck:

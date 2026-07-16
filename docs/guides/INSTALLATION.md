@@ -1,4 +1,4 @@
-# Installation Guide — Aether Agents v0.8.5
+# Installation Guide — Aether Agents v0.17.0
 
 Complete instructions for installing and configuring Aether Agents.
 

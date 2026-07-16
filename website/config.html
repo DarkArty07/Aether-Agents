@@ -105,35 +105,27 @@
             <p class="section-desc"><code>config.yaml</code> is the central configuration file for Aether Agents. It defines global model defaults and per-profile overrides so each Daimon can use a different provider or model.</p>
             <div class="code-block-wrap">
                 <pre class="code-block"><code># Global model configuration
+# Hermes config (v32 primary route)
 model:
-  default: claude-3.5-sonnet     # Default model for all Daimons
-  provider: anthropic              # Provider: openai, anthropic, google, moonshot, openrouter, ollama, vllm
-  base_url: https://api.anthropic.com  # Override API base URL (optional)
+  default: gpt-5.6-sol
+  provider: openai-codex
 
-# Per-profile overrides (optional)
-profiles:
-  hermes:
-    model:
-      default: claude-3.5-sonnet
-      provider: anthropic
-  etalides:
-    model:
-      default: claude-3.5-sonnet
-      provider: anthropic</code></pre>
-                <button class="copy-btn" data-copy="model:
-  default: claude-3.5-sonnet
-  provider: anthropic
-  base_url: https://api.anthropic.com
+# Daimon profiles have their own config.yaml.template files.
+# Their primary route is openai-codex/gpt-5.6-terra;
+# profile-specific OpenRouter entries are intentional fallbacks.</code></pre>
+                <button class="copy-btn" data-copy="# Hermes config (v32 primary route)
+model:
+  default: gpt-5.6-sol
+  provider: openai-codex
 
-profiles:
-  hermes:
-    model:
-      default: claude-3.5-sonnet
-      provider: anthropic
-  etalides:
-    model:
-      default: claude-3.5-sonnet
-      provider: anthropic">Copy</button>
+# Daimon profiles use openai-codex/gpt-5.6-terra
+# and profile-specific OpenRouter fallback entries.">Copy</button>
+            </div>
+            <div class="callout" style="border-color: rgba(57,255,130,0.3); margin-top: 1.5rem;">
+                <div class="callout-line">
+                    <span class="callout-icon" style="color: var(--c-hermes);">✓</span>
+                    <span><strong>Route distinction:</strong> Hermes uses <code>openai-codex/gpt-5.6-sol</code>; each Daimon uses <code>openai-codex/gpt-5.6-terra</code>; profile-specific OpenRouter entries are fallbacks. Graphify is the deliberate exception: semantic inference uses <code>llmgateway/deepseek-v4-flash</code>.</span>
+                </div>
             </div>
         </div>
     </section>
@@ -146,19 +138,19 @@ profiles:
             <div class="callout callout-warn">
                 <div class="callout-line">
                     <span class="callout-icon">⚠️</span>
-                    <span><strong>Critical:</strong> The flat format <code>model: claude-3.5-sonnet</code> is <strong>silently ignored</strong>. You MUST use the nested format with <code>model.default</code> — otherwise your configuration will have no effect and Aether Agents will fall back to hardcoded defaults.</span>
+                    <span><strong>Critical:</strong> The flat format <code>model: gpt-5.6-sol</code> is <strong>silently ignored</strong>. You MUST use the nested format with <code>model.default</code> — otherwise your configuration will have no effect and Aether Agents will fall back to hardcoded defaults.</span>
                 </div>
             </div>
             <div class="code-block-wrap" style="margin-top: 1.5rem;">
                 <pre class="code-block"><code># ✗ WRONG — silently ignored:
-model: claude-3.5-sonnet
+model: gpt-5.6-sol
 
 # ✓ CORRECT — nested format:
 model:
-  default: claude-3.5-sonnet</code></pre>
+  default: gpt-5.6-sol</code></pre>
                 <button class="copy-btn" data-copy="# ✓ CORRECT — nested format:
 model:
-  default: claude-3.5-sonnet">Copy</button>
+  default: gpt-5.6-sol">Copy</button>
             </div>
         </div>
     </section>
@@ -172,23 +164,23 @@ model:
 
             <h3 class="subsection-title">Example — hermes/.env</h3>
             <div class="code-block-wrap">
-                <pre class="code-block"><code>PROVIDER=anthropic
-MODEL_DEFAULT=claude-3.5-sonnet
-ANTHROPIC_API_KEY=sk-ant-...</code></pre>
-                <button class="copy-btn" data-copy="PROVIDER=anthropic
-MODEL_DEFAULT=claude-3.5-sonnet
-ANTHROPIC_API_KEY=sk-ant-...">Copy</button>
+                <pre class="code-block"><code>PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-sol
+OPENAI_API_KEY=...</code></pre>
+                <button class="copy-btn" data-copy="PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-sol
+OPENAI_API_KEY=...">Copy</button>
             </div>
 
             <h3 class="subsection-title">Example — etalides/.env</h3>
             <div class="code-block-wrap">
-                <pre class="code-block"><code>PROVIDER=anthropic
-MODEL_DEFAULT=claude-3.5-sonnet
-ANTHROPIC_API_KEY=sk-ant-...
+                <pre class="code-block"><code>PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-terra
+OPENAI_API_KEY=...
 EXA_API_KEY=exa-...         ← Required for web search!</code></pre>
-                <button class="copy-btn" data-copy="PROVIDER=anthropic
-MODEL_DEFAULT=claude-3.5-sonnet
-ANTHROPIC_API_KEY=sk-ant-...
+                <button class="copy-btn" data-copy="PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-terra
+OPENAI_API_KEY=...
 EXA_API_KEY=exa-...">Copy</button>
             </div>
 
@@ -285,7 +277,7 @@ EXA_API_KEY=exa-...">Copy</button>
             <div class="callout callout-warn">
                 <div class="callout-line">
                     <span class="callout-icon">⚙️</span>
-                    <span><strong>Flat config format silently ignored.</strong> Writing <code>model: claude-3.5-sonnet</code> has no effect. Fix: Always use nested format — <code>model.default: claude-3.5-sonnet</code>.</span>
+                    <span><strong>Flat config format silently ignored.</strong> Writing <code>model: gpt-5.6-sol</code> has no effect. Fix: Always use nested format — <code>model.default: gpt-5.6-sol</code>.</span>
                 </div>
             </div>
 

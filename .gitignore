@@ -8,6 +8,10 @@
 !.env.example
 honcho-server/.env
 
+# --- Hermes orchestrator config (user-specific: model, provider, paths) ---
+# Use config.yaml.template as base, copy to config.yaml and customize
+home/config.yaml
+
 # --- Runtime (auto-generated) ---
 home/sessions/
 home/logs/
@@ -73,23 +77,46 @@ home/profiles/*/skins
 home/profiles/*/cache/
 home/profiles/*/hindsight/
 home/profiles/*/.restart_last_processed.json
+home/profiles/*/.usage.json
+home/profiles/*/.usage.json.lock
 home/kanban.db
 home/profiles/*/kanban.db
 home/profiles/*/honcho.json
+home/honcho.json
 home/profiles/*/.env.bak*
 
 # --- Home-level runtime (not per-profile) ---
 home/config.yaml
+home/config.yaml.bak*
+home/config.yaml.corrupt.*.bak
 home/memories/
 home/hindsight/
 home/agent-hooks/
 home/pastes/
 home/cron/
 home/sandboxes/
+home/cache/
+home/lsp/
+home/kanban/
+home/.update_check
+home/.usage.json
+home/.usage.json.lock
+home/context_length_cache.yaml
+home/ollama_cloud_models_cache.json
+home/provider_models_cache.json
+home/processes.json
+home/projects.db
+home/verification_evidence.db
+home/kanban.db.*.lock
 home/shell-hooks-allowlist.json
 home/shell-hooks-allowlist.json.lock
 home/skills/.curator_state
 home/skills/.curator_backups/
+
+# --- Per-profile generated config backups and caches ---
+home/profiles/*/config.yaml.bak*
+home/profiles/*/context_length_cache.yaml
+home/profiles/*/verification_evidence.db
 
 # --- Python ---
 __pycache__/

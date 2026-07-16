@@ -4,7 +4,7 @@
 
 **A multi-agent team built on [hermes-agent](https://github.com/NousResearch/hermes-agent)**
 
-[![Version](https://img.shields.io/badge/version-0.15.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.17.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -26,9 +26,7 @@ cd Aether-Agents
 bash scripts/setup.sh
 ```
 
-Edit `.env` with your API keys, restart your terminal, and run `aether`.
-
-`setup.sh` handles everything: Python venv, pip dependencies, config generation from templates, and shell wrappers. See [docs/guides/INSTALLATION.md](docs/guides/INSTALLATION.md) for detailed options.
+Run `aether` after setup, then configure the generated `home/config.yaml` and profile `.env` files for your provider credentials. `setup.sh` creates runtime configuration from the tracked templates without overwriting an existing config or `.env`. See [docs/guides/INSTALLATION.md](docs/guides/INSTALLATION.md) for detailed options.
 
 ---
 
@@ -122,19 +120,22 @@ Aether-Agents/
 | `bash scripts/start-gateway.sh start` | Start/stop/restart gateway service |
 | `make doctor` | Verify installation health |
 | `make setup` | Shortcut for setup.sh |
+| `make setup-honcho` | Initialize Honcho and start it with detected Docker Compose or Podman Compose |
+| `make honcho-up` / `make honcho-down` | Start or stop Honcho with the detected Compose runtime |
+| `make honcho-logs` | Follow Honcho API logs with the detected Compose runtime |
 
 ---
 
 ## 🔑 Configuration
 
-`setup.sh` generates `config.yaml` from templates and copies `.env.example` → `.env` for each profile. Edit your API keys in the `.env` files:
+`setup.sh` generates `config.yaml` from templates and copies `.env.example` → `.env` without replacing existing local files. The tracked configuration schema is v32. Configure provider credentials in the generated `.env` files:
 
 ```bash
 # After setup, edit API keys:
 nano home/.env
 ```
 
-Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them to your machine's paths. See [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md) for full options.
+Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them to your machine's paths. Primary routes are Hermes on `openai-codex/gpt-5.6-sol` and all six Daimons on `openai-codex/gpt-5.6-terra`; profile-specific OpenRouter entries are intentional fallback routes. Graphify is the explicit exception: its semantic inference uses `llmgateway/deepseek-v4-flash`. See [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md) for full options.
 
 ---
 
@@ -148,27 +149,26 @@ Aether Agents uses [Honcho](https://github.com/plastic-labs/honcho) as a self-ho
 
 ### Prerequisites
 
-- **Docker Engine** (20.10+) with **Docker Compose** (v2+ or standalone `docker-compose`)
-- 4 GB free RAM for the 4 containers (PostgreSQL + pgvector, Redis, API, deriver)
+- A supported Compose runtime: Docker Compose v2, legacy `docker-compose`, or Podman Compose.
+- 4 GB free RAM for the API, deriver, PostgreSQL + pgvector, and Redis containers.
 
 ### Setup
 
     make setup-honcho
 
-This checks Docker availability, initializes the Honcho git submodule, generates honcho-server/.env from template (using your OPENCODE_GO_API_KEY), and starts all services.
+The setup script detects the available Compose runtime, initializes the Honcho submodule, generates `honcho-server/.env` from its template using configured keys, and starts the services.
 
 ### Commands
 
-    make honcho-up       # Start services (api, deriver, postgres, redis)
-    make honcho-down     # Stop services
-    make honcho-logs     # Follow logs
-    make honcho-status   # Check service health
+    make honcho-up       # Start services with the detected Compose runtime
+    make honcho-down     # Stop services while preserving named volumes
+    make honcho-logs     # Follow API logs with the detected Compose runtime
 
 ### Architecture
 
-Honcho runs as 4 containers on localhost:8010 (API), localhost:5434 (Postgres+pgvector), localhost:6380 (Redis). All Daimons query Honcho via MCP tools (honcho_profile, honcho_search, honcho_reasoning).
+Honcho runs as four internal containers: API, deriver, PostgreSQL + pgvector, and Redis. Only the API is host-bound at `127.0.0.1:8010`; PostgreSQL and Redis remain internal to the Compose network. Daimons query Honcho through MCP tools (`honcho_profile`, `honcho_search`, `honcho_reasoning`).
 
-The submodule includes 4 patches for DeepSeek/OpenCode Go compatibility (3-level structured output fallback, thinking disable, embedding dimensions, config validation). See honcho-server/PATCHES.md for details.
+The submodule includes compatibility patches for its configured providers. See `honcho-server/PATCHES.md` for details.
 
 Full documentation: docs/honcho-setup.md
 

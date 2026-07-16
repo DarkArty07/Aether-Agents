@@ -1,63 +1,42 @@
-# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
-
-# Etalides configuration — Aether Agents Daimon (Level 2)
-
-# Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: etalides
   role: researcher
-  description: "Researcher — internet and codebase contact. Deep investigation of frameworks, products, APIs, and codebases. Reports data only, never opinions."
+  description: Researcher — internet and codebase contact. Deep investigation of frameworks, products, APIs, and codebases. Reports data only, never opinions.
   capabilities:
-    - receives_from
-    - web-search
-    - web-extract
-    - code-search
-    - link-budget
-    - structured-output
-  launch_command: "hermes acp"
+  - receives_from
+  - web-search
+  - web-extract
+  - code-search
+  - link-budget
+  - structured-output
+  launch_command: hermes acp
   keep_alive: true
-
-# Model configuration
 model:
   api_mode: chat_completions
-  default: deepseek-v4-flash
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
-
-# Web search backend — Exa for high-quality research
+  default: gpt-5.6-terra
+  provider: openai-codex
+fallback_providers:
+- provider: openrouter
+  model: deepseek/deepseek-chat-v3-0324
 web:
-  backend: "exa"
-
-# Toolsets — each has a documented justification
+  backend: exa
 toolsets:
-  - web        # web_search + web_extract — primary web research tools
-  - browser    # browser_navigate/snapshot/click/type/etc — JS-heavy pages, SPA sites
-  - file       # read_file, write_file, patch, search_files — research persistence + code research
-  - terminal   # terminal + process — secondary tool for code research (git, wc, grep, structure analysis)
-
-# Link budget for research tasks — applies to both web and code research
-# Each web_search, web_extract, browser action, search_files query,
-# read_file, or terminal command counts as 1 action
+- web
+- browser
+- file
+- terminal
 link_budget:
   max_links: 10
   fast_mode: 5
-
 skills:
   external_dirs:
-    - __AETHER_ROOT__/home/skills
-
-# Session settings
-# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+  - __AETHER_ROOT__/home/skills
 display:
   personality: none
-
 max_iterations: 80
-
-# Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:
   mode: 'off'
-# Olympus v3 observability plugin
 plugins:
   enabled:
-    - olympus_v3
-    - aether
+  - olympus_v3
+  - aether
