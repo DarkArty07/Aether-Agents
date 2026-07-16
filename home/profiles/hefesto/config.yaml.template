@@ -1,56 +1,35 @@
-# Template — run scripts/setup.sh to generate config.yaml. Replaces __AETHER_ROOT__ and __HERMES_PYTHON__.
-
-# Hefesto configuration — Aether Agents Daimon (Senior Developer)
-
-# Agent discovery field — Olympus reads this to register the Daimon
 agent:
   name: hefesto
-  role: senior-developer                              # Implements atomic tasks from Hermes, does not decompose
-  description: "Senior Developer. Implements specs, code reviews, integrates, debugs. Receives atomic tasks from Hermes — does not decompose or delegate."
+  role: senior-developer
+  description: Senior Developer. Implements specs, code reviews, integrates, debugs. Receives atomic tasks from Hermes — does not decompose or delegate.
   capabilities:
-    - receives_from           # Receives atomic tasks from Hermes
-    - implementation          # Writes production code
-    - code-review             # Self-reviews before reporting
-    - integration             # Consolidates work across files
-    - debugging               # Root cause analysis
-  launch_command: "hermes acp"
+  - receives_from
+  - implementation
+  - code-review
+  - integration
+  - debugging
+  launch_command: hermes acp
   keep_alive: true
-
-# Model configuration
 model:
   api_mode: chat_completions
-  default: glm-5.1
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
-
-# Toolsets — implementation tools
-# delegate_task removed: Hermes decomposes and delegates. Hefesto receives atomic tasks.
-# subagent-driven-development skill removed: obsolete (Ergates concept removed in v0.11.0)
+  default: gpt-5.6-terra
+  provider: openai-codex
+fallback_providers:
+- provider: openrouter
+  model: deepseek/deepseek-chat-v3-0324
 toolsets:
-  - terminal            # Running commands, builds, installs, tests
-  - file                # Reading and writing source files
-  - search_files        # Finding files and patterns in the codebase
-  - patch               # Precise file edits
-  - execute_code        # Running code snippets for verification
-  - skills              # On-demand skill loading
-
+- terminal
+- file
+- skills
 skills:
   external_dirs:
-    - __AETHER_ROOT__/home/skills
-
-# Session settings
-# Personality overlay must be "none" — prevents kawaii default from overwriting SOUL.md
+  - __AETHER_ROOT__/home/skills
 display:
   personality: none
-
 max_iterations: 80
-
-# Auto-approve commands — Daimons have no interactive user for approval prompts
 approvals:
   mode: 'off'
-
-# Olympus v3 observability plugin
 plugins:
   enabled:
-    - olympus_v3
-    - aether
+  - olympus_v3
+  - aether

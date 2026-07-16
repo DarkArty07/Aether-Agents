@@ -28,6 +28,21 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.17.0 (2026-07-16)
+
+- **release**: Public documentation and release metadata synchronized to v0.17.0; tracked configuration schema is v32.
+- **models**: Hermes primary route is `openai-codex/gpt-5.6-sol`; all six Daimons use `openai-codex/gpt-5.6-terra` with profile-specific OpenRouter fallbacks retained for continuity.
+- **exception**: Graphify intentionally uses `llmgateway/deepseek-v4-flash` for semantic inference; this is an explicit integration exception, not stale routing.
+- **security**: Honcho documentation now states the network boundary correctly: only its API binds `127.0.0.1:8010`; PostgreSQL and Redis remain internal. Compose runtime detection supports Docker Compose, legacy `docker-compose`, and Podman Compose.
+- **tests**: Olympus v3 test/documentation migration now reflects five public MCP tools (`talk_to`, `discover`, `aether_status`, `aether_update`, `aether_curate`) and seven `talk_to` actions (`open`, `message`, `poll`, `close`, `cancel`, `delegate`, `steer`); `run_workflow` is not a registered v3 tool.
+
+### v0.16.0 (2026-07-08)
+
+- **feat**: "Hermes Can Write Now" — Hermes upgraded from pure orchestrator to orchestrator + fine-tuning implementer
+- **changed**: SOUL.md rewritten — §1 manifesto now includes implementation, HARD RULES relaxed (was 10, now 8), new FINE-TUNING vs BULK decision rule, §2 pipeline Phase 5 includes Hermes, §5 Delegation Checkpoint updated, §6 Routing table adds "Fine-tuning → Hermes direct", §8 Dev-QA Loop adds Hermes fine-tuning fallback, §12 Anti-patterns revised, §14 Agent Types adds Hermes as Orchestrator
+- **changed**: config.yaml — `file-write` removed from disabled_toolsets (was silently ignored, invalid name), `file-read`→`file` in toolsets + platform_toolsets (enables read_file, write_file, patch, search_files), `pre_tool_call` hook block removed entirely (was dead in TUI mode anyway), agent.description updated, paths fixed from /home/prometeo/ to /home/arty/, graphify MCP server added, MCP python paths updated to shared venv
+- **kept**: `code_execution` and `delegation` remain disabled in disabled_toolsets (valid restrictions)
+
 ### v0.11.1 (2026-05-19)
 
 - **changed**: Athena SOUL.md rewritten 342→121 lines — removed LangGraph workflow context, duplicate protocols, detailed checklists, few-shot examples

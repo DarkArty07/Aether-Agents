@@ -1,5 +1,5 @@
 # ==============================================================================
-# Aether Agents v0.8.5 — Makefile
+# Aether Agents v0.17.0 — Makefile
 # Common development targets
 # ==============================================================================
 
@@ -22,32 +22,44 @@ gateway: ## Delegate to start-gateway.sh (pass extra args: make gateway ARGS="st
 # ── Honcho (Memory Provider) ───────────────────────────────────────────────────
 
 .PHONY: setup-honcho
-setup-honcho: ## Setup Honcho: submodule, .env, docker compose up
+setup-honcho: ## Setup Honcho: submodule, .env, detected Compose runtime up
 	bash scripts/setup-honcho.sh
 
-.PHONY: honcho-up
-honcho-up: ## Start Honcho services (docker compose up -d)
-	docker compose up -d
+.PHONY: honcho-up honcho-down honcho-logs
+honcho-up honcho-down honcho-logs: COMPOSE = $(shell bash scripts/setup-honcho.sh --detect-compose)
+honcho-up: ## Start Honcho services with the detected Compose runtime
+	$(COMPOSE) up -d
 
-.PHONY: honcho-down
-honcho-down: ## Stop Honcho services (docker compose down)
-	docker compose down
+honcho-down: ## Stop Honcho services with the detected Compose runtime
+	$(COMPOSE) down
 
-.PHONY: honcho-logs
-honcho-logs: ## Follow Honcho service logs
-	docker compose logs -f
+honcho-logs: ## Follow Honcho API logs with the detected Compose runtime
+	$(COMPOSE) logs -f api
+
+# ── Python interpreter ────────────────────────────────────────────────────────
+
+# Prefer the legacy project venv. For pip-installed Hermes, use the interpreter
+# colocated with the hermes executable; otherwise fall back to python3.
+PYTHON ?= $(shell if [ -x home/.venv-hermes/bin/python ]; then \
+	printf '%s' home/.venv-hermes/bin/python; \
+elif command -v hermes >/dev/null 2>&1; then \
+	hermes_bin="$$(command -v hermes)"; hermes_dir="$$(dirname "$$hermes_bin")"; \
+	if [ -x "$$hermes_dir/python" ]; then printf '%s' "$$hermes_dir/python"; \
+	elif [ -x "$$hermes_dir/python3" ]; then printf '%s' "$$hermes_dir/python3"; \
+	else command -v python3; fi; \
+else command -v python3; fi)
 
 # ── Health Check ───────────────────────────────────────────────────────────────
 
 .PHONY: doctor
-doctor: ## Verify installation (python, venv, hermes, olympus, gpu)
+doctor: ## Verify installation (python, hermes, olympus, gpu)
 	@echo "═══ Aether Agents — Doctor ═══"
 	@echo ""
-	@echo -n "  Python 3.11+:    " && (python3 -c 'import sys; v=sys.version_info; print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Venv exists:     " && ([ -d home/.venv-hermes ] && echo "✓ home/.venv-hermes" || echo "✗ MISSING")
-	@echo -n "  Hermes binary:   " && (home/.venv-hermes/bin/hermes --version 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Olympus import:  " && (home/.venv-hermes/bin/python -c "import olympus_v3.server; print('✓ olympus_v3')" 2>/dev/null || echo "✗ FAILED")
-	@echo -n "  NVIDIA GPU:      " && (nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NOT AVAILABLE")
+	@echo "  Python interpreter: $(PYTHON)"
+	@echo -n "  Python 3.11+:       " && ($(PYTHON) -c 'import sys; v=sys.version_info; print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || echo "NOT FOUND")
+	@echo -n "  Hermes binary:      " && (hermes --version 2>/dev/null || echo "NOT FOUND")
+	@echo -n "  Olympus import:     " && ($(PYTHON) -c "import olympus_v3.server; print('✓ olympus_v3')" 2>/dev/null || echo "✗ FAILED")
+	@echo -n "  NVIDIA GPU:         " && (nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NOT AVAILABLE")
 	@echo ""
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
@@ -63,7 +75,7 @@ clean: ## Remove venv and __pycache__ directories
 .PHONY: test
 test: ## Run test suite (if tests/ exists)
 	@if [ -d tests ]; then \
-		home/.venv-hermes/bin/python -m pytest tests/ -v; \
+		$(PYTHON) -m pytest tests/ -v; \
 	else \
 		echo "No tests/ directory found — skipping"; \
 	fi

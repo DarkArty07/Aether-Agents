@@ -43,7 +43,7 @@ _turn_counter: int = 0
 
 def _get_db() -> OlympusDBSync:
     """Lazy-init the sync database connection.
-    
+
     DB path resolution: OLYMPUS_DB_PATH env > {AETHER_HOME}/.olympus_db_path file > get_db_path().
     """
     global _db
@@ -66,11 +66,11 @@ def _get_db() -> OlympusDBSync:
                     pass
                 except Exception as e:
                     logger.debug("Could not read DB path file %s: %s", db_path_file, e)
-        
+
         # Priority 3: fallback
         if not db_path:
             db_path = get_db_path()
-        
+
         _db = OlympusDBSync(db_path=Path(db_path) if db_path else None)
         _db.ensure_tables()
         logger.info("Olympus v3 hooks initialized with DB: %s", db_path)

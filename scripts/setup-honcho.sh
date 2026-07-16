@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.15.0 — Honcho Setup Script
+# Aether Agents v0.17.0 — Honcho Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
-# Sets up Honcho (memory provider) as a Docker Compose service.
+# Sets up Honcho (memory provider) with Docker Compose or Podman Compose.
 # Pulls the submodule, generates .env from template with API keys from home/.env,
 # and starts the services.
 #
 # Usage:  bash scripts/setup-honcho.sh
+#         bash scripts/setup-honcho.sh --detect-compose
 # ==============================================================================
 
 set -euo pipefail
+umask 077
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -36,35 +38,62 @@ ENV_TEMPLATE="$HONCHO_DIR/.env.template"
 ENV_FILE="$HONCHO_DIR/.env"
 HOME_ENV="$PROJECT_ROOT/home/.env"
 
-echo ""
-echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.15.0 ═══${NC}"
-echo ""
+DETECT_COMPOSE_ONLY=false
+case "${1:-}" in
+    "") ;;
+    --detect-compose) DETECT_COMPOSE_ONLY=true ;;
+    --help|-h)
+        echo "Usage: bash scripts/setup-honcho.sh [--detect-compose]"
+        exit 0
+        ;;
+    *)
+        fail "Unknown option: $1"
+        echo "Usage: bash scripts/setup-honcho.sh [--detect-compose]" >&2
+        exit 2
+        ;;
+esac
 
-# ── Pre-check: Docker ─────────────────────────────────────────────────────────
-info "Checking Docker prerequisites..."
-if ! command -v docker &>/dev/null; then
+if [ "$DETECT_COMPOSE_ONLY" = false ]; then
     echo ""
-    fail "Docker not found."
+    echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.17.0 ═══${NC}"
     echo ""
-    echo "  Docker is required to run Honcho (memory provider)."
-    echo "  Install Docker first, then re-run this script:"
+fi
+
+# ── Pre-check: Compose runtime ────────────────────────────────────────────────
+if [ "$DETECT_COMPOSE_ONLY" = false ]; then
+    info "Detecting Compose runtime..."
+fi
+COMPOSE=()
+COMPOSE_LABEL=""
+
+if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+    COMPOSE=(docker compose)
+    COMPOSE_LABEL="Docker Compose"
+elif command -v docker-compose &>/dev/null && docker-compose --version &>/dev/null; then
+    COMPOSE=(docker-compose)
+    COMPOSE_LABEL="Docker Compose (legacy)"
+elif command -v podman &>/dev/null && podman compose version &>/dev/null; then
+    COMPOSE=(podman compose)
+    COMPOSE_LABEL="Podman Compose"
+else
     echo ""
-    echo "    https://docs.docker.com/engine/install/"
+    fail "No supported Compose runtime found."
+    echo ""
+    echo "  Install Docker Compose or Podman Compose, then re-run this script."
+    echo "  Docker: https://docs.docker.com/compose/install/"
+    echo "  Podman: https://podman.io/docs/installation"
     echo ""
     exit 1
 fi
 
-if ! docker compose version &>/dev/null && ! docker-compose --version &>/dev/null; then
-    echo ""
-    fail "Docker Compose not found."
-    echo ""
-    echo "  Install Docker Compose (included with Docker Desktop / Docker Engine)."
-    echo "  See: https://docs.docker.com/compose/install/"
-    echo ""
-    exit 1
+if [ "$DETECT_COMPOSE_ONLY" = false ]; then
+    ok "$COMPOSE_LABEL detected: ${COMPOSE[*]}"
 fi
 
-ok "Docker and Docker Compose detected"
+if [ "$DETECT_COMPOSE_ONLY" = true ]; then
+    printf '%s\n' "${COMPOSE[*]}"
+    exit 0
+fi
 
 # ── Step 1: Git Submodule ──────────────────────────────────────────────────
 step "1/5" "Initializing git submodules"
@@ -83,6 +112,7 @@ if [ ! -f "$ENV_TEMPLATE" ]; then
 fi
 
 cp "$ENV_TEMPLATE" "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 ok "Copied .env.template → .env"
 
 # ── Step 3: Read API keys from home/.env ───────────────────────────────────
@@ -115,43 +145,55 @@ fi
 # ── Step 4: Substitute keys into honcho-server/.env ────────────────────────
 step "4/5" "Substituting API keys into Honcho .env"
 
+OPENCODE_GO_API_KEY="$OPENCODE_KEY" OPENROUTER_API_KEY="$OPENROUTER_KEY" python3 - "$ENV_FILE" <<'PY'
+import os
+import sys
+
+path = sys.argv[1]
+with open(path, encoding="utf-8") as env_file:
+    content = env_file.read()
+
+for placeholder, variable in (
+    ("${OPENCODE_GO_API_KEY}", "OPENCODE_GO_API_KEY"),
+    ("${OPENROUTER_API_KEY}", "OPENROUTER_API_KEY"),
+):
+    value = os.environ.get(variable, "")
+    if value:
+        content = content.replace(placeholder, value)
+
+with open(path, "w", encoding="utf-8") as env_file:
+    env_file.write(content)
+PY
+
 if [ -n "$OPENCODE_KEY" ]; then
-    # Use | as delimiter to avoid issues with / in keys
-    sed -i "s|\${OPENCODE_GO_API_KEY}|${OPENCODE_KEY}|g" "$ENV_FILE"
     ok "Substituted OPENCODE_GO_API_KEY"
 fi
 
 if [ -n "$OPENROUTER_KEY" ]; then
-    sed -i "s|\${OPENROUTER_API_KEY}|${OPENROUTER_KEY}|g" "$ENV_FILE"
     ok "Substituted OPENROUTER_API_KEY"
 else
     warn "OPENROUTER_API_KEY left as placeholder — configure it in home/.env and re-run"
 fi
 
-# ── Step 5: Start Docker Compose ───────────────────────────────────────────
-step "5/5" "Starting Honcho services via Docker Compose"
-
-if ! command -v docker &> /dev/null; then
-    fail "Docker is not installed"
-    exit 1
-fi
+# ── Step 5: Start services ─────────────────────────────────────────────────
+step "5/5" "Starting Honcho services via $COMPOSE_LABEL"
 
 cd "$PROJECT_ROOT"
-if docker compose up -d; then
+if "${COMPOSE[@]}" up -d; then
     ok "Honcho services started"
     echo ""
     info "Services running:"
-    docker compose ps 2>/dev/null || true
+    "${COMPOSE[@]}" ps 2>/dev/null || true
 else
-    fail "Docker Compose failed to start"
+    fail "$COMPOSE_LABEL failed to start"
     exit 1
 fi
 
 echo ""
 echo -e "${BOLD}═══ Honcho Setup Complete ═══${NC}"
 echo ""
-echo -e "  ${GREEN}API:${NC}      http://localhost:8000"
-echo -e "  ${GREEN}Health:${NC}   http://localhost:8000/health"
-echo -e "  ${GREEN}Logs:${NC}    docker compose logs -f"
-echo -e "  ${GREEN}Stop:${NC}    docker compose down"
+echo -e "  ${GREEN}API:${NC}      http://localhost:8010"
+echo -e "  ${GREEN}Health:${NC}   http://localhost:8010/health"
+echo -e "  ${GREEN}Logs:${NC}     ${COMPOSE[*]} logs -f"
+echo -e "  ${GREEN}Stop:${NC}     ${COMPOSE[*]} down"
 echo ""

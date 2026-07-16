@@ -468,7 +468,7 @@ async def _action_sign(
 
     # Update consultation status in DB
     contract = parsed.get("contract", {})
-    consultation_update = await db.update_consultation_status(
+    await db.update_consultation_status(
         session_id=session_id,
         agent=agent,
         status="signed",

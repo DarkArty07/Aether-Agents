@@ -58,8 +58,8 @@
                         </div>
                         <p>The only agent the user speaks to directly. Decomposes tasks, routes to the right Daimon, and synthesizes results. Owns <code>.aether/.hermes/</code>.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>delegate_task, talk_to, discover, run_workflow, memory, clarify</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Primary model:</span> <span>gpt-5.6-sol via openai-codex</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>talk_to, discover, aether_status, aether_update, aether_curate, memory</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No implement code · No direct web search · No skip session close</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature, bug-fix, security-review, research, refactor</span></div>
                         </div>
@@ -80,11 +80,11 @@
                     <div class="daimon-body">
                         <div class="daimon-meta">
                             <span class="daimon-name">Ariadna</span>
-                            <span class="daimon-tag tag-ariadna">Project Manager</span>
+                            <span class="daimon-tag tag-ariadna">Context Curator</span>
                         </div>
-                        <p>Maintains <code>CURRENT.md</code> and <code>LOG.md</code>. Detects blockers before they stop work. Provides session onboarding status on every open.</p>
+                        <p>Curates the <code>.aether</code> continuity database into <code>CONTEXT.md</code> so Daimon sessions begin with useful project state.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-4o</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>todo, memory, read_file, write_file, session_search</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No architectural decisions · No code writing · No direct user contact</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature</span></div>
@@ -108,17 +108,17 @@
                             <span class="daimon-name">Hefesto</span>
                             <span class="daimon-tag tag-hefesto">Senior Developer</span>
                         </div>
-                        <p>Receives specs from Hermes, spawns atomic sub-agents (<strong>Ergates</strong>) via <code>delegate_task(role=...)</code>, consolidates results, and runs tests.</p>
+                        <p>Receives clear, atomic specs from Hermes, implements them, verifies the result, and reports through Hermes.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>delegate_task, execute_code, read_file, write_file, patch, terminal, search_files</span></div>
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No design decisions · No ambiguous specs (report first) · Tracks via TASKS.md</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No design decisions · No ambiguous specs (report first) · No product decisions</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, refactor</span></div>
                         </div>
                         <div class="daimon-rules">
                             <span class="rule">→ No design decisions</span>
                             <span class="rule">→ No ambiguous specs</span>
-                            <span class="rule">→ Tracks via TASKS.md</span>
+                            <span class="rule">→ No product decisions</span>
                         </div>
                     </div>
                 </div>
@@ -136,7 +136,7 @@
                         </div>
                         <p>Uses <code>web_search</code> + <code>web_extract</code>. Every finding requires a source URL and a confidence level. Output is always structured: Findings / Sources / Confidence.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>web_search, web_extract, browser_navigate, browser_snapshot, browser_click</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No opinions or recommendations · ≤10 links / standard mode · Append-only RESEARCH.md</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, research</span></div>
@@ -162,7 +162,7 @@
                         </div>
                         <p>Designs user flows, layout specs, and HTML/CSS prototypes. Performs UX review post-implementation to catch regressions. Ensures WCAG compliance.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>browser_navigate, browser_snapshot, browser_vision, read_file, write_file</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No production code · No tech stack decisions · Minimum steps per flow</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature, refactor</span></div>
@@ -171,6 +171,22 @@
                             <span class="rule">→ No production code</span>
                             <span class="rule">→ No tech stack decisions</span>
                             <span class="rule">→ Minimum steps per flow</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ictinus -->
+                <div class="daimon-card" id="daimon-ictinus">
+                    <div class="daimon-body">
+                        <div class="daimon-meta">
+                            <span class="daimon-name">Ictinus</span>
+                            <span class="daimon-tag tag-daedalus">Backend Architect</span>
+                        </div>
+                        <p>Provides backend architecture, API, scalability, and infrastructure consultation to Hermes.</p>
+                        <div class="daimon-detail">
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Route:</span> <span>Primary <code>openai-codex</code>; profile-specific OpenRouter fallback</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No implementation · No product decisions · Reports through Hermes</span></div>
                         </div>
                     </div>
                 </div>
@@ -184,11 +200,11 @@
                     <div class="daimon-body">
                         <div class="daimon-meta">
                             <span class="daimon-name">Athena</span>
-                            <span class="daimon-tag tag-athena">Security Engineer</span>
+                            <span class="daimon-tag tag-athena">Security Analyst</span>
                         </div>
-                        <p>STRIDE threat modeling, OWASP review, dependency CVE auditing. Flags risks to Ariadna as sprint blockers. Activates proactively on new endpoints or dependencies.</p>
+                        <p>STRIDE threat modeling, OWASP review, dependency CVE auditing. Reports security findings to Hermes for routing and follow-up.</p>
                         <div class="daimon-detail">
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>claude-3.5-sonnet</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Model:</span> <span>gpt-5.6-terra</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>search_files, read_file, terminal, web_search</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No code implementation · All CVE search via Etalides · Risk before deployment</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>feature, bug-fix, security-review, refactor</span></div>
@@ -210,7 +226,7 @@
         <div class="container">
             <div class="section-label">Reference</div>
             <h2>Capabilities Matrix</h2>
-            <p class="section-desc">At a glance — each Daimon's role, model, key tools, and SOUL.md limits.</p>
+            <p class="section-desc">Hermes uses <code>openai-codex/gpt-5.6-sol</code>. All six Daimons use <code>openai-codex/gpt-5.6-terra</code> as their primary route, with profile-specific OpenRouter fallbacks. Graphify semantic inference intentionally uses <code>llmgateway/deepseek-v4-flash</code>.</p>
 
             <div class="lifecycle-table" style="margin-top: 2rem;">
                 <div class="lifecycle-row header" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
@@ -223,42 +239,49 @@
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-hermes);">Hermes</strong></div>
                     <div>Orchestrator</div>
-                    <div><code>claude-3.5-sonnet</code></div>
-                    <div>delegate_task, talk_to, discover, run_workflow, memory</div>
+                    <div><code>gpt-5.6-sol</code></div>
+                    <div>talk_to, discover, aether_status, aether_update, aether_curate, memory</div>
                     <div>No implement code, No direct web search</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-ariadna);">Ariadna</strong></div>
-                    <div>Project Manager</div>
-                    <div><code>gpt-4o</code></div>
+                    <div>Context Curator</div>
+                    <div><code>gpt-5.6-terra</code></div>
                     <div>todo, memory, read_file, write_file, session_search</div>
                     <div>No architectural decisions, No code writing</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-hefesto);">Hefesto</strong></div>
                     <div>Senior Developer</div>
-                    <div><code>claude-3.5-sonnet</code></div>
+                    <div><code>gpt-5.6-terra</code></div>
                     <div>delegate_task, execute_code, read_file, write_file, terminal</div>
                     <div>No design decisions, No ambiguous specs</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-etalides);">Etalides</strong></div>
                     <div>Web Researcher</div>
-                    <div><code>claude-3.5-sonnet</code></div>
+                    <div><code>gpt-5.6-terra</code></div>
                     <div>web_search, web_extract, browser_navigate, browser_snapshot</div>
                     <div>No opinions, ≤10 links, Append-only RESEARCH.md</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-daedalus);">Daedalus</strong></div>
                     <div>UX/UI Designer</div>
-                    <div><code>claude-3.5-sonnet</code></div>
+                    <div><code>gpt-5.6-terra</code></div>
                     <div>browser_navigate, browser_snapshot, browser_vision, read_file</div>
                     <div>No production code, No tech stack decisions</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
+                    <div><strong style="color: var(--c-daedalus);">Ictinus</strong></div>
+                    <div>Backend Architect</div>
+                    <div><code>gpt-5.6-terra</code></div>
+                    <div>file, terminal, architecture consultation</div>
+                    <div>No implementation, No product decisions</div>
+                </div>
+                <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-athena);">Athena</strong></div>
-                    <div>Security Engineer</div>
-                    <div><code>claude-3.5-sonnet</code></div>
+                    <div>Security Analyst</div>
+                    <div><code>gpt-5.6-terra</code></div>
                     <div>search_files, read_file, terminal, web_search</div>
                     <div>No code implementation, CVE search via Etalides</div>
                 </div>

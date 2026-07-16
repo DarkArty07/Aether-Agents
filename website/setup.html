@@ -36,7 +36,7 @@
     <section class="page-header">
         <div class="container">
             <h1>Setup Guide</h1>
-            <p>Get Aether Agents running locally in under five minutes — no Docker, no Redis, no ceremony.</p>
+            <p>Get Aether Agents running locally in under five minutes. Honcho is optional and uses a detected Docker Compose or Podman Compose runtime.</p>
         </div>
     </section>
 
@@ -51,18 +51,14 @@
                     <div class="step-content">
                         <h4>Clone &amp; Install</h4>
                         <div class="code-block-wrap">
-                            <pre class="code-block"><code>git clone https://github.com/DarkArty07/Aether-Agents.git
+                            <pre class="code-block"><code>git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .</code></pre>
-                            <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git
+bash scripts/setup.sh</code></pre>
+                            <button class="copy-btn" data-copy="git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .">Copy</button>
+bash scripts/setup.sh">Copy</button>
                         </div>
-                        <p class="step-note">Use Python 3.11 or later. Activate the venv before every session.</p>
+                        <p class="step-note">Use Python 3.11 or later. The setup script creates the project runtime, generates configs from templates, and preserves existing local configuration.</p>
                     </div>
                 </div>
 
@@ -104,7 +100,7 @@ cp home/profiles/athena/.env.example home/profiles/athena/.env">Copy</button>
                     <div class="step-num">3</div>
                     <div class="step-content">
                         <h4>Provider Setup</h4>
-                        <p class="step-note">Set <code>PROVIDER</code> in the profile's <code>.env</code> and supply the matching API key. Supported providers:</p>
+                        <p class="step-note">The tracked v32 configuration routes Hermes through <code>openai-codex/gpt-5.6-sol</code> and six Daimons through <code>openai-codex/gpt-5.6-terra</code>. Profile-specific OpenRouter entries are fallbacks; Graphify intentionally uses <code>llmgateway/deepseek-v4-flash</code> for semantic inference. Configure the credentials required by your selected routes:</p>
                         <div class="providers-table">
                             <div class="providers-row header">
                                 <div>Provider</div>
@@ -163,12 +159,14 @@ cp home/profiles/athena/.env.example home/profiles/athena/.env">Copy</button>
                         </div>
                         <div class="code-block-wrap" style="margin-top: 1rem;">
                             <pre class="code-block"><code># home/profiles/etalides/.env
-PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-EXA_API_KEY=exa-...</code></pre>
-                            <button class="copy-btn" data-copy="PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-...
-EXA_API_KEY=exa-...">Copy</button>
+PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-terra
+OPENAI_API_KEY=...
+EXA_API_KEY=...</code></pre>
+                            <button class="copy-btn" data-copy="PROVIDER=openai-codex
+MODEL_DEFAULT=gpt-5.6-terra
+OPENAI_API_KEY=...
+EXA_API_KEY=...">Copy</button>
                         </div>
                         <p class="step-note">Without <code>EXA_API_KEY</code>, Etalides will start but web search queries will fail.</p>
                     </div>
