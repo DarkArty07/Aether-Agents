@@ -40,10 +40,10 @@
                 A provider-agnostic multi-agent system. Orchestrates 6 specialized Daimons for collaborative software development through <strong>Olympus MCP</strong> and the <strong>ACP protocol</strong>.
             </p>
             <div class="hero-install">
-                <pre><code><span class="c-dim">$</span> git clone https://github.com/DarkArty07/Aether-Agents.git
-<span class="c-dim">$</span> cd Aether-Agents && pip install -e .
-<span class="c-dim">$</span> HERMES_HOME=~/Aether-Agents/home hermes --profile hermes</code></pre>
-                <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git">Copy</button>
+                <pre><code><span class="c-dim">$</span> git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
+<span class="c-dim">$</span> cd Aether-Agents
+<span class="c-dim">$</span> bash scripts/setup.sh</code></pre>
+                <button class="copy-btn" data-copy="git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git&#10;cd Aether-Agents&#10;bash scripts/setup.sh">Copy</button>
             </div>
         </div>
     </section>
@@ -54,7 +54,7 @@
             <div class="section-label">Overview</div>
             <h2>What is Aether Agents?</h2>
             <p class="section-desc">
-                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> — the orchestrator — via Olympus MCP. Workflows orchestrate multi-phase tasks across Daimons with <strong>HITL</strong> (human-in-the-loop) approval gates.
+                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> via Olympus MCP. Hermes coordinates explicit Daimon sessions and project continuity; public behavior is defined by the registered MCP tools, not legacy workflow claims.
             </p>
 
             <div class="callout">
@@ -72,7 +72,7 @@
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
-                    6 workflow types with HITL gates — project-init, feature, bug-fix, security-review, research, refactor.
+                    Olympus v3 exposes explicit session and continuity operations; Hermes composes multi-step work through delegation.
                 </div>
             </div>
         </div>
@@ -84,7 +84,7 @@
             <div class="section-label">Architecture</div>
             <h2>How it works</h2>
             <p class="section-desc">
-                Hermes connects to the <strong>Olympus MCP server</strong> via stdio. Olympus exposes three tools: <code>talk_to()</code>, <code>discover()</code>, and <code>run_workflow()</code>. Under the hood, Olympus uses the <strong>ACP (Agent Client Protocol)</strong> to spawn and communicate with each Daimon.
+                Hermes connects to the <strong>Olympus v3 MCP server</strong> via stdio. Olympus exposes five public tools: <code>talk_to()</code>, <code>discover()</code>, <code>aether_status()</code>, <code>aether_update()</code>, and <code>aether_curate()</code>. Under the hood, Olympus uses <strong>ACP (Agent Client Protocol)</strong> to manage Daimon sessions.
             </p>
 
             <div class="arch-diagram">
@@ -121,12 +121,8 @@
                     <div>Description</div>
                 </div>
                 <div class="lifecycle-row">
-                    <div><code>discover</code></div>
-                    <div>Lists all available Daimons and their capabilities</div>
-                </div>
-                <div class="lifecycle-row">
                     <div><code>open</code></div>
-                    <div>Spawns the Daimon process (if not running) and creates an ACP session</div>
+                    <div>Spawns a Daimon session through ACP</div>
                 </div>
                 <div class="lifecycle-row">
                     <div><code>message</code></div>
@@ -137,8 +133,12 @@
                     <div>Non-blocking status check — returns current thoughts, messages, tool calls</div>
                 </div>
                 <div class="lifecycle-row">
-                    <div><code>wait</code></div>
-                    <div>Blocks until the Daimon completes (max 600s timeout)</div>
+                    <div><code>delegate</code></div>
+                    <div>Opens, messages, and polls a Daimon session until completion or timeout</div>
+                </div>
+                <div class="lifecycle-row">
+                    <div><code>steer</code></div>
+                    <div>Injects a prioritized directive into an active Daimon session</div>
                 </div>
                 <div class="lifecycle-row">
                     <div><code>cancel</code></div>
@@ -154,10 +154,8 @@
             <p class="section-desc">Every project tracked by Aether gets this directory structure at its root. Each Daimon owns a subdirectory.</p>
 
             <pre class="code-block"><code>PROJECT/.aether/
-├── .hermes/     ← DESIGN.md + PLAN.md       (architecture, decisions)
-├── .ariadna/    ← CURRENT.md + LOG.md       (status, session history)
-├── .hefesto/    ← TASKS.md                  (implementation tracking)
-└── .etalides/   ← RESEARCH.md               (append-only, only when used)</code></pre>
+├── aether.db    ← continuity state and session records
+└── CONTEXT.md   ← curated project context injected into Daimon sessions</code></pre>
         </div>
     </section>
 
@@ -291,7 +289,7 @@
                 </div>
             </div>
 
-            <p class="workflows-note">Use <code>talk_to()</code> for single-Daimon consultations. Use <code>run_workflow()</code> for multi-phase tasks that need coordination and approval gates.</p>
+            <p class="workflows-note">Use <code>talk_to()</code> for single-Daimon work; Hermes coordinates multi-step tasks through explicit delegation. <code>run_workflow()</code> is not a registered Olympus v3 tool.</p>
         </div>
     </section>
 
@@ -520,7 +518,7 @@
             <div class="section-label">Provider-Agnostic</div>
             <h2>Any model. Any provider.</h2>
             <p class="section-desc">
-                Aether Agents doesn't prescribe a model. Any provider exposing an OpenAI-compatible API works. Each Daimon gets its own <code>.env</code> file — you can run Hermes on GPT-4o and Hefesto on a local vLLM instance, or use a single model for everything. Change it anytime.
+                Aether Agents doesn't prescribe a model. Any provider exposing an OpenAI-compatible API works. The tracked v32 configuration uses Hermes on <code>openai-codex/gpt-5.6-sol</code> and all six Daimons on <code>openai-codex/gpt-5.6-terra</code>. Profile-specific OpenRouter routes are fallbacks; Graphify semantic inference intentionally uses <code>llmgateway/deepseek-v4-flash</code>.
             </p>
 
             <div class="providers-table">
@@ -580,11 +578,9 @@
                     <div class="step-num">1</div>
                     <div class="step-content">
                         <h4>Clone and install</h4>
-                        <pre class="code-block"><code>git clone https://github.com/DarkArty07/Aether-Agents.git
+                        <pre class="code-block"><code>git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
-python3 -m venv venv
-source venv/bin/activate
-pip install -e .</code></pre>
+bash scripts/setup.sh</code></pre>
                     </div>
                 </div>
 

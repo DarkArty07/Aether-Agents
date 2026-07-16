@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.17.0] — 2026-07-16
+
+### Added
+- **Configuration schema v32**: Release-facing templates now document Hermes on `openai-codex/gpt-5.6-sol` and all six Daimons on `openai-codex/gpt-5.6-terra`, with profile-specific OpenRouter fallback routes.
+- **Portable Honcho operations**: Setup and documentation now support detected Docker Compose, legacy `docker-compose`, or Podman Compose runtimes.
+
+### Changed
+- **Graphify routing is explicit**: Graphify semantic inference intentionally remains on `llmgateway/deepseek-v4-flash`; it is not a stale Daimon route.
+- **Olympus v3 documentation and tests**: Public MCP documentation now matches the five registered tools — `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` — and the seven `talk_to` actions: `open`, `message`, `poll`, `close`, `cancel`, `delegate`, and `steer`.
+- **Honcho network boundary**: Only the API is host-bound at `127.0.0.1:8010`; PostgreSQL and Redis are internal Compose services.
+
+### Fixed
+- **Release metadata synchronization**: Project metadata, setup/update/gateway headers, README, installation guide, website, and agent documentation now identify v0.17.0.
+- **Fedora/runtime cleanup documentation**: Current instructions no longer require Docker exclusively or expose internal database/cache ports.
+
+### Security
+- **Configuration and runtime hardening**: Documentation preserves generated local config and `.env` files, documents provider fallbacks as intentional, and avoids treating internal PostgreSQL/Redis services as host-accessible endpoints.
+
+## [0.16.0] — 2026-07-08
+
+### Added
+- **Hermes fine-tuning implementation path**: Hermes can make small implementation, configuration, and bug-fix edits directly while bulk implementation remains delegated to Hefesto.
+
+### Changed
+- **Hermes Can Write Now**: Hermes changed from a pure orchestrator to an orchestrator plus fine-tuning implementer; its SOUL routing and development/QA guidance were updated accordingly.
+- **Valid file toolset**: `file` replaced the invalid `file-read`/`file-write` split in active toolset configuration, enabling `read_file`, `write_file`, `patch`, and `search_files`.
+- **Runtime paths and Graphify MCP wiring**: Hermes configuration paths were updated for the active runtime and Graphify was added as an MCP server.
+
+### Removed
+- **Dead write-restriction configuration**: The inactive `pre_tool_call` hook block was removed.
+
+### Security
+- **Valid restrictions retained**: `code_execution` and `delegation` remained disabled for Hermes.
+
+## Historical notes (pre-v0.16.0)
+
 ### Fixed
 - **Gateway MCP servers now inherit `home/.env`**: Drop-in systemd override added at `~/.config/systemd/user/hermes-gateway.service.d/override.conf` with `EnvironmentFile=` pointing to `home/.env`. Previously, MCP servers like Graphify (semantic retrieval) failed silently when invoked by the gateway because the unit file only injected PATH/VIRTUAL_ENV/HERMES_HOME. See skill `aether-agents-orchestration` pitfall #N and `references/gateway-mcp-env-injection.md` for the full diagnostic chain.
 - **task-delegation v1.4.1→v1.4.2**: New pitfall "Hefesto 'Nothing to Save' Last-Turn Is Unreliable" with prompt-framing mitigation.
@@ -556,3 +592,5 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.7.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.5.1...v0.6.0
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
+[0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
+[0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0

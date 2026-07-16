@@ -28,6 +28,14 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.17.0 (2026-07-16)
+
+- **release**: Public documentation and release metadata synchronized to v0.17.0; tracked configuration schema is v32.
+- **models**: Hermes primary route is `openai-codex/gpt-5.6-sol`; all six Daimons use `openai-codex/gpt-5.6-terra` with profile-specific OpenRouter fallbacks retained for continuity.
+- **exception**: Graphify intentionally uses `llmgateway/deepseek-v4-flash` for semantic inference; this is an explicit integration exception, not stale routing.
+- **security**: Honcho documentation now states the network boundary correctly: only its API binds `127.0.0.1:8010`; PostgreSQL and Redis remain internal. Compose runtime detection supports Docker Compose, legacy `docker-compose`, and Podman Compose.
+- **tests**: Olympus v3 test/documentation migration now reflects five public MCP tools (`talk_to`, `discover`, `aether_status`, `aether_update`, `aether_curate`) and seven `talk_to` actions (`open`, `message`, `poll`, `close`, `cancel`, `delegate`, `steer`); `run_workflow` is not a registered v3 tool.
+
 ### v0.16.0 (2026-07-08)
 
 - **feat**: "Hermes Can Write Now" — Hermes upgraded from pure orchestrator to orchestrator + fine-tuning implementer
