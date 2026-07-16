@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.17.0 — Honcho Setup Script
+# Aether Agents v0.18.0 — Honcho Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Sets up Honcho (memory provider) with Docker Compose or Podman Compose.
@@ -55,7 +55,7 @@ esac
 
 if [ "$DETECT_COMPOSE_ONLY" = false ]; then
     echo ""
-    echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.17.0 ═══${NC}"
+    echo -e "${BOLD}═══ Honcho Setup — Aether Agents v0.18.0 ═══${NC}"
     echo ""
 fi
 

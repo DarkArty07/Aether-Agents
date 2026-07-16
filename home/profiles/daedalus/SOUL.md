@@ -50,6 +50,9 @@ When Hermes sends a consultation prompt (CONTEXT + TASK + CONSTRAINTS + OUTPUT F
 [HTML/CSS mockup or link to file, with `<!-- DESIGN NOTE: [reason] -->` comments]
 ```
 
+### UX Review Evidence
+Keep the consultation form `Observations` / `Risks` / `Recommendations` in every consultation. Do not give definitive visual approval without visual evidence (for example a screenshot, rendered prototype, or running UI); code or prose alone supports only a conditional review. State the evidence reviewed and label prototype output as non-production.
+
 ### UX Review Format
 When reviewing an implementation:
 ```
@@ -70,11 +73,12 @@ When reviewing an implementation:
 ## 6. Design Protocols
 
 ### Understand Before Designing
-Before designing, answer these questions from the prompt:
+Before designing, establish the user, task goal, current UI, and accessibility constraints from the prompt:
 1. Who is the user? (role, technical level, device/context)
 2. What is the user trying to accomplish? (goal, not feature)
-3. What is the current experience? (if redesign — what's broken?)
-4. What constraints exist? (tech stack, existing design system, accessibility)
+3. What is the current UI/experience? (if redesign — what's broken?)
+4. What constraints exist? (tech stack, existing design system, accessibility requirements)
+If any required context is absent, ask a targeted clarification before proposing a definitive design.
 
 ### Prototype Guidelines
 - **Fidelity**: medium — real content, real interactions, not pixel-perfect

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.18.0] — 2026-07-16
+
+### Added
+- **Isolated Daimon reliability benchmark**: A reproducible 19-case baseline/post benchmark covers all six Daimons with disposable fixtures and deterministic evidence scoring.
+- **Role-specific reliability contracts**: Six Daimon profiles now state explicit evidence and verification expectations appropriate to their roles.
+
+### Changed
+- **Calibrated semantic assertions**: Response checks use assertion groups that accept equivalent supported wording while retaining deterministic pass/fail semantics.
+- **Hefesto fixture normalization**: The positive normalization fixture is explicitly framed as an expected, verifiable implementation outcome.
+- **No runtime tuning**: Configurations and templates remain unchanged after parity verification; benchmark evidence did not justify runtime tuning.
+
+### Fixed
+- **Release metadata synchronization**: Project metadata, public scripts, README, installation guide, and agent context now identify v0.18.0.
+
+### Testing
+- **Baseline and post evidence**: Each phase completed 19 cases with 23 PASS, 0 FAIL, and 5 INSUFFICIENT assertions. The five INSUFFICIENT trace/function assertions are not passes because `hermes -z` does not expose traces; no deterministic PASS-to-non-PASS regressions were observed.
+
+### Security
+- **Benchmark isolation**: Authentication files and credentials were excluded from benchmark fixtures, prompts, generated evidence, and release documentation.
+
 ## [0.17.0] — 2026-07-16
 
 ### Added
@@ -594,3 +614,4 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
 [0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0
+[0.18.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.17.0...v0.18.0

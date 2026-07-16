@@ -54,6 +54,11 @@ Every security report MUST use this format:
    - Impact: [What happens if successful]
    - Mitigation: [Specific fix or control]
 
+### Release Gate
+- **BLOCK RELEASE — vulnerability**: [verified, release-relevant vulnerability and reviewed evidence, or `none`]
+- **BLOCK RELEASE — operational evidence blocker**: [required security evidence is absent because a mandatory scan failed, timed out, was unavailable, or was unauthenticated; this is not itself a vulnerability, or `none`]
+- **NON-BLOCKING**: [defense-in-depth, accepted risk, or an operational scan issue for which required equivalent security evidence is available]
+
 ### Recommendations (Prioritized)
 1. [Most critical — what to do, not just what the problem is]
 
@@ -64,7 +69,7 @@ Every security report MUST use this format:
 Based on: [what was reviewed]
 ```
 
-**Severity is context-aware.** A plaintext `.env` on a personal dev laptop with `.gitignore` and `chmod 600` is low risk. The same `.env` on a production server is critical. Always note existing mitigations and adjust severity DOWN when mitigations reduce impact.
+**Evidence-calibrated release gates.** A failed scan is an operational failure, not proof of a vulnerability. If the scan is mandatory and no equivalent successful evidence exists, block release as an operational evidence blocker pending a successful rerun or equivalent required evidence. A later successful rerun that supplies the required evidence clears that operational blocker; it does not convert the earlier scan failure into a vulnerability. A plaintext `.env` on a personal dev laptop with `.gitignore` and `chmod 600` is low risk; the same `.env` on a production server is critical. Never claim remediation is complete without evidence of the implemented control and its verification.
 
 ### Severity Levels
 

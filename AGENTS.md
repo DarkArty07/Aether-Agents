@@ -28,6 +28,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.18.0 (2026-07-16)
+
+- **release**: Public release metadata is synchronized to v0.18.0; see `docs/releases/v0.18.0-daimon-reliability/BENCHMARK_REPORT.md` for the versioned reliability evidence.
+- **reliability**: Six Daimon profiles now carry role-specific evidence/verification contracts. The isolated 19-case baseline and post runs each recorded 23 PASS, 0 FAIL, and 5 INSUFFICIENT trace/function assertions; INSUFFICIENT is not a pass because `hermes -z` exposes no traces.
+- **config**: Templates and runtime configuration remain intentionally unchanged after parity verification; benchmark evidence did not justify tuning.
+
 ### v0.17.0 (2026-07-16)
 
 - **release**: Public documentation and release metadata synchronized to v0.17.0; tracked configuration schema is v32.
