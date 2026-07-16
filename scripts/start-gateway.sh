@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.18.1 — Gateway Service Manager
+# Aether Agents v0.18.2 — Gateway Service Manager
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Manage the Hermes Gateway systemd user service: start, stop, restart, status.
@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.18.1"
+SCRIPT_VERSION="0.18.2"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
