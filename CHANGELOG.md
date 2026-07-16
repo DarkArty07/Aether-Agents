@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.2] - 2026-07-16
+
+### Fixed
+- **ACP 0.9.0 permission schema**: Olympus ACP permission responses now conform to the installed ACP 0.9.0 schema.
+- **Least-privilege permission selection**: Permission handling deterministically selects an offered `allow_always` or `allow_once` option and denies the request when neither is offered.
+- **Process lifecycle ownership**: Async context-manager and yielded subprocess ownership are distinct, preserving exact-once normal teardown with bounded fallback termination.
+
+### Testing
+- **End-to-end and regression verification**: Real `aether_curate` E2E completed successfully with a fresh `CONTEXT.md`; the full 121-test suite passed.
+
+### Changed
+- **No runtime migration**: Runtime configuration and templates require no migration for this patch release.
+
 ## [0.18.1] - 2026-07-16
 
 ### Fixed
@@ -627,5 +640,6 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
 [0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0
+[0.18.2]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.17.0...v0.18.0

@@ -32,7 +32,9 @@ from typing import Any
 from acp import PROTOCOL_VERSION
 from acp.interfaces import Client
 from acp.schema import (
+    AllowedOutcome,
     ClientCapabilities,
+    DeniedOutcome,
     Implementation,
     PermissionOption,
     RequestPermissionResponse,
@@ -60,7 +62,8 @@ class AgentState:
     name: str
     profile_path: Path
     connection: Any = None  # acp Connection
-    process: Any = None  # subprocess context manager
+    process_context: Any = None  # async context manager from spawn_agent_process
+    process: Any = None  # actual subprocess yielded by process_context
     pid: int | None = None
     acp_session_ids: dict[str, str] = field(default_factory=dict)  # olympus_id -> acp_id
     status: str = "dead"  # dead, spawning, idle, busy
@@ -93,12 +96,33 @@ class OlympusACPClient(Client):
         tool_call: ToolCall | None = None,
         **kwargs: Any,
     ) -> RequestPermissionResponse:
-        """Auto-approve all permission requests from Daimons."""
-        logger.debug("Auto-approving permission for tool: %s", tool_call.name if tool_call else "unknown")
-        return RequestPermissionResponse(
-            permitted=True,
-            reason="Auto-approved by Olympus v3 orchestrator",
+        """Select an offered allow option, never inventing a permission ID."""
+        tool_title = getattr(tool_call, "title", None) or getattr(tool_call, "name", None) or "unknown"
+        tool_call_id = getattr(tool_call, "tool_call_id", None) or getattr(tool_call, "toolCallId", None)
+        logger.debug(
+            "Auto-handling permission for tool title=%s tool_call_id=%s",
+            tool_title,
+            tool_call_id or "unknown",
         )
+
+        for allowed_kind in ("allow_always", "allow_once"):
+            selected = next((option for option in options if option.kind == allowed_kind), None)
+            if selected is not None:
+                logger.debug(
+                    "Selected ACP permission option %s (%s) for tool_call_id=%s",
+                    selected.option_id,
+                    selected.kind,
+                    tool_call_id or "unknown",
+                )
+                return RequestPermissionResponse(
+                    outcome=AllowedOutcome(optionId=selected.option_id, outcome="selected"),
+                )
+
+        logger.warning(
+            "Denying ACP permission because no allow option was offered for tool_call_id=%s",
+            tool_call_id or "unknown",
+        )
+        return RequestPermissionResponse(outcome=DeniedOutcome(outcome="cancelled"))
 
     async def session_update(self, session_id: str, update: Any, **kwargs: Any) -> None:
         """No-op in v3. Plugin hooks handle all data flow via SQLite."""
@@ -335,7 +359,8 @@ class ACPManager:
                      agent.name, init_resp.protocol_version)
 
         agent.connection = conn
-        agent.process = cm
+        agent.process_context = cm
+        agent.process = proc
         agent.pid = proc.pid if hasattr(proc, "pid") else None
         agent.status = "idle"
 
@@ -768,28 +793,43 @@ class ACPManager:
                 except Exception as e:
                     logger.warning("Error closing session %s during shutdown: %s", sid, e)
 
-            # Close ACP connection
-            if agent.connection:
+            # Legacy AgentState has no process context to own connection teardown.
+            if agent.process_context is None and agent.connection:
                 try:
                     await agent.connection.close()
                 except Exception as e:
                     logger.warning("Error closing ACP connection for %s: %s", name, e)
 
-            # Terminate process
+            # spawn_agent_process owns normal process cleanup through its async
+            # context manager.  Only touch the yielded subprocess as a bounded
+            # fallback if that context cannot finish its own cleanup.
             agent.status = "dead"
-            if agent.process is not None:
+            fallback_terminate = agent.process_context is None
+            if agent.process_context is not None:
+                try:
+                    await asyncio.wait_for(
+                        agent.process_context.__aexit__(None, None, None), timeout=5.0
+                    )
+                except asyncio.TimeoutError:
+                    fallback_terminate = True
+                    logger.warning("Timed out exiting ACP process context for %s", name)
+                except Exception as e:
+                    fallback_terminate = True
+                    logger.warning("Error exiting ACP process context for %s: %s", name, e)
+
+            if fallback_terminate and agent.process is not None:
                 try:
                     agent.process.terminate()
                     try:
                         await asyncio.wait_for(agent.process.wait(), timeout=5.0)
                     except asyncio.TimeoutError:
                         agent.process.kill()
-                        await agent.process.wait()
-                    logger.info("Terminated process for %s (PID: %s)", name, agent.pid)
+                        await asyncio.wait_for(agent.process.wait(), timeout=5.0)
+                    logger.info("Fallback-terminated process for %s (PID: %s)", name, agent.pid)
                 except ProcessLookupError:
                     logger.info("Process for %s already terminated", name)
                 except Exception as e:
-                    logger.warning("Error terminating process for %s: %s", name, e)
+                    logger.warning("Error fallback-terminating process for %s: %s", name, e)
 
             # Clean up PID-suffixed files
             pid = agent.pid

@@ -28,6 +28,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.18.2 (2026-07-16)
+
+- **release**: Public metadata is synchronized to v0.18.2; v0.18.1/v0.18.0 history remains preserved.
+- **fix**: Olympus ACP permissions now match installed ACP 0.9.0, selecting the least-privilege offered allow option deterministically or denying when none is offered.
+- **lifecycle**: Async context-manager and subprocess ownership are distinct, with exact-once normal teardown and bounded fallback; real `aether_curate` E2E and all 121 tests pass. No runtime config/template migration is required.
+
 ### v0.18.1 (2026-07-16)
 
 - **release**: Public metadata is synchronized to v0.18.1; v0.18.0 reliability evidence remains preserved at `docs/releases/v0.18.0-daimon-reliability/BENCHMARK_REPORT.md`.
