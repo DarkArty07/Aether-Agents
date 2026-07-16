@@ -6,18 +6,19 @@ Hook tests mock the DB and file system operations to ensure isolation.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sqlite3
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from olympus_v3.acp_manager import ACPManager
+from olympus_v3.acp_manager import ACPManager, AgentState, SessionInfo
 from olympus_v3.aether_db import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
 from olympus_v3.aether_hooks import hooks as hooks_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -1046,3 +1047,120 @@ class TestKeyedAgentKey:
         key1 = ACPManager._agent_key("hefesto", "/project/A")
         key2 = ACPManager._agent_key("hefesto", "/project/A")
         assert key1 == key2
+
+class _PromptDB:
+    def __init__(self) -> None:
+        self.status_updates: list[tuple[str, str]] = []
+
+    async def update_session_status(self, session_id: str, status: str) -> None:
+        self.status_updates.append((session_id, status))
+
+
+class _PromptConnection:
+    def __init__(self, stop_reason: object) -> None:
+        self.stop_reason = stop_reason
+
+    async def prompt(self, **kwargs):
+        return SimpleNamespace(stop_reason=self.stop_reason)
+
+
+async def _wait_for_prompt_completion() -> None:
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize(
+    ("stop_reason", "expected_status"),
+    [
+        ("end_turn", "completed"),
+        ("cancelled", "cancelled"),
+        ("refusal", "error"),
+        ("max_tokens", "error"),
+        ("max_turn_requests", "error"),
+        ("unknown_terminal_reason", "error"),
+        (SimpleNamespace(value="end_turn"), "completed"),
+        (SimpleNamespace(name="cancelled"), "cancelled"),
+    ],
+)
+def test_send_message_maps_acp_stop_reason_to_persisted_terminal_status(
+    tmp_path: Path, stop_reason: object, expected_status: str
+) -> None:
+    manager_db = _PromptDB()
+    manager = ACPManager(profiles_dir=tmp_path, db=manager_db)
+    session_id = "stop-reason-session"
+    project_root = "/project"
+    profile_path = tmp_path / "hefesto"
+    profile_path.mkdir()
+    connection = _PromptConnection(stop_reason)
+    manager.sessions[session_id] = SessionInfo(
+        session_id=session_id,
+        agent_name="hefesto",
+        acp_session_id="acp-session",
+        project_root=project_root,
+    )
+    manager.agents[("hefesto", project_root)] = AgentState(
+        name="hefesto", profile_path=profile_path, connection=connection, pid=12345
+    )
+
+    asyncio.run(manager.send_message(session_id, "test prompt"))
+    asyncio.run(_wait_for_prompt_completion())
+
+    assert manager.sessions[session_id].status == expected_status
+    assert manager_db.status_updates == [(session_id, expected_status)]
+
+
+def test_close_uses_explicit_error_override_and_preserves_terminal_failures(tmp_path: Path) -> None:
+    manager_db = _PromptDB()
+    manager = ACPManager(profiles_dir=tmp_path, db=manager_db)
+    session_id = "close-session"
+    project_root = "/project"
+    profile_path = tmp_path / "hefesto"
+    profile_path.mkdir()
+    manager.sessions[session_id] = SessionInfo(
+        session_id=session_id,
+        agent_name="hefesto",
+        acp_session_id="acp-session",
+        project_root=project_root,
+    )
+    manager.agents[("hefesto", project_root)] = AgentState(
+        name="hefesto", profile_path=profile_path, pid=12345
+    )
+
+    result = asyncio.run(manager.close(session_id, terminal_status="error"))
+
+    assert result == {"status": "error", "session_id": session_id}
+    assert manager_db.status_updates == [(session_id, "error")]
+
+    manager.sessions[session_id] = SessionInfo(
+        session_id=session_id,
+        agent_name="hefesto",
+        project_root=project_root,
+        status="cancelled",
+    )
+    result = asyncio.run(manager.close(session_id, terminal_status="completed"))
+
+    assert result == {"status": "cancelled", "session_id": session_id}
+    assert manager_db.status_updates[-1] == (session_id, "cancelled")
+
+
+def test_close_rejects_nonterminal_status_override(tmp_path: Path) -> None:
+    manager = ACPManager(profiles_dir=tmp_path)
+    manager.sessions["close-session"] = SessionInfo(
+        session_id="close-session", agent_name="hefesto"
+    )
+
+    with pytest.raises(ValueError, match="terminal_status"):
+        asyncio.run(manager.close("close-session", terminal_status="active"))
+
+
+def test_close_defaults_to_completed_for_active_session(tmp_path: Path) -> None:
+    manager_db = _PromptDB()
+    manager = ACPManager(profiles_dir=tmp_path, db=manager_db)
+    manager.sessions["close-session"] = SessionInfo(
+        session_id="close-session", agent_name="hefesto"
+    )
+
+    result = asyncio.run(manager.close("close-session"))
+
+    assert result == {"status": "completed", "session_id": "close-session"}
+    assert manager_db.status_updates == [("close-session", "completed")]

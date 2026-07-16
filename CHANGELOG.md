@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.1] - 2026-07-16
+
+### Fixed
+- **Fail-closed curation completion**: `aether_curate` now waits for Ariadna terminal completion and verifies a fresh `CONTEXT.md` before reporting success.
+- **Non-success outcome persistence**: Non-success ACP stop reasons and curation failures remain non-success rather than being recorded as completed.
+- **Strict completion validation**: Bounded timeout, clarification handling, stale/invalid artifact rejection, and strict schema/footer checks prevent false success.
+
+### Testing
+- **Regression coverage**: 90 focused tests and the 113-test suite passed for the curation hardening.
+
+### Changed
+- **No runtime migration**: Runtime configuration and templates require no migration for this patch release.
+
 ## [0.18.0] — 2026-07-16
 
 ### Added
@@ -614,4 +627,5 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
 [0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0
+[0.18.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.17.0...v0.18.0

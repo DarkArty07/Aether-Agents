@@ -25,6 +25,7 @@ import logging
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 from mcp import types as mcp_types
 from mcp.server import Server
@@ -43,6 +44,8 @@ logger = logging.getLogger("olympus_v3")
 POLL_INTERVAL = 15  # seconds between polls when delegating
 STALL_TIMEOUT = 120  # seconds with zero activity before considering stalled
 MAX_POLL_ITERATIONS = 200  # safety limit for delegate loops
+CURATE_POLL_INTERVAL = 1  # seconds between Ariadna curation polls
+CURATE_TIMEOUT_SECONDS = 300  # bounded wait for Ariadna curation
 
 # ---------------------------------------------------------------------------
 # Server setup
@@ -699,6 +702,61 @@ async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
         return [mcp_types.TextContent(type="text", text=f"Error updating aether: {e}")]
 
 
+def _context_snapshot(path: Path) -> tuple[str, int] | None:
+    """Capture content and mtime so a stale artifact cannot satisfy curation."""
+    if not path.is_file():
+        return None
+    stat = path.stat()
+    return (path.read_text(), stat.st_mtime_ns)
+
+
+def _curation_result_text(progress: dict) -> str:
+    """Return all manager result fields that may carry an agent outcome."""
+    return "\n".join(
+        str(progress.get(key, ""))
+        for key in ("last_turn", "response", "result", "error", "reason")
+        if progress.get(key) is not None
+    ).strip()
+
+
+def _verify_curated_context(
+    path: Path,
+    before: tuple[str, int] | None,
+    focus: str,
+    sessions_count: int,
+) -> str | None:
+    """Return a fail-closed verification error, or None for a valid fresh context."""
+    if not path.is_file():
+        return "CONTEXT.md was not written by Ariadna."
+
+    try:
+        content, mtime_ns = _context_snapshot(path) or ("", 0)
+    except OSError as e:
+        return f"could not read CONTEXT.md after curation: {e}"
+
+    if not content.strip():
+        return "CONTEXT.md is empty after curation."
+    if len(content) > 1500:
+        return "CONTEXT.md exceeds the 1500-character limit."
+    if before is not None and before == (content, mtime_ns):
+        return "CONTEXT.md was not freshly written by this invocation."
+
+    headings = [line for line in content.splitlines() if line.startswith("#")]
+    required_headings = [
+        "## Estado actual",
+        "## Archivos recientes",
+        "## Decisiones activas",
+        "## Proximo paso",
+    ]
+    if len(headings) != 5 or not headings[0].startswith("# ") or headings[1:] != required_headings:
+        return "CONTEXT.md does not match the required five-section schema."
+
+    expected_footer = f"— Curated: {datetime.now().strftime('%Y-%m-%d')} | focus: {focus} | sessions: {sessions_count}"
+    if not content.rstrip().endswith(expected_footer):
+        return "CONTEXT.md is missing the expected curated footer."
+    return None
+
+
 async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
     """Curate .aether data into CONTEXT.md by spawning Ariadna."""
     project_root = args.get("project_root", "")
@@ -807,26 +865,89 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
         f"Write the file using write_file tool. Path: {aether_dir}/CONTEXT.md"
     )
 
+    context_path = aether_dir / "CONTEXT.md"
+    session_id: str | None = None
+    curation_succeeded = False
+    close_status = "error"
+
     try:
+        before_context = _context_snapshot(context_path)
         session_id = await manager.spawn_agent(agent_name="ariadna", project_root=project_root)
         await manager.send_message(session_id, prompt)
-        # Close the session after curation
-        try:
-            await manager.close_session(session_id)
-        except Exception:
-            pass
 
-        # Post-curate staleness sync removed: CONTEXT.md is now always injected
-        # if it exists and has content, regardless of mtime vs updated_at.
-        # Freshness is managed by aether_curate — Hermes decides when to re-curate.
+        deadline = time.monotonic() + CURATE_TIMEOUT_SECONDS
+        progress: dict | None = None
+        while time.monotonic() < deadline:
+            try:
+                remaining = max(0, deadline - time.monotonic())
+                progress = await asyncio.wait_for(manager.poll(session_id), timeout=remaining)
+            except asyncio.TimeoutError:
+                return [mcp_types.TextContent(
+                    type="text",
+                    text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
+                )]
+            except Exception as e:
+                logger.error("aether_curate poll error for %s: %s", session_id, e)
+                return [mcp_types.TextContent(type="text", text=f"Error polling Ariadna curation: {e}")]
 
-        return [mcp_types.TextContent(
-            type="text",
-            text=f"Curated context written to {aether_dir}/CONTEXT.md",
-        )]
+            status = progress.get("status", "unknown")
+            if progress.get("clarification_needed") or status == "clarification_needed":
+                return [mcp_types.TextContent(
+                    type="text",
+                    text=f"Error: Ariadna requires clarification: {_curation_result_text(progress)}",
+                )]
+            if status in ("completed", "error", "cancelled"):
+                break
+            await asyncio.sleep(min(CURATE_POLL_INTERVAL, max(0, deadline - time.monotonic())))
+        else:
+            return [mcp_types.TextContent(
+                type="text",
+                text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
+            )]
+
+        if progress is None:
+            return [mcp_types.TextContent(type="text", text="Error: Ariadna curation returned no terminal result.")]
+
+        status = progress.get("status", "unknown")
+        if status != "completed":
+            if status == "cancelled":
+                close_status = "cancelled"
+            return [mcp_types.TextContent(
+                type="text",
+                text=f"Error: Ariadna session ended with status '{status}': {_curation_result_text(progress)}",
+            )]
+
+        result_text = _curation_result_text(progress)
+        result_upper = result_text.upper()
+        if any(marker in result_upper for marker in ("CLARIFICATION NEEDED", "NOT WRITTEN", "UNVERIFIED")):
+            return [mcp_types.TextContent(
+                type="text",
+                text=f"Error: Ariadna did not verify CONTEXT.md: {result_text}",
+            )]
+
+        verification_error = _verify_curated_context(
+            context_path,
+            before_context,
+            focus,
+            sessions_count,
+        )
+        if verification_error:
+            return [mcp_types.TextContent(type="text", text=f"Error: {verification_error}")]
+
+        curation_succeeded = True
+        return [mcp_types.TextContent(type="text", text=f"Curated context written to {context_path}")]
     except Exception as e:
-        logger.error("aether_curate spawn error: %s", e)
-        return [mcp_types.TextContent(type="text", text=f"Error spawning Ariadna: {e}")]
+        logger.error("aether_curate execution error: %s", e)
+        return [mcp_types.TextContent(type="text", text=f"Error running Ariadna curation: {e}")]
+    finally:
+        if session_id is not None:
+            try:
+                await manager.close(
+                    session_id,
+                    terminal_status=None if curation_succeeded else close_status,
+                )
+            except Exception as e:
+                logger.warning("aether_curate failed to close session %s: %s", session_id, e)
 
 
 # ---------------------------------------------------------------------------
