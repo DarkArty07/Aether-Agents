@@ -15,8 +15,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from acp.schema import PermissionOption
 
-from olympus_v3.acp_manager import ACPManager, AgentState, SessionInfo
+from olympus_v3.acp_manager import ACPManager, AgentState, OlympusACPClient, SessionInfo
 from olympus_v3.aether_db import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
 from olympus_v3.aether_hooks import hooks as hooks_module
 
@@ -1164,3 +1165,213 @@ def test_close_defaults_to_completed_for_active_session(tmp_path: Path) -> None:
 
     assert result == {"status": "completed", "session_id": "close-session"}
     assert manager_db.status_updates == [("close-session", "completed")]
+
+
+# ===========================================================================
+# ACP permission and process ownership regressions
+# ===========================================================================
+
+
+class _ShutdownConnection:
+    def __init__(self) -> None:
+        self.closed_sessions: list[str] = []
+        self.close_calls = 0
+
+    async def close_session(self, session_id: str) -> None:
+        self.closed_sessions.append(session_id)
+
+    async def close(self) -> None:
+        self.close_calls += 1
+
+
+class _ProcessContext:
+    def __init__(self, exc: Exception | None = None) -> None:
+        self.exit_calls = 0
+        self.exc = exc
+        self.connection: _ShutdownConnection | None = None
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        self.exit_calls += 1
+        if self.exc is not None:
+            raise self.exc
+        if self.connection is not None:
+            await self.connection.close()
+
+
+class _ActualProcess:
+    def __init__(self, pid: int = 4242) -> None:
+        self.pid = pid
+        self.terminate_calls = 0
+        self.kill_calls = 0
+        self.wait_calls = 0
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+
+    async def wait(self) -> None:
+        self.wait_calls += 1
+
+
+def _shutdown_manager(tmp_path: Path, context: _ProcessContext, process: _ActualProcess) -> ACPManager:
+    profile_path = tmp_path / "hefesto"
+    profile_path.mkdir()
+    manager = ACPManager(profiles_dir=tmp_path)
+    agent = AgentState(
+        name="hefesto",
+        profile_path=profile_path,
+        connection=_ShutdownConnection(),
+        process_context=context,
+        process=process,
+        pid=process.pid,
+        status="idle",
+    )
+    context.connection = agent.connection
+    manager.agents[("hefesto", "/project")] = agent
+    return manager
+
+
+def test_request_permission_prefers_offered_allow_always_option() -> None:
+    response = asyncio.run(OlympusACPClient().request_permission(
+        [
+            PermissionOption(kind="allow_once", name="Allow once", optionId="once"),
+            PermissionOption(kind="allow_always", name="Always allow", optionId="always"),
+        ],
+        session_id="session",
+        tool_call=SimpleNamespace(title="write_file", tool_call_id="tool-1"),
+    ))
+
+    assert response.outcome.outcome == "selected"
+    assert response.outcome.option_id == "always"
+
+
+def test_request_permission_falls_back_to_offered_allow_once_option() -> None:
+    response = asyncio.run(OlympusACPClient().request_permission(
+        [PermissionOption(kind="allow_once", name="Allow once", optionId="once")],
+        session_id="session",
+    ))
+
+    assert response.outcome.outcome == "selected"
+    assert response.outcome.option_id == "once"
+
+
+def test_request_permission_denies_when_no_allow_option_is_offered() -> None:
+    response = asyncio.run(OlympusACPClient().request_permission(
+        [PermissionOption(kind="reject_once", name="Reject", optionId="reject")],
+        session_id="session",
+    ))
+
+    assert response.outcome.outcome == "cancelled"
+
+
+def test_spawn_process_keeps_context_manager_and_subprocess_distinct(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import olympus_v3.acp_manager as acp_manager_module
+
+    class _SpawnConnection:
+        async def initialize(self, **kwargs):
+            return SimpleNamespace(protocol_version="1")
+
+    connection = _SpawnConnection()
+    process = _ActualProcess()
+
+    class _SpawnContext:
+        async def __aenter__(self):
+            return connection, process
+
+    context = _SpawnContext()
+    monkeypatch.setattr(acp_manager_module, "spawn_agent_process", lambda *args, **kwargs: context)
+    profile_path = tmp_path / "hefesto"
+    profile_path.mkdir()
+    agent = AgentState(name="hefesto", profile_path=profile_path, status="spawning")
+
+    asyncio.run(ACPManager(profiles_dir=tmp_path)._spawn_process(agent, project_root=str(tmp_path)))
+
+    assert agent.connection is connection
+    assert agent.process_context is context
+    assert agent.process is process
+    assert agent.pid == process.pid
+
+
+def test_shutdown_exits_context_once_without_terminating_context_or_process(tmp_path: Path) -> None:
+    context = _ProcessContext()
+    process = _ActualProcess()
+    manager = _shutdown_manager(tmp_path, context, process)
+    agent = manager.agents[("hefesto", "/project")]
+    connection = agent.connection
+    manager.sessions["session"] = SessionInfo(
+        session_id="session",
+        agent_name="hefesto",
+        acp_session_id="acp-session",
+        project_root="/project",
+    )
+    agent.acp_session_ids["session"] = "acp-session"
+
+    result = asyncio.run(manager.shutdown_agent("hefesto", project_root="/project"))
+
+    assert result["status"] == "shutdown"
+    assert connection.closed_sessions == ["acp-session"]
+    assert connection.close_calls == 1
+    assert context.exit_calls == 1
+    assert process.terminate_calls == 0
+    assert process.kill_calls == 0
+    assert ("hefesto", "/project") not in manager.agents
+
+
+def test_shutdown_context_owns_connection_close_once(tmp_path: Path) -> None:
+    context = _ProcessContext()
+    process = _ActualProcess()
+    manager = _shutdown_manager(tmp_path, context, process)
+    connection = manager.agents[("hefesto", "/project")].connection
+
+    asyncio.run(manager.shutdown_agent("hefesto", project_root="/project"))
+
+    assert context.exit_calls == 1
+    assert connection.close_calls == 1
+
+
+def test_shutdown_terminates_actual_process_when_context_exit_fails(tmp_path: Path) -> None:
+    context = _ProcessContext(RuntimeError("context cleanup failed"))
+    process = _ActualProcess()
+    manager = _shutdown_manager(tmp_path, context, process)
+
+    asyncio.run(manager.shutdown_agent("hefesto", project_root="/project"))
+
+    assert context.exit_calls == 1
+    assert process.terminate_calls == 1
+    assert process.wait_calls == 1
+
+
+def test_shutdown_context_timeout_escalates_to_kill(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import olympus_v3.acp_manager as acp_manager_module
+
+    class _HangingContext(_ProcessContext):
+        async def __aexit__(self, exc_type, exc, traceback) -> None:
+            self.exit_calls += 1
+            await asyncio.Event().wait()
+
+    class _EscalatingProcess(_ActualProcess):
+        async def wait(self) -> None:
+            self.wait_calls += 1
+            if self.wait_calls == 1:
+                await asyncio.Event().wait()
+
+    real_wait_for = asyncio.wait_for
+
+    async def _short_wait_for(awaitable, timeout):
+        return await real_wait_for(awaitable, timeout=0.001)
+
+    monkeypatch.setattr(acp_manager_module.asyncio, "wait_for", _short_wait_for)
+    context = _HangingContext()
+    process = _EscalatingProcess()
+    manager = _shutdown_manager(tmp_path, context, process)
+
+    asyncio.run(manager.shutdown_agent("hefesto", project_root="/project"))
+
+    assert context.exit_calls == 1
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.wait_calls == 2
