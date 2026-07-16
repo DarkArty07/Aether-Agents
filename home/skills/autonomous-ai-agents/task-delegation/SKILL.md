@@ -1,7 +1,7 @@
 ---
 name: task-delegation
 description: "Delegate tasks to specialist Daimons — decompose, delegate, monitor, and report results."
-version: 1.4.2
+version: 1.6.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -12,15 +12,19 @@ metadata:
 
 # Task Delegation
 
-Delegate implementation work to specialist Daimons (Hefesto, Etalides, Athena, etc.). Hermes plans, decomposes, and coordinates — never implements directly.
+Delegate implementation work to specialist Daimons (Hefesto, Etalides, Athena, etc.). Hermes plans, decomposes, coordinates, and implements fine-tuning directly (v0.16.0 "Hermes Can Write Now"). Bulk implementation goes to Hefesto; small precise edits, config tweaks, bug fixes, and doc edits are Hermes' domain.
 
-## When to Delegate
+## When to Delegate vs Implement Directly (v0.16.0+)
 
-- **Code implementation** → Hefesto
-- **Research (web or codebase)** → Etalides
+**Decision rule:**
+- **Fine-tuning** (small edit, config, bug fix, doc tweak, 1-3 file change) → Hermes implements directly
+- **Bulk implementation** (scaffolding, new feature, multi-file refactor) → Hefesto
+- **Research** (web or codebase) → Etalides
 - **Security review** → Athena
 - **Design/UX consultation** → Daedalus
 - **Backend architecture** → Ictinus
+
+If a fine-tuning task takes >3 turns and isn't done → delegate to Hefesto as bulk.
 
 ## Delegation Workflow
 
@@ -74,7 +78,7 @@ Synthesize results for the user:
 
 - **Trusting delegation "completed" status blindly** — Daimons may report "completed" even when the actual work is incomplete or broken. Always verify the result: check that files exist with correct content, services are reachable (health endpoints), and the output matches acceptance criteria. Examples: Hefesto claimed docker-compose.yml was done but it was missing the deriver service and had wrong DB credentials; containers showed "Created" but never actually started. Verification caught these.
 
-- **Hermes attempting to write files** — Hermes is blocked from writing files directly (cat, echo, write_file). When mid-task you discover a file needs editing or creation, delegate to Hefesto even for small fixes. Trying to write directly wastes turns and returns errors like "Delegate. You are an orchestrator, not an implementer."
+- **Hermes fine-tuning vs delegation threshold (v0.16.0+)** — As of v0.16.0 "Hermes Can Write Now", Hermes has `write_file`, `patch`, and `search_files` tools and is expected to handle fine-tuning directly. The old pitfall ("Hermes is blocked from writing files directly") is OBSOLETE. The new rule: if a task is fine-tuning (small edit, config, bug fix, 1-3 files), Hermes does it directly. If it's bulk (scaffolding, new feature, multi-file refactor), delegate to Hefesto. If a fine-tuning task exceeds 3 turns without finishing, escalate to Hefesto as a bulk task with full context.
 
 - **Hermes using process.wait on Daimon sessions** — `process(action="wait")` only works for terminal processes with `background=true`. Use `talk_to(action="poll")` for Daimon sessions. Same session_id format but different tools and command structure.
 
@@ -130,6 +134,64 @@ Esa sola frase bloquea la meta-reflexión y fuerza a Hefesto a devolver la tabla
 - Si empieza con la tabla de resultados o el reporte consolidado → OK, el `last_turn` es confiable.
 
 **Anti-pattern:** Confiar ciegamente en `last_turn` y reportar "Nothing to save" al usuario. Chris odia esto ("nunca dejes aprendizajes sin anotar pendientes"). El trabajo SÍ se hizo, solo hay que extraer el reporte de los tool calls.
+
+## Contract-Test Delegation and QA
+
+When delegating RED-only contract tests, the deliverable is not merely “tests fail.” It is a three-part proof:
+
+1. **Independent oracle is GREEN** — fixed, hand-derived examples validate the primitive equations without constructing expectations through the same helper under test.
+2. **Pre-existing suite is GREEN** — run it separately from the intentional RED tests.
+3. **Production contract is uniformly RED** — every contract case is collected and fails for the single expected missing-feature reason; no mocks, stubs, `xfail`, accidental implementation, setup errors, or unrelated exceptions.
+
+### Make missing-module RED a test failure, not fixture infrastructure error
+
+In pytest, importing a not-yet-created module in fixture setup classifies every case as `ERROR`. Return a lazy constructor from the fixture instead, so the import happens in the test call phase and cases are reported as `FAILED`:
+
+```python
+@pytest.fixture
+def Feature():
+    def construct(*args, **kwargs):
+        from package.feature import Feature as cls
+        return cls(*args, **kwargs)
+    return construct
+```
+
+### Before delegating review, build an invariant × entry-point matrix
+
+Do not ask a reviewer to discover sibling gaps one cycle at a time. Enumerate every public entry point across columns and every invariant across rows, then require each applicable cell to have evidence.
+
+| Invariant | constructor | recurrent/step API | batch/chunk API |
+|---|---:|---:|---:|
+| input shape/dtype/device | ✓ | ✓ | ✓ |
+| supplied state shape (including batch) | — | ✓ | ✓ |
+| supplied state dtype/device | — | ✓ | ✓ |
+| default state semantics | — | ✓ | ✓ |
+| causality/order | — | ✓ | ✓ |
+| gradients across boundaries | — | — | ✓ |
+
+For every reviewer finding, expand it to its **equivalence class** before fixing. Example: if invalid state dtype is missing on one API, inspect shape, batch, dtype, and device on all state-accepting APIs in the same correction. This prevents “whack-a-mole” QA and avoids exhausting retry limits on adjacent omissions.
+
+### Do not overconstrain mixed precision
+
+Separate observable compute behavior from parameter-storage policy:
+
+- Contract projection/output dtypes and FP32 accumulation/state explicitly.
+- Do not require `weight.dtype == compute_dtype` unless the architecture deliberately forbids FP32 master weights.
+- Build expected projections from public weights cast to the compute dtype, then compare state against an independent FP32 scan.
+- Parameterize CPU and accelerator paths when both are contractual; skip only when capability is genuinely unavailable.
+
+### Re-review preflight
+
+Before consuming another independent-review cycle:
+
+- [ ] Re-run the full invariant × entry-point matrix.
+- [ ] Verify all siblings of each prior finding, not only the literal reported line.
+- [ ] Run oracle GREEN, regression GREEN, and intentional RED as separate commands.
+- [ ] Record exact counts: passed / failed / errors / skipped and the common RED cause.
+- [ ] Confirm no production file, mock, stub, or fallback was introduced.
+- [ ] Run lint, format check, and diff whitespace check.
+
+Detailed worked pattern: `references/contract-tdd-qa.md`.
 
 ## Multi-Task Coordination
 
