@@ -28,6 +28,12 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
+### v0.18.1 (2026-07-16)
+
+- **release**: Public metadata is synchronized to v0.18.1; v0.18.0 reliability evidence remains preserved at `docs/releases/v0.18.0-daimon-reliability/BENCHMARK_REPORT.md`.
+- **fix**: `aether_curate` now waits for Ariadna completion, verifies a fresh `CONTEXT.md`, and preserves non-success ACP and curation outcomes.
+- **verification**: Bounded timeout plus clarification, stale/invalid artifact, and strict schema/footer checks are covered by 90 focused tests and the 113-test suite; no runtime config/template migration is required.
+
 ### v0.18.0 (2026-07-16)
 
 - **release**: Public release metadata is synchronized to v0.18.0; see `docs/releases/v0.18.0-daimon-reliability/BENCHMARK_REPORT.md` for the versioned reliability evidence.

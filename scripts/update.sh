@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.18.0 — Update Script
+# Aether Agents v0.18.1 — Update Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Updates the repo and dependencies: git pull, pip upgrades, config regeneration.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.18.0"
+SCRIPT_VERSION="0.18.1"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────

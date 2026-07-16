@@ -1,6 +1,6 @@
 [project]
 name = "olympus-mcp"
-version = "0.18.0"
+version = "0.18.1"
 description = "Olympus MCP Server — Aether Agents orchestrator. Manages Daimon lifecycle and inter-agent communication via ACP."
 license = "MIT"
 requires-python = ">=3.11"
