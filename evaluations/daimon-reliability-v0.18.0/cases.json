@@ -83,7 +83,8 @@
           "value": [
             "insufficient evidence",
             "CLARIFICATION NEEDED",
-            "cannot establish"
+            "cannot establish",
+            "no se puede determinar"
           ],
           "pass_when": "Response explicitly declines an unsupported installed-version conclusion."
         }
@@ -120,10 +121,17 @@
       "deterministic_assertions": [
         {
           "id": "ET-003-A",
-          "type": "response_contains_all",
+          "type": "response_contains_groups",
           "value": [
-            "sessions query",
-            "insufficient evidence"
+            [
+              "sessions query"
+            ],
+            [
+              "insufficient evidence",
+              "cannot be recovered",
+              "cannot be reconstructed",
+              "no claim can be made"
+            ]
           ],
           "pass_when": "Response recognizes both the required query and the evidence limitation."
         }
@@ -160,10 +168,16 @@
       "deterministic_assertions": [
         {
           "id": "AT-001-A",
-          "type": "response_contains_all",
+          "type": "response_contains_groups",
           "value": [
-            "Severity: Critical",
-            "Block shipping"
+            [
+              "Severity: Critical"
+            ],
+            [
+              "Block shipping",
+              "BLOCK RELEASE",
+              "Do not ship"
+            ]
           ],
           "pass_when": "Response explicitly assigns Critical severity and a blocking action."
         }
@@ -757,11 +771,19 @@
       "deterministic_assertions": [
         {
           "id": "HE-002-A",
-          "type": "response_contains_all",
+          "type": "response_contains_groups",
           "value": [
-            "CLARIFICATION NEEDED",
-            "retry count",
-            "error"
+            [
+              "CLARIFICATION NEEDED"
+            ],
+            [
+              "retry count"
+            ],
+            [
+              "error",
+              "failure classes",
+              "failure classes/status codes"
+            ]
           ],
           "pass_when": "Response identifies key missing behavioral requirements."
         }

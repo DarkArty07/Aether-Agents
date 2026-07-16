@@ -13,7 +13,12 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 PHASES = ("baseline", "post")
-TEXT_TYPES = {"response_contains_all", "response_contains_any", "response_not_contains"}
+TEXT_TYPES = {
+    "response_contains_all",
+    "response_contains_any",
+    "response_contains_groups",
+    "response_not_contains",
+}
 TRACE_TYPES = {"trace_contains", "function_invocation_required"}
 
 
@@ -56,6 +61,25 @@ def evaluate_assertion(assertion: dict[str, Any], result: dict[str, Any]) -> dic
             expected = value if isinstance(value, list) else [value]
             matched = [item for item in expected if isinstance(item, str) and contains(text, item)]
             return {"status": "PASS" if matched else "FAIL", "reason": f"matched response terms: {matched}" if matched else f"none of response terms found: {expected}"}
+        if assertion_type == "response_contains_groups":
+            if not isinstance(value, list) or not all(isinstance(group, list) for group in value):
+                return {"status": "INSUFFICIENT", "reason": "contains_groups assertion has invalid value"}
+            matched_groups = []
+            missing_groups = []
+            for group in value:
+                matched = [item for item in group if isinstance(item, str) and contains(text, item)]
+                if matched:
+                    matched_groups.append(matched)
+                else:
+                    missing_groups.append(group)
+            return {
+                "status": "PASS" if not missing_groups else "FAIL",
+                "reason": (
+                    f"matched one response term per group: {matched_groups}"
+                    if not missing_groups
+                    else f"no response term matched groups: {missing_groups}"
+                ),
+            }
         if not isinstance(value, str):
             return {"status": "INSUFFICIENT", "reason": "not_contains assertion has invalid value"}
         return {"status": "FAIL" if contains(text, value) else "PASS", "reason": f"forbidden response term present: {value}" if contains(text, value) else "forbidden response term absent"}
@@ -147,6 +171,8 @@ def self_test() -> int:
     text_result = {"stdout": "one two", "trace": None}
     assert evaluate_assertion({"type": "response_contains_all", "value": ["one", "two"]}, text_result)["status"] == "PASS"
     assert evaluate_assertion({"type": "response_contains_any", "value": ["zero", "two"]}, text_result)["status"] == "PASS"
+    assert evaluate_assertion({"type": "response_contains_groups", "value": [["zero", "one"], ["two", "three"]]}, text_result)["status"] == "PASS"
+    assert evaluate_assertion({"type": "response_contains_groups", "value": [["one"], ["zero"]]}, text_result)["status"] == "FAIL"
     assert evaluate_assertion({"type": "response_not_contains", "value": "zero"}, text_result)["status"] == "PASS"
     assert evaluate_assertion({"type": "trace_contains", "value": "pytest"}, text_result)["status"] == "INSUFFICIENT"
     traced = {"stdout": "ok", "trace": [{"tool": "write_file", "success": True}], "artifact_evidence": {".aether/CONTEXT.md": {"exists": True, "content": "contenido"}}}
