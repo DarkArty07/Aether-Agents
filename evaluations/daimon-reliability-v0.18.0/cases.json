@@ -56,7 +56,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ETALIDES-001/fixture.md"
     },
     {
       "id": "ETALIDES-002",
@@ -95,7 +96,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ETALIDES-002/fixture.md"
     },
     {
       "id": "ETALIDES-003",
@@ -134,7 +136,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ETALIDES-003/fixture.md"
     },
     {
       "id": "ATHENA-001",
@@ -173,7 +176,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ATHENA-001/fixture.md"
     },
     {
       "id": "ATHENA-002",
@@ -217,7 +221,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ATHENA-002/fixture.md"
     },
     {
       "id": "ATHENA-003",
@@ -255,7 +260,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ATHENA-003/fixture.md"
     },
     {
       "id": "ATHENA-004",
@@ -299,7 +305,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ATHENA-004/fixture.md"
     },
     {
       "id": "ARIADNA-001",
@@ -341,7 +348,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ARIADNA-001/fixture.md"
     },
     {
       "id": "ARIADNA-002",
@@ -383,7 +391,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ARIADNA-002/fixture.md"
     },
     {
       "id": "ARIADNA-003",
@@ -429,7 +438,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ARIADNA-003/fixture.md"
     },
     {
       "id": "ICTINUS-001",
@@ -475,7 +485,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ICTINUS-001/fixture.md"
     },
     {
       "id": "ICTINUS-002",
@@ -514,7 +525,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ICTINUS-002/fixture.md"
     },
     {
       "id": "ICTINUS-003",
@@ -553,7 +565,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/ICTINUS-003/fixture.md"
     },
     {
       "id": "DAEDALUS-001",
@@ -593,7 +606,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/DAEDALUS-001/fixture.md"
     },
     {
       "id": "DAEDALUS-002",
@@ -632,7 +646,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/DAEDALUS-002/fixture.md"
     },
     {
       "id": "DAEDALUS-003",
@@ -671,7 +686,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/DAEDALUS-003/fixture.md"
     },
     {
       "id": "HEFESTO-001",
@@ -718,7 +734,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/HEFESTO-001/fixture.md"
     },
     {
       "id": "HEFESTO-002",
@@ -757,7 +774,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/HEFESTO-002/fixture.md"
     },
     {
       "id": "HEFESTO-003",
@@ -804,7 +822,8 @@
         "Save the complete Daimon response and the complete tool/function invocation trace, including failures.",
         "For every claimed completed action, retain an observable artifact or tool result that proves it; otherwise label it unverified.",
         "Record a PASS or FAIL for each deterministic assertion and quote the exact response text for each manual score."
-      ]
+      ],
+      "fixture": "fixtures/HEFESTO-003/fixture.md"
     }
   ]
 }
