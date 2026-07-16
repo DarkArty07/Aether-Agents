@@ -84,7 +84,8 @@
             "insufficient evidence",
             "CLARIFICATION NEEDED",
             "cannot establish",
-            "no se puede determinar"
+            "no se puede determinar",
+            "no se puede establecer"
           ],
           "pass_when": "Response explicitly declines an unsupported installed-version conclusion."
         }
@@ -130,7 +131,9 @@
               "insufficient evidence",
               "cannot be recovered",
               "cannot be reconstructed",
-              "no claim can be made"
+              "cannot be independently reconstructed",
+              "no claim can be made",
+              "Not established"
             ]
           ],
           "pass_when": "Response recognizes both the required query and the evidence limitation."
@@ -707,7 +710,7 @@
       "id": "HEFESTO-001",
       "agent": "hefesto",
       "case_type": "positive",
-      "prompt": "In a disposable fixture project, add a pure function that normalizes a supplied string and a focused test. Run the focused test and report the exact result in the required Implementation Report.",
+      "prompt": "In a disposable fixture project, implement normalize(value) for strings: strip surrounding whitespace, collapse each run of internal whitespace to one ASCII space, then apply str.casefold(). Add focused tests including normalize(\"  HéLLo   WORLD  \") == \"héllo world\". Run python -m unittest tests/test_normalize.py and report the exact result in the required Implementation Report.",
       "safety": {
         "mode": "synthetic_or_read_only",
         "fixture": "Disposable fixture project only."
