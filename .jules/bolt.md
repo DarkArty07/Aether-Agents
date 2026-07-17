@@ -1,0 +1,3 @@
+## 2024-07-17 - [Optimizing Multiple Aggregate Queries in SQLite]
+**Learning:** In both async (aiosqlite) and sync (sqlite3) code paths, executing multiple independent `COUNT(*)` queries individually introduces significant I/O and connection overhead. When querying the same table multiple times or performing independent counts, combining them into a single `SELECT` statement with scalar subqueries can yield over a 50% performance improvement (0.12s down to 0.05s in async) by reducing context switches and round-trips to the database.
+**Action:** When calculating progress or statistics that require multiple independent aggregate queries (like counts) in `olympus_v3/db.py`, combine them into a single query using scalar subqueries.
