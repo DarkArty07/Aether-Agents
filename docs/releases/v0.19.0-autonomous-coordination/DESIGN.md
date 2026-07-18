@@ -105,9 +105,9 @@ Required invariants:
 
 This rejects both a single local leader as the exclusive communication hub and a rigid fixed workflow.
 
-## 4. New Daimon requirement
+## 4. New Daimon — Coordination Steward
 
-v0.19.0 is expected to introduce a new permanent Daimon dedicated to autonomous execution coordination. Its final name, eponym, personality, authority, invocation model, tools, and lifecycle are intentionally undecided.
+v0.19.0 will introduce a permanent **Coordination Steward** dedicated to contract state and autonomous execution governance. Its role is approved; its final name, eponym, personality, invocation model, tools, and lifecycle remain design decisions.
 
 ### Why a new role is likely necessary
 
@@ -120,14 +120,16 @@ Moving routine coordination out of Hermes without assigning it explicitly would 
 - Daedalus advises and prototypes design;
 - Ariadna curates continuity.
 
-Making one of these roles the permanent coordinator would blur its domain authority. A dedicated role can preserve Hermes as design authority while operating the approved contract and maintaining execution-level coordination.
+Making one of these roles the permanent coordinator would blur its domain authority. A dedicated role preserves Hermes as design authority while maintaining execution-level coordination without displacing the accountable domain owner.
 
-### Candidate responsibilities to decide
+### Approved authority model
 
-The role may be responsible for some or all of the following, subject to user approval:
+Hermes assigns each contract to an accountable domain owner. The Coordination Steward does not become the default owner and does not replace specialist judgment. It guards the contract and the autonomous process around that owner.
 
-- receive an approved contract from Hermes;
-- establish the initial task owner and participant roster;
+The Coordination Steward is responsible for:
+
+- receive and track an approved contract from Hermes;
+- record the accountable owner and participant roster;
 - maintain the task graph and correlation between subtasks;
 - enforce scope, budget, retry, and concurrency limits;
 - observe presence and identify stalls;
@@ -135,9 +137,17 @@ The role may be responsible for some or all of the following, subject to user ap
 - ensure required QA gates occur;
 - consolidate execution state for Hermes without replacing domain evidence;
 - trigger escalation when contract conditions are met;
-- prevent a task from declaring completion without the required evidence.
+- prevent a task from declaring completion without the required evidence;
+- provide Hermes with synthesized state and escalation events rather than relaying every routine message.
 
-The new agent must not independently redesign the user's objective or silently expand scope.
+The Coordination Steward must not:
+
+- independently redesign the user's objective;
+- silently expand scope;
+- replace the accountable owner's domain judgment;
+- become the mandatory route for lateral peer communication;
+- implement specialist work merely to accelerate execution;
+- overrule a valid reviewer gate outside an approved escalation path.
 
 ## 5. Target topology — provisional
 
@@ -148,7 +158,7 @@ User
 Hermes — requirements, design, contract, decisions, escalation
   │ approved contract
   ▼
-[New coordination Daimon — exact authority TBD]
+[Coordination Steward — contract state, limits, gates, escalation]
   │
   ├──────── accountable task owner
   │               │
@@ -164,7 +174,7 @@ All authorized participants may communicate laterally.
 Hermes receives events and escalations, not every routine handoff.
 ```
 
-The diagram does not yet decide whether the new Daimon owns contracts, merely supervises them, or acts as a coordination service while task ownership stays with a domain Daimon.
+The accountable domain Daimon owns the deliverable. The Coordination Steward supervises contract state and execution invariants while authorized participants communicate laterally.
 
 ## 6. Properties v0.19.0 must preserve
 
@@ -214,4 +224,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is the exact authority of the new coordination Daimon. Role definition must precede naming and personality so that its identity reflects a real responsibility rather than forcing the architecture to fit a name.
+The next user decision is the Coordination Steward's operating personality: how it balances rigor, anticipation, diplomacy, and intervention. That behavioral contract will guide the later mythological name and eponym instead of forcing the role to fit a name chosen too early.
