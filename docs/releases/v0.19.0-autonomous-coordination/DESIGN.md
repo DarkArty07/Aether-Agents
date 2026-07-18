@@ -391,6 +391,31 @@ After runtime loss, Harmonia consults Olympus, the coordination ledger, and the 
 
 The system does not promise universal exactly-once execution. It aims for effectively-once observable effects where the destination supports idempotency and otherwise stops for reconciliation before repetition.
 
+### 3.12 Approved capability authority — Least-privilege intersection
+
+Effective authority is the intersection of permanent role ceilings, project policy, contract grants, task-scoped capabilities, and runtime enforcement. A denial at any layer denies the action; authority is default-deny rather than inferred from message text.
+
+Permanent role ceilings preserve Daimon identity and cannot be elevated by a contract. Consultants do not become implementers, implementers do not self-approve independent gates, Harmonia does not perform specialist work, and continuity curation does not acquire decision authority.
+
+Project policy limits protected branches, sensitive paths, secret material, available tools and environments, network access, globally prohibited actions, mandatory approvals, and shared resources.
+
+Contracts grant only the subset of role and project authority required for the approved outcome. Each admitted task then receives a short-lived, non-transferable capability bound to agent instance, project, contract version, task, permissions, resources, effect classes, lease, and expiry.
+
+Capabilities:
+
+- use minimum necessary scope;
+- cannot exceed the issuer's policy authority or the recipient's role ceiling;
+- cannot be transferred or silently delegated;
+- cannot mint a stronger capability;
+- expire and are revocable;
+- remain auditable without exposing embedded secrets.
+
+Runtime enforcement should constrain actual tools, paths, worktrees or sandboxes, commands, network destinations, credentials, effect classes, leases, and expiration where technically feasible. Any rule enforced only through model instructions must be labeled as a soft control and residual risk, never presented as a hard security boundary.
+
+A capability is revoked when its task ends or is cancelled, ownership changes, the contract pauses or changes version, its lease or TTL expires, runtime identity is lost, a violation occurs, Harmonia loses coordination authority, or Hermes issues an authorized stop. Revocation prevents new effects; active operations reach a safe boundary or enter reconciliation, and evidence is preserved.
+
+Credentials are referenced opaquely and delivered through the minimum authorized runtime boundary. They are not placed in message payloads or coordination events. Agent and runtime identities support independent credential rotation and revocation.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -556,4 +581,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is effective capability authority: how permanent Daimon role limits, contract grants, task-specific permissions, runtime isolation, and revocation combine before a tool call or control event is allowed. Prompt instructions alone are not an adequate permission boundary.
+The next user decision is completion and closure authority: how a task moves from an agent result to verified completion, how a contract reaches acceptance, which closures may be automatic, and what evidence, reconciliation, cleanup, and user-facing synthesis are mandatory before resources are released.
