@@ -213,6 +213,40 @@ Trust rules:
 
 Role authority remains specific. For example, Athena may emit a security gate when the contract grants that review authority, but cannot amend the architecture or implement a fix; Hefesto may report implementation evidence but cannot self-approve an independent review gate.
 
+### 3.7 Approved gate resolution — Evidence, bounded correction, explicit waiver
+
+Required reviewers retain independent authority over their assigned gates, but a failed gate must be specific, evidenced, and resolvable. Owners cannot self-approve; reviewers cannot block indefinitely through unsupported or shifting objections.
+
+Every review finding must identify:
+
+- gate and acceptance criterion;
+- classification: `blocking`, `non_blocking`, `advisory`, `operational`, or `insufficient_evidence`;
+- precise claim, evidence, impact, confidence, and required resolution;
+- contract, task, artifact, and review-attempt correlation.
+
+Only a justified `blocking` finding automatically fails its gate. `Insufficient_evidence` prevents a pass but is not proof of a defect. Non-blocking, advisory, and operational findings remain visible without independently blocking completion unless the contract says otherwise.
+
+The accountable owner may remediate, provide contrary evidence, challenge scope or classification, request minimal clarification, or request a risk waiver. The owner may not emit an independent review pass for its own work.
+
+Each failed gate enters a bounded correction loop:
+
+1. reviewer emits an evidenced finding;
+2. owner responds with a correction or evidence;
+3. the authorized reviewer reevaluates the same criterion;
+4. the gate passes or a new precise finding identifies what remains unresolved.
+
+The contract sets the retry limit, with three cycles as the default maximum. Harmonia tracks attempts, evidence changes, finding stability, budget, and unaffected parallel work, but does not decide the domain dispute.
+
+After the retry limit:
+
+- factual disputes seek independent reproducible evidence or another authorized specialist assessment;
+- architecture, product, or priority disputes escalate to Hermes and the user when required;
+- risk acceptance follows the contract's explicit waiver authority.
+
+A required gate ends only as `passed`, `failed`, or `waived`. A valid waiver records the risk, evidence, impact, rationale, accepting authority, owner, and any review condition or expiry. A task may complete only when every required gate is passed or validly waived.
+
+When authorized reviewers disagree, Harmonia preserves both findings. Independent domain gates remain separate; contradictory factual claims seek independent evidence; risk-priority conflicts escalate. Repetition does not grant a reviewer additional authority.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -378,4 +412,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is gate and disagreement resolution: what happens when an accountable owner proposes completion but a required reviewer fails a gate, when two authorized reviewers disagree, or when a finding is valid but accepting the residual risk may be reasonable. The mechanism must prevent both infinite reviewer deadlock and owner self-approval.
+The next user decision is observability and interruption policy: which events Harmonia records, which updates Hermes receives during autonomous execution, and which conditions interrupt the user. The design must preserve full auditability without recreating the current message bottleneck or flooding the user with agent chatter.
