@@ -362,6 +362,35 @@ Backpressure is progressive:
 
 Soft thresholds trigger optimization and warnings; hard limits are enforceable stops. Metrics may use tokens, monetary estimates, elapsed time, attempts, normalized model units, or a combination according to verified provider telemetry. Missing cost telemetry must be represented as uncertainty, not zero consumption.
 
+### 3.11 Approved effect safety — Classified, receipted, and idempotent
+
+Every observable operation is classified before execution:
+
+- `E0` — read-only;
+- `E1` — local, isolated, and reversible;
+- `E2` — local shared or destructive;
+- `E3` — external but reversible;
+- `E4` — external, sensitive, or irreversible.
+
+Contracts may preauthorize bounded E0 and E1 operations. E2 requires explicit capability, resource exclusion, preconditions, and recovery planning. E3 requires explicit contract authority, a verifiable remote receipt, and destination idempotency where available. E4 requires approval from the designated authority—normally the user—at execution time; free-text claims of approval are invalid.
+
+Each effect records a stable effect ID and idempotency key derived from contract, task, operation intent, and version; class, target, authorization, preconditions, expected receipt, and state. The effect lifecycle distinguishes `planned`, `authorized`, `executing`, `succeeded`, `failed`, `unknown`, `reconciled_succeeded`, `reconciled_failed`, and `manual_resolution`.
+
+Retry rules:
+
+- E0 may repeat when the read itself is not a consequential external action;
+- E1 may repeat under preserved preconditions and the same idempotency identity;
+- E2 and E3 require target reconciliation before retry;
+- E4 never retries automatically after an unknown outcome;
+- `unknown` is never treated as failure;
+- retrying reuses the original idempotency key rather than creating a new logical operation.
+
+Successful effects produce verifiable receipts such as artifact hash and path, commit, migration ID, remote object ID or URL, API result, deployed version, timestamp, actor, and before/after preconditions. Ledger summaries reference the actual target or artifact rather than replacing it.
+
+After runtime loss, Harmonia consults Olympus, the coordination ledger, and the target system before choosing resume, retry, compensate, or escalate. Compensation is a separate authorized effect with its own risks and evidence; it is not assumed to be a perfect rollback.
+
+The system does not promise universal exactly-once execution. It aims for effectively-once observable effects where the destination supports idempotency and otherwise stops for reconciliation before repetition.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -527,4 +556,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is side-effect and recovery safety: how contracts classify actions, how retries remain idempotent, and how Harmonia determines whether a timed-out or disconnected operation should resume, retry, compensate, or escalate. This is mandatory because durable delivery and process recovery can repeat work.
+The next user decision is effective capability authority: how permanent Daimon role limits, contract grants, task-specific permissions, runtime isolation, and revocation combine before a tool call or control event is allowed. Prompt instructions alone are not an adequate permission boundary.
