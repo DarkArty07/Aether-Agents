@@ -69,6 +69,40 @@ They must escalate:
 - repeated failure at the contract's retry limit;
 - any condition that would violate the contract.
 
+#### Approved contract form — Hybrid, versioned, and verifiable
+
+The execution contract combines human-readable intent with machine-verifiable control fields. Natural language preserves meaning and rationale; structured fields let Harmonia apply authority, scope, resource, evidence, and escalation rules without inventing missing constraints.
+
+The semantic portion must express:
+
+- objective and expected outcome;
+- user intent and rationale;
+- relevant context and approved decisions;
+- acceptance criteria and the meaning of success.
+
+The structured portion must express:
+
+- contract ID, project identity, version, and status;
+- accountable owner, authorized participants, and role permissions;
+- included and excluded scope;
+- side-effect and external-action policy;
+- concurrency, time, retry, and model-budget limits;
+- required evidence and quality gates;
+- escalation conditions and completion authority.
+
+Contract rules:
+
+- an approved version is immutable;
+- a participant may request an amendment but cannot modify the contract;
+- Hermes issues a new version after the required user decision or delegated approval;
+- prior versions and amendment rationale remain auditable;
+- tasks identify the exact contract version under which they operate;
+- Harmonia pauses only work affected by a pending amendment when unaffected work can safely continue;
+- peer messages are context or proposals, never implicit contract amendments;
+- ambiguous constraints are escalated rather than silently interpreted as permission.
+
+The contract schema must avoid false precision: semantic requirements remain prose where meaning cannot be reduced safely, while enforceable limits use typed fields.
+
 ### 3.3 Hermes remains the design authority
 
 Hermes remains the only agent the user must interact with directly. Hermes uses the strongest model because its primary responsibility is not message transport; it is understanding the user's intent and turning that intent into a coherent, safe, testable contract.
@@ -270,4 +304,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is the execution contract boundary: whether Hermes gives Harmonia a flexible natural-language brief, a fully structured schema, or a hybrid contract with machine-enforced fields and human-readable intent. This determines what Harmonia can enforce without pretending to understand constraints that were never made explicit.
+The next user decision is subtask creation authority: who may propose and activate work inside an approved contract, how ownership is assigned, and which checks occur before execution. The design must enable lateral initiative without allowing unrestricted task growth or making Harmonia a manual approval bottleneck.
