@@ -139,6 +139,44 @@ Required invariants:
 
 This rejects both a single local leader as the exclusive communication hub and a rigid fixed workflow.
 
+### 3.5 Approved subtask authority — Lateral proposal with automatic admission
+
+Any contract participant with an authorized role may propose a subtask. Harmonia admits it automatically when deterministic contract checks pass; routine proposals do not require manual approval from Hermes or the contract owner.
+
+Every proposal must identify:
+
+- parent task and contract version;
+- objective and reason the work is necessary;
+- requested capability and proposed owner;
+- bounded scope and dependencies;
+- acceptance criteria and expected evidence;
+- requested budget and side-effect class.
+
+Harmonia admits a proposal when:
+
+- it derives clearly from the approved objective;
+- it remains inside included scope and outside explicit exclusions;
+- the requested role has authority for the task and side effects;
+- contract budget and concurrency capacity remain available;
+- equivalent work is not already planned or running;
+- dependencies exist and the new edge creates no cycle;
+- completion criteria and evidence requirements are defined;
+- no external, irreversible, architectural, or product decision requires additional approval.
+
+An admitted task becomes part of the authoritative task graph and may be dispatched without a routine Hermes or owner gate. The contract owner receives the event and may reprioritize, pause, or cancel it within contract authority.
+
+Harmonia retains rather than rejects a proposal when scope, authority, budget, dependencies, or completion meaning are ambiguous. She requests the smallest clarification or invokes the applicable escalation path. Unaffected work continues when safe.
+
+Accountability remains separated:
+
+- the proposer explains why the subtask is necessary;
+- the subtask owner is accountable for its result and evidence;
+- the contract owner remains accountable for the integrated deliverable;
+- Harmonia is accountable for admission, task-graph integrity, traceability, and contract enforcement;
+- Hermes is accountable for contract amendments and escalated design decisions.
+
+Subtask creation must follow an explicit state model such as `proposed → admitted → waiting/ready → running → review → completed`, with `retained`, `blocked`, `failed`, and `cancelled` terminal or interruption paths defined during detailed design.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -304,4 +342,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is subtask creation authority: who may propose and activate work inside an approved contract, how ownership is assigned, and which checks occur before execution. The design must enable lateral initiative without allowing unrestricted task growth or making Harmonia a manual approval bottleneck.
+The next user decision is the peer-message trust boundary: which message types Daimons may exchange, which carry authority, and when received content may cause an action. The design must allow direct collaboration without turning every peer message—or untrusted content quoted inside one—into a privileged instruction.
