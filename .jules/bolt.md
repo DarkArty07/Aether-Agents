@@ -1,0 +1,3 @@
+## 2024-05-19 - Combine Independent SQLite COUNT(*) Queries
+**Learning:** In the `olympus_v3` database interaction, issuing multiple independent aggregate queries like `SELECT COUNT(*) FROM table` incurs unnecessary overhead due to consecutive SQLite connection acquisitions and parsing steps, which can slow down concurrent access between MCP server components and Daimon plugin hooks.
+**Action:** When gathering multiple counts or aggregations, bundle them into a single `SELECT` block using scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`), which executes faster as a single round-trip.
