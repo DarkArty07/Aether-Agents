@@ -176,6 +176,25 @@ Its behavioral contract is:
 
 Its authority comes from maintaining a shared, accurate view of the contract and execution state—not from commanding the team. It should feel present and dependable without dominating routine collaboration.
 
+### Approved lifecycle — Durable identity, on-demand runtime
+
+Harmonia has one durable logical identity per project, but her model runtime is active only while autonomous work requires coordination. Model conversation history is never the source of truth for contract state.
+
+Lifecycle requirements:
+
+- Hermes activates Harmonia when an approved contract enters execution or a relevant coordination event requires attention;
+- Harmonia remains active while the project has running contracts or unresolved escalations;
+- multiple contracts may coexist, but each retains an independent owner, scope, budget, state, and evidence chain;
+- structured durable state records contracts, tasks, dependencies, participants, events, gates, retries, and escalations;
+- after a configurable idle interval with no active work, the runtime closes without deleting durable identity or state;
+- after restart, Harmonia reconstructs an authoritative view from durable records rather than relying on remembered conversation;
+- a project-scoped lock or renewable lease prevents two active Harmonia runtimes from coordinating the same project concurrently;
+- lease loss forces the stale runtime to stop coordinating and report an operational event;
+- runtime failure must not erase Daimon results, contract history, or project continuity;
+- upgrades and restarts must be possible without migrating conversational memory.
+
+This model separates **identity**, **state**, and **reasoning runtime**. Identity and state persist; model execution is demand-driven.
+
 ## 5. Target topology — provisional
 
 ```text
@@ -251,4 +270,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is Harmonia's lifecycle and persistence boundary: whether she is permanently active, instantiated once per contract, or uses a durable identity with an on-demand runtime. The choice must preserve recovery and observability without paying for an idle reasoning process or creating competing instances.
+The next user decision is the execution contract boundary: whether Hermes gives Harmonia a flexible natural-language brief, a fully structured schema, or a hybrid contract with machine-enforced fields and human-readable intent. This determines what Harmonia can enforce without pretending to understand constraints that were never made explicit.
