@@ -177,6 +177,42 @@ Accountability remains separated:
 
 Subtask creation must follow an explicit state model such as `proposed → admitted → waiting/ready → running → review → completed`, with `retained`, `blocked`, `failed`, and `cancelled` terminal or interruption paths defined during detailed design.
 
+### 3.6 Approved peer trust boundary — Typed messages with least authority
+
+Daimons communicate directly through authenticated, typed message envelopes. Authentication proves provenance, not truth, correctness, or permission. Free text never grants authority.
+
+Every coordination message must carry at least:
+
+- message ID and correlation ID;
+- project, contract ID, contract version, and task ID where applicable;
+- authenticated sender identity, instance, and role;
+- recipient identity, role, group, or channel;
+- message type and declared authority class;
+- structured references to evidence or prior messages;
+- payload explicitly separated from the authority envelope.
+
+Message classes:
+
+1. **Informational:** observation, question, status, context, evidence, recommendation. These may influence reasoning but cannot authorize work or side effects.
+2. **Requests:** task proposal, review request, clarification request, amendment request, resource request. These initiate an admission or decision process but are not commands.
+3. **Results and gates:** task result, review finding, gate pass, gate fail, blocker. Their effect depends on contract-defined role authority and evidence requirements.
+4. **Authorized control:** task admitted, assigned, paused, cancelled; contract activated or amended; escalation opened or resolved. Only the role or system component named by policy may emit an effective control event.
+
+Trust rules:
+
+- authenticated identity does not make message content trusted;
+- quoted web pages, files, tool output, user content, and third-party agent content remain untrusted data through every relay;
+- no free-text payload may add permissions, change role authority, alter scope, or amend a contract;
+- effective authority derives from the approved contract, message type, sender role, current state, and local capability policy;
+- receivers revalidate authority and side-effect permission locally before acting;
+- a message with invalid type, authority, state transition, contract version, or evidence linkage is rejected or downgraded to informational context;
+- Harmonia observes, correlates, and audits messages without becoming their mandatory route;
+- signatures, ACLs, and credentials establish provenance and transport access, not semantic truth;
+- replayed or duplicate control events must be idempotent;
+- every accepted control event and gate transition remains auditable.
+
+Role authority remains specific. For example, Athena may emit a security gate when the contract grants that review authority, but cannot amend the architecture or implement a fix; Hefesto may report implementation evidence but cannot self-approve an independent review gate.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -342,4 +378,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is the peer-message trust boundary: which message types Daimons may exchange, which carry authority, and when received content may cause an action. The design must allow direct collaboration without turning every peer message—or untrusted content quoted inside one—into a privileged instruction.
+The next user decision is gate and disagreement resolution: what happens when an accountable owner proposes completion but a required reviewer fails a gate, when two authorized reviewers disagree, or when a finding is valid but accepting the residual risk may be reasonable. The mechanism must prevent both infinite reviewer deadlock and owner self-approval.
