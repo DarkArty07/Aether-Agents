@@ -105,9 +105,18 @@ Required invariants:
 
 This rejects both a single local leader as the exclusive communication hub and a rigid fixed workflow.
 
-## 4. New Daimon — Coordination Steward
+## 4. New Daimon — Harmonia
 
-v0.19.0 will introduce a permanent **Coordination Steward** dedicated to contract state and autonomous execution governance. Its role is approved; its final name, eponym, personality, invocation model, tools, and lifecycle remain design decisions.
+v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
+
+### Identity and eponym
+
+Harmonia is the Greek personification of harmony and concord. In Aether, her identity does not imply passive agreement or suppression of disagreement. She facilitates useful coordination while preserving evidence, specialist independence, reviewer authority, and the limits of the approved contract.
+
+> **Harmonia — Coordination Steward**
+> Facilitating sentinel of autonomous execution. She keeps contracts, dependencies, evidence, and quality gates aligned without owning specialist work or replacing Hermes's design authority.
+
+The name emphasizes lateral cooperation and calm conflict resolution. Contract enforcement prevents harmony from degrading into artificial consensus: a justified disagreement, failed gate, or evidence-backed escalation must remain visible.
 
 ### Why a new role is likely necessary
 
@@ -176,7 +185,7 @@ User
 Hermes — requirements, design, contract, decisions, escalation
   │ approved contract
   ▼
-[Coordination Steward — contract state, limits, gates, escalation]
+[Harmonia — contract state, limits, gates, escalation]
   │
   ├──────── accountable task owner
   │               │
@@ -242,4 +251,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is the Coordination Steward's mythological name and eponym. Candidate names must express facilitation, vigilance, shared order, memory of obligations, and calm intervention without implying supreme command or replacing Hermes.
+The next user decision is Harmonia's lifecycle and persistence boundary: whether she is permanently active, instantiated once per contract, or uses a durable identity with an on-demand runtime. The choice must preserve recovery and observability without paying for an idle reasoning process or creating competing instances.
