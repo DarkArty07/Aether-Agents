@@ -247,6 +247,54 @@ A required gate ends only as `passed`, `failed`, or `waived`. A valid waiver rec
 
 When authorized reviewers disagree, Harmonia preserves both findings. Independent domain gates remain separate; contradictory factual claims seek independent evidence; risk-priority conflicts escalate. Repetition does not grant a reviewer additional authority.
 
+### 3.8 Approved observability — Complete ledger, tiered visibility
+
+Autonomous execution is fully auditable but not fully streamed into Hermes or the user conversation. Visibility is separated by operational need.
+
+#### Event ledger
+
+The system records structured events for contract versions, typed messages, task proposals and admissions, ownership, state transitions, dependencies, evidence, gates, retries, waivers, budgets, escalations, external actions, failures, and recovery. Original events and artifact references remain authoritative; model summaries are derived views.
+
+Private model reasoning is not an audit requirement. Observable actions, decisions, claims, state transitions, results, and supporting evidence are.
+
+#### Harmonia operational view
+
+Harmonia maintains a current projection of active contracts, task graphs, owners, participants, dependencies, gates, budget consumption, concurrency, stalls, risks, escalations, and lease health. The projection is reconstructable from durable events.
+
+#### Hermes visibility
+
+Hermes receives high-value signals rather than every peer message:
+
+- contract activation and initial owner/plan;
+- completed end-to-end milestones;
+- significant execution-path changes;
+- failed gates and retry-limit pressure;
+- resource-threshold warnings;
+- unresolved blockers and amendment requests;
+- escalations, completion proposals, and final results.
+
+Hermes may inspect the underlying ledger, messages, evidence, and artifacts on demand without permanently injecting them into the most expensive model's context.
+
+#### User visibility and interruption
+
+The user receives contract start, meaningful end-to-end milestones, significant risks, required decisions, approved scope-change requests, exhausted autonomous recovery, and final evidence-backed outcomes. Routine peer chatter, file reads, ordinary subtasks, and repetitive status do not require user attention.
+
+Immediate user interruption is reserved for:
+
+- architecture or product decisions;
+- scope amendments;
+- approval of external or irreversible actions;
+- significant risk acceptance;
+- exhausted retry limits;
+- insufficient budget to continue;
+- unresolved reviewer conflict;
+- loss of contract or state integrity;
+- conditions where continued execution may cause harm or invalid work.
+
+Harmonia resolves ordinary availability, duplication, dependency, retry, evidence-acquisition, partial-blocking, stale-message, and recoverable-runtime conditions before escalating.
+
+Progress reporting is milestone-driven rather than timer-driven. Internal heartbeats detect stalled runtimes but are not presented as user progress unless they expose an operational problem.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -412,4 +460,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is observability and interruption policy: which events Harmonia records, which updates Hermes receives during autonomous execution, and which conditions interrupt the user. The design must preserve full auditability without recreating the current message bottleneck or flooding the user with agent chatter.
+The next user decision is state authority: which layer is the source of truth for message delivery, contracts and task state, live ACP sessions, project continuity, decisions, and artifacts. The design must prevent Cotal, Olympus, Harmonia, and `.aether` from becoming conflicting owners of the same state.
