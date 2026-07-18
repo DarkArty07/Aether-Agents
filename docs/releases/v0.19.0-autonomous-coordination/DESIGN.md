@@ -329,6 +329,39 @@ The invariant is:
 
 Recovery reconciles layers without transferring authority. Loss of transport must not erase contracts; Harmonia restart rebuilds from the ledger; Olympus restart exposes orphaned runtime work for idempotent recovery; stale curated context is regenerated from durable continuity data.
 
+### 3.10 Approved resource governance — Hierarchical budgets and adaptive backpressure
+
+Autonomous coordination uses bounded, hierarchical resource envelopes rather than unrestricted parallelism or one fixed global limit.
+
+Resource authority is layered:
+
+- project limits cap total active runtimes, per-role concurrency, expensive tools, model usage, elapsed time, event storage, and exclusive resources;
+- each contract receives explicit concurrency, attempt, time, and model-budget limits from Hermes;
+- subtasks request bounded slices from their contract;
+- Harmonia may reduce, queue, or reallocate unused resources inside a contract but cannot exceed its hard cap or take from another contract without authorized reallocation.
+
+Every contract reserves capacity for integration, required validation, recovery, and final synthesis. Routine implementation, research, advisory work, or speculation cannot consume that reserve and leave the deliverable unverified.
+
+Work priority is:
+
+1. integrity recovery;
+2. required quality gates;
+3. critical-path deliverables;
+4. necessary supporting research or consultation;
+5. non-blocking advisory work;
+6. speculative exploration.
+
+Harmonia permits parallel execution only when tasks are independent, resource-safe, role capacity exists, integration and QA reserves remain intact, and coordination overhead does not outweigh expected benefit. Logical independence does not authorize unsafe concurrent writes to shared artifacts, migrations, ports, servers, devices, deployments, or external systems.
+
+Backpressure is progressive:
+
+1. deduplicate work, reuse evidence, batch related requests, and avoid unnecessary agent activation;
+2. stop admitting speculative work, postpone advisory tasks, and reduce concurrency while preserving recovery, gates, and the critical path;
+3. pause new subtasks, allow only safe in-flight boundaries, preserve state and evidence, and notify Hermes;
+4. at the hard limit, stop rather than overspend and escalate with consumption, remaining work, and explicit options to increase budget, reduce scope, accept a partial outcome, or terminate the contract.
+
+Soft thresholds trigger optimization and warnings; hard limits are enforceable stops. Metrics may use tokens, monetary estimates, elapsed time, attempts, normalized model units, or a combination according to verified provider telemetry. Missing cost telemetry must be represented as uncertainty, not zero consumption.
+
 ## 4. New Daimon — Harmonia
 
 v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
@@ -494,4 +527,4 @@ The v0.19.0 exploration will produce:
 
 ## 9. Current decision gate
 
-The next user decision is resource governance: how concurrency and model budgets are allocated across contracts and subtasks, how backpressure works, and which work pauses first near a limit. The design must gain useful parallelism without allowing autonomous task expansion to create uncontrolled cost or resource contention.
+The next user decision is side-effect and recovery safety: how contracts classify actions, how retries remain idempotent, and how Harmonia determines whether a timed-out or disconnected operation should resume, retry, compensate, or escalate. This is mandatory because durable delivery and process recovery can repeat work.
