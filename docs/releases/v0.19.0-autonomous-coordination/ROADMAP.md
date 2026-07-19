@@ -118,7 +118,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R1 — Phase 0 feasibility proof
 
-**Status:** `READY AFTER R0`
+**Status:** `COMPLETE — GO WITH NAMED LIMITS (2026-07-18)`
 
 **Deliverable:** `PHASE_0_EVIDENCE.md` with exact source/type/schema evidence and per-seam verdicts.
 
