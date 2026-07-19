@@ -11,6 +11,8 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 MAX_PAYLOAD_BYTES = 16_384
+MAX_METADATA_BYTES = 8_192
+MAX_NESTING_DEPTH = 8
 MAX_PARTS = 32
 MAX_REFERENCES = 32
 MAX_REFERENCE_LENGTH = 256
@@ -51,28 +53,30 @@ def _id(value: Any, label: str) -> str:
     return value
 
 
-def _freeze(value: Any) -> Any:
+def _freeze(value: Any, *, depth: int = 0) -> Any:
+    if depth > MAX_NESTING_DEPTH:
+        raise ValidationError("maximum nesting depth exceeded")
     if value is None or isinstance(value, (str, int, float, bool)):
         if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
             raise ValidationError("invalid metadata")
         return value
     if isinstance(value, Mapping):
-        if len(value) > MAX_METADATA_ITEMS or any(not isinstance(k, str) for k in value):
+        if len(value) > MAX_METADATA_ITEMS or any(not isinstance(k, str) or len(k) > 128 for k in value):
             raise ValidationError("invalid metadata")
-        return MappingProxyType({k: _freeze(v) for k, v in sorted(value.items())})
+        return MappingProxyType({k: _freeze(v, depth=depth + 1) for k, v in sorted(value.items())})
     if isinstance(value, (tuple, list)):
         if len(value) > MAX_METADATA_ITEMS:
             raise ValidationError("invalid metadata")
-        return tuple(_freeze(item) for item in value)
+        return tuple(_freeze(item, depth=depth + 1) for item in value)
     raise ValidationError("invalid metadata")
 
 
-def _wire_json(value: Any, label: str = "payload") -> str:
+def _wire_json(value: Any, label: str = "payload", *, max_bytes: int = MAX_PAYLOAD_BYTES) -> str:
     try:
         encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
     except (TypeError, ValueError, OverflowError) as exc:
         raise ValidationError(f"invalid {label}") from exc
-    if len(encoded.encode("utf-8")) > MAX_PAYLOAD_BYTES:
+    if len(encoded.encode("utf-8")) > max_bytes:
         raise ValidationError(f"{label} exceeds limit")
     return encoded
 
@@ -125,7 +129,9 @@ class ParticipantCard:
         if any(isinstance(value, (dict, list, set, bytearray)) for value in self.metadata.values()):
             raise ValidationError("mutable metadata is not allowed")
         object.__setattr__(self, "skills", skills)
-        object.__setattr__(self, "metadata", _freeze(dict(self.metadata)))
+        metadata = _freeze(dict(self.metadata))
+        _wire_json(_thaw(metadata), "metadata", max_bytes=MAX_METADATA_BYTES)
+        object.__setattr__(self, "metadata", metadata)
 
     def to_dict(self) -> dict[str, Any]:
         return {"principal": self.principal.to_dict(), "role": self.role, "model": self.model, "skills": list(self.skills), "metadata": _thaw(self.metadata)}

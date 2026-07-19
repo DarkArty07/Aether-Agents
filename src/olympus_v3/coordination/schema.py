@@ -11,7 +11,14 @@ PROTOCOL_SCHEMA = {
         "message_id", "timestamp", "sender", "sender_card", "message_type", "authority", "project_id",
         "contract_id", "generation", "task_id", "correlation_id", "reply_to", "references", "parts", "route",
     ],
-    "limits": {"max_payload_bytes": 16384, "max_parts": 32, "max_references": 32, "max_reference_length": 256},
+    "limits": {
+        "max_payload_bytes": 16384,
+        "max_metadata_bytes": 8192,
+        "max_nesting_depth": 8,
+        "max_parts": 32,
+        "max_references": 32,
+        "max_reference_length": 256,
+    },
     "routes": ["channel", "participant", "role"],
     "parts": ["text", "json"],
 }

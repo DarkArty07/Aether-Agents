@@ -6,6 +6,8 @@ from types import MappingProxyType
 import pytest
 
 from olympus_v3.coordination import (
+    MAX_METADATA_BYTES,
+    MAX_NESTING_DEPTH,
     MAX_PARTS,
     MAX_PAYLOAD_BYTES,
     AuthorityClass,
@@ -92,6 +94,17 @@ def test_participant_card_accepts_real_model_and_qualified_skill_names():
     )
 
     assert card.model == "openai-codex/gpt-5.6-luna"
+
+
+def test_participant_card_metadata_has_aggregate_and_nesting_bounds():
+    with pytest.raises(ValidationError):
+        ParticipantCard(PRINCIPAL, "developer", "model-a", ("python",), {"note": "x" * MAX_METADATA_BYTES})
+
+    nested = "leaf"
+    for _ in range(MAX_NESTING_DEPTH + 1):
+        nested = (nested,)
+    with pytest.raises(ValidationError):
+        ParticipantCard(PRINCIPAL, "developer", "model-a", ("python",), {"nested": nested})
 
 
 def test_parts_keep_authority_separate_and_reject_unknown_or_malformed_payloads():
