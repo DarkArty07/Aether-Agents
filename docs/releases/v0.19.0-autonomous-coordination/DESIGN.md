@@ -1,8 +1,46 @@
-# v0.19.0 Autonomous Coordination — Design
+# v0.19.0 Autonomous Coordination — Design v2
 
-**Status:** IDEA / requirements discovery. No implementation is authorized.
+**Status:** **APPROVED — DEFAULT-OFF IMPLEMENTATION AUTHORIZED.** On 2026-07-18 the user authorized autonomous execution of Phase 0 through the code-complete R7 shadow-mode gate under `IMPLEMENTATION_PLAN.md`. Live gateway restart, runtime activation, credential repair, real pilot effects, merge, tag, and release remain separately blocked while the user is away.
 
 **Date:** 2026-07-18
+
+## 0. Decision summary v2
+
+**Selected architecture:** Option A — an **Aether-native coordination control plane over Olympus/ACP**. The Aether Contract Registry and append-only Coordination Ledger are the semantic authority; deterministic admission, capability, effect-reconciliation, and closure components enforce typed rules. Olympus/ACP remains the sole owner of process, ACP connection, session, heartbeat, technical cancellation, and technical closure. Native ledger-backed dispatch is the initial transport behind a `TransportAdapter` seam.
+
+**Ranking and exclusions:** Direct NATS JetStream is **Option C**, a future transport-only scale-out candidate requiring separate evidence and approval. Cotal transport-only is **Option B**, ranked last, not selected, not adopted or forked, and excluded from the initial runtime. Neither Cotal nor any transport owns contracts, lifecycle, completion, or semantic authority.
+
+**Authority and status:** Hermes remains the user-facing design, contract, amendment, escalation, and ordinary completion authority. Harmonia has one durable logical identity per project and an on-demand, leased runtime for coordination stewardship; she is not a process/session lifecycle owner. Phase 0 and staged default-off implementation are authorized; deployment, candidate infrastructure, live activation, credential mutation, and real effects are not.
+
+**Closure:** completion is two-stage: the accountable owner proposes an evidenced terminal result; Harmonia performs deterministic mechanical validation. The completion authority is `automatic` only for explicitly configured low-risk routine work, `hermes` by default, or `user` for reserved decisions. The only final semantic states are `completed`, `partially_completed`, `failed`, and `cancelled`.
+
+### 0.1 Why Aether does not embed Cotal Core directly
+
+The phrase **“Cotal-Core-inspired”** is an architectural boundary, not a rejection of Cotal's ideas. Aether adopts the transport-agnostic concepts that make Cotal valuable—owner/actor principals, participant cards, typed envelopes, multicast/unicast/anycast, presence, channels, live/durable delivery classes, and separate active/read/publish permissions—but implements them inside Aether's Python/Olympus control plane.
+
+A literal dependency on `@cotal-ai/core` is not selected for the initial v0.19 runtime because:
+
+1. Cotal's reference core is TypeScript and its only defined transport binding is currently NATS/JetStream, which would add a Node sidecar, broker operations, a Python↔TypeScript bridge, and a second failure/recovery surface before local Aether coordination proves that scale is needed.
+2. Cotal Core provides wire identity, routing, delivery, presence, and transport grants; it does not provide Aether's execution-contract authority, immutable task generations, independent QA gates, E0–E4 effect reconciliation, semantic completion, or `.aether` continuity. Those Aether-owned layers are required regardless of transport choice.
+3. Cotal's current Hermes connector is incompatible with Aether's baseline: it targets the Hermes 0.16 line, launches a child gateway in a temporary `HERMES_HOME`, disables approvals, and does not resume sessions. Aether requires persistent profiles, the existing Telegram gateway, and Olympus as the sole process/session lifecycle owner.
+4. Embedding the connector or Manager would create competing lifecycle ownership. v0.19 instead keeps a `TransportAdapter` seam so a future Cotal/NATS binding can be evaluated without transferring semantic or lifecycle authority.
+
+This choice does not preclude interoperability. A later adapter may implement the Cotal Wire Specification after native behavior is measured and a separate compatibility/operations gate approves NATS. The adapter must preserve Olympus lifecycle ownership and treat transport delivery as evidence, never semantic completion.
+
+### 0.2 Observable difference from Aether v0.18.2
+
+Today Hermes is both strategic authority and routine relay: it decomposes work, calls one Daimon, receives the result, forwards context to the next Daimon, drives every review/correction loop, and synthesizes completion. Daimons are specialized tools with no contract-authorized lateral coordination.
+
+In v0.19.0:
+
+- Hermes and the user approve an immutable execution contract, then Hermes leaves routine message transport;
+- Harmonia deterministically admits in-scope subtasks, tracks budgets/gates/stalls, and escalates ambiguity without becoming a process manager or product authority;
+- Daimons exchange typed, contract-bound envelopes laterally through multicast, unicast, or role-anycast routes;
+- the Coordination Ledger records semantic intent, authority, tasks, reviews, effects, evidence, and closure, while Olympus continues to record and own technical sessions/processes;
+- Aether-issued PoP capabilities bind every privileged operation to project, contract generation, task, role, audience, target, effect, expiry, revocation epoch, and fencing epoch;
+- completion becomes two-stage and evidenced rather than equated with an ACP session returning `completed`.
+
+The expected user-facing result is fewer Hermes relay turns, less flagship-model message-bus cost, autonomous specialist coordination inside approved boundaries, and preserved escalation/control when a real decision is required.
 
 ## 1. Purpose
 
@@ -25,13 +63,13 @@ v0.19.0 must separate two responsibilities:
 
 ### 3.1 Feasibility before implementation
 
-This initiative remains limited to requirements, research, design, and viability analysis until an explicit GO decision.
+The approved coordination architecture is now authorized for Phase 0 and staged default-off implementation through R7. Execution remains bounded by the gateway-survival, budget, TDD, review, and stop gates in `IMPLEMENTATION_PLAN.md`; live activation and externally consequential effects remain separately prohibited.
 
 Before that gate, the project will not:
 
 - fork or vendor Cotal;
 - install candidate coordination infrastructure;
-- modify Olympus, Hermes profiles, Daimon profiles, or runtime configuration;
+- modify Olympus, Daimon profiles, or autonomous-coordination runtime configuration; the sole approved profile exception is the versioned Hermes `home/SOUL.md` operational-contract optimization described in §3.3;
 - create connectors or protocol implementations;
 - run a migration or integration spike.
 
@@ -120,6 +158,18 @@ Hermes retains responsibility for:
 
 Hermes must not remain the routine relay for every Daimon-to-Daimon interaction. If every handoff still requires Hermes, v0.19.0 has failed its central goal.
 
+The v0.19.0 release baseline includes the approved Hermes operational-contract optimization. It preserves Hermes as design and escalation authority while making routine execution policy deterministic:
+
+- explicit instruction precedence protects current user intent and authorization boundaries;
+- FAST, STANDARD, and FULL paths prevent small work from being forced through the full pipeline;
+- session identity is scoped by `session_id + PROJECT_ROOT + AETHER_HOME`, including concurrent instances of one Daimon profile;
+- logical session closure is distinguished from persistent ACP profile processes;
+- validation is proportional to risk rather than routing every change through Athena;
+- each stable review task permits at most three total Athena executions, including the initial audit, before mandatory escalation;
+- conversation turn count alone never forces delegation while scope remains precise and progress verifiable.
+
+These prompt-level rules are part of v0.19.0 governance and release scope. They do not grant Daimons lateral communication, contract admission, capability enforcement, ledger authority, or any other runtime coordination feature before its separately authorized implementation gate.
+
 ### 3.4 Lateral team with an accountable owner
 
 Each approved contract has one accountable owner. The owner is responsible for integrating evidence and proposing completion, but is not the only participant allowed to coordinate.
@@ -175,7 +225,7 @@ Accountability remains separated:
 - Harmonia is accountable for admission, task-graph integrity, traceability, and contract enforcement;
 - Hermes is accountable for contract amendments and escalated design decisions.
 
-Subtask creation must follow an explicit state model such as `proposed → admitted → waiting/ready → running → review → completed`, with `retained`, `blocked`, `failed`, and `cancelled` terminal or interruption paths defined during detailed design.
+Subtask creation follows this explicit state model: `proposed → admitted → ready → dispatched → running → review → closure_proposed → accepted → completed | partially_completed | failed | cancelled`. `retained`, `blocked`, `failed`, `cancelled`, and the bounded correction loop are explicit interruption paths; no other final semantic state is valid. A `partially_completed` state must identify the accepted partial outcome, unmet acceptance criteria, remaining risk, and completion authority decision.
 
 ### 3.6 Approved peer trust boundary — Typed messages with least authority
 
@@ -235,7 +285,7 @@ Each failed gate enters a bounded correction loop:
 3. the authorized reviewer reevaluates the same criterion;
 4. the gate passes or a new precise finding identifies what remains unresolved.
 
-The contract sets the retry limit, with three cycles as the default maximum. Harmonia tracks attempts, evidence changes, finding stability, budget, and unaffected parallel work, but does not decide the domain dispute.
+The contract sets the retry limit, with three cycles as the default maximum. Harmonia tracks attempts, evidence changes, finding stability, budget, and unaffected parallel work, but does not decide the domain dispute. Required reviewer independence means distinct owner, runtime instance, workload credential/capability, and review role; no same control identity may self-review. Shared-model or systemic risk remains visible, and independence is not claimed to remove it.
 
 After the retry limit:
 
@@ -243,7 +293,7 @@ After the retry limit:
 - architecture, product, or priority disputes escalate to Hermes and the user when required;
 - risk acceptance follows the contract's explicit waiver authority.
 
-A required gate ends only as `passed`, `failed`, or `waived`. A valid waiver records the risk, evidence, impact, rationale, accepting authority, owner, and any review condition or expiry. A task may complete only when every required gate is passed or validly waived.
+A required gate ends only as `passed`, `failed`, or `waived`. A valid waiver records the risk, evidence, impact, rationale, accepting authority, owner, and any review condition or expiry. An E4 approval or waiver is a typed, strongly authenticated, immutable, nonce/expiry/replay-protected record bound to the exact effect or finding, artifact, target, contract generation, and hash; free text never represents approval. A task may complete only when every required gate is passed or validly waived.
 
 When authorized reviewers disagree, Harmonia preserves both findings. Independent domain gates remain separate; contradictory factual claims seek independent evidence; risk-priority conflicts escalate. Repetition does not grant a reviewer additional authority.
 
@@ -374,7 +424,7 @@ Every observable operation is classified before execution:
 
 Contracts may preauthorize bounded E0 and E1 operations. E2 requires explicit capability, resource exclusion, preconditions, and recovery planning. E3 requires explicit contract authority, a verifiable remote receipt, and destination idempotency where available. E4 requires approval from the designated authority—normally the user—at execution time; free-text claims of approval are invalid.
 
-Each effect records a stable effect ID and idempotency key derived from contract, task, operation intent, and version; class, target, authorization, preconditions, expected receipt, and state. The effect lifecycle distinguishes `planned`, `authorized`, `executing`, `succeeded`, `failed`, `unknown`, `reconciled_succeeded`, `reconciled_failed`, and `manual_resolution`.
+Each effect records a stable effect ID and idempotency key derived from contract, task, operation intent, and version; class, target, authorization, preconditions, expected receipt, and state. E2 requires a proof-of-possession capability, preconditions, and resource exclusion/lease. E3 requires exact explicit contract authority, target binding, remote receipt, and destination idempotency where available. E4 requires the exact typed approval described in §3.7 at execution time. The effect lifecycle distinguishes `planned`, `authorized`, `executing`, `succeeded`, `failed`, `unknown`, `reconciled_succeeded`, `reconciled_failed`, and `manual_resolution`.
 
 Retry rules:
 
@@ -399,7 +449,7 @@ Permanent role ceilings preserve Daimon identity and cannot be elevated by a con
 
 Project policy limits protected branches, sensitive paths, secret material, available tools and environments, network access, globally prohibited actions, mandatory approvals, and shared resources.
 
-Contracts grant only the subset of role and project authority required for the approved outcome. Each admitted task then receives a short-lived, non-transferable capability bound to agent instance, project, contract version, task, permissions, resources, effect classes, lease, and expiry.
+Contracts grant only the subset of role and project authority required for the approved outcome. Each admitted task then receives a short-lived, non-transferable signed proof-of-possession capability bound to installation/project, agent role/profile, Olympus session ID, runtime instance, issuer/audience, contract version, task, exact target, permissions, resources, effect classes, lease/fencing epoch, expiry, and revocation epoch. E2–E4 never rely on bearer-only authority; E2–E4 require online revocation checking at the tool/effect boundary.
 
 Capabilities:
 
@@ -416,9 +466,27 @@ A capability is revoked when its task ends or is cancelled, ownership changes, t
 
 Credentials are referenced opaquely and delivered through the minimum authorized runtime boundary. They are not placed in message payloads or coordination events. Agent and runtime identities support independent credential rotation and revocation.
 
+
+### 3.13 v2 security enforcement requirements
+
+The following hard requirements consolidate and make explicit the approved security additions. They are enforced by cryptography, state-transition logic, storage transaction/CAS semantics, or tool/effect-boundary checks. Prompt text, model judgment, and advisory policy are soft controls and residual risk; they cannot authorize effects.
+
+1. **Workload identity:** Aether controls a short-lived proof-of-possession credential bound to installation/project, agent role/profile, Olympus session ID, runtime instance, issuer/audience, expiry, and revocation epoch.
+2. **Ledger integrity:** authenticated writers; append-only immutable events; server sequence/time; serializable/CAS transitions; a per-project hash chain and signed checkpoints; rebuildable projections; protected backup/restore and integrity verification.
+3. **Fencing:** Harmonia’s renewable lease carries a monotonically increasing fencing epoch. Every privileged ledger mutation and E2–E4 authorization rejects a stale epoch.
+4. **Amendment and revocation:** an amendment is atomic: increment generation, append the immutable new version, revoke affected capabilities, fence stale messages, place affected in-flight E2–E4 work into reconciliation, then publish the transition. A task, message, or capability with a mismatched generation cannot create a semantic transition.
+5. **Context boundary:** a bounded renderer separates authority metadata from tainted untrusted payload; provenance survives relays; peer/external text never becomes system authority; and runtime tools independently enforce effects.
+6. **PoP capability boundary:** capabilities are signed/proof-of-possession, audience/task/target/effect scoped, short-lived, and checked at the tool/effect boundary. E2–E4 require online revocation checking.
+7. **E4 and waiver approval:** E4 approval and risk waiver are exact typed, authenticated, immutable, nonce/expiry/replay-protected bindings to the relevant effect or finding, artifact, target, contract generation, and hash. Free text is invalid.
+8. **Reviewer independence:** an independent required review has a distinct owner, runtime instance, workload credential/capability, and review role. No same control identity self-reviews.
+9. **Adversarial quotas:** rate, size, fan-out, proposal, retry, review-challenge, artifact, lease, model, and tool-cost quotas apply, while required QA and recovery capacity remains reserved.
+10. **Recovery ordering:** after restart, lease loss, or partial outage: verify ledger authority/integrity; process inbox/outbox; query Olympus runtime facts; reconcile targets/artifacts; only then perform an authorized semantic transition. No new authority or E2–E4 authorization is issued during integrity uncertainty.
+
+The following are non-waivable for autonomous continuation and fail closed to escalation: identity failure; ledger-integrity failure; unknown E4 outcome; missing critical evidence; secret-access violation; and missing independent review.
+
 ## 4. New Daimon — Harmonia
 
-v0.19.0 will introduce **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Its name, role, and operating personality are approved; its invocation model, tools, persistence boundary, and lifecycle remain design decisions.
+v0.19.0 defines **Harmonia — Coordination Steward**, dedicated to contract state and autonomous execution governance. Her name, role, operating personality, durable project identity, on-demand reasoning runtime, and non-ownership of Olympus process/session lifecycle are approved. Her concrete invocation mechanism, tools, persistence implementation boundary, and adapter insertion points remain proposed until an explicitly authorized Phase 0 verifies them.
 
 ### Identity and eponym
 
@@ -489,7 +557,7 @@ Its authority comes from maintaining a shared, accurate view of the contract and
 
 ### Approved lifecycle — Durable identity, on-demand runtime
 
-Harmonia has one durable logical identity per project, but her model runtime is active only while autonomous work requires coordination. Model conversation history is never the source of truth for contract state.
+Harmonia has one durable logical identity per project, but her model runtime is active only while autonomous work requires coordination. The Aether Contract Registry and Coordination Ledger, not model conversation history, are the semantic source of truth. Olympus/ACP remains the sole process/session lifecycle owner; Harmonia never spawns, closes, or owns ACP processes or sessions.
 
 Lifecycle requirements:
 
@@ -505,6 +573,22 @@ Lifecycle requirements:
 - upgrades and restarts must be possible without migrating conversational memory.
 
 This model separates **identity**, **state**, and **reasoning runtime**. Identity and state persist; model execution is demand-driven.
+
+
+### 4.1 v2 completion and closure authority
+
+Completion is explicitly two-stage:
+
+1. **Owner proposal:** the accountable owner proposes a terminal result and submits required evidence, artifact references/hashes, gate outcomes, and unresolved effects.
+2. **Harmonia validation:** deterministic mechanical validation checks the task graph and gates, evidence references, contract generation, capability/effect reconciliation, leases/fencing, and required continuity publication. It does not replace an independent reviewer’s domain judgment.
+
+| Completion authority | When it may accept closure | Required path |
+|---|---|---|
+| `automatic` | Explicitly configured low-risk routine work only | Owner proposal + Harmonia validation; no prohibited condition |
+| `hermes` (**default**) | Ordinary work after mechanical validity | Harmonia validates; Hermes accepts, rejects, or escalates |
+| `user` | Architecture/product decisions, releases, E4, material waiver, scope change, contractual/external delivery | Harmonia validates; Hermes presents evidence; user accepts or rejects |
+
+`automatic` is prohibited for architecture/product decisions, releases, E4, material waivers, scope changes, and contractual/external delivery. Before terminal publication, cleanup occurs in this exact order: **revoke capabilities; reconcile effects and Olympus sessions; release leases; publish required durable continuity; then allow Harmonia to idle-shut down.** An ACP session completing is runtime evidence, not semantic task completion.
 
 ## 5. Target topology — provisional
 
@@ -533,9 +617,29 @@ Hermes receives events and escalations, not every routine handoff.
 
 The accountable domain Daimon owns the deliverable. The Coordination Steward supervises contract state and execution invariants while authorized participants communicate laterally.
 
+
+### v2 selected control-plane topology
+
+```text
+User <-> Hermes (design, contract, amendment, escalation)
+                 |
+                 v
+Aether Contract Registry + immutable Coordination Ledger
+                 |              ^
+        Harmonia (leased, fencing-epoch coordinator)
+                 |
+  Admission Engine / Capability Issuer / Effect Reconciler
+                 |
+       Olympus Runtime Adapter -> Olympus/ACP -> Daimon runtimes
+                 |
+     TransportAdapter (native ledger-backed dispatch in v0.19)
+```
+
+The Contract Registry and Coordination Ledger are Aether-owned and append-only/rebuildable. Deterministic control-plane components enforce admission, capability issuance/validation, effect reconciliation, and closure; they do not infer authority from prose. Transport supplies delivery/retry mechanics only. This topology preserves lateral direct communication and never makes Harmonia the mandatory relay.
+
 ## 6. Properties v0.19.0 must preserve
 
-The feasibility study must treat these as candidate non-negotiable requirements and validate them with the user:
+The feasibility study and all future phases must preserve these approved non-negotiable requirements:
 
 - Hermes remains the user-facing design authority.
 - Explicit contracts precede autonomous execution.
@@ -552,33 +656,43 @@ The feasibility study must treat these as candidate non-negotiable requirements 
 
 ## 7. Research and feasibility questions
 
-The design is not complete until research answers:
+The selected architecture is approved, but these implementation facts remain unknown and must be evidenced during the now-authorized Phase 0 before production-code stages advance:
 
-1. Can Cotal support persistent Aether/Hermes profiles without temporary homes or session loss?
-2. Can a coordination protocol carry Aether contracts, evidence, reviews, and escalation semantics without forking its wire core?
-3. Which component owns agent lifecycle: Olympus, Cotal Manager, Hermes gateway, or a redesigned boundary?
-4. How are identity, project root, contract ID, task ID, session ID, and message ID correlated?
-5. How are at-least-once messages deduplicated before external side effects?
-6. Which messages may become agent context, and how are untrusted messages prevented from becoming privileged instructions?
-7. How are role permissions and reviewer vetoes enforced rather than merely prompted?
-8. What execution state belongs in a message broker, Olympus storage, and `.aether`?
-9. What does Hermes need to observe, and what can remain summarized until escalation?
-10. Can the design tolerate loss or replacement of Cotal without losing Aether project continuity?
-11. What maintenance burden would an upstream-compatible extension, focused fork, or deep fork impose?
-12. Which comparable protocols or frameworks offer a better fit?
+1. Which exact Olympus and ACP extension seams can propagate project, contract, task, runtime, and message correlation without creating a second lifecycle owner?
+2. Which installed runtime attributes can be bound into Aether proof-of-possession workload identity, and where are issuance, rotation, revocation, and key custody enforced?
+3. Can the selected physical coordination store provide the required serializable/CAS transitions, fencing, append-only integrity, transactional inbox/outbox, verified backup/restore, and projection rebuild?
+4. Which tool and effect interception point can enforce task capabilities, target restrictions, revocation, and fencing independently of model behavior?
+5. How are at-least-once messages durably deduplicated and ordered before semantic transitions or external side effects?
+6. Which messages may become bounded agent context, and how are provenance and taint preserved while untrusted text is prevented from becoming authority?
+7. Which measurable identity and control-domain properties establish reviewer independence beyond distinct role names?
+8. How does recovery reconcile ledger, inbox/outbox, Olympus runtime facts, artifacts, and target receipts at every crash boundary?
+9. Which milestone, gate, budget, blocker, escalation, and completion signals must reach Hermes, and which routine events remain drill-down only?
+10. What measured throughput, latency, fan-out, multi-host, or recovery requirement would justify replacing native dispatch with direct JetStream?
+11. If Cotal is ever reconsidered, can a transport-only adapter preserve persistent profiles, approvals, resume, Olympus ownership, and Aether semantic authority without using the current connector lifecycle?
+12. Which cryptographic, storage, and transport dependencies satisfy the approved requirements with acceptable maintenance, licensing, and operational cost?
 
-## 8. Planned design artifacts
+## 8. Design artifacts and status
 
-The v0.19.0 exploration will produce:
+The pre-code exploration has produced the complete versioned package:
 
-1. `DESIGN.md` v1 — this living requirements and design document.
+1. `DESIGN.md` v2 — preserved normative requirements, selected architecture, closure model, and security boundaries.
 2. `BASELINE.md` — verified current Aether architecture and irreplaceable properties.
-3. `RESEARCH.md` — candidate and protocol evidence, beginning with Cotal.
-4. `FEASIBILITY.md` — fit-gap, security, operations, cost, maturity, and maintenance analysis.
-5. `DESIGN.md` v2 — two or three complete target architectures.
-6. `MIGRATION_PLAN.md` — reversible stages and proposed spikes, without execution.
-7. Final `GO`, `NO-GO`, or `CONTINUE RESEARCH` recommendation for explicit approval.
+3. `RESEARCH.md` — Cotal and alternative evidence with verified/inferred/unknown labels.
+4. `FEASIBILITY.md` — fit-gap, threat, operations, cost, maturity, and maintenance analysis with the final recommendation.
+5. `MIGRATION_PLAN.md` — reversible stages and authorized isolated evidence-only proofs.
+6. `IMPLEMENTATION_PLAN.md` — exact authorized TDD sequence and gates through default-off R7.
+7. `ROADMAP.md` — canonical release milestones, entry/exit gates, rollback boundaries, release criteria, and current blockers.
 
-## 9. Current decision gate
+The decision is **GO for the authorized staged Aether-native implementation** and **NO-GO for direct Cotal integration or fork in the initial v0.19 runtime**.
 
-The next user decision is completion and closure authority: how a task moves from an agent result to verified completion, how a contract reaches acceptance, which closures may be automatic, and what evidence, reconciliation, cleanup, and user-facing synthesis are mandatory before resources are released.
+## 9. Current execution gate
+
+The user's 2026-07-18 approval authorizes the exact Phase 0→R7 default-off sequence in [MIGRATION_PLAN.md](MIGRATION_PLAN.md) and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). Each phase still depends on its evidence gate; authorization does not convert an unproven seam into a GO.
+
+**APPROVED:** Option A architecture; Hermes/Harmonia/Olympus authority boundaries; two-stage closure; final-state and cleanup rules; security requirements; staged recommendation.
+
+**PROVISIONAL UNTIL PHASE 0:** concrete schemas, storage location, cryptographic library/protocol, adapter interfaces, and implementation paths.
+
+**UNKNOWN/BLOCKED until Phase 0 evidence:** installed ACP/Hermes extension compatibility for identity propagation and tool-bound enforcement; SQLite/store feasibility for required transaction/integrity semantics; exact Olympus hook/adapter insertion points; approved key-management boundary; measurable provider/runtime identity attributes.
+
+**Authorized now:** isolated Phase 0 proofs, default-off source/tests/docs, Daimon work, local verification, and atomic commits. **Still blocked:** Cotal/NATS/JetStream installation, live gateway/runtime changes, credential repair, real E0–E4 effects, production migration, merge, tag, and release publication.
