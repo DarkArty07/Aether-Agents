@@ -2,7 +2,7 @@
 
 > **For Hermes:** execute this plan task by task only after the user says `aprobado`. Use Aether Daimons through Olympus, strict TDD, atomic commits, budget checks at every stage, and independent security gates where specified.
 
-**Status:** **APPROVED 2026-07-18 — R0 EXECUTION ACTIVE.** Authorization extends through code-complete, default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R2 COMPLETE, R3 EXECUTION ACTIVE.** Authorization extends through code-complete, default-off R7; live activation and release remain on hold.
 
 **Goal:** migrate Aether Agents from Hermes-relayed tool-style delegation to a contract-bounded autonomous team, using the transport-agnostic ideas of Cotal Core as design inspiration while preserving Aether semantic authority, Olympus lifecycle ownership, persistent Hermes profiles, and Telegram gateway continuity.
 

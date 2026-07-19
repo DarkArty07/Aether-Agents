@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R0 ACTIVE.** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R2 COMPLETE, R3 ACTIVE.** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -25,11 +25,11 @@
 |---|---|
 | Published version | `v0.18.2` |
 | Working branch | `feature/v0.19.0-autonomous-coordination-design` |
-| Pre-code design package | Present; final Git reconciliation pending |
-| Coordination runtime | Not implemented |
+| Pre-code design package | Reconciled and committed |
+| Coordination runtime | Protocol and immutable-contract core implemented; runtime integration not active |
 | Gateway | Active |
 | Telegram | Connected |
-| Healthy Codex accounts | 2 of 3 |
+| Healthy Codex accounts | 2 active; revoked third credential removed |
 | Available at planning baseline | 94% + 53% |
 | Revoked account | `codex-secondary` |
 | Protected reserve | `openai-codex-oauth-4`; stop initiating work at 15% to preserve ≥10% |
@@ -99,7 +99,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R0 — Safety baseline and pre-code consolidation
 
-**Status:** `ACTIVE`
+**Status:** `COMPLETE — 2026-07-18`
 
 **Deliverables:**
 
@@ -137,7 +137,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R2 — Cotal-inspired protocol core and immutable contracts
 
-**Status:** `READY AFTER R1 GO`
+**Status:** `COMPLETE — ATHENA QA ATTEMPT 2 PASS (2026-07-18)`
 
 **Scope:**
 
@@ -152,9 +152,11 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Exit evidence:** focused RED/GREEN tests plus full regression suite; malformed/sender-mismatch/stale-generation routes fail closed.
 
+**Verified result:** protocol and contracts committed in `11e5424` and `61497ba`; 30 coordination tests and 194 full-suite tests pass. Ruff, strict JSON round trips, active-contract authority, amendment-authority, actor, gate, role-permission, metadata-bound, and stale-generation checks pass. Athena attempt 1 found structural authority bypasses; the complete equivalence class was corrected and attempt 2 passed with no Critical/High finding.
+
 ### R3 — Ledger, projections, fencing, and recovery
 
-**Status:** `READY AFTER R2`
+**Status:** `ACTIVE — R2 COMPLETE`
 
 **Scope:** append-only authenticated Coordination Ledger, deterministic projections, checkpoints, tamper detection, restore/rebuild, transactional inbox/outbox, Harmonia lease, and monotonic fence.
 
