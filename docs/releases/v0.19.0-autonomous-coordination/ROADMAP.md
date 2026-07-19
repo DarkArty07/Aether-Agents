@@ -156,13 +156,17 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R3 — Ledger, projections, fencing, and recovery
 
-**Status:** `ACTIVE — R2 COMPLETE`
+**Status:** `BLOCKED — SESSION HANDOFF / NO-GO FOR EXIT (2026-07-18)`
 
 **Scope:** append-only authenticated Coordination Ledger, deterministic projections, checkpoints, tamper detection, restore/rebuild, transactional inbox/outbox, Harmonia lease, and monotonic fence.
 
-**Exit evidence:** conflict, replay, duplicate, tamper, stale-fence, restore, and projection-equivalence tests.
+**Current evidence:** an uncommitted default-off prototype passes 11 focused tests, 205 full-suite tests, and Ruff. This is regression evidence only; the required adversarial equivalence classes for contract/inbox/outbox atomicity, external-anchor rollback protection, persisted projection equivalence, verified restore, poison termination, and subprocess contention are incomplete.
 
-**Athena gate:** integrity and split-brain review.
+**Canonical handoff:** [`R3_SESSION_HANDOFF.md`](R3_SESSION_HANDOFF.md) records the exact files, commands, missing gates, delegation failures, safety state, and resume sequence. No R3 commit exists; do not advance to Athena or R4 from the current prototype.
+
+**Exit evidence required:** conflict, replay, duplicate, authenticated tamper, stale-fence, external-anchor rollback, verified restore, projection-equivalence, bounded poison, and writer-death/contention tests.
+
+**Athena gate:** integrity and split-brain review after all deterministic R3 evidence exists.
 
 ### R4 — Identity, capabilities, channels, presence, and context
 
