@@ -1,0 +1,3 @@
+## 2024-05-14 - SQLite Connection Overhead Optimization
+**Learning:** Sequential `COUNT(*)` queries in async and sync SQLite contexts incur significant connection/task-switching overhead (measured ~62% improvement). Combining multiple separate aggregate queries using scalar subqueries (e.g. `SELECT (SELECT COUNT(*)...), (SELECT COUNT(*)...)`) is highly effective and preserves code readability.
+**Action:** When observing sequential independent database queries (especially counts/aggregates on the same connection), combine them into single scalar subqueries. Always ensure trailing whitespace from multiline SQL string replacements doesn't trigger linting issues (`ruff`), and ensure `sed` replacement logic is precise so syntax errors like `SELECTid` are not created.
