@@ -18,6 +18,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -51,6 +52,11 @@ except ImportError:
 
 logger = logging.getLogger("olympus_v3.acp_manager")
 
+# Match ACP 0.9's finite agent-side stdio default without importing a newer
+# compatibility symbol that older supported agent-client-protocol releases lack.
+DEFAULT_ACP_STREAM_LIMIT = 50 * 1024 * 1024
+DEFAULT_SESSION_OPEN_TIMEOUT = 30.0
+
 
 # ---------------------------------------------------------------------------
 # Agent state tracking
@@ -66,6 +72,9 @@ class AgentState:
     process: Any = None  # actual subprocess yielded by process_context
     pid: int | None = None
     acp_session_ids: dict[str, str] = field(default_factory=dict)  # olympus_id -> acp_id
+    prompt_tasks: dict[str, asyncio.Task[Any]] = field(default_factory=dict)
+    prompt_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    mapping_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     status: str = "dead"  # dead, spawning, idle, busy
 
 
@@ -143,11 +152,27 @@ class ACPManager:
         4. close() / cancel() -> terminate + update SQLite
     """
 
-    def __init__(self, profiles_dir: Path | None = None, db: Any = None):
+    def __init__(
+        self,
+        profiles_dir: Path | None = None,
+        db: Any = None,
+        *,
+        acp_stream_limit: int = DEFAULT_ACP_STREAM_LIMIT,
+        session_open_timeout: float = DEFAULT_SESSION_OPEN_TIMEOUT,
+    ):
+        if not isinstance(acp_stream_limit, int) or acp_stream_limit < 64 * 1024:
+            raise ValueError("acp_stream_limit must be an integer of at least 65536 bytes")
+        if not isinstance(session_open_timeout, (int, float)) or session_open_timeout <= 0:
+            raise ValueError("session_open_timeout must be positive")
+
         self.agents: dict[tuple[str, str], AgentState] = {}
         self.sessions: dict[str, SessionInfo] = {}
+        self._spawn_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._reserved_session_ids: set[str] = set()
         self.profiles_dir = profiles_dir or self._default_profiles_dir()
         self.db = db  # OlympusDB instance (set later via set_db)
+        self.acp_stream_limit = acp_stream_limit
+        self.session_open_timeout = float(session_open_timeout)
 
     @staticmethod
     def _default_profiles_dir() -> Path:
@@ -172,12 +197,171 @@ class ACPManager:
     @staticmethod
     def _agent_key(agent_name: str, project_root: str | None) -> tuple[str, str]:
         """Build the compound key for the agents dict: (agent_name, project_root)."""
-        return (agent_name, project_root or "")
+        root = Path(project_root).expanduser().resolve() if project_root else Path.cwd().resolve()
+        return (agent_name, str(root))
+
+    @staticmethod
+    def _canonical_project_root(project_root: str | None) -> str:
+        """Return the one identity path used by all lifecycle state."""
+        return str(Path(project_root).expanduser().resolve() if project_root else Path.cwd().resolve())
+
+    def _lifecycle_lock(self, key: tuple[str, str]) -> asyncio.Lock:
+        return self._spawn_locks.setdefault(key, asyncio.Lock())
 
     def get_agent(self, agent_name: str, project_root: str | None = None) -> AgentState | None:
         """Look up an agent by name and project_root."""
         key = self._agent_key(agent_name, project_root)
         return self.agents.get(key)
+
+    @staticmethod
+    def _agent_is_healthy(agent: AgentState) -> bool:
+        """Return whether an agent can safely receive another ACP request."""
+        if agent.status == "dead" or agent.connection is None:
+            return False
+        if getattr(agent.connection, "_closed", False):
+            return False
+        receive_task = getattr(agent.connection, "_recv_task", None)
+        if receive_task is not None and receive_task.done():
+            return False
+        if agent.process is not None and getattr(agent.process, "returncode", None) is not None:
+            return False
+        return True
+
+    @staticmethod
+    async def _dispose_agent_transport(agent: AgentState) -> None:
+        """Close the owning context and bound fallback process termination."""
+        async def _dispose() -> None:
+            fallback_terminate = agent.process_context is None
+            try:
+                if agent.process_context is not None:
+                    try:
+                        await asyncio.wait_for(
+                            agent.process_context.__aexit__(None, None, None), timeout=5.0
+                        )
+                    except Exception:
+                        fallback_terminate = True
+                elif agent.connection is not None:
+                    with contextlib.suppress(Exception):
+                        await agent.connection.close()
+
+                process = agent.process
+                if fallback_terminate and process is not None and hasattr(process, "terminate"):
+                    try:
+                        process.terminate()
+                        try:
+                            await asyncio.wait_for(process.wait(), timeout=5.0)
+                        except asyncio.TimeoutError:
+                            process.kill()
+                            await asyncio.wait_for(process.wait(), timeout=5.0)
+                    except ProcessLookupError:
+                        pass
+                    except Exception as e:
+                        logger.warning("Failed fallback termination for %s: %s", agent.name, e)
+            finally:
+                agent.connection = None
+                agent.process_context = None
+                agent.process = None
+                agent.pid = None
+
+        cleanup = asyncio.create_task(_dispose())
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            with contextlib.suppress(asyncio.TimeoutError, Exception):
+                await asyncio.wait_for(asyncio.shield(cleanup), timeout=5.0)
+            raise
+
+    @staticmethod
+    async def _run_cleanup_to_completion(
+        cleanup_coro: Any,
+        *,
+        timeout: float = 15.0,
+    ) -> None:
+        """Finish bounded cleanup before propagating caller cancellation."""
+        cleanup = asyncio.create_task(cleanup_coro)
+        deadline = asyncio.get_running_loop().time() + timeout
+        caller_cancelled = False
+        while not cleanup.done():
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                cleanup.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await cleanup
+                raise TimeoutError(f"Lifecycle cleanup exceeded {timeout:g}s")
+            try:
+                async with asyncio.timeout(remaining):
+                    await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                caller_cancelled = True
+                continue
+            except asyncio.TimeoutError:
+                cleanup.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await cleanup
+                raise TimeoutError(f"Lifecycle cleanup exceeded {timeout:g}s")
+
+        cleanup.result()
+        if caller_cancelled:
+            raise asyncio.CancelledError
+
+    async def _rollback_unpublished_session(
+        self,
+        key: tuple[str, str],
+        agent: AgentState,
+        acp_session_id: str,
+    ) -> None:
+        """Release a raw ACP session and any otherwise unowned transport."""
+        try:
+            if agent.connection is not None:
+                await asyncio.wait_for(
+                    agent.connection.close_session(acp_session_id),
+                    timeout=5.0,
+                )
+        except BaseException as exc:
+            logger.warning("Failed unpublished ACP session cleanup %s: %s", acp_session_id, exc)
+        finally:
+            if not agent.acp_session_ids and self.agents.get(key) is agent:
+                agent.status = "dead"
+                await self._dispose_agent_transport(agent)
+                if self.agents.get(key) is agent:
+                    self.agents.pop(key, None)
+
+    async def _invalidate_agent(
+        self,
+        key: tuple[str, str],
+        agent: AgentState,
+        *,
+        reason: str,
+        session_status: str = "error",
+    ) -> None:
+        """Fail all sessions and dispose a broken agent without deleting a replacement."""
+        logger.warning("Invalidating agent %s for project %s: %s", agent.name, key[1], reason)
+        agent.status = "dead"
+        if self.agents.get(key) is agent:
+            self.agents.pop(key, None)
+
+        current_task = asyncio.current_task()
+        tasks = list(agent.prompt_tasks.values())
+        for task in tasks:
+            if task is not current_task and not task.done():
+                task.cancel()
+        for task in tasks:
+            if task is not current_task:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+        agent.prompt_tasks.clear()
+
+        for sid in list(agent.acp_session_ids):
+            session = self.sessions.get(sid)
+            if session is not None and session.status not in ("completed", "cancelled"):
+                session.status = session_status
+                if self.db:
+                    try:
+                        await self.db.update_session_status(sid, session_status)
+                    except Exception as exc:
+                        logger.warning("Failed to persist invalidated session %s: %s", sid, exc)
+
+        await self._dispose_agent_transport(agent)
 
     # -------------------------------------------------------------------
     # Discovery
@@ -221,6 +405,28 @@ class ACPManager:
         session_id: str | None = None,
         project_root: str | None = None,
     ) -> str:
+        """Reserve one globally unique logical ID, then open its ACP session."""
+        sid = session_id or str(uuid.uuid4())
+        if sid in self.sessions or sid in self._reserved_session_ids:
+            raise ValueError(f"Session already exists: {sid}")
+        # The check and add contain no await, so they are atomic within the
+        # manager's event loop even when different project locks are used.
+        self._reserved_session_ids.add(sid)
+        try:
+            return await self._spawn_agent_reserved(
+                agent_name=agent_name,
+                session_id=sid,
+                project_root=project_root,
+            )
+        finally:
+            self._reserved_session_ids.discard(sid)
+
+    async def _spawn_agent_reserved(
+        self,
+        agent_name: str,
+        session_id: str | None = None,
+        project_root: str | None = None,
+    ) -> str:
         """Spawn a Daimon process with ACP and register in SQLite.
 
         Args:
@@ -235,65 +441,104 @@ class ACPManager:
             raise RuntimeError("agent-client-protocol package not installed")
 
         sid = session_id or str(uuid.uuid4())
+        cwd = self._canonical_project_root(project_root)
+        key = self._agent_key(agent_name, cwd)
 
         # Find profile directory
         profile_path = self.profiles_dir / agent_name
         if not profile_path.exists():
             raise ValueError(f"Profile not found: {agent_name} at {profile_path}")
 
-        # Create or reuse agent state keyed by (agent_name, project_root)
-        key = self._agent_key(agent_name, project_root)
-        agent = self.agents.get(key)
-        if agent is None or agent.status in ("dead",):
-            agent = AgentState(
-                name=agent_name,
-                profile_path=profile_path,
-                status="spawning",
-            )
-            self.agents[key] = agent
+        # Serialize lookup/spawn/session-open for one agent+project key. Locks
+        # differ across projects, so independent work still starts in parallel.
+        lock = self._lifecycle_lock(key)
+        async with lock:
+            if sid in self.sessions:
+                raise ValueError(f"Session already exists: {sid}")
+            agent = self.agents.get(key)
+            if agent is not None and not self._agent_is_healthy(agent):
+                await self._invalidate_agent(key, agent, reason="failed pre-reuse health check")
+                agent = None
 
-        # If agent is already idle for the SAME project, reuse it
-        if agent.status in ("idle",) and agent.connection is not None:
-            logger.info("Reusing existing agent %s for project %s (idle)", agent_name, project_root)
-        else:
-            # Spawn new process
-            await self._spawn_process(agent, project_root=project_root)
+            if agent is None:
+                agent = AgentState(
+                    name=agent_name,
+                    profile_path=profile_path,
+                    status="spawning",
+                )
+                self.agents[key] = agent
+                try:
+                    await self._spawn_process(agent, project_root=cwd)
+                except BaseException:
+                    await self._invalidate_agent(key, agent, reason="process spawn failed")
+                    raise
+            else:
+                logger.info(
+                    "Reusing healthy agent %s for project %s (status=%s)",
+                    agent_name,
+                    project_root,
+                    agent.status,
+                )
 
-        # Create ACP session
-        if agent.connection is None:
-            raise RuntimeError(f"Agent {agent_name} has no ACP connection after spawn")
+            if agent.connection is None:
+                await self._invalidate_agent(key, agent, reason="spawn produced no ACP connection")
+                raise RuntimeError(f"Agent {agent_name} has no ACP connection after spawn")
 
-        cwd = project_root or os.environ.get("AETHER_HOME", str(Path.cwd()))
-        session_resp = await agent.connection.new_session(
-            cwd=cwd,
-            mcp_servers=[],
-        )
-        acp_session_id = session_resp.session_id
+            try:
+                session_resp = await asyncio.wait_for(
+                    agent.connection.new_session(cwd=cwd, mcp_servers=[]),
+                    timeout=self.session_open_timeout,
+                )
+            except asyncio.TimeoutError as exc:
+                await self._invalidate_agent(key, agent, reason="new_session timeout")
+                raise TimeoutError(
+                    f"Agent {agent_name} new_session timed out after "
+                    f"{self.session_open_timeout:g}s"
+                ) from exc
+            except BaseException:
+                await self._invalidate_agent(key, agent, reason="new_session failed")
+                raise
 
-        # Track session
-        session = SessionInfo(
-            session_id=sid,
-            agent_name=agent_name,
-            acp_session_id=acp_session_id,
-            project_root=cwd,
-        )
-        self.sessions[sid] = session
-        agent.acp_session_ids[sid] = acp_session_id
-        agent.status = "busy"
-
-        # Register in SQLite
-        if self.db:
-            await self.db.insert_session(
+            acp_session_id = session_resp.session_id
+            if self.agents.get(key) is not agent or agent.status == "dead":
+                await self._run_cleanup_to_completion(
+                    self._rollback_unpublished_session(key, agent, acp_session_id)
+                )
+                raise RuntimeError("Agent ownership changed while opening ACP session")
+            session = SessionInfo(
                 session_id=sid,
-                agent=agent_name,
-                metadata={"acp_session_id": acp_session_id, "profile": agent_name},
+                agent_name=agent_name,
+                acp_session_id=acp_session_id,
+                project_root=cwd,
             )
+            try:
+                if self.db:
+                    await self.db.insert_session(
+                        session_id=sid,
+                        agent=agent_name,
+                        metadata={
+                            "acp_session_id": acp_session_id,
+                            "profile": agent_name,
+                            "project_root": cwd,
+                        },
+                    )
+            except BaseException:
+                await self._run_cleanup_to_completion(
+                    self._rollback_unpublished_session(key, agent, acp_session_id)
+                )
+                raise
 
-        logger.info("Session opened: %s (ACP: %s) on agent %s", sid, acp_session_id, agent_name)
-        return sid
+            self.sessions[sid] = session
+            agent.acp_session_ids[sid] = acp_session_id
+            agent.status = "busy"
+
+            logger.info("Session opened: %s (ACP: %s) on agent %s", sid, acp_session_id, agent_name)
+            return sid
 
     async def _spawn_process(self, agent: AgentState, project_root: str | None = None) -> None:
         """Spawn a hermes-agent process with ACP server mode."""
+        if spawn_agent_process is None:
+            raise RuntimeError("agent-client-protocol package not installed")
         hermes_bin = (
             shutil.which("hermes")
             or os.path.expanduser("~/.local/bin/hermes")
@@ -337,31 +582,42 @@ class ACPManager:
                      agent.name, command, " ".join(args), agent.profile_path)
 
         try:
-            cm = spawn_agent_process(client, command, *args, env={**os.environ, **env_extra})
+            cm = spawn_agent_process(
+                client,
+                command,
+                *args,
+                env={**os.environ, **env_extra},
+                transport_kwargs={"limit": self.acp_stream_limit},
+            )
             conn, proc = await cm.__aenter__()
         except Exception as e:
             agent.status = "dead"
             logger.error("spawn_agent_process failed for %s: %s", agent.name, e)
             raise
 
-        # Initialize ACP connection
-        init_resp = await conn.initialize(
-            protocol_version=PROTOCOL_VERSION,
-            client_capabilities=ClientCapabilities(),
-            client_info=Implementation(
-                name="olympus-v3",
-                title="Olympus v3 MCP Server",
-                version="0.1.0",
-            ),
-        )
-
-        logger.info("Agent %s initialized (protocol=%s)",
-                     agent.name, init_resp.protocol_version)
-
         agent.connection = conn
         agent.process_context = cm
         agent.process = proc
         agent.pid = proc.pid if hasattr(proc, "pid") else None
+
+        try:
+            init_resp = await conn.initialize(
+                protocol_version=PROTOCOL_VERSION,
+                client_capabilities=ClientCapabilities(),
+                client_info=Implementation(
+                    name="olympus-v3",
+                    title="Olympus v3 MCP Server",
+                    version="0.1.0",
+                ),
+            )
+        except BaseException:
+            agent.status = "dead"
+            await self._dispose_agent_transport(agent)
+            raise
+
+        logger.info("Agent %s initialized (protocol=%s)",
+                     agent.name, init_resp.protocol_version)
+
         agent.status = "idle"
 
     @staticmethod
@@ -408,6 +664,56 @@ class ACPManager:
                 pass
             raise
 
+    def _write_session_mapping(
+        self,
+        agent: AgentState,
+        session: SessionInfo,
+        session_id: str,
+    ) -> None:
+        """Publish one prompt's PID-scoped plugin mapping or fail closed."""
+        pid = agent.pid or os.getpid()
+        paths = (
+            (agent.profile_path / f".olympus_session.{pid}", session_id),
+            (agent.profile_path / f".olympus_db_path.{pid}", str(get_db_path())),
+            (
+                agent.profile_path / f".aether_home.{pid}",
+                session.project_root or os.environ.get("AETHER_HOME") or str(Path.cwd().resolve()),
+            ),
+        )
+        try:
+            for path, content in paths:
+                self._atomic_write(path, content)
+        except BaseException:
+            for path, _ in paths:
+                with contextlib.suppress(OSError):
+                    path.unlink(missing_ok=True)
+            raise
+        logger.debug("Published PID-scoped session mapping for %s (PID %d)", agent.name, pid)
+
+    @staticmethod
+    def _remove_pid_mappings(
+        agent: AgentState,
+        pid: int | None,
+        *,
+        session_id: str | None = None,
+    ) -> None:
+        if pid is None:
+            return
+        session_path = agent.profile_path / f".olympus_session.{pid}"
+        if session_id is not None:
+            try:
+                if session_path.read_text() != session_id:
+                    return
+            except OSError:
+                return
+        for suffix in (
+            f".olympus_session.{pid}",
+            f".olympus_db_path.{pid}",
+            f".aether_home.{pid}",
+        ):
+            with contextlib.suppress(OSError):
+                (agent.profile_path / suffix).unlink(missing_ok=True)
+
     # -------------------------------------------------------------------
     # Messaging
     # -------------------------------------------------------------------
@@ -426,38 +732,20 @@ class ACPManager:
         if agent is None or agent.connection is None:
             raise RuntimeError(f"Agent for session {session_id} has no connection")
 
+        existing_task = agent.prompt_tasks.get(session_id)
+        if existing_task is not None and not existing_task.done():
+            raise RuntimeError(f"Session {session_id} already has an active prompt")
+        if not self._agent_is_healthy(agent):
+            key = self._agent_key(session.agent_name, session.project_root)
+            await self._invalidate_agent(key, agent, reason="failed pre-prompt health check")
+            raise RuntimeError(f"Agent for session {session_id} is not healthy")
+
         acp_session_id = session.acp_session_id
         if acp_session_id is None:
             raise RuntimeError(f"Session {session_id} has no ACP session ID")
 
-        # Write PID-suffixed session mapping files so the Daimon's plugin hooks can
-        # discover the current session ID and DB path. PID-suffixed files avoid
-        # race conditions when multiple Daimon processes share the same profile dir.
-        pid = agent.pid or os.getpid()
-        try:
-            self._atomic_write(agent.profile_path / f".olympus_session.{pid}", session_id)
-            logger.debug("Wrote .olympus_session.%d for %s: %s", pid, agent.name, session_id)
-        except Exception as e:
-            logger.warning("Failed to write .olympus_session.%d for %s: %s", pid, agent.name, e)
-
-        try:
-            db_path = str(get_db_path())
-            self._atomic_write(agent.profile_path / f".olympus_db_path.{pid}", db_path)
-            logger.debug("Wrote .olympus_db_path.%d for %s: %s", pid, agent.name, db_path)
-        except Exception as e:
-            logger.warning("Failed to write .olympus_db_path.%d for %s: %s", pid, agent.name, e)
-
-        # Write PID-suffixed .aether_home so Daimon plugin hooks can find the project root
-        try:
-            aether_home_value = session.project_root or os.environ.get("AETHER_HOME") or str(Path.cwd().resolve())
-            aether_home_file = Path(agent.profile_path) / f".aether_home.{pid}"
-            aether_home_file.write_text(aether_home_value)
-            logger.debug("Wrote .aether_home.%d for %s: %s", pid, agent.name, aether_home_value)
-        except Exception as e:
-            logger.warning("Failed to write .aether_home.%d for %s: %s", pid, agent.name, e)
-
         # Send prompt as background task
-        async def _run_prompt():
+        async def _execute_prompt():
             try:
                 response = await agent.connection.prompt(
                     session_id=acp_session_id,
@@ -488,12 +776,59 @@ class ACPManager:
                     await self.db.update_session_status(session_id, terminal_status)
             except Exception as e:
                 logger.error("Prompt error for session %s: %s", session_id, e)
-                if session_id in self.sessions:
-                    self.sessions[session_id].status = "error"
-                if self.db:
-                    await self.db.update_session_status(session_id, "error")
+                if not self._agent_is_healthy(agent):
+                    key = self._agent_key(session.agent_name, session.project_root)
+                    await self._invalidate_agent(
+                        key,
+                        agent,
+                        reason=f"prompt transport failed: {e}",
+                    )
+                else:
+                    if session_id in self.sessions:
+                        self.sessions[session_id].status = "error"
+                    if self.db:
+                        await self.db.update_session_status(session_id, "error")
 
-        asyncio.create_task(_run_prompt())
+        async def _run_prompt():
+            async with agent.prompt_lock:
+                if (
+                    self.sessions.get(session_id) is not session
+                    or agent.acp_session_ids.get(session_id) != acp_session_id
+                    or self.agents.get(self._agent_key(session.agent_name, session.project_root)) is not agent
+                ):
+                    return
+                if not self._agent_is_healthy(agent):
+                    key = self._agent_key(session.agent_name, session.project_root)
+                    await self._invalidate_agent(key, agent, reason="connection died before queued prompt")
+                    return
+                try:
+                    async with agent.mapping_lock:
+                        self._write_session_mapping(agent, session, session_id)
+                except Exception as e:
+                    logger.error("Session mapping failed for %s: %s", session_id, e)
+                    if session_id in self.sessions:
+                        self.sessions[session_id].status = "error"
+                    if self.db:
+                        await self.db.update_session_status(session_id, "error")
+                    return
+                try:
+                    await _execute_prompt()
+                finally:
+                    async with agent.mapping_lock:
+                        self._remove_pid_mappings(
+                            agent,
+                            agent.pid,
+                            session_id=session_id,
+                        )
+
+        task = asyncio.create_task(_run_prompt())
+        agent.prompt_tasks[session_id] = task
+
+        def _forget_prompt(done_task: asyncio.Task[Any]) -> None:
+            if agent.prompt_tasks.get(session_id) is done_task:
+                agent.prompt_tasks.pop(session_id, None)
+
+        task.add_done_callback(_forget_prompt)
 
         return {"status": "sent", "session_id": session_id}
 
@@ -532,83 +867,100 @@ class ACPManager:
     # -------------------------------------------------------------------
 
     async def close(self, session_id: str, *, terminal_status: str | None = None) -> dict:
-        """Close a session, optionally recording a validated terminal outcome."""
+        """Close a session under the canonical per-agent/project lifecycle lock."""
         if terminal_status not in (None, "completed", "error", "cancelled"):
             raise ValueError("terminal_status must be completed, error, or cancelled")
-
         session = self.sessions.get(session_id)
         if session is None:
             raise ValueError(f"Unknown session: {session_id}")
+        key = self._agent_key(session.agent_name, session.project_root)
+        async with self._lifecycle_lock(key):
+            return await self._close_locked(session_id, session, terminal_status)
 
+    async def _close_locked(
+        self, session_id: str, session: SessionInfo, terminal_status: str | None
+    ) -> dict:
+        """Close a session; caller holds the canonical lifecycle lock."""
         agent = self.agents.get(self._agent_key(session.agent_name, session.project_root))
+        prompt_task = agent.prompt_tasks.get(session_id) if agent else None
+        prompt_was_active = prompt_task is not None and not prompt_task.done()
 
-        # Close ACP session
+        # Closing active work must cancel it and must never manufacture success.
+        if prompt_was_active:
+            assert agent is not None and prompt_task is not None
+            if agent.connection and session.acp_session_id:
+                try:
+                    await agent.connection.cancel(session.acp_session_id)
+                except Exception as exc:
+                    logger.warning("Error cancelling ACP session %s: %s", session.acp_session_id, exc)
+            prompt_task.cancel()
+            await asyncio.gather(prompt_task, return_exceptions=True)
+
         if agent and agent.connection and session.acp_session_id:
             try:
                 await agent.connection.close_session(session.acp_session_id)
-            except Exception as e:
-                logger.warning("Error closing ACP session %s: %s", session.acp_session_id, e)
+            except Exception as exc:
+                logger.warning("Error closing ACP session %s: %s", session.acp_session_id, exc)
 
         # Never overwrite an ACP-reported failure with a successful cleanup.
         if session.status in ("error", "cancelled"):
             final_status = session.status
         elif terminal_status is not None:
             final_status = terminal_status
+        elif prompt_was_active:
+            final_status = "cancelled"
         elif session.status == "completed":
             final_status = "completed"
         else:
-            final_status = "completed"
-        if self.db:
-            await self.db.update_session_status(session_id, final_status)
+            final_status = "cancelled"
+        persistence_error: BaseException | None = None
+        try:
+            if self.db:
+                await self.db.update_session_status(session_id, final_status)
+        except BaseException as exc:
+            persistence_error = exc
 
-        # Cleanup
+        # PID and in-memory ownership cleanup must run even when persistence fails.
         session.status = final_status
-        if agent and session_id in agent.acp_session_ids:
-            del agent.acp_session_ids[session_id]
-        if session_id in self.sessions:
-            del self.sessions[session_id]
+        if agent:
+            async with agent.mapping_lock:
+                self._remove_pid_mappings(
+                    agent,
+                    agent.pid,
+                    session_id=session_id,
+                )
+            agent.acp_session_ids.pop(session_id, None)
+            agent.prompt_tasks.pop(session_id, None)
+        self.sessions.pop(session_id, None)
 
-        # Mark agent idle if no more sessions
         if agent and not agent.acp_session_ids:
-            agent.status = "idle"
+            agent.status = "idle" if self._agent_is_healthy(agent) else "dead"
+
+        if persistence_error is not None:
+            raise persistence_error
 
         logger.info("Session closed: %s (status=%s)", session_id, final_status)
         return {"status": final_status, "session_id": session_id}
 
     async def cancel(self, session_id: str) -> dict:
         """Force-cancel a stuck session."""
-        session = self.sessions.get(session_id)
-        if session is None:
-            raise ValueError(f"Unknown session: {session_id}")
-
-        agent = self.agents.get(self._agent_key(session.agent_name, session.project_root))
-
-        # Cancel via ACP
-        if agent and agent.connection and session.acp_session_id:
-            try:
-                await agent.connection.cancel(session.acp_session_id)
-            except Exception as e:
-                logger.warning("Error cancelling ACP session %s: %s", session.acp_session_id, e)
-
-        # Update SQLite
-        if self.db:
-            await self.db.update_session_status(session_id, "cancelled")
-
-        session.status = "cancelled"
-        if agent and session_id in agent.acp_session_ids:
-            del agent.acp_session_ids[session_id]
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-
-        if agent and not agent.acp_session_ids:
-            agent.status = "idle"
-
+        result = await self.close(session_id, terminal_status="cancelled")
         logger.info("Session cancelled: %s", session_id)
-        return {"status": "cancelled", "session_id": session_id}
+        return result
 
     # -------------------------------------------------------------------
     # Delegate — open + message + auto-poll until done
     # -------------------------------------------------------------------
+
+    @staticmethod
+    def _has_completion_evidence(progress: dict[str, Any]) -> bool:
+        """Accept only structurally valid persisted completion evidence."""
+        for field_name in ("last_turn", "last_reasoning"):
+            value = progress.get(field_name)
+            if isinstance(value, str) and value.strip():
+                return True
+        tool_calls = progress.get("recent_tool_calls")
+        return isinstance(tool_calls, list) and any(isinstance(item, dict) and item for item in tool_calls)
 
     async def delegate(
         self,
@@ -662,6 +1014,7 @@ class ACPManager:
         last_messages = 0
         last_tool_calls = 0
         stall_count = 0
+        empty_completion_polls = 0
 
         while True:
             await asyncio.sleep(poll_interval)
@@ -678,6 +1031,26 @@ class ACPManager:
 
             # Completion
             if status in ("completed", "error", "cancelled"):
+                # ACP adapters can surface provider failures as end_turn with no
+                # assistant turn. Allow one poll for asynchronous hooks to
+                # settle, then fail closed instead of reporting empty success.
+                if status == "completed" and not self._has_completion_evidence(progress):
+                    empty_completion_polls += 1
+                    if empty_completion_polls < 2:
+                        logger.warning(
+                            "[delegate] %s completed without a persisted turn; waiting for hooks",
+                            agent_name,
+                        )
+                        continue
+                    status = "error"
+                    progress["status"] = status
+                    progress["reason"] = "completed_without_response_evidence"
+                    session = self.sessions.get(session_id)
+                    if session is not None:
+                        session.status = status
+                    if self.db:
+                        await self.db.update_session_status(session_id, status)
+
                 progress["session_id"] = session_id
                 progress["timed_out"] = False
                 progress["elapsed_seconds"] = round(elapsed, 1)
@@ -782,70 +1155,29 @@ class ACPManager:
 
         results = []
         for key, agent in agents_to_shutdown:
-            if agent.status == "dead":
-                results.append({"status": "already_dead", "agent": name, "project_root": key[1]})
-                continue
+            assert agent is not None
+            async with self._lifecycle_lock(key):
+                # Re-check ownership after waiting: a replacement must not be disposed.
+                if self.agents.get(key) is not agent:
+                    continue
 
-            # Close all sessions
-            for sid in list(agent.acp_session_ids.keys()):
-                try:
-                    await self.close(sid)
-                except Exception as e:
-                    logger.warning("Error closing session %s during shutdown: %s", sid, e)
-
-            # Legacy AgentState has no process context to own connection teardown.
-            if agent.process_context is None and agent.connection:
-                try:
-                    await agent.connection.close()
-                except Exception as e:
-                    logger.warning("Error closing ACP connection for %s: %s", name, e)
-
-            # spawn_agent_process owns normal process cleanup through its async
-            # context manager.  Only touch the yielded subprocess as a bounded
-            # fallback if that context cannot finish its own cleanup.
-            agent.status = "dead"
-            fallback_terminate = agent.process_context is None
-            if agent.process_context is not None:
-                try:
-                    await asyncio.wait_for(
-                        agent.process_context.__aexit__(None, None, None), timeout=5.0
-                    )
-                except asyncio.TimeoutError:
-                    fallback_terminate = True
-                    logger.warning("Timed out exiting ACP process context for %s", name)
-                except Exception as e:
-                    fallback_terminate = True
-                    logger.warning("Error exiting ACP process context for %s: %s", name, e)
-
-            if fallback_terminate and agent.process is not None:
-                try:
-                    agent.process.terminate()
+                # Close all sessions while holding the same lock as spawn.
+                for sid in list(agent.acp_session_ids.keys()):
                     try:
-                        await asyncio.wait_for(agent.process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
-                        agent.process.kill()
-                        await asyncio.wait_for(agent.process.wait(), timeout=5.0)
-                    logger.info("Fallback-terminated process for %s (PID: %s)", name, agent.pid)
-                except ProcessLookupError:
-                    logger.info("Process for %s already terminated", name)
-                except Exception as e:
-                    logger.warning("Error fallback-terminating process for %s: %s", name, e)
+                        session = self.sessions.get(sid)
+                        if session is not None:
+                            await self._close_locked(sid, session, None)
+                    except Exception as exc:
+                        logger.warning("Error closing session %s during shutdown: %s", sid, exc)
 
-            # Clean up PID-suffixed files
-            pid = agent.pid
-            if pid is not None:
-                for suffix in [f".olympus_session.{pid}", f".olympus_db_path.{pid}", f".aether_home.{pid}"]:
-                    fpath = agent.profile_path / suffix
-                    if fpath.exists():
-                        try:
-                            fpath.unlink(missing_ok=True)
-                            logger.debug("Cleaned up %s for %s (PID %s)", suffix, name, pid)
-                        except Exception as e:
-                            logger.warning("Failed to clean up %s for %s: %s", suffix, name, e)
-
-            self.agents.pop(key, None)
-            logger.info("Agent %s (project %s) shut down", name, key[1])
-            results.append({"status": "shutdown", "agent": name, "project_root": key[1]})
+                pid = agent.pid
+                agent.status = "dead"
+                await self._dispose_agent_transport(agent)
+                self._remove_pid_mappings(agent, pid)
+                if self.agents.get(key) is agent:
+                    self.agents.pop(key, None)
+                logger.info("Agent %s (project %s) shut down", name, key[1])
+                results.append({"status": "shutdown", "agent": name, "project_root": key[1]})
 
         # Return single result if only one agent was shut down, otherwise list
         if len(results) == 1:
