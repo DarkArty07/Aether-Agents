@@ -562,12 +562,19 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
             hot_state = await db.get_hot_state()
 
             # Counts
-            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
-            sessions_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM issues")
-            issues_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
-            decisions_count = (await cursor.fetchone())[0]
+            # ⚡ Bolt: Combine multiple COUNT queries using scalar subqueries to reduce connection overhead
+            cursor = await db._execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM sessions),
+                    (SELECT COUNT(*) FROM issues),
+                    (SELECT COUNT(*) FROM decisions)
+                """
+            )
+            row = await cursor.fetchone()
+            sessions_count = row[0]
+            issues_count = row[1]
+            decisions_count = row[2]
 
             detail = args.get("detail", "summary")
 
