@@ -156,17 +156,17 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R3 — Ledger, projections, fencing, and recovery
 
-**Status:** `BLOCKED — SESSION HANDOFF / NO-GO FOR EXIT (2026-07-18)`
+**Status:** `R3 CLOSED — HITL EXCEPTION RECORDED / ATOMIC COMMIT (2026-07-19)`
 
 **Scope:** append-only authenticated Coordination Ledger, deterministic projections, checkpoints, tamper detection, restore/rebuild, transactional inbox/outbox, Harmonia lease, and monotonic fence.
 
-**Current evidence:** an uncommitted default-off prototype passes 11 focused tests, 205 full-suite tests, and Ruff. This is regression evidence only; the required adversarial equivalence classes for contract/inbox/outbox atomicity, external-anchor rollback protection, persisted projection equivalence, verified restore, poison termination, and subprocess contention are incomplete.
+**Current evidence:** the uncommitted default-off implementation passes 131 coordination tests and 295 full-suite tests. Ruff, compileall, and `git diff --check` pass. The executable matrix now covers contract/inbox/outbox atomicity, lease and authority fencing, authenticated tamper, external-anchor rollback protection, persisted projection equivalence, verified two-phase restore, bounded poison termination, input bounds, subprocess contention, abrupt writer death, takeover, and permanent rejection of old fences.
 
-**Canonical handoff:** [`R3_SESSION_HANDOFF.md`](R3_SESSION_HANDOFF.md) records the exact files, commands, missing gates, delegation failures, safety state, and resume sequence. No R3 commit exists; do not advance to Athena or R4 from the current prototype.
+**Canonical handoff:** [`R3_SESSION_HANDOFF.md`](R3_SESSION_HANDOFF.md) records the original blocked handoff and the superseding 2026-07-19 evidence matrix. Athena attempt 1 produced no verdict because its selected credential returned `usage_limit_reached`; attempt 2 found a poison-projection consistency defect plus missing input bounds. Those findings are corrected and locally verified. Attempt 3 again produced no verdict because the profile selected the exhausted credential and received `HTTP 429` for all three internal retries. The maximum Athena execution count is exhausted. The user explicitly approved a bounded HITL exception to close R3 without another reviewer execution; R4 and runtime activation remain blocked independently.
 
 **Exit evidence required:** conflict, replay, duplicate, authenticated tamper, stale-fence, external-anchor rollback, verified restore, projection-equivalence, bounded poison, and writer-death/contention tests.
 
-**Athena gate:** integrity and split-brain review after all deterministic R3 evidence exists.
+**Athena gate:** exhausted without a final verdict after `qa_attempt=3`. The explicit HITL exception closed R3 after a fresh deterministic matrix, 20/20 contention stress, and protected-path/staging audit. It does not convert the absent verdict into PASS, permit a fourth Athena execution, or authorize R4/runtime activation.
 
 ### R4 — Identity, capabilities, channels, presence, and context
 

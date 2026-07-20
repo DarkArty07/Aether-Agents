@@ -1,11 +1,52 @@
 # R3 Session Handoff — Ledger, Projections, Fencing, and Recovery
 
-**Date:** 2026-07-18
+**Date:** 2026-07-18; superseded evidence recorded 2026-07-19
 **Milestone:** R3 / Phase 3
-**Verdict:** **NO-GO FOR R3 EXIT — UNCOMMITTED PROTOTYPE PRESERVED**
+**Verdict:** **R3 EXIT GREEN — HITL EXCEPTION RECORDED; ATOMIC COMMIT**
 **Runtime state:** default-off library code only; no live activation, migration, gateway restart, effect, merge, tag, or publication
 
-## 1. Closure decision
+## 0. Superseding 2026-07-19 gate evidence
+
+The original blocked handoff below is retained as history. It no longer describes the executable coverage of the working tree. Hermes resumed the preserved implementation in bounded RED/GREEN units and closed every deterministic R3 equivalence class without modifying the live Olympus lifecycle paths.
+
+Current executable evidence from `/home/arty/Escritorio/agentes/aether`:
+
+```text
+python -m pytest -q tests/coordination
+131 passed in 1.40s
+
+python -m pytest -q
+295 passed in 3.30s
+
+ruff check src/olympus_v3/coordination tests/coordination
+python -m compileall -q src/olympus_v3/coordination tests/coordination
+git diff --check
+All checks passed
+```
+
+The matrix now proves:
+
+- event, projection, inbox, outbox, contract-version, and contract-head atomic rollback at injected transaction boundaries;
+- authenticated chain, checkpoint signature/coverage, trusted external anchors, rollback detection, deterministic projection rebuild, reducer compatibility, backup integrity, collision-safe publication, and two-phase restore;
+- missing, expired, stale, wrong-owner, and taken-over transport fences fail closed;
+- one terminal poison event, no recursive poison outbox, poison projection consistency, checkpoint/backup/restore verification after poison, and complete rollback on signer failure;
+- bounded identifier, payload, error, TTL, retry, and transport inputs with typed `INVALID_INPUT` or documented validation errors before mutation;
+- real `spawn` subprocess contention, one lease/CAS winner, abrupt writer death rollback, safe takeover, and permanent old-fence rejection; the contention file passed 20 consecutive stress runs before review;
+- no credentials, production key custody, workload PoP identity, runtime adapter, live migration, or autonomous activation. Those remain R4 or later.
+
+Athena history for stable `task_id=v0.19-r3-integrity-ledger`:
+
+1. `qa_attempt=1`: no verdict or tool activity; profile log proved `HTTP 429 usage_limit_reached`, and the credential pool rotated automatically. This was not accepted as PASS.
+2. `qa_attempt=2`: FAIL. Athena reproduced a High poison/projection inconsistency and identified Medium input-bound and failure-taxonomy gaps plus stale canonical evidence.
+3. Corrections: poison now updates its deterministic projection in the same transaction; signer failures roll back every affected table; public lease/ledger/transport inputs are bounded and fail closed; this document and `ROADMAP.md` now carry current evidence.
+4. `qa_attempt=3`: no verdict or tool activity. The profile again selected exhausted `openai-codex-oauth-4`; `agent.log` records three internal `HTTP 429 usage_limit_reached` failures before rotation to `openai-codex-oauth-3`. The logical session was closed. The maximum reviewer execution count is exhausted, so no fourth Athena execution is permitted for this task.
+5. HITL decision: the user explicitly approved closing R3 without another Athena execution. The exception accepts the unavailable final reviewer cycle only; all known findings, deterministic verification, protected-path audit, default-off scope, and later R4 gates remain mandatory.
+
+Fresh safety snapshot after the correction suite: gateway `active/running`, PID `2204`, `NRestarts=0`, Telegram `connected`, and `restart_requested=false`.
+
+Final HITL closeout reran 131 coordination tests, 295 full-suite tests, Ruff, compileall, and `git diff --check`; all passed. The real subprocess contention suite also passed 20/20 consecutive runs. Protected tracked paths were clean, and explicit staging contained only the 14 R3 implementation, test, and canonical-evidence paths. No Athena PASS is claimed.
+
+## 1. Original 2026-07-18 closure decision (historical)
 
 This session closes without claiming R3 complete. The current prototype is preserved for direct continuation, but it has not met the R3 evidence gate and must not be committed as the milestone implementation, sent to Athena, or used as the basis for R4 until the missing adversarial evidence is implemented.
 
@@ -57,9 +98,9 @@ The uncommitted code currently contains structural implementations for:
 
 HMAC remains structural test integrity only. It does not prove Aether workload identity, Olympus session/runtime binding, production key custody, rotation, or revocation. Those remain R4 controls.
 
-## 5. R3 exit obligations not yet proven
+## 5. R3 exit obligations that were unproven at the original closure (historical)
 
-The following remain blockers, regardless of the current green suite:
+The following were blockers at the original closure, regardless of that session's green suite:
 
 1. **Contract atomicity and authority:** no complete test matrix proves caller-signed amendment intent, designated issuer, generation/revocation CAS, rollback at every transaction stage, stale queued authority, or reconciliation of in-flight work.
 2. **Inbox/outbox atomicity:** no complete injected-fault matrix proves event, projection, outbox, and inbox marker always commit or roll back together.
@@ -72,7 +113,7 @@ The following remain blockers, regardless of the current green suite:
 9. **Contention and writer death:** no repeated spawn-safe subprocess test proves bounded `CONTENDED` classification, one CAS winner, SQLite rollback after writer death, lease takeover, and permanent rejection of the old fence.
 10. **Schema and input hardening:** identifiers, payload bounds, foreign keys, status constraints, reducer compatibility, and error taxonomy require a complete adversarial review before Athena.
 
-Therefore R3 remains **NO-GO for exit**, not failed as an architectural concept.
+These were the original blockers. Section 0 records the superseding executable coverage. The approved HITL exception permits R3 exit only after a fresh deterministic matrix, protected-path audit, explicit R3-only staging, and the planned atomic commit.
 
 ## 6. Delegation failure evidence
 
@@ -85,18 +126,16 @@ Three correction paths did not converge:
 
 The continuity issue is recorded as `.aether` issue `#15`. No fourth equivalent retry was attempted.
 
-## 7. Exact resume point
+## 7. Exact final-gate sequence
 
-The next session must:
+The user approved the HITL exception. The closeout sequence is:
 
-1. read this file, `PHASE_0_EVIDENCE.md` §8, `IMPLEMENTATION_PLAN.md` Tasks 4.1–4.3, and the six uncommitted paths;
-2. decide whether to retain or replace the prototype only after a direct code audit;
-3. write adversarial RED tests for one bounded equivalence class at a time;
-4. implement contracts/inbox/outbox first, then checkpoints/projections/restore, then subprocess contention;
-5. run focused tests after each RED/GREEN cycle and the complete suite after each class;
-6. request Athena `task_id=v0.19-r3-integrity-ledger`, `qa_attempt=1` only after every R3 gate has deterministic evidence;
-7. create the planned atomic commit only after Athena PASS and a protected-path audit;
-8. remove blocker/resolve issue `#15`, update R3 status, recurate `.aether/CONTEXT.md`, and verify the curated file.
+1. rerun deterministic verification and gateway health;
+2. audit the complete diff, protected paths, and exact staging inventory;
+3. stage only R3 implementation, tests, and canonical evidence; never use `git add -A`;
+4. create `feat(coordination): add integrity ledger and fenced recovery`;
+5. resolve the R3 gate blocker and superseded issues, update phase/task, recurate `.aether/CONTEXT.md`, and read it back semantically;
+6. keep R4 and runtime activation frozen.
 
 ## 8. Safety state at closure
 
