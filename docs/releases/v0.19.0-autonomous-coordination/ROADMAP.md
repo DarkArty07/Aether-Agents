@@ -170,17 +170,19 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R4 — Identity, capabilities, channels, presence, and context
 
-**Status:** `ACTIVE — 2026-07-19`
+**Status:** `COMPLETE — ISOLATED / DEFAULT-OFF / ATHENA PASS (2026-07-20)`
 
 **Scope:** Aether-issued PoP workload identity; task/effect/target/audience-scoped capabilities; online revocation; default-deny publishing; active/read/publish channel separation; live/durable metadata; presence projection; provenance/taint-preserving context renderer.
 
 **Exit evidence:** expired, revoked, transferred, wrong-project, wrong-task, wrong-target, wrong-effect, stale-generation, and stale-fence authority is rejected. Peer/channel text never becomes system authority.
 
-**Athena gate:** identity root, ACLs, injection, and secret handling.
+**Verified result:** the isolated implementation passes 304 coordination tests and 468 full-suite tests. Ruff, compileall, `git diff --check`, AST/secret scanning, protected-path isolation, key-purpose separation, issuer/audience/workload binding, atomic in-process replay consumption, channel/ACL exact binding, advisory-only presence, and bounded provenance/taint-preserving context checks pass. No runtime adapter or dispatcher call site was added.
+
+**Athena gate:** `qa_attempt=1` found a blocking concurrent replay-cache race and an unbounded holder-proof transcript. Both equivalence classes were corrected with deterministic RED/GREEN tests. `qa_attempt=2` reproduced the fixes, reviewed identity root, ACLs, injection, secret handling, and the complete R4 boundary, then returned **PASS / BLOCKING: no** with no Critical/High finding. Production key custody, shared durable replay, authenticated presence-source admission, and trusted live `AuthoritySnapshot` derivation remain mandatory before runtime activation.
 
 ### R5 — Harmonia admission and native dispatch
 
-**Status:** `READY AFTER R4`
+**Status:** `READY — NOT STARTED`
 
 **Scope:** deterministic subtask admission, dependency graph, all resource quotas, protected QA/recovery reserve, role anycast, native `TransportAdapter`, transactional dispatch, and Olympus Runtime Adapter.
 
