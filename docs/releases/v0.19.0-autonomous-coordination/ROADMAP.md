@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R3 COMPLETE, R4 ACTIVE.** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R5 COMPLETE, R6 BLOCKED BY THE CAPACITY GATE.** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -182,7 +182,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R5 — Harmonia admission and native dispatch
 
-**Status:** `READY — NOT STARTED`
+**Status:** `COMPLETE — DEFAULT-OFF / ATHENA QA ATTEMPT 3 PASS (2026-07-20)`
 
 **Scope:** deterministic subtask admission, dependency graph, all resource quotas, protected QA/recovery reserve, role anycast, native `TransportAdapter`, transactional dispatch, and Olympus Runtime Adapter.
 
@@ -192,15 +192,19 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Athena gate:** lifecycle, quota, replay, fan-out, and authority review.
 
+**Verified result:** deterministic admission, Harmonia planning, native protocol and ledger-backed dispatch, and the Olympus Runtime Adapter were committed in `4c910cf`, `03ef6e7`, `bd8d37c`, `718728f`, and `526d85a`. The final matrix passes 350 coordination tests and 541 full-suite tests; Ruff, compileall, diff checks, public-API ownership scanning, gateway stability, default-off isolation, cancellation rollback, canonical prompt binding, malformed-plan rejection, concurrent replay reservation, and canonical project-root separation pass. Athena attempt 1 found an admission/projection/prompt binding bypass; attempt 2 verified that closure and found a project-root replay collision; attempt 3 verified both complete equivalence classes and returned **PASS / BLOCKING: no**. Durable multi-process idempotency and issue #26 key custody remain mandatory before runtime activation.
+
 ### R6 — Effects, review independence, and closure
 
-**Status:** `READY AFTER R5`
+**Status:** `BLOCKED — CAPACITY GATE AT 15% (2026-07-20)`
 
 **Scope:** E0–E4 effects, receipts, idempotency, reconcile-before-retry, no automatic E4 retry, exact typed approvals, independent reviewer identity, owner proposal, Harmonia mechanical validation, and final semantic authority.
 
 **Exit evidence:** unknown effects fail safe; self-review is rejected; cleanup order is deterministic; final states are only `completed`, `partially_completed`, `failed`, and `cancelled`.
 
 **Athena gate:** no unresolved critical/high finding.
+
+**Entry blocker:** the post-R5 capacity check reports one healthy primary at 0%, one healthy primary at 15%, and the protected backup at 15%. The approved budget protocol forbids starting another model-intensive milestone when the reserve is at or below 15%. R6 has not started; no implementation or specialist session was opened.
 
 ### R7 — Default-off shadow runtime and release hardening
 
