@@ -94,6 +94,13 @@ from .protocol import (
     ValidationError,
 )
 from .schema import PROTOCOL_SCHEMA, validate_wire
+from .transport import (
+    ChannelPublishContext,
+    DispatchIntent,
+    NativeTransportAdapter,
+    TransportReceipt,
+    TransportStatus,
+)
 
 __all__ = [
     "ALGORITHM",
@@ -111,6 +118,7 @@ __all__ = [
     "CapabilityClaim",
     "Channel",
     "ChannelACL",
+    "ChannelPublishContext",
     "ChannelRoute",
     "Checkpoint",
     "ContextItem",
@@ -118,6 +126,7 @@ __all__ = [
     "ContractLimits",
     "ContractState",
     "DeliveryClass",
+    "DispatchIntent",
     "ENCODING_VERSION",
     "Envelope",
     "EvidenceGate",
@@ -154,6 +163,7 @@ __all__ = [
     "MAX_REFERENCE_LENGTH",
     "MessagePart",
     "MessageType",
+    "NativeTransportAdapter",
     "PROTOCOL_SCHEMA",
     "ParticipantCard",
     "ParticipantRoute",
@@ -177,6 +187,8 @@ __all__ = [
     "Taint",
     "TaskState",
     "TrustedAnchorStore",
+    "TransportReceipt",
+    "TransportStatus",
     "ValidationError",
     "Waiver",
     "WorkloadBinding",
