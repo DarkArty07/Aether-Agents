@@ -71,6 +71,7 @@ from .ledger import (
     TrustedAnchorStore,
     WriterContext,
 )
+from .native_transport import LedgerNativeTransport, NativeDispatch, NativeTransportReceipt
 from .presence import PresenceEvent, PresenceProjection, PresenceState, PresenceTracker
 from .projections import ProjectionReducer
 from .protocol import (
@@ -149,6 +150,7 @@ __all__ = [
     "LeaseManager",
     "LeaseOutcome",
     "LeaseResult",
+    "LedgerNativeTransport",
     "LedgerEvent",
     "MAX_ERROR_BYTES",
     "MAX_CAPABILITY_TTL",
@@ -164,6 +166,8 @@ __all__ = [
     "MessagePart",
     "MessageType",
     "NativeTransportAdapter",
+    "NativeDispatch",
+    "NativeTransportReceipt",
     "PROTOCOL_SCHEMA",
     "ParticipantCard",
     "ParticipantRoute",
