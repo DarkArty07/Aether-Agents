@@ -72,6 +72,13 @@ from .ledger import (
     WriterContext,
 )
 from .native_transport import LedgerNativeTransport, NativeDispatch, NativeTransportReceipt
+from .olympus_adapter import (
+    MAX_RUNTIME_PROMPT_BYTES,
+    OlympusRuntimeAdapter,
+    RuntimeObservation,
+    RuntimeReceipt,
+    RuntimeStatus,
+)
 from .presence import PresenceEvent, PresenceProjection, PresenceState, PresenceTracker
 from .projections import ProjectionReducer
 from .protocol import (
@@ -163,11 +170,13 @@ __all__ = [
     "MAX_PAYLOAD_BYTES",
     "MAX_REFERENCES",
     "MAX_REFERENCE_LENGTH",
+    "MAX_RUNTIME_PROMPT_BYTES",
     "MessagePart",
     "MessageType",
     "NativeTransportAdapter",
     "NativeDispatch",
     "NativeTransportReceipt",
+    "OlympusRuntimeAdapter",
     "PROTOCOL_SCHEMA",
     "ParticipantCard",
     "ParticipantRoute",
@@ -182,6 +191,9 @@ __all__ = [
     "RenderedContext",
     "Result",
     "RoleRoute",
+    "RuntimeObservation",
+    "RuntimeReceipt",
+    "RuntimeStatus",
     "Route",
     "SQLiteLedger",
     "SideEffectPolicy",

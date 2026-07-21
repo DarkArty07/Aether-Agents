@@ -85,13 +85,15 @@ def test_engine_is_default_off_and_has_no_admission_side_effect():
 
 
 def test_admits_valid_subtask_against_contract_limits_and_reserves():
+    request = proposal()
     result = AdmissionEngine(enabled=True).evaluate(
         make_contract(),
-        (proposal(),),
+        (request,),
         AdmissionSnapshot(active_task_ids=("existing",), model_cost_used=5, tool_cost_used=5),
     )
 
     assert result == (AdmissionDecision("task-a", AdmissionStatus.ADMITTED, ()),)
+    assert result[0].proposal is request
 
 
 def test_rejects_unknown_dependencies_and_every_member_of_a_cycle():

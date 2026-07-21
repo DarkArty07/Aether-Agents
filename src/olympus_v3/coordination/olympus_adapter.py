@@ -1,0 +1,356 @@
+"""Default-off Olympus adapter over the public ``ACPManager`` lifecycle API."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import uuid
+from dataclasses import dataclass, field
+from enum import StrEnum
+from pathlib import Path
+from types import MappingProxyType
+from typing import Any, Mapping
+
+from ..acp_manager import ACPManager
+from .admission import AdmissionProposal, AdmissionStatus
+from .contracts import TaskState
+from .harmonia import HarmoniaPlan
+from .protocol import Principal, ValidationError
+
+MAX_RUNTIME_PROMPT_BYTES = 16_384
+
+
+class RuntimeStatus(StrEnum):
+    DISABLED = "disabled"
+    SENT = "sent"
+    REPLAYED = "replayed"
+    REJECTED = "rejected"
+    ERROR = "error"
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeReceipt:
+    task_id: str
+    participant: Principal
+    session_id: str
+    status: RuntimeStatus
+    reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.task_id, str)
+            or not isinstance(self.participant, Principal)
+            or not isinstance(self.session_id, str)
+            or not isinstance(self.status, RuntimeStatus)
+            or (self.reason is not None and not isinstance(self.reason, str))
+        ):
+            raise ValidationError("invalid runtime receipt")
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeObservation:
+    task_id: str
+    participant: Principal
+    session_id: str
+    technical_status: str
+    progress: Mapping[str, Any]
+    semantic_complete: bool = field(default=False, init=False)
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.task_id, str)
+            or not isinstance(self.participant, Principal)
+            or not isinstance(self.session_id, str)
+            or not isinstance(self.technical_status, str)
+            or not isinstance(self.progress, Mapping)
+        ):
+            raise ValidationError("invalid runtime observation")
+        object.__setattr__(self, "progress", MappingProxyType(dict(self.progress)))
+
+
+class OlympusRuntimeAdapter:
+    """Translate admitted assignments to public ACP operations.
+
+    Session and process ownership remains entirely inside ``ACPManager``. This
+    adapter only remembers deterministic task/session correlation for replay and
+    technical observation. Its replay cache is process-local; live multi-process
+    activation requires the shared durable idempotency prerequisite tracked for
+    the coordination runtime.
+    """
+
+    def __init__(
+        self,
+        manager: ACPManager,
+        *,
+        project_id: str,
+        enabled: bool = False,
+        max_prompt_bytes: int = MAX_RUNTIME_PROMPT_BYTES,
+    ):
+        required = ("spawn_agent", "send_message", "poll", "close")
+        if (
+            any(not callable(getattr(manager, name, None)) for name in required)
+            or not isinstance(project_id, str)
+            or not project_id
+            or project_id != project_id.strip()
+            or not isinstance(enabled, bool)
+            or isinstance(max_prompt_bytes, bool)
+            or not isinstance(max_prompt_bytes, int)
+            or max_prompt_bytes < 1
+        ):
+            raise ValidationError("invalid Olympus runtime adapter")
+        self.manager = manager
+        self.project_id = project_id
+        self.enabled = enabled
+        self.max_prompt_bytes = max_prompt_bytes
+        self._task_sessions: dict[tuple[str, str, Principal], str] = {}
+        self._inflight: set[tuple[str, str, Principal]] = set()
+
+    @staticmethod
+    def _session_id(task_id: str, participant: Principal, project_root: str) -> str:
+        identity = ":".join(
+            (
+                "aether-r5",
+                project_root,
+                participant.project_id,
+                task_id,
+                participant.owner_id,
+                participant.actor_id,
+            )
+        )
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
+
+    async def _close_failed_session(self, session_id: str) -> bool:
+        """Complete manager-owned rollback and report cancellation during cleanup."""
+        cleanup = asyncio.create_task(self.manager.close(session_id, terminal_status="error"))
+        caller_cancelled = False
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                caller_cancelled = True
+        cleanup.result()
+        return caller_cancelled
+
+    def _plan_is_bound(self, plan: HarmoniaPlan) -> bool:
+        admission_ids = tuple(item.task_id for item in plan.admissions)
+        projection_ids = tuple(item.task_id for item in plan.projection.tasks)
+        assignment_ids = tuple(item.task_id for item in plan.assignments)
+        if (
+            len(set(admission_ids)) != len(admission_ids)
+            or len(set(assignment_ids)) != len(assignment_ids)
+            or not set(admission_ids).issubset(projection_ids)
+        ):
+            return False
+        decisions = {item.task_id: item for item in plan.admissions}
+        projected = {item.task_id: item for item in plan.projection.tasks}
+        ready_ids = {
+            task_id
+            for task_id in admission_ids
+            if projected[task_id].state is TaskState.READY
+        }
+        if set(assignment_ids) != ready_ids:
+            return False
+        for task_id in admission_ids:
+            task = projected[task_id]
+            decision = decisions[task_id]
+            if decision.proposal is None or decision.proposal != task.proposal:
+                return False
+        for assignment in plan.assignments:
+            decision = decisions[assignment.task_id]
+            task = projected[assignment.task_id]
+            if (
+                decision.status is not AdmissionStatus.ADMITTED
+                or assignment.participant != task.assignee
+                or assignment.participant.project_id != self.project_id
+                or decision.proposal is None
+                or decision.proposal.fan_out < 1
+            ):
+                return False
+        return True
+
+    @staticmethod
+    def _canonical_prompt(proposal: AdmissionProposal, participant: Principal) -> str:
+        payload = {
+            "ambiguities": proposal.ambiguities,
+            "assignee": {
+                "actor_id": participant.actor_id,
+                "owner_id": participant.owner_id,
+                "project_id": participant.project_id,
+            },
+            "dependencies": proposal.dependencies,
+            "effect_class": proposal.effect_class,
+            "evidence": proposal.evidence,
+            "fan_out": proposal.fan_out,
+            "kind": "aether.admitted_work",
+            "lease_resources": proposal.lease_resources,
+            "model_cost": proposal.model_cost,
+            "objective": proposal.objective,
+            "objective_source": proposal.objective_source,
+            "permission": proposal.permission,
+            "payload_bytes": proposal.payload_bytes,
+            "retries": proposal.retries,
+            "role": proposal.role,
+            "scopes": proposal.scopes,
+            "task_id": proposal.task_id,
+            "time_cost_seconds": proposal.time_cost_seconds,
+            "tool_cost": proposal.tool_cost,
+        }
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+    async def dispatch(
+        self,
+        plan: HarmoniaPlan,
+        *,
+        project_root: str,
+    ) -> tuple[RuntimeReceipt, ...]:
+        if (
+            not isinstance(plan, HarmoniaPlan)
+            or not isinstance(project_root, str)
+            or not project_root.startswith("/")
+        ):
+            raise ValidationError("invalid runtime dispatch")
+        project_root = str(Path(project_root).resolve())
+        receipts: list[RuntimeReceipt] = []
+        assignments = sorted(
+            plan.assignments,
+            key=lambda item: (item.task_id, item.participant.owner_id, item.participant.actor_id),
+        )
+        if not self._plan_is_bound(plan):
+            return tuple(
+                RuntimeReceipt(
+                    assignment.task_id,
+                    assignment.participant,
+                    self._session_id(assignment.task_id, assignment.participant, project_root),
+                    RuntimeStatus.REJECTED,
+                    "invalid_plan",
+                )
+                for assignment in assignments
+            )
+        decisions = {decision.task_id: decision for decision in plan.admissions}
+        for assignment in assignments:
+            key = (project_root, assignment.task_id, assignment.participant)
+            session_id = self._session_id(assignment.task_id, assignment.participant, project_root)
+            if not self.enabled:
+                receipts.append(
+                    RuntimeReceipt(
+                        assignment.task_id,
+                        assignment.participant,
+                        session_id,
+                        RuntimeStatus.DISABLED,
+                        "coordination_disabled",
+                    )
+                )
+                continue
+            decision = decisions[assignment.task_id]
+            proposal = decision.proposal
+            if proposal is None:
+                raise RuntimeError("validated admission lost proposal binding")
+            prompt = self._canonical_prompt(proposal, assignment.participant)
+            if len(prompt.encode()) > self.max_prompt_bytes:
+                receipts.append(
+                    RuntimeReceipt(
+                        assignment.task_id,
+                        assignment.participant,
+                        session_id,
+                        RuntimeStatus.REJECTED,
+                        "prompt_limit_exceeded",
+                    )
+                )
+                continue
+            existing = self._task_sessions.get(key)
+            if existing is not None or key in self._inflight:
+                receipts.append(
+                    RuntimeReceipt(
+                        assignment.task_id,
+                        assignment.participant,
+                        existing or session_id,
+                        RuntimeStatus.REPLAYED,
+                        "duplicate_assignment",
+                    )
+                )
+                continue
+
+            opened_session: str | None = None
+            self._inflight.add(key)
+            try:
+                try:
+                    opened_session = await self.manager.spawn_agent(
+                        agent_name=assignment.participant.actor_id,
+                        session_id=session_id,
+                        project_root=project_root,
+                    )
+                    if opened_session != session_id:
+                        raise RuntimeError("ACPManager returned unexpected session identity")
+                    await self.manager.send_message(session_id, prompt)
+                except BaseException as exc:
+                    cleanup_cancelled = False
+                    if opened_session is not None:
+                        cleanup_cancelled = await self._close_failed_session(opened_session)
+                    if isinstance(exc, asyncio.CancelledError) or cleanup_cancelled:
+                        raise asyncio.CancelledError from exc
+                    if not isinstance(exc, Exception):
+                        raise
+                    receipts.append(
+                        RuntimeReceipt(
+                            assignment.task_id,
+                            assignment.participant,
+                            session_id,
+                            RuntimeStatus.ERROR,
+                            "dispatch_failed",
+                        )
+                    )
+                    continue
+                self._task_sessions[key] = session_id
+                receipts.append(
+                    RuntimeReceipt(
+                        assignment.task_id,
+                        assignment.participant,
+                        session_id,
+                        RuntimeStatus.SENT,
+                    )
+                )
+            finally:
+                self._inflight.discard(key)
+        return tuple(receipts)
+
+    async def observe(
+        self,
+        task_id: str,
+        participant: Principal,
+        *,
+        project_root: str,
+    ) -> RuntimeObservation:
+        if (
+            not isinstance(task_id, str)
+            or not isinstance(participant, Principal)
+            or participant.project_id != self.project_id
+            or not isinstance(project_root, str)
+            or not project_root.startswith("/")
+        ):
+            raise ValidationError("invalid runtime observation request")
+        project_root = str(Path(project_root).resolve())
+        session_id = self._task_sessions.get((project_root, task_id, participant))
+        if session_id is None:
+            raise ValidationError("unknown runtime assignment")
+        progress = await self.manager.poll(session_id)
+        if not isinstance(progress, Mapping):
+            raise RuntimeError("ACPManager returned invalid progress")
+        technical_status = progress.get("status", "unknown")
+        if not isinstance(technical_status, str):
+            technical_status = "unknown"
+        return RuntimeObservation(
+            task_id,
+            participant,
+            session_id,
+            technical_status,
+            progress,
+        )
+
+
+__all__ = [
+    "MAX_RUNTIME_PROMPT_BYTES",
+    "OlympusRuntimeAdapter",
+    "RuntimeObservation",
+    "RuntimeReceipt",
+    "RuntimeStatus",
+]

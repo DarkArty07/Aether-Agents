@@ -169,12 +169,17 @@ class AdmissionDecision:
     task_id: str
     status: AdmissionStatus
     reasons: tuple[str, ...]
+    proposal: AdmissionProposal | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "task_id", _identifier(self.task_id, "task id"))
         if not isinstance(self.status, AdmissionStatus):
             raise ValidationError("invalid admission status")
         object.__setattr__(self, "reasons", _tuple(self.reasons, "admission reasons", _token))
+        if self.proposal is not None and (
+            not isinstance(self.proposal, AdmissionProposal) or self.proposal.task_id != self.task_id
+        ):
+            raise ValidationError("invalid admission proposal binding")
         if self.status is AdmissionStatus.ADMITTED and self.reasons:
             raise ValidationError("admitted decision cannot contain reasons")
         if self.status is not AdmissionStatus.ADMITTED and not self.reasons:
@@ -233,7 +238,12 @@ class AdmissionEngine:
         ordered = tuple(sorted(proposals, key=lambda proposal: proposal.task_id))
         if not self.enabled:
             return tuple(
-                AdmissionDecision(proposal.task_id, AdmissionStatus.REJECTED, ("coordination_disabled",))
+                AdmissionDecision(
+                    proposal.task_id,
+                    AdmissionStatus.REJECTED,
+                    ("coordination_disabled",),
+                    proposal,
+                )
                 for proposal in ordered
             )
 
@@ -296,28 +306,42 @@ class AdmissionEngine:
                 reasons.append("lease_contended")
 
             if reasons:
-                decisions.append(AdmissionDecision(proposal.task_id, AdmissionStatus.REJECTED, tuple(reasons)))
+                decisions.append(
+                    AdmissionDecision(proposal.task_id, AdmissionStatus.REJECTED, tuple(reasons), proposal)
+                )
                 continue
             if proposal.ambiguities:
-                decisions.append(AdmissionDecision(proposal.task_id, AdmissionStatus.ESCALATED, ("ambiguity",)))
+                decisions.append(
+                    AdmissionDecision(proposal.task_id, AdmissionStatus.ESCALATED, ("ambiguity",), proposal)
+                )
                 continue
 
             proposal_cost = proposal.model_cost + proposal.tool_cost
             if allocated_cost + proposal_cost > protected_limit:
                 decisions.append(
-                    AdmissionDecision(proposal.task_id, AdmissionStatus.REJECTED, ("protected_reserve_exceeded",))
+                    AdmissionDecision(
+                        proposal.task_id,
+                        AdmissionStatus.REJECTED,
+                        ("protected_reserve_exceeded",),
+                        proposal,
+                    )
                 )
                 continue
             if allocated_fan_out + proposal.fan_out > contract.limits.concurrency:
                 decisions.append(
-                    AdmissionDecision(proposal.task_id, AdmissionStatus.REJECTED, ("concurrency_limit_exceeded",))
+                    AdmissionDecision(
+                        proposal.task_id,
+                        AdmissionStatus.REJECTED,
+                        ("concurrency_limit_exceeded",),
+                        proposal,
+                    )
                 )
                 continue
 
             allocated_cost += proposal_cost
             allocated_time += proposal.time_cost_seconds
             allocated_fan_out += proposal.fan_out
-            decisions.append(AdmissionDecision(proposal.task_id, AdmissionStatus.ADMITTED, ()))
+            decisions.append(AdmissionDecision(proposal.task_id, AdmissionStatus.ADMITTED, (), proposal))
 
         return tuple(decisions)
 
