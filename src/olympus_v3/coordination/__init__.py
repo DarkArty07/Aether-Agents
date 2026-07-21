@@ -31,6 +31,14 @@ from .contracts import (
     transition_contract_state,
     transition_task_state,
 )
+from .harmonia import (
+    AnycastAssignment,
+    HarmoniaCoordinator,
+    HarmoniaEscalation,
+    HarmoniaPlan,
+    HarmoniaProjection,
+    HarmoniaTask,
+)
 from .identity import (
     ALGORITHM,
     ENCODING_VERSION,
@@ -99,6 +107,7 @@ __all__ = [
     "AuthoritySnapshot",
     "AuthorizationDenial",
     "AuthorizationResult",
+    "AnycastAssignment",
     "CapabilityClaim",
     "Channel",
     "ChannelACL",
@@ -117,6 +126,11 @@ __all__ = [
     "HMACIntegritySigner",
     "HMACWriterAuthenticator",
     "HolderProof",
+    "HarmoniaCoordinator",
+    "HarmoniaEscalation",
+    "HarmoniaPlan",
+    "HarmoniaProjection",
+    "HarmoniaTask",
     "IdentityCredential",
     "IdentityRegistry",
     "KeyPurpose",
