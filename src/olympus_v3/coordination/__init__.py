@@ -1,5 +1,6 @@
 """Public coordination protocol API."""
 
+from .admission import AdmissionDecision, AdmissionEngine, AdmissionProposal, AdmissionSnapshot, AdmissionStatus
 from .capabilities import (
     MAX_CAPABILITY_TTL,
     AuthoritySnapshot,
@@ -88,6 +89,11 @@ from .schema import PROTOCOL_SCHEMA, validate_wire
 
 __all__ = [
     "ALGORITHM",
+    "AdmissionDecision",
+    "AdmissionEngine",
+    "AdmissionProposal",
+    "AdmissionSnapshot",
+    "AdmissionStatus",
     "AppendResult",
     "AuthorityClass",
     "AuthoritySnapshot",
