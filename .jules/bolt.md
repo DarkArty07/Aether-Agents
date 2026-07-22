@@ -1,0 +1,3 @@
+## 2024-06-11 - Batching Aggregate SQLite Queries
+**Learning:** Python-to-C/async context switch overhead is a significant bottleneck for frequent, consecutive SQLite aggregate queries (like `COUNT(*)`). Using aiosqlite, dispatching work to the thread pool for multiple separate simple queries compounds this latency.
+**Action:** When performing multiple independent aggregate queries across different tables or conditions in the same function, combine them into a single `SELECT` statement using scalar subqueries (e.g., `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`). This reduces the query dispatch overhead by up to 66% for three consecutive queries. Ensure variables are properly unpacked with a fallback tuple in case `fetchone()` returns `None`.
