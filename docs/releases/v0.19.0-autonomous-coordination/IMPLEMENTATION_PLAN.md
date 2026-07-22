@@ -2,7 +2,7 @@
 
 > **For Hermes:** execute this plan task by task only after the user says `aprobado`. Use Aether Daimons through Olympus, strict TDD, atomic commits, budget checks at every stage, and independent security gates where specified.
 
-**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 READY (2026-07-21).** Authorization extends through code-complete, default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 ACTIVE (2026-07-22).** The verified shadow core is committed at `8c2ddf9`; authorization extends through complete default-off R7 integration and evidence. Live activation and release remain on hold.
 
 **Goal:** migrate Aether Agents from Hermes-relayed tool-style delegation to a contract-bounded autonomous team, using the transport-agnostic ideas of Cotal Core as design inspiration while preserving Aether semantic authority, Olympus lifecycle ownership, persistent Hermes profiles, and Telegram gateway continuity.
 
@@ -374,6 +374,10 @@ Test cleanup order: stop admission → revoke capabilities → reconcile effects
 **Atomic commit:** `feat(coordination): add reconciled effects and semantic closure`.
 
 ## 14. Phase 7 — Default-off shadow integration
+
+**Current evidence:** Task 8.2's first observational slice is implemented at `8c2ddf9`. It reads actual Olympus persistence, authenticates local evidence/reports, correlates deterministic and actual session identities without replacing either, rejects ambiguous response envelopes, and never grants semantic completion. Three controlled zero-tool runs culminated in exact agreement; 30 focused, 444 coordination, and 635 full-suite tests plus Athena `qa_attempt=3/3` pass. This does not complete Tasks 8.1, 8.3, or 8.4 and does not activate the runtime.
+
+**Executable completion manifest:** [`R7_COMPLETION_MATRIX.md`](R7_COMPLETION_MATRIX.md) is authoritative for `DONE`, `PARTIAL`, `PENDING`, and `ACTIVATION-ONLY` classification during the remaining R7 work.
 
 ### Task 8.1 — Feature flag and compatibility tests
 

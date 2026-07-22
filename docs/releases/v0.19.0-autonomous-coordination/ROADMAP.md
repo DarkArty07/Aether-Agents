@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 READY (2026-07-21).** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 ACTIVE (2026-07-22).** The verified shadow core is committed at `8c2ddf9`; autonomous completion of the remaining default-off integration is authorized. Live activation and release remain on hold.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -210,9 +210,13 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R7 — Default-off shadow runtime and release hardening
 
-**Status:** `READY AFTER R6`
+**Status:** `ACTIVE — VERIFIED SHADOW CORE; INTEGRATION CLOSURE PENDING`
 
 **Scope:** feature flag default `false`; isolated shadow end-to-end; failure/recovery suite; compatibility with five MCP tools and seven `talk_to` actions; docs/config schema/runbook/release evidence.
+
+**Verified 2026-07-21:** commit `8c2ddf9` adds the default-off observational core, authenticated OlympusDB evidence, explicit deterministic↔actual session correlation, exact versioned response binding, bounded duplicate protection, and the initial fail-closed matrix. Three controlled zero-tool Olympus runs were observed without lifecycle/effect authority. The final run agreed on assignment, participant, session correlation, and expected status with no mismatch while retaining `semantic_complete=false`. The matrix passes 30 focused, 444 coordination, and 635 full-suite tests; Ruff, formatting, compileall, diff checks, and Athena `qa_attempt=3/3` pass.
+
+**Remaining before R7 completion:** official configuration/schema seam; complete five-tool/seven-action compatibility evidence; advanced restart/recovery cases; disposable durable correlation/replay evidence; system benchmark; reconciled docs and rollback runbook. These remain default-off and do not authorize gateway/runtime activation.
 
 **Exit evidence:**
 
@@ -326,4 +330,4 @@ The autonomous run ends successfully at R7 when:
 - no live migration, restart, merge, tag, or release was attempted;
 - the user receives a concise report with commits, tests, balance, unresolved risks, and the exact user-present activation gate.
 
-Execution is active at R0 under this roadmap and `IMPLEMENTATION_PLAN.md`. Advancement remains evidence-gated; live activation and release stay on HOLD.
+Execution is active at R7 under this roadmap, `IMPLEMENTATION_PLAN.md`, and `R7_COMPLETION_MATRIX.md`. Advancement remains evidence-gated; live activation and release stay on HOLD.
