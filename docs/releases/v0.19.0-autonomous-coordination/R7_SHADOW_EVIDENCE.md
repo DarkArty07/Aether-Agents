@@ -1,7 +1,7 @@
 # R7 Shadow Mode — First Controlled Run
 
 **Date:** 2026-07-21
-**Status:** executed; R7 remains active and default-off
+**Status:** executed and superseded by the complete R7 default-off matrix; activation remains on hold
 **Authority:** observational only; no coordination dispatch or semantic completion authority
 
 ## Purpose
@@ -122,6 +122,6 @@ Executable tests cover these fail-closed observations without producing effects:
 
 Each adverse condition remains observational, makes technical agreement fail closed where applicable, and can never set `semantic_complete=true`.
 
-## Next R7 gate
+## Consolidated result
 
-Run consolidated validation and independent risk review over the complete R7 shadow equivalence class. Do not activate the live runtime before those gates pass and a separate user authorization is given.
+The first-run mismatch led to explicit authenticated correlation, complete disabled compatibility, typed advanced recovery evidence, disposable restart-safe persistence, and the ten-scenario benchmark documented in `R7_BENCHMARK_REPORT.md`. The remaining R7 gate is consolidated validation plus independent review. Live runtime activation still requires a separate user decision.

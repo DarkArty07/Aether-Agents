@@ -41,6 +41,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
+| 🧪 | **Default-Off Coordination Lab** | v0.19 R7 adds an isolated shadow observer, typed failure/recovery evidence, and disposable durable correlation. It is not active in the gateway and never replaces Olympus lifecycle ownership. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
@@ -74,6 +75,12 @@ Olympus v3 Server
 - **ACP** — Olympus manages Daimon sessions via Agent Client Protocol (HTTP)
 - **Plugin Hooks** — Per-turn observability inside each Daimon: `post_llm_call`, `post_tool_call`, `on_session_end`, `pre_llm_call`
 - **.aether** — 3-layer continuity: capture (hooks) → curate (Ariadna) → inject (first turn)
+
+### Experimental v0.19 coordination boundary
+
+The feature branch contains a complete **default-off** R7 shadow subsystem. It compares Harmonia plans with persisted Olympus evidence, correlates deterministic and actual session IDs, detects typed failures, and can preserve correlation in a disposable SQLite store. The current `talk_to` path and all five Olympus MCP tools remain the operational default; Olympus alone owns ACP process/session lifecycle. Shadow reports are evidence only and always keep `semantic_complete=false`.
+
+Nothing in R7 installs Cotal, NATS, or JetStream, activates the gateway, migrates production state, or authorizes autonomous effects. See the [R7 benchmark](docs/releases/v0.19.0-autonomous-coordination/R7_BENCHMARK_REPORT.md) and [future activation/rollback runbook](docs/releases/v0.19.0-autonomous-coordination/R7_ACTIVATION_ROLLBACK_RUNBOOK.md).
 
 ---
 

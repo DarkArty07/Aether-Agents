@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 ACTIVE (2026-07-22).** The verified shadow core is committed at `8c2ddf9`; autonomous completion of the remaining default-off integration is authorized. Live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R7 CODE-COMPLETE / DEFAULT-OFF (2026-07-22).** The complete isolated integration and benchmark are implemented; final independent closure evidence is pending. Live activation, pilot, R8, merge, tag, and release remain on hold.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -210,13 +210,13 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R7 — Default-off shadow runtime and release hardening
 
-**Status:** `ACTIVE — VERIFIED SHADOW CORE; INTEGRATION CLOSURE PENDING`
+**Status:** `CODE-COMPLETE — DEFAULT-OFF; FINAL CLOSURE REVIEW PENDING`
 
 **Scope:** feature flag default `false`; isolated shadow end-to-end; failure/recovery suite; compatibility with five MCP tools and seven `talk_to` actions; docs/config schema/runbook/release evidence.
 
-**Verified 2026-07-21:** commit `8c2ddf9` adds the default-off observational core, authenticated OlympusDB evidence, explicit deterministic↔actual session correlation, exact versioned response binding, bounded duplicate protection, and the initial fail-closed matrix. Three controlled zero-tool Olympus runs were observed without lifecycle/effect authority. The final run agreed on assignment, participant, session correlation, and expected status with no mismatch while retaining `semantic_complete=false`. The matrix passes 30 focused, 444 coordination, and 635 full-suite tests; Ruff, formatting, compileall, diff checks, and Athena `qa_attempt=3/3` pass.
+**Verified implementation:** commits `8c2ddf9`, `343bbeb`, `fa0cb58`, `1707f4b`, `74de60b`, and `8a39196` provide the authenticated shadow core, official default-false config seam, complete five-tool/seven-action compatibility matrix, advanced fail-closed recovery observations, disposable restart-safe correlation, and a ten-scenario benchmark. Three controlled zero-tool Olympus runs established the real correlation seam. The local benchmark ran 50 scenarios twice through actual shadow APIs, detected 25/25 injected failures, produced zero clean false positives, and made zero lifecycle/effect calls; `semantic_complete` remained false.
 
-**Remaining before R7 completion:** official configuration/schema seam; complete five-tool/seven-action compatibility evidence; advanced restart/recovery cases; disposable durable correlation/replay evidence; system benchmark; reconciled docs and rollback runbook. These remain default-off and do not authorize gateway/runtime activation.
+**Remaining before R7 completion:** reconcile documentation/runbook and pass one independent final trust-boundary review plus the consolidated verification/continuity gate. These steps do not authorize gateway/runtime activation.
 
 **Exit evidence:**
 
