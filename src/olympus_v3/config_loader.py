@@ -19,6 +19,7 @@ logger = logging.getLogger("olympus_v3.config")
 @dataclass
 class DaimonProfile:
     """Configuration for a single Daimon agent."""
+
     name: str
     profile_path: Path
     has_config: bool = False
@@ -27,23 +28,32 @@ class DaimonProfile:
     @property
     def launch_command(self) -> list[str]:
         """Build the spawn command for this profile."""
-        hermes_bin = (
-            os.environ.get("HERMES_BIN")
-            or os.path.expanduser("~/.local/bin/hermes")
-            or "hermes"
-        )
+        hermes_bin = os.environ.get("HERMES_BIN") or os.path.expanduser("~/.local/bin/hermes") or "hermes"
         return [hermes_bin, "acp", "--profile", self.name]
+
+
+@dataclass(frozen=True)
+class CoordinationConfig:
+    """Default-off coordination configuration.
+
+    Parsing this value never constructs or activates the coordination runtime.
+    """
+
+    enabled: bool = False
+    mode: str = "shadow"
 
 
 @dataclass
 class OlympusV3Config:
     """Olympus v3 configuration."""
+
     profiles_dir: Path = field(default_factory=lambda: _default_profiles_dir())
     db_path: Path = field(default_factory=lambda: _default_db_path())
     poll_interval: int = 15
     stall_timeout: int = 45
     max_poll_iterations: int = 200
     aether_home: Path = field(default_factory=lambda: _default_aether_home())
+    coordination: CoordinationConfig = field(default_factory=CoordinationConfig)
     daimons: dict[str, DaimonProfile] = field(default_factory=dict)
 
 
@@ -112,8 +122,24 @@ def load_config(config_path: Path | None = None) -> OlympusV3Config:
                 config.db_path = Path(data["db_path"])
             if "profiles_dir" in data:
                 config.profiles_dir = Path(data["profiles_dir"])
+            if "coordination" in data:
+                coordination = data["coordination"]
+                if not isinstance(coordination, dict):
+                    raise ValueError("coordination must be a mapping")
+                unknown = set(coordination) - {"enabled", "mode"}
+                if unknown:
+                    raise ValueError(f"coordination has unknown keys: {sorted(unknown)}")
+                enabled = coordination.get("enabled", False)
+                mode = coordination.get("mode", "shadow")
+                if not isinstance(enabled, bool):
+                    raise ValueError("coordination.enabled must be a boolean")
+                if mode != "shadow":
+                    raise ValueError("coordination.mode must be 'shadow'")
+                config.coordination = CoordinationConfig(enabled=enabled, mode=mode)
 
             logger.info("Loaded config from %s", config_path)
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning("Failed to load config from %s: %s", config_path, e)
 

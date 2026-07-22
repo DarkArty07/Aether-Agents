@@ -1,0 +1,7 @@
+# Olympus v3 project-local configuration template.
+# Copy to AETHER_HOME/olympus_v3.yaml only when an isolated runtime needs it.
+
+coordination:
+  # R7 remains observational and default-off. Parsing true does not activate it.
+  enabled: false
+  mode: shadow
