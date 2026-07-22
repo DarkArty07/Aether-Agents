@@ -1,6 +1,6 @@
 # R7 Default-Off Completion Matrix
 
-**Status:** CODE-COMPLETE — documentation/final closure review in progress 2026-07-22
+**Status:** COMPLETE / DEFAULT-OFF — user decision gate 2026-07-22
 
 **Baseline:** `8c2ddf9 feat(coordination): add verified shadow correlation`
 
@@ -55,3 +55,5 @@ Never use `git add -A`. Existing unrelated `home/` changes and runtime artifacts
 ## Closure gate
 
 R7 may become `COMPLETE` only when every non-activation row is `DONE`, the complete default-off candidate has independent risk evidence, all sessions are logically closed, continuity is curated and read back, and the user receives the benchmark/decision package. Completion still leaves activation, pilot, merge, tag, and release on HOLD.
+
+Closure evidence: final corrections at `317b359`; 70 focused R7, 514 coordination, and 705 full-suite tests pass. Athena attempts 1–2 provided actionable review and the named Medium findings were corrected. Attempt 3/3 completed without a payload, so no Athena PASS is claimed; this limitation is accepted only for inactive/default-off closure and cannot be carried into activation approval.

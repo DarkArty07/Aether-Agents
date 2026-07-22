@@ -2,7 +2,7 @@
 
 > **For Hermes:** execute this plan task by task only after the user says `aprobado`. Use Aether Daimons through Olympus, strict TDD, atomic commits, budget checks at every stage, and independent security gates where specified.
 
-**Status:** **APPROVED 2026-07-18 — R7 CODE-COMPLETE / DEFAULT-OFF (2026-07-22).** Tasks 8.1–8.3 and the isolated benchmark are implemented; documentation and final independent closure remain. Live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R7 COMPLETE / DEFAULT-OFF (2026-07-22).** Tasks 8.1–8.4, benchmark, documentation, and bounded final closure are complete. Live activation and release remain on hold pending the user's decision.
 
 **Goal:** migrate Aether Agents from Hermes-relayed tool-style delegation to a contract-bounded autonomous team, using the transport-agnostic ideas of Cotal Core as design inspiration while preserving Aether semantic authority, Olympus lifecycle ownership, persistent Hermes profiles, and Telegram gateway continuity.
 
@@ -375,7 +375,7 @@ Test cleanup order: stop admission → revoke capabilities → reconcile effects
 
 ## 14. Phase 7 — Default-off shadow integration
 
-**Current evidence:** Tasks 8.1–8.3 are implemented through `8a39196`. The subsystem reads actual Olympus persistence, authenticates evidence/reports, correlates deterministic and actual session identities without replacing either, preserves that binding in disposable SQLite across recreation, rejects advanced failure/recovery conditions, and never grants semantic completion. Complete disabled compatibility covers five MCP tools and seven `talk_to` actions. The benchmark executes ten local scenarios through real shadow APIs with zero lifecycle/effect calls. Task 8.4 documentation and final independent closure remain; runtime activation is not authorized.
+**Current evidence:** Tasks 8.1–8.4 are implemented through `317b359`. The subsystem reads actual Olympus persistence, authenticates evidence/reports, correlates deterministic and actual session identities without replacing either, preserves that binding in disposable SQLite across recreation, rejects advanced failure/recovery conditions, and never grants semantic completion. Complete disabled compatibility covers five MCP tools and seven `talk_to` actions. The benchmark executes ten local scenarios through real shadow APIs with zero lifecycle/effect calls. Final deterministic validation passes 70 focused R7, 514 coordination, and 705 full-suite tests. Runtime activation is not authorized.
 
 **Executable completion manifest:** [`R7_COMPLETION_MATRIX.md`](R7_COMPLETION_MATRIX.md) is authoritative for `DONE`, `PARTIAL`, `PENDING`, and `ACTIVATION-ONLY` classification during the remaining R7 work.
 

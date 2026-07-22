@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R7 CODE-COMPLETE / DEFAULT-OFF (2026-07-22).** The complete isolated integration and benchmark are implemented; final independent closure evidence is pending. Live activation, pilot, R8, merge, tag, and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R7 COMPLETE / DEFAULT-OFF (2026-07-22).** The complete isolated integration, benchmark, documentation, and bounded final review are closed. Live activation, pilot, R8, merge, tag, and release remain on hold pending the user's decision.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -210,13 +210,13 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R7 — Default-off shadow runtime and release hardening
 
-**Status:** `CODE-COMPLETE — DEFAULT-OFF; FINAL CLOSURE REVIEW PENDING`
+**Status:** `COMPLETE — DEFAULT-OFF / USER DECISION GATE`
 
 **Scope:** feature flag default `false`; isolated shadow end-to-end; failure/recovery suite; compatibility with five MCP tools and seven `talk_to` actions; docs/config schema/runbook/release evidence.
 
 **Verified implementation:** commits `8c2ddf9`, `343bbeb`, `fa0cb58`, `1707f4b`, `74de60b`, and `8a39196` provide the authenticated shadow core, official default-false config seam, complete five-tool/seven-action compatibility matrix, advanced fail-closed recovery observations, disposable restart-safe correlation, and a ten-scenario benchmark. Three controlled zero-tool Olympus runs established the real correlation seam. The local benchmark ran 50 scenarios twice through actual shadow APIs, detected 25/25 injected failures, produced zero clean false positives, and made zero lifecycle/effect calls; `semantic_complete` remained false.
 
-**Remaining before R7 completion:** reconcile documentation/runbook and pass one independent final trust-boundary review plus the consolidated verification/continuity gate. These steps do not authorize gateway/runtime activation.
+**Final closure:** Athena attempts 1 and 2 found process-local context/replay and same-instance SQLite boundary defects. They were corrected with deterministic regressions; final local validation passes 70 focused R7, 514 coordination, and 705 full-suite tests. The third and maximum Athena execution returned no review payload, so it is recorded as an evidence-unavailable final attempt rather than a PASS. No Critical/High finding remained after attempt 2, and every named Medium equivalence class was corrected and reproduced locally. R7 default-off is therefore closed with this explicit review limitation; activation still requires a separate user-approved design and security gate.
 
 **Exit evidence:**
 

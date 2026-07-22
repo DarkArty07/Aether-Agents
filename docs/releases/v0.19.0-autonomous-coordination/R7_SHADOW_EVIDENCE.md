@@ -124,4 +124,4 @@ Each adverse condition remains observational, makes technical agreement fail clo
 
 ## Consolidated result
 
-The first-run mismatch led to explicit authenticated correlation, complete disabled compatibility, typed advanced recovery evidence, disposable restart-safe persistence, and the ten-scenario benchmark documented in `R7_BENCHMARK_REPORT.md`. The remaining R7 gate is consolidated validation plus independent review. Live runtime activation still requires a separate user decision.
+The first-run mismatch led to explicit authenticated correlation, complete disabled compatibility, typed advanced recovery evidence, disposable restart-safe persistence, and the ten-scenario benchmark documented in `R7_BENCHMARK_REPORT.md`. Final review additionally hardened project binding, bidirectional process-local uniqueness, malformed metadata handling, and same-instance durable concurrency. R7 is closed default-off; live runtime activation still requires a separate user decision and activation-grade review.
