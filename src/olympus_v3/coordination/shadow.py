@@ -193,6 +193,8 @@ async def observe_olympus_session(
         conditions,
     )
     canonical_root = _canonical_root(project_root)
+    if project_id != participant.project_id:
+        raise ValidationError("shadow project identity mismatch")
     row = await db.get_session(session_id)
     turn = await db.get_latest_turn(session_id)
     if not isinstance(row, Mapping) or not isinstance(turn, Mapping):
@@ -201,8 +203,13 @@ async def observe_olympus_session(
         metadata = json.loads(row.get("metadata") or "{}")
     except (TypeError, json.JSONDecodeError) as exc:
         raise ValidationError("invalid Olympus session metadata") from exc
+    if not isinstance(metadata, Mapping):
+        raise ValidationError("unbound Olympus session evidence")
     status = row.get("status")
     response = turn.get("content")
+    metadata_root = metadata.get("project_root")
+    if not isinstance(metadata_root, str):
+        raise ValidationError("unbound Olympus session evidence")
     expected_response = (
         f"AETHER_SHADOW_V1 task_id={task_id} participant={participant.actor_id} technical_status={status}"
     )
@@ -210,7 +217,7 @@ async def observe_olympus_session(
         row.get("session_id") != session_id
         or row.get("agent") != participant.actor_id
         or metadata.get("profile") != participant.actor_id
-        or _canonical_root(metadata.get("project_root")) != canonical_root
+        or _canonical_root(metadata_root) != canonical_root
         or not isinstance(status, str)
         or not isinstance(response, str)
         or response != expected_response
@@ -287,7 +294,7 @@ class ShadowSessionCorrelation:
 
 
 class ShadowCorrelationRegistry:
-    """Bounded process-local detector; same-binding repeats are idempotent."""
+    """Bounded process-local detector with bidirectional session uniqueness."""
 
     def __init__(self, *, max_entries: int = MAX_SHADOW_ASSIGNMENTS) -> None:
         if (
@@ -298,17 +305,48 @@ class ShadowCorrelationRegistry:
             raise ValidationError("invalid shadow registry bound")
         self._lock = Lock()
         self._max_entries = max_entries
-        self._actual: dict[str, tuple[str, Principal]] = {}
+        self._actual: dict[str, tuple[object, ...]] = {}
+        self._predicted: dict[str, tuple[object, ...]] = {}
+
+    @staticmethod
+    def _binding(correlation: ShadowSessionCorrelation) -> tuple[object, ...]:
+        return (
+            correlation.task_id,
+            correlation.participant,
+            correlation.project_root,
+            correlation.predicted_session_id,
+            correlation.actual_session_id,
+            correlation.evidence_signature,
+            correlation.project_id,
+            correlation.contract_id,
+            correlation.generation,
+        )
 
     def consume(self, correlation: ShadowSessionCorrelation) -> bool:
-        binding = (correlation.task_id, correlation.participant)
+        if not isinstance(correlation, ShadowSessionCorrelation):
+            return False
+        if (
+            correlation.project_id is None
+            or correlation.contract_id is None
+            or correlation.generation is None
+            or correlation.project_id != correlation.participant.project_id
+        ):
+            return False
+        try:
+            if _canonical_root(correlation.project_root) != correlation.project_root:
+                return False
+        except ValidationError:
+            return False
+        binding = self._binding(correlation)
         with self._lock:
-            previous = self._actual.get(correlation.actual_session_id)
-            if previous is not None:
-                return previous == binding
+            actual = self._actual.get(correlation.actual_session_id)
+            predicted = self._predicted.get(correlation.predicted_session_id)
+            if actual is not None or predicted is not None:
+                return actual == binding and predicted == binding
             if len(self._actual) >= self._max_entries:
                 return False
             self._actual[correlation.actual_session_id] = binding
+            self._predicted[correlation.predicted_session_id] = binding
             return True
 
 

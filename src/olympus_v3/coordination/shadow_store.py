@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from .protocol import Principal, ValidationError
@@ -33,6 +34,7 @@ class DurableShadowCorrelationRegistry:
             raise ValidationError("invalid shadow busy timeout")
         self._path = str(path)
         self._max_entries = max_entries
+        self._lock = Lock()
         self._conn = sqlite3.connect(self._path, timeout=busy_timeout_ms / 1000, check_same_thread=False)
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
@@ -102,6 +104,10 @@ class DurableShadowCorrelationRegistry:
     def consume(self, correlation: ShadowSessionCorrelation) -> bool:
         binding = self._binding(correlation)
         encoded = json.dumps(binding, sort_keys=True, separators=(",", ":"))
+        with self._lock:
+            return self._consume_locked(binding, encoded)
+
+    def _consume_locked(self, binding: dict[str, Any], encoded: str) -> bool:
         try:
             self._conn.execute("BEGIN IMMEDIATE")
             integrity = self._conn.execute("PRAGMA quick_check").fetchone()
