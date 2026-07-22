@@ -52,12 +52,12 @@ class DurableShadowCorrelationRegistry:
                     predicted_session_id TEXT NOT NULL UNIQUE, evidence_signature TEXT NOT NULL, binding TEXT NOT NULL
                 );
             """)
+            self._conn.execute(
+                "INSERT OR IGNORE INTO shadow_store_meta VALUES ('schema_version', ?)",
+                (str(_SCHEMA_VERSION),),
+            )
             row = self._conn.execute("SELECT value FROM shadow_store_meta WHERE key='schema_version'").fetchone()
-            if row is None:
-                self._conn.execute(
-                    "INSERT INTO shadow_store_meta VALUES ('schema_version', ?)", (str(_SCHEMA_VERSION),)
-                )
-            elif row[0] != str(_SCHEMA_VERSION):
+            if row is None or row[0] != str(_SCHEMA_VERSION):
                 raise ValidationError("invalid shadow store schema version")
             self._conn.commit()
         except sqlite3.DatabaseError as exc:
