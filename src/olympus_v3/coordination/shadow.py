@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from threading import Lock
-from typing import Any, Mapping
+from typing import Any, Mapping, Protocol
 
 from .harmonia import HarmoniaPlan
 from .olympus_adapter import OlympusRuntimeAdapter, RuntimeObservation
@@ -261,6 +261,9 @@ class ShadowSessionCorrelation:
     predicted_session_id: str
     actual_session_id: str
     evidence_signature: str
+    project_id: str | None = None
+    contract_id: str | None = None
+    generation: int | None = None
 
     @classmethod
     def from_evidence(cls, plan: HarmoniaPlan, evidence: VerifiedShadowEvidence) -> ShadowSessionCorrelation:
@@ -277,6 +280,9 @@ class ShadowSessionCorrelation:
             predicted,
             evidence.actual_session_id,
             evidence.signature,
+            evidence.project_id,
+            evidence.contract_id,
+            evidence.generation,
         )
 
 
@@ -304,6 +310,12 @@ class ShadowCorrelationRegistry:
                 return False
             self._actual[correlation.actual_session_id] = binding
             return True
+
+
+class ShadowCorrelationConsumer(Protocol):
+    """Structural consume seam shared by process-local and durable registries."""
+
+    def consume(self, correlation: ShadowSessionCorrelation) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -396,7 +408,7 @@ def compare_shadow(
     generation: int | None = None,
     expected_status: str | None = None,
     correlation: ShadowSessionCorrelation | None = None,
-    registry: ShadowCorrelationRegistry | None = None,
+    registry: ShadowCorrelationConsumer | None = None,
 ) -> ShadowReport:
     """Compare verified Olympus facts to a plan without runtime side effects."""
     config = ShadowConfig() if config is None else config
@@ -415,7 +427,7 @@ def compare_shadow(
         _bounded_text(value, label)
     if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
         raise ValidationError("invalid generation")
-    if not isinstance(correlation, ShadowSessionCorrelation) or not isinstance(registry, ShadowCorrelationRegistry):
+    if not isinstance(correlation, ShadowSessionCorrelation) or not callable(getattr(registry, "consume", None)):
         return _report(True, False, False, False, False, ("unverified_correlation",), None, evidence.latency_ms)
     assignments = plan.assignments
     if len(assignments) > config.max_assignments or len({item.task_id for item in assignments}) != len(assignments):
@@ -437,6 +449,9 @@ def compare_shadow(
         and correlation.predicted_session_id == expected_prediction
         and correlation.actual_session_id == evidence.actual_session_id
         and correlation.evidence_signature == evidence.signature
+        and correlation.project_id == evidence.project_id
+        and correlation.contract_id == evidence.contract_id
+        and correlation.generation == evidence.generation
         and registry.consume(correlation)
     )
     status_ok = evidence.technical_status == expected_status and not evidence.conditions
@@ -469,6 +484,7 @@ __all__ = [
     "MAX_SHADOW_MISMATCHES",
     "ShadowCondition",
     "ShadowConfig",
+    "ShadowCorrelationConsumer",
     "ShadowCorrelationRegistry",
     "ShadowObservation",
     "ShadowReport",

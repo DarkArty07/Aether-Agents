@@ -162,6 +162,7 @@ from .shadow import (
     observe_olympus_session,
     verify_shadow_report,
 )
+from .shadow_store import DurableShadowCorrelationRegistry
 from .transport import (
     ChannelPublishContext,
     DispatchIntent,
@@ -328,6 +329,7 @@ __all__ = [
     "ShadowCondition",
     "ShadowConfig",
     "ShadowCorrelationRegistry",
+    "DurableShadowCorrelationRegistry",
     "ShadowObservation",
     "ShadowReport",
     "ShadowSessionCorrelation",
