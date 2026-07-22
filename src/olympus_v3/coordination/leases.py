@@ -158,14 +158,15 @@ class LeaseManager:
     def check(
         self, lease: Lease, owner: str | None = None, epoch: int | None = None, token: str | None = None
     ) -> LeaseOutcome:
+        if not isinstance(lease, Lease):
+            return LeaseOutcome(LeaseResult.INVALID_INPUT)
+        expected_owner = lease.owner if owner is None else owner
+        expected_epoch = lease.epoch if epoch is None else epoch
+        expected_token = lease.token if token is None else token
         current = self._read(lease)
-        if (
-            current is None
-            or (owner is not None and current.owner != owner)
-            or (epoch is not None and current.epoch != epoch)
-        ):
+        if current is None or current.owner != expected_owner or current.epoch != expected_epoch:
             return LeaseOutcome(LeaseResult.STALE_FENCE)
-        if token is not None and current.token != token:
+        if current.token != expected_token:
             return LeaseOutcome(LeaseResult.NOT_LEASE_OWNER)
         if current.expires_at <= self.clock():
             return LeaseOutcome(LeaseResult.LEASE_EXPIRED)

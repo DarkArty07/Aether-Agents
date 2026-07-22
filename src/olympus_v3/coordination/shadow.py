@@ -31,6 +31,12 @@ class ShadowCondition(StrEnum):
     RUNTIME_UNAVAILABLE = "runtime_unavailable"
     REVIEWER_VIOLATION = "reviewer_violation"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    STALE_LEASE = "stale_lease"
+    REVOCATION_RACE = "revocation_race"
+    LEDGER_TAMPERED = "ledger_tampered"
+    PROJECTION_REBUILT = "projection_rebuilt"
+    UNKNOWN_EFFECT = "unknown_effect"
+    PARTIAL_EVIDENCE = "partial_evidence"
 
 
 def _bounded_text(value: Any, label: str) -> str:
