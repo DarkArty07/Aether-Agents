@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R5 COMPLETE, R6 BLOCKED BY THE CAPACITY GATE.** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 READY (2026-07-21).** Autonomous execution is authorized through default-off R7; live activation and release remain on hold.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
@@ -196,7 +196,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 ### R6 — Effects, review independence, and closure
 
-**Status:** `BLOCKED — CAPACITY GATE AT 15% (2026-07-20)`
+**Status:** `COMPLETE — DEFAULT-OFF / ATHENA QA ATTEMPT 3 PASS (2026-07-21)`
 
 **Scope:** E0–E4 effects, receipts, idempotency, reconcile-before-retry, no automatic E4 retry, exact typed approvals, independent reviewer identity, owner proposal, Harmonia mechanical validation, and final semantic authority.
 
@@ -204,7 +204,9 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Athena gate:** no unresolved critical/high finding.
 
-**Entry blocker:** the post-R5 capacity check reports one healthy primary at 0%, one healthy primary at 15%, and the protected backup at 15%. The approved budget protocol forbids starting another model-intensive milestone when the reserve is at or below 15%. R6 has not started; no implementation or specialist session was opened.
+**Verified result:** the isolated implementation covers provenance-controlled E0–E4 lifecycle transitions, exact idempotency identity, authenticated single-use E4 approvals, bound receipts, independent review, typed findings/evidence, signed waivers, authenticated gate evaluations, two-stage semantic closure, and deterministic cleanup. The final matrix passes 64 focused R6 tests, 414 coordination tests, and 605 full-suite tests; Ruff, formatting, compileall, diff checks, adversarial tamper/replay/scope probes, and protected-path scope audit pass. Athena attempts 1 and 2 found four caller-assertion bypasses across receipts, gate evaluation, and closure; the complete equivalence classes were corrected. Attempt 3 reverified every prior finding and returned **PASS / BLOCKING: no** with high confidence.
+
+**R7 activation prerequisites:** process-local HMAC/replay state, caller-provided test keys, durable distributed replay, production key custody, and ledger-derived closure facts remain explicit R7 blockers. No gateway/runtime activation occurred. The earlier capacity entry blocker was removed after the user explicitly authorized continued compute on 2026-07-21.
 
 ### R7 — Default-off shadow runtime and release hardening
 

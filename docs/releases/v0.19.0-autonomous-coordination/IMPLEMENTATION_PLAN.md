@@ -2,7 +2,7 @@
 
 > **For Hermes:** execute this plan task by task only after the user says `aprobado`. Use Aether Daimons through Olympus, strict TDD, atomic commits, budget checks at every stage, and independent security gates where specified.
 
-**Status:** **APPROVED 2026-07-18 — R5 COMPLETE, R6 BLOCKED BY THE CAPACITY GATE.** Authorization extends through code-complete, default-off R7; live activation and release remain on hold.
+**Status:** **APPROVED 2026-07-18 — R6 COMPLETE, R7 READY (2026-07-21).** Authorization extends through code-complete, default-off R7; live activation and release remain on hold.
 
 **Goal:** migrate Aether Agents from Hermes-relayed tool-style delegation to a contract-bounded autonomous team, using the transport-agnostic ideas of Cotal Core as design inspiration while preserving Aether semantic authority, Olympus lifecycle ownership, persistent Hermes profiles, and Telegram gateway continuity.
 
@@ -368,6 +368,8 @@ Owner proposes completion with evidence; Harmonia validates mechanically; Hermes
 Test cleanup order: stop admission → revoke capabilities → reconcile effects/sessions → release lease → publish continuity → idle shutdown.
 
 **Athena gate:** E4, waivers, review independence, unknown effects, secrets, and recovery order.
+
+**Verified 2026-07-21:** 64 focused R6 tests, 414 coordination tests, and 605 full-suite tests pass. Ruff, formatting, compileall, diff checks, adversarial construction/tamper/replay/scope probes, and exact staging-scope audit pass. Athena `qa_attempt=3/3` returned **PASS** after revalidating all four findings from the first two attempts. R6 remains isolated/default-off; durable shared replay, production key custody, ledger-derived facts, and runtime activation remain R7 prerequisites.
 
 **Atomic commit:** `feat(coordination): add reconciled effects and semantic closure`.
 
