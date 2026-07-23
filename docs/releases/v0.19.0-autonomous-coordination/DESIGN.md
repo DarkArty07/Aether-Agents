@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Design v2
 
-**Status:** **APPROVED — DEFAULT-OFF IMPLEMENTATION AUTHORIZED.** On 2026-07-18 the user authorized autonomous execution of Phase 0 through the code-complete R7 shadow-mode gate under `IMPLEMENTATION_PLAN.md`. Live gateway restart, runtime activation, credential repair, real pilot effects, merge, tag, and release remain separately blocked while the user is away.
+**Status:** **R7 COMPLETE DEFAULT-OFF; R8 LEGACY PILOT BLOCKED; KERNEL CONVERGENCE APPROVED FOR PLANNING ONLY.** R2–R7 remain the selected architecture. The bounded R8 Snake pilot demonstrated that its `PilotStore` runtime bypassed those authorities and ended fail-closed as blocked. The approved continuation is defined by `KERNEL_CONVERGENCE_DECISION.md`; source/test implementation, another pilot, live activation, merge, tag, deployment, and publication remain separately blocked.
 
 **Date:** 2026-07-18
 
@@ -10,7 +10,7 @@
 
 **Ranking and exclusions:** Direct NATS JetStream is **Option C**, a future transport-only scale-out candidate requiring separate evidence and approval. Cotal transport-only is **Option B**, ranked last, not selected, not adopted or forked, and excluded from the initial runtime. Neither Cotal nor any transport owns contracts, lifecycle, completion, or semantic authority.
 
-**Authority and status:** Hermes remains the user-facing design, contract, amendment, escalation, and ordinary completion authority. Harmonia has one durable logical identity per project and an on-demand, leased runtime for coordination stewardship; she is not a process/session lifecycle owner. Phase 0 and staged default-off implementation are authorized; deployment, candidate infrastructure, live activation, credential mutation, and real effects are not.
+**Authority and status:** Hermes remains the user-facing design, contract, amendment, escalation, and ordinary completion authority. Harmonia has one durable logical identity per project and an on-demand, leased runtime for coordination stewardship; she is not a process/session lifecycle owner. The historical Phase 0–R8 authorizations are exhausted at their recorded gates. Current authorization covers convergence documentation and planning only; source/test implementation, deployment, candidate infrastructure, live activation, credential mutation, and real effects are not authorized.
 
 **Closure:** completion is two-stage: the accountable owner proposes an evidenced terminal result; Harmonia performs deterministic mechanical validation. The completion authority is `automatic` only for explicitly configured low-risk routine work, `hermes` by default, or `user` for reserved decisions. The only final semantic states are `completed`, `partially_completed`, `failed`, and `cancelled`.
 
@@ -41,6 +41,23 @@ In v0.19.0:
 - completion becomes two-stage and evidenced rather than equated with an ACP session returning `completed`.
 
 The expected user-facing result is fewer Hermes relay turns, less flagship-model message-bus cost, autonomous specialist coordination inside approved boundaries, and preserved escalation/control when a real decision is required.
+
+### 0.3 Post-R8 convergence decision
+
+R8 did not invalidate the R2–R7 kernel because the pilot did not execute through it end to end. The pilot instead created a parallel authority for task state, attempts, evidence, recovery, and closure in `PilotStore`, then called the special `dispatch_pilot_task()` adapter path. Its durable recovery and fail-closed result remain useful evidence, but that runtime is not the selected production architecture.
+
+The approved planning direction is:
+
+- compile `PilotManifest` into existing contracts and kernel facts;
+- make the ledger and durable workflow projection the semantic authority for every new kernel-backed run;
+- retain Olympus as the sole ACP process/session lifecycle owner;
+- retain Harmonia as a pure planner and keep it shadow-only for the first converged Snake run;
+- preserve historical R8 runs as legacy read-only evidence;
+- prohibit dual-write and mid-run runtime migration;
+- separate delivery, execution, semantic outcome, and operational closure;
+- require trusted evidence, fenced results, durable budget obligations, and executed cleanup before final closure.
+
+The normative continuation documents are `KERNEL_CONVERGENCE_DECISION.md`, `KERNEL_CONVERGENCE_ROADMAP.md`, `ACP_RUNTIME_BOUNDARY_AUDIT.md`, and `KERNEL_CONVERGENCE_IMPLEMENTATION_PLAN.md`. Their current approval is documentary only.
 
 ## 1. Purpose
 
@@ -656,7 +673,7 @@ The feasibility study and all future phases must preserve these approved non-neg
 
 ## 7. Research and feasibility questions
 
-The selected architecture is approved, but these implementation facts remain unknown and must be evidenced during the now-authorized Phase 0 before production-code stages advance:
+At the original Phase 0 gate, the selected architecture was approved while these implementation facts still required evidence before production-code stages could advance:
 
 1. Which exact Olympus and ACP extension seams can propagate project, contract, task, runtime, and message correlation without creating a second lifecycle owner?
 2. Which installed runtime attributes can be bound into Aether proof-of-possession workload identity, and where are issuance, rotation, revocation, and key custody enforced?

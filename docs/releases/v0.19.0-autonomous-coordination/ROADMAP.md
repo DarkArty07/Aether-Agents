@@ -1,10 +1,10 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **APPROVED 2026-07-18 — R7 COMPLETE / DEFAULT-OFF (2026-07-22).** The complete isolated integration, benchmark, documentation, and bounded final review are closed. Live activation, pilot, R8, merge, tag, and release remain on hold pending the user's decision.
+**Status:** **R7 COMPLETE / DEFAULT-OFF; R8 LEGACY PILOT BLOCKED; KERNEL CONVERGENCE PLANNING ACTIVE (2026-07-23).** R8 ended fail-closed after its final bounded review and is not reopened. The approved documentary continuation is `KERNEL_CONVERGENCE_ROADMAP.md`; implementation, another pilot, live activation, merge, tag, and release remain blocked.
 
 **Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
 
-**Normative sources:** [DESIGN.md](DESIGN.md), [BASELINE.md](BASELINE.md), [RESEARCH.md](RESEARCH.md), [FEASIBILITY.md](FEASIBILITY.md), [MIGRATION_PLAN.md](MIGRATION_PLAN.md), and [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Normative sources:** [DESIGN.md](DESIGN.md), [BASELINE.md](BASELINE.md), [RESEARCH.md](RESEARCH.md), [FEASIBILITY.md](FEASIBILITY.md), [MIGRATION_PLAN.md](MIGRATION_PLAN.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [KERNEL_CONVERGENCE_DECISION.md](KERNEL_CONVERGENCE_DECISION.md), and [KERNEL_CONVERGENCE_ROADMAP.md](KERNEL_CONVERGENCE_ROADMAP.md).
 
 ## 1. Non-negotiable release decisions
 
@@ -26,14 +26,14 @@
 | Published version | `v0.18.2` |
 | Working branch | `feature/v0.19.0-autonomous-coordination-design` |
 | Pre-code design package | Reconciled and committed |
-| Coordination runtime | Protocol and immutable-contract core implemented; runtime integration not active |
+| Coordination runtime | R2–R7 primitives implemented and default-off; no integrated authoritative runtime |
 | Gateway | Active |
 | Telegram | Connected |
 | Healthy Codex accounts | 2 active; revoked third credential removed |
 | Available at planning baseline | 94% + 53% |
 | Revoked account | `codex-secondary` |
 | Protected reserve | `openai-codex-oauth-4`; stop initiating work at 15% to preserve ≥10% |
-| Active blockers in `.aether` | None |
+| Active blockers in `.aether` | R8 legacy pilot blocked; ACP teardown defect remains open |
 | Known source observation | stale Olympus module prose (#12) |
 
 The old roadmap entry claiming Ariadna is blocked by HTTP 401 is resolved and is not an active release blocker.
@@ -73,7 +73,11 @@ R7  Default-off shadow integration + hardening
 HOLD  User-present activation gate
       |
       v
-R8  Guarded E0/E1 pilot, merge, tag, and v0.19.0 publication
+R8  Guarded E0/E1 legacy pilot (BLOCKED; no publication)
+      |
+      v
+R9+ Kernel-backed convergence continuation
+     (see KERNEL_CONVERGENCE_ROADMAP.md)
 ```
 
 ## 4. Status model
@@ -243,11 +247,15 @@ No gateway restart, live feature activation, production database migration, or r
 4. explicit pilot contract, participants, budget, paths, and stop conditions;
 5. activation only after feature-disabled rollback is proven.
 
-### R8 — Guarded pilot and v0.19.0 publication
+### R8 — Guarded legacy pilot
 
-**Status:** `HOLD AFTER R7`
+**Status:** `BLOCKED — TERMINAL LEGACY PILOT OUTCOME (2026-07-23)`
 
-**Scope:** one reversible E0/E1-only contract, then release hardening, PR, merge, synchronized version bump, tag, and release.
+**Executed scope:** one reversible E0/E1 Snake contract through the pilot-specific `PilotStore` runtime. The repository and product deterministic checks passed, but the final independent review rejected two accessibility/interaction requirements. `snake-review` consumed the one authorized task-scoped attempt-3 exception, `snake-closure` was never dispatched, and no fourth attempt is authorized.
+
+**Architectural result:** R8 validated durable pilot recovery, bounded attempts, duplicate-dispatch prevention, external review, and fail-closed blocking. It did not validate the R2–R7 kernel end to end because it bypassed the general ledger/admission/lease/transport/review/closure authority path.
+
+**Continuation:** preserve R8 and its database as legacy read-only evidence. New work follows [KERNEL_CONVERGENCE_ROADMAP.md](KERNEL_CONVERGENCE_ROADMAP.md). No correction, closure, merge, tag, or publication follows from this milestone.
 
 **Excluded:** E2–E4 autonomous rollout, Cotal connector, NATS/JetStream deployment, broad production rollout, or lifecycle replacement.
 
