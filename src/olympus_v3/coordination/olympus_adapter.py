@@ -120,16 +120,16 @@ class OlympusRuntimeAdapter:
         return str(uuid.uuid5(uuid.NAMESPACE_URL, identity))
 
     async def _close_failed_session(self, session_id: str) -> bool:
-        """Complete manager-owned rollback and report cancellation during cleanup."""
+        """Attempt manager-owned rollback without suppressing cancellation forever."""
         cleanup = asyncio.create_task(self.manager.close(session_id, terminal_status="error"))
-        caller_cancelled = False
-        while not cleanup.done():
-            try:
-                await asyncio.shield(cleanup)
-            except asyncio.CancelledError:
-                caller_cancelled = True
+        try:
+            await asyncio.wait_for(asyncio.shield(cleanup), timeout=30)
+        except (TimeoutError, asyncio.CancelledError):
+            cleanup.cancel()
+            await asyncio.gather(cleanup, return_exceptions=True)
+            raise
         cleanup.result()
-        return caller_cancelled
+        return False
 
     def _plan_is_bound(self, plan: HarmoniaPlan) -> bool:
         admission_ids = tuple(item.task_id for item in plan.admissions)
@@ -143,11 +143,7 @@ class OlympusRuntimeAdapter:
             return False
         decisions = {item.task_id: item for item in plan.admissions}
         projected = {item.task_id: item for item in plan.projection.tasks}
-        ready_ids = {
-            task_id
-            for task_id in admission_ids
-            if projected[task_id].state is TaskState.READY
-        }
+        ready_ids = {task_id for task_id in admission_ids if projected[task_id].state is TaskState.READY}
         if set(assignment_ids) != ready_ids:
             return False
         for task_id in admission_ids:
@@ -203,11 +199,7 @@ class OlympusRuntimeAdapter:
         *,
         project_root: str,
     ) -> tuple[RuntimeReceipt, ...]:
-        if (
-            not isinstance(plan, HarmoniaPlan)
-            or not isinstance(project_root, str)
-            or not project_root.startswith("/")
-        ):
+        if not isinstance(plan, HarmoniaPlan) or not isinstance(project_root, str) or not project_root.startswith("/"):
             raise ValidationError("invalid runtime dispatch")
         project_root = str(Path(project_root).resolve())
         receipts: list[RuntimeReceipt] = []
@@ -345,6 +337,135 @@ class OlympusRuntimeAdapter:
             technical_status,
             progress,
         )
+
+    async def dispatch_pilot_task(
+        self,
+        task: Any,
+        *,
+        manifest: Any,
+        session_id: str,
+        project_root: str,
+        envelope: Mapping[str, Any],
+    ) -> RuntimeReceipt:
+        """Dispatch one pre-bound R8 pilot envelope via public ACP operations."""
+        from .pilot_model import PilotManifest, PilotTask
+
+        if not isinstance(manifest, PilotManifest) or not isinstance(task, PilotTask):
+            raise ValidationError("invalid pilot authority")
+        try:
+            authoritative_task = manifest.task(task.task_id)
+        except Exception as exc:
+            raise ValidationError("unknown pilot task") from exc
+        if authoritative_task != task:
+            participant = Principal(
+                self.project_id,
+                f"r8-{authoritative_task.assignee}",
+                authoritative_task.assignee,
+            )
+            return RuntimeReceipt(
+                task.task_id,
+                participant,
+                session_id,
+                RuntimeStatus.REJECTED,
+                "invalid_pilot_task",
+            )
+        participant = Principal(self.project_id, f"r8-{task.assignee}", task.assignee)
+        if not self.enabled:
+            return RuntimeReceipt(
+                task.task_id, participant, session_id, RuntimeStatus.DISABLED, "coordination_disabled"
+            )
+        canonical_root = str(Path(project_root).resolve())
+        key = (canonical_root, task.task_id, participant)
+        expected = {
+            "task_id": task.task_id,
+            "session_id": session_id,
+            "participant": participant,
+            "pilot_id": self.project_id,
+            "project_id": self.project_id,
+            "manifest_hash": manifest.manifest_hash,
+            "generation": manifest.generation,
+            "role": task.role,
+            "objective": task.objective,
+            "permission": task.permission,
+            "allowed_scopes": task.scopes,
+            "dependencies": task.depends_on,
+            "required_artifacts": task.required_artifacts,
+            "result_schema": "AETHER_PILOT_RESULT_V1",
+        }
+        if (
+            not isinstance(envelope, Mapping)
+            or any(envelope.get(name) != value for name, value in expected.items())
+            or envelope.get("kind") != "aether.snake.task.v1"
+            or getattr(manifest, "project_id", None) != self.project_id
+            or getattr(manifest, "root", None) != canonical_root
+            or not isinstance(envelope.get("forbidden"), tuple)
+            or len(envelope["forbidden"]) < 6
+        ):
+            return RuntimeReceipt(
+                task.task_id, participant, session_id, RuntimeStatus.REJECTED, "invalid_pilot_envelope"
+            )
+        existing = self._task_sessions.get(key)
+        if existing is not None or key in self._inflight:
+            if existing not in {None, session_id}:
+                return RuntimeReceipt(task.task_id, participant, session_id, RuntimeStatus.REJECTED, "session_conflict")
+            return RuntimeReceipt(task.task_id, participant, session_id, RuntimeStatus.REPLAYED, "duplicate_assignment")
+        prompt_payload = dict(envelope)
+        prompt_payload["participant"] = {
+            "project_id": participant.project_id,
+            "owner_id": participant.owner_id,
+            "actor_id": participant.actor_id,
+        }
+        prompt = json.dumps(prompt_payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        if len(prompt.encode()) > self.max_prompt_bytes:
+            return RuntimeReceipt(
+                task.task_id, participant, session_id, RuntimeStatus.REJECTED, "prompt_limit_exceeded"
+            )
+        self._inflight.add(key)
+        actual_session: str | None = None
+        try:
+            try:
+                actual_session = await asyncio.wait_for(
+                    self.manager.spawn_agent(
+                        agent_name=task.assignee,
+                        session_id=session_id,
+                        project_root=canonical_root,
+                    ),
+                    timeout=300,
+                )
+                if actual_session != session_id:
+                    raise RuntimeError("ACPManager returned unexpected session identity")
+                await asyncio.wait_for(self.manager.send_message(session_id, prompt), timeout=300)
+            except BaseException as exc:
+                if actual_session is not None:
+                    await asyncio.wait_for(self._close_failed_session(actual_session), timeout=300)
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                return RuntimeReceipt(task.task_id, participant, session_id, RuntimeStatus.ERROR, "dispatch_failed")
+            self._task_sessions[key] = session_id
+            return RuntimeReceipt(task.task_id, participant, session_id, RuntimeStatus.SENT)
+        finally:
+            self._inflight.discard(key)
+
+    async def observe_pilot_task(
+        self,
+        task: Any,
+        *,
+        session_id: str,
+        project_root: str,
+    ) -> RuntimeObservation:
+        participant = Principal(self.project_id, f"r8-{task.assignee}", task.assignee)
+        canonical_root = str(Path(project_root).resolve())
+        key = (canonical_root, task.task_id, participant)
+        known = self._task_sessions.get(key)
+        if known not in {None, session_id}:
+            raise ValidationError("pilot session binding mismatch")
+        progress = await asyncio.wait_for(self.manager.poll(session_id), timeout=300)
+        if not isinstance(progress, Mapping):
+            raise RuntimeError("ACPManager returned invalid progress")
+        technical_status = progress.get("status", "unknown")
+        if not isinstance(technical_status, str):
+            technical_status = "unknown"
+        return RuntimeObservation(task.task_id, participant, session_id, technical_status, progress)
 
 
 __all__ = [
