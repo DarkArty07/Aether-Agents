@@ -84,6 +84,7 @@ async def init_server() -> None:
     logger.info("Database connected: %s", db_path)
 
     from .config_loader import get_config
+
     config = get_config()
     _manager = ACPManager(profiles_dir=config.profiles_dir, db=_db)
     logger.info("ACP manager initialized with profiles_dir: %s", config.profiles_dir)
@@ -92,6 +93,7 @@ async def init_server() -> None:
 # ---------------------------------------------------------------------------
 # Helper: build progress dict from SQLite
 # ---------------------------------------------------------------------------
+
 
 async def _build_response(session_id: str) -> dict:
     """Build a response dict from SQLite for a session.
@@ -116,6 +118,7 @@ async def _build_response(session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Tool: talk_to
 # ---------------------------------------------------------------------------
+
 
 @app.list_tools()
 async def list_tools() -> list[mcp_types.Tool]:
@@ -221,8 +224,13 @@ async def list_tools() -> list[mcp_types.Tool]:
                     "action": {
                         "type": "string",
                         "enum": [
-                            "set_phase", "set_task", "add_blocker", "remove_blocker",
-                            "add_decision", "add_issue", "resolve_issue",
+                            "set_phase",
+                            "set_task",
+                            "add_blocker",
+                            "remove_blocker",
+                            "add_decision",
+                            "add_issue",
+                            "resolve_issue",
                         ],
                         "description": "Action to perform.",
                     },
@@ -232,13 +240,19 @@ async def list_tools() -> list[mcp_types.Tool]:
                     "title": {"type": "string", "description": "Decision title (for add_decision)."},
                     "decision": {"type": "string", "description": "Decision text (for add_decision)."},
                     "rationale": {"type": "string", "description": "Decision rationale (for add_decision, optional)."},
-                    "alternatives": {"type": "string", "description": "Decision alternatives (for add_decision, optional)."},
+                    "alternatives": {
+                        "type": "string",
+                        "description": "Decision alternatives (for add_decision, optional).",
+                    },
                     "description": {"type": "string", "description": "Issue description (for add_issue)."},
                     "error_type": {"type": "string", "description": "Issue error type (for add_issue, optional)."},
                     "session_id": {"type": "string", "description": "Issue session ID (for add_issue, optional)."},
                     "issue_id": {"type": "integer", "description": "Issue ID (for resolve_issue)."},
                     "resolution": {"type": "string", "description": "Resolution text (for resolve_issue)."},
-                    "resolved_by": {"type": "string", "description": "Who resolved it (for resolve_issue, default 'hermes')."},
+                    "resolved_by": {
+                        "type": "string",
+                        "description": "Who resolved it (for resolve_issue, default 'hermes').",
+                    },
                 },
                 "required": ["action", "project_root"],
             },
@@ -273,6 +287,7 @@ async def list_tools() -> list[mcp_types.Tool]:
 # ---------------------------------------------------------------------------
 # talk_to handler
 # ---------------------------------------------------------------------------
+
 
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[mcp_types.TextContent]:
@@ -393,7 +408,12 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
         try:
             db = _get_db()
             row_id = await db.insert_steering(session_id, directive, args.get("priority", 0))
-            return [mcp_types.TextContent(type="text", text=json.dumps({"status": "steered", "steering_id": row_id, "session_id": session_id}, indent=2))]
+            return [
+                mcp_types.TextContent(
+                    type="text",
+                    text=json.dumps({"status": "steered", "steering_id": row_id, "session_id": session_id}, indent=2),
+                )
+            ]
         except Exception as e:
             logger.error("Steer error for session %s: %s", session_id, e)
             return [mcp_types.TextContent(type="text", text=f"Error steering session: {e}")]
@@ -429,12 +449,20 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
             await manager.send_message(session_id, prompt)
         except Exception as e:
             logger.error("Delegate: failed to send prompt to %s: %s", session_id, e)
-            return [mcp_types.TextContent(type="text", text=json.dumps({
-                "session_id": session_id,
-                "status": "error",
-                "error": f"Failed to send prompt: {e}",
-                "elapsed_seconds": time.time() - start_time,
-            }, indent=2))]
+            return [
+                mcp_types.TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "session_id": session_id,
+                            "status": "error",
+                            "error": f"Failed to send prompt: {e}",
+                            "elapsed_seconds": time.time() - start_time,
+                        },
+                        indent=2,
+                    ),
+                )
+            ]
 
         # Auto-poll loop
         poll_iterations = 0
@@ -494,9 +522,11 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
             current_messages = progress.get("messages", 0)
             current_tool_calls = progress.get("tool_calls", 0)
 
-            if (current_thoughts == last_thoughts and
-                current_messages == last_messages and
-                current_tool_calls == last_tool_calls):
+            if (
+                current_thoughts == last_thoughts
+                and current_messages == last_messages
+                and current_tool_calls == last_tool_calls
+            ):
                 stall_count += 1
                 # Active session: give more time (2x STALL_TIMEOUT) since
                 # hooks write data after completion, not during processing
@@ -532,6 +562,7 @@ async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:
 # discover handler
 # ---------------------------------------------------------------------------
 
+
 async def _handle_discover() -> list[mcp_types.TextContent]:
     """List available Daimon profiles."""
     manager = _get_manager()
@@ -548,6 +579,7 @@ async def _handle_discover() -> list[mcp_types.TextContent]:
 # aether_status handler
 # ---------------------------------------------------------------------------
 
+
 async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
     """Query the .aether continuity database for project state."""
     project_root = args.get("project_root", "")
@@ -562,12 +594,19 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
             hot_state = await db.get_hot_state()
 
             # Counts
-            cursor = await db._execute("SELECT COUNT(*) FROM sessions")
-            sessions_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM issues")
-            issues_count = (await cursor.fetchone())[0]
-            cursor = await db._execute("SELECT COUNT(*) FROM decisions")
-            decisions_count = (await cursor.fetchone())[0]
+            # ⚡ Bolt: Combine multiple COUNT queries into scalar subqueries to reduce connection and I/O overhead
+            cursor = await db._execute(
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM sessions),
+                    (SELECT COUNT(*) FROM issues),
+                    (SELECT COUNT(*) FROM decisions)
+                """
+            )
+            row = await cursor.fetchone()
+            sessions_count = row[0]
+            issues_count = row[1]
+            decisions_count = row[2]
 
             detail = args.get("detail", "summary")
 
@@ -582,21 +621,15 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
                 recent_sessions = await db.get_recent_sessions(limit=5)
                 recent_files = await db.get_recent_files(limit=10)
 
-                cursor = await db._execute(
-                    "SELECT * FROM decisions ORDER BY created_at DESC LIMIT 5"
-                )
+                cursor = await db._execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT 5")
                 rows = await cursor.fetchall()
                 recent_decisions = [dict(row) for row in rows]
 
-                cursor = await db._execute(
-                    "SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC"
-                )
+                cursor = await db._execute("SELECT * FROM issues WHERE status = 'open' ORDER BY created_at DESC")
                 rows = await cursor.fetchall()
                 open_issues = [dict(row) for row in rows]
 
-                cursor = await db._execute(
-                    "SELECT * FROM issues ORDER BY created_at DESC LIMIT 5"
-                )
+                cursor = await db._execute("SELECT * FROM issues ORDER BY created_at DESC LIMIT 5")
                 rows = await cursor.fetchall()
                 recent_issues = [dict(row) for row in rows]
 
@@ -620,6 +653,7 @@ async def _handle_aether_status(args: dict) -> list[mcp_types.TextContent]:
 # ---------------------------------------------------------------------------
 # aether_update handler
 # ---------------------------------------------------------------------------
+
 
 async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
     """Update the .aether continuity database."""
@@ -668,8 +702,10 @@ async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
                 rationale = args.get("rationale")
                 alternatives = args.get("alternatives")
                 row_id = await db.insert_decision(
-                    title=title, decision=decision,
-                    rationale=rationale, alternatives=alternatives,
+                    title=title,
+                    decision=decision,
+                    rationale=rationale,
+                    alternatives=alternatives,
                 )
                 return [mcp_types.TextContent(type="text", text=f"Decision added (id={row_id}): {title}")]
 
@@ -678,7 +714,8 @@ async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
                 error_type = args.get("error_type")
                 session_id = args.get("session_id")
                 row_id = await db.insert_issue(
-                    description=description, error_type=error_type,
+                    description=description,
+                    error_type=error_type,
                     session_id=session_id,
                 )
                 return [mcp_types.TextContent(type="text", text=f"Issue added (id={row_id}): {description}")]
@@ -688,7 +725,8 @@ async def _handle_aether_update(args: dict) -> list[mcp_types.TextContent]:
                 resolution = args.get("resolution", "")
                 resolved_by = args.get("resolved_by", "hermes")
                 await db.resolve_issue(
-                    issue_id=int(issue_id), resolution=resolution,
+                    issue_id=int(issue_id),
+                    resolution=resolution,
                     resolved_by=resolved_by,
                 )
                 return [mcp_types.TextContent(type="text", text=f"Issue {issue_id} resolved by {resolved_by}")]
@@ -776,7 +814,9 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
             recent_sessions = await db.get_recent_sessions(limit=5)
             await db.get_recent_files(limit=10)
 
-            cursor = await db._execute("SELECT * FROM decisions WHERE status = 'active' ORDER BY created_at DESC LIMIT 10")
+            cursor = await db._execute(
+                "SELECT * FROM decisions WHERE status = 'active' ORDER BY created_at DESC LIMIT 10"
+            )
             rows = await cursor.fetchall()
             decisions = [dict(row) for row in rows]
 
@@ -796,15 +836,15 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
         context_parts.append(f"Phase: {hot_state.get('current_phase', 'unknown')}")
         context_parts.append(f"Current Task: {hot_state.get('current_task', 'unknown')}")
         context_parts.append(f"Total Sessions: {hot_state.get('total_sessions', 0)}")
-        if hot_state.get('blockers'):
+        if hot_state.get("blockers"):
             context_parts.append(f"Blockers: {hot_state['blockers']}")
 
     if recent_sessions:
         context_parts.append("\nRecent Sessions:")
         for s in recent_sessions:
-            agent = s.get('agent', '?')
-            status = s.get('status', '?')
-            summary = (s.get('result_summary') or 'No summary')[:100]
+            agent = s.get("agent", "?")
+            status = s.get("status", "?")
+            summary = (s.get("result_summary") or "No summary")[:100]
             context_parts.append(f"  - {agent} ({status}): {summary}")
 
     if decisions:
@@ -831,7 +871,7 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
             pass
 
     # Sessions count for footer
-    sessions_count = hot_state.get('total_sessions', 0) if hot_state else 0
+    sessions_count = hot_state.get("total_sessions", 0) if hot_state else 0
 
     prompt = (
         f"PROJECT_ROOT: {project_root}\n\n"
@@ -882,28 +922,34 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
                 remaining = max(0, deadline - time.monotonic())
                 progress = await asyncio.wait_for(manager.poll(session_id), timeout=remaining)
             except asyncio.TimeoutError:
-                return [mcp_types.TextContent(
-                    type="text",
-                    text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
-                )]
+                return [
+                    mcp_types.TextContent(
+                        type="text",
+                        text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
+                    )
+                ]
             except Exception as e:
                 logger.error("aether_curate poll error for %s: %s", session_id, e)
                 return [mcp_types.TextContent(type="text", text=f"Error polling Ariadna curation: {e}")]
 
             status = progress.get("status", "unknown")
             if progress.get("clarification_needed") or status == "clarification_needed":
-                return [mcp_types.TextContent(
-                    type="text",
-                    text=f"Error: Ariadna requires clarification: {_curation_result_text(progress)}",
-                )]
+                return [
+                    mcp_types.TextContent(
+                        type="text",
+                        text=f"Error: Ariadna requires clarification: {_curation_result_text(progress)}",
+                    )
+                ]
             if status in ("completed", "error", "cancelled"):
                 break
             await asyncio.sleep(min(CURATE_POLL_INTERVAL, max(0, deadline - time.monotonic())))
         else:
-            return [mcp_types.TextContent(
-                type="text",
-                text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
-            )]
+            return [
+                mcp_types.TextContent(
+                    type="text",
+                    text=f"Error: Ariadna curation timed out after {CURATE_TIMEOUT_SECONDS} seconds.",
+                )
+            ]
 
         if progress is None:
             return [mcp_types.TextContent(type="text", text="Error: Ariadna curation returned no terminal result.")]
@@ -912,18 +958,22 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
         if status != "completed":
             if status == "cancelled":
                 close_status = "cancelled"
-            return [mcp_types.TextContent(
-                type="text",
-                text=f"Error: Ariadna session ended with status '{status}': {_curation_result_text(progress)}",
-            )]
+            return [
+                mcp_types.TextContent(
+                    type="text",
+                    text=f"Error: Ariadna session ended with status '{status}': {_curation_result_text(progress)}",
+                )
+            ]
 
         result_text = _curation_result_text(progress)
         result_upper = result_text.upper()
         if any(marker in result_upper for marker in ("CLARIFICATION NEEDED", "NOT WRITTEN", "UNVERIFIED")):
-            return [mcp_types.TextContent(
-                type="text",
-                text=f"Error: Ariadna did not verify CONTEXT.md: {result_text}",
-            )]
+            return [
+                mcp_types.TextContent(
+                    type="text",
+                    text=f"Error: Ariadna did not verify CONTEXT.md: {result_text}",
+                )
+            ]
 
         verification_error = _verify_curated_context(
             context_path,
@@ -953,6 +1003,7 @@ async def _handle_aether_curate(args: dict) -> list[mcp_types.TextContent]:
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
+
 
 async def main() -> None:
     """Start the Olympus v3 MCP server."""

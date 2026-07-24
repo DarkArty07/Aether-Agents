@@ -111,6 +111,7 @@ _SCHEMA_STMTS = (
 # Path resolution
 # ---------------------------------------------------------------------------
 
+
 def get_db_path() -> Path:
     """Resolve database path from env var or defaults.
 
@@ -141,6 +142,7 @@ def get_db_path() -> Path:
 # ---------------------------------------------------------------------------
 # Async database (for MCP server)
 # ---------------------------------------------------------------------------
+
 
 class OlympusDB:
     """Async SQLite database for Olympus v3 session data.
@@ -197,17 +199,14 @@ class OlympusDB:
         now = time.time()
         meta_json = json.dumps(metadata) if metadata else None
         await self._execute(
-            "INSERT INTO sessions (session_id, agent, status, started_at, metadata) "
-            "VALUES (?, ?, 'active', ?, ?)",
+            "INSERT INTO sessions (session_id, agent, status, started_at, metadata) VALUES (?, ?, 'active', ?, ?)",
             (sid, agent, now, meta_json),
         )
         await self._db.commit()
         logger.debug("Session created: %s (agent=%s)", sid, agent)
         return sid
 
-    async def update_session_status(
-        self, session_id: str, status: str, metadata: dict[str, Any] | None = None
-    ) -> None:
+    async def update_session_status(self, session_id: str, status: str, metadata: dict[str, Any] | None = None) -> None:
         """Update session status. For 'completed' or 'error', also set completed_at."""
         now = time.time()
         if status in ("completed", "error", "cancelled"):
@@ -229,9 +228,7 @@ class OlympusDB:
 
     async def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Get session row as dict."""
-        cursor = await self._execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-        )
+        cursor = await self._execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,))
         row = await cursor.fetchone()
         if row is None:
             return None
@@ -264,8 +261,7 @@ class OlympusDB:
     async def get_latest_turn(self, session_id: str) -> dict[str, Any] | None:
         """Get the latest assistant turn for a session."""
         cursor = await self._execute(
-            "SELECT * FROM turns WHERE session_id = ? AND role = 'assistant' "
-            "ORDER BY turn_num DESC LIMIT 1",
+            "SELECT * FROM turns WHERE session_id = ? AND role = 'assistant' ORDER BY turn_num DESC LIMIT 1",
             (session_id,),
         )
         row = await cursor.fetchone()
@@ -273,9 +269,7 @@ class OlympusDB:
             return None
         return dict(row)
 
-    async def get_turns(
-        self, session_id: str, since_turn: int = 0
-    ) -> list[dict[str, Any]]:
+    async def get_turns(self, session_id: str, since_turn: int = 0) -> list[dict[str, Any]]:
         """Get all turns for a session, optionally since a given turn number."""
         cursor = await self._execute(
             "SELECT * FROM turns WHERE session_id = ? AND turn_num > ? ORDER BY turn_num",
@@ -307,9 +301,7 @@ class OlympusDB:
         )
         await self._db.commit()
 
-    async def update_tool_call_result(
-        self, call_id: str, result: str, status: str = "completed"
-    ) -> None:
+    async def update_tool_call_result(self, call_id: str, result: str, status: str = "completed") -> None:
         """Update a tool call with its result."""
         await self._execute(
             "UPDATE tool_calls SET result = ?, status = ? WHERE call_id = ?",
@@ -330,14 +322,11 @@ class OlympusDB:
     # Steering
     # -------------------------------------------------------------------
 
-    async def insert_steering(
-        self, session_id: str, directive: str, priority: int = 0
-    ) -> int:
+    async def insert_steering(self, session_id: str, directive: str, priority: int = 0) -> int:
         """Insert a steering directive. Returns steering id."""
         now = time.time()
         cursor = await self._execute(
-            "INSERT INTO steering (session_id, directive, priority, consumed, timestamp) "
-            "VALUES (?, ?, ?, 0, ?)",
+            "INSERT INTO steering (session_id, directive, priority, consumed, timestamp) VALUES (?, ?, ?, 0, ?)",
             (session_id, directive, priority, now),
         )
         await self._db.commit()
@@ -361,9 +350,7 @@ class OlympusDB:
         directives = [row[1] for row in rows]
         ids = [row[0] for row in rows]
         placeholders = ",".join("?" * len(ids))
-        await self._execute(
-            f"UPDATE steering SET consumed = 1 WHERE id IN ({placeholders})", ids
-        )
+        await self._execute(f"UPDATE steering SET consumed = 1 WHERE id IN ({placeholders})", ids)
         await self._db.commit()
         return directives
 
@@ -378,8 +365,7 @@ class OlympusDB:
         """
         cutoff = time.time() - timeout
         cursor = await self._execute(
-            "UPDATE sessions SET status = 'error', completed_at = ? "
-            "WHERE status = 'active' AND started_at < ?",
+            "UPDATE sessions SET status = 'error', completed_at = ? WHERE status = 'active' AND started_at < ?",
             (time.time(), cutoff),
         )
         await self._db.commit()
@@ -410,24 +396,21 @@ class OlympusDB:
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-        # Count turns
+        # Count turns and tool calls in a single query
+        # ⚡ Bolt: Combine multiple COUNT queries into scalar subqueries to reduce connection and I/O overhead
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-            (session_id,),
+            """
+            SELECT
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+            """,
+            (session_id, session_id, session_id),
         )
-        thoughts = (await cursor.fetchone())[0]
-
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
-
-        # Count tool calls
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-        )
-        tool_calls_count = (await cursor.fetchone())[0]
+        row = await cursor.fetchone()
+        thoughts = row[0]
+        messages = row[1]
+        tool_calls_count = row[2]
 
         # Latest turn
         latest = await self.get_latest_turn(session_id)
@@ -459,9 +442,9 @@ class OlympusDB:
             last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
 
         # Clarification needed flag
-        clarification_needed = bool(
-            re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
-        ) if last_turn_content else False
+        clarification_needed = (
+            bool(re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)) if last_turn_content else False
+        )
 
         # Heartbeat timestamp
         cursor = await self._execute(
@@ -487,6 +470,7 @@ class OlympusDB:
 # ---------------------------------------------------------------------------
 # Sync database (for plugin hooks)
 # ---------------------------------------------------------------------------
+
 
 class OlympusDBSync:
     """Synchronous SQLite database for Olympus v3 plugin hooks.
@@ -572,9 +556,7 @@ class OlympusDBSync:
         finally:
             conn.close()
 
-    def update_tool_call_result(
-        self, call_id: str, result: str, status: str = "completed"
-    ) -> None:
+    def update_tool_call_result(self, call_id: str, result: str, status: str = "completed") -> None:
         """Update a tool call with its result synchronously."""
         conn = self._connect()
         try:
@@ -590,9 +572,7 @@ class OlympusDBSync:
     # Session status (sync — called from on_session_end hook)
     # -------------------------------------------------------------------
 
-    def update_session_status(
-        self, session_id: str, status: str
-    ) -> None:
+    def update_session_status(self, session_id: str, status: str) -> None:
         """Update session status. Sets completed_at for terminal statuses."""
         conn = self._connect()
         try:
@@ -621,8 +601,7 @@ class OlympusDBSync:
         try:
             now = time.time()
             cursor = conn.execute(
-                "INSERT INTO steering (session_id, directive, priority, consumed, timestamp) "
-                "VALUES (?, ?, ?, 0, ?)",
+                "INSERT INTO steering (session_id, directive, priority, consumed, timestamp) VALUES (?, ?, ?, 0, ?)",
                 (session_id, directive, priority, now),
             )
             conn.commit()
@@ -646,9 +625,7 @@ class OlympusDBSync:
             directives = [row[1] for row in rows]
             ids = [row[0] for row in rows]
             placeholders = ",".join("?" * len(ids))
-            conn.execute(
-                f"UPDATE steering SET consumed = 1 WHERE id IN ({placeholders})", ids
-            )
+            conn.execute(f"UPDATE steering SET consumed = 1 WHERE id IN ({placeholders})", ids)
             conn.commit()
             return directives
         finally:
@@ -663,8 +640,7 @@ class OlympusDBSync:
         try:
             cutoff = time.time() - timeout
             cursor = conn.execute(
-                "UPDATE sessions SET status = 'error', completed_at = ? "
-                "WHERE status = 'active' AND started_at < ?",
+                "UPDATE sessions SET status = 'error', completed_at = ? WHERE status = 'active' AND started_at < ?",
                 (time.time(), cutoff),
             )
             conn.commit()
@@ -693,33 +669,28 @@ class OlympusDBSync:
         conn = self._connect()
         try:
             # Session status
-            cursor = conn.execute(
-                "SELECT status FROM sessions WHERE session_id = ?", (session_id,)
-            )
+            cursor = conn.execute("SELECT status FROM sessions WHERE session_id = ?", (session_id,))
             row = cursor.fetchone()
             status = row[0] if row else "unknown"
 
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-            # Count turns
+            # Count turns and tool calls in a single query
+            # ⚡ Bolt: Combine multiple COUNT queries into scalar subqueries to reduce connection and I/O overhead
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
-                (session_id,),
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'),
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''),
+                    (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?)
+                """,
+                (session_id, session_id, session_id),
             )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
-
-            # Count tool calls
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-            )
-            tool_calls_count = cursor.fetchone()[0]
+            row = cursor.fetchone()
+            thoughts = row[0]
+            messages = row[1]
+            tool_calls_count = row[2]
 
             # Latest turn
             cursor = conn.execute(
@@ -756,9 +727,11 @@ class OlympusDBSync:
                 last_turn_content = f"[Working] {last_tc['tool_name']}({args_preview}...) → {last_tc['status']}"
 
             # Clarification needed flag
-            clarification_needed = bool(
-                re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
-            ) if last_turn_content else False
+            clarification_needed = (
+                bool(re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE))
+                if last_turn_content
+                else False
+            )
 
             # Heartbeat timestamp
             cursor = conn.execute(
