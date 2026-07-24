@@ -107,8 +107,13 @@ def test_run_rebuild_restores_durable_workflow_from_typed_intent_events(tmp_path
     service.admit_task("run-a", "task-a")
     service.mark_task_ready("run-a", "task-a")
     service.dispatch_task("run-a", "task-a")
-    service.start_attempt("run-a", "task-a")
-    service.bind_logical_session("run-a", "task-a", logical_session="logical-a")
+    attempt = service.start_attempt("run-a", "task-a")
+    binding = service.bind_logical_session("run-a", "task-a", logical_session="logical-a")
+
+    event_count = ledger.conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+    assert service.start_attempt("run-a", "task-a") == attempt
+    assert service.bind_logical_session("run-a", "task-a", logical_session="logical-a") == binding
+    assert ledger.conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == event_count
 
     event_kinds = [row[0] for row in ledger.conn.execute("SELECT kind FROM events")]
     assert {
@@ -120,6 +125,15 @@ def test_run_rebuild_restores_durable_workflow_from_typed_intent_events(tmp_path
         "attempt.started",
         "session.bound",
     } <= set(event_kinds)
+    authority = ledger.conn.execute(
+        "SELECT DISTINCT contract_id,contract_generation,revocation_epoch FROM events"
+    ).fetchall()
+    assert [tuple(row) for row in authority] == [("contract-a", 0, 0)]
+    projection = ledger.projection("task:run-a:task-a")
+    assert projection is not None
+    assert projection["prerequisites"] == []
+    assert projection["state"] == "running"
+    assert projection["logical_session"] == "logical-a"
 
     rebuilt = runtime.KernelRunService.rebuild(ledger)
     assert rebuilt.run("run-a") == original
