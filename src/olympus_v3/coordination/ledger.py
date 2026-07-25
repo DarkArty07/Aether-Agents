@@ -20,13 +20,36 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
-from .contracts import ContractAmendment, ExecutionContract
+from .contracts import ContractAmendment, ContractState, ExecutionContract
 from .projections import ProjectionReducer
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 MAX_EVENT_PAYLOAD_BYTES = 16_384
 MAX_ERROR_BYTES = 4_096
 MAX_SQLITE_INTEGER = (1 << 63) - 1
+_BUDGET_EVENT_KINDS = frozenset(
+    {
+        "budget.reserved",
+        "budget.committed",
+        "budget.spent",
+        "budget.released",
+        "budget.retry_admitted",
+        "budget.retry_task",
+        "budget.replan_task",
+    }
+)
+_WORKFLOW_EVENT_KINDS = frozenset(
+    {
+        "run.created",
+        "task.created",
+        "task.admitted",
+        "task.ready",
+        "task.dispatched",
+        "attempt.started",
+        "session.bound",
+    }
+)
+_AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS
 
 
 class InvalidInputError(ValueError):
@@ -152,8 +175,7 @@ class SignedEventDraft:
             or isinstance(self.expected_version, bool)
             or self.expected_version < 0
             or any(
-                value is not None
-                and (not isinstance(value, int) or isinstance(value, bool) or value < 0)
+                value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0)
                 for value in optional_integers
             )
         ):
@@ -401,11 +423,7 @@ class SQLiteLedger:
         from .leases import Lease, LeaseOutcome, LeaseResult
 
         now = self.clock()
-        if (
-            not _valid_identifier(resource)
-            or not _valid_identifier(owner)
-            or not _valid_positive_integer(ttl, now=now)
-        ):
+        if not _valid_identifier(resource) or not _valid_identifier(owner) or not _valid_positive_integer(ttl, now=now):
             return LeaseOutcome(LeaseResult.INVALID_INPUT)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
@@ -439,11 +457,7 @@ class SQLiteLedger:
         from .leases import Lease, LeaseOutcome, LeaseResult
 
         now = self.clock()
-        if (
-            not isinstance(lease, Lease)
-            or not _valid_identifier(owner)
-            or not _valid_positive_integer(ttl, now=now)
-        ):
+        if not isinstance(lease, Lease) or not _valid_identifier(owner) or not _valid_positive_integer(ttl, now=now):
             return LeaseOutcome(LeaseResult.INVALID_INPUT)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
@@ -547,21 +561,38 @@ class SQLiteLedger:
         return None
 
     def _authority_status(self, draft: SignedEventDraft) -> Result | None:
-        if draft.contract_generation is None and draft.revocation_epoch is None:
+        if draft.kind in _AUTHORITY_BOUND_EVENT_KINDS:
+            if draft.contract_generation is None or draft.revocation_epoch is None:
+                return Result.INVALID_INPUT
+            contract_id = draft.payload.get("contract_id") if isinstance(draft.payload, Mapping) else None
+            if not isinstance(contract_id, str):
+                return Result.INVALID_INPUT
+        elif draft.contract_generation is None and draft.revocation_epoch is None:
             return None
+        elif (draft.contract_generation is None) != (draft.revocation_epoch is None):
+            return Result.INVALID_INPUT
         contract_id = draft.payload.get("contract_id") if isinstance(draft.payload, Mapping) else None
         if not isinstance(contract_id, str):
             contract_id = draft.aggregate
         row = self.conn.execute(
-            "SELECT generation,revocation_epoch FROM contract_heads WHERE installation_id=? AND project_id=? AND contract_id=?",
+            "SELECT h.generation,h.revocation_epoch,v.document FROM contract_heads h JOIN contract_versions v ON v.installation_id=h.installation_id AND v.project_id=h.project_id AND v.contract_id=h.contract_id AND v.generation=h.generation WHERE h.installation_id=? AND h.project_id=? AND h.contract_id=?",
             (self.scope.installation_id, self.scope.project_id, contract_id),
         ).fetchone()
         if not row or row[0] != draft.contract_generation or row[1] != draft.revocation_epoch:
             return Result.STALE_AUTHORITY
+        if draft.kind in _AUTHORITY_BOUND_EVENT_KINDS:
+            try:
+                status = ExecutionContract.from_dict(json.loads(row[2])).status
+            except Exception:
+                return Result.INTEGRITY_FAILURE
+            if status is not ContractState.ACTIVE:
+                return Result.STALE_AUTHORITY
         return None
 
     def append(self, draft: SignedEventDraft, context: WriterContext, *, message_id: str | None = None) -> AppendResult:
         if message_id is not None and not _valid_identifier(message_id):
+            return AppendResult(Result.INVALID_INPUT)
+        if draft.kind == "contract.advance":
             return AppendResult(Result.INVALID_INPUT)
         failure = self._check(draft, context)
         if failure:
@@ -588,6 +619,28 @@ class SQLiteLedger:
             if authority_failure:
                 self.conn.rollback()
                 return AppendResult(authority_failure)
+            if draft.kind in _WORKFLOW_EVENT_KINDS or draft.kind in _BUDGET_EVENT_KINDS:
+                from .budget import BudgetError, validate_budget_history
+                from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
+
+                try:
+                    history = self.events()
+                    history.append({"aggregate": draft.aggregate, "kind": draft.kind, "payload": dict(draft.payload)})
+                    if draft.kind in _WORKFLOW_EVENT_KINDS:
+                        validate_workflow_history(history)
+                    else:
+                        contract_row = self.conn.execute(
+                            "SELECT v.document FROM contract_versions v JOIN contract_heads h ON h.installation_id=v.installation_id AND h.project_id=v.project_id AND h.contract_id=v.contract_id AND v.generation=h.generation WHERE h.installation_id=? AND h.project_id=? AND h.contract_id=?",
+                            (self.scope.installation_id, self.scope.project_id, draft.payload.get("contract_id")),
+                        ).fetchone()
+                        authorized = json.loads(contract_row[0])["limits"]["model_budget"] if contract_row else 0
+                        validate_budget_history(history, authorized=authorized)
+                except AuthorityError:
+                    self.conn.rollback()
+                    return AppendResult(Result.STALE_AUTHORITY)
+                except (InvalidTransition, BudgetError, KeyError, TypeError, ValueError):
+                    self.conn.rollback()
+                    return AppendResult(Result.INVALID_INPUT)
             current = self.conn.execute(
                 "SELECT COALESCE(MAX(version),0) FROM events WHERE installation_id=? AND project_id=? AND aggregate=?",
                 (self.scope.installation_id, self.scope.project_id, draft.aggregate),
@@ -877,7 +930,17 @@ class SQLiteLedger:
             self.clock(),
         ]
         signature = self.integrity_signer.sign(json.dumps(signed_values, separators=(",", ":")).encode())
-        encoding_version, installation_id, project_id, checkpoint_id, sequence, event_hash, projection_digest, key_id, created_at = signed_values
+        (
+            encoding_version,
+            installation_id,
+            project_id,
+            checkpoint_id,
+            sequence,
+            event_hash,
+            projection_digest,
+            key_id,
+            created_at,
+        ) = signed_values
         self.conn.execute(
             "INSERT INTO checkpoints(installation_id,project_id,checkpoint_id,encoding_version,sequence,event_hash,projection_digest,key_id,created_at,signature) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (
@@ -1021,6 +1084,31 @@ class SQLiteLedger:
             (self.scope.installation_id, self.scope.project_id),
         ).fetchone()[0]
         event_id = uuid.uuid4().hex
+        internal_writer = "ledger-internal"
+        internal_key = self.integrity_signer.key_id
+        internal_resource = "ledger-integrity"
+        internal_fence = 1
+        proof_material = json.dumps(
+            [
+                1,
+                self.scope.installation_id,
+                self.scope.project_id,
+                sequence,
+                now,
+                event_id,
+                "outbox",
+                version,
+                "outbox.poison",
+                payload,
+                previous,
+                internal_writer,
+                internal_key,
+                internal_resource,
+                internal_fence,
+            ],
+            separators=(",", ":"),
+        ).encode()
+        internal_proof = self.integrity_signer.sign(proof_material)
         fields = [
             1,
             self.scope.installation_id,
@@ -1033,11 +1121,11 @@ class SQLiteLedger:
             "outbox.poison",
             payload,
             previous,
-            source["writer_id"],
-            source["key_id"],
-            source["resource"],
-            source["fence"],
-            source["writer_proof"],
+            internal_writer,
+            internal_key,
+            internal_resource,
+            internal_fence,
+            internal_proof,
         ]
         event_hash = hashlib.sha256(json.dumps(fields, separators=(",", ":")).encode()).hexdigest()
         auth_tag = self.integrity_signer.sign(json.dumps(fields + [event_hash], separators=(",", ":")).encode())
@@ -1055,11 +1143,11 @@ class SQLiteLedger:
                 payload,
                 previous,
                 event_hash,
-                source["writer_id"],
-                source["key_id"],
-                source["resource"],
-                source["fence"],
-                source["writer_proof"],
+                internal_writer,
+                internal_key,
+                internal_resource,
+                internal_fence,
+                internal_proof,
                 auth_tag,
                 1,
                 row["contract_id"],
@@ -1198,17 +1286,10 @@ class SQLiteLedger:
     def complete_outbox(self, message_id: str, completion_event_id: str) -> Result:
         if not _valid_identifier(message_id) or not _valid_identifier(completion_event_id):
             return Result.INVALID_INPUT
-        self.conn.execute("BEGIN IMMEDIATE")
-        try:
-            cur = self.conn.execute(
-                "UPDATE outbox SET semantic_completion_event_id=? WHERE installation_id=? AND project_id=? AND message_id=? AND status='SENT' AND semantic_completion_event_id IS NULL",
-                (completion_event_id, self.scope.installation_id, self.scope.project_id, message_id),
-            )
-            self.conn.commit()
-            return Result.APPLIED if cur.rowcount else Result.CAS_CONFLICT
-        except Exception:
-            self.conn.rollback()
-            raise
+        # R10a has no semantic completion event kind or authenticated binding
+        # contract.  Until one exists, this public API must fail closed rather
+        # than accepting an arbitrary string as execution evidence.
+        return Result.INVALID_INPUT
 
     def outbox(self) -> list[dict[str, Any]]:
         return [
@@ -1227,8 +1308,20 @@ class SQLiteLedger:
         generation: int | None = None,
         revocation_epoch: int | None = None,
     ) -> Result:
+        """Install the one trusted genesis contract for this ledger scope.
+
+        Subsequent authority changes must use ``advance_contract`` with an
+        authenticated amendment; this bootstrap path cannot manufacture a
+        non-genesis head.
+        """
         if not isinstance(document, ExecutionContract) or document.project_id != self.scope.project_id:
             return Result.INVALID_SCOPE
+        if (
+            document.generation != 0
+            or document.revocation_epoch != 0
+            or document.status not in {ContractState.PROPOSED, ContractState.ACTIVE}
+        ):
+            return Result.INVALID_INPUT
         if contract_id is not None and contract_id != document.contract_id:
             return Result.CAS_CONFLICT
         if generation is not None and generation != document.generation:
@@ -1238,6 +1331,18 @@ class SQLiteLedger:
         encoded = json.dumps(document.to_dict(), sort_keys=True, separators=(",", ":"), allow_nan=False)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
+            initialized = self.conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM contract_heads WHERE installation_id=? AND project_id=? UNION SELECT 1 FROM events WHERE installation_id=? AND project_id=?)",
+                (
+                    self.scope.installation_id,
+                    self.scope.project_id,
+                    self.scope.installation_id,
+                    self.scope.project_id,
+                ),
+            ).fetchone()[0]
+            if initialized:
+                self.conn.rollback()
+                return Result.CAS_CONFLICT
             self.conn.execute(
                 "INSERT INTO contract_versions(installation_id,project_id,contract_id,generation,document,revocation_epoch) VALUES(?,?,?,?,?,?)",
                 (
@@ -1323,7 +1428,10 @@ class SQLiteLedger:
             or amendment.prior_contract.revocation_epoch != expected_revocation_epoch
         ):
             return Result.CAS_CONFLICT
-        if amendment.issuer != amendment.prior_contract.amendment_authority or amendment.issuer.actor_id != context.writer_id:
+        if (
+            amendment.issuer != amendment.prior_contract.amendment_authority
+            or amendment.issuer.actor_id != context.writer_id
+        ):
             return Result.AUTHENTICATION_FAILED
         intent = self._amendment_draft(amendment, context)
         signed = (
@@ -1619,7 +1727,9 @@ class SQLiteLedger:
             try:
                 if probe.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError(Result.RESTORE_INVALID.value)
-                row = probe.execute("SELECT installation_id,project_id FROM events ORDER BY sequence LIMIT 1").fetchone()
+                row = probe.execute(
+                    "SELECT installation_id,project_id FROM events ORDER BY sequence LIMIT 1"
+                ).fetchone()
                 if row and tuple(row) != (self.scope.installation_id, self.scope.project_id):
                     raise ValueError(Result.RESTORE_INVALID.value)
             finally:

@@ -137,5 +137,5 @@ def test_transport_ack_does_not_complete_execution_contract(ledger):
     assert row["status"] == "SENT"
     assert row["transport_ack_at"] is not None
     assert row["semantic_completion_event_id"] is None
-    assert db.complete_outbox("message-a", "completion-event") is Result.APPLIED
-    assert db.outbox()[0]["semantic_completion_event_id"] == "completion-event"
+    assert db.complete_outbox("message-a", "completion-event") is Result.INVALID_INPUT
+    assert db.outbox()[0]["semantic_completion_event_id"] is None

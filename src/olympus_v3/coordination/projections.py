@@ -30,11 +30,39 @@ class ProjectionReducer:
             value = {**current, **payload}
         elif kind == "outbox.poison":
             value = {"poison": payload}
+        elif kind in {
+            "budget.reserved",
+            "budget.committed",
+            "budget.spent",
+            "budget.released",
+            "budget.retry_admitted",
+            "budget.retry_task",
+            "budget.replan_task",
+        }:
+            value = {**(current or {}), **payload}
+        elif kind in {
+            "run.created",
+            "task.created",
+            "task.admitted",
+            "task.ready",
+            "task.dispatched",
+            "attempt.started",
+            "session.bound",
+        }:
+            from .workflow import reduce_workflow_projection
+
+            value = reduce_workflow_projection(current, kind, payload)
+
         else:
             raise ValueError("unknown event kind")
         return self._json(value)
 
     def rebuild(self, events: list[dict[str, Any]]) -> dict[str, Any]:
+        from .budget import validate_budget_history
+        from .workflow import validate_workflow_history
+
+        runs, _, _, _ = validate_workflow_history(events)
+        validate_budget_history(events, runs=runs)
         result: dict[str, Any] = {}
         last: dict[str, int] = {}
         for event in events:

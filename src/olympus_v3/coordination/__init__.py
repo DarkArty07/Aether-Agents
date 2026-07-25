@@ -110,7 +110,7 @@ from .olympus_adapter import (
 )
 from .pilot import PilotCoordinator
 from .pilot_compiler import compile_snake_manifest
-from .pilot_evidence import encode_result, parse_and_verify_result
+from .pilot_evidence import encode_result, normalize_result_envelope, parse_and_verify_result
 from .pilot_model import PilotError, PilotManifest, PilotTask, TaskStatus
 from .pilot_store import PilotStore
 from .presence import PresenceEvent, PresenceProjection, PresenceState, PresenceTracker
@@ -293,6 +293,7 @@ __all__ = [
     "PilotTask",
     "TaskStatus",
     "encode_result",
+    "normalize_result_envelope",
     "parse_and_verify_result",
     "compile_snake_manifest",
     "PresenceEvent",

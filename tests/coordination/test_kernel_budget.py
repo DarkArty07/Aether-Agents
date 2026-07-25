@@ -24,6 +24,7 @@ from olympus_v3.coordination import (
     WriterContext,
     amend_contract,
 )
+from olympus_v3.coordination.budget import OBLIGATIONS
 
 PROJECT = "project-a"
 OWNER = Principal(PROJECT, "hermes", "owner")
@@ -90,10 +91,12 @@ def test_correction_derives_obligations_and_rejects_insufficient_total_budget(tm
     budget, runtime = budget_api()
     small_ledger, small, _, _ = open_runtime(tmp_path / "small.sqlite", model_budget=3)
     small.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    small.create_task("run-a", task_id="task-a")
     with pytest.raises(budget.InsufficientObligations):
         small.reserve_correction("run-a", task_id="task-a", amount=20, command_id="correction-1")
     ledger, service, _, _ = open_runtime(tmp_path / "correction.sqlite")
     service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    service.create_task("run-a", task_id="task-a")
     reservation = service.reserve_correction("run-a", task_id="task-a", amount=20, command_id="correction-2")
     assert reservation.obligations == ("verification", "re_review", "recovery", "cleanup")
 
@@ -102,6 +105,7 @@ def test_retry_and_replan_require_fresh_admission(tmp_path: Path):
     budget, runtime = budget_api()
     ledger, service, _, _ = open_runtime(tmp_path / "admission.sqlite")
     service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    service.create_task("run-a", task_id="task-a")
     admission = service.admit_retry("run-a", task_id="task-a", amount=10, command_id="admit-1")
     service.commit_budget("run-a", reservation_id=admission.reservation_id, amount=4, command_id="commit-1")
     service.spend_budget("run-a", reservation_id=admission.reservation_id, amount=4, command_id="spend-1")
@@ -181,6 +185,31 @@ def test_command_boundary_does_not_accept_caller_projection_or_semantic_outcome(
         assert not {"state", "outcome", "balance", "authority"} & set(parameters)
 
 
+def test_generic_budget_append_requires_current_authority_metadata(tmp_path: Path):
+    ledger, service, context, auth = open_runtime(tmp_path / "raw-budget-authority.sqlite")
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    draft = ledger.draft(
+        "budget:run-a",
+        "budget.reserved",
+        {
+            "run_id": "run-a",
+            "contract_id": "contract-a",
+            "reservation_id": "reservation:run-a:raw",
+            "amount": 10,
+            "obligations": (),
+            "command_id": "raw-reserve",
+        },
+        writer=context,
+        expected_version=0,
+    )
+    signed = auth.sign(draft, context)
+    assert ledger.append(signed, context, message_id="raw-budget-authority").status in (
+        Result.INVALID_INPUT,
+        Result.STALE_AUTHORITY,
+    )
+    assert ledger.conn.execute("SELECT COUNT(*) FROM events WHERE kind='budget.reserved'").fetchone()[0] == 0
+
+
 def test_concurrent_independent_services_allow_only_one_reservation(tmp_path: Path):
     _, runtime = budget_api()
     path = tmp_path / "concurrent.sqlite"
@@ -202,3 +231,148 @@ def test_concurrent_independent_services_allow_only_one_reservation(tmp_path: Pa
     assert sum(result is not None for result in results) == 1
     ledger, service, _, _ = open_runtime(path, writer_id="reader", key_id="key-reader", provision=False)
     assert service.budget("run-a").reserved == 60
+
+
+def _raw_budget_append(ledger, context, auth, *, payload, aggregate="budget:run-a", kind="budget.reserved", version=0):
+    draft = ledger.draft(
+        aggregate,
+        kind,
+        payload,
+        writer=context,
+        expected_version=version,
+        contract_generation=0,
+        revocation_epoch=0,
+    )
+    return ledger.append(auth.sign(draft, context), context, message_id="raw-" + str(payload.get("command_id")))
+
+
+@pytest.mark.parametrize("amount", [1.5, True, 0, -1])
+def test_generic_budget_append_rejects_non_positive_integer_amount_without_mutation(tmp_path: Path, amount):
+    ledger, service, context, auth = open_runtime(tmp_path / ("amount-" + str(amount) + ".sqlite"))
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    before = len(ledger.events())
+    result = _raw_budget_append(
+        ledger,
+        context,
+        auth,
+        payload={
+            "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "reservation:run-a:raw",
+            "amount": amount, "obligations": [], "command_id": "raw-amount",
+        },
+    )
+    assert result.status is Result.INVALID_INPUT
+    assert len(ledger.events()) == before
+    assert ledger.projection("run:run-a")["run_id"] == "run-a"
+
+
+@pytest.mark.parametrize(
+    "payload,aggregate",
+    [
+        ({"contract_id": "contract-a", "reservation_id": "reservation:run-a:x", "amount": 1, "obligations": [], "command_id": "x"}, "budget:run-a"),
+        ({"run_id": "ghost", "contract_id": "contract-a", "reservation_id": "reservation:ghost:x", "amount": 1, "obligations": [], "command_id": "x"}, "budget:ghost"),
+        ({"run_id": "run-a", "contract_id": "contract-b", "reservation_id": "reservation:run-a:x", "amount": 1, "obligations": [], "command_id": "x"}, "budget:run-a"),
+        ({"run_id": "run-a", "contract_id": "contract-a", "reservation_id": "reservation:run-a:x", "amount": 1, "obligations": [], "command_id": "x"}, "run:run-a"),
+        ({"run_id": "run-a", "contract_id": "contract-a", "reservation_id": None, "amount": 1, "obligations": [], "command_id": "x"}, "budget:run-a"),
+        ({"run_id": "run-a", "contract_id": "contract-a", "reservation_id": "", "amount": 1, "obligations": [], "command_id": "x"}, "budget:run-a"),
+    ],
+)
+def test_generic_budget_append_rejects_orphan_scope_and_missing_identity_without_mutation(tmp_path: Path, payload, aggregate):
+    ledger, service, context, auth = open_runtime(tmp_path / ("scope-" + str(payload.get("run_id")) + ".sqlite"))
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    before = (len(ledger.events()), ledger.projection("run:run-a"), len(ledger.outbox()), ledger.contract())
+    result = _raw_budget_append(ledger, context, auth, payload=payload, aggregate=aggregate)
+    assert result.status in (Result.INVALID_INPUT, Result.STALE_AUTHORITY)
+    assert (len(ledger.events()), ledger.projection("run:run-a"), len(ledger.outbox()), ledger.contract()) == before
+
+
+def test_generic_budget_append_positive_control_and_cross_run_reference_fail_closed(tmp_path: Path):
+    ledger, service, context, auth = open_runtime(tmp_path / "identity.sqlite")
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    accepted = _raw_budget_append(
+        ledger, context, auth,
+        payload={
+            "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "reservation:run-a:raw",
+            "amount": 1, "obligations": [], "command_id": "raw-positive",
+        },
+    )
+    assert accepted.status is Result.APPLIED
+    before = len(ledger.events())
+    rejected = _raw_budget_append(
+        ledger, context, auth,
+        kind="budget.committed", version=1,
+        payload={
+            "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "reservation:run-b:foreign",
+            "amount": 1, "command_id": "raw-cross-run",
+        },
+    )
+    assert rejected.status is Result.INVALID_INPUT
+    assert len(ledger.events()) == before
+
+
+@pytest.mark.parametrize("receive", [False, True])
+@pytest.mark.parametrize(
+    "kind,payload",
+    [
+        (
+            "budget.reserved",
+            {
+                "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "correction:run-a:ghost:c1",
+                "task_id": "ghost", "amount": 1, "obligations": ["verification", "re_review", "recovery", "cleanup"],
+                "command_id": "c1",
+            },
+        ),
+        (
+            "budget.retry_admitted",
+            {
+                "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "retry:run-a:ghost:a1",
+                "admission_id": "admission:run-a:ghost:a1", "task_id": "ghost", "amount": 1,
+                "command_id": "a1",
+            },
+        ),
+    ],
+)
+def test_direct_append_and_receive_reject_ghost_task_without_mutation(tmp_path: Path, receive, kind, payload):
+    ledger, service, context, auth = open_runtime(tmp_path / f"ghost-{receive}-{kind}.sqlite")
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    before = (
+        len(ledger.events()),
+        ledger.projection("run:run-a"),
+        len(ledger.outbox()),
+        ledger.conn.execute("SELECT COUNT(*) FROM inbox").fetchone()[0],
+    )
+    draft = ledger.draft(
+        "budget:run-a", kind, payload, writer=context, expected_version=0, contract_generation=0, revocation_epoch=0
+    )
+    signed = auth.sign(draft, context)
+    result = ledger.receive("ghost-receive" if receive else "ghost-append", signed, context) if receive else ledger.append(
+        signed, context, message_id="ghost-append"
+    )
+    assert result.status is Result.INVALID_INPUT
+    assert (
+        len(ledger.events()),
+        ledger.projection("run:run-a"),
+        len(ledger.outbox()),
+        ledger.conn.execute("SELECT COUNT(*) FROM inbox").fetchone()[0],
+    ) == before
+
+
+def test_direct_append_accepts_only_same_run_task_control_and_rejects_foreign_run(tmp_path: Path):
+    ledger, service, context, auth = open_runtime(tmp_path / "task-binding.sqlite")
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    service.create_run(run_id="run-b", contract_id="contract-a", mode="kernel")
+    service.create_task("run-b", task_id="task-a")
+
+    foreign = {
+        "run_id": "run-a", "contract_id": "contract-a", "reservation_id": "correction:run-a:task-a:foreign",
+        "task_id": "task-a", "amount": 1, "obligations": list(OBLIGATIONS),
+        "command_id": "foreign",
+    }
+    before = len(ledger.events())
+    draft = ledger.draft("budget:run-a", "budget.reserved", foreign, writer=context, contract_generation=0, revocation_epoch=0)
+    assert ledger.append(auth.sign(draft, context), context, message_id="foreign").status is Result.INVALID_INPUT
+    assert len(ledger.events()) == before
+
+    service.create_task("run-a", task_id="task-a")
+    valid = {**foreign, "reservation_id": "correction:run-a:task-a:valid", "command_id": "valid"}
+    draft = ledger.draft("budget:run-a", "budget.reserved", valid, writer=context, contract_generation=0, revocation_epoch=0)
+    assert ledger.append(auth.sign(draft, context), context, message_id="valid").status is Result.APPLIED
