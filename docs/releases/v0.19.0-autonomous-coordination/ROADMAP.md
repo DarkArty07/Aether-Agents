@@ -170,7 +170,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Exit evidence required:** conflict, replay, duplicate, authenticated tamper, stale-fence, external-anchor rollback, verified restore, projection-equivalence, bounded poison, and writer-death/contention tests.
 
-**Athena gate:** exhausted without a final verdict after `qa_attempt=3`. The explicit HITL exception closed R3 after a fresh deterministic matrix, 20/20 contention stress, and protected-path/staging audit. It does not convert the absent verdict into PASS, permit a fourth Athena execution, or authorize R4/runtime activation.
+**Historical Athena gate:** exhausted without a final verdict after `qa_attempt=3`. The explicit HITL exception closed R3 after a fresh deterministic matrix, 20/20 contention stress, and protected-path/staging audit. It does not convert the absent verdict into PASS, permit a fourth Athena execution, or authorize R4/runtime activation.
 
 ### R4 — Identity, capabilities, channels, presence, and context
 
@@ -182,7 +182,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Verified result:** the isolated implementation passes 304 coordination tests and 468 full-suite tests. Ruff, compileall, `git diff --check`, AST/secret scanning, protected-path isolation, key-purpose separation, issuer/audience/workload binding, atomic in-process replay consumption, channel/ACL exact binding, advisory-only presence, and bounded provenance/taint-preserving context checks pass. No runtime adapter or dispatcher call site was added.
 
-**Athena gate:** `qa_attempt=1` found a blocking concurrent replay-cache race and an unbounded holder-proof transcript. Both equivalence classes were corrected with deterministic RED/GREEN tests. `qa_attempt=2` reproduced the fixes, reviewed identity root, ACLs, injection, secret handling, and the complete R4 boundary, then returned **PASS / BLOCKING: no** with no Critical/High finding. Production key custody, shared durable replay, authenticated presence-source admission, and trusted live `AuthoritySnapshot` derivation remain mandatory before runtime activation.
+**Historical Athena gate:** `qa_attempt=1` found a blocking concurrent replay-cache race and an unbounded holder-proof transcript. Both equivalence classes were corrected with deterministic RED/GREEN tests. `qa_attempt=2` reproduced the fixes, reviewed identity root, ACLs, injection, secret handling, and the complete R4 boundary, then returned **PASS / BLOCKING: no** with no Critical/High finding. Production key custody, shared durable replay, authenticated presence-source admission, and trusted live `AuthoritySnapshot` derivation remain mandatory before runtime activation.
 
 ### R5 — Harmonia admission and native dispatch
 
@@ -194,7 +194,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Exit evidence:** admitted work maps to existing Olympus execution; duplicates do not duplicate semantic transitions; ambiguity escalates; old `talk_to` remains default.
 
-**Athena gate:** lifecycle, quota, replay, fan-out, and authority review.
+**Historical Athena gate:** lifecycle, quota, replay, fan-out, and authority review.
 
 **Verified result:** deterministic admission, Harmonia planning, native protocol and ledger-backed dispatch, and the Olympus Runtime Adapter were committed in `4c910cf`, `03ef6e7`, `bd8d37c`, `718728f`, and `526d85a`. The final matrix passes 350 coordination tests and 541 full-suite tests; Ruff, compileall, diff checks, public-API ownership scanning, gateway stability, default-off isolation, cancellation rollback, canonical prompt binding, malformed-plan rejection, concurrent replay reservation, and canonical project-root separation pass. Athena attempt 1 found an admission/projection/prompt binding bypass; attempt 2 verified that closure and found a project-root replay collision; attempt 3 verified both complete equivalence classes and returned **PASS / BLOCKING: no**. Durable multi-process idempotency and issue #26 key custody remain mandatory before runtime activation.
 
@@ -206,7 +206,7 @@ Approval starts autonomous implementation under the exact scope in `IMPLEMENTATI
 
 **Exit evidence:** unknown effects fail safe; self-review is rejected; cleanup order is deterministic; final states are only `completed`, `partially_completed`, `failed`, and `cancelled`.
 
-**Athena gate:** no unresolved critical/high finding.
+**Historical Athena gate:** no unresolved critical/high finding.
 
 **Verified result:** the isolated implementation covers provenance-controlled E0–E4 lifecycle transitions, exact idempotency identity, authenticated single-use E4 approvals, bound receipts, independent review, typed findings/evidence, signed waivers, authenticated gate evaluations, two-stage semantic closure, and deterministic cleanup. The final matrix passes 64 focused R6 tests, 414 coordination tests, and 605 full-suite tests; Ruff, formatting, compileall, diff checks, adversarial tamper/replay/scope probes, and protected-path scope audit pass. Athena attempts 1 and 2 found four caller-assertion bypasses across receipts, gate evaluation, and closure; the complete equivalence classes were corrected. Attempt 3 reverified every prior finding and returned **PASS / BLOCKING: no** with high confidence.
 
@@ -256,6 +256,8 @@ No gateway restart, live feature activation, production database migration, or r
 **Architectural result:** R8 validated durable pilot recovery, bounded attempts, duplicate-dispatch prevention, external review, and fail-closed blocking. It did not validate the R2–R7 kernel end to end because it bypassed the general ledger/admission/lease/transport/review/closure authority path.
 
 **Continuation:** preserve R8 and its database as legacy read-only evidence. New work follows [KERNEL_CONVERGENCE_ROADMAP.md](KERNEL_CONVERGENCE_ROADMAP.md). No correction, closure, merge, tag, or publication follows from this milestone.
+
+**Current validation policy (2026-07-25):** Athena is suspended globally until explicit user reactivation. Historical Athena evidence above remains factual, but R9–R14 do not require new Athena executions. The active convergence roadmap must prove v0.19.0 through deterministic RED/GREEN tests, authority and fault-injection matrices, direct Hermes verification, and one separately authorized clean kernel-backed pilot. Missing evidence or a reproducible blocker still fails closed; skipping Athena is not a waiver of correctness.
 
 **Excluded:** E2–E4 autonomous rollout, Cotal connector, NATS/JetStream deployment, broad production rollout, or lifecycle replacement.
 

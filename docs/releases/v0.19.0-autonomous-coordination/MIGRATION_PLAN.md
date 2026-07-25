@@ -2,6 +2,8 @@
 
 **Status:** **AUTHORIZED FOR PHASE 0 THROUGH DEFAULT-OFF R7 IMPLEMENTATION.** The user's 2026-07-18 approval permits isolated proofs, source, tests, docs, Daimon execution, and atomic commits. It does not permit live gateway restart/activation, credential repair, Cotal/NATS/JetStream installation, real effects, merge, tag, or release.
 
+**Continuation note (2026-07-25):** stages 0–4 below are historical implementation governance. R9–R14 now follow `KERNEL_CONVERGENCE_ROADMAP.md`. Athena is suspended globally until explicit user reactivation; future convergence gates use deterministic adversarial evidence and direct Hermes acceptance.
+
 **Dependencies:** [DESIGN.md](DESIGN.md) is normative; [BASELINE.md](BASELINE.md) defines non-regression constraints; [FEASIBILITY.md](FEASIBILITY.md) defines stop conditions.
 
 ## Frozen approval boundaries
@@ -22,7 +24,7 @@
 | 0. Extension-seam verification | Read-only source/schema inspection and isolated design validation | Explicit Phase 0 authorization | Documented actual seam map and GO/NO-GO against feasibility conditions | No production changes; discard isolated evidence artifacts only if separately authorized |
 | 1. Pure domain model | Additive contract/event/state code behind disabled feature flag | Phase 0 GO + explicit coding authorization | TDD proof of immutable generations, transitions, projection rebuild | Disable flag; retain ledger records read-only |
 | 2. Integrity/identity substrate | Store, hash/checkpoint, lease/fence, PoP capability validator | Stage 1 security review | TDD tamper/revocation/stale-fence/restore proof | Disable issuance; preserve append-only evidence |
-| 3. Admission and native dispatch | Admission engine, inbox/outbox, Olympus Runtime Adapter in shadow mode | Athena gate + lifecycle compatibility proof | Shadow records match old execution without semantic activation | Disable adapter/shadow writer; old `talk_to` flow remains |
+| 3. Admission and native dispatch | Admission engine, inbox/outbox, Olympus Runtime Adapter in shadow mode | Historical security gate + lifecycle compatibility proof | Shadow records match old execution without semantic activation | Disable adapter/shadow writer; old `talk_to` flow remains |
 | 4. Effects/reviews/closure | Tool-bound capability checks, reconciler, two-stage completion | E2/E3 test proof; no E4 live use | Deterministic reconciliation and independent-review tests | Disable new effect path; unresolved work enters safe reconciliation |
 | 5. Limited opt-in pilot | Explicitly selected E0/E1 contract only | User-approved pilot contract and budget | Observed recovery/quota/closure evidence; no invariant breach | Stop admissions, revoke caps, reconcile, return to old execution |
 | 6. Scale assessment | Consider direct JetStream transport seam only | Separate architecture/operations approval | Cost/security/runbook evidence | Retain native transport |
@@ -40,7 +42,7 @@ The user authorized these proofs under the exact isolation, budget, cleanup, and
 ## Gate discipline
 
 - Every stage has a written entry decision, exact allowed paths, and explicit prohibited effects.
-- Athena reviews security design/code before advancing from stages 2, 3, 4, and before any pilot.
+- Historical stage reviews remain evidence only. New milestones require deterministic adversarial matrices, direct Hermes verification, and explicit user authorization for a pilot; Athena must not be dispatched while suspended.
 - Hermes decides contract/amendment/escalation; the user decides required architecture/product/release/E4/scope/waiver/external delivery acceptance.
 - Failure of integrity, identity, independent review, secret handling, critical evidence, or unknown E4 is non-waivable for autonomous continuation.
 - Rollback means safely disabling new authority, revoking capabilities, reconciling effects/sessions, preserving ledger evidence, and restoring baseline paths—not deleting history.

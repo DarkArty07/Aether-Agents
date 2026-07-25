@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Implementation Plan
 
-> **For Hermes:** execute this plan task by task only after the user says `aprobado`. Use Aether Daimons through Olympus, strict TDD, atomic commits, budget checks at every stage, and independent security gates where specified.
+> **Historical scope through R7:** this plan records the completed default-off implementation path. Current R9–R14 continuation is governed by `KERNEL_CONVERGENCE_ROADMAP.md` and `KERNEL_CONVERGENCE_IMPLEMENTATION_PLAN.md`. Athena is suspended globally until explicit user reactivation; no clause below authorizes a new Athena execution.
 
 **Status:** **APPROVED 2026-07-18 — R7 COMPLETE / DEFAULT-OFF (2026-07-22).** Tasks 8.1–8.4, benchmark, documentation, and bounded final closure are complete. Live activation and release remain on hold pending the user's decision.
 
@@ -110,7 +110,7 @@ Budget rules:
    - before Phase 0;
    - before and after every roadmap milestone;
    - before any bulk Hefesto delegation;
-   - before every Athena review;
+   - before any explicitly user-authorized external reviewer execution; Athena is currently suspended;
    - before final documentation/continuity closure.
 2. Treat only healthy rows with numeric `Disponible` as usable capacity.
 3. Use `openai-codex-oauth-4` as the logical reserve account.
@@ -273,7 +273,7 @@ Test one logical lease, monotonic epoch, stale writer rejection, expiry, takeove
 
 Test durable intent before dispatch, duplicate receive dedupe, retry-safe delivery, poison-message termination, and no transport acknowledgement becoming semantic completion.
 
-**Athena gate:** integrity, replay, stale authority, restore, and split-brain review.
+**Historical Athena gate:** integrity, replay, stale authority, restore, and split-brain review. This gate belongs to the completed R3 history and is not a future dispatch instruction.
 
 **Atomic commit:** `feat(coordination): add integrity ledger and fenced recovery`.
 
@@ -307,7 +307,7 @@ Implement `idle`, `waiting`, `working`, `offline`; channel registry; active/read
 
 Preserve source, provenance, taint, authority separation, token/byte bounds, and safe omission summaries.
 
-**Athena gate:** identity root, revocation, ACL containment, prompt injection, and secret references.
+**Historical Athena gate:** identity root, revocation, ACL containment, prompt injection, and secret references. This gate belongs to the completed R4 history and is not a future dispatch instruction.
 
 **Atomic commit:** `feat(coordination): add scoped identity channels and context`.
 
@@ -341,7 +341,7 @@ Expose a protocol-only `TransportAdapter`; implement native ledger-backed dispat
 
 Modify `server.py`/`acp_manager.py` only at the Phase 0-proven seam. Adapter maps admitted work to existing Olympus operations and observes technical results; it never owns processes/sessions.
 
-**Athena gate:** lifecycle non-regression, fan-out, quota, replay, and Harmonia authority.
+**Historical Athena gate:** lifecycle non-regression, fan-out, quota, replay, and Harmonia authority. This gate belongs to the completed R5 history and is not a future dispatch instruction.
 
 **Atomic commit:** `feat(coordination): add Harmonia admission and native dispatch`.
 
@@ -367,7 +367,7 @@ Owner proposes completion with evidence; Harmonia validates mechanically; Hermes
 
 Test cleanup order: stop admission → revoke capabilities → reconcile effects/sessions → release lease → publish continuity → idle shutdown.
 
-**Athena gate:** E4, waivers, review independence, unknown effects, secrets, and recovery order.
+**Historical Athena gate:** E4, waivers, review independence, unknown effects, secrets, and recovery order. This gate belongs to the completed R6 history and is not a future dispatch instruction.
 
 **Verified 2026-07-21:** 64 focused R6 tests, 414 coordination tests, and 605 full-suite tests pass. Ruff, formatting, compileall, diff checks, adversarial construction/tamper/replay/scope probes, and exact staging-scope audit pass. Athena `qa_attempt=3/3` returned **PASS** after revalidating all four findings from the first two attempts. R6 remains isolated/default-off; durable shared replay, production key custody, ledger-derived facts, and runtime activation remain R7 prerequisites.
 
@@ -447,7 +447,7 @@ Stop immediately and report when any occurs:
 - Phase 0 cannot prove a sole lifecycle owner or hard effect boundary;
 - storage cannot provide atomic transitions/fencing/rebuild;
 - a v0.18.2 invariant requires an unapproved breaking change;
-- three Athena executions for one task fail;
+- a required deterministic/security blocker remains reproducible after the bounded correction budget;
 - critical/high security finding remains unresolved;
 - implementation requires Cotal/NATS/JetStream contrary to the approved architecture;
 - unknown E2–E4 effect or credential mutation would be necessary.

@@ -182,7 +182,7 @@ The v0.19.0 release baseline includes the approved Hermes operational-contract o
 - session identity is scoped by `session_id + PROJECT_ROOT + AETHER_HOME`, including concurrent instances of one Daimon profile;
 - logical session closure is distinguished from persistent ACP profile processes;
 - validation is proportional to risk rather than routing every change through Athena;
-- each stable review task permits at most three total Athena executions, including the initial audit, before mandatory escalation;
+- Athena is not a universal gate and is currently suspended globally; future risk-based routing is tracked in `TECHNICAL_DEBT.md` and requires explicit user reactivation before any Athena execution;
 - conversation turn count alone never forces delegation while scope remains precise and progress verifiable.
 
 These prompt-level rules are part of v0.19.0 governance and release scope. They do not grant Daimons lateral communication, contract admission, capability enforcement, ledger authority, or any other runtime coordination feature before its separately authorized implementation gate.
@@ -520,7 +520,7 @@ Moving routine coordination out of Hermes without assigning it explicitly would 
 
 - Hefesto implements;
 - Etalides researches;
-- Athena reviews security and quality risk;
+- Athena reviews security and quality risk only when enabled by user/project policy; it is currently suspended;
 - Ictinus advises on backend architecture;
 - Daedalus advises and prototypes design;
 - Ariadna curates continuity.

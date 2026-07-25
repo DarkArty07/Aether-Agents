@@ -1,6 +1,6 @@
 # Kernel-Backed Snake Convergence Implementation Plan
 
-> **For Hermes:** execute only after Christopher explicitly authorizes implementation. Follow TDD, milestone-implementation-governance, scoped staging, and independent security review where authority/provenance changes.
+> **For Hermes:** execute only after Christopher explicitly authorizes implementation. Follow TDD, milestone-implementation-governance, scoped staging, deterministic adversarial verification, and direct Hermes acceptance. Do not dispatch Athena until the user explicitly reactivates it.
 
 **Goal:** compose the existing R2–R7 primitives into one authoritative, reconstructable, default-off runtime for a fixed Snake workflow without PilotStore writes.
 
@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.11+, dataclasses/enums, SQLite, asyncio, existing Olympus ACP APIs, pytest, Ruff. No new runtime dependency.
 
-**Current authorization:** planning only. Every task below remains blocked until implementation approval.
+**Current authorization:** R9/R10 are complete. R11 is the next implementation milestone, but this document update does not authorize code execution. When explicitly resumed, begin only with R11a RED dispatch/outbox/fencing tests. R11b, later milestones, the real ACP smoke, and the Snake pilot retain separate gates.
 
 ---
 
@@ -165,7 +165,7 @@ RED tests:
 
 The verifier executes only allowlisted local commands in a supplied fixture root. It receives no shell string and no secrets.
 
-### Task 6 — Authoritative review
+### Task 6 — Generic review authority without Athena dispatch
 
 **Create:** `tests/coordination/test_kernel_review.py`
 
@@ -178,6 +178,8 @@ RED tests:
 5. `test_review_finding_and_gate_result_are_persisted_and_rebuildable`
 6. `test_caller_constructed_gate_evaluation_without_assignment_is_rejected`
 7. `test_review_attempt_budget_is_reserved_before_dispatch`
+
+These tests validate generic reviewer assignment, capability, independence, persistence, and rebuild using controlled identities/fakes. They must not assume that Athena is the reviewer and do not authorize an Athena session. While Athena remains suspended, executable milestone acceptance belongs to Hermes using deterministic evidence.
 
 ### Task 7 — Closure and cleanup
 
@@ -287,7 +289,7 @@ Run in order:
 8. source scan for forbidden PilotStore writes/private ACPManager access;
 9. staged-path and secret scan before any commit.
 
-Security-sensitive milestones for receipts, review, authority, and closure require producer→artifact→consumer adversarial review. Maximum three Athena executions per stable task if Athena is used.
+Security-sensitive milestones for receipts, review, authority, and closure require a producer→artifact→consumer adversarial matrix, deterministic negative tests, direct source inspection, and reproduction of every claimed fix. Athena is not part of the current gate and must not be dispatched until explicit user reactivation.
 
 ## 7. Pilot gate after implementation
 
@@ -301,6 +303,8 @@ Implementation approval does not authorize the pilot. A later clean Snake run re
 - no writes to historical PilotStore;
 - no manual repair/fallback;
 - process/listener preflight and cleanup verification;
+- direct Hermes acceptance of the deterministic and fault-injection evidence;
+- no Athena dependency while the global suspension remains active;
 - explicit Christopher authorization.
 
 ## 8. Stop point
