@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.11+, dataclasses/enums, SQLite, asyncio, existing Olympus ACP APIs, pytest, Ruff. No new runtime dependency.
 
-**Current authorization:** R9/R10 are complete. R11 is the next implementation milestone, but this document update does not authorize code execution. When explicitly resumed, begin only with R11a RED dispatch/outbox/fencing tests. R11b, later milestones, the real ACP smoke, and the Snake pilot retain separate gates.
+**Current authorization/status:** R9/R10 are complete. R11a is committed and R11b has an uncommitted implementation candidate whose focused suite passed 37 tests. R11 remains fail-closed pending format/lint, final subsystem and full regressions, compile/diff/scope checks, migration/fault/concurrency closure and staged-candidate inspection. Resume from `R11_SESSION_HANDOFF_2026-07-25.md`; do not begin R12, run live ACP, execute the Snake pilot, activate, merge, tag or publish from this checkpoint.
 
 ---
 
