@@ -89,11 +89,11 @@ def test_each_harmonia_action_reaches_one_service_branch(monkeypatch, action, tm
 
 
 def test_harmonia_handler_sanitizes_unexpected_exceptions(monkeypatch, tmp_path):
-    secret = "/private/runtime/key-material"
+    internal_detail = "sensitive-internal-detail"
     monkeypatch.setattr(
         server,
         "_harmonia_service",
-        FakeService(error=RuntimeError(secret)),
+        FakeService(error=RuntimeError(internal_detail)),
         raising=False,
     )
 
@@ -102,7 +102,7 @@ def test_harmonia_handler_sanitizes_unexpected_exceptions(monkeypatch, tmp_path)
     )
 
     assert result["error"]["code"] == "internal_failure"
-    assert secret not in json.dumps(result)
+    assert internal_detail not in json.dumps(result)
 
 
 def test_disabled_start_response_has_no_legacy_or_manager_effect(monkeypatch, tmp_path):
