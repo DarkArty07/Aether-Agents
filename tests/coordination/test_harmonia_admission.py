@@ -37,8 +37,8 @@ REQUEST_DIGEST = "sha256:" + "c" * 64
 
 
 def _contract(status: ContractState = ContractState.ACTIVE):
-    owner = Principal(PROJECT, "hermes", "hermes")
-    worker = Principal(PROJECT, "hermes", "hefesto")
+    owner = Principal(PROJECT, "server", "hermes")
+    worker = Principal(PROJECT, "server", "hefesto")
     return ExecutionContract(
         CONTRACT,
         PROJECT,

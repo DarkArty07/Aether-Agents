@@ -59,6 +59,7 @@ _TASK_KIND_STATE = {
     "attempt.started": TaskState.RUNNING,
 }
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
+_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SCHEMAS = {
     "run.created": {"run_id", "contract_id", "mode"},
     "task.created": {"run_id", "task_id", "prerequisites", "contract_id"},
@@ -105,6 +106,10 @@ _SCHEMAS = {
     "attempt.orphaned": {"run_id", "task_id", "attempt", "contract_id"},
     "attempt.superseded": {"run_id", "task_id", "attempt", "replacement_attempt", "contract_id"},
 }
+_RUN_CREATED_SCHEMAS = (
+    _SCHEMAS["run.created"],
+    _SCHEMAS["run.created"] | {"request_id", "request_digest"},
+)
 _R11_DISPATCH_KINDS = {
     "dispatch.unknown",
     "observation.accepted",
@@ -151,7 +156,9 @@ def validate_workflow_history(events):
         )
         if not isinstance(payload, dict) or (
             kind == "session.bound" and set(payload) not in session_schemas
-        ) or (kind != "session.bound" and set(payload) != _SCHEMAS[kind]):
+        ) or (
+            kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS
+        ) or (kind not in {"session.bound", "run.created"} and set(payload) != _SCHEMAS[kind]):
             raise _bad("invalid workflow payload schema")
         aggregate = event.get("aggregate")
         run_id, task_id = payload.get("run_id"), payload.get("task_id")
@@ -159,7 +166,21 @@ def validate_workflow_history(events):
         if not all(isinstance(value, str) and _ID.fullmatch(value) for value in (contract_id, run_id)):
             raise _bad("invalid workflow identifiers")
         if kind == "run.created":
-            if aggregate != "run:" + run_id or payload["mode"] != RuntimeMode.KERNEL.value or run_id in runs:
+            request_id = payload.get("request_id")
+            request_digest = payload.get("request_digest")
+            if (
+                aggregate != f"run:{run_id}"
+                or payload["mode"] != RuntimeMode.KERNEL.value
+                or run_id in runs
+                or (
+                    request_id is not None
+                    and (not isinstance(request_id, str) or not _ID.fullmatch(request_id))
+                )
+                or (
+                    request_digest is not None
+                    and (not isinstance(request_digest, str) or not _SHA256.fullmatch(request_digest))
+                )
+            ):
                 raise _bad("duplicate or invalid run creation")
             runs[run_id] = contract_id
             continue

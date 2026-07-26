@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .budget import (
@@ -32,6 +33,20 @@ from .workflow import (
     TaskRecord,
     transition_state,
 )
+
+
+class IdempotencyConflictError(ValueError):
+    pass
+
+
+class AdmissionLimitError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class RunRequestMetadata:
+    request_id: str
+    request_digest: str
 
 
 class KernelWriter:
@@ -211,6 +226,15 @@ class KernelRunService:
         self._sessions = {
             key: [SessionBinding(key[0], key[1], value) for value in values] for key, values in sessions.items()
         }
+        self._run_requests = {}
+        for event in events:
+            if event.get("kind") != "run.created":
+                continue
+            payload = json.loads(event["payload"])
+            if "request_id" in payload:
+                self._run_requests[payload["run_id"]] = RunRequestMetadata(
+                    payload["request_id"], payload["request_digest"]
+                )
         self._budget_states = {}
         self._reservations = {}
         self._admissions = {}
@@ -287,6 +311,10 @@ class KernelRunService:
     def run(self, run_id):
         return self._state()._runs[run_id]
 
+    def run_request(self, run_id):
+        self.run(run_id)
+        return self._run_requests.get(run_id)
+
     def task(self, run_id, task_id):
         return self._state()._tasks[(run_id, task_id)]
 
@@ -314,6 +342,46 @@ class KernelRunService:
             return existing
         payload = {"run_id": run_id, "contract_id": contract_id, "mode": mode}
         self._append("run:" + run_id, "run.created", payload, 0, contract_id=contract_id)
+        return self.run(run_id)
+
+    def ensure_run(self, *, run_id, contract_id, mode, request_id, request_digest):
+        """Idempotently create the single v0.19.1 run using aggregate CAS."""
+        if mode != RuntimeMode.KERNEL.value:
+            raise RuntimeModeError("kernel runs require kernel mode")
+
+        def resolve_existing():
+            self._state()
+            if run_id not in self._runs:
+                if self._runs:
+                    raise AdmissionLimitError("admission limit")
+                return None
+            record = self._runs[run_id]
+            metadata = self._run_requests.get(run_id)
+            if (
+                record.contract_id == contract_id
+                and record.mode == mode
+                and metadata == RunRequestMetadata(request_id, request_digest)
+            ):
+                return record
+            raise IdempotencyConflictError("idempotency conflict")
+
+        existing = resolve_existing()
+        if existing is not None:
+            return existing
+        payload = {
+            "run_id": run_id,
+            "contract_id": contract_id,
+            "mode": mode,
+            "request_id": request_id,
+            "request_digest": request_digest,
+        }
+        try:
+            self._append("run:" + run_id, "run.created", payload, 0, contract_id=contract_id)
+        except ValueError:
+            raced = resolve_existing()
+            if raced is not None:
+                return raced
+            raise
         return self.run(run_id)
 
     def set_runtime_mode(self, run_id, mode):
