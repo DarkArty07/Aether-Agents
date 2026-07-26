@@ -276,14 +276,14 @@ def test_curation_public_path_and_logical_teardown_are_available_when_disabled(i
     assert any(call[0] == "close" and call[2] is None for call in manager.calls)
 
 
-def test_startup_does_not_import_or_call_shadow_runtime(monkeypatch, tmp_path):
+def test_startup_composes_no_project_context_or_pilot_runtime(monkeypatch, tmp_path):
     imported = []
     original_import = builtins.__import__
 
     def guarded_import(name, *args, **kwargs):
-        if "olympus_v3.coordination" in name:
+        if "coordination.pilot" in name or "pilot_store" in name:
             imported.append(name)
-            raise AssertionError("startup must not import coordination runtime")
+            raise AssertionError("startup must not import Pilot runtime")
         return original_import(name, *args, **kwargs)
 
     class DB:
@@ -293,9 +293,24 @@ def test_startup_does_not_import_or_call_shadow_runtime(monkeypatch, tmp_path):
         async def connect(self):
             pass
 
+        async def close(self):
+            pass
+
     class Manager:
         def __init__(self, **kwargs):
-            pass
+            self.calls = []
+
+        async def spawn_agent(self, **kwargs):
+            self.calls.append(("spawn", kwargs))
+
+        async def send_message(self, *args, **kwargs):
+            self.calls.append(("send", args, kwargs))
+
+        async def poll(self, *args, **kwargs):
+            self.calls.append(("poll", args, kwargs))
+
+        async def close(self, *args, **kwargs):
+            self.calls.append(("close", args, kwargs))
 
     monkeypatch.setattr(server, "OlympusDB", DB)
     monkeypatch.setattr(server, "ACPManager", Manager)
@@ -310,3 +325,6 @@ def test_startup_does_not_import_or_call_shadow_runtime(monkeypatch, tmp_path):
     asyncio.run(server.init_server())
 
     assert imported == []
+    assert server._harmonia_registry.context_count == 0
+    assert server._manager.calls == []
+    asyncio.run(server.shutdown_server())

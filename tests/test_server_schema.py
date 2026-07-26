@@ -6,7 +6,6 @@ import pytest
 
 from olympus_v3 import server
 
-
 TALK_TO_ACTIONS = {"open", "message", "poll", "close", "cancel", "delegate", "steer"}
 TALK_TO_PROPERTIES = {
     "agent",
