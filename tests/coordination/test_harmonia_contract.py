@@ -12,8 +12,8 @@ from olympus_v3.coordination.harmonia_contract import (
     HarmoniaStatusRequest,
     HarmoniaStopRequest,
     InvalidHarmoniaRequest,
-    public_error,
     parse_harmonia_request,
+    public_error,
 )
 
 
@@ -183,8 +183,10 @@ def test_genesis_rejects_malformed_scopes_permissions_and_limits(tmp_path, field
     ],
 )
 def test_start_rejects_malformed_identity_revision_digest_and_root(tmp_path, overrides):
+    payload = _start(tmp_path)
+    payload.update(overrides)
     with pytest.raises(InvalidHarmoniaRequest, match="invalid request"):
-        parse_harmonia_request(_start(tmp_path, **overrides))
+        parse_harmonia_request(payload)
 
 
 @pytest.mark.parametrize("run_id", ["task-" + "a" * 32, "run-short", "run-" + "A" * 32, "run-" + "a" * 33])
@@ -278,6 +280,7 @@ def test_explicit_v0190_shadow_config_remains_parseable_but_does_not_allow_harmo
     "content",
     [
         "coordination:\n  enabled: false\n  mode: active\n",
+        "coordination:\n  enabled: false\n  mode: shadow\n  allowed_modes: [legacy, kernel-single-task]\n",
         "coordination:\n  enabled: false\n  allowed_modes: legacy\n",
         "coordination:\n  enabled: false\n  allowed_modes: [legacy, unknown]\n",
         "coordination:\n  enabled: false\n  allowed_modes: [legacy, legacy]\n",

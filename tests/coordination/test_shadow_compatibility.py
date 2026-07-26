@@ -141,7 +141,7 @@ def _text(result):
     return result[0].text
 
 
-@pytest.mark.parametrize("config_text", [None, "coordination:\n  enabled: false\n  mode: shadow\n"])
+@pytest.mark.parametrize("config_text", [None, "coordination:\n  enabled: false\n  mode: legacy\n"])
 def test_absent_and_explicit_false_preserve_public_tool_registration(tmp_path, config_text):
     path = tmp_path / "olympus_v3.yaml"
     if config_text is not None:

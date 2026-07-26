@@ -15,14 +15,17 @@ def test_coordination_is_disabled_when_config_file_is_absent(tmp_path):
     config = load_config(tmp_path / "missing.yaml")
 
     assert config.coordination.enabled is False
-    assert config.coordination.mode == "shadow"
+    assert config.coordination.mode == "legacy"
+    assert config.coordination.allowed_modes == ("legacy",)
+    assert config.coordination.project_allowlist == ()
+    assert config.coordination.max_active_runs == 0
 
 
 def test_coordination_explicit_false_matches_absent_default(tmp_path):
-    config = load_config(write_config(tmp_path, "coordination:\n  enabled: false\n  mode: shadow\n"))
+    config = load_config(write_config(tmp_path, "coordination:\n  enabled: false\n  mode: legacy\n"))
 
     assert config.coordination.enabled is False
-    assert config.coordination.mode == "shadow"
+    assert config.coordination.mode == "legacy"
 
 
 def test_coordination_explicit_true_only_parses_configuration(tmp_path):
