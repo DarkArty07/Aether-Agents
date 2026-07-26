@@ -102,18 +102,20 @@ v0.19.0 is frozen at R11. The following are explicitly outside this version:
 
 Existing R12–R15 sections are retained as historical design input, not as unfinished requirements that keep v0.19.0 open.
 
-## 7. Later experimental increments
+## 7. Approved later experimental increments
 
-The work must continue, if separately authorized, in later versioned increments rather than expanding v0.19.0. The intended experiment sequence is:
+The user approved a six-patch experimental train for work after v0.19.0. Its canonical design is `../v0.19.x-kernel-migration/DESIGN.md`; approval does not authorize code or live execution.
 
-| Increment | Bounded experiment | Required stop gate |
+| Version | Bounded experiment | Required stop gate |
 |---|---|---|
-| Next increment | Trusted verifier receipts, artifact generations and review identity binding | Agent prose or stale evidence cannot pass a gate. |
-| Following increment | Executable closure and cleanup receipts | No `CLOSED` while a session, lease, child or listener remains unverifiably open. |
-| Following increment | Explicit default-off kernel composition root | One run selects one authority; no `PilotStore` dual-write; old `talk_to` remains rollback-only for the experiment. |
-| Following increment | Kernel-backed bounded pilot | After one approved contract, Hermes performs zero routine relay/next-agent/correction dispatches. Result is `VIABLE`, `VIABLE WITH BLOCKERS`, or `NOT VIABLE`. |
+| v0.19.1 | Explicit default-off kernel composition for one task | Real server composition reaches ACPManager with one immutable authority; no completion claim. |
+| v0.19.2 | Trusted verifier receipts and runtime-bound evidence | Agent prose, stale generation or unrelated ACP state cannot pass. |
+| v0.19.3 | Executable closure and manager-owned cleanup | No `CLOSED` while a session or managed resource remains unverifiably open. |
+| v0.19.4 | Fixed two-agent ledger handoff | Hermes performs zero routine relay or next-agent dispatch between Tasks A and B. |
+| v0.19.5 | Bounded active Harmonia selection | Harmonia selects inside an approved contract; kernel commits; Harmonia makes no ACP call. |
+| v0.19.6 | Fault-injected bounded pilot | Result is `VIABLE`, `VIABLE WITH BLOCKERS`, or `NOT VIABLE`. |
 
-Exact semantic version numbers and authorization are separate decisions. Every increment starts default-off, has a bounded fault matrix, and ends before the next increment is admitted.
+Every increment starts default-off, receives separate implementation and live-execution authorization, freezes before the next increment, and stops the train if an authority invariant fails.
 
 ## 8. Repository and packaging warning
 

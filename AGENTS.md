@@ -4,7 +4,11 @@ This file is the canonical project context. It is read automatically by hermes-a
 
 ## v0.19.0 experimental coordination closeout
 
-v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to -> ACPManager` path remains authoritative, so this version does not replace Hermes hub-and-spoke. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication are outside this closeout and require separate authorization. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
+v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to -> ACPManager` path remains authoritative, so this version does not replace Hermes hub-and-spoke. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication are outside this closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
+
+## v0.19.x incremental kernel migration
+
+The six-patch design in `docs/releases/v0.19.x-kernel-migration/DESIGN.md` is approved: v0.19.1 composition, v0.19.2 trusted evidence, v0.19.3 closure, v0.19.4 fixed no-relay handoff, v0.19.5 bounded Harmonia and v0.19.6 fault pilot/verdict. Only the design and detailed v0.19.1 planning are authorized. Implementation, live ACP, activation, merge, tag, release and deployment remain blocked behind separate gates.
 
 ## Git Conventions
 
@@ -31,6 +35,8 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 - **MAJOR** (`1.0.0`) — Breaking changes. API changes, configuration migration required.
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
+
+**Approved experimental exception:** the default-off v0.19.x kernel migration uses micro-patches v0.19.1–v0.19.6 so each authority hypothesis can freeze or stop independently. These patches do not imply production readiness and retain separate implementation, live-execution and release gates.
 
 ### v0.18.2 (2026-07-16)
 

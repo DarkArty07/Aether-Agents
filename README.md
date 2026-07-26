@@ -78,7 +78,9 @@ Olympus v3 Server
 
 ### v0.19 experimental coordination closeout
 
-v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. R12–R14 are outside v0.19.0 and require later, separately authorized versioned experiments. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
+v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
+
+The approved [v0.19.x incremental migration design](docs/releases/v0.19.x-kernel-migration/DESIGN.md) separates composition, trusted evidence, closure, no-relay handoff, bounded Harmonia and the fault pilot into v0.19.1–v0.19.6. The train is design-approved only: v0.19.1 implementation, live ACP, activation, merge, tag and release remain unauthorized.
 
 ---
 

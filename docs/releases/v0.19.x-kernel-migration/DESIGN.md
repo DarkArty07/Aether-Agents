@@ -1,6 +1,6 @@
 # v0.19.x Incremental Kernel Migration — Design
 
-**Status:** PROPOSED — PENDING APPROVAL
+**Status:** APPROVED DESIGN — IMPLEMENTATION AND LIVE EXECUTION NOT AUTHORIZED
 
 **Design scope:** versioned experimental increments after the frozen v0.19.0 baseline. This document does not authorize implementation, live ACP execution, configuration changes, gateway restart, merge, tag, deployment or publication.
 
@@ -107,7 +107,7 @@ PROPOSED
 
 Approval of this design does not skip any later implementation or live-execution gate.
 
-## 7. Proposed six-patch sequence
+## 7. Approved six-patch sequence
 
 The sequence deliberately separates trusted evidence from executable closure. Combining them would hide which authority failed.
 
@@ -340,21 +340,29 @@ Athena remains suspended. Validation uses:
 
 A test report, agent statement or specialist opinion never substitutes for observable runtime evidence.
 
-## 11. Current decision gate
+## 11. Current decision gate — v0.19.1 API seam
 
-The first decision is whether to approve the six-patch sequence:
+The six-patch sequence is approved. The next decision is how an explicitly authorized v0.19.1 request selects the kernel without changing ordinary `talk_to` behavior.
+
+### Option A — discriminator inside `talk_to` (recommended for v0.19.1)
 
 ```text
-v0.19.1 composition
-v0.19.2 trusted evidence
-v0.19.3 closure
-v0.19.4 fixed no-relay handoff
-v0.19.5 bounded Harmonia
-v0.19.6 fault pilot and verdict
+talk_to(action="delegate", coordination="kernel-single-task")
 ```
 
-**Recommendation:** approve six increments. Combining evidence and closure into one patch is shorter numerically but makes failures and rollback ambiguous.
+- smallest backward-compatible change;
+- reuses the established Hermes-to-Olympus surface;
+- ordinary calls remain legacy when the field is absent;
+- Olympus must enforce config, project allowlist, contract and immutable run authority;
+- eventual steady-state separation may still require a dedicated tool.
 
-Approval of this sequence authorizes only reconciliation of design documents and detailed planning for v0.19.1. It does not authorize code or live execution.
+### Option B — separate `kernel_run` MCP tool
 
-The next design decision after sequence approval is the experimental API seam: an explicit `coordination="kernel-single-task"` discriminator inside `talk_to` versus a separate `kernel_run` MCP tool.
+- strongest structural separation between legacy sessions and kernel runs;
+- clearer response and lifecycle contract;
+- expands the public MCP surface before the first operational hypothesis is proven;
+- requires more Hermes integration and compatibility work in v0.19.1.
+
+A server-global runtime switch is rejected because it could reroute unrelated projects and existing behavior.
+
+**Recommendation:** approve Option A for v0.19.1 only. Reassess a dedicated `kernel_run` tool after v0.19.4 proves a no-relay handoff. Choosing either option authorizes detailed planning only; code and live execution remain separate gates.
