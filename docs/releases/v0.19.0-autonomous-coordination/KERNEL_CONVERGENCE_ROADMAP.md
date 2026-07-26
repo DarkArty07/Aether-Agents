@@ -97,7 +97,7 @@ Implement with a fake executor only:
 
 ## R11 — Dispatch, fencing, and uncertain effects
 
-**Status:** IMPLEMENTED / NOT CLOSED — focused R11 suite passed 37 tests; formatting, subsystem/full regression, compile, migration/fault/concurrency review, staged-candidate audit and atomic commit remain pending. See `R11_SESSION_HANDOFF_2026-07-25.md`.
+**Status:** IMPLEMENTED / NOT CLOSED — focused suite (38), coordination regression (109), full suite (834), Ruff, compile and diff checks are GREEN. The remaining fail-closed blockers are legacy-outbox migration coverage, atomic `UNKNOWN` persistence/recovery and concurrent dispatcher worker identity/fencing. See `R11_SESSION_HANDOFF_2026-07-25.md`.
 
 - persist dispatch intent before ACP calls;
 - claim through `LedgerNativeTransport`;

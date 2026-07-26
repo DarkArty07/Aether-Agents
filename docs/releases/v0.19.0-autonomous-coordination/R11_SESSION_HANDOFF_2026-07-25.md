@@ -81,46 +81,46 @@ Adversarial tests were added for these equivalence classes, including effect-acc
 
 ## Executable evidence
 
-Fresh focused R11 result after the final behavioral changes:
+Initial focused evidence was 37 passed. In this final session update, Ruff formatting/import cleanup was applied and one unused local was removed without changing test assertions.
+
+Fresh final-session evidence:
 
 ```text
 pytest -q tests/coordination/test_kernel_dispatcher.py tests/coordination/test_kernel_fencing.py
-37 passed in 1.32s
+38 passed in 1.39s
+
+pytest -q [R11 + workflow + workflow-security + budget + transport + Olympus adapter matrix]
+109 passed in 1.85s
+
+pytest -q
+834 passed in 9.69s
+
+ruff check src/olympus_v3/coordination tests/coordination
+All checks passed!
+
+python -m compileall -q src/olympus_v3 tests/coordination
+git diff --check
+passed
 ```
 
-An earlier expanded coordination regression, before the final hardening edits, passed:
+A new RED/GREEN correction was added: an outbox row in future `RETRY_WAIT` no longer blocks dispatch of an independent ready task. The selector now skips non-due retry rows and continues scanning.
 
-```text
-105 passed in 1.71s
-```
-
-It included dispatcher, fencing, workflow, workflow security, budget, ledger transport fencing, native transport and Olympus adapter tests. Because later production/test changes were made, this earlier 105-pass result is historical evidence only and must be rerun.
-
-The latest Ruff invocation did not pass. It reported **48 editorial errors**, concentrated in the two R11 test files: unsorted imports, unused import/local, and compressed semicolon/one-line `with` statements. Production syntax checks performed by patch tooling passed, but that is not a substitute for the canonical lint/compile gate.
-
-`git diff --check` passed before the final small hardening edits. It must be rerun against the final candidate.
-
-No full repository suite was run after the final R11 changes. No completion commit exists.
+No completion commit exists. The R11 code remains unstaged and uncommitted because the remaining migration, atomicity and concurrent-worker equivalence classes have not been proven.
 
 ## Verification still required
 
-These are required before an R11 completion claim:
+These remain required before an R11 completion claim:
 
-1. format the two R11 tests without changing assertions or behavior;
-2. rerun the focused 37-test matrix;
-3. rerun the expanded coordination regression against the final files;
-4. run the complete repository suite;
-5. run focused Ruff and compile checks;
-6. rerun `git diff --check` and ownership/forbidden-dependency scans;
-7. inspect every R11 test body against the roadmap invariants;
-8. test the outbox schema migration from a legacy database, including row preservation, rollback/fault behavior and index recreation;
-9. verify the `UNKNOWN` event/outbox projection remains fail-closed at every crash boundary; determine whether an atomic ledger primitive or deterministic recovery repair is required;
-10. review transport-worker identity: the default stable owner is useful for restart recovery but may be insufficient for multiple concurrent dispatchers sharing one owner; prove the approved concurrency-1 boundary or introduce an explicit worker identity/fence contract;
-11. inspect retry timing so a future `RETRY_WAIT` neither redispatches early nor blocks an independent due message;
-12. verify exact public exports/signatures and no private ACP/SQLite access;
-13. verify no `PilotStore`, dual-write, subprocess or semantic-completion path entered the R11 candidate;
-14. stage only the declared R11 implementation paths and inspect the complete cached diff, including the untracked dispatcher; this handoff and the two convergence documents are already preserved by the documentation checkpoint;
-15. only after all gates pass, create one atomic R11 implementation commit and update continuity/roadmap to COMPLETE.
+1. inspect every R11 test body against the roadmap invariants;
+2. test the outbox schema migration from a legacy database, including row preservation, rollback/fault behavior and index recreation;
+3. make `UNKNOWN` state plus its `dispatch.unknown` durable fact atomic, or prove and implement deterministic recovery for every crash point between them;
+4. replace the fixed `kernel-dispatcher` transport owner with a worker-identity/fence contract, or prove and enforce the approved single-dispatcher boundary;
+5. rerun the focused, subsystem and full gates after corrections;
+6. rerun compile, diff, scope, ownership and secret checks after corrections;
+7. verify exact public exports/signatures and no private ACP/SQLite access;
+8. verify no `PilotStore`, dual-write, subprocess or semantic-completion path entered the R11 candidate;
+9. stage only the declared R11 implementation paths and inspect the complete cached diff, including the untracked dispatcher; this handoff and the two convergence documents are already preserved by the documentation checkpoint;
+10. only after all gates pass, create one atomic R11 implementation commit and update continuity/roadmap to COMPLETE.
 
 ## Dirty-tree and staging boundaries
 
