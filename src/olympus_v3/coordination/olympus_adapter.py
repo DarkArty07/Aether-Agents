@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -322,6 +323,26 @@ class OlympusRuntimeAdapter:
         logical_session = request.get("logical_session")
         agent_name = request.get("agent_name")
         prompt = request.get("prompt")
+        prompt_digest = request.get("prompt_digest")
+        try:
+            prompt_payload = json.loads(prompt) if isinstance(prompt, str) else None
+        except (TypeError, ValueError):
+            prompt_payload = None
+        expected_authority = {
+            "project_id": getattr(authority, "project_id", None),
+            "run_id": getattr(authority, "run_id", None),
+            "task_id": getattr(authority, "task_id", None),
+            "attempt": getattr(authority, "attempt", None),
+            "contract_id": getattr(authority, "contract_id", None),
+            "contract_generation": getattr(authority, "contract_generation", None),
+            "plan_id": getattr(authority, "plan_id", None),
+            "plan_revision": getattr(authority, "plan_revision", None),
+            "snapshot_digest": getattr(authority, "snapshot_digest", None),
+            "message_id": getattr(authority, "message_id", None),
+        }
+        expected_digest = (
+            "sha256:" + hashlib.sha256(prompt.encode()).hexdigest() if isinstance(prompt, str) else None
+        )
         if (
             getattr(authority, "project_id", None) != self.project_id
             or not isinstance(project_root, str)
@@ -333,6 +354,26 @@ class OlympusRuntimeAdapter:
             or not isinstance(prompt, str)
             or not prompt
             or len(prompt.encode()) > self.max_prompt_bytes
+            or prompt_digest != expected_digest
+            or not isinstance(prompt_payload, dict)
+            or set(prompt_payload)
+            != {"acceptance_evidence", "authority", "contract", "instructions", "kind", "task"}
+            or prompt_payload.get("kind") != "aether.harmonia.task.v1"
+            or prompt_payload.get("authority") != expected_authority
+            or not isinstance(prompt_payload.get("contract"), dict)
+            or prompt_payload["contract"].get("worker_id") != agent_name
+            or prompt_payload.get("task")
+            != {
+                "task_id": getattr(authority, "task_id", None),
+                "attempt": getattr(authority, "attempt", None),
+                "project_root": project_root,
+            }
+            or json.dumps(prompt_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) != prompt
+            or request.get("run_id") != getattr(authority, "run_id", None)
+            or request.get("task_id") != getattr(authority, "task_id", None)
+            or request.get("attempt") != getattr(authority, "attempt", None)
+            or request.get("message_id") != getattr(authority, "message_id", None)
+            or request.get("plan_id") != getattr(authority, "plan_id", None)
         ):
             raise ValidationError("invalid kernel dispatch authority")
         if not self.enabled:

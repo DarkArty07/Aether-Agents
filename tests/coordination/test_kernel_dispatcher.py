@@ -424,7 +424,7 @@ def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(ker
         "plan_revision": 7,
         "project_id": PROJECT,
         "run_id": "run-a",
-        "snapshot_digest": "sha256:abc",
+        "snapshot_digest": "sha256:snapshot",
         "task_id": "task-a",
     }
     assert prompt["contract"] == {
@@ -548,7 +548,7 @@ def test_real_olympus_adapter_owns_dispatch_observe_and_cancel_effects(kernel):
     response = async_test(d.dispatch_once())
     assert response["accepted"] is True
     assert manager.spawned[0][0] == "worker"
-    assert manager.sent and "aether.kernel_dispatch" in manager.sent[0][1]
+    assert manager.sent and "aether.harmonia.task.v1" in manager.sent[0][1]
     observation = async_test(d.observe_once("run-a", "task-a", attempt=kernel[2].attempt))
     assert observation.status == "working"
     d.cancel("run-a", "task-a", attempt=kernel[2].attempt)

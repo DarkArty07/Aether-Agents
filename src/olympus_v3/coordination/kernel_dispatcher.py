@@ -391,6 +391,65 @@ class KernelDispatcher:
         if result is not Result.APPLIED:
             raise StaleFence(result.value)
 
+    def _canonical_prompt(self, authority: DispatchAuthority) -> str:
+        contract = self.ledger.read_contract(authority.contract_id)
+        if contract is None or contract.status is not ContractState.ACTIVE:
+            raise DispatchRejected("active contract required")
+        prompt = {
+            "kind": "aether.harmonia.task.v1",
+            "authority": {
+                "project_id": authority.project_id,
+                "run_id": authority.run_id,
+                "task_id": authority.task_id,
+                "attempt": authority.attempt,
+                "contract_id": authority.contract_id,
+                "contract_generation": authority.contract_generation,
+                "plan_id": authority.plan_id,
+                "plan_revision": authority.plan_revision,
+                "snapshot_digest": authority.snapshot_digest,
+                "message_id": authority.message_id,
+            },
+            "contract": {
+                "objective": contract.objective,
+                "expected_outcome": contract.expected_outcome,
+                "included_scopes": list(contract.included_scopes),
+                "excluded_scopes": list(contract.excluded_scopes),
+                "worker_id": authority.agent_name,
+                "role_permissions": list(contract.role_permissions.get(authority.agent_name, ())),
+                "limits": {
+                    "max_parallel_tasks": contract.limits.concurrency,
+                    "max_runtime_seconds": contract.limits.time_seconds,
+                    "max_retries": contract.limits.retries,
+                    "model_budget": contract.limits.model_budget,
+                    "network_budget": contract.limits.qa_reserve,
+                    "tool_budget": contract.limits.recovery_reserve,
+                },
+                "side_effect_policy": {
+                    "allowed_effects": list(contract.side_effect_policy.allowed_effects),
+                    "approval_threshold": contract.side_effect_policy.max_external_actions,
+                    "rollback_required": contract.side_effect_policy.reversible,
+                },
+                "escalation_conditions": list(contract.escalation_conditions),
+            },
+            "task": {
+                "task_id": authority.task_id,
+                "attempt": authority.attempt,
+                "project_root": authority.project_root,
+            },
+            "acceptance_evidence": [
+                {"name": gate.name, "required": gate.required, "state": gate.state.value}
+                for gate in contract.evidence_gates
+            ],
+            "instructions": [
+                "Do not delegate.",
+                "Do not widen scope.",
+                "Do not modify the contract.",
+                "Do not claim completion without evidence.",
+                "Report blockers and stop when authority is insufficient.",
+            ],
+        }
+        return json.dumps(prompt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
     async def dispatch_with(self, authority):
         self._authority_current(authority)
         row = self.claim_with(authority)
@@ -416,6 +475,7 @@ class KernelDispatcher:
         )
         if armed is not Result.APPLIED:
             raise StaleFence(armed.value)
+        prompt = self._canonical_prompt(authority)
         request = {
             "run_id": authority.run_id,
             "task_id": authority.task_id,
@@ -425,18 +485,8 @@ class KernelDispatcher:
             "message_id": authority.message_id,
             "plan_id": authority.plan_id,
             "agent_name": authority.agent_name,
-            "prompt": json.dumps(
-                {
-                    "kind": "aether.kernel_dispatch",
-                    "run_id": authority.run_id,
-                    "task_id": authority.task_id,
-                    "attempt": authority.attempt,
-                    "plan_id": authority.plan_id,
-                    "snapshot_digest": authority.snapshot_digest,
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            ),
+            "prompt": prompt,
+            "prompt_digest": "sha256:" + hashlib.sha256(prompt.encode()).hexdigest(),
         }
         try:
             if callable(getattr(self.runtime_adapter, "dispatch_kernel", None)):
