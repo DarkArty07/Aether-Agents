@@ -1,18 +1,29 @@
 """R11a RED contract for the ledger-native kernel dispatcher."""
+
 from __future__ import annotations
 
 import asyncio
 import importlib
 import inspect
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from olympus_v3.coordination import (
-    ContractLimits, ContractState, EvidenceGate, ExecutionContract,
-    HMACIntegritySigner, HMACWriterAuthenticator, Principal, Result,
-    SideEffectPolicy, SQLiteLedger, StoreScope, WriterContext,
+    ContractLimits,
+    ContractState,
+    EvidenceGate,
+    ExecutionContract,
+    HMACIntegritySigner,
+    HMACWriterAuthenticator,
+    Principal,
+    Result,
+    SideEffectPolicy,
+    SQLiteLedger,
+    StoreScope,
+    WriterContext,
 )
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 
@@ -24,6 +35,7 @@ WORKER = Principal(PROJECT, "hermes", "worker")
 @dataclass
 class FakeRuntimeAdapter:
     """Only fake at the ACP effect boundary; it owns no durable lifecycle state."""
+
     outcome: str = "accepted"
 
     def __post_init__(self):
@@ -57,7 +69,14 @@ def dispatcher_api():
         module = importlib.import_module("olympus_v3.coordination.kernel_dispatcher")
     except ModuleNotFoundError as exc:
         pytest.fail(f"R11 RED: missing public dispatcher module/API: {exc.name}", pytrace=False)
-    required = ("KernelDispatcher", "DispatchAuthority", "DispatchRejected", "StaleFence", "ReconciliationRequired", "ReconciliationEvidence")
+    required = (
+        "KernelDispatcher",
+        "DispatchAuthority",
+        "DispatchRejected",
+        "StaleFence",
+        "ReconciliationRequired",
+        "ReconciliationEvidence",
+    )
     missing = [name for name in required if not hasattr(module, name)]
     if missing:
         pytest.fail(f"R11 RED: missing dispatcher API: {', '.join(missing)}", pytrace=False)
@@ -66,12 +85,23 @@ def dispatcher_api():
 
 def make_contract():
     return ExecutionContract(
-        contract_id="contract-a", project_id=PROJECT, generation=0, owner=OWNER,
-        participants=(OWNER, WORKER), objective="build", expected_outcome="verified",
-        included_scopes=("src/",), excluded_scopes=("secrets/",), role_permissions={"worker": ("implement",)},
-        evidence_gates=(EvidenceGate("qa", True),), side_effect_policy=SideEffectPolicy(("filesystem",), 2, True),
-        limits=ContractLimits(2, 60, 3, 100, 1, 1), escalation_conditions=("ambiguity",),
-        completion_authority=OWNER, amendment_authority=OWNER, status=ContractState.ACTIVE,
+        contract_id="contract-a",
+        project_id=PROJECT,
+        generation=0,
+        owner=OWNER,
+        participants=(OWNER, WORKER),
+        objective="build",
+        expected_outcome="verified",
+        included_scopes=("src/",),
+        excluded_scopes=("secrets/",),
+        role_permissions={"worker": ("implement",)},
+        evidence_gates=(EvidenceGate("qa", True),),
+        side_effect_policy=SideEffectPolicy(("filesystem",), 2, True),
+        limits=ContractLimits(2, 60, 3, 100, 1, 1),
+        escalation_conditions=("ambiguity",),
+        completion_authority=OWNER,
+        amendment_authority=OWNER,
+        status=ContractState.ACTIVE,
     )
 
 
@@ -79,7 +109,12 @@ def make_contract():
 def kernel(tmp_path: Path):
     scope = StoreScope("install-a", PROJECT)
     auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
-    ledger = SQLiteLedger(tmp_path / "kernel.sqlite", scope, writer_authenticator=auth, integrity_signer=HMACIntegritySigner(b"integrity-key"))
+    ledger = SQLiteLedger(
+        tmp_path / "kernel.sqlite",
+        scope,
+        writer_authenticator=auth,
+        integrity_signer=HMACIntegritySigner(b"integrity-key"),
+    )
     lease = ledger.acquire_lease("ledger-owner", "owner", ttl=10_000_000_000).lease
     assert lease is not None
     context = WriterContext(scope, "owner", "key-owner", "ledger-owner", lease.epoch, lease.expires_at)
@@ -96,14 +131,31 @@ def kernel(tmp_path: Path):
     ledger.close()
 
 
-def dispatcher(kernel, adapter=None):
+def dispatcher(kernel, adapter=None, worker_id=None):
     module = dispatcher_api()
     ledger, service, _, _ = kernel
-    return module.KernelDispatcher(ledger=ledger, runtime=service, runtime_adapter=adapter or FakeRuntimeAdapter())
+    return module.KernelDispatcher(
+        ledger=ledger,
+        runtime=service,
+        runtime_adapter=adapter or FakeRuntimeAdapter(),
+        worker_id=worker_id,
+    )
 
 
 def stage(d, attempt=1):
-    return d.stage_ready("run-a", "task-a", attempt=attempt, project_root="/workspace/project", plan_revision=7, snapshot_digest="sha256:snapshot")
+    return d.stage_ready(
+        "run-a",
+        "task-a",
+        attempt=attempt,
+        project_root="/workspace/project",
+        plan_revision=7,
+        snapshot_digest="sha256:snapshot",
+    )
+
+
+def dispatch_row(ledger):
+    staged = {event["event_id"] for event in ledger.events() if event["kind"] == "dispatch.staged"}
+    return next(row for row in ledger.outbox() if row["event_id"] in staged)
 
 
 def test_complete_outbox_is_ledger_method_and_fail_closed(kernel):
@@ -140,7 +192,7 @@ def test_ack_is_sync_and_does_not_complete_task(kernel):
     stage(d, attempt.attempt)
     async_test(d.dispatch_once())
     d.ack_once()
-    row = ledger.outbox()[0]
+    row = dispatch_row(ledger)
     assert row["semantic_completion_event_id"] is None
     assert service.task("run-a", "task-a").state.value == "running"
 
@@ -156,7 +208,7 @@ def test_authority_binds_explicit_plan_inputs_and_immutable_fields(kernel):
     assert authority.contract_id == "contract-a" and authority.contract_generation == 0
     assert authority.project_root == "/workspace/project"
     assert authority.logical_session == f"kernel:{PROJECT}:run-a:task-a:{attempt.attempt}"
-    assert ledger.outbox()[0]["contract_id"] == "contract-a"
+    assert dispatch_row(ledger)["contract_id"] == "contract-a"
 
 
 def test_duplicate_stage_reuses_one_intent_and_one_binding(kernel):
@@ -165,16 +217,19 @@ def test_duplicate_stage_reuses_one_intent_and_one_binding(kernel):
     d = dispatcher(kernel, adapter)
     first, second = stage(d, attempt.attempt), stage(d, attempt.attempt)
     assert first.message_id == second.message_id
-    async_test(d.dispatch_once()); async_test(d.dispatch_once())
-    assert len(ledger.outbox()) == 1 and len(adapter.opens) == 1
+    async_test(d.dispatch_once())
+    async_test(d.dispatch_once())
+    assert len([e for e in ledger.events() if e["kind"] == "dispatch.staged"]) == 1
+    assert len(adapter.opens) == 1
     assert len([e for e in ledger.events() if e["kind"] == "session.bound"]) == 1
 
 
 def test_accepted_but_response_lost_is_durable_unknown(kernel):
     ledger, _, attempt, _ = kernel
     d = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"))
-    stage(d, attempt.attempt); async_test(d.dispatch_once())
-    row = ledger.outbox()[0]
+    stage(d, attempt.attempt)
+    async_test(d.dispatch_once())
+    row = dispatch_row(ledger)
     assert row["status"] == "UNKNOWN" and row["reconciliation_required"] == 1
     assert any(e["kind"] == "dispatch.unknown" for e in ledger.events())
 
@@ -182,40 +237,44 @@ def test_accepted_but_response_lost_is_durable_unknown(kernel):
 def test_unknown_blocks_retry_with_public_reconciliation_exception(kernel):
     ledger, _, attempt, _ = kernel
     d = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"))
-    stage(d, attempt.attempt); async_test(d.dispatch_once())
+    stage(d, attempt.attempt)
+    async_test(d.dispatch_once())
     with pytest.raises(dispatcher_api().ReconciliationRequired):
         async_test(d.dispatch_once())
-    assert ledger.outbox()[0]["status"] == "UNKNOWN"
+    assert dispatch_row(ledger)["status"] == "UNKNOWN"
 
 
 def test_pre_acceptance_failure_is_retryable_not_unknown(kernel):
     ledger, _, attempt, _ = kernel
     d = dispatcher(kernel, FakeRuntimeAdapter("pre_acceptance_failure"))
-    stage(d, attempt.attempt); async_test(d.dispatch_once())
-    row = ledger.outbox()[0]
+    stage(d, attempt.attempt)
+    async_test(d.dispatch_once())
+    row = dispatch_row(ledger)
     assert row["status"] in {"RETRY_WAIT", "PENDING"} and row["reconciliation_required"] == 0
 
 
 def test_restart_uses_fresh_writable_facade_and_preserves_uncertainty(kernel):
     ledger, service, attempt, _ = kernel
     first = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"))
-    stage(first, attempt.attempt); first.claim_once()
+    stage(first, attempt.attempt)
+    first.claim_once()
     restarted = KernelRunService(ledger, writer=service.writer)
     second = dispatcher((ledger, restarted, attempt, 0), FakeRuntimeAdapter("accepted_response_lost"))
     async_test(second.dispatch_once())
-    assert ledger.outbox()[0]["status"] == "UNKNOWN"
+    assert dispatch_row(ledger)["status"] == "UNKNOWN"
 
 
 def test_reconciliation_requires_typed_evidence_bound_to_authority(kernel):
     module = dispatcher_api()
     ledger, _, attempt, _ = kernel
     d = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"))
-    envelope = stage(d, attempt.attempt); async_test(d.dispatch_once())
+    envelope = stage(d, attempt.attempt)
+    async_test(d.dispatch_once())
     with pytest.raises(module.ReconciliationRequired):
         d.reconcile_unknown("run-a", "task-a", attempt=attempt.attempt, evidence=None)
     evidence = module.ReconciliationEvidence(authority=envelope.authority, observation="no-effect")
     assert d.reconcile_unknown("run-a", "task-a", attempt=attempt.attempt, evidence=evidence)
-    assert ledger.outbox()[0]["reconciliation_required"] == 0
+    assert dispatch_row(ledger)["reconciliation_required"] == 0
 
 
 def test_public_surface_has_runtime_adapter_not_acp_manager(kernel):
@@ -232,3 +291,318 @@ def test_static_scope_excludes_legacy_export_and_scans_only_kernel_paths():
     root = Path(__file__).parents[2] / "src/olympus_v3/coordination"
     paths = (root / "kernel_dispatcher.py", root / "kernel_runtime.py")
     assert all("pilotstore" not in path.read_text().lower() for path in paths if path.exists())
+
+
+def test_dispatcher_does_not_bypass_ledger_public_api():
+    module = dispatcher_api()
+    source = inspect.getsource(module.KernelDispatcher)
+    assert ".conn" not in source
+
+
+def test_attempt_fence_is_not_the_shared_transport_lease(kernel):
+    ledger, _, attempt, _ = kernel
+    envelope = stage(dispatcher(kernel), attempt.attempt)
+    authority = envelope.authority
+    assert authority.lease_resource == f"dispatch:run-a:task-a:{attempt.attempt}"
+    assert authority.lease_resource != "outbox"
+    assert ledger.check_lease(authority.as_lease(), authority.lease_owner).lease is not None
+
+
+def test_kernel_outbox_does_not_hide_existing_durable_rows(kernel):
+    ledger, _, attempt, before = kernel
+    envelope = stage(dispatcher(kernel), attempt.attempt)
+    assert len(ledger.outbox()) == before + 1
+    assert ledger.outbox_message(envelope.message_id)["event_id"]
+
+
+def test_effect_accepted_then_binding_write_failure_becomes_unknown(kernel):
+    ledger, _, attempt, _ = kernel
+    d = dispatcher(kernel, FakeRuntimeAdapter())
+    envelope = stage(d, attempt.attempt)
+    failures = [0]
+
+    def fail_once(point):
+        if point == "after_event_insert" and failures[0] == 0:
+            failures[0] += 1
+            raise RuntimeError("binding persistence failed after ACP acceptance")
+
+    ledger.fault = fail_once
+    async_test(d.dispatch_once())
+    ledger.fault = None
+    assert ledger.outbox_message(envelope.message_id)["status"] == "UNKNOWN"
+    assert any(e["kind"] == "dispatch.unknown" for e in ledger.events())
+
+
+def test_unknown_dispatch_does_not_block_independent_ready_task(kernel):
+    ledger, service, attempt_a, _ = kernel
+    adapter = FakeRuntimeAdapter("accepted_response_lost")
+    d = dispatcher(kernel, adapter)
+    envelope_a = stage(d, attempt_a.attempt)
+    async_test(d.dispatch_once())
+    assert ledger.outbox_message(envelope_a.message_id)["status"] == "UNKNOWN"
+
+    service.create_task("run-a", task_id="task-b")
+    service.admit_task("run-a", "task-b")
+    service.mark_task_ready("run-a", "task-b")
+    service.dispatch_task("run-a", "task-b")
+    attempt_b = service.start_attempt("run-a", "task-b")
+    envelope_b = d.stage_ready(
+        "run-a",
+        "task-b",
+        attempt=attempt_b.attempt,
+        project_root="/workspace/project",
+        plan_revision=7,
+        snapshot_digest="sha256:snapshot-b",
+    )
+    adapter.outcome = "accepted"
+    async_test(d.dispatch_once())
+    assert ledger.outbox_message(envelope_b.message_id)["status"] in {"LEASED", "SENT"}
+    assert any(
+        binding.logical_session == envelope_b.authority.logical_session
+        for binding in service.sessions("run-a", "task-b")
+    )
+
+
+def test_future_retry_wait_does_not_block_independent_ready_task(kernel):
+    ledger, service, attempt_a, _ = kernel
+    adapter = FakeRuntimeAdapter("pre_acceptance_failure")
+    d = dispatcher(kernel, adapter)
+    envelope_a = stage(d, attempt_a.attempt)
+    async_test(d.dispatch_once())
+    assert ledger.outbox_message(envelope_a.message_id)["status"] == "RETRY_WAIT"
+
+    service.create_task("run-a", task_id="task-b")
+    service.admit_task("run-a", "task-b")
+    service.mark_task_ready("run-a", "task-b")
+    service.dispatch_task("run-a", "task-b")
+    attempt_b = service.start_attempt("run-a", "task-b")
+    envelope_b = d.stage_ready(
+        "run-a",
+        "task-b",
+        attempt=attempt_b.attempt,
+        project_root="/workspace/project",
+        plan_revision=7,
+        snapshot_digest="sha256:snapshot-b",
+    )
+    adapter.outcome = "accepted"
+
+    async_test(d.dispatch_once())
+
+    assert ledger.outbox_message(envelope_a.message_id)["status"] == "RETRY_WAIT"
+    assert ledger.outbox_message(envelope_b.message_id)["status"] in {"LEASED", "SENT"}
+    assert any(
+        binding.logical_session == envelope_b.authority.logical_session
+        for binding in service.sessions("run-a", "task-b")
+    )
+    assert len(adapter.opens) == 2
+
+
+def test_olympus_adapter_exposes_authoritative_kernel_seam():
+    from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
+
+    assert inspect.iscoroutinefunction(OlympusRuntimeAdapter.dispatch_kernel)
+    assert inspect.iscoroutinefunction(OlympusRuntimeAdapter.observe_kernel)
+    assert inspect.iscoroutinefunction(OlympusRuntimeAdapter.cancel_kernel)
+
+
+def test_real_olympus_adapter_owns_dispatch_observe_and_cancel_effects(kernel):
+    from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
+
+    class PublicManager:
+        def __init__(self):
+            self.spawned = []
+            self.sent = []
+            self.closed = []
+
+        async def spawn_agent(self, *, agent_name, session_id, project_root):
+            self.spawned.append((agent_name, session_id, project_root))
+            return session_id
+
+        async def send_message(self, session_id, prompt):
+            self.sent.append((session_id, prompt))
+
+        async def poll(self, session_id):
+            return {"status": "working", "session_id": session_id}
+
+        async def close(self, session_id, *, terminal_status):
+            self.closed.append((session_id, terminal_status))
+
+    manager = PublicManager()
+    adapter = OlympusRuntimeAdapter(manager, project_id=PROJECT, enabled=True)
+    d = dispatcher(kernel, adapter)
+    envelope = stage(d, kernel[2].attempt)
+    response = async_test(d.dispatch_once())
+    assert response["accepted"] is True
+    assert manager.spawned[0][0] == "worker"
+    assert manager.sent and "aether.kernel_dispatch" in manager.sent[0][1]
+    observation = async_test(d.observe_once("run-a", "task-a", attempt=kernel[2].attempt))
+    assert observation.status == "working"
+    d.cancel("run-a", "task-a", attempt=kernel[2].attempt)
+    async_test(d.deliver_cancel_once("run-a", "task-a", attempt=kernel[2].attempt))
+    assert manager.closed[0][1] == "cancelled"
+    assert any(event["kind"] == "cancel.intent" for event in kernel[0].events())
+    assert envelope.authority.logical_session
+
+
+@pytest.mark.parametrize(
+    ("kind", "aggregate", "payload", "message_id"),
+    (
+        ("dispatch.staged", "dispatch:forged", {"run_id": "run-a"}, "forged-stage"),
+        (
+            "dispatch.unknown",
+            "dispatch:forged",
+            {
+                "run_id": "run-a",
+                "task_id": "task-a",
+                "attempt": 1,
+                "contract_id": "contract-a",
+                "message_id": "forged-stage",
+                "reason": "forged",
+            },
+            None,
+        ),
+        (
+            "session.bound",
+            "task:run-a:task-a",
+            {
+                "run_id": "run-a",
+                "task_id": "task-a",
+                "logical_session": "forged",
+                "contract_id": "contract-a",
+                "unexpected": True,
+            },
+            None,
+        ),
+    ),
+)
+def test_generic_append_cannot_forge_r11_authority_events(kernel, kind, aggregate, payload, message_id):
+    ledger, service, _, _ = kernel
+    context = service.writer.context
+    draft = ledger.draft(
+        aggregate,
+        kind,
+        payload,
+        writer=context,
+        expected_version=ledger.aggregate_version(aggregate),
+        contract_generation=0,
+        revocation_epoch=0,
+    )
+    signed = service.writer.authenticator.sign(draft, context)
+    assert ledger.append(signed, context, message_id=message_id).status is Result.INVALID_INPUT
+
+
+def test_unknown_transition_rolls_back_as_one_durable_unit(kernel):
+    ledger, _, attempt, _ = kernel
+    d = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"), worker_id="worker-a")
+    envelope = stage(d, attempt.attempt)
+    failures = [0]
+
+    def fail_once(point):
+        if point == "after_unknown_event" and failures[0] == 0:
+            failures[0] += 1
+            raise RuntimeError("crash after unknown event")
+
+    ledger.fault = fail_once
+    with pytest.raises(RuntimeError, match="crash after unknown event"):
+        async_test(d.dispatch_once())
+    ledger.fault = None
+    row = ledger.outbox_message(envelope.message_id)
+    events = [e for e in ledger.events() if e["kind"] == "dispatch.unknown"]
+    assert (row["status"], row["reconciliation_required"], bool(events)) != ("UNKNOWN", 1, False)
+
+
+def test_post_acceptance_unknown_write_fault_never_replays_the_effect(kernel):
+    ledger, _, attempt, _ = kernel
+    adapter = FakeRuntimeAdapter("accepted_response_lost")
+    d = dispatcher(kernel, adapter, worker_id="worker-a")
+    envelope = stage(d, attempt.attempt)
+    failures = [0]
+
+    def fail_once(point):
+        if point == "after_unknown_event" and failures[0] == 0:
+            failures[0] += 1
+            raise RuntimeError("crash after accepted effect before UNKNOWN commit")
+
+    ledger.fault = fail_once
+    with pytest.raises(RuntimeError, match="UNKNOWN commit"):
+        async_test(d.dispatch_once())
+    ledger.fault = None
+
+    # The first runtime call may already have been accepted.  Recovery must
+    # conservatively materialize UNKNOWN without attempting a second effect.
+    async_test(d.dispatch_once())
+    row = ledger.outbox_message(envelope.message_id)
+    assert len(adapter.opens) == 1
+    assert row["status"] == "UNKNOWN" and row["reconciliation_required"] == 1
+    assert any(
+        event["kind"] == "dispatch.unknown"
+        and json.loads(event["payload"])["message_id"] == envelope.message_id
+        for event in ledger.events()
+    )
+
+
+def test_dispatcher_worker_identity_is_not_shared_and_expiry_allows_new_epoch(kernel):
+    ledger, _, attempt, now = kernel
+    first = dispatcher(kernel, worker_id="worker-a")
+    second = dispatcher(kernel, worker_id="worker-b")
+    original = stage(first, attempt.attempt)
+    assert original.authority.lease_owner == "worker-a"
+    with pytest.raises(dispatcher_api().StaleFence):
+        second.claim_with(original.authority)
+    ledger.clock = lambda: original.authority.lease_until + 1
+    replacement = ledger.acquire_lease(original.authority.lease_resource, "worker-b", ttl=10).lease
+    assert replacement is not None
+    assert replacement.owner == "worker-b"
+    assert replacement.epoch > original.authority.lease_epoch
+
+
+def test_second_sqlite_worker_fences_stale_owner_after_takeover(kernel, tmp_path):
+    ledger, service, attempt, _ = kernel
+    first = dispatcher(kernel, worker_id="worker-a")
+    original = stage(first, attempt.attempt)
+    other = SQLiteLedger(
+        tmp_path / "kernel.sqlite",
+        ledger.scope,
+        writer_authenticator=ledger.writer_authenticator,
+        integrity_signer=ledger.integrity_signer,
+    )
+    try:
+        second_runtime = KernelRunService(other, writer=service.writer)
+        second = dispatcher((other, second_runtime, attempt, 0), worker_id="worker-b")
+        with pytest.raises(dispatcher_api().StaleFence):
+            second.claim_with(original.authority)
+
+        advanced = original.authority.lease_until + 1
+        ledger.clock = lambda: advanced
+        other.clock = lambda: advanced
+        replacement = other.acquire_lease(original.authority.lease_resource, "worker-b", ttl=10).lease
+        assert replacement is not None and replacement.epoch > original.authority.lease_epoch
+        with pytest.raises(dispatcher_api().StaleFence):
+            first.acknowledge(original.authority)
+    finally:
+        other.close()
+
+
+def test_unknown_recovery_survives_fresh_ledger_and_dispatcher(kernel, tmp_path):
+    ledger, service, attempt, _ = kernel
+    first = dispatcher(kernel, FakeRuntimeAdapter("accepted_response_lost"), worker_id="worker-a")
+    envelope = stage(first, attempt.attempt)
+    async_test(first.dispatch_once())
+    reopened = SQLiteLedger(
+        tmp_path / "kernel.sqlite",
+        ledger.scope,
+        writer_authenticator=ledger.writer_authenticator,
+        integrity_signer=ledger.integrity_signer,
+    )
+    restarted = KernelRunService(reopened, writer=service.writer)
+    second = dispatcher((reopened, restarted, attempt, 0), worker_id="worker-a")
+    with pytest.raises(dispatcher_api().ReconciliationRequired):
+        async_test(second.dispatch_once())
+    row = reopened.outbox_message(envelope.message_id)
+    assert row["status"] == "UNKNOWN" and row["reconciliation_required"] == 1
+    assert any(
+        json.loads(event["payload"]).get("message_id") == envelope.message_id
+        for event in reopened.events()
+        if event["kind"] == "dispatch.unknown"
+    )
+    reopened.close()

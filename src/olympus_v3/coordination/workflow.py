@@ -27,6 +27,12 @@ class RuntimeMode(StrEnum):
     PILOT = "pilot"
 
 
+class AttemptState(StrEnum):
+    ACTIVE = "active"
+    ORPHANED = "orphaned"
+    SUPERSEDED = "superseded"
+
+
 WORKFLOW_KINDS = frozenset(
     {
         "run.created",
@@ -36,6 +42,13 @@ WORKFLOW_KINDS = frozenset(
         "task.dispatched",
         "attempt.started",
         "session.bound",
+        "dispatch.staged",
+        "dispatch.unknown",
+        "observation.accepted",
+        "cancel.intent",
+        "reconciliation.completed",
+        "attempt.orphaned",
+        "attempt.superseded",
     }
 )
 _TASK_KIND_STATE = {
@@ -54,6 +67,49 @@ _SCHEMAS = {
     "task.dispatched": {"run_id", "task_id", "contract_id"},
     "attempt.started": {"run_id", "task_id", "attempt", "contract_id"},
     "session.bound": {"run_id", "task_id", "logical_session", "contract_id"},
+    "dispatch.staged": {
+        "installation_id",
+        "project_id",
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "contract_generation",
+        "revocation_epoch",
+        "agent_name",
+        "plan_id",
+        "plan_revision",
+        "snapshot_digest",
+        "project_root",
+        "logical_session",
+        "message_id",
+        "lease_resource",
+        "lease_owner",
+        "lease_epoch",
+        "lease_token",
+        "lease_until",
+        "envelope",
+    },
+    "dispatch.unknown": {"run_id", "task_id", "attempt", "contract_id", "message_id", "reason"},
+    "observation.accepted": {"run_id", "task_id", "attempt", "contract_id", "message_id", "status"},
+    "cancel.intent": {"run_id", "task_id", "attempt", "contract_id", "message_id"},
+    "reconciliation.completed": {
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "message_id",
+        "status",
+        "observation",
+    },
+    "attempt.orphaned": {"run_id", "task_id", "attempt", "contract_id"},
+    "attempt.superseded": {"run_id", "task_id", "attempt", "replacement_attempt", "contract_id"},
+}
+_R11_DISPATCH_KINDS = {
+    "dispatch.unknown",
+    "observation.accepted",
+    "cancel.intent",
+    "reconciliation.completed",
 }
 
 
@@ -81,13 +137,21 @@ def validate_workflow_history(events):
     runs = {}
     tasks = {}
     attempts = {}
+    attempt_states = {}
     sessions = {}
+    staged = {}
     for event in events:
         kind = event.get("kind")
         if kind not in WORKFLOW_KINDS:
             continue
         payload = _event_payload(event)
-        if not isinstance(payload, dict) or set(payload) != _SCHEMAS[kind]:
+        session_schemas = (
+            _SCHEMAS["session.bound"],
+            _SCHEMAS["session.bound"] | {"acp_session_id", "attempt", "message_id", "fence"},
+        )
+        if not isinstance(payload, dict) or (
+            kind == "session.bound" and set(payload) not in session_schemas
+        ) or (kind != "session.bound" and set(payload) != _SCHEMAS[kind]):
             raise _bad("invalid workflow payload schema")
         aggregate = event.get("aggregate")
         run_id, task_id = payload.get("run_id"), payload.get("task_id")
@@ -98,6 +162,86 @@ def validate_workflow_history(events):
             if aggregate != "run:" + run_id or payload["mode"] != RuntimeMode.KERNEL.value or run_id in runs:
                 raise _bad("duplicate or invalid run creation")
             runs[run_id] = contract_id
+            continue
+        if kind == "dispatch.staged":
+            key = (run_id, task_id)
+            attempt = payload["attempt"]
+            message_id = payload["message_id"]
+            if (
+                not isinstance(task_id, str)
+                or not _ID.fullmatch(task_id)
+                or key not in tasks
+                or tasks[key][0] is not TaskState.RUNNING
+                or attempt not in attempts.get(key, ())
+                or attempt_states.get((run_id, task_id, attempt)) is not AttemptState.ACTIVE
+                or not isinstance(message_id, str)
+                or not _ID.fullmatch(message_id)
+                or aggregate != "dispatch:" + message_id
+                or message_id in staged
+                or payload["lease_resource"] != f"dispatch:{run_id}:{task_id}:{attempt}"
+                or payload["logical_session"] != f"kernel:{payload['project_id']}:{run_id}:{task_id}:{attempt}"
+                or payload["envelope"] != {"run_id": run_id, "task_id": task_id, "attempt": attempt}
+                or not isinstance(payload["project_root"], str)
+                or not payload["project_root"].startswith("/")
+                or any(
+                    not isinstance(payload[name], str) or not payload[name]
+                    for name in (
+                        "installation_id",
+                        "project_id",
+                        "agent_name",
+                        "plan_id",
+                        "snapshot_digest",
+                        "lease_owner",
+                        "lease_token",
+                    )
+                )
+                or any(
+                    not isinstance(payload[name], int) or isinstance(payload[name], bool) or payload[name] < 0
+                    for name in (
+                        "contract_generation",
+                        "revocation_epoch",
+                        "plan_revision",
+                        "lease_epoch",
+                        "lease_until",
+                    )
+                )
+            ):
+                raise _bad("invalid durable dispatch authority")
+            staged[message_id] = payload
+            continue
+        if kind in _R11_DISPATCH_KINDS:
+            message_id = payload["message_id"]
+            source = staged.get(message_id)
+            if (
+                source is None
+                or aggregate != "dispatch:" + message_id
+                or any(payload[name] != source[name] for name in ("run_id", "task_id", "attempt", "contract_id"))
+            ):
+                raise _bad("dispatch authority mismatch")
+            continue
+        if kind in {"attempt.orphaned", "attempt.superseded"}:
+            key = (run_id, task_id)
+            attempt = payload["attempt"]
+            current_state = attempt_states.get((run_id, task_id, attempt))
+            if (
+                aggregate != f"task:{run_id}:{task_id}"
+                or (kind == "attempt.orphaned" and current_state is not AttemptState.ACTIVE)
+                or (
+                    kind == "attempt.superseded"
+                    and current_state not in {AttemptState.ACTIVE, AttemptState.ORPHANED}
+                )
+                or not any(
+                    item["run_id"] == run_id and item["task_id"] == task_id and item["attempt"] == attempt
+                    for item in staged.values()
+                )
+            ):
+                raise _bad("invalid attempt reconciliation")
+            if kind == "attempt.orphaned":
+                attempt_states[(run_id, task_id, attempt)] = AttemptState.ORPHANED
+            elif payload["replacement_attempt"] != attempt + 1:
+                raise _bad("non-monotonic attempt supersession")
+            else:
+                attempt_states[(run_id, task_id, attempt)] = AttemptState.SUPERSEDED
             continue
         if (
             not isinstance(task_id, str)
@@ -137,6 +281,7 @@ def validate_workflow_history(events):
                 ):
                     raise _bad("non-monotonic attempt")
                 attempts.setdefault(key, []).append(attempt)
+                attempt_states[(run_id, task_id, attempt)] = AttemptState.ACTIVE
         elif kind == "session.bound":
             logical = payload["logical_session"]
             if (
@@ -146,6 +291,18 @@ def validate_workflow_history(events):
                 or not attempts.get(key)
             ):
                 raise _bad("invalid session binding")
+            if "message_id" in payload:
+                source = staged.get(payload["message_id"])
+                if (
+                    source is None
+                    or payload["attempt"] != source["attempt"]
+                    or payload["logical_session"] != source["logical_session"]
+                    or payload["contract_id"] != source["contract_id"]
+                    or not isinstance(payload["acp_session_id"], str)
+                    or not payload["acp_session_id"]
+                    or payload["fence"] != source["lease_epoch"]
+                ):
+                    raise _bad("session binding authority mismatch")
             sessions.setdefault(key, []).append(logical)
     return runs, tasks, attempts, sessions
 
@@ -179,6 +336,7 @@ class AttemptRecord:
     run_id: str
     task_id: str
     attempt: int
+    state: AttemptState = AttemptState.ACTIVE
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +362,7 @@ def transition_state(current: TaskState, target: TaskState) -> TaskState:
 
 __all__ = [
     "AttemptRecord",
+    "AttemptState",
     "AuthorityError",
     "InvalidTransition",
     "RuntimeMode",

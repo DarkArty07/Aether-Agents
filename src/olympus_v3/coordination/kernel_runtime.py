@@ -22,6 +22,7 @@ from .contracts import ContractState, TaskState
 from .ledger import HMACWriterAuthenticator, Result, SignedEventDraft, SQLiteLedger, WriterContext
 from .workflow import (
     AttemptRecord,
+    AttemptState,
     AuthorityError,
     InvalidTransition,
     RunRecord,
@@ -181,7 +182,11 @@ class KernelRunService:
         except (AuthorityError, InvalidTransition):
             raise
         contracts = {
-            run_id: (self.ledger.read_contract(contract_id).limits.model_budget if self.ledger.read_contract(contract_id) else 0)
+            run_id: (
+                self.ledger.read_contract(contract_id).limits.model_budget
+                if self.ledger.read_contract(contract_id)
+                else 0
+            )
             for run_id, contract_id in runs.items()
         }
         validate_budget_history(events, authorized=contracts, runs=runs)
@@ -194,6 +199,15 @@ class KernelRunService:
         self._attempts = {
             key: [AttemptRecord(key[0], key[1], attempt) for attempt in values] for key, values in attempts.items()
         }
+        for event in events:
+            if event.get("kind") in {"attempt.orphaned", "attempt.superseded"}:
+                payload = json.loads(event["payload"])
+                key = (payload["run_id"], payload["task_id"])
+                state = AttemptState.ORPHANED if event["kind"] == "attempt.orphaned" else AttemptState.SUPERSEDED
+                self._attempts[key] = [
+                    AttemptRecord(a.run_id, a.task_id, a.attempt, state if a.attempt == payload["attempt"] else a.state)
+                    for a in self._attempts.get(key, [])
+                ]
         self._sessions = {
             key: [SessionBinding(key[0], key[1], value) for value in values] for key, values in sessions.items()
         }

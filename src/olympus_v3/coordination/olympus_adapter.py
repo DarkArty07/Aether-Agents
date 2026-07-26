@@ -106,6 +106,10 @@ class OlympusRuntimeAdapter:
         self._inflight: set[tuple[str, str, Principal]] = set()
 
     @staticmethod
+    def _kernel_session_id(logical_session: str) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, "aether-r11:" + logical_session))
+
+    @staticmethod
     def _session_id(task_id: str, participant: Principal, project_root: str) -> str:
         identity = ":".join(
             (
@@ -304,6 +308,72 @@ class OlympusRuntimeAdapter:
             finally:
                 self._inflight.discard(key)
         return tuple(receipts)
+
+    async def dispatch_kernel(self, *, authority: Any, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        """Execute one ledger-authorized R11 dispatch through public ACP APIs.
+
+        Durable retry and replay decisions remain in ``KernelDispatcher``.  This
+        seam owns only the external ACP lifecycle effect and returns its observed
+        identity.
+        """
+        if not isinstance(request, Mapping):
+            raise ValidationError("invalid kernel dispatch request")
+        project_root = request.get("project_root")
+        logical_session = request.get("logical_session")
+        agent_name = request.get("agent_name")
+        prompt = request.get("prompt")
+        if (
+            getattr(authority, "project_id", None) != self.project_id
+            or not isinstance(project_root, str)
+            or not project_root.startswith("/")
+            or not isinstance(logical_session, str)
+            or not logical_session
+            or not isinstance(agent_name, str)
+            or not agent_name
+            or not isinstance(prompt, str)
+            or not prompt
+            or len(prompt.encode()) > self.max_prompt_bytes
+        ):
+            raise ValidationError("invalid kernel dispatch authority")
+        if not self.enabled:
+            raise ConnectionError("coordination runtime disabled before ACP acceptance")
+        session_id = self._kernel_session_id(logical_session)
+        try:
+            opened = await self.manager.spawn_agent(
+                agent_name=agent_name,
+                session_id=session_id,
+                project_root=str(Path(project_root).resolve()),
+            )
+        except Exception as exc:
+            raise ConnectionError("ACP session was not accepted") from exc
+        if opened != session_id:
+            raise TimeoutError("ACP accepted an unexpected session identity")
+        try:
+            await self.manager.send_message(session_id, prompt)
+        except Exception as exc:
+            raise TimeoutError("ACP session accepted but delivery response was lost") from exc
+        return {"accepted": True, "acp_session_id": session_id}
+
+    async def observe_kernel(self, *, authority: Any, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        if not isinstance(request, Mapping) or getattr(authority, "project_id", None) != self.project_id:
+            raise ValidationError("invalid kernel observation authority")
+        session_id = self._kernel_session_id(str(request.get("logical_session", "")))
+        progress = await self.manager.poll(session_id)
+        if not isinstance(progress, Mapping):
+            raise RuntimeError("ACPManager returned invalid progress")
+        status = progress.get("status", "unknown")
+        return {
+            "status": status if isinstance(status, str) else "unknown",
+            "acp_session_id": session_id,
+            "progress": dict(progress),
+        }
+
+    async def cancel_kernel(self, *, authority: Any, request: Mapping[str, Any]) -> Mapping[str, Any]:
+        if not isinstance(request, Mapping) or getattr(authority, "project_id", None) != self.project_id:
+            raise ValidationError("invalid kernel cancellation authority")
+        session_id = self._kernel_session_id(str(request.get("logical_session", "")))
+        await self.manager.close(session_id, terminal_status="cancelled")
+        return {"accepted": True, "acp_session_id": session_id}
 
     async def observe(
         self,

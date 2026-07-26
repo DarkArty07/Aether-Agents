@@ -82,6 +82,16 @@ from .identity import (
     verify_holder_proof,
     verify_identity_credential,
 )
+from .kernel_dispatcher import (
+    DispatchAuthority,
+    DispatchEnvelope,
+    DispatchObservation,
+    DispatchRejected,
+    KernelDispatcher,
+    ReconciliationEvidence,
+    ReconciliationRequired,
+    StaleFence,
+)
 from .leases import Lease, LeaseManager, LeaseOutcome, LeaseResult
 from .ledger import (
     MAX_ERROR_BYTES,
@@ -325,6 +335,14 @@ __all__ = [
     "Waiver",
     "WorkloadBinding",
     "WriterContext",
+    "KernelDispatcher",
+    "DispatchAuthority",
+    "DispatchEnvelope",
+    "DispatchObservation",
+    "DispatchRejected",
+    "ReconciliationRequired",
+    "ReconciliationEvidence",
+    "StaleFence",
     "amend_contract",
     "assert_current_generation",
     "authorize",

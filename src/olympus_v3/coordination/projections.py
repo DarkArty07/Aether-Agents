@@ -48,10 +48,26 @@ class ProjectionReducer:
             "task.dispatched",
             "attempt.started",
             "session.bound",
+            "dispatch.staged",
+            "dispatch.unknown",
+            "cancel.intent",
+            "attempt.orphaned",
+            "attempt.superseded",
+            "observation.accepted",
+            "reconciliation.completed",
         }:
-            from .workflow import reduce_workflow_projection
+            if kind in {
+                "dispatch.staged",
+                "dispatch.unknown",
+                "cancel.intent",
+                "observation.accepted",
+                "reconciliation.completed",
+            }:
+                value = {**(current or {}), **payload}
+            else:
+                from .workflow import reduce_workflow_projection
 
-            value = reduce_workflow_projection(current, kind, payload)
+                value = reduce_workflow_projection(current, kind, payload)
 
         else:
             raise ValueError("unknown event kind")

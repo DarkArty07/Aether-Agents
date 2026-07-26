@@ -47,6 +47,13 @@ _WORKFLOW_EVENT_KINDS = frozenset(
         "task.dispatched",
         "attempt.started",
         "session.bound",
+        "dispatch.staged",
+        "dispatch.unknown",
+        "cancel.intent",
+        "attempt.orphaned",
+        "attempt.superseded",
+        "observation.accepted",
+        "reconciliation.completed",
     }
 )
 _AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS
@@ -374,7 +381,7 @@ class SQLiteLedger:
           value TEXT NOT NULL, reducer_version TEXT NOT NULL, source_sequence INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY(installation_id,project_id,aggregate));
         CREATE TABLE IF NOT EXISTS leases(installation_id TEXT NOT NULL, project_id TEXT NOT NULL, resource TEXT NOT NULL, owner TEXT NOT NULL, epoch INTEGER NOT NULL, expires_at INTEGER NOT NULL, token TEXT NOT NULL, PRIMARY KEY(installation_id,project_id,resource));
         CREATE TABLE IF NOT EXISTS outbox(installation_id TEXT NOT NULL, project_id TEXT NOT NULL, message_id TEXT NOT NULL, event_id TEXT NOT NULL,
-          status TEXT NOT NULL CHECK(status IN ('PENDING','LEASED','RETRY_WAIT','SENT','POISON')), attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+          status TEXT NOT NULL CHECK(status IN ('PENDING','LEASED','RETRY_WAIT','SENT','POISON','UNKNOWN')), attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
           lease_owner TEXT, lease_epoch INTEGER, lease_token TEXT, lease_until INTEGER, transport_ack_at INTEGER, semantic_completion_event_id TEXT,
           contract_id TEXT, contract_generation INTEGER, revocation_epoch INTEGER, reconciliation_required INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(installation_id,project_id,message_id));
@@ -391,27 +398,60 @@ class SQLiteLedger:
         CREATE TRIGGER IF NOT EXISTS immutable_contract_versions_delete BEFORE DELETE ON contract_versions BEGIN SELECT RAISE(ABORT,'immutable contract version'); END;
         """)
         # Additive migration for stores created before the R3 inbox/outbox contract.
-        for table, columns in {
-            "outbox": (
-                "lease_epoch INTEGER",
-                "lease_token TEXT",
-                "contract_id TEXT",
-                "contract_generation INTEGER",
-                "revocation_epoch INTEGER",
-                "reconciliation_required INTEGER NOT NULL DEFAULT 0",
-            ),
-            "inbox": (
-                "contract_id TEXT",
-                "contract_generation INTEGER",
-                "revocation_epoch INTEGER",
-                "authority_state TEXT NOT NULL DEFAULT 'CURRENT'",
-            ),
-            "events": ("contract_id TEXT", "contract_generation INTEGER", "revocation_epoch INTEGER"),
-        }.items():
-            existing = {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")}
-            for column in columns:
-                if column.split()[0] not in existing:
-                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+        # The legacy rebuild is one transaction: SQLite otherwise permits a crash
+        # between RENAME/CREATE/COPY to leave an apparently valid but empty store.
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            for table, columns in {
+                "outbox": (
+                    "lease_epoch INTEGER",
+                    "lease_token TEXT",
+                    "contract_id TEXT",
+                    "contract_generation INTEGER",
+                    "revocation_epoch INTEGER",
+                    "reconciliation_required INTEGER NOT NULL DEFAULT 0",
+                ),
+                "inbox": (
+                    "contract_id TEXT",
+                    "contract_generation INTEGER",
+                    "revocation_epoch INTEGER",
+                    "authority_state TEXT NOT NULL DEFAULT 'CURRENT'",
+                ),
+                "events": ("contract_id TEXT", "contract_generation INTEGER", "revocation_epoch INTEGER"),
+            }.items():
+                existing = {row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+                for column in columns:
+                    if column.split()[0] not in existing:
+                        self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
+            sql_row = self.conn.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name='outbox'"
+            ).fetchone()
+            if sql_row and "'UNKNOWN'" not in sql_row[0]:
+                indexes = [
+                    row[0]
+                    for row in self.conn.execute(
+                        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='outbox' AND sql IS NOT NULL"
+                    )
+                ]
+                self.conn.execute("ALTER TABLE outbox RENAME TO outbox_legacy")
+                self.conn.execute("""CREATE TABLE outbox(installation_id TEXT NOT NULL, project_id TEXT NOT NULL, message_id TEXT NOT NULL, event_id TEXT NOT NULL,
+                  status TEXT NOT NULL CHECK(status IN ('PENDING','LEASED','RETRY_WAIT','SENT','POISON','UNKNOWN')), attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+                  lease_owner TEXT, lease_epoch INTEGER, lease_token TEXT, lease_until INTEGER, transport_ack_at INTEGER, semantic_completion_event_id TEXT,
+                  contract_id TEXT, contract_generation INTEGER, revocation_epoch INTEGER, reconciliation_required INTEGER NOT NULL DEFAULT 0,
+                  PRIMARY KEY(installation_id,project_id,message_id))""")
+                target = [row[1] for row in self.conn.execute("PRAGMA table_info(outbox)")]
+                source = {row[1] for row in self.conn.execute("PRAGMA table_info(outbox_legacy)")}
+                columns = [name for name in target if name in source]
+                names = ",".join(columns)
+                self.conn.execute(f"INSERT INTO outbox({names}) SELECT {names} FROM outbox_legacy")
+                self._stage("after_outbox_legacy_copy")
+                self.conn.execute("DROP TABLE outbox_legacy")
+                for index_sql in indexes:
+                    self.conn.execute(index_sql)
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     def close(self) -> None:
         self.conn.close()
@@ -592,7 +632,7 @@ class SQLiteLedger:
     def append(self, draft: SignedEventDraft, context: WriterContext, *, message_id: str | None = None) -> AppendResult:
         if message_id is not None and not _valid_identifier(message_id):
             return AppendResult(Result.INVALID_INPUT)
-        if draft.kind == "contract.advance":
+        if draft.kind in {"contract.advance", "dispatch.unknown"}:
             return AppendResult(Result.INVALID_INPUT)
         failure = self._check(draft, context)
         if failure:
@@ -1009,6 +1049,7 @@ class SQLiteLedger:
         owner: str,
         *,
         lease: Any | None = None,
+        message_id: str | None = None,
         now: int | None = None,
         lease_ns: int = 30_000_000_000,
         max_attempts: int = 5,
@@ -1021,6 +1062,7 @@ class SQLiteLedger:
             or now < 0
             or not _valid_positive_integer(lease_ns, now=now)
             or not _valid_positive_integer(max_attempts)
+            or (message_id is not None and not _valid_identifier(message_id))
         ):
             raise InvalidInputError("invalid input")
         if lease is None:
@@ -1031,10 +1073,16 @@ class SQLiteLedger:
             if lease_failure:
                 self.conn.rollback()
                 return []
-            rows = self.conn.execute(
-                "SELECT * FROM outbox WHERE installation_id=? AND project_id=? AND attempts<? AND (status='PENDING' OR (status IN ('LEASED','RETRY_WAIT') AND lease_until<=?)) ORDER BY message_id",
-                (self.scope.installation_id, self.scope.project_id, max_attempts, now),
-            ).fetchall()
+            query = (
+                "SELECT * FROM outbox WHERE installation_id=? AND project_id=? "
+                "AND attempts<? AND (status='PENDING' OR "
+                "(status IN ('LEASED','RETRY_WAIT') AND lease_until<=?))"
+            )
+            args: list[Any] = [self.scope.installation_id, self.scope.project_id, max_attempts, now]
+            if message_id is not None:
+                query += " AND message_id=?"
+                args.append(message_id)
+            rows = self.conn.execute(query + " ORDER BY message_id", args).fetchall()
             result = []
             for row in rows:
                 attempt = row["attempts"] + 1
@@ -1053,7 +1101,14 @@ class SQLiteLedger:
                 )
                 result.append(
                     dict(row)
-                    | {"status": "LEASED", "attempts": attempt, "lease_owner": owner, "lease_until": now + lease_ns}
+                    | {
+                        "status": "LEASED",
+                        "attempts": attempt,
+                        "lease_owner": owner,
+                        "lease_epoch": lease.epoch,
+                        "lease_token": lease.token,
+                        "lease_until": now + lease_ns,
+                    }
                 )
             self.conn.commit()
             return result
@@ -1061,7 +1116,17 @@ class SQLiteLedger:
             self.conn.rollback()
             raise
 
-    def _append_poison_event(self, row: sqlite3.Row, message_id: str, error: str, now: int) -> None:
+    def _append_poison_event(
+        self,
+        row: sqlite3.Row,
+        message_id: str,
+        error: str,
+        now: int,
+        *,
+        kind: str = "outbox.poison",
+        event_payload: Mapping[str, Any] | None = None,
+        aggregate: str = "outbox",
+    ) -> None:
         source = self.conn.execute(
             "SELECT * FROM events WHERE installation_id=? AND project_id=? AND event_id=?",
             (self.scope.installation_id, self.scope.project_id, row["event_id"]),
@@ -1076,12 +1141,12 @@ class SQLiteLedger:
             "SELECT COALESCE(MAX(sequence),0)+1 FROM events WHERE installation_id=? AND project_id=?",
             (self.scope.installation_id, self.scope.project_id),
         ).fetchone()[0]
-        poison_payload = {"message_id": message_id, "attempts": row["attempts"], "error": error}
+        poison_payload = dict(event_payload) if event_payload is not None else {"message_id": message_id, "attempts": row["attempts"], "error": error}
         payload = _canonical_payload(poison_payload)
         previous = last[0] if last else "GENESIS"
         version = self.conn.execute(
-            "SELECT COALESCE(MAX(version),0)+1 FROM events WHERE installation_id=? AND project_id=? AND aggregate='outbox'",
-            (self.scope.installation_id, self.scope.project_id),
+            "SELECT COALESCE(MAX(version),0)+1 FROM events WHERE installation_id=? AND project_id=? AND aggregate=?",
+            (self.scope.installation_id, self.scope.project_id, aggregate),
         ).fetchone()[0]
         event_id = uuid.uuid4().hex
         internal_writer = "ledger-internal"
@@ -1096,9 +1161,9 @@ class SQLiteLedger:
                 sequence,
                 now,
                 event_id,
-                "outbox",
+                aggregate,
                 version,
-                "outbox.poison",
+                kind,
                 payload,
                 previous,
                 internal_writer,
@@ -1116,9 +1181,9 @@ class SQLiteLedger:
             sequence,
             now,
             event_id,
-            "outbox",
+            aggregate,
             version,
-            "outbox.poison",
+            kind,
             payload,
             previous,
             internal_writer,
@@ -1137,9 +1202,9 @@ class SQLiteLedger:
                 sequence,
                 event_id,
                 now,
-                "outbox",
+                aggregate,
                 version,
-                "outbox.poison",
+                kind,
                 payload,
                 previous,
                 event_hash,
@@ -1156,12 +1221,12 @@ class SQLiteLedger:
             ),
         )
         prior = self.conn.execute(
-            "SELECT value FROM projections WHERE installation_id=? AND project_id=? AND aggregate='outbox'",
-            (self.scope.installation_id, self.scope.project_id),
+            "SELECT value FROM projections WHERE installation_id=? AND project_id=? AND aggregate=?",
+            (self.scope.installation_id, self.scope.project_id, aggregate),
         ).fetchone()
         value = self.reducer.reduce(
             json.loads(prior[0]) if prior else None,
-            "outbox.poison",
+            kind,
             poison_payload,
         )
         self.conn.execute(
@@ -1169,7 +1234,7 @@ class SQLiteLedger:
             (
                 self.scope.installation_id,
                 self.scope.project_id,
-                "outbox",
+                aggregate,
                 version,
                 json.dumps(value, sort_keys=True, separators=(",", ":")),
                 self.reducer.version,
@@ -1239,7 +1304,7 @@ class SQLiteLedger:
                 self.conn.rollback()
                 return Result.INTEGRITY_FAILURE
         self.conn.execute(
-            "UPDATE outbox SET status=?,last_error=?,lease_owner=NULL,lease_until=? WHERE installation_id=? AND project_id=? AND message_id=?",
+            "UPDATE outbox SET status=?,last_error=?,lease_owner=NULL,lease_until=?,reconciliation_required=0 WHERE installation_id=? AND project_id=? AND message_id=?",
             (status, error, until, self.scope.installation_id, self.scope.project_id, message_id),
         )
         self.conn.commit()
@@ -1255,7 +1320,7 @@ class SQLiteLedger:
             self.conn.rollback()
             return lease_failure
         cur = self.conn.execute(
-            "UPDATE outbox SET status='SENT',transport_ack_at=?,lease_owner=NULL,lease_epoch=NULL,lease_token=NULL,lease_until=NULL WHERE installation_id=? AND project_id=? AND message_id=? AND status='LEASED' AND lease_owner=? AND lease_epoch=? AND lease_token=? AND lease_until> ?",
+            "UPDATE outbox SET status='SENT',transport_ack_at=?,lease_owner=NULL,lease_epoch=NULL,lease_token=NULL,lease_until=NULL,reconciliation_required=0 WHERE installation_id=? AND project_id=? AND message_id=? AND status='LEASED' AND lease_owner=? AND lease_epoch=? AND lease_token=? AND lease_until> ?",
             (
                 now,
                 self.scope.installation_id,
@@ -1269,6 +1334,105 @@ class SQLiteLedger:
         )
         self.conn.commit()
         return Result.TRANSPORT_ACKNOWLEDGED if cur.rowcount else Result.STALE_FENCE
+
+    def mark_outbox_effect_started(self, message_id: str, owner: str, *, lease: Any) -> Result:
+        """Durably fence a possibly accepted external effect before awaiting it."""
+        if not _valid_identifier(message_id) or not _valid_identifier(owner):
+            return Result.INVALID_INPUT
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            failure = self._outbox_lease_failure(lease, owner)
+            if failure:
+                self.conn.rollback()
+                return failure
+            cur = self.conn.execute(
+                "UPDATE outbox SET reconciliation_required=1 WHERE installation_id=? AND project_id=? AND message_id=? AND status='LEASED' AND lease_owner=? AND lease_epoch=? AND lease_token=? AND lease_until> ?",
+                (
+                    self.scope.installation_id,
+                    self.scope.project_id,
+                    message_id,
+                    owner,
+                    lease.epoch,
+                    lease.token,
+                    self.clock(),
+                ),
+            )
+            self.conn.commit()
+            return Result.APPLIED if cur.rowcount == 1 else Result.STALE_FENCE
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def mark_outbox_unknown(
+        self,
+        message_id: str,
+        owner: str,
+        *,
+        lease: Any,
+        reason: str = "unknown transport outcome",
+        authority: Mapping[str, Any] | None = None,
+    ) -> Result:
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            failure = self._outbox_lease_failure(lease, owner)
+            row = self.conn.execute(
+                "SELECT * FROM outbox WHERE installation_id=? AND project_id=? AND message_id=?",
+                (self.scope.installation_id, self.scope.project_id, message_id),
+            ).fetchone()
+            if failure and not (row and row["status"] == "UNKNOWN" and row["reconciliation_required"] == 1):
+                self.conn.rollback()
+                return failure
+            if not row:
+                self.conn.rollback()
+                return Result.STALE_FENCE
+            if row["status"] == "LEASED" and (
+                tuple((row["lease_owner"], row["lease_epoch"], row["lease_token"]))
+                != (owner, lease.epoch, lease.token)
+            ):
+                self.conn.rollback()
+                return Result.STALE_FENCE
+            if row["status"] not in {"LEASED", "UNKNOWN"}:
+                self.conn.rollback()
+                return Result.STALE_FENCE
+            self._stage("before_unknown_event")
+            payload = {
+                "run_id": authority["run_id"],
+                "task_id": authority["task_id"],
+                "attempt": authority["attempt"],
+                "contract_id": authority["contract_id"],
+                "message_id": message_id,
+                "reason": reason,
+            } if authority is not None else None
+            self._append_poison_event(
+                row, message_id, reason, self.clock(), kind="dispatch.unknown", event_payload=payload, aggregate="dispatch:" + message_id
+            )
+            self._stage("after_unknown_event")
+            self.conn.execute(
+                "UPDATE outbox SET status='UNKNOWN',reconciliation_required=1,lease_owner=NULL,lease_epoch=NULL,lease_token=NULL,lease_until=NULL WHERE installation_id=? AND project_id=? AND message_id=?",
+                (self.scope.installation_id, self.scope.project_id, message_id),
+            )
+            self._stage("after_unknown_outbox")
+            self.conn.commit()
+            return Result.APPLIED
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def reconcile_outbox(self, message_id: str, *, authority: Mapping[str, Any]) -> Result:
+        row = self.conn.execute(
+            "SELECT * FROM outbox WHERE installation_id=? AND project_id=? AND message_id=?",
+            (self.scope.installation_id, self.scope.project_id, message_id),
+        ).fetchone()
+        if not row or row["status"] != "UNKNOWN" or row["reconciliation_required"] != 1:
+            return Result.INVALID_INPUT
+        if any(row[name] != authority.get(name) for name in ("contract_id", "contract_generation", "revocation_epoch")):
+            return Result.STALE_AUTHORITY
+        self.conn.execute(
+            "UPDATE outbox SET reconciliation_required=0,status='SENT' WHERE installation_id=? AND project_id=? AND message_id=?",
+            (self.scope.installation_id, self.scope.project_id, message_id),
+        )
+        self.conn.commit()
+        return Result.APPLIED
 
     def _outbox_lease_failure(self, lease: Any | None, owner: str) -> Result | None:
         if lease is None or getattr(lease, "resource", None) != "outbox" or getattr(lease, "scope", None) != self.scope:
@@ -1299,6 +1463,40 @@ class SQLiteLedger:
                 (self.scope.installation_id, self.scope.project_id),
             )
         ]
+
+    def outbox_message(self, message_id: str) -> dict[str, Any] | None:
+        if not _valid_identifier(message_id):
+            return None
+        row = self.conn.execute(
+            "SELECT * FROM outbox WHERE installation_id=? AND project_id=? AND message_id=?",
+            (self.scope.installation_id, self.scope.project_id, message_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def aggregate_version(self, aggregate: str) -> int:
+        if not isinstance(aggregate, str) or not aggregate:
+            raise InvalidInputError("invalid aggregate")
+        return int(
+            self.conn.execute(
+                "SELECT COALESCE(MAX(version),0) FROM events WHERE installation_id=? AND project_id=? AND aggregate=?",
+                (self.scope.installation_id, self.scope.project_id, aggregate),
+            ).fetchone()[0]
+        )
+
+    def lease(self, resource: str) -> Any | None:
+        from .leases import Lease
+
+        if not _valid_identifier(resource):
+            return None
+        row = self.conn.execute(
+            "SELECT * FROM leases WHERE installation_id=? AND project_id=? AND resource=?",
+            (self.scope.installation_id, self.scope.project_id, resource),
+        ).fetchone()
+        return (
+            Lease(self.scope, resource, row["owner"], row["epoch"], row["expires_at"], row["token"])
+            if row
+            else None
+        )
 
     def create_contract(
         self,
