@@ -1,5 +1,7 @@
 # R11 session handoff — 2026-07-25
 
+> **Historical checkpoint:** the implementation-status instructions below describe the pre-closeout stop point. They were superseded by `0912f1d` (R11 implementation), `e26d890` (R11 documentation closeout), and `RELEASE_CLOSEOUT.md` (v0.19.0 release-level truth). Preserve this file as evidence; do not use its "pending/uncommitted" language as current status.
+
 ## Exact stop point
 
 The session was stopped at the user's request while R11 verification and closeout remained incomplete.

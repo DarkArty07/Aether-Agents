@@ -2,9 +2,9 @@
 
 This file is the canonical project context. It is read automatically by hermes-agent, Cursor, and Claude Code.
 
-## v0.19 R7 default-off coordination status
+## v0.19.0 experimental coordination closeout
 
-R7 shadow integration is code-complete on the v0.19 feature branch but remains inactive. Olympus v3 is the sole ACP process/session lifecycle owner, and the five MCP tools plus seven `talk_to` actions remain compatible when coordination is absent or disabled. Harmonia plans and shadow reports are observational; they never grant semantic completion or perform effects. Disposable SQLite correlation evidence is not a production identity/key-custody solution. Any pilot, live config mutation, gateway restart, production migration, R8, merge, tag, or publication requires a separate explicit user gate. Canonical evidence lives in `docs/releases/v0.19.0-autonomous-coordination/`.
+v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to -> ACPManager` path remains authoritative, so this version does not replace Hermes hub-and-spoke. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication are outside this closeout and require separate authorization. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
 
 ## Git Conventions
 

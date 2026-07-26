@@ -76,11 +76,9 @@ Olympus v3 Server
 - **Plugin Hooks** — Per-turn observability inside each Daimon: `post_llm_call`, `post_tool_call`, `on_session_end`, `pre_llm_call`
 - **.aether** — 3-layer continuity: capture (hooks) → curate (Ariadna) → inject (first turn)
 
-### Experimental v0.19 coordination boundary
+### v0.19 experimental coordination closeout
 
-The feature branch contains a complete **default-off** R7 shadow subsystem. It compares Harmonia plans with persisted Olympus evidence, correlates deterministic and actual session IDs, detects typed failures, and can preserve correlation in a disposable SQLite store. The current `talk_to` path and all five Olympus MCP tools remain the operational default; Olympus alone owns ACP process/session lifecycle. Shadow reports are evidence only and always keep `semantic_complete=false`.
-
-Nothing in R7 installs Cotal, NATS, or JetStream, activates the gateway, migrates production state, or authorizes autonomous effects. See the [R7 benchmark](docs/releases/v0.19.0-autonomous-coordination/R7_BENCHMARK_REPORT.md) and [future activation/rollback runbook](docs/releases/v0.19.0-autonomous-coordination/R7_ACTIVATION_ROLLBACK_RUNBOOK.md).
+v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. R12–R14 are outside v0.19.0 and require later, separately authorized versioned experiments. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
 
 ---
 

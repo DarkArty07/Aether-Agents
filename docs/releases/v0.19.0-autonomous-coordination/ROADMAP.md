@@ -1,10 +1,10 @@
 # v0.19.0 Autonomous Coordination — Roadmap
 
-**Status:** **R7 COMPLETE / DEFAULT-OFF; R8 LEGACY PILOT BLOCKED; KERNEL CONVERGENCE PLANNING ACTIVE (2026-07-23).** R8 ended fail-closed after its final bounded review and is not reopened. The approved documentary continuation is `KERNEL_CONVERGENCE_ROADMAP.md`; implementation, another pilot, live activation, merge, tag, and release remain blocked.
+**Status:** **FROZEN EXPERIMENTAL BASELINE AT R11 — DEFAULT-OFF / NOT OPERATIONALLY VALIDATED.** R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. R12–R14 are outside v0.19.0 and move to later, separately authorized versioned experiments. See `RELEASE_CLOSEOUT.md`. No live activation, merge, tag, deployment, publication or release-readiness claim is authorized.
 
-**Release objective:** migrate Aether Agents to a contract-bounded autonomous team using Cotal Core's transport-agnostic coordination concepts as inspiration, while preserving Hermes as user-facing design authority, Olympus/ACP as sole process/session lifecycle owner, `.aether` as project continuity, and the current Telegram gateway as a protected control channel.
+**Historical objective:** explore migration from Hermes-relayed coordination toward a contract-bounded autonomous team while preserving Hermes as user-facing authority and Olympus/ACP as lifecycle owner. v0.19.0 did not demonstrate that replacement operationally.
 
-**Normative sources:** [DESIGN.md](DESIGN.md), [BASELINE.md](BASELINE.md), [RESEARCH.md](RESEARCH.md), [FEASIBILITY.md](FEASIBILITY.md), [MIGRATION_PLAN.md](MIGRATION_PLAN.md), [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [KERNEL_CONVERGENCE_DECISION.md](KERNEL_CONVERGENCE_DECISION.md), and [KERNEL_CONVERGENCE_ROADMAP.md](KERNEL_CONVERGENCE_ROADMAP.md).
+**Normative closeout:** [RELEASE_CLOSEOUT.md](RELEASE_CLOSEOUT.md). Earlier design, feasibility, implementation and convergence documents remain historical evidence; where status language conflicts, the closeout governs v0.19.0.
 
 ## 1. Non-negotiable release decisions
 

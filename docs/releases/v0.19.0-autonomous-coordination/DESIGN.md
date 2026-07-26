@@ -1,6 +1,6 @@
 # v0.19.0 Autonomous Coordination — Design v2
 
-**Status:** **R7 COMPLETE DEFAULT-OFF; R8 LEGACY PILOT BLOCKED; KERNEL CONVERGENCE APPROVED FOR PLANNING ONLY.** R2–R7 remain the selected architecture. The bounded R8 Snake pilot demonstrated that its `PilotStore` runtime bypassed those authorities and ended fail-closed as blocked. The approved continuation is defined by `KERNEL_CONVERGENCE_DECISION.md`; source/test implementation, another pilot, live activation, merge, tag, deployment, and publication remain separately blocked.
+**Status:** **FROZEN v0.19.0 EXPERIMENTAL BASELINE AT R11 — DEFAULT-OFF / NOT OPERATIONALLY VALIDATED.** `RELEASE_CLOSEOUT.md` is authoritative for release status. Earlier R0–R11 design and evidence remain historical; R12–R15 are deferred outside v0.19.0. No kernel-backed live pilot, hub-and-spoke replacement, activation, merge, tag, deployment or publication is claimed or authorized.
 
 **Date:** 2026-07-18
 

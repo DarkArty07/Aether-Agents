@@ -1,22 +1,25 @@
 # v0.19.0 Kernel-Backed Convergence Roadmap
 
-**Status:** ACTIVE ROADMAP — R11 COMPLETE; R12–R14 remain blocked pending separate authorization
+**Status:** FROZEN AT R11 — HISTORICAL CONVERGENCE PLAN; R12–R15 DEFERRED TO LATER VERSIONED EXPERIMENTS
 
-**Predecessor:** `ROADMAP.md` R0–R8. That history remains normative and is not rewritten. R8 ended `BLOCKED` after the bounded Snake pilot exercised the legacy pilot runtime and failed its final independent product review.
+**Closeout authority:** `RELEASE_CLOSEOUT.md`. R11 is the final v0.19.0 implementation milestone. Sections R12–R15 below are preserved as design input and are not pending scope for v0.19.0.
 
-**Objective:** prove whether the v0.19.0 architecture is functionally viable by making the existing R2–R7 kernel the mandatory authority for one clean, fixed-graph, default-off Snake pilot without PilotStore writes, dual authority, semantic normalization, or manual coordinator repair. The decisive gate is executable kernel-backed behavior, not another Athena review cycle.
+**Predecessor:** `ROADMAP.md` R0–R8. That history remains normative evidence and is not rewritten. R8 ended `BLOCKED` after the bounded Snake pilot exercised the legacy pilot runtime and failed its final independent product review.
+
+**Historical objective:** prove whether the architecture could become functionally viable through one kernel-backed pilot. v0.19.0 stopped before that proof, so no `VIABLE` verdict was issued.
 
 ## Release boundary
 
-v0.19.0 targets:
+v0.19.0 closeout contains:
 
 - R7 shadow stable and default-off;
-- one R8-derived kernel-backed Snake capability, experimental and default-off;
+- frozen legacy R8 blocked evidence;
+- deterministic kernel convergence through R11;
+- no trusted-evidence runtime, executable closure or kernel-backed pilot;
 - no autonomous general rollout;
 - local single-user/cooperative-process threat model;
 - no E2–E4 live effects;
-- no Athena dispatch or Athena-dependent milestone gate until explicit user reactivation;
-- no merge, tag, deployment, publication, or runtime activation without separate approval.
+- no merge, tag, deployment, publication or runtime activation authorized by this closeout.
 
 ## Path
 
@@ -30,22 +33,17 @@ R9   Convergence contracts and RED composition matrix (COMPLETE)
 R10  Durable workflow projection and budget authority (COMPLETE)
   |
   v
-R11  Ledger-native dispatch, lease/fence, and reconciliation (NEXT)
+R11  Ledger-native dispatch, lease/fence, and reconciliation (COMPLETE)
   |
   v
-R12  Trusted evidence, artifact generations, and review binding
+FREEZE v0.19.0 experimental baseline; no operational viability verdict
   |
   v
-R13  Closure snapshot, executable cleanup, and operational finality
-  |
-  v
-R14  Clean kernel-backed Snake plus fault injection
-  |
-  v
-HOLD User decision on second fixture and release scope
-  |
-  v
-R15  Second fixture and generalization evidence (separately authorized)
+LATER VERSIONED EXPERIMENTS (separate authorization)
+  - trusted evidence and review binding
+  - executable closure and cleanup
+  - default-off live composition
+  - clean kernel-backed pilot and fault matrix
 ```
 
 ## R8L — Freeze legacy evidence
@@ -112,6 +110,10 @@ Implement with a fake executor only:
 - harden `complete_outbox()` binding.
 
 **Exit:** fault injection at every persist/effect boundary cannot duplicate semantic execution or accept stale results.
+
+## Deferred design inventory — not v0.19.0 scope
+
+The following R12–R15 sections are preserved to carry design intent into later versioned experiments. They are not pending milestones for v0.19.0 and their numbering may be remapped when a later increment is authorized.
 
 ## R12 — Trusted evidence and generic review binding
 
@@ -221,10 +223,10 @@ This policy removes Athena as a universal gate; it does not convert missing evid
 | R9/R10 source and tests | COMPLETE |
 | R11a RED dispatch/outbox/fencing tests | COMPLETE and committed in `869efee` |
 | R11b source/test implementation | COMPLETE and committed in `0912f1d` |
-| R12–R13 source/test implementation | BLOCKED pending separate authorization |
-| Fake-runtime deterministic tests | R11 focused 45, coordination 650 and full 841 GREEN |
-| Real ACP integration tests | BLOCKED pending milestone gate |
-| Clean Snake pilot | BLOCKED pending R9–R13 and explicit run approval |
+| R12–R15 source/test implementation | DEFERRED outside v0.19.0; requires later versioned authorization |
+| Fake-runtime deterministic tests | R11 focused 45, coordination 650 and full 841 GREEN at closeout |
+| Real ACP kernel integration tests | NOT EXECUTED in v0.19.0 |
+| Clean kernel-backed pilot | NOT EXECUTED in v0.19.0 |
 | Athena review or dispatch | SUSPENDED until explicit user reactivation |
 | Gateway restart/config mutation | NOT AUTHORIZED |
-| Merge/tag/release/publication | NOT AUTHORIZED |
+| Merge/tag/release/publication | NOT AUTHORIZED by this closeout |

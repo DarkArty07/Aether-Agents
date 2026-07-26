@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.11+, dataclasses/enums, SQLite, asyncio, existing Olympus ACP APIs, pytest, Ruff. No new runtime dependency.
 
-**Current authorization/status:** R9–R11 are complete; R11 is committed in `0912f1d` after migration, uncertain-effect recovery and concurrent-worker fencing closure. R12–R13 remain blocked pending separate authorization. Do not run live ACP, execute the Snake pilot, activate, merge, tag or publish from this checkpoint.
+**Current status:** FROZEN HISTORICAL PLAN. v0.19.0 stops at R11 (`0912f1d`, closeout `e26d890`) and is classified experimental/default-off/not operationally validated by `RELEASE_CLOSEOUT.md`. Tasks for trusted evidence, closure, live composition and a kernel-backed pilot are deferred to later separately authorized versioned experiments. Do not implement them, run live ACP, activate, merge, tag or publish as part of v0.19.0.
 
 ---
 

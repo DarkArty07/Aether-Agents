@@ -1,8 +1,8 @@
 # v0.19.0 Kernel-Backed Convergence Decision
 
-**Status:** APPROVED FOR DOCUMENTATION AND PLANNING ONLY — 2026-07-23
+**Status:** HISTORICAL CONVERGENCE DECISION — SUPERSEDED FOR v0.19.0 STATUS BY `RELEASE_CLOSEOUT.md`
 
-**Implementation status:** NOT AUTHORIZED. This decision does not authorize source/test changes, a new pilot run, live coordination, gateway/config mutation, merge, tag, deployment, or publication.
+**Implementation outcome:** v0.19.0 implemented deterministic convergence through R11, then froze as experimental/default-off/not operationally validated. R12–R14, another pilot, live coordination, gateway/config mutation, merge, tag, deployment and publication are outside this version.
 
 ## Decision
 
