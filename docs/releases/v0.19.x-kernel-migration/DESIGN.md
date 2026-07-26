@@ -206,27 +206,35 @@ Requirements:
 
 The exact resolver and filesystem location remain a later technical design decision; the per-project authority boundary is mandatory.
 
-### Proposed request seam
+### Approved public request seam — `harmonia`
 
-The smallest backward-compatible experiment is an explicit discriminator on the existing delegation surface, conceptually:
+v0.19.1 introduces a dedicated MCP tool named `harmonia`. Harmonia is the public coordination identity; the kernel remains an internal implementation detail.
 
 ```text
-talk_to(action="delegate", coordination="kernel-single-task")
+harmonia(action="start", ...)
+harmonia(action="status", run_id="...")
+harmonia(action="stop", run_id="...")
 ```
+
+Initial action contract:
+
+- `start` validates eligibility, durably admits exactly one task, stages dispatch and returns the Harmonia run identity plus technical state;
+- `status` is read-only and returns durable authority, dispatch, ACP binding, uncertainty and reconciliation state without creating or migrating storage;
+- `stop` prevents further work for the run and requests bounded ACPManager-owned cancellation/cleanup; before v0.19.3 it must not claim verified semantic closure.
+
+The public surface must not expose `kernel_run` or require callers to understand `KernelRunService`, `KernelDispatcher` or ledger internals. Structured responses may state `runtime_authority=kernel` for auditability, but Harmonia owns the public contract.
 
 Effective admission requires all conditions:
 
 ```text
-explicit request opt-in
-AND server config permits kernel-single-task
+explicit harmonia start request
+AND server config permits the v0.19.1 single-task capability
 AND project is allowlisted
 AND max_active_runs permits admission
 AND immutable contract authorizes the task
 ```
 
-The request field alone is never authorization. Ordinary `talk_to` remains unchanged when the discriminator is absent.
-
-A separate future `kernel_run` MCP tool may provide stronger steady-state separation, but it is not required for the smallest v0.19.1 experiment. A server-global selector is rejected because it could silently reroute all projects.
+The request alone is never authorization. Ordinary `talk_to` remains exclusively legacy and receives no experimental `coordination` discriminator. A server-global selector is rejected because it could silently reroute unrelated projects.
 
 ### Proposed default-off config shape
 
@@ -248,7 +256,7 @@ Code presence, composition eligibility, request intent and live execution author
 - no trusted evidence acceptance;
 - no closure claim;
 - no handoff;
-- no active Harmonia;
+- no active Harmonia planning or next-task selection;
 - no arbitrary graph;
 - no production migration;
 - no default-mode change;
@@ -340,29 +348,19 @@ Athena remains suspended. Validation uses:
 
 A test report, agent statement or specialist opinion never substitutes for observable runtime evidence.
 
-## 11. Current decision gate — v0.19.1 API seam
+## 11. Current planning gate — detailed v0.19.1 contract
 
-The six-patch sequence is approved. The next decision is how an explicitly authorized v0.19.1 request selects the kernel without changing ordinary `talk_to` behavior.
-
-### Option A — discriminator inside `talk_to` (recommended for v0.19.1)
+The public API decision is approved:
 
 ```text
-talk_to(action="delegate", coordination="kernel-single-task")
+harmonia(action="start" | "status" | "stop")
 ```
 
-- smallest backward-compatible change;
-- reuses the established Hermes-to-Olympus surface;
-- ordinary calls remain legacy when the field is absent;
-- Olympus must enforce config, project allowlist, contract and immutable run authority;
-- eventual steady-state separation may still require a dedicated tool.
+- Harmonia is the public coordination identity.
+- The kernel remains an internal engine.
+- `talk_to` remains exclusively legacy.
+- `start` is limited to one task in v0.19.1.
+- `status` is read-only.
+- `stop` requests bounded ACPManager-owned teardown but cannot claim verified closure before v0.19.3.
 
-### Option B — separate `kernel_run` MCP tool
-
-- strongest structural separation between legacy sessions and kernel runs;
-- clearer response and lifecycle contract;
-- expands the public MCP surface before the first operational hypothesis is proven;
-- requires more Hermes integration and compatibility work in v0.19.1.
-
-A server-global runtime switch is rejected because it could reroute unrelated projects and existing behavior.
-
-**Recommendation:** approve Option A for v0.19.1 only. Reassess a dedicated `kernel_run` tool after v0.19.4 proves a no-relay handoff. Choosing either option authorizes detailed planning only; code and live execution remain separate gates.
+The next authorized activity is a detailed v0.19.1 implementation plan covering typed request/response schemas, server composition lifetime, project-store resolution, configuration admission, state transitions, RED tests, deterministic gates and the separately blocked live-run matrix. Planning does not authorize source changes or execution.

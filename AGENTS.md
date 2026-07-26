@@ -8,7 +8,7 @@ v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not ope
 
 ## v0.19.x incremental kernel migration
 
-The six-patch design in `docs/releases/v0.19.x-kernel-migration/DESIGN.md` is approved: v0.19.1 composition, v0.19.2 trusted evidence, v0.19.3 closure, v0.19.4 fixed no-relay handoff, v0.19.5 bounded Harmonia and v0.19.6 fault pilot/verdict. Only the design and detailed v0.19.1 planning are authorized. Implementation, live ACP, activation, merge, tag, release and deployment remain blocked behind separate gates.
+The six-patch design in `docs/releases/v0.19.x-kernel-migration/DESIGN.md` is approved: v0.19.1 composition, v0.19.2 trusted evidence, v0.19.3 closure, v0.19.4 fixed no-relay handoff, v0.19.5 bounded Harmonia and v0.19.6 fault pilot/verdict. The public coordination surface is a dedicated `harmonia` MCP tool with initial `start`, `status` and `stop` actions; kernel classes remain internal and `talk_to` remains legacy. Only design and detailed v0.19.1 planning are authorized. Implementation, live ACP, activation, merge, tag, release and deployment remain blocked behind separate gates.
 
 ## Git Conventions
 
