@@ -1,6 +1,6 @@
 # v0.19.0 Kernel-Backed Convergence Roadmap
 
-**Status:** ACTIVE ROADMAP — R10 COMPLETE; R11 IMPLEMENTED AND FOCUSED-GREEN, CANONICAL CLOSEOUT PENDING
+**Status:** ACTIVE ROADMAP — R11 COMPLETE; R12–R14 remain blocked pending separate authorization
 
 **Predecessor:** `ROADMAP.md` R0–R8. That history remains normative and is not rewritten. R8 ended `BLOCKED` after the bounded Snake pilot exercised the legacy pilot runtime and failed its final independent product review.
 
@@ -97,7 +97,7 @@ Implement with a fake executor only:
 
 ## R11 — Dispatch, fencing, and uncertain effects
 
-**Status:** IMPLEMENTED / NOT CLOSED — focused suite (38), coordination regression (109), full suite (834), Ruff, compile and diff checks are GREEN. The remaining fail-closed blockers are legacy-outbox migration coverage, atomic `UNKNOWN` persistence/recovery and concurrent dispatcher worker identity/fencing. See `R11_SESSION_HANDOFF_2026-07-25.md`.
+**Status:** COMPLETE — commit `0912f1d`; focused suite (45), coordination regression (650), full suite (841), Ruff, compile, diff, staged-scope and credential scan are GREEN.
 
 - persist dispatch intent before ACP calls;
 - claim through `LedgerNativeTransport`;
@@ -220,9 +220,9 @@ This policy removes Athena as a universal gate; it does not convert missing evid
 | Documentation and planning | AUTHORIZED |
 | R9/R10 source and tests | COMPLETE |
 | R11a RED dispatch/outbox/fencing tests | COMPLETE and committed in `869efee` |
-| R11b source/test implementation | IMPLEMENTED and focused-green; canonical verification/commit pending |
-| R12–R13 source/test implementation | BLOCKED pending R11 completion evidence and authorization |
-| Fake-runtime deterministic tests | R11 focused suite GREEN; complete final regression pending |
+| R11b source/test implementation | COMPLETE and committed in `0912f1d` |
+| R12–R13 source/test implementation | BLOCKED pending separate authorization |
+| Fake-runtime deterministic tests | R11 focused 45, coordination 650 and full 841 GREEN |
 | Real ACP integration tests | BLOCKED pending milestone gate |
 | Clean Snake pilot | BLOCKED pending R9–R13 and explicit run approval |
 | Athena review or dispatch | SUSPENDED until explicit user reactivation |
