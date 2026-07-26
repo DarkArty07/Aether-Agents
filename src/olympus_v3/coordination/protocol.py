@@ -88,7 +88,7 @@ class Principal:
     actor_id: str
 
     def __post_init__(self) -> None:
-        project = _name(self.project_id, "project")
+        project = _id(self.project_id, "project")
         owner = _name(self.owner_id, "owner")
         actor = _name(self.actor_id, "actor")
         if owner == actor:

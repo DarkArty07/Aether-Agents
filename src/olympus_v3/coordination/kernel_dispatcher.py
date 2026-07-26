@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from .contracts import ContractState
 from .leases import Lease
 from .ledger import Result, SQLiteLedger, StoreScope
-from .workflow import AttemptState
+from .workflow import AttemptState, kernel_logical_session
 
 
 class DispatchRejected(ValueError):
@@ -194,7 +194,7 @@ class KernelDispatcher:
         ):
             raise DispatchRejected("invalid dispatch inputs")
         project_root = str(Path(project_root).resolve())
-        logical = f"kernel:{self.ledger.scope.project_id}:{run_id}:{task_id}:{attempt}"
+        logical = kernel_logical_session(self.ledger.scope.project_id, run_id, task_id, attempt)
         workers = tuple(participant for participant in contract.participants if participant != contract.owner)
         if len(workers) != 1:
             raise DispatchRejected("dispatch requires exactly one contract worker")
@@ -457,17 +457,17 @@ class KernelDispatcher:
             return None
         if row["status"] == "UNKNOWN":
             raise ReconciliationRequired("typed reconciliation required")
+        if any(
+            binding.logical_session == authority.logical_session
+            for binding in self.runtime.sessions(authority.run_id, authority.task_id)
+        ):
+            return {"accepted": True, "replayed": True}
         # Persist this conservative pre-effect marker before the first external
         # await. A crash after Olympus may have accepted cannot be retried from
         # a merely leased row; recovery turns it into durable UNKNOWN instead.
         if row["reconciliation_required"]:
             self._record_unknown(authority, "recovered possible accepted dispatch")
             return None
-        if any(
-            binding.logical_session == authority.logical_session
-            for binding in self.runtime.sessions(authority.run_id, authority.task_id)
-        ):
-            return {"accepted": True, "replayed": True}
         armed = self.ledger.mark_outbox_effect_started(
             authority.message_id,
             self._owner,
@@ -534,6 +534,15 @@ class KernelDispatcher:
             )
         except Exception as exc:
             self._record_unknown(authority, f"binding persistence failed: {exc}")
+            return None
+        row = self._row(authority)
+        acknowledged = self.ledger.mark_outbox_sent(
+            authority.message_id,
+            self._owner,
+            lease=self._claimed_transport_lease(row or {}),
+        )
+        if acknowledged is not Result.TRANSPORT_ACKNOWLEDGED:
+            self._record_unknown(authority, f"transport acknowledgement failed: {acknowledged.value}")
             return None
         return response
 

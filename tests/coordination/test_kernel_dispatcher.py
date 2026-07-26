@@ -207,7 +207,8 @@ def test_authority_binds_explicit_plan_inputs_and_immutable_fields(kernel):
     assert authority.plan_id
     assert authority.contract_id == "contract-a" and authority.contract_generation == 0
     assert authority.project_root == "/workspace/project"
-    assert authority.logical_session == f"kernel:{PROJECT}:run-a:task-a:{attempt.attempt}"
+    assert authority.logical_session.startswith("kernel:")
+    assert len(authority.logical_session) == 71
     assert dispatch_row(ledger)["contract_id"] == "contract-a"
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -122,6 +123,12 @@ def _bad(message: str) -> InvalidTransition:
     return InvalidTransition(message)
 
 
+def kernel_logical_session(project_id: str, run_id: str, task_id: str, attempt: int) -> str:
+    """Return a bounded deterministic session identity for full-width IDs."""
+    material = f"{project_id}\0{run_id}\0{task_id}\0{attempt}".encode()
+    return "kernel:" + hashlib.sha256(material).hexdigest()
+
+
 def _event_payload(event):
     payload = event.get("payload") if isinstance(event, dict) else None
     if isinstance(payload, str):
@@ -200,7 +207,11 @@ def validate_workflow_history(events):
                 or aggregate != "dispatch:" + message_id
                 or message_id in staged
                 or payload["lease_resource"] != f"dispatch:{run_id}:{task_id}:{attempt}"
-                or payload["logical_session"] != f"kernel:{payload['project_id']}:{run_id}:{task_id}:{attempt}"
+                or payload["logical_session"]
+                not in {
+                    f"kernel:{payload['project_id']}:{run_id}:{task_id}:{attempt}",
+                    kernel_logical_session(payload["project_id"], run_id, task_id, attempt),
+                }
                 or payload["envelope"] != {"run_id": run_id, "task_id": task_id, "attempt": attempt}
                 or not isinstance(payload["project_root"], str)
                 or not payload["project_root"].startswith("/")

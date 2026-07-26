@@ -11,6 +11,7 @@ from olympus_v3.coordination.harmonia_runtime import (
     StaticCoordinationKeyProvider,
 )
 from olympus_v3.coordination.harmonia_service import HarmoniaService
+from olympus_v3.coordination.protocol import Principal
 
 
 class Manager:
@@ -46,6 +47,10 @@ class Manager:
 
 def run(awaitable):
     return asyncio.run(awaitable)
+
+
+def test_principal_accepts_sha256_project_identity_starting_with_digit():
+    assert Principal("0" * 64, "harmonia", "hermes").project_id == "0" * 64
 
 
 def payload(root: Path, **overrides):
