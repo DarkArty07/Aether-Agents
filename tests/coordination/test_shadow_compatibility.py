@@ -13,7 +13,7 @@ import pytest
 from olympus_v3 import config_loader, server
 from olympus_v3.config_loader import CoordinationConfig, OlympusV3Config, load_config
 
-TOOLS = {"talk_to", "discover", "aether_status", "aether_update", "aether_curate"}
+TOOLS = {"talk_to", "discover", "aether_status", "aether_update", "aether_curate", "harmonia"}
 ACTIONS = ("open", "message", "poll", "close", "cancel", "delegate", "steer")
 
 
