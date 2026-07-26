@@ -397,6 +397,120 @@ def test_future_retry_wait_does_not_block_independent_ready_task(kernel):
     assert len(adapter.opens) == 2
 
 
+def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(kernel):
+    adapter = FakeRuntimeAdapter()
+    d = dispatcher(kernel, adapter)
+    envelope = stage(d, kernel[2].attempt)
+
+    async_test(d.dispatch_once())
+
+    request = adapter.opens[0]
+    prompt = json.loads(request["prompt"])
+    assert set(prompt) == {
+        "acceptance_evidence",
+        "authority",
+        "contract",
+        "instructions",
+        "kind",
+        "task",
+    }
+    assert prompt["kind"] == "aether.harmonia.task.v1"
+    assert prompt["authority"] == {
+        "attempt": envelope.authority.attempt,
+        "contract_generation": 0,
+        "contract_id": "contract-a",
+        "message_id": envelope.authority.message_id,
+        "plan_id": envelope.authority.plan_id,
+        "plan_revision": 7,
+        "project_id": PROJECT,
+        "run_id": "run-a",
+        "snapshot_digest": "sha256:abc",
+        "task_id": "task-a",
+    }
+    assert prompt["contract"] == {
+        "escalation_conditions": ["ambiguity"],
+        "excluded_scopes": ["secrets/"],
+        "expected_outcome": "verified",
+        "included_scopes": ["src/"],
+        "limits": {
+            "max_parallel_tasks": 2,
+            "max_retries": 3,
+            "max_runtime_seconds": 60,
+            "model_budget": 100,
+            "network_budget": 1,
+            "tool_budget": 1,
+        },
+        "objective": "build",
+        "role_permissions": ["implement"],
+        "side_effect_policy": {
+            "allowed_effects": ["filesystem"],
+            "approval_threshold": 2,
+            "rollback_required": True,
+        },
+        "worker_id": "worker",
+    }
+    assert prompt["task"] == {
+        "attempt": 1,
+        "project_root": envelope.authority.project_root,
+        "task_id": "task-a",
+    }
+    assert prompt["acceptance_evidence"] == [{"name": "qa", "required": True, "state": "pending"}]
+    assert prompt["instructions"] == [
+        "Do not delegate.",
+        "Do not widen scope.",
+        "Do not modify the contract.",
+        "Do not claim completion without evidence.",
+        "Report blockers and stop when authority is insufficient.",
+    ]
+    assert request["prompt_digest"].startswith("sha256:")
+    assert len(request["prompt_digest"]) == 71
+    serialized = request["prompt"]
+    assert envelope.authority.lease_token not in serialized
+    assert "owner-key" not in serialized
+    assert "integrity-key" not in serialized
+
+
+def test_real_adapter_rejects_tampered_prompt_before_any_acp_operation(kernel):
+    from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
+    from olympus_v3.coordination.protocol import ValidationError
+
+    class Manager:
+        def __init__(self):
+            self.calls = []
+
+        async def spawn_agent(self, **kwargs):
+            self.calls.append(("spawn", kwargs))
+            return kwargs["session_id"]
+
+        async def send_message(self, *args):
+            self.calls.append(("send", args))
+
+        async def poll(self, session_id):
+            return {"status": "working", "session_id": session_id}
+
+        async def close(self, *args, **kwargs):
+            self.calls.append(("close", args, kwargs))
+
+    manager = Manager()
+    real = OlympusRuntimeAdapter(manager, project_id=PROJECT, enabled=True)
+
+    class TamperingAdapter:
+        async def dispatch_kernel(self, *, authority, request):
+            tampered = dict(request)
+            prompt = json.loads(tampered["prompt"])
+            prompt["authority"]["plan_revision"] += 1
+            tampered["prompt"] = json.dumps(prompt, sort_keys=True, separators=(",", ":"))
+            return await real.dispatch_kernel(authority=authority, request=tampered)
+
+    d = dispatcher(kernel, TamperingAdapter())
+    stage(d, kernel[2].attempt)
+
+    with pytest.raises(ValidationError, match="invalid kernel dispatch authority"):
+        async_test(d.dispatch_once())
+
+    assert manager.calls == []
+
+
 def test_olympus_adapter_exposes_authoritative_kernel_seam():
     from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
 
