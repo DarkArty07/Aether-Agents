@@ -1,8 +1,10 @@
 # v0.19.x Incremental Kernel Migration — Roadmap
 
-**Status:** APPROVED DESIGN — `harmonia` TOOL SEAM APPROVED; v0.19.1 DETAILED PLAN PENDING
+**Status:** APPROVED DESIGN — v0.19.1 DETAILED PLAN COMPLETE; IMPLEMENTATION PENDING AUTHORIZATION
 
 **Canonical design:** `DESIGN.md`
+
+**v0.19.1 implementation plan:** `V0.19.1_IMPLEMENTATION_PLAN.md`
 
 **Frozen predecessor:** `../v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`
 
@@ -38,7 +40,7 @@ A failure does not automatically authorize a correction patch or the next milest
 
 | Version | State | Hypothesis | Required evidence | Explicit exclusions |
 |---|---|---|---|---|
-| v0.19.1 | DESIGN + `harmonia` TOOL SEAM APPROVED — DETAILED PLAN PENDING | One opted-in task reaches ACPManager through server-owned kernel composition. | Actual composition seam, durable admission/staging/session binding, honest uncertainty, unchanged legacy default. | Completion, review, closure, handoff, Harmonia planning. |
+| v0.19.1 | DESIGN + DETAILED PLAN COMPLETE — IMPLEMENTATION PENDING AUTHORIZATION | One opted-in task reaches ACPManager through server-owned kernel composition. | Actual composition seam, durable admission/staging/session binding, honest uncertainty, unchanged legacy default. | Completion, review, closure, handoff, Harmonia planning. |
 | v0.19.2 | BLOCKED by v0.19.1 | A verifier-bound receipt proves the exact task result independently of agent prose. | Exact identity tuple, artifact generation/digest, stale/forged evidence rejection, deterministic replay. | Closure, next-task selection, handoff. |
 | v0.19.3 | BLOCKED by v0.19.2 | Trusted work closes only after ACPManager-owned cleanup is verified. | Closure snapshot, cleanup receipt, `CLOSE_FAILED`, no managed survivor under `CLOSED`. | Handoff, Harmonia, broad pilot. |
 | v0.19.4 | BLOCKED by v0.19.3 | Task B starts from Task A's durable result without Hermes relay. | Two-task trace, digest-bound handoff and zero routine Hermes calls between tasks. | Dynamic task selection, repair loops, arbitrary DAG. |
@@ -135,4 +137,4 @@ The v0.19.1 public seam is approved as a dedicated `harmonia` MCP tool:
 harmonia(action="start" | "status" | "stop")
 ```
 
-Harmonia owns the public coordination contract; the kernel remains internal; `talk_to` remains legacy. The next authorized activity is detailed v0.19.1 planning. Source changes, live ACP, configuration changes, gateway restart, merge, tag, deployment and publication remain unauthorized.
+Harmonia owns the public coordination contract; the kernel remains internal; `talk_to` remains legacy. The detailed implementation sequence, RED tests, rollback and separately blocked live matrix are frozen in `V0.19.1_IMPLEMENTATION_PLAN.md`. The next gate is explicit implementation authorization. Source changes, live ACP, configuration changes, gateway restart, merge, tag, deployment and publication remain unauthorized.

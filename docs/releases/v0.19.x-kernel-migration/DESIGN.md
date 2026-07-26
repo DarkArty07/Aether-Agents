@@ -348,7 +348,7 @@ Athena remains suspended. Validation uses:
 
 A test report, agent statement or specialist opinion never substitutes for observable runtime evidence.
 
-## 11. Current planning gate — detailed v0.19.1 contract
+## 11. Current gate — v0.19.1 implementation authorization
 
 The public API decision is approved:
 
@@ -363,4 +363,6 @@ harmonia(action="start" | "status" | "stop")
 - `status` is read-only.
 - `stop` requests bounded ACPManager-owned teardown but cannot claim verified closure before v0.19.3.
 
-The next authorized activity is a detailed v0.19.1 implementation plan covering typed request/response schemas, server composition lifetime, project-store resolution, configuration admission, state transitions, RED tests, deterministic gates and the separately blocked live-run matrix. Planning does not authorize source changes or execution.
+The detailed v0.19.1 plan is frozen in `V0.19.1_IMPLEMENTATION_PLAN.md`. It specifies the typed request/response contract, restricted genesis conversion, project identity/store, cold read-only status path, server-owned runtime registry, ledger-backed idempotency, contract-derived Daimon prompt, uncertainty semantics, RED/GREEN commit slices, deterministic gates and separately blocked live matrix.
+
+The next gate is explicit implementation authorization. The plan does not authorize source changes, configuration changes, ACP execution, gateway restart, merge, tag, release, deployment or publication.
