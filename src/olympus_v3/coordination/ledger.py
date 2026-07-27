@@ -1604,7 +1604,7 @@ class SQLiteLedger:
                 self.conn.rollback()
                 return failure
             cur = self.conn.execute(
-                "UPDATE outbox SET reconciliation_required=1 WHERE installation_id=? AND project_id=? AND message_id=? AND status='LEASED' AND lease_owner=? AND lease_epoch=? AND lease_token=? AND lease_until> ?",
+                "UPDATE outbox SET reconciliation_required=1 WHERE installation_id=? AND project_id=? AND message_id=? AND status='LEASED' AND reconciliation_required=0 AND lease_owner=? AND lease_epoch=? AND lease_token=? AND lease_until> ?",
                 (
                     self.scope.installation_id,
                     self.scope.project_id,

@@ -235,6 +235,7 @@ class KernelDispatcher:
     def _stage_ready(
         self, run_id: str, task_id: str, *, attempt: int, project_root: str, plan_revision: int,
         snapshot_digest: str, handoff: HandoffSnapshot | None = None, _message_id: str | None = None,
+        selection_epoch: int | None = None, selection_proposal_id: str | None = None,
     ) -> DispatchEnvelope:
         run, contract = self._contract(run_id)
         try:
@@ -332,11 +333,16 @@ class KernelDispatcher:
         }
         if handoff is not None:
             payload["handoff"] = handoff.to_dict()
+        if selection_epoch is not None:
+            payload["selection_epoch"] = selection_epoch
+            payload["selection_proposal_id"] = selection_proposal_id
         self._append("dispatch.staged", "dispatch:" + message_id, payload, message_id=message_id)
         return self._envelope(payload)
 
     def stage_successor(
-        self, run_id: str, source_task_id: str, successor_task_id: str, *, project_root: str, plan_revision: int
+        self, run_id: str, source_task_id: str, successor_task_id: str, *, project_root: str, plan_revision: int,
+        selection_epoch: int | None = None, selection_proposal_id: str | None = None,
+        selection_worker_id: str | None = None,
     ) -> DispatchEnvelope:
         """Admit and stage the fixed successor only after verifier-backed closure."""
         run, contract = self._contract(run_id)
@@ -398,7 +404,17 @@ class KernelDispatcher:
         if contract.task_worker_bindings is None or successor_task_id not in contract.task_worker_bindings:
             raise DispatchRejected("successor task worker binding required")
         worker = self._resolve_worker(contract, successor_task_id)
-        message_id = "000" + hashlib.sha256(f"successor:{run_id}:{successor_task_id}:{handoff.snapshot_digest}:{plan_revision}".encode()).hexdigest()[:29]
+        if selection_worker_id is not None and selection_worker_id != worker.actor_id:
+            raise DispatchRejected("committed selection worker binding mismatch")
+        selection_identity = ""
+        if selection_epoch is not None or selection_proposal_id is not None:
+            if (
+                isinstance(selection_epoch, bool) or not isinstance(selection_epoch, int) or selection_epoch <= 0
+                or not isinstance(selection_proposal_id, str) or not selection_proposal_id
+            ):
+                raise DispatchRejected("invalid committed selection identity")
+            selection_identity = f":selection:{selection_epoch}:{selection_proposal_id}"
+        message_id = "000" + hashlib.sha256(f"successor:{run_id}:{successor_task_id}:{handoff.snapshot_digest}:{plan_revision}{selection_identity}".encode()).hexdigest()[:29]
         attempt = None
         for _ in range(8):
             successor = self.runtime.task(run_id, successor_task_id)
@@ -439,6 +455,7 @@ class KernelDispatcher:
             run_id, successor_task_id, attempt=attempt.attempt, project_root=project_root,
             plan_revision=plan_revision, snapshot_digest=handoff.snapshot_digest, handoff=handoff,
             _message_id=message_id,
+            selection_epoch=selection_epoch, selection_proposal_id=selection_proposal_id,
         )
         if envelope.authority.agent_name != worker.actor_id or envelope.payload.get("handoff") != handoff.to_dict():
             raise DispatchRejected("successor dispatch binding mismatch")
@@ -683,6 +700,8 @@ class KernelDispatcher:
             return None
         if row["status"] == "UNKNOWN":
             raise ReconciliationRequired("typed reconciliation required")
+        if row["status"] == "SENT":
+            return {"accepted": True, "replayed": True}
         if any(
             binding.logical_session == authority.logical_session
             for binding in self.runtime.sessions(authority.run_id, authority.task_id)

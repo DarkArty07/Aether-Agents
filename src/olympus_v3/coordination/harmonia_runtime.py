@@ -28,6 +28,7 @@ from .ledger import (
     WriterContext,
 )
 from .olympus_adapter import OlympusRuntimeAdapter
+from .selection_commit import rebuild_selection_decisions
 
 WRITER_ID = "hermes"
 WRITER_KEY_ID = "harmonia-writer-v1"
@@ -125,12 +126,70 @@ class ProjectRuntimeContext:
     closed: bool = False
     monitor_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
 
+    async def _stage_committed_selections(self) -> None:
+        """Reconcile authenticated selections through the existing kernel dispatcher."""
+        if self.runtime is None:
+            return
+        decisions = rebuild_selection_decisions(self.ledger)
+        events = self.ledger.events()
+        staged_payloads = [
+            json.loads(event["payload"])
+            for event in events
+            if event["kind"] == "dispatch.staged"
+        ]
+        for decision in sorted(decisions.values(), key=lambda item: (item.run_id, item.selection_epoch)):
+            try:
+                run = self.runtime.run(decision.run_id)
+                contract = self.ledger.read_contract(run.contract_id)
+                target = self.runtime.task(decision.run_id, decision.selected_task_id)
+            except (KeyError, ValueError):
+                continue
+            if (
+                contract is None
+                or run.contract_id != decision.contract_id
+                or contract.status.value != "active"
+                or contract.generation != decision.contract_generation
+                or contract.revocation_epoch != decision.revocation_epoch
+                or contract.task_worker_bindings is None
+                or decision.selected_task_id not in contract.task_worker_bindings
+                or contract.task_worker_bindings[decision.selected_task_id].actor_id != decision.resolved_worker_id
+                or target.prerequisites is None
+                or len(target.prerequisites) != 1
+                or target.state not in {TaskState.PROPOSED, TaskState.RUNNING}
+            ):
+                continue
+            source_id = target.prerequisites[0]
+            source_stage = next(
+                (
+                    payload for payload in staged_payloads
+                    if payload.get("run_id") == decision.run_id and payload.get("task_id") == source_id
+                ),
+                None,
+            )
+            if source_stage is None:
+                continue
+            try:
+                envelope = self.dispatcher.stage_successor(
+                    decision.run_id, source_id, decision.selected_task_id,
+                    project_root=source_stage["project_root"], plan_revision=decision.plan_revision,
+                    selection_epoch=decision.selection_epoch, selection_proposal_id=decision.proposal_id,
+                    selection_worker_id=decision.resolved_worker_id,
+                )
+                dispatched = await self.dispatcher.dispatch_with(envelope.authority)
+                if isinstance(dispatched, Mapping) and dispatched.get("accepted") is True:
+                    await self.start_monitor(envelope.authority)
+            except (DispatchRejected, StaleFence):
+                continue
+
     async def _stage_fixed_successors(self) -> None:
         if self.runtime is None:
             return
+        committed_runs = {decision.run_id for decision in rebuild_selection_decisions(self.ledger).values()}
         events = self.ledger.events()
         created = [json.loads(event["payload"]) for event in events if event["kind"] == "task.created"]
         for successor in created:
+            if successor.get("run_id") in committed_runs:
+                continue
             prerequisites = tuple(successor.get("prerequisites", ()))
             if len(prerequisites) != 1:
                 continue
@@ -259,6 +318,7 @@ class ProjectRuntimeContext:
             )
             if binding:
                 await self.start_monitor(self.dispatcher._envelope(payload).authority)
+        await self._stage_committed_selections()
         await self._stage_fixed_successors()
 
     async def aclose(self) -> None:

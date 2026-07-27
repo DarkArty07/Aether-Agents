@@ -331,7 +331,7 @@ def validate_workflow_history(events):
             or (kind == "session.bound" and set(payload) not in session_schemas)
             or (kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS)
             or (kind == "task.released" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}))
-            or (kind == "dispatch.staged" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}))
+            or (kind == "dispatch.staged" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}, _SCHEMAS[kind] | {"selection_epoch", "selection_proposal_id"}, _SCHEMAS[kind] | {"handoff", "selection_epoch", "selection_proposal_id"}))
             or (kind not in {"session.bound", "run.created", "task.released", "dispatch.staged"} and set(payload) != _SCHEMAS[kind])
         ):
             raise _bad("invalid workflow payload schema")
