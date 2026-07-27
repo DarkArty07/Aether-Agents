@@ -1175,6 +1175,9 @@ class KernelDispatcher:
                     **({"proof": dict(response)} if valid else {"reason": "invalid cleanup response"}),
                 }
             self._append(kind, "dispatch:" + intent["message_id"], payload, message_id=kind + ":" + intent["cleanup_command_id"])
+            released_effect = self.ledger.release_lease(claim.lease, self._cleanup_owner)
+            if released_effect.status is not LeaseResult.ACQUIRED:
+                raise ReconciliationRequired("cleanup effect lease release failed")
             return {"outcome": outcome, "event": kind}
         return None
 
@@ -1230,6 +1233,9 @@ class KernelDispatcher:
                 existing = [event for event in self.ledger.events() if event["kind"] == event_kind and json.loads(event["payload"]).get("cleanup_command_id") == intent["cleanup_command_id"]]
                 if not existing:
                     self._append(event_kind, aggregate, {"run_id": intent["run_id"], "task_id": intent["task_id"], "attempt": intent["attempt"], "contract_id": intent["contract_id"], "cleanup_command_id": intent["cleanup_command_id"], "outcome": terminal["outcome"]}, message_id=event_kind + ":" + intent["cleanup_command_id"])
+                released_finalize = self.ledger.release_lease(claim.lease, self._finalize_owner)
+                if released_finalize.status is not LeaseResult.ACQUIRED:
+                    raise ReconciliationRequired("close finalization lease release failed")
                 return {"state": target_state.value}
             proof = terminal.get("proof", {}).get("survivors") if isinstance(terminal.get("proof"), Mapping) else None
             if not isinstance(proof, Mapping) or set(proof) != {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"} or any(value is not False for value in proof.values()):
@@ -1261,6 +1267,9 @@ class KernelDispatcher:
             closed_exists = any(event["kind"] == "task.closed" and json.loads(event["payload"]).get("receipt_id") == receipt_id for event in self.ledger.events())
             if not closed_exists:
                 self._append("task.closed", aggregate, {"run_id": intent["run_id"], "task_id": intent["task_id"], "attempt": intent["attempt"], "contract_id": intent["contract_id"], "receipt_id": receipt_id}, message_id="task.closed:" + receipt_id)
+            released_finalize = self.ledger.release_lease(claim.lease, self._finalize_owner)
+            if released_finalize.status is not LeaseResult.ACQUIRED:
+                raise ReconciliationRequired("close finalization lease release failed")
             return {"state": TaskState.CLOSED.value, "receipt_id": receipt_id}
         return None
 

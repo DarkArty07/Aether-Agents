@@ -1235,6 +1235,12 @@ def test_renewed_dispatch_lease_is_the_exact_fence_used_for_close(stack):
     receipt = event_payloads(ledger, "cleanup.receipt.recorded")[0]
     assert receipt["lease_released"] is True
     assert ledger.lease(authority.lease_resource) is None
+    operation_leases = [
+        row["resource"]
+        for row in ledger.conn.execute("SELECT resource FROM leases").fetchall()
+        if row["resource"].startswith(("cleanup-effect:", "close-finalize:"))
+    ]
+    assert operation_leases == []
 
 
 def test_close_request_requires_matching_trusted_receipt_and_changes_nothing_on_rejection(stack):
