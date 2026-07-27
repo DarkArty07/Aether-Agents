@@ -94,6 +94,7 @@ class HarmoniaRunSnapshot:
     events: tuple[dict[str, Any], ...]
     outbox: tuple[dict[str, Any], ...]
     contract_document: dict[str, Any] | None
+    dispatch_lease: dict[str, Any] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,7 +253,17 @@ class ProjectInspector:
         run_created = next(event for event in events if event["kind"] == "run.created")
         contract_id = run_created["payload"].get("contract_id")
         contract_document = self._read_contract(connection, contract_id) if isinstance(contract_id, str) else None
-        return HarmoniaRunSnapshot(run_id, tuple(events), tuple(outbox), contract_document)
+        staged = next((event["payload"] for event in reversed(events) if event["kind"] == "dispatch.staged"), {})
+        lease_resource = staged.get("lease_resource")
+        lease_row = None
+        if isinstance(lease_resource, str):
+            lease_row = connection.execute(
+                """SELECT resource,owner,epoch,expires_at,token FROM leases
+                   WHERE installation_id=? AND project_id=? AND resource=?""",
+                (*scope, lease_resource),
+            ).fetchone()
+        dispatch_lease = dict(lease_row) if lease_row is not None else None
+        return HarmoniaRunSnapshot(run_id, tuple(events), tuple(outbox), contract_document, dispatch_lease)
 
     def _read_contract(self, connection: sqlite3.Connection, contract_id: str) -> dict[str, Any] | None:
         row = connection.execute(

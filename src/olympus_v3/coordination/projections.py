@@ -55,6 +55,10 @@ class ProjectionReducer:
             "attempt.superseded",
             "observation.accepted",
             "reconciliation.completed",
+            "runtime.terminal.observed",
+            "cleanup.requested",
+            "cleanup.completed",
+            "cleanup.unknown",
         }:
             if kind in {
                 "dispatch.staged",
@@ -62,6 +66,10 @@ class ProjectionReducer:
                 "cancel.intent",
                 "observation.accepted",
                 "reconciliation.completed",
+                "runtime.terminal.observed",
+                "cleanup.requested",
+                "cleanup.completed",
+                "cleanup.unknown",
             }:
                 value = {**(current or {}), **payload}
             else:

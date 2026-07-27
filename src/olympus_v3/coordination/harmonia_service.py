@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -225,7 +226,33 @@ class HarmoniaService:
                 await context.dispatcher.dispatch_with(envelope.authority)
             except ReconciliationRequired:
                 pass
-            return self._status(request.project_root, run_id, action="start")
+            result = self._status(request.project_root, run_id, action="start")
+            if result.get("ok") and result.get("state") == "session_bound":
+                await context.start_monitor(envelope.authority)
+            return result
+
+    async def _lifecycle_status(self, project_root: Path, run_id: str, *, action: str) -> dict[str, Any]:
+        result = self._status(project_root, run_id, action=action)
+        if not result.get("ok"):
+            return result
+        context = await self._registry.get_or_create(project_root)
+        staged = next((event for event in context.ledger.events() if event["kind"] == "dispatch.staged"), None)
+        if staged is None:
+            return result
+        payload = json.loads(staged["payload"])
+        authority = context.dispatcher._envelope(payload).authority
+        terminal = any(
+            event["kind"] == "runtime.terminal.observed"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+            for event in context.ledger.events()
+        )
+        lease = context.ledger.lease(authority.lease_resource)
+        if not terminal and (lease is None or lease.expires_at <= context.ledger.clock()):
+            result.update({"state": "reconciliation_required", "uncertainty": "terminal_evidence_absent"})
+            return result
+        if result.get("state") == "session_bound" and not terminal:
+            await context.start_monitor(authority)
+        return result
 
     def _status(self, project_root: Path, run_id: str, *, action: str) -> dict[str, Any]:
         identity = derive_project_store(self._aether_home, project_root)
@@ -243,6 +270,15 @@ class HarmoniaService:
         attempt_event = next((event["payload"] for event in reversed(events) if event["kind"] == "attempt.started"), {})
         staged = next((event["payload"] for event in reversed(events) if event["kind"] == "dispatch.staged"), {})
         binding = next((event["payload"] for event in reversed(events) if event["kind"] == "session.bound"), {})
+        terminal = next((event["payload"] for event in reversed(events) if event["kind"] == "runtime.terminal.observed"), {})
+        cleanup_events = [event for event in events if event["kind"].startswith("cleanup.")]
+        cleanup_state = "not_requested"
+        if any(event["kind"] == "cleanup.unknown" for event in cleanup_events):
+            cleanup_state = "unknown"
+        elif any(event["kind"] == "cleanup.completed" for event in cleanup_events):
+            cleanup_state = "completed"
+        elif any(event["kind"] == "cleanup.requested" for event in cleanup_events):
+            cleanup_state = "requested"
         cancelled = any(event["kind"] == "cancel.intent" for event in events)
         outbox = snapshot.outbox[-1] if snapshot.outbox else {}
         unknown = outbox.get("status") == "UNKNOWN" or outbox.get("reconciliation_required") == 1
@@ -258,6 +294,19 @@ class HarmoniaService:
             state, uncertainty = "dispatch_staged", None
         else:
             state, uncertainty = "admitted", None
+        if state == "session_bound" and not terminal:
+            lease = snapshot.dispatch_lease
+            lease_expires_at = lease.get("expires_at") if lease is not None else None
+            matching_lease = (
+                lease is not None
+                and lease.get("owner") == staged.get("lease_owner")
+                and lease.get("epoch") == staged.get("lease_epoch")
+                and lease.get("token") == staged.get("lease_token")
+                and isinstance(lease_expires_at, int)
+            )
+            lease_expired = not isinstance(lease_expires_at, int) or lease_expires_at <= time.time_ns()
+            if not matching_lease or lease_expired:
+                state, uncertainty = "reconciliation_required", "terminal_evidence_absent"
         if state not in _STATES:
             raise RuntimeError("invalid Harmonia projection")
         return {
@@ -273,6 +322,9 @@ class HarmoniaService:
             "attempt": attempt_event.get("attempt"),
             "outbox_status": outbox.get("status"),
             "acp_session_id": binding.get("acp_session_id"),
+            "technical_status": terminal.get("status"),
+            "semantic_completion": False,
+            "cleanup_state": cleanup_state,
             "uncertainty": uncertainty,
             "error": None,
         }
@@ -302,6 +354,56 @@ class HarmoniaService:
             if stage is None:
                 return public_error("stop", "authority_mismatch")
             authority = context.dispatcher._envelope(json.loads(stage["payload"])).authority
+            terminal_event = next(
+                (
+                    event for event in context.ledger.events()
+                    if event["kind"] == "runtime.terminal.observed"
+                    and json.loads(event["payload"]).get("message_id") == authority.message_id
+                ),
+                None,
+            )
+            if terminal_event is not None:
+                terminal_payload = json.loads(terminal_event["payload"])
+                prior_cleanup = [
+                    event for event in context.ledger.events()
+                    if event["kind"] in {"cleanup.completed", "cleanup.unknown"}
+                    and json.loads(event["payload"]).get("message_id") == authority.message_id
+                ]
+                if prior_cleanup:
+                    result = self._status(request.project_root, request.run_id, action="stop")
+                    result["cleanup_state"] = "unknown" if prior_cleanup[-1]["kind"] == "cleanup.unknown" else "completed"
+                    return result
+                context.dispatcher._append(
+                    "cleanup.requested", "dispatch:" + authority.message_id,
+                    {"run_id": authority.run_id, "task_id": authority.task_id, "attempt": authority.attempt,
+                     "contract_id": authority.contract_id, "message_id": authority.message_id,
+                     "logical_session": authority.logical_session},
+                )
+                try:
+                    await context.adapter.cleanup_kernel(
+                        project_id=authority.project_id,
+                        logical_session=terminal_payload["logical_session"],
+                        session_id=terminal_payload["acp_session_id"],
+                        terminal_status=terminal_payload["status"],
+                    )
+                except Exception:
+                    context.dispatcher._append(
+                        "cleanup.unknown", "dispatch:" + authority.message_id,
+                        {"run_id": authority.run_id, "task_id": authority.task_id, "attempt": authority.attempt,
+                         "contract_id": authority.contract_id, "message_id": authority.message_id},
+                    )
+                else:
+                    context.dispatcher._append(
+                        "cleanup.completed", "dispatch:" + authority.message_id,
+                        {"run_id": authority.run_id, "task_id": authority.task_id, "attempt": authority.attempt,
+                         "contract_id": authority.contract_id, "message_id": authority.message_id},
+                    )
+                return self._status(request.project_root, request.run_id, action="stop")
+            lease = context.ledger.lease(authority.lease_resource)
+            if lease is None or lease.expires_at <= context.ledger.clock():
+                result = self._status(request.project_root, request.run_id, action="stop")
+                result.update({"state": "reconciliation_required", "uncertainty": "terminal_evidence_absent"})
+                return result
             try:
                 context.dispatcher.cancel_with(authority)
             except (DispatchRejected, StaleFence):

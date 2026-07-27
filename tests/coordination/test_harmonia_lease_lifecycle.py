@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from olympus_v3.acp_manager import ACPManager, SessionInfo
 from olympus_v3.coordination import (
     ContractLimits,
     ContractState,
@@ -96,9 +97,11 @@ class PublicManager:
         self.calls: list[tuple[str, object]] = []
         self.cleanup_error = cleanup_error
         self.before_close = None
+        self.sessions: set[str] = set()
 
     async def spawn_agent(self, *, agent_name, session_id, project_root):
         self.calls.append(("spawn", session_id))
+        self.sessions.add(session_id)
         return session_id
 
     async def send_message(self, session_id, prompt):
@@ -118,6 +121,8 @@ class PublicManager:
 
     async def cleanup_persisted(self, session_id, *, terminal_status, project_id):
         self.calls.append(("cleanup_persisted", (session_id, terminal_status, project_id)))
+        if session_id not in self.sessions:
+            raise ValueError("unknown persisted session")
         if self.cleanup_error:
             raise self.cleanup_error
         return {"status": terminal_status}
@@ -161,7 +166,7 @@ def stack(tmp_path: Path):
         integrity_signer=HMACIntegritySigner(b"integrity-key"),
         clock=clock,
     )
-    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=10_000).lease
+    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=100_000_000_000).lease
     assert lease is not None
     writer_context = WriterContext(scope, "owner", "key-owner", "ledger-owner", lease.epoch, lease.expires_at)
     assert ledger.create_contract(make_contract()) in (Result.APPLIED, Result.DUPLICATE)
@@ -249,7 +254,11 @@ def test_renewal_rejects_stale_or_replaced_authority_without_reacquisition(stack
 def test_terminal_observation_is_authenticated_as_one_event_and_not_semantic_completion(stack):
     _, ledger, runtime, dispatcher, envelope, _ = stack
     authority = envelope.authority
-    observation = TerminalObservation("completed", authority.logical_session, "acp-session-1", authority.message_id)
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    observation = TerminalObservation(
+        "completed", authority.logical_session, binding["acp_session_id"], authority.message_id
+    )
 
     first = dispatcher.record_terminal_with(authority, observation)
     replay = dispatcher.record_terminal_with(authority, observation)
@@ -271,8 +280,11 @@ def test_terminal_observation_is_authenticated_as_one_event_and_not_semantic_com
 def test_terminal_observation_rejects_mismatched_session_or_status(stack):
     _, ledger, _, dispatcher, envelope, _ = stack
     authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
     dispatcher.record_terminal_with(
-        authority, TerminalObservation("completed", authority.logical_session, "acp-session-1", authority.message_id)
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
     )
     with pytest.raises(Exception):
         dispatcher.record_terminal_with(
@@ -284,6 +296,7 @@ def test_terminal_observation_rejects_mismatched_session_or_status(stack):
 def test_monitor_renews_past_original_deadline_then_persists_terminal_before_removal(stack):
     clock, ledger, runtime, dispatcher, envelope, effects = stack
     authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
     context = ProjectRuntimeContext(None, None, ledger, runtime, None, dispatcher)
     effects.observations = [
         {"status": "working", "acp_session_id": "acp-session-1"},
@@ -360,7 +373,11 @@ def test_terminal_cleanup_after_expired_dispatch_has_one_effect_and_no_cancel(tm
     started = run(service.handle(_request(root)))
     context = run(registry.get_or_create(root))
     authority = authority_from(json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged")))
-    context.dispatcher.record_terminal_with(authority, TerminalObservation("completed", authority.logical_session, "acp-session-1", authority.message_id))
+    binding = json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "session.bound"))
+    context.dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
     context.ledger.clock = lambda: authority.lease_until + 1
 
     first = run(service.handle({"action": "stop", "project_root": str(root), "run_id": started["run_id"]}))
@@ -387,7 +404,11 @@ def test_expired_without_terminal_evidence_reconciles_without_adapter_effect(tmp
     lease_before = context.ledger.lease(authority.lease_resource)
     assert lease_before is not None
     epoch_before = lease_before.epoch
-    context.ledger.clock = lambda: 10**18
+    context.ledger.conn.execute(
+        "UPDATE leases SET expires_at=1 WHERE installation_id=? AND project_id=? AND resource=?",
+        (context.ledger.scope.installation_id, context.ledger.scope.project_id, authority.lease_resource),
+    )
+    context.ledger.conn.commit()
     result = run(service.handle({"action": action, "project_root": str(root), "run_id": started["run_id"]}))
 
     assert result["state"] == "reconciliation_required"
@@ -438,7 +459,11 @@ def test_restart_terminal_evidence_cleans_once_and_missing_evidence_stays_fail_c
     started = run(service.handle(_request(root)))
     context = run(registry.get_or_create(root))
     authority = authority_from(json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged")))
-    context.dispatcher.record_terminal_with(authority, TerminalObservation("completed", authority.logical_session, "acp-session-1", authority.message_id))
+    binding = json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "session.bound"))
+    context.dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
     run(registry.close())
     restarted, registry2 = _service(tmp_path, root, manager)
     result = run(restarted.handle({"action": "stop", "project_root": str(root), "run_id": started["run_id"]}))
@@ -451,14 +476,47 @@ def test_restart_terminal_evidence_cleans_once_and_missing_evidence_stays_fail_c
 def test_adapter_cleanup_uses_public_manager_and_rejects_wrong_project_or_session():
     manager = PublicManager()
     adapter = OlympusRuntimeAdapter(manager, project_id=PROJECT, enabled=True)
+    logical_session = "kernel:project-a:run-a:task-a:1"
+    session_id = adapter._kernel_session_id(logical_session)
+    manager.sessions.add(session_id)
     with pytest.raises(Exception):
-        run(adapter.cleanup_kernel(project_id="project-b", session_id="acp-session-1", terminal_status="completed"))
+        run(
+            adapter.cleanup_kernel(
+                project_id="project-b",
+                logical_session=logical_session,
+                session_id=session_id,
+                terminal_status="completed",
+            )
+        )
     with pytest.raises(Exception):
-        run(adapter.cleanup_kernel(project_id=PROJECT, session_id="foreign-session", terminal_status="completed"))
+        run(
+            adapter.cleanup_kernel(
+                project_id=PROJECT,
+                logical_session=logical_session,
+                session_id="foreign-session",
+                terminal_status="completed",
+            )
+        )
     assert manager.calls == []
 
 
-def test_default_off_status_response_has_explicit_lifecycle_fields_and_no_effect(tmp_path):
+def test_public_manager_cleanup_rejects_a_foreign_project_binding(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    manager = ACPManager.__new__(ACPManager)
+    manager.sessions = {
+        "session-a": SessionInfo("session-a", "worker", project_root=str(root)),
+    }
+
+    with pytest.raises(ValueError, match="project binding mismatch"):
+        run(
+            manager.cleanup_persisted(
+                "session-a", terminal_status="completed", project_id="foreign-project"
+            )
+        )
+
+
+def test_default_off_status_error_preserves_stable_contract_and_has_no_effect(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
     manager = PublicManager()
@@ -467,8 +525,8 @@ def test_default_off_status_response_has_explicit_lifecycle_fields_and_no_effect
     result = run(service.handle({"action": "status", "project_root": str(root), "run_id": "run-" + "b" * 32}))
 
     assert result["error"]["code"] == "not_found"
-    assert {"state", "technical_status", "semantic_completion", "cleanup_state"} <= result.keys()
-    assert result["semantic_completion"] is False
+    assert result["state"] is None
+    assert "technical_status" not in result
     assert manager.calls == []
 
 

@@ -395,6 +395,27 @@ class OlympusRuntimeAdapter:
             raise TimeoutError("ACP session accepted but delivery response was lost") from exc
         return {"accepted": True, "acp_session_id": session_id}
 
+    async def cleanup_kernel(
+        self, *, project_id: str, logical_session: str, session_id: str, terminal_status: str
+    ) -> Mapping[str, Any]:
+        """Cleanup a persisted ACP session through the public manager boundary."""
+        if (
+            project_id != self.project_id
+            or not isinstance(logical_session, str)
+            or not logical_session
+            or session_id != self._kernel_session_id(logical_session)
+        ):
+            raise ValidationError("invalid persisted cleanup authority")
+        if terminal_status not in {"completed", "error", "cancelled"}:
+            raise ValidationError("invalid terminal status")
+        cleanup = getattr(self.manager, "cleanup_persisted", None)
+        if not callable(cleanup):
+            raise RuntimeError("persisted cleanup boundary unavailable")
+        result = await cleanup(session_id, terminal_status=terminal_status, project_id=project_id)
+        if not isinstance(result, Mapping):
+            raise RuntimeError("invalid cleanup response")
+        return result
+
     async def observe_kernel(self, *, authority: Any, request: Mapping[str, Any]) -> Mapping[str, Any]:
         if not isinstance(request, Mapping) or getattr(authority, "project_id", None) != self.project_id:
             raise ValidationError("invalid kernel observation authority")

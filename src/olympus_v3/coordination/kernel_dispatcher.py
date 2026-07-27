@@ -583,6 +583,65 @@ class KernelDispatcher:
             lease=self._claimed_transport_lease(row or {}),
         )
 
+    def renew_with(self, authority: DispatchAuthority, *, ttl: int):
+        """Renew the exact dispatch fence, never reacquiring it."""
+        current = self._authority_current(authority)
+        now = self.ledger.clock()
+        extension = current.expires_at - now + ttl
+        outcome = self.ledger.renew_lease(
+            current, self._owner, ttl=extension, token=authority.lease_token
+        )
+        if outcome.lease is None:
+            raise StaleFence(outcome.status.value)
+        return outcome
+
+    def record_terminal_with(self, authority: DispatchAuthority, observation: Any):
+        """Persist authenticated technical terminal evidence exactly once."""
+        self._authority_current(authority)
+        status = getattr(observation, "status", None)
+        logical_session = getattr(observation, "logical_session", None)
+        acp_session_id = getattr(observation, "acp_session_id", None)
+        message_id = getattr(observation, "message_id", None)
+        if (
+            status not in {"completed", "error", "cancelled"}
+            or logical_session != authority.logical_session
+            or not isinstance(acp_session_id, str)
+            or not acp_session_id
+            or message_id != authority.message_id
+        ):
+            raise DispatchRejected("terminal evidence does not match dispatch authority")
+        bindings = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "session.bound"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if len(bindings) != 1 or bindings[0].get("acp_session_id") != acp_session_id:
+            raise DispatchRejected("terminal evidence does not match durable session binding")
+        payload = {
+            "run_id": authority.run_id,
+            "task_id": authority.task_id,
+            "attempt": authority.attempt,
+            "contract_id": authority.contract_id,
+            "contract_generation": authority.contract_generation,
+            "revocation_epoch": authority.revocation_epoch,
+            "message_id": authority.message_id,
+            "logical_session": authority.logical_session,
+            "acp_session_id": acp_session_id,
+            "status": status,
+        }
+        prior = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "runtime.terminal.observed"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if prior:
+            if prior[0] != payload:
+                raise DispatchRejected("conflicting terminal evidence")
+            return Result.APPLIED
+        return self._append("runtime.terminal.observed", "dispatch:" + authority.message_id, payload).status
+
     async def observe_with(self, authority):
         self._authority_current(authority)
         request = {

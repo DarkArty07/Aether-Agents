@@ -164,7 +164,7 @@ def test_conflicting_replay_and_second_request_return_distinct_stable_errors(tmp
     assert second["error"]["code"] == "admission_limit"
 
 
-def test_status_is_cold_read_only_and_never_polls_acp(tmp_path):
+def test_status_is_cold_read_only_and_does_not_add_an_acp_poll(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
     manager = Manager()
@@ -179,7 +179,7 @@ def test_status_is_cold_read_only_and_never_polls_acp(tmp_path):
 
     assert status == {**started, "action": "status"}
     assert registry.context_count == contexts_before
-    assert manager.polled == polls_before == []
+    assert manager.polled == polls_before
 
 
 def test_status_missing_store_creates_nothing(tmp_path):

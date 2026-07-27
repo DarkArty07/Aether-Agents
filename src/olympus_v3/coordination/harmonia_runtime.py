@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from .harmonia_store import ProjectStoreIdentity, derive_project_store
-from .kernel_dispatcher import KernelDispatcher
+from .kernel_dispatcher import DispatchRejected, KernelDispatcher, StaleFence
 from .kernel_runtime import KernelRunService, KernelWriter
 from .ledger import (
     HMACIntegritySigner,
@@ -34,6 +35,8 @@ _WRITER_KEY_ENV = "AETHER_COORDINATION_WRITER_KEY_B64"
 _INTEGRITY_KEY_ENV = "AETHER_COORDINATION_INTEGRITY_KEY_B64"
 _MINIMUM_KEY_BYTES = 32
 _WRITER_LEASE_TTL_NS = 3_600_000_000_000
+_DISPATCH_LEASE_TTL_NS = 10_000_000_000
+_DISPATCH_RENEWAL_MARGIN_NS = 3_000_000_000
 
 
 class CoordinationKeyProviderUnavailable(RuntimeError):
@@ -104,11 +107,87 @@ class ProjectRuntimeContext:
     adapter: OlympusRuntimeAdapter
     dispatcher: KernelDispatcher
     closed: bool = False
+    monitor_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
+
+    async def start_monitor(self, authority: Any, *, clock=None, poll_interval: float = 1.0):
+        if self.closed:
+            raise RuntimeError("runtime context is closed")
+        existing = self.monitor_tasks.get(authority.message_id)
+        if existing is not None and not existing.done():
+            return existing
+        clock = clock or self.ledger.clock
+        if isinstance(poll_interval, bool) or not isinstance(poll_interval, (int, float)) or poll_interval < 0:
+            raise ValueError("non-negative poll interval required")
+
+        async def monitor():
+            current = authority
+            try:
+                while True:
+                    lease = self.ledger.lease(current.lease_resource)
+                    if lease is None:
+                        return
+                    if lease.expires_at <= clock() + _DISPATCH_RENEWAL_MARGIN_NS:
+                        renewed = self.dispatcher.renew_with(current, ttl=_DISPATCH_LEASE_TTL_NS)
+                        renewed_lease = renewed.lease
+                        if renewed_lease is None:
+                            return
+                        current = replace(current, lease_until=renewed_lease.expires_at)
+                    observed = await self.dispatcher.observe_with(current)
+                    status = observed.status
+                    if status in {"completed", "error", "cancelled"}:
+                        self.dispatcher.record_terminal_with(
+                            current,
+                            type("TerminalObservation", (), {
+                                "status": status,
+                                "logical_session": current.logical_session,
+                                "acp_session_id": observed.acp_session_id,
+                                "message_id": current.message_id,
+                            })(),
+                        )
+                        return
+                    if poll_interval:
+                        await asyncio.sleep(poll_interval)
+                    else:
+                        await asyncio.sleep(0)
+            except (DispatchRejected, StaleFence):
+                return
+            finally:
+                self.monitor_tasks.pop(authority.message_id, None)
+
+        task = asyncio.create_task(monitor())
+        self.monitor_tasks[authority.message_id] = task
+        return task
+
+    async def resume_monitors(self) -> None:
+        terminal_ids = {
+            json.loads(event["payload"]).get("message_id")
+            for event in self.ledger.events()
+            if event["kind"] == "runtime.terminal.observed"
+        }
+        for event in self.ledger.events():
+            if event["kind"] != "dispatch.staged":
+                continue
+            payload = json.loads(event["payload"])
+            if payload.get("message_id") in terminal_ids:
+                continue
+            binding = any(
+                item["kind"] == "session.bound"
+                and json.loads(item["payload"]).get("message_id") == payload.get("message_id")
+                for item in self.ledger.events()
+            )
+            if binding:
+                await self.start_monitor(self.dispatcher._envelope(payload).authority)
 
     async def aclose(self) -> None:
         if self.closed:
             return
         self.closed = True
+        tasks = tuple(self.monitor_tasks.values())
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self.monitor_tasks.clear()
         self.ledger.close()
 
 
@@ -151,6 +230,7 @@ class ProjectRuntimeRegistry:
                 return current
             context = self._build_context(identity)
             self._contexts[identity.project_id] = context
+            await context.resume_monitors()
             return context
 
     def _build_context(self, identity: ProjectStoreIdentity) -> ProjectRuntimeContext:

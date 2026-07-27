@@ -56,7 +56,15 @@ _WORKFLOW_EVENT_KINDS = frozenset(
         "reconciliation.completed",
     }
 )
-_AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS
+_LIFECYCLE_EVENT_KINDS = frozenset(
+    {
+        "runtime.terminal.observed",
+        "cleanup.requested",
+        "cleanup.completed",
+        "cleanup.unknown",
+    }
+)
+_AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS | _LIFECYCLE_EVENT_KINDS
 
 
 class InvalidInputError(ValueError):
@@ -1575,10 +1583,14 @@ class SQLiteLedger:
 
     def read_contract(self, contract_id: str) -> ExecutionContract | None:
         row = self.conn.execute(
-            "SELECT v.document FROM contract_versions v JOIN contract_heads h ON h.installation_id=v.installation_id AND h.project_id=v.project_id AND h.contract_id=v.contract_id AND h.generation=v.generation WHERE v.installation_id=? AND v.project_id=? AND v.contract_id=?",
+            "SELECT v.document,h.revocation_epoch FROM contract_versions v JOIN contract_heads h ON h.installation_id=v.installation_id AND h.project_id=v.project_id AND h.contract_id=v.contract_id AND h.generation=v.generation WHERE v.installation_id=? AND v.project_id=? AND v.contract_id=?",
             (self.scope.installation_id, self.scope.project_id, contract_id),
         ).fetchone()
-        return ExecutionContract.from_dict(json.loads(row[0])) if row else None
+        if not row:
+            return None
+        document = json.loads(row[0])
+        document["revocation_epoch"] = row[1]
+        return ExecutionContract.from_dict(document)
 
     def contract(self, contract_id: str | None = None) -> dict[str, Any] | None:
         query = "SELECT v.document FROM contract_versions v JOIN contract_heads h ON h.installation_id=v.installation_id AND h.project_id=v.project_id AND h.contract_id=v.contract_id AND h.generation=v.generation WHERE v.installation_id=? AND v.project_id=?"

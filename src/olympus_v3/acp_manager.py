@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import os
 import re
@@ -941,6 +942,25 @@ class ACPManager:
 
         logger.info("Session closed: %s (status=%s)", session_id, final_status)
         return {"status": final_status, "session_id": session_id}
+
+    async def cleanup_persisted(self, session_id: str, *, terminal_status: str, project_id: str) -> dict:
+        """Public, project-scoped cleanup boundary for durable runtime bindings."""
+        if not isinstance(session_id, str) or not session_id or not isinstance(project_id, str) or not project_id:
+            raise ValueError("invalid persisted cleanup authority")
+        if terminal_status not in {"completed", "error", "cancelled"}:
+            raise ValueError("invalid terminal status")
+        session = self.sessions.get(session_id)
+        if session is None:
+            raise ValueError("unknown persisted session")
+        if not isinstance(session.project_root, str) or not session.project_root:
+            raise ValueError("session project binding unavailable")
+        canonical_root = str(Path(session.project_root).expanduser().resolve())
+        expected_project_id = hashlib.sha256(
+            ("olympus-project-v1\0" + canonical_root).encode("utf-8")
+        ).hexdigest()
+        if project_id != expected_project_id:
+            raise ValueError("session project binding mismatch")
+        return await self.close(session_id, terminal_status=terminal_status)
 
     async def cancel(self, session_id: str) -> dict:
         """Force-cancel a stuck session."""
