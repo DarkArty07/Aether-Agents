@@ -1,6 +1,6 @@
 # Experimental decision — Harmonia lifecycle authority
 
-**Status:** Experimentally validated; not yet approved as production implementation
+**Status:** Experimentally validated and approved for test-first production implementation; Gate C live remains unauthorized
 **Issue:** [GitHub #107](https://github.com/DarkArty07/Aether-Agents/issues/107)
 **Evidence:** [`README.md`](README.md), [`result.json`](result.json), executable [`main.py`](main.py)
 
@@ -66,6 +66,62 @@ Rejected for production. The live failure showed that external status alone leav
 - Restart reconciliation cannot create a second session or resurrect stale authority.
 - Harmonia remains default-off.
 
+## Frozen production specification
+
+The production correction is intentionally narrower than the full lifecycle architecture discussed during consultation.
+
+### Durable events
+
+- `runtime.terminal.observed`: one authenticated technical terminal observation bound to run, task, attempt, contract generation/revocation epoch, message, logical session and ACP session. Allowed statuses are `completed`, `error` and `cancelled`.
+- `cleanup.requested`: one durable terminal-cleanup intent. It is distinct from `cancel.intent` and never implies cancellation.
+- `cleanup.completed`: the matching idempotent cleanup effect was acknowledged.
+- `cleanup.unknown`: the cleanup effect may have occurred but cannot be verified; replay performs no blind second effect.
+- `reconciliation.required`: authority expired or evidence became ambiguous before a trusted terminal event could be persisted.
+
+Lease renewal itself remains represented by the authoritative SQLite lease row. No additional renewal event is required in this increment because renewal changes only expiry and the production ledger already fences it by resource, owner, epoch and token.
+
+`runtime.terminal.observed` is technical evidence only. It must not call or weaken `KernelRunService.complete_task()` and must not grant semantic completion, acceptance, release or publication authority.
+
+### Public projection compatibility
+
+The existing `state` vocabulary remains compatible. Terminal and cleanup facts are exposed through additional fields rather than representing product completion:
+
+```json
+{
+  "state": "session_bound",
+  "technical_status": "completed",
+  "semantic_completion": false,
+  "cleanup_state": "pending"
+}
+```
+
+`reconciliation_required` remains the fail-closed public state. Cleanup transitions may use `cleanup_state` values `pending`, `requested`, `completed` and `unknown`; they do not change semantic authority.
+
+### Monitor ownership and timing
+
+- `ProjectRuntimeContext` owns exactly one monitor task per durable dispatch `message_id`.
+- A monitor starts only after `session.bound` is durable and is deduplicated by message ID.
+- It polls only through `OlympusRuntimeAdapter`, renews the same dispatch lease before expiry, and persists terminal evidence before stopping.
+- Renewal preserves resource, owner, epoch and token. It never falls back to `acquire_lease()` after expiry.
+- Registry/context shutdown signals and awaits monitors with a bound before closing the ledger. Shutdown cannot append a false terminal event.
+- Poll failures are retried only while authority remains valid. Expiry, revocation, replacement or terminal-evidence conflict stops normal monitoring and enters reconciliation.
+
+### Stop semantics
+
+- Active authority: retain `cancel.intent` before the external cancellation effect.
+- Trusted terminal evidence: append `cleanup.requested`, call a dedicated cleanup operation that preserves the observed terminal status, then append `cleanup.completed` or `cleanup.unknown`. Do not emit `cancel.intent`.
+- Expired authority without terminal evidence: persist/return `reconciliation.required`; perform no poll, cancel, close, dispatch or lease reacquisition.
+- Repeated and concurrent stop calls produce at most one intent and one external effect for their branch.
+
+### Restart policy
+
+- Rebuild lifecycle solely from the project ledger and public Olympus session evidence.
+- A bound dispatch with a still-live lease may resume one monitor; it must not stage, spawn or send again.
+- Durable terminal evidence permits terminal cleanup without requiring the expired dispatch lease.
+- Expired dispatch authority without trusted terminal evidence becomes `reconciliation.required` using only the fresh ledger-writer fence; it performs no ACP effect and creates no replacement session.
+- Restart-safe observation/cleanup must use public adapter/ACPManager methods. Coordination code may not inspect `ACPManager.sessions`, `agents` or `prompt_tasks` directly.
+- If a persisted terminal session cannot be transport-cleaned after restart, report `cleanup.unknown`; do not manufacture success or cancellation.
+
 ## Expected production change surface
 
 The implementation should remain bounded to the coordination equivalence class:
@@ -91,4 +147,4 @@ Before this decision becomes production behavior:
 
 ## Decision boundary
 
-The experiment validates feasibility and selects the preferred direction. It does **not** authorize production implementation, ACP live execution, issue closure, merge, tag, release, deployment or v0.19.2.
+The experiment validates feasibility and the user has authorized a test-first production correction plus deterministic Gate B. This does **not** authorize ACP live execution, Gate C, merge, tag, release, deployment or v0.19.2. GitHub #107 remains open until the production regression matrix and Gate B are green.
