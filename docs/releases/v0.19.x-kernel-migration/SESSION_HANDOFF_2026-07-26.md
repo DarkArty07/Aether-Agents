@@ -90,3 +90,9 @@ Aether issue 52 / GitHub #99 evidence remains open: logical session `82dd9c7f-cc
 ## 7. Canonical continuation point
 
 The safe continuation point is the committed, fully tested dependency-release foundation at `b759609`. The next session begins with documentation/sequence reconciliation, not implementation or live execution.
+
+## 8. Sequencing decision resolved — 2026-07-27
+
+Chris selected the canonical roadmap order: v0.19.3 executable closure and ACPManager-owned cleanup precedes v0.19.4 handoff. The decision is recorded in project continuity and the detailed Gate A contract is frozen in `V0.19.3_IMPLEMENTATION_PLAN.md`.
+
+Deterministic Gate B implementation is authorized. Gate C live execution, Harmonia activation, handoff, merge, tag, release, deployment and publication remain separately blocked.

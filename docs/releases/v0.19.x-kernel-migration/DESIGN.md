@@ -1,8 +1,8 @@
 # v0.19.x Incremental Kernel Migration — Design
 
-**Status:** APPROVED DESIGN — IMPLEMENTATION AND LIVE EXECUTION NOT AUTHORIZED
+**Status:** APPROVED DESIGN — v0.19.3 DETERMINISTIC IMPLEMENTATION AUTHORIZED; LIVE EXECUTION NOT AUTHORIZED
 
-**Design scope:** versioned experimental increments after the frozen v0.19.0 baseline. This document does not authorize implementation, live ACP execution, configuration changes, gateway restart, merge, tag, deployment or publication.
+**Design scope:** versioned experimental increments after the frozen v0.19.0 baseline. Chris approved preserving the canonical cleanup-before-handoff order and authorized deterministic v0.19.3 implementation on 2026-07-27. This document does not authorize live ACP execution, configuration changes, gateway restart, merge, tag, deployment or publication.
 
 **Baseline authority:** `../v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`
 
@@ -322,7 +322,7 @@ Bound evidence to installation, project, run, task, attempt, contract generation
 
 ### v0.19.3 — executable closure
 
-Require trusted evidence before completion. Use ACPManager public lifecycle methods, durable cleanup receipts and `CLOSE_FAILED`. No multi-agent handoff.
+Require trusted evidence before completion. Persist close intent before any cleanup effect; use ACPManager public lifecycle methods; record verifier-owned durable cleanup receipts; and permit `CLOSED` only after proving zero managed survivors. Known failed postconditions produce `CLOSE_FAILED`; uncertain cleanup remains reconciliation-required. No multi-agent handoff.
 
 ### v0.19.4 — fixed handoff
 
@@ -348,21 +348,20 @@ Athena remains suspended. Validation uses:
 
 A test report, agent statement or specialist opinion never substitutes for observable runtime evidence.
 
-## 11. Current gate — v0.19.1 implementation authorization
+## 11. Current gate — v0.19.3 deterministic implementation
 
-The public API decision is approved:
+The v0.19.1 composition and v0.19.2 trusted-evidence/dependency foundation are implemented. Chris selected the canonical next step: v0.19.3 executable closure and ACPManager-owned cleanup before any handoff.
+
+The detailed v0.19.3 contract is frozen in `V0.19.3_IMPLEMENTATION_PLAN.md`. Its required authority chain is:
 
 ```text
-harmonia(action="start" | "status" | "stop")
+trusted evidence
+  -> semantic closure validation
+  -> durable close intent
+  -> ACPManager-owned cleanup
+  -> verifier-owned cleanup receipt
+  -> zero-survivor verification
+  -> CLOSED
 ```
 
-- Harmonia is the public coordination identity.
-- The kernel remains an internal engine.
-- `talk_to` remains exclusively legacy.
-- `start` is limited to one task in v0.19.1.
-- `status` is read-only.
-- `stop` requests bounded ACPManager-owned teardown but cannot claim verified closure before v0.19.3.
-
-The detailed v0.19.1 plan is frozen in `V0.19.1_IMPLEMENTATION_PLAN.md`. It specifies the typed request/response contract, restricted genesis conversion, project identity/store, cold read-only status path, server-owned runtime registry, ledger-backed idempotency, contract-derived Daimon prompt, uncertainty semantics, RED/GREEN commit slices, deterministic gates and separately blocked live matrix.
-
-The next gate is explicit implementation authorization. The plan does not authorize source changes, configuration changes, ACP execution, gateway restart, merge, tag, release, deployment or publication.
+Deterministic Gate B implementation is authorized. Gate C remains separately blocked: no live ACP, real Daimon cleanup, configuration activation, gateway restart, v0.19.4 handoff, merge, tag, release, deployment or publication.
