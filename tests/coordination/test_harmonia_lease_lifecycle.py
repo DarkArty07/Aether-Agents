@@ -530,6 +530,68 @@ def test_default_off_status_error_preserves_stable_contract_and_has_no_effect(tm
     assert manager.calls == []
 
 
+def test_repeated_unchanged_observations_persist_only_status_transitions(stack):
+    _, ledger, _, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    effects.observations = [
+        {"status": "working", "acp_session_id": "acp-session-1"},
+        {"status": "working", "acp_session_id": "acp-session-1"},
+        {"status": "completed", "acp_session_id": "acp-session-1"},
+    ]
+
+    observations = [run(dispatcher.observe_with(authority)) for _ in range(3)]
+
+    assert [item.status for item in observations] == ["working", "working", "completed"]
+    assert [item["status"] for item in event_payloads(ledger, "observation.accepted")] == [
+        "working",
+        "completed",
+    ]
+
+
+def test_public_state_projects_terminal_then_cleaned_without_duplicate_cleanup(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    manager = PublicManager()
+    service, registry = _service(tmp_path, root, manager)
+
+    async def scenario():
+        started = await service.handle(_request(root))
+        context = await registry.get_or_create(root)
+        staged = next(event for event in context.ledger.events() if event["kind"] == "dispatch.staged")
+        authority = context.dispatcher._envelope(json.loads(staged["payload"])).authority
+        binding = event_payloads(context.ledger, "session.bound")[0]
+        context.dispatcher.record_terminal_with(
+            authority,
+            TerminalObservation(
+                "completed",
+                authority.logical_session,
+                binding["acp_session_id"],
+                authority.message_id,
+            ),
+        )
+
+        terminal = await service.handle(
+            {"action": "status", "project_root": str(root), "run_id": started["run_id"]}
+        )
+        stopped = await service.handle(
+            {"action": "stop", "project_root": str(root), "run_id": started["run_id"]}
+        )
+        replay = await service.handle(
+            {"action": "stop", "project_root": str(root), "run_id": started["run_id"]}
+        )
+
+        assert terminal["state"] == "terminal_observed"
+        assert terminal["technical_status"] == "completed"
+        assert stopped["state"] == "cleaned"
+        assert replay["state"] == "cleaned"
+        assert len(event_payloads(context.ledger, "cleanup.requested")) == 1
+        assert len(event_payloads(context.ledger, "cleanup.completed")) == 1
+        await registry.close()
+
+    run(scenario())
+
+
 def assert_event_exists(ledger, kind):
     assert any(event["kind"] == kind for event in ledger.events())
 

@@ -656,19 +656,30 @@ class KernelDispatcher:
             response = await self.runtime_adapter.observe_kernel(authority=authority, request=request)
         else:
             response = await self.runtime_adapter.observe(**request)
-        self._append(
-            "observation.accepted",
-            "dispatch:" + authority.message_id,
-            {
-                "run_id": authority.run_id,
-                "task_id": authority.task_id,
-                "attempt": authority.attempt,
-                "contract_id": authority.contract_id,
-                "message_id": authority.message_id,
-                "status": response.get("status", "unknown"),
-            },
+        status = response.get("status", "unknown")
+        prior = next(
+            (
+                json.loads(event["payload"])
+                for event in reversed(self.ledger.events())
+                if event["kind"] == "observation.accepted"
+                and json.loads(event["payload"]).get("message_id") == authority.message_id
+            ),
+            None,
         )
-        return DispatchObservation(response.get("status", "unknown"), response.get("acp_session_id"), response)
+        if prior is None or prior.get("status") != status:
+            self._append(
+                "observation.accepted",
+                "dispatch:" + authority.message_id,
+                {
+                    "run_id": authority.run_id,
+                    "task_id": authority.task_id,
+                    "attempt": authority.attempt,
+                    "contract_id": authority.contract_id,
+                    "message_id": authority.message_id,
+                    "status": status,
+                },
+            )
+        return DispatchObservation(status, response.get("acp_session_id"), response)
 
     async def observe_once(self, run_id, task_id, *, attempt):
         event = next(

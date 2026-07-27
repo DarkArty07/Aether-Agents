@@ -35,7 +35,17 @@ from .kernel_runtime import AdmissionLimitError, AuthorityError, IdempotencyConf
 from .ledger import Result
 
 _STATES = frozenset(
-    {"admitted", "dispatch_staged", "retry_wait", "session_bound", "reconciliation_required", "cancel_requested"}
+    {
+        "admitted",
+        "dispatch_staged",
+        "retry_wait",
+        "session_bound",
+        "terminal_observed",
+        "cleanup_pending",
+        "cleaned",
+        "reconciliation_required",
+        "cancel_requested",
+    }
 )
 
 
@@ -284,6 +294,14 @@ class HarmoniaService:
         unknown = outbox.get("status") == "UNKNOWN" or outbox.get("reconciliation_required") == 1
         if unknown:
             state, uncertainty = "reconciliation_required", "external_effect_unknown"
+        elif cleanup_state == "unknown":
+            state, uncertainty = "reconciliation_required", "cleanup_unverified"
+        elif cleanup_state == "completed":
+            state, uncertainty = "cleaned", None
+        elif cleanup_state == "requested":
+            state, uncertainty = "cleanup_pending", None
+        elif terminal:
+            state, uncertainty = "terminal_observed", None
         elif cancelled:
             state, uncertainty = "cancel_requested", "cleanup_unverified"
         elif binding:
