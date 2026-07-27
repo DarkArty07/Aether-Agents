@@ -10,7 +10,9 @@
 
 **GitHub PR:** [#113 — feat(coordination): validate autonomous kernel through v0.19.4](https://github.com/DarkArty07/Aether-Agents/pull/113)
 
-**PR state:** Draft; no merge, tag, release, deployment or activation authorized
+**PR state:** Draft; GitHub Actions PASS on Python 3.11, Python 3.12 and build; no merge, tag, release, deployment or activation authorized
+
+**Tracked clean-checkout defect:** [#114 — CI: clean checkout cannot collect v0.19 coordination tests](https://github.com/DarkArty07/Aether-Agents/issues/114), open until the correction reaches `main`
 
 ## 1. Closed scope
 
@@ -105,6 +107,8 @@ At closeout inventory:
 The main worktree contained 30 modified tracked paths and 98 untracked entries before this closeout. They span pilot work, profile/config templates, skills, documentation and local runtime artifacts. They were deliberately preserved. No blanket staging, reset, clean or stash was performed.
 
 The first PR CI run correctly exposed that `normalize_result_envelope` was exported from committed `__init__.py` although its implementation existed only in preserved local R8 work. It also exposed the undeclared `hermes-agent` development dependency required by Phase 0 tests. Commit `46ad861` applied the minimal correction without absorbing the local R8 implementation. A fresh editable install, wheel build, import smoke, Ruff, compileall and the committed test suites passed afterward.
+
+GitHub Actions correction run `30309109184` then passed Python 3.11, Python 3.12 and the package build. Issue #114 preserves the defect and evidence until merge; PR #113 remains draft by design.
 
 ## 6. Exact stop boundary
 
