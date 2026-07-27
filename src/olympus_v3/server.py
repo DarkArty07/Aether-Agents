@@ -165,6 +165,16 @@ def _harmonia_schema() -> dict:
         "qa_reserve": {"type": "integer", "minimum": 0},
         "recovery_reserve": {"type": "integer", "minimum": 0},
         "escalation_conditions": {"type": "array", "items": {"type": "string"}},
+        "tasks": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": {"type": "object", "additionalProperties": False,
+                "properties": {
+                    "task_id": {"type": "string"}, "worker": {"type": "string"},
+                    "worker_permissions": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                    "prerequisites": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["task_id", "worker", "worker_permissions", "prerequisites"]},
+        },
     }
     return {
         "type": "object",
@@ -177,7 +187,14 @@ def _harmonia_schema() -> dict:
                 "type": "object",
                 "additionalProperties": False,
                 "properties": contract_properties,
-                "required": list(contract_properties),
+                "required": [
+                    key for key in contract_properties
+                    if key not in {"worker", "worker_permissions", "tasks"}
+                ],
+                "oneOf": [
+                    {"required": ["worker", "worker_permissions"]},
+                    {"required": ["tasks"]},
+                ],
             },
             "plan_revision": {"type": "integer", "minimum": 1},
             "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},

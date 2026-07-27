@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 
+from .contracts import TaskState
 from .harmonia_store import ProjectStoreIdentity, derive_project_store
 from .kernel_dispatcher import DispatchRejected, KernelDispatcher, StaleFence
 from .kernel_runtime import KernelRunService, KernelWriter
@@ -98,6 +99,20 @@ class EnvironmentCoordinationKeyProvider:
         )
 
 
+class _HarmoniaKernelDispatcher(KernelDispatcher):
+    """Kernel-owned closure hook for the already-declared fixed successor edge."""
+
+    def __init__(self, *args, after_close=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._after_close = after_close
+
+    async def finalize_close(self):
+        result = await super().finalize_close()
+        if self._after_close is not None:
+            await self._after_close()
+        return result
+
+
 @dataclass(slots=True)
 class ProjectRuntimeContext:
     identity: ProjectStoreIdentity
@@ -108,6 +123,40 @@ class ProjectRuntimeContext:
     dispatcher: KernelDispatcher
     closed: bool = False
     monitor_tasks: dict[str, asyncio.Task] = field(default_factory=dict)
+
+    async def _stage_fixed_successors(self) -> None:
+        if self.runtime is None:
+            return
+        events = self.ledger.events()
+        created = [json.loads(event["payload"]) for event in events if event["kind"] == "task.created"]
+        for successor in created:
+            prerequisites = tuple(successor.get("prerequisites", ()))
+            if len(prerequisites) != 1:
+                continue
+            source_id, successor_id = prerequisites[0], successor["task_id"]
+            try:
+                source = self.runtime.task(successor["run_id"], source_id)
+                target = self.runtime.task(successor["run_id"], successor_id)
+                contract = self.ledger.read_contract(self.runtime.run(successor["run_id"]).contract_id)
+            except (KeyError, ValueError):
+                continue
+            if contract is None or contract.task_worker_bindings is None or successor_id not in contract.task_worker_bindings:
+                continue
+            if source.state is not TaskState.CLOSED or target.state not in {TaskState.PROPOSED, TaskState.RUNNING}:
+                continue
+            staged = next((json.loads(event["payload"]) for event in events
+                           if event["kind"] == "dispatch.staged"
+                           and json.loads(event["payload"]).get("run_id") == successor["run_id"]
+                           and json.loads(event["payload"]).get("task_id") == source_id), None)
+            if staged is None:
+                continue
+            try:
+                self.dispatcher.stage_successor(
+                    successor["run_id"], source_id, successor_id,
+                    project_root=staged["project_root"], plan_revision=staged["plan_revision"],
+                )
+            except DispatchRejected:
+                continue
 
     async def start_monitor(self, authority: Any, *, clock=None, poll_interval: float = 1.0):
         if self.closed:
@@ -189,6 +238,7 @@ class ProjectRuntimeContext:
             )
             if binding:
                 await self.start_monitor(self.dispatcher._envelope(payload).authority)
+        await self._stage_fixed_successors()
 
     async def aclose(self) -> None:
         if self.closed:
@@ -275,13 +325,15 @@ class ProjectRuntimeRegistry:
             )
             runtime = KernelRunService(ledger, writer=KernelWriter(writer_context, authenticator))
             adapter = OlympusRuntimeAdapter(self._manager, project_id=identity.project_id, enabled=True)
-            dispatcher = KernelDispatcher(
+            dispatcher = _HarmoniaKernelDispatcher(
                 ledger=ledger,
                 runtime=runtime,
                 runtime_adapter=adapter,
                 worker_id=keys.writer_id,
             )
-            return ProjectRuntimeContext(identity, keys, ledger, runtime, adapter, dispatcher)
+            context = ProjectRuntimeContext(identity, keys, ledger, runtime, adapter, dispatcher)
+            dispatcher._after_close = context._stage_fixed_successors
+            return context
         except Exception:
             if ledger is not None:
                 ledger.close()

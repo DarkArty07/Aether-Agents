@@ -114,7 +114,10 @@ class HarmoniaService:
             return "project_not_allowed"
         if self._config.max_active_runs != 1:
             return "admission_limit"
-        if request.contract.worker not in self._workers:
+        if request.contract.tasks:
+            if any(task.worker not in self._workers for task in request.contract.tasks):
+                return "invalid_request"
+        elif request.contract.worker not in self._workers:
             return "invalid_request"
         return None
 
@@ -127,34 +130,37 @@ class HarmoniaService:
     @staticmethod
     def _contract(identity, request: HarmoniaStartRequest) -> ExecutionContract:
         spec = request.contract
+        fixed = bool(spec.tasks)
         contract_id = _identifier("contract-", _canonical(spec.to_dict()).decode())
         owner = Principal(identity.project_id, "harmonia", "hermes")
-        worker = Principal(identity.project_id, "harmonia", spec.worker)
+        task_specs = spec.tasks or ()
+        workers = tuple(Principal(identity.project_id, "harmonia", task.worker) for task in task_specs)
+        if not fixed:
+            workers = (Principal(identity.project_id, "harmonia", spec.worker),)
+        participants = (owner, *workers)
+        role_permissions = ({spec.worker: spec.worker_permissions} if not fixed else {
+            task.worker: task.worker_permissions for task in task_specs
+        })
+        bindings = ({task.task_id: worker for task, worker in zip(task_specs, workers)} if fixed else None)
         return ExecutionContract(
             contract_id=contract_id,
             project_id=identity.project_id,
             generation=0,
             owner=owner,
-            participants=(owner, worker),
+            participants=participants,
             objective=spec.objective,
             expected_outcome=spec.expected_outcome,
             included_scopes=spec.included_scopes,
             excluded_scopes=spec.excluded_scopes,
-            role_permissions={spec.worker: spec.worker_permissions},
+            role_permissions=role_permissions,
             evidence_gates=(),
             side_effect_policy=SideEffectPolicy((), 0, True),
-            limits=ContractLimits(
-                1,
-                spec.time_seconds,
-                0,
-                spec.model_budget,
-                spec.qa_reserve,
-                spec.recovery_reserve,
-            ),
+            limits=ContractLimits(2 if fixed else 1, spec.time_seconds, 0, spec.model_budget, spec.qa_reserve, spec.recovery_reserve),
             escalation_conditions=spec.escalation_conditions,
             completion_authority=owner,
             amendment_authority=owner,
             status=ContractState.ACTIVE,
+            task_worker_bindings=bindings,
         )
 
     @staticmethod
@@ -175,7 +181,8 @@ class HarmoniaService:
             context = await self._registry.get_or_create(request.project_root)
             request_digest = self._request_digest(request)
             run_id = _identifier("run-", identity.project_id + "\0" + request.request_id)
-            task_id = _identifier("task-", run_id + "\0primary")
+            task_specs = request.contract.tasks or ()
+            task_ids = tuple(task.task_id for task in task_specs) or (_identifier("task-", run_id + "\0primary"),)
             contract = self._contract(identity, request)
 
             prior_runs = self._run_payloads(context)
@@ -207,31 +214,32 @@ class HarmoniaService:
                 request_id=request.request_id,
                 request_digest=request_digest,
             )
-            try:
-                task = context.runtime.task(run_id, task_id)
-            except KeyError:
-                task = context.runtime.create_task(run_id, task_id=task_id)
-            if task.state is TaskState.PROPOSED:
-                task = context.runtime.admit_task(run_id, task_id)
-            if task.state is TaskState.ADMITTED:
-                task = context.runtime.mark_task_ready(run_id, task_id)
-            if task.state is TaskState.READY:
-                task = context.runtime.dispatch_task(run_id, task_id)
-            attempts = context.runtime.attempts(run_id, task_id)
-            if task.state is TaskState.DISPATCHED:
-                attempt = context.runtime.start_attempt(run_id, task_id)
-            elif len(attempts) == 1:
-                attempt = attempts[0]
-            else:
-                raise AdmissionLimitError("admission limit")
-            envelope = context.dispatcher.stage_ready(
-                run_id,
-                task_id,
-                attempt=attempt.attempt,
-                project_root=str(request.project_root),
-                plan_revision=request.plan_revision,
-                snapshot_digest=request.snapshot_digest,
-            )
+            for index, task_id in enumerate(task_ids):
+                prerequisites = task_specs[index].prerequisites if task_specs else ()
+                try:
+                    task = context.runtime.task(run_id, task_id)
+                except KeyError:
+                    task = context.runtime.create_task(run_id, task_id=task_id, prerequisites=prerequisites)
+                if index != 0:
+                    continue
+                if task.state is TaskState.PROPOSED:
+                    task = context.runtime.admit_task(run_id, task_id)
+                if task.state is TaskState.ADMITTED:
+                    task = context.runtime.mark_task_ready(run_id, task_id)
+                if task.state is TaskState.READY:
+                    task = context.runtime.dispatch_task(run_id, task_id)
+                attempts = context.runtime.attempts(run_id, task_id)
+                if task.state is TaskState.DISPATCHED:
+                    attempt = context.runtime.start_attempt(run_id, task_id)
+                elif len(attempts) == 1:
+                    attempt = attempts[0]
+                else:
+                    raise AdmissionLimitError("admission limit")
+                envelope = context.dispatcher.stage_ready(
+                    run_id, task_id, attempt=attempt.attempt, project_root=str(request.project_root),
+                    plan_revision=request.plan_revision, snapshot_digest=request.snapshot_digest,
+                )
+
             try:
                 await context.dispatcher.dispatch_with(envelope.authority)
             except ReconciliationRequired:
@@ -340,6 +348,34 @@ class HarmoniaService:
                 "verifier_identity": verifier.get("identity"),
                 "verifier_version": verifier.get("version"),
             }
+        task_rows: dict[str, dict[str, Any]] = {}
+        state_by_kind = {
+            "task.created": "blocked", "task.admitted": "admitted", "task.ready": "ready",
+            "task.dispatched": "dispatched", "attempt.started": "running", "task.released": "proposed",
+            "task.closed": "closed",
+        }
+        for event in events:
+            payload = event["payload"]
+            task_id = payload.get("task_id")
+            if not task_id:
+                continue
+            row = task_rows.setdefault(task_id, {"task_id": task_id})
+            if event["kind"] == "task.created":
+                row["prerequisites"] = payload.get("prerequisites", [])
+            if event["kind"] in state_by_kind:
+                row["state"] = state_by_kind[event["kind"]]
+        document = snapshot.contract_document or {}
+        bindings = document.get("task_worker_bindings") or {}
+        for row in task_rows.values():
+            principal = bindings.get(row["task_id"])
+            if isinstance(principal, Mapping):
+                row["worker"] = principal.get("actor_id")
+        topology = tuple(task_rows.values())
+        public_bindings = {
+            task_id: principal.get("actor_id")
+            for task_id, principal in bindings.items()
+            if isinstance(principal, Mapping)
+        }
         return {
             "action": action,
             "ok": True,
@@ -347,6 +383,8 @@ class HarmoniaService:
             "project_id": identity.project_id,
             "run_id": run_id,
             "task_id": task_event.get("task_id"),
+            "tasks": list(topology),
+            "bindings": public_bindings,
             "contract_id": run.get("contract_id"),
             "state": state,
             "durable": True,

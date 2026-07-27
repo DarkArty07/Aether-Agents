@@ -95,6 +95,16 @@ def test_harmonia_schema_is_flat_strict_and_action_conditional():
             "then": {"required": ["run_id"]},
         },
     ]
+    contract = schema["properties"]["contract"]
+    assert "tasks" not in contract["required"]
+    assert "worker" not in contract["required"]
+    assert "worker_permissions" not in contract["required"]
+    assert {tuple(branch["required"]) for branch in contract["oneOf"]} == {
+        ("worker", "worker_permissions"),
+        ("tasks",),
+    }
+    assert contract["properties"]["tasks"]["minItems"] == 2
+    assert contract["properties"]["tasks"]["maxItems"] == 2
 
 
 @pytest.mark.parametrize("action", sorted(TALK_TO_ACTIONS))

@@ -33,6 +33,8 @@ _GENESIS_FIELDS = frozenset(
         "escalation_conditions",
     }
 )
+_FIXED_GENESIS_FIELDS = _GENESIS_FIELDS - {"worker", "worker_permissions"} | {"tasks"}
+_TASK_FIELDS = frozenset({"task_id", "worker", "worker_permissions", "prerequisites"})
 _START_FIELDS = frozenset(
     {"action", "project_root", "request_id", "contract", "plan_revision", "snapshot_digest"}
 )
@@ -144,13 +146,29 @@ class HarmoniaGenesisSpec:
     qa_reserve: int
     recovery_reserve: int
     escalation_conditions: tuple[str, ...]
+    tasks: tuple["HarmoniaTaskSpec", ...] = ()
 
     @classmethod
     def from_dict(cls, value: Any) -> HarmoniaGenesisSpec:
-        data = _exact_fields(value, _GENESIS_FIELDS)
-        worker = _identifier(data["worker"])
-        if worker in _RESTRICTED_WORKERS:
-            _invalid()
+        fixed = isinstance(value, Mapping) and "tasks" in value
+        data = _exact_fields(value, _FIXED_GENESIS_FIELDS if fixed else _GENESIS_FIELDS)
+        tasks: tuple[HarmoniaTaskSpec, ...] = ()
+        if fixed:
+            if not isinstance(data["tasks"], list) or len(data["tasks"]) != 2:
+                _invalid()
+            tasks = tuple(HarmoniaTaskSpec.from_dict(item) for item in data["tasks"])
+            if len({item.task_id for item in tasks}) != 2 or len({item.worker for item in tasks}) != 2:
+                _invalid()
+            if any(item.worker in _RESTRICTED_WORKERS for item in tasks):
+                _invalid()
+            if tasks[0].prerequisites or tasks[1].prerequisites != (tasks[0].task_id,):
+                _invalid()
+            worker, permissions = tasks[0].worker, tasks[0].worker_permissions
+        else:
+            worker = _identifier(data["worker"])
+            if worker in _RESTRICTED_WORKERS:
+                _invalid()
+            permissions = _string_list(data["worker_permissions"], allow_empty=False)
         time_seconds = _positive_integer(data["time_seconds"])
         model_budget = _positive_integer(data["model_budget"])
         qa_reserve = _positive_integer(data["qa_reserve"])
@@ -163,16 +181,17 @@ class HarmoniaGenesisSpec:
             expected_outcome=_text(data["expected_outcome"]),
             included_scopes=_string_list(data["included_scopes"], allow_empty=False),
             excluded_scopes=_string_list(data["excluded_scopes"], allow_empty=True),
-            worker_permissions=_string_list(data["worker_permissions"], allow_empty=False),
+            worker_permissions=permissions,
             time_seconds=time_seconds,
             model_budget=model_budget,
             qa_reserve=qa_reserve,
             recovery_reserve=recovery_reserve,
             escalation_conditions=_string_list(data["escalation_conditions"], allow_empty=True),
+            tasks=tasks,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "worker": self.worker,
             "objective": self.objective,
             "expected_outcome": self.expected_outcome,
@@ -185,6 +204,35 @@ class HarmoniaGenesisSpec:
             "recovery_reserve": self.recovery_reserve,
             "escalation_conditions": list(self.escalation_conditions),
         }
+        if self.tasks:
+            result.pop("worker")
+            result.pop("worker_permissions")
+            result["tasks"] = [task.to_dict() for task in self.tasks]
+        return result
+
+
+@dataclass(frozen=True, slots=True)
+class HarmoniaTaskSpec:
+    task_id: str
+    worker: str
+    worker_permissions: tuple[str, ...]
+    prerequisites: tuple[str, ...]
+
+    @classmethod
+    def from_dict(cls, value: Any) -> "HarmoniaTaskSpec":
+        data = _exact_fields(value, _TASK_FIELDS)
+        prerequisites = data["prerequisites"]
+        if not isinstance(prerequisites, list):
+            _invalid()
+        return cls(
+            task_id=_identifier(data["task_id"]),
+            worker=_identifier(data["worker"]),
+            worker_permissions=_string_list(data["worker_permissions"], allow_empty=False),
+            prerequisites=tuple(_identifier(item) for item in prerequisites),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"task_id": self.task_id, "worker": self.worker, "worker_permissions": list(self.worker_permissions), "prerequisites": list(self.prerequisites)}
 
 
 @dataclass(frozen=True, slots=True)
