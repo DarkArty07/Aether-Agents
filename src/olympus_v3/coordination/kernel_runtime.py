@@ -683,7 +683,7 @@ class KernelRunService:
             "lease_epoch",
             "lease_token",
         )
-        if any(not hasattr(authority, name) for name in required):
+        if any(not hasattr(authority, name) for name in (*required, "lease_until")):
             raise AuthorityError("invalid dispatch authority")
         if (authority.installation_id, authority.project_id) != (
             self.ledger.scope.installation_id,
@@ -717,6 +717,7 @@ class KernelRunService:
             or lease.owner != authority.lease_owner
             or lease.epoch != authority.lease_epoch
             or lease.token != authority.lease_token
+            or lease.expires_at != authority.lease_until
             or lease.expires_at <= self.ledger.clock()
         ):
             raise AuthorityError("stale close dispatch fence")
@@ -770,6 +771,11 @@ class KernelRunService:
             "message_id": authority.message_id,
             "logical_session": authority.logical_session,
             "fence": authority.lease_epoch,
+            "lease_resource": authority.lease_resource,
+            "lease_owner": authority.lease_owner,
+            "lease_epoch": authority.lease_epoch,
+            "lease_token": authority.lease_token,
+            "lease_until": authority.lease_until,
             "acp_session_id": receipt["acp_session_id"],
             "evidence_receipt_id": receipt["receipt_id"],
             "cleanup_command_id": "cleanup:" + command_id,

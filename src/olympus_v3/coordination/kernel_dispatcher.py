@@ -1178,8 +1178,15 @@ class KernelDispatcher:
             proof = terminal.get("proof", {}).get("survivors") if isinstance(terminal.get("proof"), Mapping) else None
             if not isinstance(proof, Mapping) or set(proof) != {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"} or any(value is not False for value in proof.values()):
                 raise ReconciliationRequired("invalid cleanup proof")
-            lease_resource = staged["lease_resource"]
-            intent_lease = Lease(self.ledger.scope, lease_resource, staged["lease_owner"], staged["lease_epoch"], staged["lease_until"], staged["lease_token"])
+            lease_resource = intent["lease_resource"]
+            intent_lease = Lease(
+                self.ledger.scope,
+                lease_resource,
+                intent["lease_owner"],
+                intent["lease_epoch"],
+                intent["lease_until"],
+                intent["lease_token"],
+            )
             current_lease = self.ledger.lease(intent_lease.resource)
             if current_lease is not None:
                 if current_lease != intent_lease:
@@ -1191,7 +1198,7 @@ class KernelDispatcher:
                 raise StaleFence("dispatch lease survives close")
             receipt_id = "cleanup-receipt:" + hashlib.sha256(intent["cleanup_command_id"].encode()).hexdigest()
             receipt_payload = {name: intent[name] for name in ("run_id", "task_id", "attempt", "contract_id", "contract_generation", "revocation_epoch", "message_id", "logical_session", "acp_session_id", "evidence_receipt_id", "cleanup_command_id", "closure_proposal_hash")}
-            receipt_payload.update({"lease_resource": staged["lease_resource"], "lease_owner": staged["lease_owner"], "lease_epoch": staged["lease_epoch"], "lease_token": staged["lease_token"], "lease_released": True, "receipt_id": receipt_id, "proof": dict(proof)})
+            receipt_payload.update({"lease_resource": intent["lease_resource"], "lease_owner": intent["lease_owner"], "lease_epoch": intent["lease_epoch"], "lease_token": intent["lease_token"], "lease_released": True, "receipt_id": receipt_id, "proof": dict(proof)})
             receipt_exists = any(event["kind"] == "cleanup.receipt.recorded" and json.loads(event["payload"]).get("receipt_id") == receipt_id for event in self.ledger.events())
             if not receipt_exists:
                 self._append("cleanup.receipt.recorded", aggregate, receipt_payload, message_id=receipt_id)

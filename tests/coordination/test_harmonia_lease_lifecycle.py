@@ -1195,6 +1195,11 @@ def test_trusted_receipt_requests_one_durable_close_without_cleanup_effect(stack
         "revocation_epoch": authority.revocation_epoch,
         "message_id": authority.message_id,
         "logical_session": authority.logical_session,
+        "lease_resource": authority.lease_resource,
+        "lease_owner": authority.lease_owner,
+        "lease_epoch": authority.lease_epoch,
+        "lease_token": authority.lease_token,
+        "lease_until": authority.lease_until,
         "acp_session_id": "acp-session-1",
         "evidence_receipt_id": receipt["receipt_id"],
         "fence": authority.lease_epoch,
@@ -1206,6 +1211,30 @@ def test_trusted_receipt_requests_one_durable_close_without_cleanup_effect(stack
     assert intents[0]["closure_proposal_hash"].startswith("sha256:")
     assert tuple(effects.calls) == calls_before
     assert not event_payloads(ledger, "task.closed")
+
+
+def test_renewed_dispatch_lease_is_the_exact_fence_used_for_close(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    renewed = dispatcher.renew_with(authority, ttl=500)
+    assert renewed.lease is not None
+    current = replace(authority, lease_until=renewed.lease.expires_at)
+
+    runtime.request_close(
+        authority=current,
+        proposed_state=CompletionState.COMPLETED,
+        command_id="close-after-renewal",
+    )
+    intent = event_payloads(ledger, "close.requested")[0]
+    assert intent["lease_until"] == renewed.lease.expires_at
+    assert run(dispatcher.cleanup_once(authority=current))["outcome"] == "completed"
+    closed = run(dispatcher.finalize_close(authority=current))
+
+    assert closed["state"] == TaskState.CLOSED.value
+    receipt = event_payloads(ledger, "cleanup.receipt.recorded")[0]
+    assert receipt["lease_released"] is True
+    assert ledger.lease(authority.lease_resource) is None
 
 
 def test_close_request_requires_matching_trusted_receipt_and_changes_nothing_on_rejection(stack):
