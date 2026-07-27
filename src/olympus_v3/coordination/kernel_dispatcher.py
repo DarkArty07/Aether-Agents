@@ -971,6 +971,9 @@ class KernelDispatcher:
         permissions = () if contract is None else contract.role_permissions.get(authority.agent_name, ())
         if "return_evidence" not in permissions:
             return
+        nested = progress.get("progress") if isinstance(progress, Mapping) else None
+        if isinstance(nested, Mapping):
+            progress = nested
         if not isinstance(progress, Mapping) or not isinstance(progress.get("last_turn"), str):
             raise DispatchRejected("structured ACP result required")
 

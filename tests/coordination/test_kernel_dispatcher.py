@@ -606,12 +606,12 @@ def test_read_only_worker_returns_json_and_kernel_materializes_evidence(response
     with pytest.raises(dispatcher_api().DispatchRejected, match="invalid structured ACP result"):
         d.materialize_response_result_with(
             envelope.authority,
-            {"last_turn": '{"answer":"ok","answer":"conflict"}'},
+            {"progress": {"last_turn": '{"answer":"ok","answer":"conflict"}'}},
         )
 
     d.materialize_response_result_with(
         envelope.authority,
-        {"last_turn": '{"answer":"B_VERIFIED","source_sha256":"sha256:source"}'},
+        {"progress": {"last_turn": '{"answer":"B_VERIFIED","source_sha256":"sha256:source"}'}},
     )
     result_path = project_root / ".aether/evidence/run-a/task-a/1/result.json"
     document = json.loads(result_path.read_text())
