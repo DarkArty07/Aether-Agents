@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -15,8 +17,9 @@ from .evidence import (
     build_evidence_receipt,
     verify_artifact,
 )
-from .leases import Lease
+from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
+from .protocol import ValidationError
 from .workflow import AttemptState, kernel_logical_session
 
 
@@ -103,6 +106,8 @@ class KernelDispatcher:
         if not isinstance(derived, str) or not derived or not derived.replace("-", "").replace("_", "").isalnum():
             raise DispatchRejected("stable worker identity required")
         self._owner = derived
+        self._cleanup_owner = "cleanup-" + secrets.token_hex(8)
+        self._cleanup_lock = asyncio.Lock()
 
     def _contract(self, run_id: str):
         try:
@@ -771,6 +776,122 @@ class KernelDispatcher:
                 },
             )
         return DispatchObservation(status, response.get("acp_session_id"), response)
+
+    @staticmethod
+    def _cleanup_status(proposed_state: str) -> str:
+        return {"completed": "completed", "failed": "error", "cancelled": "cancelled"}[proposed_state]
+
+    def _cleanup_events(self, intent: Mapping[str, Any], kind: str):
+        return [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == kind
+            and json.loads(event["payload"]).get("cleanup_command_id") == intent["cleanup_command_id"]
+        ]
+
+    async def cleanup_once(self):
+        """Consume one durable close obligation, with intent-before-effect ordering."""
+        async with self._cleanup_lock:
+            return await self._cleanup_once_locked()
+
+    async def _cleanup_once_locked(self):
+        intents = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "close.requested"
+        ]
+        for intent in intents:
+            outcomes = [
+                (kind, payload)
+                for kind in ("cleanup.completed", "cleanup.failed", "cleanup.unknown")
+                for payload in self._cleanup_events(intent, kind)
+            ]
+            if outcomes:
+                kind, payload = outcomes[0]
+                return {"outcome": payload["outcome"], "event": kind}
+
+            staged = next(
+                (
+                    json.loads(event["payload"])
+                    for event in self.ledger.events()
+                    if event["kind"] == "dispatch.staged"
+                    and json.loads(event["payload"]).get("message_id") == intent["message_id"]
+                ),
+                None,
+            )
+            if staged is None:
+                raise ReconciliationRequired("cleanup authority is not durably staged")
+            expected = {
+                "installation_id": staged["installation_id"],
+                "project_id": staged["project_id"],
+                "run_id": staged["run_id"],
+                "task_id": staged["task_id"],
+                "attempt": staged["attempt"],
+                "contract_id": staged["contract_id"],
+                "contract_generation": staged["contract_generation"],
+                "revocation_epoch": staged["revocation_epoch"],
+                "message_id": staged["message_id"],
+                "logical_session": staged["logical_session"],
+            }
+            if any(intent.get(name) != value for name, value in expected.items()):
+                raise ReconciliationRequired("cleanup authority mismatch")
+            cleanup_resource = "cleanup-effect:" + hashlib.sha256(
+                intent["cleanup_command_id"].encode("utf-8")
+            ).hexdigest()[:32]
+            claim = self.ledger.acquire_lease(
+                cleanup_resource,
+                self._cleanup_owner,
+                ttl=300_000_000_000,
+            )
+            if claim.status is LeaseResult.CONTENDED:
+                return None
+            if claim.lease is None:
+                raise ReconciliationRequired("cleanup effect lease unavailable")
+            request_payload = {
+                **expected,
+                "acp_session_id": intent["acp_session_id"],
+                "evidence_receipt_id": intent["evidence_receipt_id"],
+                "cleanup_command_id": intent["cleanup_command_id"],
+                "command_id": intent["command_id"],
+                "proposed_state": intent["proposed_state"],
+                "expected_terminal_status": self._cleanup_status(intent["proposed_state"]),
+                "outcome": "requested",
+            }
+            self._append(
+                "cleanup.requested",
+                "dispatch:" + intent["message_id"],
+                request_payload,
+                message_id="cleanup-requested:" + intent["cleanup_command_id"],
+            )
+            terminal_status = request_payload["expected_terminal_status"]
+            try:
+                response = await self.runtime_adapter.cleanup_kernel(
+                    project_id=expected["project_id"],
+                    logical_session=expected["logical_session"],
+                    session_id=request_payload["acp_session_id"],
+                    terminal_status=terminal_status,
+                )
+            except Exception as exc:
+                known_rejection = isinstance(exc, ValidationError)
+                outcome = "failed" if known_rejection else "unknown"
+                kind = "cleanup.failed" if known_rejection else "cleanup.unknown"
+                payload = {**request_payload, "outcome": outcome, "reason": str(exc)[:4096]}
+            else:
+                valid = (
+                    isinstance(response, Mapping)
+                    and response.get("status") == terminal_status
+                    and response.get("acp_session_id") == request_payload["acp_session_id"]
+                )
+                outcome = "completed" if valid else "unknown"
+                kind = "cleanup.completed" if valid else "cleanup.unknown"
+                payload = {
+                    **request_payload,
+                    "outcome": outcome,
+                    **({} if valid else {"reason": "invalid cleanup response"}),
+                }
+            self._append(kind, "dispatch:" + intent["message_id"], payload, message_id=kind + ":" + intent["cleanup_command_id"])
+            return {"outcome": outcome, "event": kind}
+        return None
 
     async def observe_once(self, run_id, task_id, *, attempt):
         event = next(

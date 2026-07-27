@@ -113,6 +113,8 @@ _SCHEMAS = {
     "attempt.orphaned": {"run_id", "task_id", "attempt", "contract_id"},
     "attempt.superseded": {"run_id", "task_id", "attempt", "replacement_attempt", "contract_id"},
     "close.requested": {
+        "installation_id",
+        "project_id",
         "run_id",
         "task_id",
         "attempt",
@@ -121,6 +123,7 @@ _SCHEMAS = {
         "revocation_epoch",
         "message_id",
         "logical_session",
+        "fence",
         "acp_session_id",
         "evidence_receipt_id",
         "closure_proposal_hash",
@@ -353,6 +356,8 @@ def validate_workflow_history(events):
                 or any(
                     payload[name] != source[name]
                     for name in (
+                        "installation_id",
+                        "project_id",
                         "run_id",
                         "task_id",
                         "attempt",
@@ -363,6 +368,7 @@ def validate_workflow_history(events):
                         "logical_session",
                     )
                 )
+                or payload["fence"] != source["lease_epoch"]
                 or any(
                     payload[name] != receipt[name]
                     for name in (

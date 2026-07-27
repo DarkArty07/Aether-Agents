@@ -59,6 +59,7 @@ class ProjectionReducer:
             "runtime.terminal.observed",
             "cleanup.requested",
             "cleanup.completed",
+            "cleanup.failed",
             "cleanup.unknown",
             "evidence.receipt.recorded",
             "close.requested",
@@ -72,6 +73,7 @@ class ProjectionReducer:
                 "runtime.terminal.observed",
                 "cleanup.requested",
                 "cleanup.completed",
+                "cleanup.failed",
                 "cleanup.unknown",
                 "evidence.receipt.recorded",
             }:

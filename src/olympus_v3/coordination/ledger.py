@@ -63,6 +63,7 @@ _LIFECYCLE_EVENT_KINDS = frozenset(
         "runtime.terminal.observed",
         "cleanup.requested",
         "cleanup.completed",
+        "cleanup.failed",
         "cleanup.unknown",
         "evidence.receipt.recorded",
     }

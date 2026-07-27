@@ -39,6 +39,7 @@ from olympus_v3.coordination.harmonia_service import HarmoniaService
 from olympus_v3.coordination.kernel_dispatcher import DispatchAuthority, KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
+from olympus_v3.coordination.protocol import ValidationError
 from olympus_v3.coordination.workflow import closure_proposal_hash
 
 PROJECT = "project-a"
@@ -100,6 +101,15 @@ class EffectBarrier:
         if self.cleanup_error:
             raise self.cleanup_error
         return {"status": request.get("terminal_status", "completed")}
+
+    async def cleanup_kernel(self, **request):
+        self.calls.append(("cleanup_kernel", request))
+        if self.cleanup_error:
+            raise self.cleanup_error
+        return {
+            "status": request["terminal_status"],
+            "acp_session_id": request["session_id"],
+        }
 
 
 class PublicManager:
@@ -1159,6 +1169,8 @@ def test_trusted_receipt_requests_one_durable_close_without_cleanup_effect(stack
     assert len(intents) == 1
     receipt = event_payloads(ledger, "evidence.receipt.recorded")[0]
     assert intents[0] == {
+        "installation_id": authority.installation_id,
+        "project_id": authority.project_id,
         "run_id": authority.run_id,
         "task_id": authority.task_id,
         "attempt": authority.attempt,
@@ -1169,6 +1181,7 @@ def test_trusted_receipt_requests_one_durable_close_without_cleanup_effect(stack
         "logical_session": authority.logical_session,
         "acp_session_id": "acp-session-1",
         "evidence_receipt_id": receipt["receipt_id"],
+        "fence": authority.lease_epoch,
         "closure_proposal_hash": intents[0]["closure_proposal_hash"],
         "cleanup_command_id": "cleanup:close-command-1",
         "command_id": "close-command-1",
@@ -1366,3 +1379,167 @@ def test_same_close_command_converges_across_independent_sqlite_connections(stac
     assert states == (TaskState.CLEANUP_PENDING, TaskState.CLEANUP_PENDING)
     assert len(event_payloads(ledger, "close.requested")) == 1
     assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+
+
+def _persist_close_intent(ledger, runtime, dispatcher, envelope, *, effects):
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    runtime.request_close(
+        authority=envelope.authority,
+        proposed_state=CompletionState.COMPLETED,
+        command_id="close-command-1",
+    )
+    effects.calls.clear()
+
+
+def test_cleanup_coordinator_consumes_pending_obligation_once_and_never_closes(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+
+    first = run(dispatcher.cleanup_once())
+    replay = run(dispatcher.cleanup_once())
+
+    assert first["outcome"] == replay["outcome"] == "completed"
+    assert len(event_payloads(ledger, "cleanup.requested")) == 1
+    assert len(event_payloads(ledger, "cleanup.completed")) == 1
+    assert [kind for kind, _ in effects.calls].count("cleanup_kernel") == 1
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+    assert not event_payloads(ledger, "task.closed")
+
+
+def test_cleanup_coordinator_persists_failed_or_unknown_typed_outcomes_without_retry(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    effects.cleanup_error = ValidationError("cleanup rejected before effect")
+
+    failed = run(dispatcher.cleanup_once())
+    replay = run(dispatcher.cleanup_once())
+
+    assert failed["outcome"] == replay["outcome"] == "failed"
+    assert len(event_payloads(ledger, "cleanup.failed")) == 1
+    assert [kind for kind, _ in effects.calls].count("cleanup_kernel") == 1
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+
+
+def test_cleanup_timeout_is_ambiguous_and_never_classified_as_known_failure(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    effects.cleanup_error = TimeoutError("cleanup response lost")
+
+    result = run(dispatcher.cleanup_once())
+
+    assert result["outcome"] == "unknown"
+    assert len(event_payloads(ledger, "cleanup.unknown")) == 1
+    assert not event_payloads(ledger, "cleanup.failed")
+    assert not event_payloads(ledger, "cleanup.completed")
+
+
+def test_cleanup_coordinator_rejects_mismatched_outcome_and_unknown_session_as_unknown(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    effects.cleanup_kernel = None
+
+    async def malformed(**request):
+        effects.calls.append(("cleanup_kernel", request))
+        return {"status": "completed", "acp_session_id": "foreign-session"}
+
+    effects.cleanup_kernel = malformed
+    malformed_result = run(dispatcher.cleanup_once())
+    assert malformed_result["outcome"] == "unknown"
+    assert len(event_payloads(ledger, "cleanup.unknown")) == 1
+
+    # Replaying the typed unknown result must not invoke cleanup again.
+    replay = run(dispatcher.cleanup_once())
+    assert replay["outcome"] == "unknown"
+    assert len([kind for kind, _ in effects.calls if kind == "cleanup_kernel"]) == 1
+
+    # An unknown persisted session is also reconciliation-required, never success.
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+
+
+def test_cleanup_coordinator_persists_unknown_for_unknown_persisted_session(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    effects.cleanup_error = ValueError("unknown persisted session")
+
+    result = run(dispatcher.cleanup_once())
+
+    assert result["outcome"] == "unknown"
+    assert len(event_payloads(ledger, "cleanup.unknown")) == 1
+    assert not event_payloads(ledger, "cleanup.completed")
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+
+
+def test_cleanup_coordinator_restarts_from_durable_requested_before_effect(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    intent = event_payloads(ledger, "close.requested")[0]
+    requested = {
+        **{name: intent[name] for name in (
+            "installation_id", "project_id", "run_id", "task_id", "attempt",
+            "contract_id", "contract_generation", "revocation_epoch", "message_id",
+            "logical_session", "acp_session_id", "evidence_receipt_id", "cleanup_command_id",
+            "command_id", "proposed_state",
+        )},
+        "expected_terminal_status": "completed",
+        "outcome": "requested",
+    }
+    dispatcher._append(
+        "cleanup.requested",
+        "dispatch:" + envelope.authority.message_id,
+        requested,
+        message_id="cleanup-requested:" + intent["cleanup_command_id"],
+    )
+    effects.calls.clear()
+    restarted = KernelRunService(ledger, writer=runtime.writer)
+    restarted_dispatcher = KernelDispatcher(
+        ledger=ledger, runtime=restarted, runtime_adapter=effects, worker_id="owner"
+    )
+
+    result = run(restarted_dispatcher.cleanup_once())
+
+    assert result["outcome"] == "completed"
+    assert len(event_payloads(ledger, "cleanup.requested")) == 1
+    assert len(event_payloads(ledger, "cleanup.completed")) == 1
+    assert [kind for kind, _ in effects.calls].count("cleanup_kernel") == 1
+
+
+def test_competing_cleanup_consumers_allow_only_one_external_effect(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+
+    class BlockingCleanup:
+        def __init__(self):
+            self.calls = []
+            self.started = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def cleanup_kernel(self, **request):
+            self.calls.append(request)
+            self.started.set()
+            await self.release.wait()
+            return {"status": request["terminal_status"], "acp_session_id": request["session_id"]}
+
+    adapter = BlockingCleanup()
+    first_dispatcher = KernelDispatcher(
+        ledger=ledger, runtime=runtime, runtime_adapter=adapter, worker_id="owner"
+    )
+    competing_dispatcher = KernelDispatcher(
+        ledger=ledger, runtime=runtime, runtime_adapter=adapter, worker_id="owner"
+    )
+
+    async def scenario():
+        first_task = asyncio.create_task(first_dispatcher.cleanup_once())
+        await asyncio.wait_for(adapter.started.wait(), timeout=2)
+        competing = await competing_dispatcher.cleanup_once()
+        adapter.release.set()
+        first = await first_task
+        replay = await competing_dispatcher.cleanup_once()
+        return first, competing, replay
+
+    first, competing, replay = run(scenario())
+
+    assert first["outcome"] == replay["outcome"] == "completed"
+    assert competing is None
+    assert len(adapter.calls) == 1
+    assert len(event_payloads(ledger, "cleanup.requested")) == 1
+    assert len(event_payloads(ledger, "cleanup.completed")) == 1

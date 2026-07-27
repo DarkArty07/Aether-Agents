@@ -759,6 +759,8 @@ class KernelRunService:
         if expected_state is not proposed_state:
             raise InvalidTransition("semantic closure conflicts with trusted evidence")
         payload = {
+            "installation_id": authority.installation_id,
+            "project_id": authority.project_id,
             "run_id": authority.run_id,
             "task_id": authority.task_id,
             "attempt": authority.attempt,
@@ -767,6 +769,7 @@ class KernelRunService:
             "revocation_epoch": authority.revocation_epoch,
             "message_id": authority.message_id,
             "logical_session": authority.logical_session,
+            "fence": authority.lease_epoch,
             "acp_session_id": receipt["acp_session_id"],
             "evidence_receipt_id": receipt["receipt_id"],
             "cleanup_command_id": "cleanup:" + command_id,
