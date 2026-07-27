@@ -96,7 +96,7 @@ async def init_server() -> None:
     _manager = ACPManager(profiles_dir=config.profiles_dir, db=_db)
     logger.info("ACP manager initialized with profiles_dir: %s", config.profiles_dir)
 
-    aether_home = config.profiles_dir.expanduser().resolve().parent
+    aether_home = config.aether_home.expanduser().resolve()
     _harmonia_registry = ProjectRuntimeRegistry(
         aether_home,
         _manager,
