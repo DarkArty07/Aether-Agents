@@ -159,6 +159,39 @@ def test_receive_positive_control_commits_all_rows(tmp_path):
     db.close()
 
 
+@pytest.mark.parametrize(
+    ("aggregate", "kind", "payload"),
+    (
+        ("aggregate-a", "state.set", {"value": 4}),
+        ("aggregate-b", "state.set", {"value": 3}),
+        ("aggregate-a", "state.changed", {"value": 3}),
+    ),
+)
+def test_append_message_replay_is_payload_aware_and_atomic(tmp_path, aggregate, kind, payload):
+    db, auth, context = _setup(tmp_path)
+    original = auth.sign(
+        db.draft("aggregate-a", "state.set", {"value": 3}, writer=context),
+        context,
+    )
+    assert db.append(original, context, message_id="message-a").status is Result.APPLIED
+    committed = _snapshot(db, ("events", "projections", "inbox", "outbox"))
+
+    exact = auth.sign(
+        db.draft("aggregate-a", "state.set", {"value": 3}, writer=context),
+        context,
+    )
+    assert db.append(exact, context, message_id="message-a").status is Result.DUPLICATE
+    assert _snapshot(db, ("events", "projections", "inbox", "outbox")) == committed
+
+    conflicting = auth.sign(
+        db.draft(aggregate, kind, payload, writer=context, expected_version=db.aggregate_version(aggregate)),
+        context,
+    )
+    assert db.append(conflicting, context, message_id="message-a").status is Result.IDEMPOTENCY_CONFLICT
+    assert _snapshot(db, ("events", "projections", "inbox", "outbox")) == committed
+    db.close()
+
+
 def test_create_contract_positive_control_commits_both_contract_rows(tmp_path):
     db, _, _ = _setup(tmp_path)
 

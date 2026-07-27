@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .contracts import ContractState
+from .evidence import (
+    EvidenceIdentity,
+    EvidenceVerificationError,
+    build_evidence_receipt,
+    verify_artifact,
+)
 from .leases import Lease
 from .ledger import Result, SQLiteLedger, StoreScope
 from .workflow import AttemptState, kernel_logical_session
@@ -641,6 +647,64 @@ class KernelDispatcher:
                 raise DispatchRejected("conflicting terminal evidence")
             return Result.APPLIED
         return self._append("runtime.terminal.observed", "dispatch:" + authority.message_id, payload).status
+
+    @staticmethod
+    def _evidence_identity(authority: DispatchAuthority, acp_session_id: str) -> EvidenceIdentity:
+        return EvidenceIdentity(
+            installation_id=authority.installation_id,
+            project_id=authority.project_id,
+            run_id=authority.run_id,
+            task_id=authority.task_id,
+            attempt=authority.attempt,
+            contract_id=authority.contract_id,
+            contract_generation=authority.contract_generation,
+            revocation_epoch=authority.revocation_epoch,
+            message_id=authority.message_id,
+            logical_session=authority.logical_session,
+            acp_session_id=acp_session_id,
+        )
+
+    def record_evidence_with(self, authority: DispatchAuthority):
+        """Verify the fixed result artifact and persist one authority-bound receipt."""
+        self._authority_current(authority)
+        terminal_events = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "runtime.terminal.observed"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if len(terminal_events) != 1:
+            raise DispatchRejected("durable terminal evidence required")
+        terminal = terminal_events[0]
+        expected = {
+            "run_id": authority.run_id,
+            "task_id": authority.task_id,
+            "attempt": authority.attempt,
+            "contract_id": authority.contract_id,
+            "contract_generation": authority.contract_generation,
+            "revocation_epoch": authority.revocation_epoch,
+            "message_id": authority.message_id,
+            "logical_session": authority.logical_session,
+        }
+        if any(terminal.get(key) != value for key, value in expected.items()):
+            raise DispatchRejected("terminal evidence does not match dispatch authority")
+        acp_session_id = terminal.get("acp_session_id")
+        status = terminal.get("status")
+        if not isinstance(acp_session_id, str) or status not in {"completed", "error", "cancelled"}:
+            raise DispatchRejected("invalid durable terminal evidence")
+        identity = self._evidence_identity(authority, acp_session_id)
+        try:
+            artifact = verify_artifact(Path(authority.project_root), identity)
+            receipt = build_evidence_receipt(identity, artifact, status)
+        except EvidenceVerificationError as exc:
+            raise DispatchRejected(exc.code) from exc
+        self._authority_current(authority)
+        return self._append(
+            "evidence.receipt.recorded",
+            "evidence:" + authority.message_id,
+            receipt.event_payload(),
+            message_id="evidence:" + authority.message_id,
+        ).status
 
     async def observe_with(self, authority):
         self._authority_current(authority)

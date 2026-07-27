@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import olympus_v3.coordination.kernel_dispatcher as dispatcher_module
 from olympus_v3.acp_manager import ACPManager, SessionInfo
 from olympus_v3.coordination import (
     ContractLimits,
@@ -24,6 +25,11 @@ from olympus_v3.coordination import (
     StoreScope,
     TaskState,
     WriterContext,
+)
+from olympus_v3.coordination.evidence import (
+    ARTIFACT_RELATIVE_PATH,
+    build_evidence_receipt,
+    verify_artifact,
 )
 from olympus_v3.coordination.harmonia_runtime import ProjectRuntimeContext
 from olympus_v3.coordination.harmonia_service import HarmoniaService
@@ -179,8 +185,10 @@ def stack(tmp_path: Path):
     attempt = runtime.start_attempt("run-a", "task-a")
     effects = EffectBarrier()
     dispatcher = KernelDispatcher(ledger=ledger, runtime=runtime, runtime_adapter=effects, worker_id="owner")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
     envelope = dispatcher.stage_ready(
-        "run-a", "task-a", attempt=attempt.attempt, project_root="/workspace/project", plan_revision=7, snapshot_digest="sha256:snapshot"
+        "run-a", "task-a", attempt=attempt.attempt, project_root=str(project_root), plan_revision=7, snapshot_digest="sha256:snapshot"
     )
     yield clock, ledger, runtime, dispatcher, envelope, effects
     if not ledger._closed:
@@ -189,6 +197,33 @@ def stack(tmp_path: Path):
 
 def event_payloads(ledger, kind: str) -> list[dict]:
     return [json.loads(row["payload"]) for row in ledger.events() if row["kind"] == kind]
+
+
+def write_result_artifact(authority, acp_session_id: str, *, answer: str = "ok") -> Path:
+    payload = {
+        "schema": "AETHER_TASK_RESULT_V1",
+        "installation_id": authority.installation_id,
+        "project_id": authority.project_id,
+        "run_id": authority.run_id,
+        "task_id": authority.task_id,
+        "attempt": authority.attempt,
+        "contract_id": authority.contract_id,
+        "contract_generation": authority.contract_generation,
+        "revocation_epoch": authority.revocation_epoch,
+        "message_id": authority.message_id,
+        "logical_session": authority.logical_session,
+        "acp_session_id": acp_session_id,
+        "artifact_generation": 1,
+        "result": {"answer": answer},
+    }
+    path = Path(authority.project_root) / ARTIFACT_RELATIVE_PATH.format(
+        run_id=authority.run_id,
+        task_id=authority.task_id,
+        attempt=authority.attempt,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
 
 
 def authority_from(payload: dict) -> DispatchAuthority:
@@ -275,6 +310,160 @@ def test_terminal_observation_is_authenticated_as_one_event_and_not_semantic_com
     assert payload["logical_session"] == authority.logical_session
     assert payload["acp_session_id"] == observation.acp_session_id
     assert runtime.task("run-a", "task-a").state is not TaskState.COMPLETED
+
+
+def test_evidence_receipt_records_once_and_changed_artifact_conflicts(stack):
+    _, ledger, _, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    terminal = TerminalObservation(
+        "completed", authority.logical_session, binding["acp_session_id"], authority.message_id
+    )
+    dispatcher.record_terminal_with(authority, terminal)
+    artifact_path = write_result_artifact(authority, terminal.acp_session_id)
+
+    first = dispatcher.record_evidence_with(authority)
+    replay = dispatcher.record_evidence_with(authority)
+
+    assert first is Result.APPLIED
+    assert replay is Result.DUPLICATE
+    receipts = event_payloads(ledger, "evidence.receipt.recorded")
+    assert len(receipts) == 1
+    receipt = receipts[0]
+    assert receipt["schema"] == "AETHER_EVIDENCE_RECEIPT_V1"
+    assert receipt["contract_id"] == authority.contract_id
+    assert receipt["terminal"] == {"technical_status": "completed"}
+    assert receipt["artifact"]["digest"].startswith("sha256:")
+    assert "result" not in receipt["artifact"]
+    assert receipt["receipt_id"].startswith("receipt:")
+    assert receipt["receipt_payload_digest"].startswith("sha256:")
+
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+    value = json.loads(artifact_path.read_text())
+    value["result"]["answer"] = "changed"
+    artifact_path.write_text(json.dumps(value))
+    with pytest.raises(Exception, match="IDEMPOTENCY_CONFLICT"):
+        dispatcher.record_evidence_with(authority)
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+
+
+def test_evidence_receipt_requires_durable_terminal_and_current_fence(stack):
+    clock, ledger, _, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    write_result_artifact(authority, binding["acp_session_id"])
+
+    with pytest.raises(Exception):
+        dispatcher.record_evidence_with(authority)
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    clock.advance(authority.lease_until - clock() + 1)
+    with pytest.raises(Exception):
+        dispatcher.record_evidence_with(authority)
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+
+
+def test_ledger_rejects_well_formed_receipt_without_terminal_prerequisite(stack):
+    _, ledger, _, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    write_result_artifact(authority, binding["acp_session_id"])
+    identity = dispatcher._evidence_identity(authority, binding["acp_session_id"])
+    receipt = build_evidence_receipt(
+        identity,
+        verify_artifact(Path(authority.project_root), identity),
+        "completed",
+    )
+
+    with pytest.raises(Exception, match="INVALID_INPUT"):
+        dispatcher._append(
+            "evidence.receipt.recorded",
+            "evidence:" + authority.message_id,
+            receipt.event_payload(),
+            message_id="evidence:" + authority.message_id,
+        )
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+
+
+def test_evidence_rechecks_fence_after_filesystem_verification(stack, monkeypatch):
+    _, ledger, _, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    write_result_artifact(authority, binding["acp_session_id"])
+    real_verify = dispatcher_module.verify_artifact
+
+    def replace_fence_after_verify(*args, **kwargs):
+        verified = real_verify(*args, **kwargs)
+        ledger.conn.execute(
+            "UPDATE leases SET token=? WHERE resource=?",
+            ("replaced-after-verification", authority.lease_resource),
+        )
+        ledger.conn.commit()
+        return verified
+
+    monkeypatch.setattr(dispatcher_module, "verify_artifact", replace_fence_after_verify)
+    with pytest.raises(Exception):
+        dispatcher.record_evidence_with(authority)
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+
+
+@pytest.mark.parametrize("artifact_exists", [True, False])
+def test_monitor_persists_terminal_before_optional_receipt_without_task_error(stack, artifact_exists):
+    _, ledger, _, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    if artifact_exists:
+        write_result_artifact(authority, binding["acp_session_id"])
+    effects.observations = [{"status": "completed", "acp_session_id": binding["acp_session_id"]}]
+    context = ProjectRuntimeContext(None, None, ledger, None, None, dispatcher)
+
+    async def scenario():
+        task = await context.start_monitor(authority, poll_interval=0)
+        await task
+        assert task.exception() is None
+
+    run(scenario())
+    kinds = [row["kind"] for row in ledger.events()]
+    assert "runtime.terminal.observed" in kinds
+    if artifact_exists:
+        assert "evidence.receipt.recorded" in kinds
+        assert kinds.index("runtime.terminal.observed") < kinds.index("evidence.receipt.recorded")
+    else:
+        assert "evidence.receipt.recorded" not in kinds
+
+
+@pytest.mark.parametrize("artifact_exists", [True, False])
+def test_restart_retries_terminal_receipt_once_without_observing_acp(stack, artifact_exists):
+    _, ledger, _, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    if artifact_exists:
+        write_result_artifact(authority, binding["acp_session_id"])
+    effects.calls.clear()
+    context = ProjectRuntimeContext(None, None, ledger, None, None, dispatcher)
+
+    run(context.resume_monitors())
+
+    assert not any(kind == "observe" for kind, _ in effects.calls)
+    assert bool(event_payloads(ledger, "evidence.receipt.recorded")) is artifact_exists
 
 
 def test_terminal_observation_rejects_mismatched_session_or_status(stack):
@@ -471,6 +660,40 @@ def test_restart_terminal_evidence_cleans_once_and_missing_evidence_stays_fail_c
     assert result["cleanup_state"] == "completed"
     assert [kind for kind, _ in manager.calls].count("cleanup_persisted") == 1
     run(registry2.close())
+
+
+def test_cold_status_exposes_receipt_summary_without_semantic_completion_or_acp_call(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    manager = PublicManager()
+    service, registry = _service(tmp_path, root, manager)
+    started = run(service.handle(_request(root)))
+    context = run(registry.get_or_create(root))
+    authority = authority_from(
+        json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged"))
+    )
+    binding = event_payloads(context.ledger, "session.bound")[0]
+    context.dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    calls_before = tuple(manager.calls)
+
+    absent = service._status(root, started["run_id"], action="status")
+    assert absent["evidence_receipt"] is None
+    assert tuple(manager.calls) == calls_before
+
+    write_result_artifact(authority, binding["acp_session_id"])
+    context.dispatcher.record_evidence_with(authority)
+    present = service._status(root, started["run_id"], action="status")
+
+    assert present["semantic_completion"] is False
+    assert present["evidence_receipt"]["receipt_id"].startswith("receipt:")
+    assert present["evidence_receipt"]["artifact_digest"].startswith("sha256:")
+    assert present["evidence_receipt"]["verifier_identity"] == "kernel.artifact-verifier"
+    assert "result" not in present["evidence_receipt"]
+    assert tuple(manager.calls) == calls_before
+    run(registry.close())
 
 
 def test_adapter_cleanup_uses_public_manager_and_rejects_wrong_project_or_session():

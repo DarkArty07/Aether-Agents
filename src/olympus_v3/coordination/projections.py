@@ -59,6 +59,7 @@ class ProjectionReducer:
             "cleanup.requested",
             "cleanup.completed",
             "cleanup.unknown",
+            "evidence.receipt.recorded",
         }:
             if kind in {
                 "dispatch.staged",
@@ -70,6 +71,7 @@ class ProjectionReducer:
                 "cleanup.requested",
                 "cleanup.completed",
                 "cleanup.unknown",
+                "evidence.receipt.recorded",
             }:
                 value = {**(current or {}), **payload}
             else:

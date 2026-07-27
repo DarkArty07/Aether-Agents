@@ -62,6 +62,7 @@ _LIFECYCLE_EVENT_KINDS = frozenset(
         "cleanup.requested",
         "cleanup.completed",
         "cleanup.unknown",
+        "evidence.receipt.recorded",
     }
 )
 _AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS | _LIFECYCLE_EVENT_KINDS
@@ -100,6 +101,7 @@ def _canonical_payload(payload: Any) -> str:
 class Result(StrEnum):
     APPLIED = "APPLIED"
     DUPLICATE = "DUPLICATE"
+    IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
     CAS_CONFLICT = "CAS_CONFLICT"
     CONTENDED = "CONTENDED"
     AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
@@ -637,6 +639,52 @@ class SQLiteLedger:
                 return Result.STALE_AUTHORITY
         return None
 
+    def _message_replay_status(self, message_id: str, draft: SignedEventDraft) -> Result | None:
+        row = self.conn.execute(
+            "SELECT e.aggregate,e.kind,e.payload FROM inbox i JOIN events e "
+            "ON e.installation_id=i.installation_id AND e.project_id=i.project_id "
+            "AND e.event_id=i.applied_event_id WHERE i.installation_id=? AND i.project_id=? AND i.message_id=?",
+            (self.scope.installation_id, self.scope.project_id, message_id),
+        ).fetchone()
+        if row is None:
+            return None
+        incoming = _canonical_payload(draft.payload)
+        if (row["aggregate"], row["kind"], row["payload"]) == (draft.aggregate, draft.kind, incoming):
+            return Result.DUPLICATE
+        return Result.IDEMPOTENCY_CONFLICT
+
+    def _evidence_prerequisite_status(self, draft: SignedEventDraft) -> Result | None:
+        if draft.kind != "evidence.receipt.recorded":
+            return None
+        receipt = draft.payload
+        matches = []
+        for row in self.conn.execute(
+            "SELECT payload FROM events WHERE installation_id=? AND project_id=? AND kind=?",
+            (self.scope.installation_id, self.scope.project_id, "runtime.terminal.observed"),
+        ):
+            terminal = json.loads(row["payload"])
+            if terminal.get("message_id") == receipt["message_id"]:
+                matches.append(terminal)
+        if len(matches) != 1:
+            return Result.INVALID_INPUT
+        terminal = matches[0]
+        shared = (
+            "run_id",
+            "task_id",
+            "attempt",
+            "contract_id",
+            "contract_generation",
+            "revocation_epoch",
+            "message_id",
+            "logical_session",
+            "acp_session_id",
+        )
+        if any(terminal.get(field) != receipt.get(field) for field in shared):
+            return Result.INVALID_INPUT
+        if terminal.get("status") != receipt["terminal"]["technical_status"]:
+            return Result.INVALID_INPUT
+        return None
+
     def append(self, draft: SignedEventDraft, context: WriterContext, *, message_id: str | None = None) -> AppendResult:
         if message_id is not None and not _valid_identifier(message_id):
             return AppendResult(Result.INVALID_INPUT)
@@ -645,17 +693,27 @@ class SQLiteLedger:
         failure = self._check(draft, context)
         if failure:
             return AppendResult(failure)
+        if draft.kind == "evidence.receipt.recorded":
+            from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
+
+            try:
+                validate_evidence_receipt_payload(draft.payload)
+            except EvidenceVerificationError:
+                return AppendResult(Result.INVALID_INPUT)
+            expected_message_id = "evidence:" + draft.payload["message_id"]
+            if (
+                draft.payload["installation_id"] != self.scope.installation_id
+                or draft.payload["project_id"] != self.scope.project_id
+                or draft.aggregate != expected_message_id
+                or message_id != expected_message_id
+            ):
+                return AppendResult(Result.INVALID_INPUT)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
-            if (
-                message_id
-                and self.conn.execute(
-                    "SELECT 1 FROM inbox WHERE installation_id=? AND project_id=? AND message_id=?",
-                    (self.scope.installation_id, self.scope.project_id, message_id),
-                ).fetchone()
-            ):
+            replay = self._message_replay_status(message_id, draft) if message_id else None
+            if replay is not None:
                 self.conn.rollback()
-                return AppendResult(Result.DUPLICATE)
+                return AppendResult(replay)
             lease = self.conn.execute(
                 "SELECT * FROM leases WHERE installation_id=? AND project_id=? AND resource=? AND owner=? AND epoch=?",
                 (self.scope.installation_id, self.scope.project_id, context.resource, context.writer_id, context.fence),
@@ -663,10 +721,14 @@ class SQLiteLedger:
             if not lease or lease["expires_at"] <= self.clock():
                 self.conn.rollback()
                 return AppendResult(Result.LEASE_EXPIRED if lease else Result.STALE_FENCE)
-            authority_failure = self._authority_status(draft)
-            if authority_failure:
+            authority_status = self._authority_status(draft)
+            if authority_status is not None:
                 self.conn.rollback()
-                return AppendResult(authority_failure)
+                return AppendResult(authority_status)
+            evidence_status = self._evidence_prerequisite_status(draft)
+            if evidence_status is not None:
+                self.conn.rollback()
+                return AppendResult(evidence_status)
             if draft.kind in _WORKFLOW_EVENT_KINDS or draft.kind in _BUDGET_EVENT_KINDS:
                 from .budget import BudgetError, validate_budget_history
                 from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
@@ -825,14 +887,9 @@ class SQLiteLedger:
             )
         except sqlite3.IntegrityError:
             self.conn.rollback()
-            if (
-                message_id
-                and self.conn.execute(
-                    "SELECT 1 FROM inbox WHERE installation_id=? AND project_id=? AND message_id=?",
-                    (self.scope.installation_id, self.scope.project_id, message_id),
-                ).fetchone()
-            ):
-                return AppendResult(Result.DUPLICATE)
+            replay = self._message_replay_status(message_id, draft) if message_id else None
+            if replay is not None:
+                return AppendResult(replay)
             return AppendResult(Result.CAS_CONFLICT)
         except sqlite3.OperationalError as exc:
             self.conn.rollback()

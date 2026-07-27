@@ -144,6 +144,7 @@ class ProjectRuntimeContext:
                                 "message_id": current.message_id,
                             })(),
                         )
+                        self.dispatcher.record_evidence_with(current)
                         return
                     if poll_interval:
                         await asyncio.sleep(poll_interval)
@@ -164,11 +165,22 @@ class ProjectRuntimeContext:
             for event in self.ledger.events()
             if event["kind"] == "runtime.terminal.observed"
         }
+        receipt_ids = {
+            json.loads(event["payload"]).get("message_id")
+            for event in self.ledger.events()
+            if event["kind"] == "evidence.receipt.recorded"
+        }
         for event in self.ledger.events():
             if event["kind"] != "dispatch.staged":
                 continue
             payload = json.loads(event["payload"])
-            if payload.get("message_id") in terminal_ids:
+            message_id = payload.get("message_id")
+            if message_id in terminal_ids:
+                if message_id not in receipt_ids:
+                    try:
+                        self.dispatcher.record_evidence_with(self.dispatcher._envelope(payload).authority)
+                    except (DispatchRejected, StaleFence):
+                        pass
                 continue
             binding = any(
                 item["kind"] == "session.bound"

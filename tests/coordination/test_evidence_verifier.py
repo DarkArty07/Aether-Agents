@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from olympus_v3.coordination.evidence import (
     EvidenceIdentity,
     EvidenceVerificationError,
     build_evidence_receipt,
+    validate_evidence_receipt_payload,
     verify_artifact,
 )
 
@@ -84,6 +86,57 @@ def test_valid_artifact_verifies_and_receipt_is_deterministic(tmp_path):
     assert receipt.version == 1
     assert receipt.algorithm == "sha256-canonical-json"
     assert receipt.schema == "AETHER_EVIDENCE_RECEIPT_V1"
+
+
+def test_receipt_payload_is_flat_bounded_and_excludes_result(tmp_path):
+    write_json(tmp_path, artifact(result={"answer": "large-result-stays-in-file"}))
+    verified = verify_artifact(tmp_path, identity())
+    receipt = build_evidence_receipt(identity(), verified, "completed")
+    payload = receipt.event_payload()
+
+    assert payload["contract_id"] == "contract-1"
+    assert payload["acp_session_id"] == "acp-1"
+    assert payload["terminal"] == {"technical_status": "completed"}
+    assert "evidence_identity" not in payload
+    assert "result" not in payload["artifact"]
+    assert payload["receipt_id"] == receipt.receipt_id
+    assert payload["receipt_payload_digest"] == receipt.receipt_payload_digest
+    base = {key: value for key, value in payload.items() if key not in {"receipt_id", "receipt_payload_digest"}}
+    canonical = json.dumps(base, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    assert payload["receipt_payload_digest"] == "sha256:" + hashlib.sha256(canonical).hexdigest()
+    assert payload["receipt_id"] == "receipt:" + hashlib.sha256(
+        b"AETHER_EVIDENCE_RECEIPT_V1\0" + canonical
+    ).hexdigest()
+    validate_evidence_receipt_payload(payload)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["digest", "receipt-id", "verifier", "bool-version", "bool-generation", "path", "extra", "result"],
+)
+def test_receipt_payload_validator_rejects_forged_or_extended_payload(tmp_path, mutation):
+    write_json(tmp_path, artifact())
+    receipt = build_evidence_receipt(identity(), verify_artifact(tmp_path, identity()), "completed")
+    payload = receipt.event_payload()
+    if mutation == "digest":
+        payload["receipt_payload_digest"] = "sha256:" + "0" * 64
+    elif mutation == "receipt-id":
+        payload["receipt_id"] = "receipt:" + "0" * 64
+    elif mutation == "verifier":
+        payload["verifier"]["identity"] = "worker-claimed-verifier"
+    elif mutation == "bool-version":
+        payload["verifier"]["version"] = True
+    elif mutation == "bool-generation":
+        payload["artifact"]["generation"] = True
+    elif mutation == "path":
+        payload["artifact"]["relative_path"] = "caller/result.json"
+    elif mutation == "extra":
+        payload["extra"] = True
+    else:
+        payload["artifact"]["result"] = {"answer": "forged"}
+
+    with pytest.raises(EvidenceVerificationError):
+        validate_evidence_receipt_payload(payload)
 
 
 def test_whitespace_and_key_order_do_not_change_digest(tmp_path):
@@ -224,6 +277,16 @@ def test_receipt_rejects_artifact_verified_for_different_identity(tmp_path):
         build_evidence_receipt(identity(contract_id="contract-2"), verified, "completed")
 
     assert exc.value.code == "artifact_mismatch"
+
+
+def test_verifier_reads_from_nofollow_descriptor_not_reopened_path(tmp_path, monkeypatch):
+    write_json(tmp_path, artifact())
+
+    def reject_path_read(_path):
+        raise AssertionError("path reopened after validation")
+
+    monkeypatch.setattr(Path, "read_bytes", reject_path_read)
+    assert verify_artifact(tmp_path, identity()).digest.startswith("sha256:")
 
 
 def test_symlink_and_intermediate_escape_are_rejected(tmp_path):

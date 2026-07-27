@@ -281,6 +281,7 @@ class HarmoniaService:
         staged = next((event["payload"] for event in reversed(events) if event["kind"] == "dispatch.staged"), {})
         binding = next((event["payload"] for event in reversed(events) if event["kind"] == "session.bound"), {})
         terminal = next((event["payload"] for event in reversed(events) if event["kind"] == "runtime.terminal.observed"), {})
+        evidence = next((event["payload"] for event in reversed(events) if event["kind"] == "evidence.receipt.recorded"), {})
         cleanup_events = [event for event in events if event["kind"].startswith("cleanup.")]
         cleanup_state = "not_requested"
         if any(event["kind"] == "cleanup.unknown" for event in cleanup_events):
@@ -327,6 +328,18 @@ class HarmoniaService:
                 state, uncertainty = "reconciliation_required", "terminal_evidence_absent"
         if state not in _STATES:
             raise RuntimeError("invalid Harmonia projection")
+        evidence_receipt = None
+        if evidence:
+            artifact = evidence.get("artifact", {})
+            verifier = evidence.get("verifier", {})
+            evidence_receipt = {
+                "receipt_id": evidence.get("receipt_id"),
+                "receipt_payload_digest": evidence.get("receipt_payload_digest"),
+                "artifact_digest": artifact.get("digest"),
+                "artifact_generation": artifact.get("generation"),
+                "verifier_identity": verifier.get("identity"),
+                "verifier_version": verifier.get("version"),
+            }
         return {
             "action": action,
             "ok": True,
@@ -341,6 +354,7 @@ class HarmoniaService:
             "outbox_status": outbox.get("status"),
             "acp_session_id": binding.get("acp_session_id"),
             "technical_status": terminal.get("status"),
+            "evidence_receipt": evidence_receipt,
             "semantic_completion": False,
             "cleanup_state": cleanup_state,
             "uncertainty": uncertainty,
