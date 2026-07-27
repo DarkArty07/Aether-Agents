@@ -2,9 +2,9 @@
 
 ## TD-v0.19-001 — Risk-based Athena routing in Hermes
 
-**Status:** Open  
-**Owner:** Hermes architecture / user approval  
-**Priority:** Deferred until the kernel-backed architecture is proven  
+**Status:** Open<br>
+**Owner:** Hermes architecture / user approval<br>
+**Priority:** Deferred until the kernel-backed architecture is proven<br>
 **Introduced:** 2026-07-25
 
 ### Context
