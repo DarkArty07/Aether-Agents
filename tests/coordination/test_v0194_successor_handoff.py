@@ -161,6 +161,23 @@ def test_closed_source_stages_exact_bound_successor_with_bounded_handoff(closed_
     assert staged_b[0]["handoff"] == handoff
 
 
+def test_successor_live_prompt_contains_verified_handoff_and_own_result_contract(closed_source):
+    _, _, _, dispatcher, effects, root, _ = closed_source
+    envelope = dispatcher.stage_successor(
+        "run-fixed", "task-a", "task-b", project_root=str(root), plan_revision=2
+    )
+
+    run(dispatcher.dispatch_with(envelope.authority))
+
+    request = [payload for kind, payload in effects.calls if kind == "dispatch"][-1]
+    prompt = json.loads(request["prompt"])
+    assert prompt["handoff"] == envelope.payload["handoff"]
+    assert "result" not in json.dumps(prompt["handoff"])
+    assert prompt["result_artifact"]["relative_path"] == ".aether/evidence/run-fixed/task-b/1/result.json"
+    assert prompt["result_artifact"]["document"]["task_id"] == "task-b"
+    assert prompt["result_artifact"]["document"]["acp_session_id"]
+
+
 def test_tampered_snapshot_rejects_without_advancing_successor(closed_source):
     _, _, runtime, dispatcher, _, root, _ = closed_source
     receipt = next(

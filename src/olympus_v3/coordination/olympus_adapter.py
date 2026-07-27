@@ -15,8 +15,10 @@ from typing import Any, Mapping
 from ..acp_manager import ACPManager
 from .admission import AdmissionProposal, AdmissionStatus
 from .contracts import TaskState
+from .evidence import ARTIFACT_RELATIVE_PATH, ARTIFACT_SCHEMA, EvidenceVerificationError, HandoffSnapshot
 from .harmonia import HarmoniaPlan
 from .protocol import Principal, ValidationError
+from .workflow import kernel_acp_session_id
 
 MAX_RUNTIME_PROMPT_BYTES = 16_384
 
@@ -108,7 +110,7 @@ class OlympusRuntimeAdapter:
 
     @staticmethod
     def _kernel_session_id(logical_session: str) -> str:
-        return str(uuid.uuid5(uuid.NAMESPACE_URL, "aether-r11:" + logical_session))
+        return kernel_acp_session_id(logical_session)
 
     @staticmethod
     def _session_id(task_id: str, participant: Principal, project_root: str) -> str:
@@ -340,6 +342,42 @@ class OlympusRuntimeAdapter:
             "snapshot_digest": getattr(authority, "snapshot_digest", None),
             "message_id": getattr(authority, "message_id", None),
         }
+        session_id = kernel_acp_session_id(logical_session) if isinstance(logical_session, str) and logical_session else None
+        expected_result_artifact = {
+            "relative_path": ARTIFACT_RELATIVE_PATH.format(
+                run_id=getattr(authority, "run_id", None),
+                task_id=getattr(authority, "task_id", None),
+                attempt=getattr(authority, "attempt", None),
+            ),
+            "write_before_completion": True,
+            "document": {
+                "schema": ARTIFACT_SCHEMA,
+                "installation_id": getattr(authority, "installation_id", None),
+                "project_id": getattr(authority, "project_id", None),
+                "run_id": getattr(authority, "run_id", None),
+                "task_id": getattr(authority, "task_id", None),
+                "attempt": getattr(authority, "attempt", None),
+                "contract_id": getattr(authority, "contract_id", None),
+                "contract_generation": getattr(authority, "contract_generation", None),
+                "revocation_epoch": getattr(authority, "revocation_epoch", None),
+                "message_id": getattr(authority, "message_id", None),
+                "logical_session": logical_session,
+                "acp_session_id": session_id,
+                "artifact_generation": 1,
+                "result": {"answer": "REPLACE_WITH_TASK_RESULT"},
+            },
+        }
+        expected_keys = {
+            "acceptance_evidence", "authority", "contract", "instructions", "kind", "result_artifact", "task"
+        }
+        handoff_valid = True
+        if isinstance(prompt_payload, dict) and "handoff" in prompt_payload:
+            expected_keys.add("handoff")
+            try:
+                handoff = HandoffSnapshot.from_dict(prompt_payload["handoff"])
+                handoff_valid = handoff.snapshot_digest == getattr(authority, "snapshot_digest", None)
+            except EvidenceVerificationError:
+                handoff_valid = False
         expected_digest = (
             "sha256:" + hashlib.sha256(prompt.encode()).hexdigest() if isinstance(prompt, str) else None
         )
@@ -356,12 +394,13 @@ class OlympusRuntimeAdapter:
             or len(prompt.encode()) > self.max_prompt_bytes
             or prompt_digest != expected_digest
             or not isinstance(prompt_payload, dict)
-            or set(prompt_payload)
-            != {"acceptance_evidence", "authority", "contract", "instructions", "kind", "task"}
+            or set(prompt_payload) != expected_keys
             or prompt_payload.get("kind") != "aether.harmonia.task.v1"
             or prompt_payload.get("authority") != expected_authority
             or not isinstance(prompt_payload.get("contract"), dict)
             or prompt_payload["contract"].get("worker_id") != agent_name
+            or prompt_payload.get("result_artifact") != expected_result_artifact
+            or not handoff_valid
             or prompt_payload.get("task")
             != {
                 "task_id": getattr(authority, "task_id", None),

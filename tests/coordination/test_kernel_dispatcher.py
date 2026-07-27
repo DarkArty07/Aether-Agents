@@ -474,6 +474,7 @@ def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(ker
         "contract",
         "instructions",
         "kind",
+        "result_artifact",
         "task",
     }
     assert prompt["kind"] == "aether.harmonia.task.v1"
@@ -516,12 +517,22 @@ def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(ker
         "project_root": envelope.authority.project_root,
         "task_id": "task-a",
     }
+    artifact = prompt["result_artifact"]
+    assert artifact["relative_path"] == ".aether/evidence/run-a/task-a/1/result.json"
+    assert artifact["write_before_completion"] is True
+    assert artifact["document"]["schema"] == "AETHER_TASK_RESULT_V1"
+    assert artifact["document"]["run_id"] == "run-a"
+    assert artifact["document"]["task_id"] == "task-a"
+    assert artifact["document"]["artifact_generation"] == 1
+    assert artifact["document"]["acp_session_id"]
+    assert artifact["document"]["result"] == {"answer": "REPLACE_WITH_TASK_RESULT"}
     assert prompt["acceptance_evidence"] == [{"name": "qa", "required": True, "state": "pending"}]
     assert prompt["instructions"] == [
         "Do not delegate.",
         "Do not widen scope.",
         "Do not modify the contract.",
         "Do not claim completion without evidence.",
+        "Before reporting completion, atomically write result_artifact.document to result_artifact.relative_path and replace only its result value with the bounded task output.",
         "Report blockers and stop when authority is insufficient.",
     ]
     assert request["prompt_digest"].startswith("sha256:")

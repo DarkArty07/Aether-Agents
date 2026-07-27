@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -183,6 +184,13 @@ def kernel_logical_session(project_id: str, run_id: str, task_id: str, attempt: 
     """Return a bounded deterministic session identity for full-width IDs."""
     material = f"{project_id}\0{run_id}\0{task_id}\0{attempt}".encode()
     return "kernel:" + hashlib.sha256(material).hexdigest()
+
+
+def kernel_acp_session_id(logical_session: str) -> str:
+    """Derive the public ACPManager identity bound to one kernel session."""
+    if not isinstance(logical_session, str) or not logical_session:
+        raise ValueError("logical session required")
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "aether-r11:" + logical_session))
 
 
 def _event_payload(event):

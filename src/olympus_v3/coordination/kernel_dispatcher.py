@@ -12,6 +12,8 @@ from typing import Any, Mapping
 
 from .contracts import ContractState, TaskState
 from .evidence import (
+    ARTIFACT_RELATIVE_PATH,
+    ARTIFACT_SCHEMA,
     EvidenceIdentity,
     EvidenceVerificationError,
     HandoffSnapshot,
@@ -23,7 +25,7 @@ from .evidence import (
 from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
 from .protocol import Principal, ValidationError
-from .workflow import AttemptState, kernel_logical_session
+from .workflow import AttemptState, kernel_acp_session_id, kernel_logical_session
 
 
 class DispatchRejected(ValueError):
@@ -543,10 +545,45 @@ class KernelDispatcher:
         if result is not Result.APPLIED:
             raise StaleFence(result.value)
 
+    def _staged_handoff(self, authority: DispatchAuthority) -> dict[str, Any] | None:
+        matches: list[dict[str, Any]] = []
+        for event in self.ledger.events():
+            if event["kind"] != "dispatch.staged":
+                continue
+            payload = json.loads(event["payload"])
+            if payload.get("message_id") == authority.message_id:
+                matches.append(payload)
+        if len(matches) != 1:
+            raise DispatchRejected("one durable staged dispatch required")
+        raw = matches[0].get("handoff")
+        if raw is None:
+            return None
+        handoff = HandoffSnapshot.from_dict(raw)
+        if handoff.snapshot_digest != authority.snapshot_digest:
+            raise DispatchRejected("staged handoff digest mismatch")
+        return handoff.to_dict()
+
     def _canonical_prompt(self, authority: DispatchAuthority) -> str:
         contract = self.ledger.read_contract(authority.contract_id)
         if contract is None or contract.status is not ContractState.ACTIVE:
             raise DispatchRejected("active contract required")
+        artifact_document = {
+            "schema": ARTIFACT_SCHEMA,
+            "installation_id": authority.installation_id,
+            "project_id": authority.project_id,
+            "run_id": authority.run_id,
+            "task_id": authority.task_id,
+            "attempt": authority.attempt,
+            "contract_id": authority.contract_id,
+            "contract_generation": authority.contract_generation,
+            "revocation_epoch": authority.revocation_epoch,
+            "message_id": authority.message_id,
+            "logical_session": authority.logical_session,
+            "acp_session_id": kernel_acp_session_id(authority.logical_session),
+            "artifact_generation": 1,
+            "result": {"answer": "REPLACE_WITH_TASK_RESULT"},
+        }
+        handoff = self._staged_handoff(authority)
         prompt = {
             "kind": "aether.harmonia.task.v1",
             "authority": {
@@ -588,6 +625,15 @@ class KernelDispatcher:
                 "attempt": authority.attempt,
                 "project_root": authority.project_root,
             },
+            "result_artifact": {
+                "relative_path": ARTIFACT_RELATIVE_PATH.format(
+                    run_id=authority.run_id,
+                    task_id=authority.task_id,
+                    attempt=authority.attempt,
+                ),
+                "write_before_completion": True,
+                "document": artifact_document,
+            },
             "acceptance_evidence": [
                 {"name": gate.name, "required": gate.required, "state": gate.state.value}
                 for gate in contract.evidence_gates
@@ -597,9 +643,12 @@ class KernelDispatcher:
                 "Do not widen scope.",
                 "Do not modify the contract.",
                 "Do not claim completion without evidence.",
+                "Before reporting completion, atomically write result_artifact.document to result_artifact.relative_path and replace only its result value with the bounded task output.",
                 "Report blockers and stop when authority is insufficient.",
             ],
         }
+        if handoff is not None:
+            prompt["handoff"] = handoff
         return json.dumps(prompt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     async def dispatch_with(self, authority):
