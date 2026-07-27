@@ -1,6 +1,6 @@
 # v0.19.x Incremental Kernel Migration — Roadmap
 
-**Status:** v0.19.1 AND v0.19.2 IMPLEMENTED; v0.19.3 GATE A APPROVED AND IMPLEMENTATION AUTHORIZED; LIVE GATE BLOCKED
+**Status:** v0.19.1–v0.19.4 DETERMINISTIC GATES IMPLEMENTED; v0.19.3/v0.19.4 LIVE GATES BLOCKED
 
 **Canonical design:** `DESIGN.md`
 
@@ -45,7 +45,7 @@ A failure does not automatically authorize a correction patch or the next milest
 | v0.19.1 | IMPLEMENTED — deterministic and bounded live evidence recorded | One opted-in task reaches ACPManager through server-owned kernel composition. | Actual composition seam, durable admission/staging/session binding, honest uncertainty, unchanged legacy default. | Completion, review, closure, handoff, Harmonia planning. |
 | v0.19.2 | IMPLEMENTED — Gate B closed at `b759609` | A verifier-bound receipt proves the exact task result independently of agent prose. | Exact identity tuple, artifact generation/digest, stale/forged evidence rejection, deterministic replay and atomic dependent release. | Closure, next-task selection, handoff. |
 | v0.19.3 | IMPLEMENTED — Gate B closed at `7e432f5`; Gate C live blocked | Trusted work closes only after ACPManager-owned cleanup is verified. | Closure snapshot, durable close intent, cleanup receipt, `CLOSE_FAILED`/`RECONCILIATION_REQUIRED`, no managed survivor under `CLOSED`. | Handoff, Harmonia, broad pilot. |
-| v0.19.4 | GATE A APPROVED — deterministic Gate B authorized; live blocked | Task B starts from Task A's durable result without Hermes relay. | Two-task trace, contract-bound workers, immutable digest-bound snapshot, cleanup-before-handoff and zero routine Hermes calls between tasks. | Dynamic task selection, repair loops, arbitrary DAG. |
+| v0.19.4 | IMPLEMENTED — Gate B candidate frozen at `565745c`; Gate C live blocked | Task B starts from Task A's durable result without Hermes relay. | Two-task trace, contract-bound workers, immutable digest-bound snapshot, cleanup-before-handoff and zero routine Hermes calls between tasks. | Dynamic task selection, repair loops, arbitrary DAG. |
 | v0.19.5 | BLOCKED by v0.19.4 | Harmonia selects a bounded next task without becoming runtime/lifecycle authority. | Projection revision CAS, eligibility enforcement, kernel commit and no Harmonia ACP call. | Open-ended planning, contract amendment, global activation. |
 | v0.19.6 | BLOCKED by v0.19.5 | The complete bounded path survives representative failures without hub-and-spoke fallback. | Disposable live run, fault matrix and formal viability verdict. | Production rollout, second fixture, global replacement claim. |
 
