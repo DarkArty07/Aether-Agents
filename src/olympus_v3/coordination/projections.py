@@ -67,6 +67,7 @@ class ProjectionReducer:
             "task.closed",
             "evidence.receipt.recorded",
             "close.requested",
+            "task.selection.committed",
         }:
             if kind in {
                 "dispatch.staged",

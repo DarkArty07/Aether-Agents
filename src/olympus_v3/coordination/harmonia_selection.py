@@ -193,11 +193,20 @@ class KernelSelectionValidator:
         self._approved = approved_task_ids
         self._bindings = dict(bindings)
 
-    def validate(self, proposal: SelectionProposal) -> str:
+    def validated_projection(self, proposal: SelectionProposal) -> EligibilityProjection:
         if not isinstance(proposal, SelectionProposal):
             raise ValidationError("invalid proposal type")
-        expected = derive_projection(self._authority, self._candidates, approved_task_ids=self._approved, bindings=self._bindings)
+        expected = derive_projection(
+            self._authority,
+            self._candidates,
+            approved_task_ids=self._approved,
+            bindings=self._bindings,
+        )
         expected_proposal = propose_selection(expected)
         if proposal.to_dict() != expected_proposal.to_dict():
             raise ValidationError("proposal does not match current kernel projection or policy")
-        return proposal.selected_task_id
+        return expected
+
+    def validate(self, proposal: SelectionProposal) -> str:
+        expected = self.validated_projection(proposal)
+        return expected.candidates[0].task_id
