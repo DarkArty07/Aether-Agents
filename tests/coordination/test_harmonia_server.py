@@ -152,6 +152,39 @@ def test_init_composes_registry_without_creating_project_runtime(monkeypatch, tm
     assert server._harmonia_service is not None
 
 
+@pytest.mark.parametrize("profiles_layout", ["external", "symlink"])
+def test_init_uses_configured_aether_home_for_harmonia_store(
+    monkeypatch, tmp_path, profiles_layout
+):
+    control_root = tmp_path / "isolated-control"
+    real_profiles = tmp_path / "external-home" / "profiles"
+    real_profiles.mkdir(parents=True)
+    if profiles_layout == "symlink":
+        control_root.mkdir()
+        profiles = control_root / "profiles"
+        profiles.symlink_to(real_profiles, target_is_directory=True)
+    else:
+        profiles = real_profiles
+    config = OlympusV3Config(
+        profiles_dir=profiles,
+        db_path=control_root / "olympus.db",
+        aether_home=control_root,
+        coordination=CoordinationConfig(),
+    )
+    config.daimons = {"hefesto": object()}
+    monkeypatch.setattr(config_loader, "get_config", lambda: config)
+    monkeypatch.setattr(server, "OlympusDB", FakeDB)
+    monkeypatch.setattr(server, "ACPManager", FakeManager)
+    monkeypatch.setattr(server, "ProjectRuntimeRegistry", FakeRegistry, raising=False)
+    monkeypatch.setattr(server, "EnvironmentCoordinationKeyProvider", object, raising=False)
+    monkeypatch.setattr(server, "HarmoniaService", lambda **kwargs: FakeService(), raising=False)
+
+    asyncio.run(server.init_server())
+
+    assert FakeRegistry.instances[0].aether_home == control_root.resolve()
+    asyncio.run(server.shutdown_server())
+
+
 def test_shutdown_closes_registry_exactly_once(monkeypatch):
     registry = FakeRegistry("/tmp/home", FakeManager(), object())
     db = FakeDB()
