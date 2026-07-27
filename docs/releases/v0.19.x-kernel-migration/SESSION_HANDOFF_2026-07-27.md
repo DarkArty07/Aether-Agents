@@ -69,7 +69,8 @@ At final verification, active dispatch/cleanup/finalization leases, manager sess
 
 A detached clean worktree at committed `HEAD` passed:
 
-- full repository suite: `1107 passed`;
+- full repository suite in a fresh venv from the committed checkout: `1097 passed`;
+- coordination plus ACP lifecycle in that checkout: `932 passed`;
 - Ruff over coordination and ACP lifecycle scope: PASS;
 - `python -m compileall -q src tests`: PASS;
 - Gate A/B/C documentation assertions: PASS;
@@ -89,6 +90,7 @@ The temporary validation worktree was removed after the checks.
 | `7ccd000` | Release terminal cleanup/finalization operation leases immediately. |
 | `9a95a95` | Record formal v0.19.4 Gate C PASS evidence. |
 | `495d236` | Remove the remaining committed diff-check formatting defect. |
+| `46ad861` | Restore clean-checkout CI by removing one orphaned export and declaring the Hermes Agent test dependency. |
 
 ## 5. Git and GitHub state
 
@@ -101,6 +103,8 @@ At closeout inventory:
 - unrelated automated Bolt/Dependabot PRs were not modified, closed or merged.
 
 The main worktree contained 30 modified tracked paths and 98 untracked entries before this closeout. They span pilot work, profile/config templates, skills, documentation and local runtime artifacts. They were deliberately preserved. No blanket staging, reset, clean or stash was performed.
+
+The first PR CI run correctly exposed that `normalize_result_envelope` was exported from committed `__init__.py` although its implementation existed only in preserved local R8 work. It also exposed the undeclared `hermes-agent` development dependency required by Phase 0 tests. Commit `46ad861` applied the minimal correction without absorbing the local R8 implementation. A fresh editable install, wheel build, import smoke, Ruff, compileall and the committed test suites passed afterward.
 
 ## 6. Exact stop boundary
 
