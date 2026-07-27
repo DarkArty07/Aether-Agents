@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 from pathlib import Path
 
@@ -100,6 +101,128 @@ class Manager:
                 "pid_session_mapping": False,
             },
         }
+
+
+class CompletingManager(Manager):
+    def __init__(self, root: Path):
+        super().__init__()
+        self.root = root
+        self.statuses = {}
+        self.prompts = []
+
+    async def send_message(self, session_id, prompt):
+        await super().send_message(session_id, prompt)
+        payload = json.loads(prompt)
+        self.prompts.append(payload)
+        if "handoff" in payload:
+            snapshot = self.root / payload["handoff"]["snapshot_relative_path"]
+            raw = snapshot.read_bytes()
+            assert "sha256:" + hashlib.sha256(raw).hexdigest() == payload["handoff"]["snapshot_digest"]
+            answer = "B_CONSUMED_VERIFIED_HANDOFF"
+        else:
+            answer = "A_PRODUCED_SOURCE_RESULT"
+        document = payload["result_artifact"]["document"]
+        document["result"] = {"answer": answer}
+        destination = self.root / payload["result_artifact"]["relative_path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")))
+        self.statuses[session_id] = "completed"
+
+    async def poll(self, session_id):
+        return {"status": self.statuses.get(session_id, "working")}
+
+    async def cleanup_persisted(self, session_id, *, terminal_status, project_id):
+        result = await super().cleanup_persisted(
+            session_id, terminal_status=terminal_status, project_id=project_id
+        )
+        self.sessions.discard(session_id)
+        return result
+
+
+def test_fixed_live_monitor_autonomously_closes_a_dispatches_b_and_closes_b(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    home = tmp_path / "home"
+    config = CoordinationConfig(True, "legacy", ("legacy", "kernel-single-task"), (str(root),), 1)
+    manager = CompletingManager(root)
+    registry = ProjectRuntimeRegistry(
+        home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32)
+    )
+    service = HarmoniaService(
+        aether_home=home,
+        config=config,
+        registry=registry,
+        discovered_workers={"hefesto", "ictinus"},
+    )
+
+    async def scenario():
+        started = await service.handle(fixed_payload(root))
+        context = await registry.get_or_create(root)
+        for _ in range(200):
+            states = {
+                task_id: context.runtime.task(started["run_id"], task_id).state
+                for task_id in ("task-a", "task-b")
+            }
+            if states == {"task-a": TaskState.CLOSED, "task-b": TaskState.CLOSED}:
+                break
+            await asyncio.sleep(0)
+        final_states = {
+            task_id: context.runtime.task(started["run_id"], task_id).state
+            for task_id in ("task-a", "task-b")
+        }
+        events = context.ledger.events()
+        await registry.close()
+        return final_states, events
+
+    final_states, events = asyncio.run(scenario())
+    assert final_states == {"task-a": TaskState.CLOSED, "task-b": TaskState.CLOSED}
+    assert [call[1] for call in manager.calls if call[0] == "spawn"] == ["hefesto", "ictinus"]
+    assert len(manager.prompts) == 2 and "handoff" not in manager.prompts[0]
+    assert manager.prompts[1]["handoff"]["source_task_id"] == "task-a"
+    assert manager.sessions == set()
+    assert sum(event["kind"] == "cleanup.completed" for event in events) == 2
+
+
+def test_fixed_live_monitor_closes_failed_a_without_dispatching_b(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    home = tmp_path / "home"
+
+    class FailingSourceManager(CompletingManager):
+        async def send_message(self, session_id, prompt):
+            await super().send_message(session_id, prompt)
+            self.statuses[session_id] = "error"
+
+    manager = FailingSourceManager(root)
+    config = CoordinationConfig(True, "legacy", ("legacy", "kernel-single-task"), (str(root),), 1)
+    registry = ProjectRuntimeRegistry(
+        home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32)
+    )
+    service = HarmoniaService(
+        aether_home=home,
+        config=config,
+        registry=registry,
+        discovered_workers={"hefesto", "ictinus"},
+    )
+
+    async def scenario():
+        started = await service.handle(fixed_payload(root))
+        context = await registry.get_or_create(root)
+        for _ in range(200):
+            if context.runtime.task(started["run_id"], "task-a").state is TaskState.CLOSED:
+                break
+            await asyncio.sleep(0)
+        states = {
+            task_id: context.runtime.task(started["run_id"], task_id).state
+            for task_id in ("task-a", "task-b")
+        }
+        await registry.close()
+        return states
+
+    states = asyncio.run(scenario())
+    assert states == {"task-a": TaskState.CLOSED, "task-b": TaskState.PROPOSED}
+    assert [call[1] for call in manager.calls if call[0] == "spawn"] == ["hefesto"]
+    assert manager.sessions == set()
 
 
 def test_fixed_start_persists_b_blocked_and_binds_a(tmp_path):
@@ -247,7 +370,7 @@ def test_fixed_public_path_closes_a_and_auto_stages_b_once(tmp_path):
     public = json.dumps(status)
     assert "lease_token" not in public
     assert '"result"' not in public
-    assert [call[1] for call in manager.calls if call[0] == "spawn"] == ["hefesto"]
+    assert [call[1] for call in manager.calls if call[0] == "spawn"] == ["hefesto", "ictinus"]
 
 
 def test_fixed_successor_auto_stages_after_runtime_registry_restart(tmp_path):

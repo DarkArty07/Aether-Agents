@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 
+from .closure import CompletionState
 from .contracts import TaskState
 from .harmonia_store import ProjectStoreIdentity, derive_project_store
 from .kernel_dispatcher import DispatchRejected, KernelDispatcher, StaleFence
@@ -106,8 +107,8 @@ class _HarmoniaKernelDispatcher(KernelDispatcher):
         super().__init__(*args, **kwargs)
         self._after_close = after_close
 
-    async def finalize_close(self):
-        result = await super().finalize_close()
+    async def finalize_close(self, *, authority=None):
+        result = await super().finalize_close(authority=authority)
         if self._after_close is not None:
             await self._after_close()
         return result
@@ -151,10 +152,13 @@ class ProjectRuntimeContext:
             if staged is None:
                 continue
             try:
-                self.dispatcher.stage_successor(
+                envelope = self.dispatcher.stage_successor(
                     successor["run_id"], source_id, successor_id,
                     project_root=staged["project_root"], plan_revision=staged["plan_revision"],
                 )
+                dispatched = await self.dispatcher.dispatch_with(envelope.authority)
+                if isinstance(dispatched, Mapping) and dispatched.get("accepted") is True:
+                    await self.start_monitor(envelope.authority)
             except DispatchRejected:
                 continue
 
@@ -194,6 +198,22 @@ class ProjectRuntimeContext:
                             })(),
                         )
                         self.dispatcher.record_evidence_with(current)
+                        if self.runtime is None:
+                            return
+                        proposed = {
+                            "completed": CompletionState.COMPLETED,
+                            "error": CompletionState.FAILED,
+                            "cancelled": CompletionState.CANCELLED,
+                        }[status]
+                        self.runtime.request_close(
+                            authority=current,
+                            proposed_state=proposed,
+                            command_id="monitor-close:" + current.message_id,
+                        )
+                        cleanup = await self.dispatcher.cleanup_once(authority=current)
+                        if not isinstance(cleanup, Mapping) or cleanup.get("outcome") != "completed":
+                            return
+                        await self.dispatcher.finalize_close(authority=current)
                         return
                     if poll_interval:
                         await asyncio.sleep(poll_interval)

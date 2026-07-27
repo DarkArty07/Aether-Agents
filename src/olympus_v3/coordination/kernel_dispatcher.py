@@ -376,6 +376,7 @@ class KernelDispatcher:
             raise DispatchRejected(exc.code) from exc
         if (
             receipt.get("contract_id") != run.contract_id
+            or receipt.get("terminal") != {"technical_status": "completed"}
             or receipt.get("contract_generation") != contract.generation
             or receipt.get("revocation_epoch") != contract.revocation_epoch
             or receipt.get("attempt") != handoff.source_attempt
@@ -986,17 +987,28 @@ class KernelDispatcher:
             and json.loads(event["payload"]).get("cleanup_command_id") == intent["cleanup_command_id"]
         ]
 
-    async def cleanup_once(self):
+    async def cleanup_once(self, *, authority: DispatchAuthority | None = None):
         """Consume one durable close obligation, with intent-before-effect ordering."""
         async with self._cleanup_lock:
-            return await self._cleanup_once_locked()
+            return await self._cleanup_once_locked(authority=authority)
 
-    async def _cleanup_once_locked(self):
+    async def _cleanup_once_locked(self, *, authority: DispatchAuthority | None = None):
         intents = [
             json.loads(event["payload"])
             for event in self.ledger.events()
             if event["kind"] == "close.requested"
         ]
+        if authority is not None:
+            intents = [
+                intent
+                for intent in intents
+                if intent.get("run_id") == authority.run_id
+                and intent.get("task_id") == authority.task_id
+                and intent.get("attempt") == authority.attempt
+                and intent.get("message_id") == authority.message_id
+            ]
+            if len(intents) != 1:
+                raise ReconciliationRequired("exact cleanup authority required")
         for intent in intents:
             outcomes = [
                 (kind, payload)
@@ -1094,13 +1106,24 @@ class KernelDispatcher:
             return {"outcome": outcome, "event": kind}
         return None
 
-    async def finalize_close(self):
+    async def finalize_close(self, *, authority: DispatchAuthority | None = None):
         """Project one typed cleanup outcome only after fenced proof verification."""
         async with self._finalize_lock:
-            return await self._finalize_close_locked()
+            return await self._finalize_close_locked(authority=authority)
 
-    async def _finalize_close_locked(self):
+    async def _finalize_close_locked(self, *, authority: DispatchAuthority | None = None):
         intents = [json.loads(event["payload"]) for event in self.ledger.events() if event["kind"] == "close.requested"]
+        if authority is not None:
+            intents = [
+                intent
+                for intent in intents
+                if intent.get("run_id") == authority.run_id
+                and intent.get("task_id") == authority.task_id
+                and intent.get("attempt") == authority.attempt
+                and intent.get("message_id") == authority.message_id
+            ]
+            if len(intents) != 1:
+                raise ReconciliationRequired("exact finalize authority required")
         for intent in intents:
             terminal = next(
                 (json.loads(event["payload"]) for event in self.ledger.events()
