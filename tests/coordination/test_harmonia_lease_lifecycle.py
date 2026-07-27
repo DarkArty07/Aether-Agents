@@ -417,14 +417,13 @@ def test_evidence_receipt_records_once_and_changed_artifact_conflicts(stack):
     assert receipt["receipt_id"].startswith("receipt:")
     assert receipt["receipt_payload_digest"].startswith("sha256:")
     releases = event_payloads(ledger, "task.released")
-    assert releases == [
-        {
-            "contract_id": authority.contract_id,
-            "run_id": "run-a",
-            "task_id": "task-b",
-            "satisfied_prerequisites": [{"task_id": "task-a", "receipt_id": receipt["receipt_id"]}],
-        }
-    ]
+    assert len(releases) == 1
+    release = releases[0]
+    assert release["contract_id"] == authority.contract_id
+    assert release["run_id"] == "run-a"
+    assert release["task_id"] == "task-b"
+    assert release["satisfied_prerequisites"] == [{"task_id": "task-a", "receipt_id": receipt["receipt_id"]}]
+    assert release["handoff"] == receipt["handoff"]
     assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
     projection = ledger.projection("task:run-a:task-b")
     assert projection is not None and projection["state"] == "proposed"

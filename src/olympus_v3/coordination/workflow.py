@@ -317,7 +317,8 @@ def validate_workflow_history(events):
             not isinstance(payload, dict)
             or (kind == "session.bound" and set(payload) not in session_schemas)
             or (kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS)
-            or (kind not in {"session.bound", "run.created"} and set(payload) != _SCHEMAS[kind])
+            or (kind == "task.released" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}))
+            or (kind not in {"session.bound", "run.created", "task.released"} and set(payload) != _SCHEMAS[kind])
         ):
             raise _bad("invalid workflow payload schema")
         aggregate = event.get("aggregate")
@@ -619,6 +620,16 @@ def validate_workflow_history(events):
                 or any(item["receipt_id"] not in receipts.get((run_id, item["task_id"]), set()) for item in satisfied)
             ):
                 raise _bad("invalid task release")
+            handoff = payload.get("handoff")
+            if handoff is not None:
+                from .evidence import EvidenceVerificationError, HandoffSnapshot
+                try:
+                    snapshot = HandoffSnapshot.from_dict(handoff)
+                    matching = [item["receipt_id"] for item in satisfied if isinstance(item, dict) and item.get("receipt_id") in receipt_payloads and receipt_payloads[item["receipt_id"]].get("handoff") == handoff]
+                    if len(matching) != 1 or snapshot.source_receipt_id != matching[0]:
+                        raise ValueError("handoff binding mismatch")
+                except (EvidenceVerificationError, ValueError):
+                    raise _bad("invalid task release handoff")
             tasks[key] = (TaskState.PROPOSED, prerequisites)
         elif kind in _TASK_KIND_STATE:
             current, prerequisites = tasks[key]

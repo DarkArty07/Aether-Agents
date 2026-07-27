@@ -15,6 +15,7 @@ from .evidence import (
     EvidenceIdentity,
     EvidenceVerificationError,
     build_evidence_receipt,
+    create_handoff_snapshot,
     verify_artifact,
 )
 from .leases import Lease, LeaseResult
@@ -718,7 +719,9 @@ class KernelDispatcher:
         identity = self._evidence_identity(authority, acp_session_id)
         try:
             artifact = verify_artifact(Path(authority.project_root), identity)
-            receipt = build_evidence_receipt(identity, artifact, status)
+            preliminary = build_evidence_receipt(identity, artifact, status)
+            handoff = create_handoff_snapshot(Path(authority.project_root), identity, preliminary.receipt_id, artifact)
+            receipt = build_evidence_receipt(identity, artifact, status, handoff)
         except EvidenceVerificationError as exc:
             raise DispatchRejected(exc.code) from exc
         self._authority_current(authority)
@@ -730,6 +733,19 @@ class KernelDispatcher:
             payload,
         )
         releases = self.runtime.release_drafts_for_receipt(payload)
+        if handoff is not None:
+            enriched = []
+            for draft, release_message_id in releases:
+                release_payload = dict(draft.payload)
+                satisfied = release_payload.get("satisfied_prerequisites", [])
+                if any(item.get("receipt_id") == receipt.receipt_id for item in satisfied if isinstance(item, dict)):
+                    release_payload["handoff"] = handoff.to_dict()
+                    draft = self._writer._author(
+                        self.ledger, draft.aggregate, draft.kind, release_payload, draft.expected_version,
+                        contract_generation=draft.contract_generation, revocation_epoch=draft.revocation_epoch,
+                    )
+                enriched.append((draft, release_message_id))
+            releases = tuple(enriched)
         writer: Any = self._writer
         if writer is None:
             raise DispatchRejected("writable kernel runtime required")
