@@ -83,24 +83,31 @@ def dispatcher_api():
     return module
 
 
-def make_contract():
+def make_contract(task_worker_bindings=None):
+    participants = (OWNER, WORKER)
+    if task_worker_bindings:
+        participants = (OWNER, WORKER, *task_worker_bindings.values())
     return ExecutionContract(
         contract_id="contract-a",
         project_id=PROJECT,
         generation=0,
         owner=OWNER,
-        participants=(OWNER, WORKER),
+        participants=participants,
         objective="build",
         expected_outcome="verified",
         included_scopes=("src/",),
         excluded_scopes=("secrets/",),
-        role_permissions={"worker": ("implement",)},
+        role_permissions={
+            "worker": ("implement",),
+            **({principal.actor_id: ("implement",) for principal in task_worker_bindings.values()} if task_worker_bindings else {}),
+        },
         evidence_gates=(EvidenceGate("qa", True),),
         side_effect_policy=SideEffectPolicy(("filesystem",), 2, True),
         limits=ContractLimits(2, 60, 3, 100, 1, 1),
         escalation_conditions=("ambiguity",),
         completion_authority=OWNER,
         amendment_authority=OWNER,
+        task_worker_bindings=task_worker_bindings,
         status=ContractState.ACTIVE,
     )
 
@@ -142,6 +149,29 @@ def dispatcher(kernel, adapter=None, worker_id=None):
     )
 
 
+@pytest.fixture
+def fixed_kernel(tmp_path: Path):
+    scope = StoreScope("install-a", PROJECT)
+    auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
+    ledger = SQLiteLedger(tmp_path / "fixed-kernel.sqlite", scope, writer_authenticator=auth, integrity_signer=HMACIntegritySigner(b"integrity-key"))
+    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=10_000_000_000).lease
+    assert lease is not None
+    context = WriterContext(scope, "owner", "key-owner", "ledger-owner", lease.epoch, lease.expires_at)
+    worker_a = Principal(PROJECT, "hermes", "worker-a")
+    worker_b = Principal(PROJECT, "hermes", "worker-b")
+    assert ledger.create_contract(make_contract({"task-a": worker_a, "task-b": worker_b})) in (Result.APPLIED, Result.DUPLICATE)
+    service = KernelRunService(ledger, writer=KernelWriter(context, auth))
+    service.create_run(run_id="run-fixed", contract_id="contract-a", mode="kernel")
+    for task_id in ("task-a", "task-b"):
+        service.create_task("run-fixed", task_id=task_id)
+        service.admit_task("run-fixed", task_id)
+        service.mark_task_ready("run-fixed", task_id)
+        service.dispatch_task("run-fixed", task_id)
+        service.start_attempt("run-fixed", task_id)
+    yield ledger, service
+    ledger.close()
+
+
 def stage(d, attempt=1):
     return d.stage_ready(
         "run-a",
@@ -151,6 +181,37 @@ def stage(d, attempt=1):
         plan_revision=7,
         snapshot_digest="sha256:snapshot",
     )
+
+
+def test_fixed_contract_dispatches_each_task_to_its_exact_bound_principal(fixed_kernel):
+    ledger, service = fixed_kernel
+    d = dispatcher((ledger, service, None, 0))
+    first = d.stage_ready("run-fixed", "task-a", attempt=1, project_root="/workspace/project", plan_revision=1, snapshot_digest="sha256:a")
+    second = d.stage_ready("run-fixed", "task-b", attempt=1, project_root="/workspace/project", plan_revision=1, snapshot_digest="sha256:b")
+
+    assert first.authority.agent_name == "worker-a"
+    assert second.authority.agent_name == "worker-b"
+    with pytest.raises(TypeError, match="worker_id"):
+        d.stage_ready("run-fixed", "task-a", attempt=1, project_root="/workspace/project", plan_revision=1, snapshot_digest="sha256:c", worker_id="worker-b")
+
+
+def test_fixed_contract_rejects_dispatch_for_unbound_task(fixed_kernel):
+    ledger, service = fixed_kernel
+    service.create_task("run-fixed", task_id="task-c")
+    service.admit_task("run-fixed", "task-c")
+    service.mark_task_ready("run-fixed", "task-c")
+    service.dispatch_task("run-fixed", "task-c")
+    service.start_attempt("run-fixed", "task-c")
+
+    with pytest.raises(dispatcher_api().DispatchRejected, match="binding required"):
+        dispatcher((ledger, service, None, 0)).stage_ready(
+            "run-fixed",
+            "task-c",
+            attempt=1,
+            project_root="/workspace/project",
+            plan_revision=1,
+            snapshot_digest="sha256:c",
+        )
 
 
 def dispatch_row(ledger):

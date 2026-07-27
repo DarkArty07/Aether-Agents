@@ -128,6 +128,64 @@ def test_json_safe_contract_serialization_excludes_secrets():
     assert ExecutionContract.from_dict(wire) == make_contract()
 
 
+def test_fixed_task_worker_bindings_round_trip_complete_principals_and_are_immutable():
+    worker_a = Principal(PROJECT, "hermes", "worker-a")
+    worker_b = Principal(PROJECT, "hermes", "worker-b")
+    contract = make_contract(
+        participants=(OWNER, REVIEWER, WORKER, worker_a, worker_b),
+        role_permissions={
+            OWNER.actor_id: ("manage",),
+            REVIEWER.actor_id: ("review",),
+            WORKER.actor_id: ("execute",),
+            worker_a.actor_id: ("execute",),
+            worker_b.actor_id: ("execute",),
+        },
+        task_worker_bindings={"task-a": worker_a, "task-b": worker_b},
+    )
+
+    replayed = ExecutionContract.from_dict(contract.to_dict())
+
+    assert replayed.task_worker_bindings == {"task-a": worker_a, "task-b": worker_b}
+    assert replayed.to_dict() == contract.to_dict()
+    with pytest.raises(TypeError):
+        replayed.task_worker_bindings["task-a"] = worker_b
+
+
+@pytest.mark.parametrize(
+    "bindings",
+    [
+        None,
+        {"task-a": "worker-a", "task-b": "worker-b"},
+        {"task-a": Principal(PROJECT, "hermes", "worker-a"), "task-b": Principal("other-project", "hermes", "worker-b")},
+        {"task-a": Principal(PROJECT, "hermes", "outsider"), "task-b": Principal(PROJECT, "hermes", "worker-b")},
+    ],
+)
+def test_fixed_task_worker_bindings_fail_closed_for_incomplete_or_unauthorized_values(bindings):
+    if bindings is None:
+        with pytest.raises(ValidationError):
+            ExecutionContract.from_dict({**make_contract().to_dict(), "task_worker_bindings": {"task-a": Principal(PROJECT, "hermes", "worker-a").to_dict()}})
+        return
+    with pytest.raises(ValidationError):
+        make_contract(task_worker_bindings=bindings)
+
+
+def test_fixed_task_worker_bindings_reject_actor_only_and_duplicate_wire_entries():
+    base = make_contract().to_dict()
+    with pytest.raises(ValidationError):
+        ExecutionContract.from_dict({**base, "task_worker_bindings": [{"task_id": "task-a", "worker": "worker-a"}]})
+    with pytest.raises(ValidationError):
+        ExecutionContract.from_dict({**base, "task_worker_bindings": {"task-a": "worker-a"}})
+
+
+def test_fixed_task_worker_binding_requires_contract_permissions():
+    worker_a = Principal(PROJECT, "hermes", "worker-a")
+    with pytest.raises(ValidationError, match="lacks contract permissions"):
+        make_contract(
+            participants=(OWNER, REVIEWER, WORKER, worker_a),
+            task_worker_bindings={"task-a": worker_a},
+        )
+
+
 def test_limits_require_executable_capacity_and_reserves_within_budget():
     with pytest.raises(ValidationError):
         ContractLimits(0, 60, 3, 100, 10, 5)

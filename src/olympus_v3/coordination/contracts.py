@@ -214,6 +214,7 @@ class ExecutionContract:
     amendment_authority: Principal
     revocation_epoch: int = 0
     status: ContractState = ContractState.PROPOSED
+    task_worker_bindings: Mapping[str, Principal] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "contract_id", _id(self.contract_id, "contract id"))
@@ -247,6 +248,23 @@ class ExecutionContract:
             raise ValidationError("invalid completion authority")
         if not isinstance(self.amendment_authority, Principal) or self.amendment_authority not in self.participants:
             raise ValidationError("invalid amendment authority")
+        if self.task_worker_bindings is None:
+            bindings = None
+        elif not isinstance(self.task_worker_bindings, Mapping) or not self.task_worker_bindings:
+            raise ValidationError("invalid task worker bindings")
+        else:
+            bindings = {}
+            for task_id, principal in self.task_worker_bindings.items():
+                task_id = _id(task_id, "task binding key")
+                if not isinstance(principal, Principal) or principal.project_id != self.project_id or principal not in self.participants:
+                    raise ValidationError("task worker binding is not participant-bound")
+                if not self.role_permissions.get(principal.actor_id):
+                    raise ValidationError("task worker binding lacks contract permissions")
+                bindings[task_id] = principal
+            if len(bindings) != len(self.task_worker_bindings):
+                raise ValidationError("duplicate task worker binding")
+            bindings = MappingProxyType(dict(sorted(bindings.items())))
+        object.__setattr__(self, "task_worker_bindings", bindings)
         participant_roles = {participant.actor_id for participant in self.participants}
         if set(self.role_permissions) - participant_roles:
             raise ValidationError("role permissions are not participant-bound")
@@ -254,12 +272,13 @@ class ExecutionContract:
             raise ValidationError("invalid contract state")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"contract_id": self.contract_id, "project_id": self.project_id, "generation": self.generation, "owner": self.owner.to_dict(), "participants": [p.to_dict() for p in self.participants], "objective": self.objective, "expected_outcome": self.expected_outcome, "included_scopes": list(self.included_scopes), "excluded_scopes": list(self.excluded_scopes), "role_permissions": {k: list(v) for k, v in self.role_permissions.items()}, "evidence_gates": [g.to_dict() for g in self.evidence_gates], "side_effect_policy": self.side_effect_policy.to_dict(), "limits": self.limits.to_dict(), "escalation_conditions": list(self.escalation_conditions), "completion_authority": self.completion_authority.to_dict(), "amendment_authority": self.amendment_authority.to_dict(), "revocation_epoch": self.revocation_epoch, "status": self.status.value}
+        return {"contract_id": self.contract_id, "project_id": self.project_id, "generation": self.generation, "owner": self.owner.to_dict(), "participants": [p.to_dict() for p in self.participants], "objective": self.objective, "expected_outcome": self.expected_outcome, "included_scopes": list(self.included_scopes), "excluded_scopes": list(self.excluded_scopes), "role_permissions": {k: list(v) for k, v in self.role_permissions.items()}, "evidence_gates": [g.to_dict() for g in self.evidence_gates], "side_effect_policy": self.side_effect_policy.to_dict(), "limits": self.limits.to_dict(), "escalation_conditions": list(self.escalation_conditions), "completion_authority": self.completion_authority.to_dict(), "amendment_authority": self.amendment_authority.to_dict(), "task_worker_bindings": {k: v.to_dict() for k, v in self.task_worker_bindings.items()} if self.task_worker_bindings is not None else None, "revocation_epoch": self.revocation_epoch, "status": self.status.value}
 
     @classmethod
     def from_dict(cls, value: Any) -> ExecutionContract:
         fields = {"contract_id", "project_id", "generation", "owner", "participants", "objective", "expected_outcome", "included_scopes", "excluded_scopes", "role_permissions", "evidence_gates", "side_effect_policy", "limits", "escalation_conditions", "completion_authority", "amendment_authority", "revocation_epoch", "status"}
-        _fields(value, fields, "execution contract")
+        if not isinstance(value, dict) or set(value) not in (fields, fields | {"task_worker_bindings"}):
+            raise ValidationError("invalid execution contract fields")
         if any(not isinstance(value[key], list) for key in ("participants", "included_scopes", "excluded_scopes", "evidence_gates", "escalation_conditions")):
             raise ValidationError("invalid contract collections")
         perms = value["role_permissions"]
@@ -269,7 +288,14 @@ class ExecutionContract:
             status = ContractState(value["status"])
         except (TypeError, ValueError) as exc:
             raise ValidationError("invalid contract state") from exc
-        return cls(value["contract_id"], value["project_id"], value["generation"], Principal.from_dict(value["owner"]), tuple(Principal.from_dict(p) for p in value["participants"]), value["objective"], value["expected_outcome"], tuple(value["included_scopes"]), tuple(value["excluded_scopes"]), {k: tuple(v) for k, v in perms.items()}, tuple(EvidenceGate.from_dict(g) for g in value["evidence_gates"]), SideEffectPolicy.from_dict(value["side_effect_policy"]), ContractLimits.from_dict(value["limits"]), tuple(value["escalation_conditions"]), Principal.from_dict(value["completion_authority"]), Principal.from_dict(value["amendment_authority"]), value["revocation_epoch"], status)
+        raw_bindings = value.get("task_worker_bindings")
+        if raw_bindings is not None:
+            if not isinstance(raw_bindings, dict):
+                raise ValidationError("invalid task worker bindings")
+            bindings = {task_id: Principal.from_dict(principal) for task_id, principal in raw_bindings.items()}
+        else:
+            bindings = None
+        return cls(value["contract_id"], value["project_id"], value["generation"], Principal.from_dict(value["owner"]), tuple(Principal.from_dict(p) for p in value["participants"]), value["objective"], value["expected_outcome"], tuple(value["included_scopes"]), tuple(value["excluded_scopes"]), {k: tuple(v) for k, v in perms.items()}, tuple(EvidenceGate.from_dict(g) for g in value["evidence_gates"]), SideEffectPolicy.from_dict(value["side_effect_policy"]), ContractLimits.from_dict(value["limits"]), tuple(value["escalation_conditions"]), Principal.from_dict(value["completion_authority"]), Principal.from_dict(value["amendment_authority"]), value["revocation_epoch"], status, bindings)
 
 
 @dataclass(frozen=True, slots=True)

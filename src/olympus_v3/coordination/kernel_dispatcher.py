@@ -19,7 +19,7 @@ from .evidence import (
 )
 from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
-from .protocol import ValidationError
+from .protocol import Principal, ValidationError
 from .workflow import AttemptState, kernel_logical_session
 
 
@@ -191,6 +191,18 @@ class KernelDispatcher:
         return self.ledger.aggregate_version(aggregate)
 
     @staticmethod
+    def _resolve_worker(contract, task_id: str) -> Principal:
+        bindings = contract.task_worker_bindings
+        if bindings is not None:
+            if task_id not in bindings:
+                raise DispatchRejected("task worker binding required")
+            return bindings[task_id]
+        workers = tuple(participant for participant in contract.participants if participant != contract.owner)
+        if len(workers) != 1:
+            raise DispatchRejected("dispatch requires exactly one contract worker")
+        return workers[0]
+
+    @staticmethod
     def _plan_id(run_id, task_id, attempt, revision, digest):
         return hashlib.sha256(f"{run_id}:{task_id}:{attempt}:{revision}:{digest}".encode()).hexdigest()[:32]
 
@@ -217,10 +229,8 @@ class KernelDispatcher:
             raise DispatchRejected("invalid dispatch inputs")
         project_root = str(Path(project_root).resolve())
         logical = kernel_logical_session(self.ledger.scope.project_id, run_id, task_id, attempt)
-        workers = tuple(participant for participant in contract.participants if participant != contract.owner)
-        if len(workers) != 1:
-            raise DispatchRejected("dispatch requires exactly one contract worker")
-        agent_name = workers[0].actor_id
+        worker = self._resolve_worker(contract, task_id)
+        agent_name = worker.actor_id
         plan_id = self._plan_id(run_id, task_id, attempt, plan_revision, snapshot_digest + ":" + agent_name)
         message_id = "000" + hashlib.sha256(f"{plan_id}:{logical}:{self._owner}".encode()).hexdigest()[:29]
         existing = next(
