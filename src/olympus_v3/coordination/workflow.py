@@ -52,6 +52,10 @@ WORKFLOW_KINDS = frozenset(
         "attempt.orphaned",
         "attempt.superseded",
         "close.requested",
+        "cleanup.receipt.recorded",
+        "task.closed",
+        "close.failed",
+        "close.reconciliation_required",
     }
 )
 _TASK_KIND_STATE = {
@@ -62,6 +66,9 @@ _TASK_KIND_STATE = {
     "task.dispatched": TaskState.DISPATCHED,
     "attempt.started": TaskState.RUNNING,
     "close.requested": TaskState.CLEANUP_PENDING,
+    "task.closed": TaskState.CLOSED,
+    "close.failed": TaskState.CLOSE_FAILED,
+    "close.reconciliation_required": TaskState.RECONCILIATION_REQUIRED,
 }
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -131,6 +138,30 @@ _SCHEMAS = {
         "command_id",
         "proposed_state",
     },
+    "cleanup.receipt.recorded": {
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "contract_generation",
+        "revocation_epoch",
+        "message_id",
+        "logical_session",
+        "acp_session_id",
+        "evidence_receipt_id",
+        "cleanup_command_id",
+        "closure_proposal_hash",
+        "lease_resource",
+        "lease_owner",
+        "lease_epoch",
+        "lease_token",
+        "lease_released",
+        "receipt_id",
+        "proof",
+    },
+    "task.closed": {"run_id", "task_id", "attempt", "contract_id", "receipt_id"},
+    "close.failed": {"run_id", "task_id", "attempt", "contract_id", "cleanup_command_id", "outcome"},
+    "close.reconciliation_required": {"run_id", "task_id", "attempt", "contract_id", "cleanup_command_id", "outcome"},
 }
 _RUN_CREATED_SCHEMAS = (
     _SCHEMAS["run.created"],
@@ -200,6 +231,9 @@ def validate_workflow_history(events):
     receipts = {}
     receipt_payloads = {}
     close_intents = {}
+    cleanup_requests = {}
+    cleanup_outcomes = {}
+    cleanup_receipts = {}
     for event in events:
         kind = event.get("kind")
         if kind == "evidence.receipt.recorded":
@@ -217,6 +251,60 @@ def validate_workflow_history(events):
                 raise _bad("evidence receipt task mismatch")
             receipts.setdefault(receipt_key, set()).add(payload["receipt_id"])
             receipt_payloads[payload["receipt_id"]] = payload
+            continue
+        if kind in {"cleanup.requested", "cleanup.completed", "cleanup.failed", "cleanup.unknown"}:
+            payload = _event_payload(event)
+            if not isinstance(payload, dict):
+                raise _bad("invalid cleanup event")
+            # v0.19.1 technical-stop cleanup remains a separate lifecycle path.
+            # Only v0.19.3 semantic closure carries a cleanup command binding.
+            if "cleanup_command_id" not in payload:
+                continue
+            key = (payload.get("run_id"), payload.get("task_id"))
+            intent = close_intents.get(key)
+            common = (
+                "installation_id",
+                "project_id",
+                "run_id",
+                "task_id",
+                "attempt",
+                "contract_id",
+                "contract_generation",
+                "revocation_epoch",
+                "message_id",
+                "logical_session",
+                "acp_session_id",
+                "evidence_receipt_id",
+                "cleanup_command_id",
+                "command_id",
+                "proposed_state",
+            )
+            if (
+                intent is None
+                or event.get("aggregate") != "dispatch:" + payload.get("message_id", "")
+                or any(payload.get(name) != intent.get(name) for name in common)
+                or payload.get("expected_terminal_status")
+                != {"completed": "completed", "failed": "error", "cancelled": "cancelled"}.get(
+                    intent.get("proposed_state")
+                )
+            ):
+                raise _bad("cleanup authority mismatch")
+            command = payload["cleanup_command_id"]
+            if kind == "cleanup.requested":
+                if payload.get("outcome") != "requested" or command in cleanup_requests:
+                    raise _bad("invalid cleanup request")
+                cleanup_requests[command] = payload
+            else:
+                request = cleanup_requests.get(command)
+                expected_outcome = kind.removeprefix("cleanup.")
+                if (
+                    request is None
+                    or command in cleanup_outcomes
+                    or payload.get("outcome") != expected_outcome
+                    or any(payload.get(name) != request.get(name) for name in common + ("expected_terminal_status",))
+                ):
+                    raise _bad("invalid cleanup outcome")
+                cleanup_outcomes[command] = payload
             continue
         if kind not in WORKFLOW_KINDS:
             continue
@@ -392,7 +480,95 @@ def validate_workflow_history(events):
             ):
                 raise _bad("invalid close intent")
             tasks[key] = (TaskState.CLEANUP_PENDING, tasks[key][1])
-            close_intents[key] = payload["command_id"]
+            close_intents[key] = payload
+            continue
+        if kind in {"cleanup.receipt.recorded", "task.closed", "close.failed", "close.reconciliation_required"}:
+            key = (run_id, task_id)
+            current = tasks.get(key)
+            if current is None or aggregate != f"task:{run_id}:{task_id}":
+                raise _bad("invalid close finalization aggregate")
+            if kind == "cleanup.receipt.recorded":
+                proof = payload.get("proof")
+                intent = close_intents.get(key)
+                outcome = cleanup_outcomes.get(payload.get("cleanup_command_id"))
+                source = staged.get(payload.get("message_id"))
+                intent_fields = (
+                    "run_id",
+                    "task_id",
+                    "attempt",
+                    "contract_id",
+                    "contract_generation",
+                    "revocation_epoch",
+                    "message_id",
+                    "logical_session",
+                    "acp_session_id",
+                    "evidence_receipt_id",
+                    "cleanup_command_id",
+                    "closure_proposal_hash",
+                )
+                lease_fields = ("lease_resource", "lease_owner", "lease_epoch", "lease_token")
+                expected_receipt_id = (
+                    "cleanup-receipt:"
+                    + hashlib.sha256(str(payload.get("cleanup_command_id", "")).encode("utf-8")).hexdigest()
+                )
+                if (
+                    current[0] is not TaskState.CLEANUP_PENDING
+                    or key in cleanup_receipts
+                    or intent is None
+                    or outcome is None
+                    or outcome.get("outcome") != "completed"
+                    or source is None
+                    or any(payload.get(name) != intent.get(name) for name in intent_fields)
+                    or any(payload.get(name) != source.get(name) for name in lease_fields)
+                    or payload.get("receipt_id") != expected_receipt_id
+                    or payload.get("lease_released") is not True
+                    or not isinstance(proof, dict)
+                    or proof != outcome.get("proof", {}).get("survivors")
+                    or set(proof) != {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"}
+                    or any(value is not False for value in proof.values())
+                ):
+                    raise _bad("invalid cleanup receipt")
+                cleanup_receipts[key] = payload["receipt_id"]
+            elif kind == "task.closed":
+                intent = close_intents.get(key)
+                if (
+                    key not in cleanup_receipts
+                    or current[0] is not TaskState.CLEANUP_PENDING
+                    or payload["receipt_id"] != cleanup_receipts[key]
+                    or intent is None
+                    or payload["attempt"] != intent["attempt"]
+                    or payload["contract_id"] != intent["contract_id"]
+                ):
+                    raise _bad("task.closed requires prior cleanup receipt")
+                tasks[key] = (TaskState.CLOSED, current[1])
+            elif kind == "close.failed":
+                intent = close_intents.get(key)
+                outcome = cleanup_outcomes.get(payload.get("cleanup_command_id"))
+                if (
+                    current[0] is not TaskState.CLEANUP_PENDING
+                    or payload.get("outcome") != "failed"
+                    or intent is None
+                    or outcome is None
+                    or outcome.get("outcome") != "failed"
+                    or payload["attempt"] != intent["attempt"]
+                    or payload["contract_id"] != intent["contract_id"]
+                ):
+                    raise _bad("invalid close failure")
+                tasks[key] = (TaskState.CLOSE_FAILED, current[1])
+            else:
+                intent = close_intents.get(key)
+                outcome = cleanup_outcomes.get(payload.get("cleanup_command_id"))
+                if (
+                    current[0] is not TaskState.CLEANUP_PENDING
+                    or payload.get("outcome") != "unknown"
+                    or intent is None
+                    or outcome is None
+                    or outcome.get("outcome") != "unknown"
+                    or payload["attempt"] != intent["attempt"]
+                    or payload["contract_id"] != intent["contract_id"]
+                ):
+                    raise _bad("invalid close reconciliation requirement")
+                tasks[key] = (TaskState.RECONCILIATION_REQUIRED, current[1])
             continue
         if (
             not isinstance(task_id, str)

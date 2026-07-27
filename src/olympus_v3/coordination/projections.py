@@ -61,6 +61,10 @@ class ProjectionReducer:
             "cleanup.completed",
             "cleanup.failed",
             "cleanup.unknown",
+            "cleanup.receipt.recorded",
+            "close.failed",
+            "close.reconciliation_required",
+            "task.closed",
             "evidence.receipt.recorded",
             "close.requested",
         }:

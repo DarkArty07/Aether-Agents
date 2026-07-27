@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import ContractState
+from .contracts import ContractState, TaskState
 from .evidence import (
     EvidenceIdentity,
     EvidenceVerificationError,
@@ -108,6 +108,8 @@ class KernelDispatcher:
         self._owner = derived
         self._cleanup_owner = "cleanup-" + secrets.token_hex(8)
         self._cleanup_lock = asyncio.Lock()
+        self._finalize_owner = "finalize-" + secrets.token_hex(8)
+        self._finalize_lock = asyncio.Lock()
 
     def _contract(self, run_id: str):
         try:
@@ -881,16 +883,88 @@ class KernelDispatcher:
                     isinstance(response, Mapping)
                     and response.get("status") == terminal_status
                     and response.get("acp_session_id") == request_payload["acp_session_id"]
+                    and response.get("project_id") == request_payload["project_id"]
+                    and isinstance(response.get("survivors"), Mapping)
+                    and set(response["survivors"]) == {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"}
+                    and all(value is False for value in response["survivors"].values())
                 )
                 outcome = "completed" if valid else "unknown"
                 kind = "cleanup.completed" if valid else "cleanup.unknown"
                 payload = {
                     **request_payload,
                     "outcome": outcome,
-                    **({} if valid else {"reason": "invalid cleanup response"}),
+                    **({"proof": dict(response)} if valid else {"reason": "invalid cleanup response"}),
                 }
             self._append(kind, "dispatch:" + intent["message_id"], payload, message_id=kind + ":" + intent["cleanup_command_id"])
             return {"outcome": outcome, "event": kind}
+        return None
+
+    async def finalize_close(self):
+        """Project one typed cleanup outcome only after fenced proof verification."""
+        async with self._finalize_lock:
+            return await self._finalize_close_locked()
+
+    async def _finalize_close_locked(self):
+        intents = [json.loads(event["payload"]) for event in self.ledger.events() if event["kind"] == "close.requested"]
+        for intent in intents:
+            terminal = next(
+                (json.loads(event["payload"]) for event in self.ledger.events()
+                 if event["kind"] in {"cleanup.completed", "cleanup.failed", "cleanup.unknown"}
+                 and json.loads(event["payload"]).get("cleanup_command_id") == intent["cleanup_command_id"]),
+                None,
+            )
+            if terminal is None:
+                raise ReconciliationRequired("cleanup outcome required")
+            aggregate = f"task:{intent['run_id']}:{intent['task_id']}"
+            staged = next((json.loads(event["payload"]) for event in self.ledger.events() if event["kind"] == "dispatch.staged" and json.loads(event["payload"]).get("message_id") == intent["message_id"]), None)
+            if staged is None:
+                raise ReconciliationRequired("dispatch authority missing")
+            prior_closed = next((json.loads(event["payload"]) for event in self.ledger.events() if event["kind"] == "task.closed" and json.loads(event["payload"]).get("receipt_id") == "cleanup-receipt:" + hashlib.sha256(intent["cleanup_command_id"].encode()).hexdigest()), None)
+            if prior_closed is not None:
+                return {"state": TaskState.CLOSED.value, "receipt_id": prior_closed["receipt_id"]}
+            finalize_resource = "close-finalize:" + hashlib.sha256(
+                intent["cleanup_command_id"].encode("utf-8")
+            ).hexdigest()[:32]
+            claim = self.ledger.acquire_lease(
+                finalize_resource,
+                self._finalize_owner,
+                ttl=300_000_000_000,
+            )
+            if claim.status is LeaseResult.CONTENDED:
+                return None
+            if claim.lease is None:
+                raise ReconciliationRequired("close finalization lease unavailable")
+            if terminal["outcome"] != "completed":
+                event_kind = "close.failed" if terminal["outcome"] == "failed" else "close.reconciliation_required"
+                target_state = TaskState.CLOSE_FAILED if terminal["outcome"] == "failed" else TaskState.RECONCILIATION_REQUIRED
+                existing = [event for event in self.ledger.events() if event["kind"] == event_kind and json.loads(event["payload"]).get("cleanup_command_id") == intent["cleanup_command_id"]]
+                if not existing:
+                    self._append(event_kind, aggregate, {"run_id": intent["run_id"], "task_id": intent["task_id"], "attempt": intent["attempt"], "contract_id": intent["contract_id"], "cleanup_command_id": intent["cleanup_command_id"], "outcome": terminal["outcome"]}, message_id=event_kind + ":" + intent["cleanup_command_id"])
+                return {"state": target_state.value}
+            proof = terminal.get("proof", {}).get("survivors") if isinstance(terminal.get("proof"), Mapping) else None
+            if not isinstance(proof, Mapping) or set(proof) != {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"} or any(value is not False for value in proof.values()):
+                raise ReconciliationRequired("invalid cleanup proof")
+            lease_resource = staged["lease_resource"]
+            intent_lease = Lease(self.ledger.scope, lease_resource, staged["lease_owner"], staged["lease_epoch"], staged["lease_until"], staged["lease_token"])
+            current_lease = self.ledger.lease(intent_lease.resource)
+            if current_lease is not None:
+                if current_lease != intent_lease:
+                    raise StaleFence("newer dispatch lease blocks close")
+                released = self.ledger.release_lease(intent_lease, staged["lease_owner"])
+                if released.lease is not None:
+                    raise StaleFence("dispatch lease release failed")
+            if self.ledger.lease(intent_lease.resource) is not None:
+                raise StaleFence("dispatch lease survives close")
+            receipt_id = "cleanup-receipt:" + hashlib.sha256(intent["cleanup_command_id"].encode()).hexdigest()
+            receipt_payload = {name: intent[name] for name in ("run_id", "task_id", "attempt", "contract_id", "contract_generation", "revocation_epoch", "message_id", "logical_session", "acp_session_id", "evidence_receipt_id", "cleanup_command_id", "closure_proposal_hash")}
+            receipt_payload.update({"lease_resource": staged["lease_resource"], "lease_owner": staged["lease_owner"], "lease_epoch": staged["lease_epoch"], "lease_token": staged["lease_token"], "lease_released": True, "receipt_id": receipt_id, "proof": dict(proof)})
+            receipt_exists = any(event["kind"] == "cleanup.receipt.recorded" and json.loads(event["payload"]).get("receipt_id") == receipt_id for event in self.ledger.events())
+            if not receipt_exists:
+                self._append("cleanup.receipt.recorded", aggregate, receipt_payload, message_id=receipt_id)
+            closed_exists = any(event["kind"] == "task.closed" and json.loads(event["payload"]).get("receipt_id") == receipt_id for event in self.ledger.events())
+            if not closed_exists:
+                self._append("task.closed", aggregate, {"run_id": intent["run_id"], "task_id": intent["task_id"], "attempt": intent["attempt"], "contract_id": intent["contract_id"], "receipt_id": receipt_id}, message_id="task.closed:" + receipt_id)
+            return {"state": TaskState.CLOSED.value, "receipt_id": receipt_id}
         return None
 
     async def observe_once(self, run_id, task_id, *, attempt):

@@ -414,6 +414,17 @@ class OlympusRuntimeAdapter:
         result = await cleanup(session_id, terminal_status=terminal_status, project_id=project_id)
         if not isinstance(result, Mapping):
             raise RuntimeError("invalid cleanup response")
+        proof = result.get("survivors")
+        required = {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"}
+        if (
+            result.get("status") != terminal_status
+            or result.get("project_id") != project_id
+            or result.get("acp_session_id") != session_id
+            or not isinstance(proof, Mapping)
+            or set(proof) != required
+            or any(proof[name] is not False for name in required)
+        ):
+            raise ValidationError("invalid cleanup proof")
         return {**result, "acp_session_id": session_id}
 
     async def observe_kernel(self, *, authority: Any, request: Mapping[str, Any]) -> Mapping[str, Any]:

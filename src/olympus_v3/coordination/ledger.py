@@ -56,6 +56,10 @@ _WORKFLOW_EVENT_KINDS = frozenset(
         "observation.accepted",
         "reconciliation.completed",
         "close.requested",
+        "cleanup.receipt.recorded",
+        "task.closed",
+        "close.failed",
+        "close.reconciliation_required",
     }
 )
 _LIFECYCLE_EVENT_KINDS = frozenset(
@@ -68,6 +72,7 @@ _LIFECYCLE_EVENT_KINDS = frozenset(
         "evidence.receipt.recorded",
     }
 )
+_CLOSURE_LIFECYCLE_KINDS = frozenset({"cleanup.requested", "cleanup.completed", "cleanup.failed", "cleanup.unknown"})
 _AUTHORITY_BOUND_EVENT_KINDS = _WORKFLOW_EVENT_KINDS | _BUDGET_EVENT_KINDS | _LIFECYCLE_EVENT_KINDS
 
 
@@ -504,6 +509,50 @@ class SQLiteLedger:
             self.conn.rollback()
             raise
 
+    def release_lease(self, lease: Any, owner: str):
+        """Atomically release exactly the live lease represented by ``lease``."""
+        from .leases import Lease, LeaseOutcome, LeaseResult
+
+        if not isinstance(lease, Lease) or not _valid_identifier(owner):
+            return LeaseOutcome(LeaseResult.INVALID_INPUT)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            row = self.conn.execute(
+                "SELECT * FROM leases WHERE installation_id=? AND project_id=? AND resource=?",
+                (self.scope.installation_id, self.scope.project_id, lease.resource),
+            ).fetchone()
+            if not row or row["owner"] != owner or row["epoch"] != lease.epoch or row["token"] != lease.token:
+                self.conn.rollback()
+                return LeaseOutcome(LeaseResult.STALE_FENCE)
+            if row["expires_at"] <= self.clock():
+                self.conn.rollback()
+                return LeaseOutcome(LeaseResult.LEASE_EXPIRED)
+            deleted = self.conn.execute(
+                "DELETE FROM leases WHERE installation_id=? AND project_id=? AND resource=? AND owner=? AND epoch=? AND token=? AND expires_at>?",
+                (
+                    self.scope.installation_id,
+                    self.scope.project_id,
+                    lease.resource,
+                    owner,
+                    lease.epoch,
+                    lease.token,
+                    self.clock(),
+                ),
+            )
+            if deleted.rowcount != 1:
+                self.conn.rollback()
+                return LeaseOutcome(LeaseResult.STALE_FENCE)
+            self.conn.commit()
+            return LeaseOutcome(LeaseResult.ACQUIRED)
+        except sqlite3.OperationalError as exc:
+            self.conn.rollback()
+            if "locked" in str(exc).lower():
+                return LeaseOutcome(LeaseResult.CONTENDED)
+            raise
+        except Exception:
+            self.conn.rollback()
+            raise
+
     def renew_lease(self, lease: Any, owner: str, *, ttl: int, token: str | None = None):
         from .leases import Lease, LeaseOutcome, LeaseResult
 
@@ -877,6 +926,7 @@ class SQLiteLedger:
                 draft.kind in _WORKFLOW_EVENT_KINDS
                 or draft.kind in _BUDGET_EVENT_KINDS
                 or draft.kind == "evidence.receipt.recorded"
+                or draft.kind in _CLOSURE_LIFECYCLE_KINDS
             ):
                 from .budget import BudgetError, validate_budget_history
                 from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
@@ -884,7 +934,11 @@ class SQLiteLedger:
                 try:
                     history = self.events()
                     history.append({"aggregate": draft.aggregate, "kind": draft.kind, "payload": dict(draft.payload)})
-                    if draft.kind in _WORKFLOW_EVENT_KINDS or draft.kind == "evidence.receipt.recorded":
+                    if (
+                        draft.kind in _WORKFLOW_EVENT_KINDS
+                        or draft.kind == "evidence.receipt.recorded"
+                        or draft.kind in _CLOSURE_LIFECYCLE_KINDS
+                    ):
                         validate_workflow_history(history)
                     else:
                         contract_row = self.conn.execute(

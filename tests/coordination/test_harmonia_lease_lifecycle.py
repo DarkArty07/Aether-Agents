@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import hashlib
 import json
 import threading
 from dataclasses import dataclass, replace
@@ -12,7 +13,7 @@ from pathlib import Path
 import pytest
 
 import olympus_v3.coordination.kernel_dispatcher as dispatcher_module
-from olympus_v3.acp_manager import ACPManager, SessionInfo
+from olympus_v3.acp_manager import ACPManager, AgentState, SessionInfo
 from olympus_v3.coordination import (
     ContractLimits,
     ContractState,
@@ -109,6 +110,8 @@ class EffectBarrier:
         return {
             "status": request["terminal_status"],
             "acp_session_id": request["session_id"],
+            "project_id": request["project_id"],
+            "survivors": {"logical_manager_session": False, "acp_mapping": False, "prompt_task": False, "pid_session_mapping": False},
         }
 
 
@@ -145,7 +148,7 @@ class PublicManager:
             raise ValueError("unknown persisted session")
         if self.cleanup_error:
             raise self.cleanup_error
-        return {"status": terminal_status}
+        return {"status": terminal_status, "project_id": project_id, "acp_session_id": session_id, "survivors": {"logical_manager_session": False, "acp_mapping": False, "prompt_task": False, "pid_session_mapping": False}}
 
 
 def run(awaitable):
@@ -1517,7 +1520,7 @@ def test_competing_cleanup_consumers_allow_only_one_external_effect(stack):
             self.calls.append(request)
             self.started.set()
             await self.release.wait()
-            return {"status": request["terminal_status"], "acp_session_id": request["session_id"]}
+            return {"status": request["terminal_status"], "acp_session_id": request["session_id"], "project_id": request["project_id"], "survivors": {"logical_manager_session": False, "acp_mapping": False, "prompt_task": False, "pid_session_mapping": False}}
 
     adapter = BlockingCleanup()
     first_dispatcher = KernelDispatcher(
@@ -1543,3 +1546,194 @@ def test_competing_cleanup_consumers_allow_only_one_external_effect(stack):
     assert len(adapter.calls) == 1
     assert len(event_payloads(ledger, "cleanup.requested")) == 1
     assert len(event_payloads(ledger, "cleanup.completed")) == 1
+
+
+def test_release_lease_deletes_only_exact_live_owner_epoch_and_token(stack):
+    clock, ledger, _, _, envelope, _ = stack
+    lease = ledger.lease(envelope.authority.lease_resource)
+    assert lease is not None
+    released = ledger.release_lease(lease, envelope.authority.lease_owner)
+    assert released.status.value == "ACQUIRED"
+    assert ledger.lease(lease.resource) is None
+    replacement = ledger.acquire_lease(lease.resource, "owner", ttl=100).lease
+    assert replacement is not None
+    stale = ledger.release_lease(lease, lease.owner)
+    assert stale.status.value != "RELEASED"
+    assert ledger.lease(lease.resource).token == replacement.token
+    assert clock() < replacement.expires_at
+
+
+def test_finalizer_requires_cleanup_proof_releases_dispatch_lease_and_projects_closed(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    assert run(dispatcher.cleanup_once())["outcome"] == "completed"
+    finalized = run(dispatcher.finalize_close())
+    assert finalized["state"] == TaskState.CLOSED.value
+    assert len(event_payloads(ledger, "cleanup.receipt.recorded")) == 1
+    assert len(event_payloads(ledger, "task.closed")) == 1
+    assert ledger.lease(envelope.authority.lease_resource) is None
+    assert runtime.task("run-a", "task-a").state is TaskState.CLOSED
+    assert run(dispatcher.finalize_close()) == finalized
+
+
+@pytest.mark.parametrize(
+    ("outcome", "expected_state", "expected_event"),
+    [
+        ("failed", TaskState.CLOSE_FAILED, "close.failed"),
+        ("unknown", TaskState.RECONCILIATION_REQUIRED, "close.reconciliation_required"),
+    ],
+)
+def test_failed_or_unknown_cleanup_never_projects_success(
+    stack,
+    outcome,
+    expected_state,
+    expected_event,
+):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    effects.cleanup_error = ValidationError("cleanup rejected") if outcome == "failed" else TimeoutError("lost")
+    assert run(dispatcher.cleanup_once())["outcome"] == outcome
+    finalized = run(dispatcher.finalize_close())
+    assert finalized["state"] == expected_state.value
+    assert len(event_payloads(ledger, expected_event)) == 1
+    assert not event_payloads(ledger, "task.closed")
+    assert runtime.task("run-a", "task-a").state is expected_state
+
+
+def test_acp_cleanup_returns_zero_survivor_proof_bound_to_exact_project_and_session(tmp_path):
+    manager = ACPManager()
+    session_id = "acp-session-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    project_id = hashlib.sha256(("olympus-project-v1\0" + str(root.resolve())).encode()).hexdigest()
+
+    async def scenario():
+        profile = tmp_path / "profile"
+        profile.mkdir()
+        agent = AgentState("hefesto", profile, pid=4242, status="idle")
+        agent.acp_session_ids[session_id] = session_id
+        done = asyncio.create_task(asyncio.sleep(0))
+        await done
+        agent.prompt_tasks[session_id] = done
+        (profile / ".olympus_session.4242").write_text(session_id)
+        manager.sessions[session_id] = SessionInfo(session_id, "hefesto", session_id, str(root))
+        manager.agents[manager._agent_key("hefesto", str(root))] = agent
+        return await manager.cleanup_persisted(
+            session_id,
+            terminal_status="completed",
+            project_id=project_id,
+        )
+
+    proof = run(scenario())
+    assert proof["status"] == "completed"
+    assert proof["project_id"] == project_id
+    assert proof["acp_session_id"] == session_id
+    assert proof["survivors"] == {"logical_manager_session": False, "acp_mapping": False, "prompt_task": False, "pid_session_mapping": False}
+
+
+def test_finalizer_recovers_receipt_written_before_task_closed(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    assert run(dispatcher.cleanup_once())["outcome"] == "completed"
+    original_append = dispatcher._append
+
+    def crash_after_receipt(kind, *args, **kwargs):
+        result = original_append(kind, *args, **kwargs)
+        if kind == "cleanup.receipt.recorded":
+            raise RuntimeError("crash after cleanup receipt")
+        return result
+
+    dispatcher._append = crash_after_receipt
+    with pytest.raises(RuntimeError, match="crash after cleanup receipt"):
+        run(dispatcher.finalize_close())
+    dispatcher._append = original_append
+
+    assert len(event_payloads(ledger, "cleanup.receipt.recorded")) == 1
+    assert not event_payloads(ledger, "task.closed")
+    recovered = run(dispatcher.finalize_close())
+    assert recovered["state"] == TaskState.CLOSED.value
+    assert len(event_payloads(ledger, "cleanup.receipt.recorded")) == 1
+    assert len(event_payloads(ledger, "task.closed")) == 1
+    assert runtime.task("run-a", "task-a").state is TaskState.CLOSED
+
+
+def test_two_sqlite_finalizers_converge_without_split_terminal_state(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    assert run(dispatcher.cleanup_once())["outcome"] == "completed"
+    context = runtime.writer.context
+    barrier = threading.Barrier(2)
+
+    def finalize_from_connection():
+        auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
+        local = SQLiteLedger(
+            ledger.path,
+            ledger.scope,
+            writer_authenticator=auth,
+            integrity_signer=HMACIntegritySigner(b"integrity-key"),
+            clock=ledger.clock,
+            busy_timeout_ms=5_000,
+        )
+        try:
+            service = KernelRunService(local, writer=KernelWriter(context, auth))
+            local_dispatcher = KernelDispatcher(
+                ledger=local,
+                runtime=service,
+                runtime_adapter=effects,
+                worker_id="owner",
+            )
+            barrier.wait(timeout=5)
+            return run(local_dispatcher.finalize_close())
+        finally:
+            local.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(lambda _: finalize_from_connection(), range(2)))
+
+    assert any(result and result["state"] == TaskState.CLOSED.value for result in results)
+    assert len(event_payloads(ledger, "cleanup.receipt.recorded")) == 1
+    assert len(event_payloads(ledger, "task.closed")) == 1
+    assert not event_payloads(ledger, "close.failed")
+    assert runtime.task("run-a", "task-a").state is TaskState.CLOSED
+    assert run(dispatcher.finalize_close())["state"] == TaskState.CLOSED.value
+
+
+def test_forged_cleanup_receipt_binding_is_rejected_without_terminal_success(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    assert run(dispatcher.cleanup_once())["outcome"] == "completed"
+    original_append = dispatcher._append
+
+    def forge_receipt(kind, aggregate, payload, **kwargs):
+        if kind == "cleanup.receipt.recorded":
+            payload = {**payload, "acp_session_id": "foreign-session"}
+        return original_append(kind, aggregate, payload, **kwargs)
+
+    dispatcher._append = forge_receipt
+    with pytest.raises(ValueError, match="INVALID_INPUT"):
+        run(dispatcher.finalize_close())
+    dispatcher._append = original_append
+
+    assert not event_payloads(ledger, "cleanup.receipt.recorded")
+    assert not event_payloads(ledger, "task.closed")
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+    assert run(dispatcher.finalize_close())["state"] == TaskState.CLOSED.value
+
+
+def test_newer_dispatch_lease_blocks_finalization_and_survives(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    _persist_close_intent(ledger, runtime, dispatcher, envelope, effects=effects)
+    assert run(dispatcher.cleanup_once())["outcome"] == "completed"
+    original = ledger.lease(envelope.authority.lease_resource)
+    assert original is not None
+    assert ledger.release_lease(original, original.owner).lease is None
+    replacement = ledger.acquire_lease(original.resource, original.owner, ttl=1_000_000_000).lease
+    assert replacement is not None and replacement.token != original.token
+
+    with pytest.raises(dispatcher_module.StaleFence, match="newer dispatch lease"):
+        run(dispatcher.finalize_close())
+
+    assert ledger.lease(original.resource) == replacement
+    assert not event_payloads(ledger, "cleanup.receipt.recorded")
+    assert not event_payloads(ledger, "task.closed")
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING

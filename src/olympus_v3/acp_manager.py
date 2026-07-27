@@ -960,7 +960,30 @@ class ACPManager:
         ).hexdigest()
         if project_id != expected_project_id:
             raise ValueError("session project binding mismatch")
-        return await self.close(session_id, terminal_status=terminal_status)
+        acp_session_id = session.acp_session_id or session_id
+        key = self._agent_key(session.agent_name, session.project_root)
+        agent = self.agents.get(key)
+        pid = agent.pid if agent else None
+        result = await self.close(session_id, terminal_status=terminal_status)
+        agent = self.agents.get(key)
+        session_mapping_survives = False
+        if agent is not None and pid is not None:
+            mapping = agent.profile_path / f".olympus_session.{pid}"
+            try:
+                session_mapping_survives = mapping.read_text() == session_id
+            except OSError:
+                session_mapping_survives = False
+        return {
+            **result,
+            "project_id": project_id,
+            "acp_session_id": acp_session_id,
+            "survivors": {
+                "logical_manager_session": session_id in self.sessions,
+                "acp_mapping": bool(agent and session_id in agent.acp_session_ids),
+                "prompt_task": bool(agent and session_id in agent.prompt_tasks),
+                "pid_session_mapping": session_mapping_survives,
+            },
+        }
 
     async def cancel(self, session_id: str) -> dict:
         """Force-cancel a stuck session."""
