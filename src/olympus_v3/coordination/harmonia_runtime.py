@@ -197,6 +197,7 @@ class ProjectRuntimeContext:
                                 "message_id": current.message_id,
                             })(),
                         )
+                        self.dispatcher.materialize_response_result_with(current, observed.progress)
                         self.dispatcher.record_evidence_with(current)
                         if self.runtime is None:
                             return

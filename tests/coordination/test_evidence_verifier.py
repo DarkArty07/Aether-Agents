@@ -11,6 +11,7 @@ from olympus_v3.coordination.evidence import (
     EvidenceIdentity,
     EvidenceVerificationError,
     build_evidence_receipt,
+    materialize_captured_result,
     validate_evidence_receipt_payload,
     verify_artifact,
 )
@@ -86,6 +87,17 @@ def test_valid_artifact_verifies_and_receipt_is_deterministic(tmp_path):
     assert receipt.version == 1
     assert receipt.algorithm == "sha256-canonical-json"
     assert receipt.schema == "AETHER_EVIDENCE_RECEIPT_V1"
+
+
+def test_kernel_materializes_captured_result_atomically_and_idempotently(tmp_path):
+    expected = identity()
+    first = materialize_captured_result(tmp_path, expected, {"answer": "ok", "verified": True})
+    second = materialize_captured_result(tmp_path, expected, {"answer": "ok", "verified": True})
+
+    assert first == second
+    assert dict(first.result) == {"answer": "ok", "verified": True}
+    with pytest.raises(EvidenceVerificationError, match="stale_artifact"):
+        materialize_captured_result(tmp_path, expected, {"answer": "conflict"})
 
 
 def test_receipt_payload_is_flat_bounded_and_excludes_result(tmp_path):

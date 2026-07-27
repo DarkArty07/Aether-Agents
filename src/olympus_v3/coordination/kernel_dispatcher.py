@@ -19,6 +19,7 @@ from .evidence import (
     HandoffSnapshot,
     build_evidence_receipt,
     create_handoff_snapshot,
+    materialize_captured_result,
     validate_handoff_snapshot,
     verify_artifact,
 )
@@ -584,6 +585,8 @@ class KernelDispatcher:
         contract = self.ledger.read_contract(authority.contract_id)
         if contract is None or contract.status is not ContractState.ACTIVE:
             raise DispatchRejected("active contract required")
+        role_permissions = tuple(contract.role_permissions.get(authority.agent_name, ()))
+        response_delivery = "return_evidence" in role_permissions
         artifact_document = {
             "schema": ARTIFACT_SCHEMA,
             "installation_id": authority.installation_id,
@@ -643,12 +646,13 @@ class KernelDispatcher:
                 "project_root": authority.project_root,
             },
             "result_artifact": {
+                "delivery": "acp_response" if response_delivery else "worker_file",
                 "relative_path": ARTIFACT_RELATIVE_PATH.format(
                     run_id=authority.run_id,
                     task_id=authority.task_id,
                     attempt=authority.attempt,
                 ),
-                "write_before_completion": True,
+                "write_before_completion": not response_delivery,
                 "document": artifact_document,
             },
             "acceptance_evidence": [
@@ -660,7 +664,11 @@ class KernelDispatcher:
                 "Do not widen scope.",
                 "Do not modify the contract.",
                 "Do not claim completion without evidence.",
-                "Before reporting completion, atomically write result_artifact.document to result_artifact.relative_path and replace only its result value with the bounded task output.",
+                (
+                    "Return exactly one JSON object equal to the bounded task result value; do not use markdown, commentary, or write any file. The kernel will bind identity and persist result_artifact."
+                    if response_delivery
+                    else "Before reporting completion, atomically write result_artifact.document to result_artifact.relative_path and replace only its result value with the bounded task output."
+                ),
                 "Report blockers and stop when authority is insufficient.",
             ],
         }
@@ -951,6 +959,51 @@ class KernelDispatcher:
         if result.status not in (Result.APPLIED, Result.DUPLICATE):
             raise DispatchRejected(result.status.value)
         return result.status
+
+    def materialize_response_result_with(
+        self,
+        authority: DispatchAuthority,
+        progress: Mapping[str, Any],
+    ) -> None:
+        """Persist a read-only worker's exact structured ACP response."""
+        self._authority_current(authority)
+        contract = self.ledger.read_contract(authority.contract_id)
+        permissions = () if contract is None else contract.role_permissions.get(authority.agent_name, ())
+        if "return_evidence" not in permissions:
+            return
+        if not isinstance(progress, Mapping) or not isinstance(progress.get("last_turn"), str):
+            raise DispatchRejected("structured ACP result required")
+
+        def unique_object(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError("duplicate result key")
+                value[key] = item
+            return value
+
+        try:
+            result = json.loads(progress["last_turn"], object_pairs_hook=unique_object)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise DispatchRejected("invalid structured ACP result") from exc
+        if not isinstance(result, dict):
+            raise DispatchRejected("structured ACP result must be an object")
+        terminal = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "runtime.terminal.observed"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if len(terminal) != 1 or not isinstance(terminal[0].get("acp_session_id"), str):
+            raise DispatchRejected("durable terminal evidence required")
+        try:
+            materialize_captured_result(
+                Path(authority.project_root),
+                self._evidence_identity(authority, terminal[0]["acp_session_id"]),
+                result,
+            )
+        except EvidenceVerificationError as exc:
+            raise DispatchRejected(exc.code) from exc
 
     async def observe_with(self, authority):
         self._authority_current(authority)

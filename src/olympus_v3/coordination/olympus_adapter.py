@@ -343,13 +343,24 @@ class OlympusRuntimeAdapter:
             "message_id": getattr(authority, "message_id", None),
         }
         session_id = kernel_acp_session_id(logical_session) if isinstance(logical_session, str) and logical_session else None
+        prompt_permissions = (
+            prompt_payload.get("contract", {}).get("role_permissions", ())
+            if isinstance(prompt_payload, dict)
+            and isinstance(prompt_payload.get("contract"), dict)
+            else ()
+        )
+        response_delivery = (
+            isinstance(prompt_permissions, list)
+            and "return_evidence" in prompt_permissions
+        )
         expected_result_artifact = {
+            "delivery": "acp_response" if response_delivery else "worker_file",
             "relative_path": ARTIFACT_RELATIVE_PATH.format(
                 run_id=getattr(authority, "run_id", None),
                 task_id=getattr(authority, "task_id", None),
                 attempt=getattr(authority, "attempt", None),
             ),
-            "write_before_completion": True,
+            "write_before_completion": not response_delivery,
             "document": {
                 "schema": ARTIFACT_SCHEMA,
                 "installation_id": getattr(authority, "installation_id", None),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import stat
 from dataclasses import dataclass
 from pathlib import Path
@@ -293,6 +294,88 @@ def verify_artifact(project_root: Path | str, evidence_identity: EvidenceIdentit
         result=_freeze(document["result"]),
         canonical_bytes=canonical,
     )
+
+
+def materialize_captured_result(
+    project_root: Path | str,
+    evidence_identity: EvidenceIdentity,
+    result: Mapping[str, Any],
+) -> VerifiedArtifact:
+    """Atomically persist a read-only worker's structured ACP result.
+
+    The worker supplies only the bounded ``result`` mapping. Kernel-owned
+    identity fields and the destination path are derived from authenticated
+    dispatch state and cannot be selected by the worker.
+    """
+    if not isinstance(result, Mapping):
+        _fail("artifact_invalid")
+    document = {
+        "schema": ARTIFACT_SCHEMA,
+        **{field: getattr(evidence_identity, field) for field in _IDENTITY_FIELDS},
+        "artifact_generation": 1,
+        "result": _plain(result),
+    }
+    if _depth(document) > _MAX_DEPTH:
+        _fail("artifact_invalid")
+    raw = _canonical(document)
+    if len(raw) > _MAX_ARTIFACT_BYTES:
+        _fail("artifact_invalid")
+
+    try:
+        root = Path(project_root).resolve(strict=True)
+    except (FileNotFoundError, OSError):
+        _fail("artifact_missing")
+    relative = Path(
+        ARTIFACT_RELATIVE_PATH.format(
+            run_id=_safe_component(evidence_identity.run_id),
+            task_id=_safe_component(evidence_identity.task_id),
+            attempt=_safe_component(evidence_identity.attempt),
+        )
+    )
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.resolve(strict=True).relative_to(root)
+    except (FileNotFoundError, OSError, ValueError):
+        _fail("artifact_escape")
+    if os.path.lexists(path):
+        existing = verify_artifact(root, evidence_identity)
+        if existing.canonical_bytes != raw:
+            _fail("stale_artifact")
+        return existing
+
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    descriptor = None
+    try:
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        with os.fdopen(descriptor, "wb", closefd=True) as handle:
+            descriptor = None
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError:
+            existing = verify_artifact(root, evidence_identity)
+            if existing.canonical_bytes != raw:
+                _fail("stale_artifact")
+            return existing
+    except EvidenceVerificationError:
+        raise
+    except OSError:
+        _fail("artifact_invalid")
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return verify_artifact(root, evidence_identity)
 
 
 def _snapshot_parent_fd(root: Path, relative: Path, *, create: bool) -> tuple[int, str]:

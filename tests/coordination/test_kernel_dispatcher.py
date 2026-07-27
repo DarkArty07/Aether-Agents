@@ -83,7 +83,7 @@ def dispatcher_api():
     return module
 
 
-def make_contract(task_worker_bindings=None):
+def make_contract(task_worker_bindings=None, *, worker_permissions=("implement",)):
     participants = (OWNER, WORKER)
     if task_worker_bindings:
         participants = (OWNER, WORKER, *task_worker_bindings.values())
@@ -98,7 +98,7 @@ def make_contract(task_worker_bindings=None):
         included_scopes=("src/",),
         excluded_scopes=("secrets/",),
         role_permissions={
-            "worker": ("implement",),
+            "worker": worker_permissions,
             **({principal.actor_id: ("implement",) for principal in task_worker_bindings.values()} if task_worker_bindings else {}),
         },
         evidence_gates=(EvidenceGate("qa", True),),
@@ -135,6 +135,35 @@ def kernel(tmp_path: Path):
     attempt = service.start_attempt("run-a", "task-a")
     before = ledger.conn.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
     yield ledger, service, attempt, before
+    ledger.close()
+
+
+@pytest.fixture
+def response_kernel(tmp_path: Path):
+    scope = StoreScope("install-a", PROJECT)
+    auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
+    ledger = SQLiteLedger(
+        tmp_path / "response-kernel.sqlite",
+        scope,
+        writer_authenticator=auth,
+        integrity_signer=HMACIntegritySigner(b"integrity-key"),
+    )
+    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=10_000_000_000).lease
+    assert lease is not None
+    context = WriterContext(scope, "owner", "key-owner", "ledger-owner", lease.epoch, lease.expires_at)
+    assert ledger.create_contract(
+        make_contract(worker_permissions=("read", "verify", "return_evidence"))
+    ) in (Result.APPLIED, Result.DUPLICATE)
+    service = KernelRunService(ledger, writer=KernelWriter(context, auth))
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    service.create_task("run-a", task_id="task-a")
+    service.admit_task("run-a", "task-a")
+    service.mark_task_ready("run-a", "task-a")
+    service.dispatch_task("run-a", "task-a")
+    attempt = service.start_attempt("run-a", "task-a")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    yield ledger, service, attempt, project_root
     ledger.close()
 
 
@@ -518,6 +547,7 @@ def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(ker
         "task_id": "task-a",
     }
     artifact = prompt["result_artifact"]
+    assert artifact["delivery"] == "worker_file"
     assert artifact["relative_path"] == ".aether/evidence/run-a/task-a/1/result.json"
     assert artifact["write_before_completion"] is True
     assert artifact["document"]["schema"] == "AETHER_TASK_RESULT_V1"
@@ -541,6 +571,53 @@ def test_kernel_prompt_is_canonical_contractual_and_contains_no_capabilities(ker
     assert envelope.authority.lease_token not in serialized
     assert "owner-key" not in serialized
     assert "integrity-key" not in serialized
+
+
+def test_read_only_worker_returns_json_and_kernel_materializes_evidence(response_kernel):
+    ledger, service, attempt, project_root = response_kernel
+    adapter = FakeRuntimeAdapter()
+    d = dispatcher((ledger, service, attempt, 0), adapter)
+    envelope = d.stage_ready(
+        "run-a",
+        "task-a",
+        attempt=attempt.attempt,
+        project_root=str(project_root),
+        plan_revision=7,
+        snapshot_digest="sha256:snapshot",
+    )
+
+    async_test(d.dispatch_once())
+    prompt = json.loads(adapter.opens[0]["prompt"])
+    assert prompt["result_artifact"]["delivery"] == "acp_response"
+    assert prompt["result_artifact"]["write_before_completion"] is False
+    assert "do not use markdown" in prompt["instructions"][4]
+
+    observation = type(
+        "TerminalObservation",
+        (),
+        {
+            "status": "completed",
+            "logical_session": envelope.authority.logical_session,
+            "acp_session_id": "acp-session-1",
+            "message_id": envelope.authority.message_id,
+        },
+    )()
+    d.record_terminal_with(envelope.authority, observation)
+    with pytest.raises(dispatcher_api().DispatchRejected, match="invalid structured ACP result"):
+        d.materialize_response_result_with(
+            envelope.authority,
+            {"last_turn": '{"answer":"ok","answer":"conflict"}'},
+        )
+
+    d.materialize_response_result_with(
+        envelope.authority,
+        {"last_turn": '{"answer":"B_VERIFIED","source_sha256":"sha256:source"}'},
+    )
+    result_path = project_root / ".aether/evidence/run-a/task-a/1/result.json"
+    document = json.loads(result_path.read_text())
+    assert document["acp_session_id"] == "acp-session-1"
+    assert document["result"] == {"answer": "B_VERIFIED", "source_sha256": "sha256:source"}
+    assert d.record_evidence_with(envelope.authority) is Result.APPLIED
 
 
 def test_real_adapter_rejects_tampered_prompt_before_any_acp_operation(kernel):
