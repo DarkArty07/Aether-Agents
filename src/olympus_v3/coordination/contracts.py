@@ -69,6 +69,7 @@ class TaskState(StrEnum):
     READY = "ready"
     DISPATCHED = "dispatched"
     RUNNING = "running"
+    CLEANUP_PENDING = "cleanup_pending"
     REVIEW = "review"
     CLOSURE_PROPOSED = "closure_proposed"
     ACCEPTED = "accepted"

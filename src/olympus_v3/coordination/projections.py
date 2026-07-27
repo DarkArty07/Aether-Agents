@@ -61,6 +61,7 @@ class ProjectionReducer:
             "cleanup.completed",
             "cleanup.unknown",
             "evidence.receipt.recorded",
+            "close.requested",
         }:
             if kind in {
                 "dispatch.staged",

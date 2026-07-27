@@ -6,7 +6,7 @@ import asyncio
 import concurrent.futures
 import json
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -28,6 +28,7 @@ from olympus_v3.coordination import (
     TaskState,
     WriterContext,
 )
+from olympus_v3.coordination.closure import CompletionState
 from olympus_v3.coordination.evidence import (
     ARTIFACT_RELATIVE_PATH,
     build_evidence_receipt,
@@ -38,6 +39,7 @@ from olympus_v3.coordination.harmonia_service import HarmoniaService
 from olympus_v3.coordination.kernel_dispatcher import DispatchAuthority, KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
+from olympus_v3.coordination.workflow import closure_proposal_hash
 
 PROJECT = "project-a"
 OWNER = Principal(PROJECT, "hermes", "owner")
@@ -1138,3 +1140,229 @@ def _request(root):
         "plan_revision": 1,
         "snapshot_digest": "sha256:" + "a" * 64,
     }
+
+
+def test_trusted_receipt_requests_one_durable_close_without_cleanup_effect(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    calls_before = tuple(effects.calls)
+
+    requested = runtime.request_close(
+        authority=authority,
+        proposed_state=CompletionState.COMPLETED,
+        command_id="close-command-1",
+    )
+
+    assert requested.state is TaskState.CLEANUP_PENDING
+    intents = event_payloads(ledger, "close.requested")
+    assert len(intents) == 1
+    receipt = event_payloads(ledger, "evidence.receipt.recorded")[0]
+    assert intents[0] == {
+        "run_id": authority.run_id,
+        "task_id": authority.task_id,
+        "attempt": authority.attempt,
+        "contract_id": authority.contract_id,
+        "contract_generation": authority.contract_generation,
+        "revocation_epoch": authority.revocation_epoch,
+        "message_id": authority.message_id,
+        "logical_session": authority.logical_session,
+        "acp_session_id": "acp-session-1",
+        "evidence_receipt_id": receipt["receipt_id"],
+        "closure_proposal_hash": intents[0]["closure_proposal_hash"],
+        "cleanup_command_id": "cleanup:close-command-1",
+        "command_id": "close-command-1",
+        "proposed_state": "completed",
+    }
+    assert intents[0]["closure_proposal_hash"].startswith("sha256:")
+    assert tuple(effects.calls) == calls_before
+    assert not event_payloads(ledger, "task.closed")
+
+
+def test_close_request_requires_matching_trusted_receipt_and_changes_nothing_on_rejection(stack):
+    _, ledger, runtime, _, envelope, effects = stack
+    authority = envelope.authority
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+
+    with pytest.raises(Exception, match="evidence"):
+        runtime.request_close(
+            authority=authority,
+            proposed_state=CompletionState.COMPLETED,
+            command_id="close-command-1",
+        )
+
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+    assert effects.calls == []
+    assert runtime.task("run-a", "task-a").state is TaskState.RUNNING
+
+
+def test_close_request_replays_exactly_and_conflicting_command_payload_fails_closed(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    calls_before = tuple(effects.calls)
+
+    first = runtime.request_close(
+        authority=authority,
+        proposed_state=CompletionState.COMPLETED,
+        command_id="close-command-1",
+    )
+    replay = runtime.request_close(
+        authority=authority,
+        proposed_state=CompletionState.COMPLETED,
+        command_id="close-command-1",
+    )
+
+    assert first == replay
+    assert len(event_payloads(ledger, "close.requested")) == 1
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+    with pytest.raises(Exception, match="conflict"):
+        runtime.request_close(
+            authority=authority,
+            proposed_state=CompletionState.FAILED,
+            command_id="close-command-1",
+        )
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+    assert tuple(effects.calls) == calls_before
+
+    rebuilt = KernelRunService.rebuild(ledger)
+    assert rebuilt.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING
+    assert len(event_payloads(ledger, "close.requested")) == 1
+
+
+def test_direct_completion_cannot_bypass_cleanup_pending_contract(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+
+    with pytest.raises(Exception, match="completion gates"):
+        runtime.complete_task("run-a", "task-a")
+
+    assert not event_payloads(ledger, "close.requested")
+    assert not event_payloads(ledger, "task.closed")
+    assert runtime.task("run-a", "task-a").state is TaskState.RUNNING
+
+
+@pytest.mark.parametrize("mutation", ["expired-fence", "forged-session", "unknown-run"])
+def test_close_request_rejects_stale_or_cross_identity_authority_without_mutation(stack, mutation):
+    clock, ledger, runtime, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    calls_before = tuple(effects.calls)
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+    if mutation == "expired-fence":
+        clock.advance(authority.lease_until - clock() + 1)
+    elif mutation == "forged-session":
+        authority = replace(authority, logical_session="kernel:forged")
+    else:
+        authority = replace(authority, run_id="unknown-run")
+
+    with pytest.raises(Exception):
+        runtime.request_close(
+            authority=authority,
+            proposed_state=CompletionState.COMPLETED,
+            command_id="close-command-1",
+        )
+
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+    assert tuple(effects.calls) == calls_before
+    assert not event_payloads(ledger, "close.requested")
+
+
+def test_ledger_rejects_close_intent_without_verifier_owned_receipt(stack):
+    _, ledger, runtime, _, envelope, _ = stack
+    authority = envelope.authority
+    aggregate = f"task:{authority.run_id}:{authority.task_id}"
+    payload = {
+        "run_id": authority.run_id,
+        "task_id": authority.task_id,
+        "attempt": authority.attempt,
+        "contract_generation": authority.contract_generation,
+        "revocation_epoch": authority.revocation_epoch,
+        "message_id": authority.message_id,
+        "logical_session": authority.logical_session,
+        "acp_session_id": "acp-session-1",
+        "evidence_receipt_id": "receipt:" + "a" * 64,
+        "cleanup_command_id": "cleanup:close-command-1",
+        "command_id": "close-command-1",
+        "proposed_state": "completed",
+    }
+    payload["closure_proposal_hash"] = closure_proposal_hash(payload)
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+
+    with pytest.raises(Exception, match="INVALID_INPUT"):
+        runtime._append(
+            aggregate,
+            "close.requested",
+            payload,
+            runtime._version(aggregate),
+            contract_id=authority.contract_id,
+        )
+
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+    assert runtime.task("run-a", "task-a").state is TaskState.RUNNING
+
+
+def test_non_completion_authority_cannot_request_close(stack):
+    _, ledger, runtime, dispatcher, envelope, effects = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    current = runtime.writer.context
+    other_auth = HMACWriterAuthenticator({("worker", "key-worker"): b"worker-key"})
+    other_context = WriterContext(
+        ledger.scope,
+        "worker",
+        "key-worker",
+        current.resource,
+        current.fence,
+        current.expires_at,
+    )
+    unauthorized = KernelRunService(ledger, writer=KernelWriter(other_context, other_auth))
+    before = tuple((row["kind"], row["payload"]) for row in ledger.events())
+    calls_before = tuple(effects.calls)
+
+    with pytest.raises(Exception, match="completion authority"):
+        unauthorized.request_close(
+            authority=authority,
+            proposed_state=CompletionState.COMPLETED,
+            command_id="close-command-1",
+        )
+
+    assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+    assert tuple(effects.calls) == calls_before
+    assert not event_payloads(ledger, "close.requested")
+
+
+def test_same_close_command_converges_across_independent_sqlite_connections(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+    context = runtime.writer.context
+    barrier = threading.Barrier(2)
+
+    def request_from_independent_connection():
+        auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
+        local = SQLiteLedger(
+            ledger.path,
+            ledger.scope,
+            writer_authenticator=auth,
+            integrity_signer=HMACIntegritySigner(b"integrity-key"),
+            clock=ledger.clock,
+            busy_timeout_ms=5_000,
+        )
+        try:
+            service = KernelRunService(local, writer=KernelWriter(context, auth))
+            barrier.wait(timeout=5)
+            return service.request_close(
+                authority=authority,
+                proposed_state=CompletionState.COMPLETED,
+                command_id="close-command-1",
+            ).state
+        finally:
+            local.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        states = tuple(executor.map(lambda _: request_from_independent_connection(), range(2)))
+
+    assert states == (TaskState.CLEANUP_PENDING, TaskState.CLEANUP_PENDING)
+    assert len(event_payloads(ledger, "close.requested")) == 1
+    assert runtime.task("run-a", "task-a").state is TaskState.CLEANUP_PENDING

@@ -55,6 +55,7 @@ _WORKFLOW_EVENT_KINDS = frozenset(
         "attempt.superseded",
         "observation.accepted",
         "reconciliation.completed",
+        "close.requested",
     }
 )
 _LIFECYCLE_EVENT_KINDS = frozenset(

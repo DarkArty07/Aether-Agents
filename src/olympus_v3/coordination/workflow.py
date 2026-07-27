@@ -51,6 +51,7 @@ WORKFLOW_KINDS = frozenset(
         "reconciliation.completed",
         "attempt.orphaned",
         "attempt.superseded",
+        "close.requested",
     }
 )
 _TASK_KIND_STATE = {
@@ -60,6 +61,7 @@ _TASK_KIND_STATE = {
     "task.ready": TaskState.READY,
     "task.dispatched": TaskState.DISPATCHED,
     "attempt.started": TaskState.RUNNING,
+    "close.requested": TaskState.CLEANUP_PENDING,
 }
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -110,6 +112,22 @@ _SCHEMAS = {
     },
     "attempt.orphaned": {"run_id", "task_id", "attempt", "contract_id"},
     "attempt.superseded": {"run_id", "task_id", "attempt", "replacement_attempt", "contract_id"},
+    "close.requested": {
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "contract_generation",
+        "revocation_epoch",
+        "message_id",
+        "logical_session",
+        "acp_session_id",
+        "evidence_receipt_id",
+        "closure_proposal_hash",
+        "cleanup_command_id",
+        "command_id",
+        "proposed_state",
+    },
 }
 _RUN_CREATED_SCHEMAS = (
     _SCHEMAS["run.created"],
@@ -143,6 +161,26 @@ def _event_payload(event):
     return payload
 
 
+def closure_proposal_hash(payload) -> str:
+    """Bind close intent to its exact authority, evidence and semantic outcome."""
+    fields = (
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "contract_generation",
+        "revocation_epoch",
+        "message_id",
+        "logical_session",
+        "acp_session_id",
+        "evidence_receipt_id",
+        "proposed_state",
+    )
+    material = {name: payload.get(name) for name in fields}
+    canonical = json.dumps(material, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
 def validate_workflow_history(events):
     """Validate the workflow subset as one deterministic, fail-closed reduction.
 
@@ -157,6 +195,8 @@ def validate_workflow_history(events):
     sessions = {}
     staged = {}
     receipts = {}
+    receipt_payloads = {}
+    close_intents = {}
     for event in events:
         kind = event.get("kind")
         if kind == "evidence.receipt.recorded":
@@ -173,6 +213,7 @@ def validate_workflow_history(events):
             if receipt_key not in tasks or runs.get(payload["run_id"]) != payload["contract_id"]:
                 raise _bad("evidence receipt task mismatch")
             receipts.setdefault(receipt_key, set()).add(payload["receipt_id"])
+            receipt_payloads[payload["receipt_id"]] = payload
             continue
         if kind not in WORKFLOW_KINDS:
             continue
@@ -289,6 +330,63 @@ def validate_workflow_history(events):
                 raise _bad("non-monotonic attempt supersession")
             else:
                 attempt_states[(run_id, task_id, attempt)] = AttemptState.SUPERSEDED
+            continue
+        if kind == "close.requested":
+            key = (run_id, task_id)
+            source = staged.get(payload["message_id"])
+            receipt = receipt_payloads.get(payload["evidence_receipt_id"])
+            expected_state = {
+                "completed": "completed",
+                "error": "failed",
+                "cancelled": "cancelled",
+            }
+            if (
+                not isinstance(task_id, str)
+                or not _ID.fullmatch(task_id)
+                or aggregate != f"task:{run_id}:{task_id}"
+                or key not in tasks
+                or tasks[key][0] is not TaskState.RUNNING
+                or source is None
+                or receipt is None
+                or key in close_intents
+                or attempt_states.get((run_id, task_id, payload["attempt"])) is not AttemptState.ACTIVE
+                or any(
+                    payload[name] != source[name]
+                    for name in (
+                        "run_id",
+                        "task_id",
+                        "attempt",
+                        "contract_id",
+                        "contract_generation",
+                        "revocation_epoch",
+                        "message_id",
+                        "logical_session",
+                    )
+                )
+                or any(
+                    payload[name] != receipt[name]
+                    for name in (
+                        "run_id",
+                        "task_id",
+                        "attempt",
+                        "contract_id",
+                        "contract_generation",
+                        "revocation_epoch",
+                        "message_id",
+                        "logical_session",
+                        "acp_session_id",
+                    )
+                )
+                or expected_state.get(receipt["terminal"]["technical_status"]) != payload["proposed_state"]
+                or not isinstance(payload["command_id"], str)
+                or not _ID.fullmatch(payload["command_id"])
+                or payload["cleanup_command_id"] != "cleanup:" + payload["command_id"]
+                or not _SHA256.fullmatch(payload["closure_proposal_hash"])
+                or payload["closure_proposal_hash"] != closure_proposal_hash(payload)
+            ):
+                raise _bad("invalid close intent")
+            tasks[key] = (TaskState.CLEANUP_PENDING, tasks[key][1])
+            close_intents[key] = payload["command_id"]
             continue
         if (
             not isinstance(task_id, str)
@@ -429,6 +527,7 @@ _ALLOWED = {
     TaskState.ADMITTED: TaskState.READY,
     TaskState.READY: TaskState.DISPATCHED,
     TaskState.DISPATCHED: TaskState.RUNNING,
+    TaskState.RUNNING: TaskState.CLEANUP_PENDING,
 }
 
 
@@ -448,6 +547,7 @@ __all__ = [
     "RunRecord",
     "SessionBinding",
     "TaskRecord",
+    "closure_proposal_hash",
     "reduce_workflow_projection",
     "transition_state",
 ]

@@ -19,6 +19,7 @@ from .budget import (
     RetryState,
     reduce_budget,
 )
+from .closure import CompletionState
 from .contracts import ContractState, TaskState
 from .ledger import HMACWriterAuthenticator, Result, SignedEventDraft, SQLiteLedger, WriterContext
 from .workflow import (
@@ -31,6 +32,7 @@ from .workflow import (
     RuntimeModeError,
     SessionBinding,
     TaskRecord,
+    closure_proposal_hash,
     transition_state,
 )
 
@@ -653,6 +655,147 @@ class KernelRunService:
 
     def refresh_contract_authority(self, run_id):
         return self.budget(run_id)
+
+    def request_close(self, *, authority, proposed_state, command_id):
+        """Persist one fail-closed cleanup obligation without performing cleanup."""
+        self._state()
+        if not isinstance(proposed_state, CompletionState) or proposed_state not in {
+            CompletionState.COMPLETED,
+            CompletionState.FAILED,
+            CompletionState.CANCELLED,
+        }:
+            raise InvalidTransition("unsupported semantic closure state")
+        if not isinstance(command_id, str) or not command_id:
+            raise IdempotencyConflictError("close command identity required")
+        required = (
+            "installation_id",
+            "project_id",
+            "run_id",
+            "task_id",
+            "attempt",
+            "contract_id",
+            "contract_generation",
+            "revocation_epoch",
+            "message_id",
+            "logical_session",
+            "lease_resource",
+            "lease_owner",
+            "lease_epoch",
+            "lease_token",
+        )
+        if any(not hasattr(authority, name) for name in required):
+            raise AuthorityError("invalid dispatch authority")
+        if (authority.installation_id, authority.project_id) != (
+            self.ledger.scope.installation_id,
+            self.ledger.scope.project_id,
+        ):
+            raise AuthorityError("dispatch authority scope mismatch")
+        key = (authority.run_id, authority.task_id)
+        task = self._tasks.get(key)
+        run = self._runs.get(authority.run_id)
+        if task is None or run is None or run.contract_id != authority.contract_id:
+            raise AuthorityError("close authority does not match kernel workflow")
+        contract = self.ledger.read_contract(authority.contract_id)
+        if (
+            contract is None
+            or contract.status is not ContractState.ACTIVE
+            or contract.generation != authority.contract_generation
+            or contract.revocation_epoch != authority.revocation_epoch
+        ):
+            raise AuthorityError("stale close contract authority")
+        if (
+            contract.completion_authority.project_id != self.ledger.scope.project_id
+            or contract.completion_authority.actor_id != self.writer.context.writer_id
+        ):
+            raise AuthorityError("contract completion authority required")
+        active_attempts = [item for item in self._attempts.get(key, ()) if item.state is AttemptState.ACTIVE]
+        if not active_attempts or active_attempts[-1].attempt != authority.attempt:
+            raise AuthorityError("stale close attempt authority")
+        lease = self.ledger.lease(authority.lease_resource)
+        if (
+            lease is None
+            or lease.owner != authority.lease_owner
+            or lease.epoch != authority.lease_epoch
+            or lease.token != authority.lease_token
+            or lease.expires_at <= self.ledger.clock()
+        ):
+            raise AuthorityError("stale close dispatch fence")
+        staged = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "dispatch.staged"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if len(staged) != 1 or any(staged[0].get(name) != getattr(authority, name) for name in required):
+            raise AuthorityError("close authority does not match durable dispatch")
+        receipts = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "evidence.receipt.recorded"
+            and json.loads(event["payload"]).get("message_id") == authority.message_id
+        ]
+        if len(receipts) != 1:
+            raise AuthorityError("trusted evidence receipt required")
+        receipt = receipts[0]
+        identity_fields = (
+            "installation_id",
+            "project_id",
+            "run_id",
+            "task_id",
+            "attempt",
+            "contract_id",
+            "contract_generation",
+            "revocation_epoch",
+            "message_id",
+            "logical_session",
+        )
+        if any(receipt.get(name) != getattr(authority, name) for name in identity_fields):
+            raise AuthorityError("evidence receipt does not match close authority")
+        expected_state = {
+            "completed": CompletionState.COMPLETED,
+            "error": CompletionState.FAILED,
+            "cancelled": CompletionState.CANCELLED,
+        }.get(receipt.get("terminal", {}).get("technical_status"))
+        if expected_state is not proposed_state:
+            raise InvalidTransition("semantic closure conflicts with trusted evidence")
+        payload = {
+            "run_id": authority.run_id,
+            "task_id": authority.task_id,
+            "attempt": authority.attempt,
+            "contract_id": authority.contract_id,
+            "contract_generation": authority.contract_generation,
+            "revocation_epoch": authority.revocation_epoch,
+            "message_id": authority.message_id,
+            "logical_session": authority.logical_session,
+            "acp_session_id": receipt["acp_session_id"],
+            "evidence_receipt_id": receipt["receipt_id"],
+            "cleanup_command_id": "cleanup:" + command_id,
+            "command_id": command_id,
+            "proposed_state": proposed_state.value,
+        }
+        payload["closure_proposal_hash"] = closure_proposal_hash(payload)
+        prior = [
+            json.loads(event["payload"])
+            for event in self.ledger.events()
+            if event["kind"] == "close.requested"
+            and json.loads(event["payload"]).get("run_id") == authority.run_id
+            and json.loads(event["payload"]).get("task_id") == authority.task_id
+        ]
+        if prior:
+            if prior[0] != payload:
+                raise IdempotencyConflictError("close command conflict")
+            return self.task(*key)
+        if task.state is not TaskState.RUNNING:
+            raise InvalidTransition("task is not eligible for close intent")
+        aggregate = f"task:{authority.run_id}:{authority.task_id}"
+        self._append(
+            aggregate,
+            "close.requested",
+            payload,
+            self._version(aggregate),
+            contract_id=authority.contract_id,
+        )
+        return self.task(*key)
 
     def complete_task(self, run_id, task_id):
         raise InvalidTransition("completion gates are not implemented")
