@@ -398,26 +398,42 @@ class KernelDispatcher:
             raise DispatchRejected("successor task worker binding required")
         worker = self._resolve_worker(contract, successor_task_id)
         message_id = "000" + hashlib.sha256(f"successor:{run_id}:{successor_task_id}:{handoff.snapshot_digest}:{plan_revision}".encode()).hexdigest()[:29]
-        if successor.state is TaskState.PROPOSED:
-            task = self.runtime.admit_task(run_id, successor_task_id)
-            if task.state is TaskState.ADMITTED:
-                task = self.runtime.mark_task_ready(run_id, successor_task_id)
-            if task.state is TaskState.READY:
-                task = self.runtime.dispatch_task(run_id, successor_task_id)
-            if task.state is not TaskState.DISPATCHED:
-                raise DispatchRejected("successor dispatch transition failed")
-            attempt = self.runtime.start_attempt(run_id, successor_task_id)
-        elif successor.state is TaskState.RUNNING:
-            active_attempts = tuple(
-                item
-                for item in self.runtime.attempts(run_id, successor_task_id)
-                if item.state is AttemptState.ACTIVE
-            )
-            if len(active_attempts) != 1:
-                raise DispatchRejected("successor active attempt required")
-            attempt = active_attempts[0]
-        else:
+        attempt = None
+        for _ in range(8):
+            successor = self.runtime.task(run_id, successor_task_id)
+            try:
+                if successor.state is TaskState.PROPOSED:
+                    self.runtime.admit_task(run_id, successor_task_id)
+                    continue
+                if successor.state is TaskState.ADMITTED:
+                    self.runtime.mark_task_ready(run_id, successor_task_id)
+                    continue
+                if successor.state is TaskState.READY:
+                    self.runtime.dispatch_task(run_id, successor_task_id)
+                    continue
+                if successor.state is TaskState.DISPATCHED:
+                    attempt = self.runtime.start_attempt(run_id, successor_task_id)
+                    break
+            except ValueError as exc:
+                # Another authenticated consumer may have won this exact
+                # monotonic transition after our read. Re-read durable state;
+                # all other validation failures remain fatal.
+                if str(exc) == Result.INVALID_INPUT.value:
+                    continue
+                raise
+            if successor.state is TaskState.RUNNING:
+                active_attempts = tuple(
+                    item
+                    for item in self.runtime.attempts(run_id, successor_task_id)
+                    if item.state is AttemptState.ACTIVE
+                )
+                if len(active_attempts) != 1:
+                    raise DispatchRejected("successor active attempt required")
+                attempt = active_attempts[0]
+                break
             raise DispatchRejected("successor release required")
+        if attempt is None:
+            raise DispatchRejected("successor dispatch transition failed")
         envelope = self._stage_ready(
             run_id, successor_task_id, attempt=attempt.attempt, project_root=project_root,
             plan_revision=plan_revision, snapshot_digest=handoff.snapshot_digest, handoff=handoff,

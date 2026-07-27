@@ -151,14 +151,23 @@ def test_genesis_rejects_invalid_or_suspended_worker_identifiers(tmp_path, worke
         ("time_seconds", 0),
         ("time_seconds", True),
         ("model_budget", 1),
-        ("qa_reserve", 0),
-        ("recovery_reserve", 0),
+        ("qa_reserve", -1),
+        ("recovery_reserve", -1),
         ("escalation_conditions", "ambiguity"),
     ],
 )
 def test_genesis_rejects_malformed_scopes_permissions_and_limits(tmp_path, field, value):
     with pytest.raises(InvalidHarmoniaRequest, match="invalid request"):
         parse_harmonia_request(_start(tmp_path, contract=_genesis(**{field: value})))
+
+
+def test_genesis_accepts_zero_qa_and_recovery_reserves(tmp_path):
+    parsed = parse_harmonia_request(
+        _start(tmp_path, contract=_genesis(qa_reserve=0, recovery_reserve=0))
+    )
+    assert isinstance(parsed, HarmoniaStartRequest)
+    assert parsed.contract.qa_reserve == 0
+    assert parsed.contract.recovery_reserve == 0
 
 
 @pytest.mark.parametrize(

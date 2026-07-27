@@ -109,6 +109,12 @@ def _positive_integer(value: Any) -> int:
     return value
 
 
+def _nonnegative_integer(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        _invalid()
+    return value
+
+
 def _string_list(value: Any, *, allow_empty: bool) -> tuple[str, ...]:
     if not isinstance(value, list) or (not allow_empty and not value):
         _invalid()
@@ -171,8 +177,8 @@ class HarmoniaGenesisSpec:
             permissions = _string_list(data["worker_permissions"], allow_empty=False)
         time_seconds = _positive_integer(data["time_seconds"])
         model_budget = _positive_integer(data["model_budget"])
-        qa_reserve = _positive_integer(data["qa_reserve"])
-        recovery_reserve = _positive_integer(data["recovery_reserve"])
+        qa_reserve = _nonnegative_integer(data["qa_reserve"])
+        recovery_reserve = _nonnegative_integer(data["recovery_reserve"])
         if qa_reserve + recovery_reserve > model_budget:
             _invalid()
         return cls(

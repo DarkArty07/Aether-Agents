@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -114,6 +115,51 @@ def _profiles(tmp_path: Path) -> Path:
     profiles = tmp_path / "profiles"
     (profiles / "hefesto").mkdir(parents=True)
     return profiles
+
+
+def test_cleanup_persisted_returns_kernel_authorized_public_session_identity(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    profiles = _profiles(tmp_path)
+    public_session_id = "olympus-public-session"
+    raw_acp_session_id = "raw-acp-session"
+
+    async def scenario():
+        manager = ACPManager(profiles_dir=profiles, db=_DB())
+        agent = AgentState(
+            name="hefesto",
+            profile_path=profiles / "hefesto",
+            status="dead",
+        )
+        session = SessionInfo(
+            session_id=public_session_id,
+            agent_name="hefesto",
+            acp_session_id=raw_acp_session_id,
+            project_root=str(project),
+            status="completed",
+        )
+        manager.agents[manager._agent_key("hefesto", str(project))] = agent
+        manager.sessions[public_session_id] = session
+        agent.acp_session_ids[public_session_id] = raw_acp_session_id
+        project_id = hashlib.sha256(
+            ("olympus-project-v1\0" + str(project.resolve())).encode("utf-8")
+        ).hexdigest()
+
+        result = await manager.cleanup_persisted(
+            public_session_id,
+            terminal_status="completed",
+            project_id=project_id,
+        )
+        return result
+
+    result = asyncio.run(scenario())
+    assert result["acp_session_id"] == public_session_id
+    assert result["survivors"] == {
+        "logical_manager_session": False,
+        "acp_mapping": False,
+        "prompt_task": False,
+        "pid_session_mapping": False,
+    }
 
 
 def test_concurrent_same_key_opens_spawn_one_process_and_track_two_sessions(tmp_path, monkeypatch):

@@ -960,7 +960,10 @@ class ACPManager:
         ).hexdigest()
         if project_id != expected_project_id:
             raise ValueError("session project binding mismatch")
-        acp_session_id = session.acp_session_id or session_id
+        # The kernel authorizes and persists the Olympus-facing session ID.
+        # The raw ACP UUID remains an internal transport detail and must not
+        # replace that public identity in the cleanup proof.
+        acp_session_id = session_id
         key = self._agent_key(session.agent_name, session.project_root)
         agent = self.agents.get(key)
         pid = agent.pid if agent else None
