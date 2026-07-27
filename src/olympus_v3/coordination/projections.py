@@ -43,6 +43,7 @@ class ProjectionReducer:
         elif kind in {
             "run.created",
             "task.created",
+            "task.released",
             "task.admitted",
             "task.ready",
             "task.dispatched",

@@ -42,6 +42,7 @@ _WORKFLOW_EVENT_KINDS = frozenset(
     {
         "run.created",
         "task.created",
+        "task.released",
         "task.admitted",
         "task.ready",
         "task.dispatched",
@@ -433,9 +434,7 @@ class SQLiteLedger:
                 for column in columns:
                     if column.split()[0] not in existing:
                         self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column}")
-            sql_row = self.conn.execute(
-                "SELECT sql FROM sqlite_master WHERE type='table' AND name='outbox'"
-            ).fetchone()
+            sql_row = self.conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='outbox'").fetchone()
             if sql_row and "'UNKNOWN'" not in sql_row[0]:
                 indexes = [
                     row[0]
@@ -685,6 +684,161 @@ class SQLiteLedger:
             return Result.INVALID_INPUT
         return None
 
+    def _receipt_input_status(self, draft: SignedEventDraft, message_id: str | None) -> Result | None:
+        if draft.kind != "evidence.receipt.recorded":
+            return None
+        from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
+
+        try:
+            validate_evidence_receipt_payload(draft.payload)
+        except EvidenceVerificationError:
+            return Result.INVALID_INPUT
+        expected_message_id = "evidence:" + draft.payload["message_id"]
+        if (
+            draft.payload["installation_id"] != self.scope.installation_id
+            or draft.payload["project_id"] != self.scope.project_id
+            or draft.aggregate != expected_message_id
+            or message_id != expected_message_id
+        ):
+            return Result.INVALID_INPUT
+        return None
+
+    def _insert_draft(
+        self,
+        draft: SignedEventDraft,
+        message_id: str | None,
+        *,
+        batch_index: int | None = None,
+    ) -> tuple[Result | None, str | None]:
+        current = self.conn.execute(
+            "SELECT COALESCE(MAX(version),0) FROM events WHERE installation_id=? AND project_id=? AND aggregate=?",
+            (self.scope.installation_id, self.scope.project_id, draft.aggregate),
+        ).fetchone()[0]
+        if current != draft.expected_version:
+            return Result.CAS_CONFLICT, None
+        last = self.conn.execute(
+            "SELECT event_hash FROM events WHERE installation_id=? AND project_id=? ORDER BY sequence DESC LIMIT 1",
+            (self.scope.installation_id, self.scope.project_id),
+        ).fetchone()
+        previous = last[0] if last else "GENESIS"
+        sequence = self.conn.execute(
+            "SELECT COALESCE(MAX(sequence),0)+1 FROM events WHERE installation_id=? AND project_id=?",
+            (self.scope.installation_id, self.scope.project_id),
+        ).fetchone()[0]
+        event_id = uuid.uuid4().hex
+        now = self.clock()
+        payload = json.dumps(draft.payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        fields = [
+            1,
+            self.scope.installation_id,
+            self.scope.project_id,
+            sequence,
+            now,
+            event_id,
+            draft.aggregate,
+            current + 1,
+            draft.kind,
+            payload,
+            previous,
+            draft.writer_id,
+            draft.key_id,
+            draft.resource,
+            draft.fence,
+            draft.proof,
+        ]
+        event_hash = hashlib.sha256(json.dumps(fields, separators=(",", ":")).encode()).hexdigest()
+        auth_tag = self.integrity_signer.sign(json.dumps(fields + [event_hash], separators=(",", ":")).encode())
+        contract_id = draft.payload.get("contract_id") if isinstance(draft.payload, Mapping) else None
+        self.conn.execute(
+            "INSERT INTO events(installation_id,project_id,sequence,event_id,server_time,aggregate,version,kind,payload,previous_hash,event_hash,writer_id,key_id,resource,fence,writer_proof,auth_tag,encoding_version,contract_id,contract_generation,revocation_epoch) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                self.scope.installation_id,
+                self.scope.project_id,
+                sequence,
+                event_id,
+                now,
+                draft.aggregate,
+                current + 1,
+                draft.kind,
+                payload,
+                previous,
+                event_hash,
+                draft.writer_id,
+                draft.key_id,
+                draft.resource,
+                draft.fence,
+                draft.proof,
+                auth_tag,
+                1,
+                contract_id,
+                draft.contract_generation,
+                draft.revocation_epoch,
+            ),
+        )
+        self._stage("after_event_insert")
+        old = self.conn.execute(
+            "SELECT value FROM projections WHERE installation_id=? AND project_id=? AND aggregate=?",
+            (self.scope.installation_id, self.scope.project_id, draft.aggregate),
+        ).fetchone()
+        value = self.reducer.reduce(json.loads(old[0]) if old else None, draft.kind, draft.payload)
+        self.conn.execute(
+            "INSERT OR REPLACE INTO projections VALUES(?,?,?,?,?,?,?,?)",
+            (
+                self.scope.installation_id,
+                self.scope.project_id,
+                draft.aggregate,
+                current + 1,
+                json.dumps(value, sort_keys=True, separators=(",", ":")),
+                self.reducer.version,
+                sequence,
+                event_hash,
+            ),
+        )
+        self._stage("after_projection")
+        self._stage("after_event")
+        if message_id:
+            self.conn.execute(
+                "INSERT INTO inbox(installation_id,project_id,message_id,applied_event_id,applied_at,contract_id,contract_generation,revocation_epoch,authority_state) VALUES(?,?,?,?,?,?,?,?,?)",
+                (
+                    self.scope.installation_id,
+                    self.scope.project_id,
+                    message_id,
+                    event_id,
+                    now,
+                    contract_id,
+                    draft.contract_generation,
+                    draft.revocation_epoch,
+                    "CURRENT",
+                ),
+            )
+            self._stage("after_inbox")
+        self.conn.execute(
+            "INSERT INTO outbox(installation_id,project_id,message_id,event_id,status,attempts,last_error,lease_owner,lease_epoch,lease_token,lease_until,transport_ack_at,semantic_completion_event_id,contract_id,contract_generation,revocation_epoch,reconciliation_required) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                self.scope.installation_id,
+                self.scope.project_id,
+                message_id or event_id,
+                event_id,
+                "PENDING",
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                contract_id,
+                draft.contract_generation,
+                draft.revocation_epoch,
+                0,
+            ),
+        )
+        self._stage("after_outbox")
+        if batch_index is not None:
+            self._stage(f"batch_after_item_{batch_index}")
+        return None, event_id
+
     def append(self, draft: SignedEventDraft, context: WriterContext, *, message_id: str | None = None) -> AppendResult:
         if message_id is not None and not _valid_identifier(message_id):
             return AppendResult(Result.INVALID_INPUT)
@@ -693,21 +847,9 @@ class SQLiteLedger:
         failure = self._check(draft, context)
         if failure:
             return AppendResult(failure)
-        if draft.kind == "evidence.receipt.recorded":
-            from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
-
-            try:
-                validate_evidence_receipt_payload(draft.payload)
-            except EvidenceVerificationError:
-                return AppendResult(Result.INVALID_INPUT)
-            expected_message_id = "evidence:" + draft.payload["message_id"]
-            if (
-                draft.payload["installation_id"] != self.scope.installation_id
-                or draft.payload["project_id"] != self.scope.project_id
-                or draft.aggregate != expected_message_id
-                or message_id != expected_message_id
-            ):
-                return AppendResult(Result.INVALID_INPUT)
+        receipt_status = self._receipt_input_status(draft, message_id)
+        if receipt_status is not None:
+            return AppendResult(receipt_status)
         try:
             self.conn.execute("BEGIN IMMEDIATE")
             replay = self._message_replay_status(message_id, draft) if message_id else None
@@ -729,14 +871,18 @@ class SQLiteLedger:
             if evidence_status is not None:
                 self.conn.rollback()
                 return AppendResult(evidence_status)
-            if draft.kind in _WORKFLOW_EVENT_KINDS or draft.kind in _BUDGET_EVENT_KINDS:
+            if (
+                draft.kind in _WORKFLOW_EVENT_KINDS
+                or draft.kind in _BUDGET_EVENT_KINDS
+                or draft.kind == "evidence.receipt.recorded"
+            ):
                 from .budget import BudgetError, validate_budget_history
                 from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
 
                 try:
                     history = self.events()
                     history.append({"aggregate": draft.aggregate, "kind": draft.kind, "payload": dict(draft.payload)})
-                    if draft.kind in _WORKFLOW_EVENT_KINDS:
+                    if draft.kind in _WORKFLOW_EVENT_KINDS or draft.kind == "evidence.receipt.recorded":
                         validate_workflow_history(history)
                     else:
                         contract_row = self.conn.execute(
@@ -751,132 +897,10 @@ class SQLiteLedger:
                 except (InvalidTransition, BudgetError, KeyError, TypeError, ValueError):
                     self.conn.rollback()
                     return AppendResult(Result.INVALID_INPUT)
-            current = self.conn.execute(
-                "SELECT COALESCE(MAX(version),0) FROM events WHERE installation_id=? AND project_id=? AND aggregate=?",
-                (self.scope.installation_id, self.scope.project_id, draft.aggregate),
-            ).fetchone()[0]
-            if current != draft.expected_version:
+            insert_status, event_id = self._insert_draft(draft, message_id)
+            if insert_status is not None or event_id is None:
                 self.conn.rollback()
-                return AppendResult(Result.CAS_CONFLICT)
-            last = self.conn.execute(
-                "SELECT event_hash FROM events WHERE installation_id=? AND project_id=? ORDER BY sequence DESC LIMIT 1",
-                (self.scope.installation_id, self.scope.project_id),
-            ).fetchone()
-            previous = last[0] if last else "GENESIS"
-            sequence = self.conn.execute(
-                "SELECT COALESCE(MAX(sequence),0)+1 FROM events WHERE installation_id=? AND project_id=?",
-                (self.scope.installation_id, self.scope.project_id),
-            ).fetchone()[0]
-            event_id = uuid.uuid4().hex
-            now = self.clock()
-            payload = json.dumps(draft.payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
-            fields = [
-                1,
-                self.scope.installation_id,
-                self.scope.project_id,
-                sequence,
-                now,
-                event_id,
-                draft.aggregate,
-                current + 1,
-                draft.kind,
-                payload,
-                previous,
-                draft.writer_id,
-                draft.key_id,
-                draft.resource,
-                draft.fence,
-                draft.proof,
-            ]
-            event_hash = hashlib.sha256(json.dumps(fields, separators=(",", ":")).encode()).hexdigest()
-            auth_tag = self.integrity_signer.sign(json.dumps(fields + [event_hash], separators=(",", ":")).encode())
-            contract_id = draft.payload.get("contract_id") if isinstance(draft.payload, Mapping) else None
-            self.conn.execute(
-                "INSERT INTO events(installation_id,project_id,sequence,event_id,server_time,aggregate,version,kind,payload,previous_hash,event_hash,writer_id,key_id,resource,fence,writer_proof,auth_tag,encoding_version,contract_id,contract_generation,revocation_epoch) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    self.scope.installation_id,
-                    self.scope.project_id,
-                    sequence,
-                    event_id,
-                    now,
-                    draft.aggregate,
-                    current + 1,
-                    draft.kind,
-                    payload,
-                    previous,
-                    event_hash,
-                    draft.writer_id,
-                    draft.key_id,
-                    draft.resource,
-                    draft.fence,
-                    draft.proof,
-                    auth_tag,
-                    1,
-                    contract_id,
-                    draft.contract_generation,
-                    draft.revocation_epoch,
-                ),
-            )
-            self._stage("after_event_insert")
-            old = self.conn.execute(
-                "SELECT value FROM projections WHERE installation_id=? AND project_id=? AND aggregate=?",
-                (self.scope.installation_id, self.scope.project_id, draft.aggregate),
-            ).fetchone()
-            value = self.reducer.reduce(json.loads(old[0]) if old else None, draft.kind, draft.payload)
-            self.conn.execute(
-                "INSERT OR REPLACE INTO projections VALUES(?,?,?,?,?,?,?,?)",
-                (
-                    self.scope.installation_id,
-                    self.scope.project_id,
-                    draft.aggregate,
-                    current + 1,
-                    json.dumps(value, sort_keys=True, separators=(",", ":")),
-                    self.reducer.version,
-                    sequence,
-                    event_hash,
-                ),
-            )
-            self._stage("after_projection")
-            self._stage("after_event")
-            if message_id:
-                self.conn.execute(
-                    "INSERT INTO inbox(installation_id,project_id,message_id,applied_event_id,applied_at,contract_id,contract_generation,revocation_epoch,authority_state) VALUES(?,?,?,?,?,?,?,?,?)",
-                    (
-                        self.scope.installation_id,
-                        self.scope.project_id,
-                        message_id,
-                        event_id,
-                        now,
-                        contract_id,
-                        draft.contract_generation,
-                        draft.revocation_epoch,
-                        "CURRENT",
-                    ),
-                )
-                self._stage("after_inbox")
-            self.conn.execute(
-                "INSERT INTO outbox(installation_id,project_id,message_id,event_id,status,attempts,last_error,lease_owner,lease_epoch,lease_token,lease_until,transport_ack_at,semantic_completion_event_id,contract_id,contract_generation,revocation_epoch,reconciliation_required) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    self.scope.installation_id,
-                    self.scope.project_id,
-                    message_id or event_id,
-                    event_id,
-                    "PENDING",
-                    0,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    contract_id,
-                    draft.contract_generation,
-                    draft.revocation_epoch,
-                    0,
-                ),
-            )
-            self._stage("after_outbox")
+                return AppendResult(insert_status or Result.INTEGRITY_FAILURE)
             self._stage("before_commit")
             self.conn.commit()
             return AppendResult(
@@ -890,6 +914,115 @@ class SQLiteLedger:
             replay = self._message_replay_status(message_id, draft) if message_id else None
             if replay is not None:
                 return AppendResult(replay)
+            return AppendResult(Result.CAS_CONFLICT)
+        except sqlite3.OperationalError as exc:
+            self.conn.rollback()
+            return AppendResult(Result.CONTENDED if "locked" in str(exc).lower() else Result.INTEGRITY_FAILURE)
+        except Exception:
+            self.conn.rollback()
+            raise
+
+    def append_evidence_release_batch(
+        self,
+        receipt_draft: SignedEventDraft,
+        context: WriterContext,
+        message_id: str,
+        releases: tuple[tuple[SignedEventDraft, str], ...],
+    ) -> AppendResult:
+        """Atomically persist one verified receipt and its deterministic releases."""
+        items = ((receipt_draft, message_id), *releases)
+        if (
+            receipt_draft.kind != "evidence.receipt.recorded"
+            or not releases
+            or any(draft.kind != "task.released" for draft, _ in releases)
+            or tuple(draft.aggregate for draft, _ in releases)
+            != tuple(sorted(draft.aggregate for draft, _ in releases))
+            or len({item_message_id for _, item_message_id in items}) != len(items)
+            or any(not _valid_identifier(item_message_id) for _, item_message_id in items)
+        ):
+            return AppendResult(Result.INVALID_INPUT)
+        for draft, item_message_id in items:
+            failure = self._check(draft, context)
+            if failure is not None:
+                return AppendResult(failure)
+            receipt_status = self._receipt_input_status(draft, item_message_id)
+            if receipt_status is not None:
+                return AppendResult(receipt_status)
+        try:
+            self.conn.execute("BEGIN IMMEDIATE")
+            replay_states = [self._message_replay_status(item_message_id, draft) for draft, item_message_id in items]
+            if any(state is Result.IDEMPOTENCY_CONFLICT for state in replay_states):
+                self.conn.rollback()
+                return AppendResult(Result.IDEMPOTENCY_CONFLICT)
+            if all(state is Result.DUPLICATE for state in replay_states):
+                self.conn.rollback()
+                return AppendResult(Result.DUPLICATE)
+            if any(state is not None for state in replay_states):
+                self.conn.rollback()
+                return AppendResult(Result.INTEGRITY_FAILURE)
+            now = self.clock()
+            for draft, _ in items:
+                lease = self.conn.execute(
+                    "SELECT * FROM leases WHERE installation_id=? AND project_id=? AND resource=? AND owner=? AND epoch=?",
+                    (
+                        self.scope.installation_id,
+                        self.scope.project_id,
+                        context.resource,
+                        context.writer_id,
+                        context.fence,
+                    ),
+                ).fetchone()
+                if not lease or lease["expires_at"] <= now:
+                    self.conn.rollback()
+                    return AppendResult(Result.LEASE_EXPIRED if lease else Result.STALE_FENCE)
+                authority_status = self._authority_status(draft)
+                if authority_status is not None:
+                    self.conn.rollback()
+                    return AppendResult(authority_status)
+                evidence_status = self._evidence_prerequisite_status(draft)
+                if evidence_status is not None:
+                    self.conn.rollback()
+                    return AppendResult(evidence_status)
+            from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
+
+            history = self.events()
+            history.extend(
+                {"aggregate": draft.aggregate, "kind": draft.kind, "payload": dict(draft.payload)} for draft, _ in items
+            )
+            try:
+                validate_workflow_history(history)
+            except AuthorityError:
+                self.conn.rollback()
+                return AppendResult(Result.STALE_AUTHORITY)
+            except (InvalidTransition, KeyError, TypeError, ValueError):
+                self.conn.rollback()
+                return AppendResult(Result.INVALID_INPUT)
+            event_ids = []
+            for index, (draft, item_message_id) in enumerate(items, 1):
+                insert_status, event_id = self._insert_draft(
+                    draft,
+                    item_message_id,
+                    batch_index=index,
+                )
+                if insert_status is not None or event_id is None:
+                    self.conn.rollback()
+                    return AppendResult(insert_status or Result.INTEGRITY_FAILURE)
+                event_ids.append(event_id)
+            self._stage("before_commit")
+            self.conn.commit()
+            return AppendResult(
+                Result.APPLIED,
+                self._event_from_row(
+                    self.conn.execute("SELECT * FROM events WHERE event_id=?", (event_ids[0],)).fetchone()
+                ),
+            )
+        except sqlite3.IntegrityError:
+            self.conn.rollback()
+            replay_states = [self._message_replay_status(item_message_id, draft) for draft, item_message_id in items]
+            if all(state is Result.DUPLICATE for state in replay_states):
+                return AppendResult(Result.DUPLICATE)
+            if any(state is Result.IDEMPOTENCY_CONFLICT for state in replay_states):
+                return AppendResult(Result.IDEMPOTENCY_CONFLICT)
             return AppendResult(Result.CAS_CONFLICT)
         except sqlite3.OperationalError as exc:
             self.conn.rollback()
@@ -1206,7 +1339,11 @@ class SQLiteLedger:
             "SELECT COALESCE(MAX(sequence),0)+1 FROM events WHERE installation_id=? AND project_id=?",
             (self.scope.installation_id, self.scope.project_id),
         ).fetchone()[0]
-        poison_payload = dict(event_payload) if event_payload is not None else {"message_id": message_id, "attempts": row["attempts"], "error": error}
+        poison_payload = (
+            dict(event_payload)
+            if event_payload is not None
+            else {"message_id": message_id, "attempts": row["attempts"], "error": error}
+        )
         payload = _canonical_payload(poison_payload)
         previous = last[0] if last else "GENESIS"
         version = self.conn.execute(
@@ -1451,8 +1588,7 @@ class SQLiteLedger:
                 self.conn.rollback()
                 return Result.STALE_FENCE
             if row["status"] == "LEASED" and (
-                tuple((row["lease_owner"], row["lease_epoch"], row["lease_token"]))
-                != (owner, lease.epoch, lease.token)
+                tuple((row["lease_owner"], row["lease_epoch"], row["lease_token"])) != (owner, lease.epoch, lease.token)
             ):
                 self.conn.rollback()
                 return Result.STALE_FENCE
@@ -1460,16 +1596,26 @@ class SQLiteLedger:
                 self.conn.rollback()
                 return Result.STALE_FENCE
             self._stage("before_unknown_event")
-            payload = {
-                "run_id": authority["run_id"],
-                "task_id": authority["task_id"],
-                "attempt": authority["attempt"],
-                "contract_id": authority["contract_id"],
-                "message_id": message_id,
-                "reason": reason,
-            } if authority is not None else None
+            payload = (
+                {
+                    "run_id": authority["run_id"],
+                    "task_id": authority["task_id"],
+                    "attempt": authority["attempt"],
+                    "contract_id": authority["contract_id"],
+                    "message_id": message_id,
+                    "reason": reason,
+                }
+                if authority is not None
+                else None
+            )
             self._append_poison_event(
-                row, message_id, reason, self.clock(), kind="dispatch.unknown", event_payload=payload, aggregate="dispatch:" + message_id
+                row,
+                message_id,
+                reason,
+                self.clock(),
+                kind="dispatch.unknown",
+                event_payload=payload,
+                aggregate="dispatch:" + message_id,
             )
             self._stage("after_unknown_event")
             self.conn.execute(
@@ -1557,11 +1703,7 @@ class SQLiteLedger:
             "SELECT * FROM leases WHERE installation_id=? AND project_id=? AND resource=?",
             (self.scope.installation_id, self.scope.project_id, resource),
         ).fetchone()
-        return (
-            Lease(self.scope, resource, row["owner"], row["epoch"], row["expires_at"], row["token"])
-            if row
-            else None
-        )
+        return Lease(self.scope, resource, row["owner"], row["epoch"], row["expires_at"], row["token"]) if row else None
 
     def create_contract(
         self,

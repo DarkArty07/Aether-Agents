@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -188,7 +190,12 @@ def stack(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir()
     envelope = dispatcher.stage_ready(
-        "run-a", "task-a", attempt=attempt.attempt, project_root=str(project_root), plan_revision=7, snapshot_digest="sha256:snapshot"
+        "run-a",
+        "task-a",
+        attempt=attempt.attempt,
+        project_root=str(project_root),
+        plan_revision=7,
+        snapshot_digest="sha256:snapshot",
     )
     yield clock, ledger, runtime, dispatcher, envelope, effects
     if not ledger._closed:
@@ -226,12 +233,63 @@ def write_result_artifact(authority, acp_session_id: str, *, answer: str = "ok")
     return path
 
 
+def stage_running_task(runtime, dispatcher, *, task_id: str, project_root: str, plan_revision: int):
+    runtime.create_task("run-a", task_id=task_id)
+    runtime.admit_task("run-a", task_id)
+    runtime.mark_task_ready("run-a", task_id)
+    runtime.dispatch_task("run-a", task_id)
+    attempt = runtime.start_attempt("run-a", task_id)
+    return dispatcher.stage_ready(
+        "run-a",
+        task_id,
+        attempt=attempt.attempt,
+        project_root=project_root,
+        plan_revision=plan_revision,
+        snapshot_digest=f"sha256:snapshot-{task_id}",
+    )
+
+
+def persist_task_receipt(ledger, dispatcher, envelope):
+    authority = envelope.authority
+    run(dispatcher.dispatch_with(authority))
+    binding = next(
+        payload
+        for payload in event_payloads(ledger, "session.bound")
+        if payload.get("message_id") == authority.message_id
+    )
+    terminal = TerminalObservation(
+        "completed",
+        authority.logical_session,
+        binding["acp_session_id"],
+        authority.message_id,
+    )
+    dispatcher.record_terminal_with(authority, terminal)
+    write_result_artifact(authority, terminal.acp_session_id)
+    return dispatcher.record_evidence_with(authority)
+
+
 def authority_from(payload: dict) -> DispatchAuthority:
     names = (
-        "installation_id", "project_id", "run_id", "task_id", "attempt", "contract_id",
-        "contract_generation", "revocation_epoch", "agent_name", "plan_id", "plan_revision",
-        "snapshot_digest", "project_root", "logical_session", "message_id", "lease_resource",
-        "lease_owner", "lease_epoch", "lease_token", "lease_until",
+        "installation_id",
+        "project_id",
+        "run_id",
+        "task_id",
+        "attempt",
+        "contract_id",
+        "contract_generation",
+        "revocation_epoch",
+        "agent_name",
+        "plan_id",
+        "plan_revision",
+        "snapshot_digest",
+        "project_root",
+        "logical_session",
+        "message_id",
+        "lease_resource",
+        "lease_owner",
+        "lease_epoch",
+        "lease_token",
+        "lease_until",
     )
     return DispatchAuthority(*(payload[name] for name in names))
 
@@ -246,7 +304,10 @@ def test_renewal_extends_same_dispatch_row_without_epoch_or_token_change(stack):
     assert renewed.lease is not None
     assert current is not None
     assert (current.resource, current.owner, current.epoch, current.token) == (
-        original.resource, original.owner, original.epoch, original.token
+        original.resource,
+        original.owner,
+        original.epoch,
+        original.token,
     )
     assert current.expires_at > authority.lease_until
     assert renewed.lease.epoch == authority.lease_epoch
@@ -313,8 +374,10 @@ def test_terminal_observation_is_authenticated_as_one_event_and_not_semantic_com
 
 
 def test_evidence_receipt_records_once_and_changed_artifact_conflicts(stack):
-    _, ledger, _, dispatcher, envelope, _ = stack
+    _, ledger, runtime, dispatcher, envelope, _ = stack
     authority = envelope.authority
+    dependent = runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+    assert dependent.state is TaskState.BLOCKED
     run(dispatcher.dispatch_with(authority))
     binding = event_payloads(ledger, "session.bound")[0]
     terminal = TerminalObservation(
@@ -338,6 +401,19 @@ def test_evidence_receipt_records_once_and_changed_artifact_conflicts(stack):
     assert "result" not in receipt["artifact"]
     assert receipt["receipt_id"].startswith("receipt:")
     assert receipt["receipt_payload_digest"].startswith("sha256:")
+    releases = event_payloads(ledger, "task.released")
+    assert releases == [
+        {
+            "contract_id": authority.contract_id,
+            "run_id": "run-a",
+            "task_id": "task-b",
+            "satisfied_prerequisites": [{"task_id": "task-a", "receipt_id": receipt["receipt_id"]}],
+        }
+    ]
+    assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
+    projection = ledger.projection("task:run-a:task-b")
+    assert projection is not None and projection["state"] == "proposed"
+    assert runtime.task("run-a", "task-a").state is TaskState.RUNNING
 
     before = tuple((row["kind"], row["payload"]) for row in ledger.events())
     value = json.loads(artifact_path.read_text())
@@ -346,6 +422,172 @@ def test_evidence_receipt_records_once_and_changed_artifact_conflicts(stack):
     with pytest.raises(Exception, match="IDEMPOTENCY_CONFLICT"):
         dispatcher.record_evidence_with(authority)
     assert tuple((row["kind"], row["payload"]) for row in ledger.events()) == before
+
+
+def test_receipt_and_release_rollback_as_one_transaction(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    write_result_artifact(authority, binding["acp_session_id"])
+    before = {
+        table: tuple(tuple(row) for row in ledger.conn.execute(f"SELECT * FROM {table} ORDER BY rowid"))
+        for table in ("events", "projections", "inbox", "outbox")
+    }
+
+    def fail_between_receipt_and_release(stage):
+        if stage == "batch_after_item_1":
+            raise RuntimeError("injected batch crash")
+
+    ledger.fault = fail_between_receipt_and_release
+    with pytest.raises(RuntimeError, match="injected batch crash"):
+        dispatcher.record_evidence_with(authority)
+    ledger.fault = None
+
+    assert len(event_payloads(ledger, "runtime.terminal.observed")) == 1
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+    assert not event_payloads(ledger, "task.released")
+    after = {
+        table: tuple(tuple(row) for row in ledger.conn.execute(f"SELECT * FROM {table} ORDER BY rowid"))
+        for table in ("events", "projections", "inbox", "outbox")
+    }
+    assert after == before
+    assert runtime.task("run-a", "task-b").state is TaskState.BLOCKED
+
+    assert dispatcher.record_evidence_with(authority) is Result.APPLIED
+    assert len(event_payloads(ledger, "evidence.receipt.recorded")) == 1
+    assert len(event_payloads(ledger, "task.released")) == 1
+    assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
+
+
+def test_two_connections_racing_same_release_converge_to_one_batch(stack):
+    clock, ledger, runtime, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    write_result_artifact(authority, binding["acp_session_id"])
+    db_path = Path(ledger.conn.execute("PRAGMA database_list").fetchone()[2])
+    barrier = threading.Barrier(2)
+
+    def record_from_independent_connection():
+        auth = HMACWriterAuthenticator({("owner", "key-owner"): b"owner-key"})
+        local = SQLiteLedger(
+            db_path,
+            ledger.scope,
+            writer_authenticator=auth,
+            integrity_signer=HMACIntegritySigner(b"integrity-key"),
+            clock=clock,
+        )
+        try:
+            lease = local.lease("ledger-owner")
+            assert lease is not None
+            context = WriterContext(
+                local.scope,
+                "owner",
+                "key-owner",
+                "ledger-owner",
+                lease.epoch,
+                lease.expires_at,
+            )
+            local_runtime = KernelRunService(local, writer=KernelWriter(context, auth))
+            local_dispatcher = KernelDispatcher(
+                ledger=local,
+                runtime=local_runtime,
+                runtime_adapter=EffectBarrier(),
+                worker_id="owner",
+            )
+            barrier.wait(timeout=5)
+            return local_dispatcher.record_evidence_with(authority)
+        finally:
+            local.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        results = tuple(executor.map(lambda _: record_from_independent_connection(), range(2)))
+
+    assert sorted(result.value for result in results) == ["APPLIED", "DUPLICATE"]
+    assert len(event_payloads(ledger, "evidence.receipt.recorded")) == 1
+    assert len(event_payloads(ledger, "task.released")) == 1
+    assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
+
+
+def test_one_receipt_releases_all_dependents_in_task_order(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+    runtime.create_task("run-a", task_id="task-c", prerequisites=("task-a",))
+
+    assert persist_task_receipt(ledger, dispatcher, envelope) is Result.APPLIED
+
+    releases = event_payloads(ledger, "task.released")
+    assert [payload["task_id"] for payload in releases] == ["task-b", "task-c"]
+    receipt_id = event_payloads(ledger, "evidence.receipt.recorded")[0]["receipt_id"]
+    assert all(
+        payload["satisfied_prerequisites"] == [{"task_id": "task-a", "receipt_id": receipt_id}] for payload in releases
+    )
+    assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
+    assert runtime.task("run-a", "task-c").state is TaskState.PROPOSED
+
+
+def test_multiple_prerequisites_release_only_after_last_receipt(stack):
+    _, ledger, runtime, dispatcher, envelope_a, _ = stack
+    envelope_c = stage_running_task(
+        runtime,
+        dispatcher,
+        task_id="task-c",
+        project_root=envelope_a.authority.project_root,
+        plan_revision=8,
+    )
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a", "task-c"))
+
+    assert persist_task_receipt(ledger, dispatcher, envelope_a) is Result.APPLIED
+    assert not event_payloads(ledger, "task.released")
+    assert runtime.task("run-a", "task-b").state is TaskState.BLOCKED
+
+    receipt_a = event_payloads(ledger, "evidence.receipt.recorded")[0]
+    contract = ledger.read_contract("contract-a")
+    assert contract is not None
+    forged_payload = {
+        "run_id": "run-a",
+        "task_id": "task-b",
+        "satisfied_prerequisites": [
+            {"task_id": "task-a", "receipt_id": receipt_a["receipt_id"]},
+            {"task_id": "task-c", "receipt_id": "receipt:" + "0" * 64},
+        ],
+        "contract_id": "contract-a",
+    }
+    forged = runtime.writer._author(
+        ledger,
+        "task:run-a:task-b",
+        "task.released",
+        forged_payload,
+        ledger.aggregate_version("task:run-a:task-b"),
+        contract_generation=contract.generation,
+        revocation_epoch=contract.revocation_epoch,
+    )
+    assert ledger.append(forged, runtime.writer.context, message_id="forged-release").status is Result.INVALID_INPUT
+    assert runtime.task("run-a", "task-b").state is TaskState.BLOCKED
+
+    assert persist_task_receipt(ledger, dispatcher, envelope_c) is Result.APPLIED
+    release = event_payloads(ledger, "task.released")[0]
+    receipts = {
+        payload["task_id"]: payload["receipt_id"] for payload in event_payloads(ledger, "evidence.receipt.recorded")
+    }
+    assert release["satisfied_prerequisites"] == [
+        {"task_id": "task-a", "receipt_id": receipts["task-a"]},
+        {"task_id": "task-c", "receipt_id": receipts["task-c"]},
+    ]
+    assert runtime.task("run-a", "task-b").state is TaskState.PROPOSED
+    assert runtime.task("run-a", "task-a").state is TaskState.RUNNING
+    assert runtime.task("run-a", "task-c").state is TaskState.RUNNING
 
 
 def test_evidence_receipt_requires_durable_terminal_and_current_fence(stack):
@@ -390,6 +632,36 @@ def test_ledger_rejects_well_formed_receipt_without_terminal_prerequisite(stack)
             message_id="evidence:" + authority.message_id,
         )
     assert not event_payloads(ledger, "evidence.receipt.recorded")
+
+
+def test_ledger_rejects_standalone_receipt_that_would_strand_dependent(stack):
+    _, ledger, runtime, dispatcher, envelope, _ = stack
+    authority = envelope.authority
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+    run(dispatcher.dispatch_with(authority))
+    binding = event_payloads(ledger, "session.bound")[0]
+    dispatcher.record_terminal_with(
+        authority,
+        TerminalObservation("completed", authority.logical_session, binding["acp_session_id"], authority.message_id),
+    )
+    write_result_artifact(authority, binding["acp_session_id"])
+    identity = dispatcher._evidence_identity(authority, binding["acp_session_id"])
+    receipt = build_evidence_receipt(
+        identity,
+        verify_artifact(Path(authority.project_root), identity),
+        "completed",
+    )
+
+    with pytest.raises(Exception, match="INVALID_INPUT"):
+        dispatcher._append(
+            "evidence.receipt.recorded",
+            "evidence:" + authority.message_id,
+            receipt.event_payload(),
+            message_id="evidence:" + authority.message_id,
+        )
+    assert not event_payloads(ledger, "evidence.receipt.recorded")
+    assert not event_payloads(ledger, "task.released")
+    assert runtime.task("run-a", "task-b").state is TaskState.BLOCKED
 
 
 def test_evidence_rechecks_fence_after_filesystem_verification(stack, monkeypatch):
@@ -447,8 +719,9 @@ def test_monitor_persists_terminal_before_optional_receipt_without_task_error(st
 
 @pytest.mark.parametrize("artifact_exists", [True, False])
 def test_restart_retries_terminal_receipt_once_without_observing_acp(stack, artifact_exists):
-    _, ledger, _, dispatcher, envelope, effects = stack
+    _, ledger, runtime, dispatcher, envelope, effects = stack
     authority = envelope.authority
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
     run(dispatcher.dispatch_with(authority))
     binding = event_payloads(ledger, "session.bound")[0]
     dispatcher.record_terminal_with(
@@ -464,6 +737,12 @@ def test_restart_retries_terminal_receipt_once_without_observing_acp(stack, arti
 
     assert not any(kind == "observe" for kind, _ in effects.calls)
     assert bool(event_payloads(ledger, "evidence.receipt.recorded")) is artifact_exists
+    assert bool(event_payloads(ledger, "task.released")) is artifact_exists
+    rebuilt = KernelRunService.rebuild(ledger)
+    expected_state = TaskState.PROPOSED if artifact_exists else TaskState.BLOCKED
+    assert rebuilt.task("run-a", "task-b").state is expected_state
+    projection = ledger.projection("task:run-a:task-b")
+    assert projection is not None and projection["state"] == expected_state.value
 
 
 def test_terminal_observation_rejects_mismatched_session_or_status(stack):
@@ -477,7 +756,8 @@ def test_terminal_observation_rejects_mismatched_session_or_status(stack):
     )
     with pytest.raises(Exception):
         dispatcher.record_terminal_with(
-            authority, TerminalObservation("error", authority.logical_session + "-foreign", "acp-session-2", authority.message_id)
+            authority,
+            TerminalObservation("error", authority.logical_session + "-foreign", "acp-session-2", authority.message_id),
         )
     assert len(event_payloads(ledger, "runtime.terminal.observed")) == 1
 
@@ -542,6 +822,7 @@ def test_active_stop_is_intent_before_one_cancel_under_concurrent_replay(tmp_pat
     context = run(registry.get_or_create(root))
     manager.before_close = lambda: assert_event_exists(context.ledger, "cancel.intent")
     stop = {"action": "stop", "project_root": str(root), "run_id": started["run_id"], "reason": "operator"}
+
     async def concurrent_stops():
         return await asyncio.gather(service.handle(stop), service.handle(stop))
 
@@ -561,7 +842,9 @@ def test_terminal_cleanup_after_expired_dispatch_has_one_effect_and_no_cancel(tm
     service, registry = _service(tmp_path, root, manager)
     started = run(service.handle(_request(root)))
     context = run(registry.get_or_create(root))
-    authority = authority_from(json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged")))
+    authority = authority_from(
+        json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged"))
+    )
     binding = json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "session.bound"))
     context.dispatcher.record_terminal_with(
         authority,
@@ -620,15 +903,11 @@ def test_restart_resumes_live_binding_once_without_spawn_or_send(tmp_path):
         started = await service.handle(_request(root))
         first_context = await registry.get_or_create(root)
         authority = authority_from(
-            json.loads(
-                next(e["payload"] for e in first_context.ledger.events() if e["kind"] == "dispatch.staged")
-            )
+            json.loads(next(e["payload"] for e in first_context.ledger.events() if e["kind"] == "dispatch.staged"))
         )
         await registry.close()
         restarted, registry2 = _service(tmp_path, root, manager)
-        result = await restarted.handle(
-            {"action": "status", "project_root": str(root), "run_id": started["run_id"]}
-        )
+        result = await restarted.handle({"action": "status", "project_root": str(root), "run_id": started["run_id"]})
         context2 = await registry2.get_or_create(root)
         await asyncio.sleep(0)
         assert result["state"] == "session_bound"
@@ -647,7 +926,9 @@ def test_restart_terminal_evidence_cleans_once_and_missing_evidence_stays_fail_c
     service, registry = _service(tmp_path, root, manager)
     started = run(service.handle(_request(root)))
     context = run(registry.get_or_create(root))
-    authority = authority_from(json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged")))
+    authority = authority_from(
+        json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "dispatch.staged"))
+    )
     binding = json.loads(next(e["payload"] for e in context.ledger.events() if e["kind"] == "session.bound"))
     context.dispatcher.record_terminal_with(
         authority,
@@ -732,11 +1013,7 @@ def test_public_manager_cleanup_rejects_a_foreign_project_binding(tmp_path):
     }
 
     with pytest.raises(ValueError, match="project binding mismatch"):
-        run(
-            manager.cleanup_persisted(
-                "session-a", terminal_status="completed", project_id="foreign-project"
-            )
-        )
+        run(manager.cleanup_persisted("session-a", terminal_status="completed", project_id="foreign-project"))
 
 
 def test_default_off_status_error_preserves_stable_contract_and_has_no_effect(tmp_path):
@@ -744,7 +1021,12 @@ def test_default_off_status_error_preserves_stable_contract_and_has_no_effect(tm
     root.mkdir()
     manager = PublicManager()
     registry = _registry(tmp_path, manager)
-    service = HarmoniaService(aether_home=tmp_path / "home", config=__import__("olympus_v3.config_loader", fromlist=["CoordinationConfig"]).CoordinationConfig(), registry=registry, discovered_workers={"worker"})
+    service = HarmoniaService(
+        aether_home=tmp_path / "home",
+        config=__import__("olympus_v3.config_loader", fromlist=["CoordinationConfig"]).CoordinationConfig(),
+        registry=registry,
+        discovered_workers={"worker"},
+    )
     result = run(service.handle({"action": "status", "project_root": str(root), "run_id": "run-" + "b" * 32}))
 
     assert result["error"]["code"] == "not_found"
@@ -794,15 +1076,9 @@ def test_public_state_projects_terminal_then_cleaned_without_duplicate_cleanup(t
             ),
         )
 
-        terminal = await service.handle(
-            {"action": "status", "project_root": str(root), "run_id": started["run_id"]}
-        )
-        stopped = await service.handle(
-            {"action": "stop", "project_root": str(root), "run_id": started["run_id"]}
-        )
-        replay = await service.handle(
-            {"action": "stop", "project_root": str(root), "run_id": started["run_id"]}
-        )
+        terminal = await service.handle({"action": "status", "project_root": str(root), "run_id": started["run_id"]})
+        stopped = await service.handle({"action": "stop", "project_root": str(root), "run_id": started["run_id"]})
+        replay = await service.handle({"action": "stop", "project_root": str(root), "run_id": started["run_id"]})
 
         assert terminal["state"] == "terminal_observed"
         assert terminal["technical_status"] == "completed"
@@ -829,8 +1105,16 @@ def _service(tmp_path, root, manager):
     from olympus_v3.config_loader import CoordinationConfig
 
     registry = _registry(tmp_path, manager)
-    config = CoordinationConfig(enabled=True, mode="legacy", allowed_modes=("legacy", "kernel-single-task"), project_allowlist=(str(root.resolve()),), max_active_runs=1)
-    return HarmoniaService(aether_home=tmp_path / "home", config=config, registry=registry, discovered_workers={"hefesto"}), registry
+    config = CoordinationConfig(
+        enabled=True,
+        mode="legacy",
+        allowed_modes=("legacy", "kernel-single-task"),
+        project_allowlist=(str(root.resolve()),),
+        max_active_runs=1,
+    )
+    return HarmoniaService(
+        aether_home=tmp_path / "home", config=config, registry=registry, discovered_workers={"hefesto"}
+    ), registry
 
 
 def _request(root):
@@ -839,9 +1123,16 @@ def _request(root):
         "project_root": str(root),
         "request_id": "service-one",
         "contract": {
-            "worker": "hefesto", "objective": "build", "expected_outcome": "verified",
-            "included_scopes": ["src"], "excluded_scopes": [], "worker_permissions": ["implement"],
-            "time_seconds": 60, "model_budget": 10, "qa_reserve": 1, "recovery_reserve": 1,
+            "worker": "hefesto",
+            "objective": "build",
+            "expected_outcome": "verified",
+            "included_scopes": ["src"],
+            "excluded_scopes": [],
+            "worker_permissions": ["implement"],
+            "time_seconds": 60,
+            "model_budget": 10,
+            "qa_reserve": 1,
+            "recovery_reserve": 1,
             "escalation_conditions": ["ambiguity"],
         },
         "plan_revision": 1,

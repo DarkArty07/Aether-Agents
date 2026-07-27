@@ -331,6 +331,67 @@ class KernelRunService:
         ).fetchone()
         return row[0]
 
+    def release_drafts_for_receipt(self, receipt_payload: Mapping[str, Any]):
+        """Derive signed releases completed by one verifier-owned receipt."""
+        self._state()
+        writer = self._require_writer()
+        run_id = receipt_payload.get("run_id")
+        task_id = receipt_payload.get("task_id")
+        receipt_id = receipt_payload.get("receipt_id")
+        contract_id = receipt_payload.get("contract_id")
+        if (
+            not isinstance(run_id, str)
+            or not isinstance(task_id, str)
+            or not isinstance(receipt_id, str)
+            or not isinstance(contract_id, str)
+            or (run_id, task_id) not in self._tasks
+            or run_id not in self._runs
+            or self._runs[run_id].contract_id != contract_id
+        ):
+            raise AuthorityError("receipt does not match kernel workflow")
+        contract = self.ledger.read_contract(contract_id)
+        if contract is None or contract.status is not ContractState.ACTIVE:
+            raise AuthorityError("active execution contract required")
+        receipts: dict[tuple[str, str], set[str]] = {}
+        for event in self.ledger.events():
+            if event["kind"] != "evidence.receipt.recorded":
+                continue
+            payload = json.loads(event["payload"])
+            receipts.setdefault((payload["run_id"], payload["task_id"]), set()).add(payload["receipt_id"])
+        receipts.setdefault((run_id, task_id), set()).add(receipt_id)
+        releases = []
+        for (candidate_run, candidate_task), task in sorted(self._tasks.items()):
+            if candidate_run != run_id or task.state is not TaskState.BLOCKED:
+                continue
+            if not all(receipts.get((run_id, prerequisite)) for prerequisite in task.prerequisites):
+                continue
+            satisfied = [
+                {
+                    "task_id": prerequisite,
+                    "receipt_id": sorted(receipts[(run_id, prerequisite)])[0],
+                }
+                for prerequisite in sorted(task.prerequisites)
+            ]
+            aggregate = f"task:{run_id}:{candidate_task}"
+            payload = {
+                "run_id": run_id,
+                "task_id": candidate_task,
+                "satisfied_prerequisites": satisfied,
+                "contract_id": contract_id,
+            }
+            draft = writer._author(
+                self.ledger,
+                aggregate,
+                "task.released",
+                payload,
+                self._version(aggregate),
+                contract_generation=contract.generation,
+                revocation_epoch=contract.revocation_epoch,
+            )
+            message_material = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+            releases.append((draft, "release:" + hashlib.sha256(message_material).hexdigest()))
+        return tuple(releases)
+
     def create_run(self, *, run_id, contract_id, mode):
         if mode != RuntimeMode.KERNEL.value:
             raise RuntimeModeError("kernel runs require kernel mode")

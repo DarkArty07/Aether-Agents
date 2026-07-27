@@ -142,6 +142,29 @@ def test_run_rebuild_restores_durable_workflow_from_typed_intent_events(tmp_path
     assert rebuilt.sessions("run-a", "task-a")[0].logical_session == "logical-a"
 
 
+def test_prerequisite_task_starts_blocked_and_cannot_advance(tmp_path: Path):
+    _, runtime = kernel_api()
+    ledger, service, _, _ = open_runtime(tmp_path / "dependency.sqlite")
+    service.create_run(run_id="run-a", contract_id="contract-a", mode="kernel")
+    service.create_task("run-a", task_id="task-a")
+    blocked = service.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+
+    assert blocked.state.value == "blocked"
+    assert ledger.projection("task:run-a:task-b")["state"] == "blocked"
+    for advance in (
+        service.admit_task,
+        service.mark_task_ready,
+        service.dispatch_task,
+        service.start_attempt,
+    ):
+        with pytest.raises(runtime.InvalidTransition):
+            advance("run-a", "task-b")
+    assert not any(
+        event["kind"] in {"task.admitted", "task.ready", "task.dispatched", "attempt.started"}
+        and '"task_id":"task-b"' in event["payload"]
+        for event in ledger.events()
+    )
+
 
 def test_task_progress_requires_durable_task_and_legal_transitions(tmp_path: Path):
     _, runtime = kernel_api()

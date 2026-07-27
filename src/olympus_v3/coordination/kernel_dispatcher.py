@@ -92,9 +92,7 @@ class ReconciliationEvidence:
 class KernelDispatcher:
     """Kernel command boundary; all replay authority remains in SQLiteLedger."""
 
-    def __init__(
-        self, *, ledger: SQLiteLedger, runtime: Any, runtime_adapter: Any, worker_id: str | None = None
-    ):
+    def __init__(self, *, ledger: SQLiteLedger, runtime: Any, runtime_adapter: Any, worker_id: str | None = None):
         if not isinstance(ledger, SQLiteLedger):
             raise TypeError("ledger required")
         self.ledger, self.runtime, self.runtime_adapter = ledger, runtime, runtime_adapter
@@ -154,19 +152,30 @@ class KernelDispatcher:
             raise StaleFence("replaced or revoked authority")
         return self._lease(authority)
 
-    def _append(self, kind: str, aggregate: str, payload: Mapping[str, Any], *, message_id: str | None = None):
+    def _signed_draft(self, kind: str, aggregate: str, payload: Mapping[str, Any]):
+        writer: Any = self._writer
+        if writer is None:
+            raise DispatchRejected("writable kernel runtime required")
         contract = self.ledger.read_contract(payload["contract_id"])
+        if contract is None or contract.status is not ContractState.ACTIVE:
+            raise DispatchRejected("active contract required")
         draft = self.ledger.draft(
             aggregate,
             kind,
             dict(payload),
-            writer=self._writer.context,
+            writer=writer.context,
             expected_version=self._version(aggregate),
             contract_generation=contract.generation,
             revocation_epoch=contract.revocation_epoch,
         )
-        signed = self._writer.authenticator.sign(draft, self._writer.context)
-        result = self.ledger.append(signed, self._writer.context, message_id=message_id)
+        return writer.authenticator.sign(draft, writer.context)
+
+    def _append(self, kind: str, aggregate: str, payload: Mapping[str, Any], *, message_id: str | None = None):
+        writer: Any = self._writer
+        if writer is None:
+            raise DispatchRejected("writable kernel runtime required")
+        signed = self._signed_draft(kind, aggregate, payload)
+        result = self.ledger.append(signed, writer.context, message_id=message_id)
         if result.status not in (Result.APPLIED, Result.DUPLICATE):
             raise DispatchRejected(result.status.value)
         return result
@@ -211,8 +220,7 @@ class KernelDispatcher:
             (
                 event
                 for event in self.ledger.events()
-                if event["kind"] == "dispatch.staged"
-                and json.loads(event["payload"]).get("message_id") == message_id
+                if event["kind"] == "dispatch.staged" and json.loads(event["payload"]).get("message_id") == message_id
             ),
             None,
         )
@@ -594,9 +602,7 @@ class KernelDispatcher:
         current = self._authority_current(authority)
         now = self.ledger.clock()
         extension = current.expires_at - now + ttl
-        outcome = self.ledger.renew_lease(
-            current, self._owner, ttl=extension, token=authority.lease_token
-        )
+        outcome = self.ledger.renew_lease(current, self._owner, ttl=extension, token=authority.lease_token)
         if outcome.lease is None:
             raise StaleFence(outcome.status.value)
         return outcome
@@ -699,12 +705,33 @@ class KernelDispatcher:
         except EvidenceVerificationError as exc:
             raise DispatchRejected(exc.code) from exc
         self._authority_current(authority)
-        return self._append(
+        payload = receipt.event_payload()
+        receipt_message_id = "evidence:" + authority.message_id
+        receipt_draft = self._signed_draft(
             "evidence.receipt.recorded",
-            "evidence:" + authority.message_id,
-            receipt.event_payload(),
-            message_id="evidence:" + authority.message_id,
-        ).status
+            receipt_message_id,
+            payload,
+        )
+        releases = self.runtime.release_drafts_for_receipt(payload)
+        writer: Any = self._writer
+        if writer is None:
+            raise DispatchRejected("writable kernel runtime required")
+        if releases:
+            result = self.ledger.append_evidence_release_batch(
+                receipt_draft,
+                writer.context,
+                receipt_message_id,
+                releases,
+            )
+        else:
+            result = self.ledger.append(
+                receipt_draft,
+                writer.context,
+                message_id=receipt_message_id,
+            )
+        if result.status not in (Result.APPLIED, Result.DUPLICATE):
+            raise DispatchRejected(result.status.value)
+        return result.status
 
     async def observe_with(self, authority):
         self._authority_current(authority)
@@ -784,8 +811,7 @@ class KernelDispatcher:
     async def deliver_cancel_with(self, authority):
         self._authority_current(authority)
         if not any(
-            event["kind"] == "cancel.intent"
-            and json.loads(event["payload"]).get("message_id") == authority.message_id
+            event["kind"] == "cancel.intent" and json.loads(event["payload"]).get("message_id") == authority.message_id
             for event in self.ledger.events()
         ):
             raise DispatchRejected("cancellation intent must be durable before effect")

@@ -38,6 +38,7 @@ WORKFLOW_KINDS = frozenset(
     {
         "run.created",
         "task.created",
+        "task.released",
         "task.admitted",
         "task.ready",
         "task.dispatched",
@@ -54,6 +55,7 @@ WORKFLOW_KINDS = frozenset(
 )
 _TASK_KIND_STATE = {
     "task.created": TaskState.PROPOSED,
+    "task.released": TaskState.PROPOSED,
     "task.admitted": TaskState.ADMITTED,
     "task.ready": TaskState.READY,
     "task.dispatched": TaskState.DISPATCHED,
@@ -61,9 +63,11 @@ _TASK_KIND_STATE = {
 }
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
+_RECEIPT_ID = re.compile(r"^receipt:[0-9a-f]{64}$")
 _SCHEMAS = {
     "run.created": {"run_id", "contract_id", "mode"},
     "task.created": {"run_id", "task_id", "prerequisites", "contract_id"},
+    "task.released": {"run_id", "task_id", "satisfied_prerequisites", "contract_id"},
     "task.admitted": {"run_id", "task_id", "contract_id"},
     "task.ready": {"run_id", "task_id", "contract_id"},
     "task.dispatched": {"run_id", "task_id", "contract_id"},
@@ -152,8 +156,24 @@ def validate_workflow_history(events):
     attempt_states = {}
     sessions = {}
     staged = {}
+    receipts = {}
     for event in events:
         kind = event.get("kind")
+        if kind == "evidence.receipt.recorded":
+            from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
+
+            payload = _event_payload(event)
+            if not isinstance(payload, dict):
+                raise _bad("invalid evidence receipt")
+            try:
+                validate_evidence_receipt_payload(payload)
+            except EvidenceVerificationError as exc:
+                raise _bad("invalid evidence receipt") from exc
+            receipt_key = (payload["run_id"], payload["task_id"])
+            if receipt_key not in tasks or runs.get(payload["run_id"]) != payload["contract_id"]:
+                raise _bad("evidence receipt task mismatch")
+            receipts.setdefault(receipt_key, set()).add(payload["receipt_id"])
+            continue
         if kind not in WORKFLOW_KINDS:
             continue
         payload = _event_payload(event)
@@ -161,11 +181,12 @@ def validate_workflow_history(events):
             _SCHEMAS["session.bound"],
             _SCHEMAS["session.bound"] | {"acp_session_id", "attempt", "message_id", "fence"},
         )
-        if not isinstance(payload, dict) or (
-            kind == "session.bound" and set(payload) not in session_schemas
-        ) or (
-            kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS
-        ) or (kind not in {"session.bound", "run.created"} and set(payload) != _SCHEMAS[kind]):
+        if (
+            not isinstance(payload, dict)
+            or (kind == "session.bound" and set(payload) not in session_schemas)
+            or (kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS)
+            or (kind not in {"session.bound", "run.created"} and set(payload) != _SCHEMAS[kind])
+        ):
             raise _bad("invalid workflow payload schema")
         aggregate = event.get("aggregate")
         run_id, task_id = payload.get("run_id"), payload.get("task_id")
@@ -179,10 +200,7 @@ def validate_workflow_history(events):
                 aggregate != f"run:{run_id}"
                 or payload["mode"] != RuntimeMode.KERNEL.value
                 or run_id in runs
-                or (
-                    request_id is not None
-                    and (not isinstance(request_id, str) or not _ID.fullmatch(request_id))
-                )
+                or (request_id is not None and (not isinstance(request_id, str) or not _ID.fullmatch(request_id)))
                 or (
                     request_digest is not None
                     and (not isinstance(request_digest, str) or not _SHA256.fullmatch(request_digest))
@@ -258,10 +276,7 @@ def validate_workflow_history(events):
             if (
                 aggregate != f"task:{run_id}:{task_id}"
                 or (kind == "attempt.orphaned" and current_state is not AttemptState.ACTIVE)
-                or (
-                    kind == "attempt.superseded"
-                    and current_state not in {AttemptState.ACTIVE, AttemptState.ORPHANED}
-                )
+                or (kind == "attempt.superseded" and current_state not in {AttemptState.ACTIVE, AttemptState.ORPHANED})
                 or not any(
                     item["run_id"] == run_id and item["task_id"] == task_id and item["attempt"] == attempt
                     for item in staged.values()
@@ -291,13 +306,40 @@ def validate_workflow_history(events):
                 key in tasks
                 or not isinstance(prerequisites, list)
                 or any(not isinstance(item, str) or not _ID.fullmatch(item) for item in prerequisites)
+                or len(set(prerequisites)) != len(prerequisites)
+                or task_id in prerequisites
             ):
                 raise _bad("invalid or duplicate task creation")
             if any((run_id, item) not in tasks for item in prerequisites):
                 raise _bad("missing workflow prerequisite")
-            tasks[key] = (TaskState.PROPOSED, tuple(prerequisites))
+            tasks[key] = (
+                TaskState.BLOCKED if prerequisites else TaskState.PROPOSED,
+                tuple(prerequisites),
+            )
         elif key not in tasks:
             raise _bad("workflow task parent missing")
+        elif kind == "task.released":
+            current, prerequisites = tasks[key]
+            satisfied = payload["satisfied_prerequisites"]
+            if (
+                current is not TaskState.BLOCKED
+                or not isinstance(satisfied, list)
+                or satisfied
+                != sorted(satisfied, key=lambda item: item.get("task_id", "") if isinstance(item, dict) else "")
+                or any(
+                    not isinstance(item, dict)
+                    or set(item) != {"task_id", "receipt_id"}
+                    or not isinstance(item["task_id"], str)
+                    or not _ID.fullmatch(item["task_id"])
+                    or not isinstance(item["receipt_id"], str)
+                    or not _RECEIPT_ID.fullmatch(item["receipt_id"])
+                    for item in satisfied
+                )
+                or tuple(item["task_id"] for item in satisfied) != tuple(sorted(prerequisites))
+                or any(item["receipt_id"] not in receipts.get((run_id, item["task_id"]), set()) for item in satisfied)
+            ):
+                raise _bad("invalid task release")
+            tasks[key] = (TaskState.PROPOSED, prerequisites)
         elif kind in _TASK_KIND_STATE:
             current, prerequisites = tasks[key]
             target = _TASK_KIND_STATE[kind]
@@ -336,13 +378,16 @@ def validate_workflow_history(events):
                 ):
                     raise _bad("session binding authority mismatch")
             sessions.setdefault(key, []).append(logical)
+    for (run_id, _task_id), (state, prerequisites) in tasks.items():
+        if state is TaskState.BLOCKED and prerequisites and all(receipts.get((run_id, item)) for item in prerequisites):
+            raise _bad("satisfied prerequisites require durable release")
     return runs, tasks, attempts, sessions
 
 
 def reduce_workflow_projection(current, kind, payload):
     """Derive workflow projection fields from validated event intent."""
     value = {**(current or {}), **payload}
-    state = _TASK_KIND_STATE.get(kind)
+    state = TaskState.BLOCKED if kind == "task.created" and payload.get("prerequisites") else _TASK_KIND_STATE.get(kind)
     if state is not None:
         value["state"] = state.value
     return value
@@ -379,6 +424,7 @@ class SessionBinding:
 
 
 _ALLOWED = {
+    TaskState.BLOCKED: TaskState.PROPOSED,
     TaskState.PROPOSED: TaskState.ADMITTED,
     TaskState.ADMITTED: TaskState.READY,
     TaskState.READY: TaskState.DISPATCHED,
