@@ -329,6 +329,20 @@ def test_renewal_extends_same_dispatch_row_without_epoch_or_token_change(stack):
     assert clock() < current.expires_at
 
 
+def test_successor_admission_is_cleanup_gated_by_source_closed_state(stack):
+    _, _, runtime, dispatcher, _, _ = stack
+    runtime.create_task("run-a", task_id="task-b", prerequisites=("task-a",))
+
+    with pytest.raises(dispatcher_module.DispatchRejected, match="source task must be closed"):
+        dispatcher.stage_successor(
+            "run-a",
+            "task-a",
+            "task-b",
+            project_root=str(Path("/workspace/project")),
+            plan_revision=1,
+        )
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["expired", "foreign-token", "replaced-epoch", "revoked-contract", "replaced-attempt"],

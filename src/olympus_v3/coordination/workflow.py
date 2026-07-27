@@ -318,7 +318,8 @@ def validate_workflow_history(events):
             or (kind == "session.bound" and set(payload) not in session_schemas)
             or (kind == "run.created" and set(payload) not in _RUN_CREATED_SCHEMAS)
             or (kind == "task.released" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}))
-            or (kind not in {"session.bound", "run.created", "task.released"} and set(payload) != _SCHEMAS[kind])
+            or (kind == "dispatch.staged" and set(payload) not in (_SCHEMAS[kind], _SCHEMAS[kind] | {"handoff"}))
+            or (kind not in {"session.bound", "run.created", "task.released", "dispatch.staged"} and set(payload) != _SCHEMAS[kind])
         ):
             raise _bad("invalid workflow payload schema")
         aggregate = event.get("aggregate")
@@ -346,6 +347,16 @@ def validate_workflow_history(events):
             key = (run_id, task_id)
             attempt = payload["attempt"]
             message_id = payload["message_id"]
+            handoff = payload.get("handoff")
+            expected_envelope = {"run_id": run_id, "task_id": task_id, "attempt": attempt}
+            if handoff is not None:
+                from .evidence import EvidenceVerificationError, HandoffSnapshot
+
+                try:
+                    HandoffSnapshot.from_dict(handoff)
+                except EvidenceVerificationError:
+                    raise _bad("invalid dispatch handoff")
+                expected_envelope["handoff"] = handoff
             if (
                 not isinstance(task_id, str)
                 or not _ID.fullmatch(task_id)
@@ -363,7 +374,7 @@ def validate_workflow_history(events):
                     f"kernel:{payload['project_id']}:{run_id}:{task_id}:{attempt}",
                     kernel_logical_session(payload["project_id"], run_id, task_id, attempt),
                 }
-                or payload["envelope"] != {"run_id": run_id, "task_id": task_id, "attempt": attempt}
+                or payload["envelope"] != expected_envelope
                 or not isinstance(payload["project_root"], str)
                 or not payload["project_root"].startswith("/")
                 or any(

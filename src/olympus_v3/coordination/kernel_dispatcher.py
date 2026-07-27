@@ -14,8 +14,10 @@ from .contracts import ContractState, TaskState
 from .evidence import (
     EvidenceIdentity,
     EvidenceVerificationError,
+    HandoffSnapshot,
     build_evidence_receipt,
     create_handoff_snapshot,
+    validate_handoff_snapshot,
     verify_artifact,
 )
 from .leases import Lease, LeaseResult
@@ -208,7 +210,28 @@ class KernelDispatcher:
         return hashlib.sha256(f"{run_id}:{task_id}:{attempt}:{revision}:{digest}".encode()).hexdigest()[:32]
 
     def stage_ready(
-        self, run_id: str, task_id: str, *, attempt: int, project_root: str, plan_revision: int, snapshot_digest: str
+        self,
+        run_id: str,
+        task_id: str,
+        *,
+        attempt: int,
+        project_root: str,
+        plan_revision: int,
+        snapshot_digest: str,
+    ) -> DispatchEnvelope:
+        """Stage an ordinary ready task without a caller-supplied handoff."""
+        return self._stage_ready(
+            run_id,
+            task_id,
+            attempt=attempt,
+            project_root=project_root,
+            plan_revision=plan_revision,
+            snapshot_digest=snapshot_digest,
+        )
+
+    def _stage_ready(
+        self, run_id: str, task_id: str, *, attempt: int, project_root: str, plan_revision: int,
+        snapshot_digest: str, handoff: HandoffSnapshot | None = None, _message_id: str | None = None,
     ) -> DispatchEnvelope:
         run, contract = self._contract(run_id)
         try:
@@ -233,7 +256,7 @@ class KernelDispatcher:
         worker = self._resolve_worker(contract, task_id)
         agent_name = worker.actor_id
         plan_id = self._plan_id(run_id, task_id, attempt, plan_revision, snapshot_digest + ":" + agent_name)
-        message_id = "000" + hashlib.sha256(f"{plan_id}:{logical}:{self._owner}".encode()).hexdigest()[:29]
+        message_id = _message_id or ("000" + hashlib.sha256(f"{plan_id}:{logical}:{self._owner}".encode()).hexdigest()[:29])
         existing = next(
             (
                 event
@@ -244,7 +267,7 @@ class KernelDispatcher:
         )
         if existing:
             prior = self._envelope(json.loads(existing["payload"]))
-            if self.ledger.check_lease(prior.authority.as_lease(), self._owner).lease is not None:
+            if self.ledger.check_lease(prior.authority.as_lease(), prior.authority.lease_owner).lease is not None:
                 return prior
         lease_resource = f"dispatch:{run_id}:{task_id}:{attempt}"
         now = self.ledger.clock()
@@ -299,10 +322,107 @@ class KernelDispatcher:
             "lease_epoch": acquired.epoch,
             "lease_token": acquired.token,
             "lease_until": acquired.expires_at,
-            "envelope": {"run_id": run_id, "task_id": task_id, "attempt": attempt},
+            "envelope": {
+                "run_id": run_id, "task_id": task_id, "attempt": attempt,
+                **({"handoff": handoff.to_dict()} if handoff is not None else {}),
+            },
         }
+        if handoff is not None:
+            payload["handoff"] = handoff.to_dict()
         self._append("dispatch.staged", "dispatch:" + message_id, payload, message_id=message_id)
         return self._envelope(payload)
+
+    def stage_successor(
+        self, run_id: str, source_task_id: str, successor_task_id: str, *, project_root: str, plan_revision: int
+    ) -> DispatchEnvelope:
+        """Admit and stage the fixed successor only after verifier-backed closure."""
+        run, contract = self._contract(run_id)
+        try:
+            source = self.runtime.task(run_id, source_task_id)
+            successor = self.runtime.task(run_id, successor_task_id)
+        except (KeyError, ValueError) as exc:
+            raise DispatchRejected("unknown successor workflow task") from exc
+        if source.state is not TaskState.CLOSED:
+            raise DispatchRejected("source task must be closed")
+        if successor.prerequisites != (source_task_id,):
+            raise DispatchRejected("successor release required")
+
+        events = self.ledger.events()
+        payloads = [(event["kind"], json.loads(event["payload"])) for event in events]
+        receipts = [payload for kind, payload in payloads if kind == "evidence.receipt.recorded"
+                    and payload.get("run_id") == run_id and payload.get("task_id") == source_task_id]
+        releases = [payload for kind, payload in payloads if kind == "task.released"
+                    and payload.get("run_id") == run_id and payload.get("task_id") == successor_task_id]
+        closed = [payload for kind, payload in payloads if kind == "task.closed"
+                  and payload.get("run_id") == run_id and payload.get("task_id") == source_task_id]
+        cleanup = [payload for kind, payload in payloads if kind == "cleanup.receipt.recorded"
+                   and payload.get("run_id") == run_id and payload.get("task_id") == source_task_id]
+        if len(receipts) != 1 or len(releases) != 1 or len(closed) != 1 or len(cleanup) != 1:
+            raise DispatchRejected("verifier-owned closed handoff required")
+        receipt, release, close, cleanup_receipt = receipts[0], releases[0], closed[0], cleanup[0]
+        source_stage = next(
+            (payload for kind, payload in payloads if kind == "dispatch.staged"
+             and payload.get("message_id") == receipt.get("message_id")), None
+        )
+        handoff_data = receipt.get("handoff")
+        if release.get("handoff") != handoff_data or not handoff_data:
+            raise DispatchRejected("exact handoff release required")
+        try:
+            handoff = HandoffSnapshot.from_dict(handoff_data)
+            validate_handoff_snapshot(Path(project_root), handoff)
+        except EvidenceVerificationError as exc:
+            raise DispatchRejected(exc.code) from exc
+        if (
+            receipt.get("contract_id") != run.contract_id
+            or receipt.get("contract_generation") != contract.generation
+            or receipt.get("revocation_epoch") != contract.revocation_epoch
+            or receipt.get("attempt") != handoff.source_attempt
+            or receipt.get("receipt_id") != handoff.source_receipt_id
+            or source_stage is None
+            or source_stage.get("project_id") != self.ledger.scope.project_id
+            or source_stage.get("project_root") != str(Path(project_root).resolve())
+            or any(cleanup_receipt.get(name) != source_stage.get(name) for name in ("attempt", "contract_id", "contract_generation", "revocation_epoch", "message_id", "logical_session", "lease_resource", "lease_owner", "lease_epoch", "lease_token"))
+            or close.get("receipt_id") is None
+            or cleanup_receipt.get("lease_released") is not True
+            or cleanup_receipt.get("receipt_id") != close.get("receipt_id")
+            or set(cleanup_receipt.get("proof", {})) != {"logical_manager_session", "acp_mapping", "prompt_task", "pid_session_mapping"}
+            or any(value is not False for value in cleanup_receipt["proof"].values())
+        ):
+            raise DispatchRejected("stale or invalid closed handoff identity")
+        if release.get("satisfied_prerequisites") != [{"task_id": source_task_id, "receipt_id": receipt["receipt_id"]}]:
+            raise DispatchRejected("successor prerequisite receipt mismatch")
+        if contract.task_worker_bindings is None or successor_task_id not in contract.task_worker_bindings:
+            raise DispatchRejected("successor task worker binding required")
+        worker = self._resolve_worker(contract, successor_task_id)
+        message_id = "000" + hashlib.sha256(f"successor:{run_id}:{successor_task_id}:{handoff.snapshot_digest}:{plan_revision}".encode()).hexdigest()[:29]
+        if successor.state is TaskState.PROPOSED:
+            task = self.runtime.admit_task(run_id, successor_task_id)
+            if task.state is TaskState.ADMITTED:
+                task = self.runtime.mark_task_ready(run_id, successor_task_id)
+            if task.state is TaskState.READY:
+                task = self.runtime.dispatch_task(run_id, successor_task_id)
+            if task.state is not TaskState.DISPATCHED:
+                raise DispatchRejected("successor dispatch transition failed")
+            attempt = self.runtime.start_attempt(run_id, successor_task_id)
+        elif successor.state is TaskState.RUNNING:
+            active_attempts = tuple(
+                item
+                for item in self.runtime.attempts(run_id, successor_task_id)
+                if item.state is AttemptState.ACTIVE
+            )
+            if len(active_attempts) != 1:
+                raise DispatchRejected("successor active attempt required")
+            attempt = active_attempts[0]
+        else:
+            raise DispatchRejected("successor release required")
+        envelope = self._stage_ready(
+            run_id, successor_task_id, attempt=attempt.attempt, project_root=project_root,
+            plan_revision=plan_revision, snapshot_digest=handoff.snapshot_digest, handoff=handoff,
+            _message_id=message_id,
+        )
+        if envelope.authority.agent_name != worker.actor_id or envelope.payload.get("handoff") != handoff.to_dict():
+            raise DispatchRejected("successor dispatch binding mismatch")
+        return envelope
 
     @staticmethod
     def _envelope(payload):
