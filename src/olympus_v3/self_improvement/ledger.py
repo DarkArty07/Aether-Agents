@@ -16,7 +16,7 @@ _SIGNALS = {"NONE", "PATCH_CANDIDATE", "MINOR_CAPABILITY_SIGNAL", "REQUIRES_MORE
 # version is refused loudly: `CREATE TABLE IF NOT EXISTS` against an older shape
 # silently no-ops and then every INSERT fails, which produced a healthy-looking
 # session with zero evidence.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class LedgerSchemaError(RuntimeError):
@@ -47,12 +47,13 @@ CREATE TABLE IF NOT EXISTS cycle_sessions (
 CREATE TABLE IF NOT EXISTS tool_calls (
     session_id TEXT NOT NULL REFERENCES cycle_sessions(session_id),
     turn_id TEXT NOT NULL DEFAULT '',
+    api_request_id TEXT NOT NULL DEFAULT '',
     tool_call_id TEXT NOT NULL,
     tool_name TEXT NOT NULL,
     duration_ms INTEGER,
     outcome TEXT NOT NULL CHECK (outcome IN ('success', 'error', 'unknown')),
     created_at REAL NOT NULL,
-    PRIMARY KEY (session_id, turn_id, tool_call_id)
+    PRIMARY KEY (session_id, turn_id, api_request_id, tool_call_id)
 );
 CREATE TABLE IF NOT EXISTS turn_outcomes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS model_calls (
 CREATE TABLE IF NOT EXISTS coordination_events (
     session_id TEXT NOT NULL REFERENCES cycle_sessions(session_id),
     turn_id TEXT NOT NULL DEFAULT '',
+    api_request_id TEXT NOT NULL DEFAULT '',
     event_id TEXT NOT NULL,
     system TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -87,7 +89,7 @@ CREATE TABLE IF NOT EXISTS coordination_events (
     uncertainty TEXT,
     duration_ms INTEGER,
     created_at REAL NOT NULL,
-    PRIMARY KEY (session_id, turn_id, event_id)
+    PRIMARY KEY (session_id, turn_id, api_request_id, event_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_model_calls_session ON model_calls(session_id);
@@ -300,11 +302,13 @@ class SelfImprovementLedger:
         duration_ms: Any,
         outcome: str,
         turn_id: str = "",
+        api_request_id: str = "",
     ) -> bool:
         return self.record_tool_observation(
             session_id=session_id,
             tool_call_id=tool_call_id,
             turn_id=turn_id,
+            api_request_id=api_request_id,
             tool_name=tool_name,
             duration_ms=duration_ms,
             outcome=outcome,
@@ -321,28 +325,33 @@ class SelfImprovementLedger:
         outcome: str,
         coordination: dict[str, Any] | None,
         turn_id: str = "",
+        api_request_id: str = "",
     ) -> bool:
         """Commit a tool metric and optional coordination classification atomically.
 
-        Identity is `(session_id, turn_id, tool_call_id)`. A bare tool_call_id is
-        not unique: Hermes derives it from the call's content when the provider
-        supplies none, so the same command in two sessions — or in the baseline
-        and retry halves of one comparison — collides and the later row is lost.
+        Identity is `(session_id, turn_id, api_request_id, tool_call_id)`. Hermes
+        may derive a tool_call_id from call content, and the per-response index
+        resets on each model request. The request identity distinguishes a real
+        retry inside one turn while an exact duplicate hook delivery remains
+        idempotent.
         """
 
         self.ensure_schema()
         normalized_outcome = outcome if outcome in {"success", "error", "unknown"} else "unknown"
         scoped_turn = self._safe_text(turn_id) or ""
+        scoped_request = self._safe_text(api_request_id) or ""
         with self._connect() as connection:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO tool_calls (
-                    session_id, turn_id, tool_call_id, tool_name, duration_ms, outcome, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    session_id, turn_id, api_request_id, tool_call_id,
+                    tool_name, duration_ms, outcome, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     self._safe_text(session_id) or "unknown",
                     scoped_turn,
+                    scoped_request,
                     self._safe_text(tool_call_id) or "unknown",
                     self._safe_text(tool_name) or "unknown",
                     self._optional_int(duration_ms),
@@ -356,13 +365,15 @@ class SelfImprovementLedger:
                 connection.execute(
                     """
                     INSERT INTO coordination_events (
-                        session_id, turn_id, event_id, system, action, phase,
-                        outcome, uncertainty, duration_ms, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        session_id, turn_id, api_request_id, event_id,
+                        system, action, phase, outcome, uncertainty,
+                        duration_ms, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         self._safe_text(session_id) or "unknown",
                         scoped_turn,
+                        scoped_request,
                         self._safe_text(tool_call_id) or "unknown",
                         self._safe_text(coordination.get("system")) or "unknown",
                         self._safe_text(coordination.get("action")) or "unknown",

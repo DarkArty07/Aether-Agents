@@ -77,10 +77,27 @@ def _walk_to_project(start: Path) -> Path | None:
 
 
 def _project_root(kwargs: dict[str, Any]) -> Path | None:
+    """Resolve the active repository; an explicit root may only confirm it.
+
+    Hermes' real lifecycle hooks do not provide ``project_root``. Treating an
+    arbitrary plugin kwarg as authority let a foreign repository redirect its
+    session into Aether's ledger. The nearest Git repository derived from the
+    process workspace is authoritative; an explicit value is accepted only as
+    a matching assertion for tests or future host contracts.
+    """
+
+    discovered = _walk_to_project(Path.cwd())
     explicit = kwargs.get("project_root")
     if explicit:
-        return Path(str(explicit)).expanduser().resolve()
-    return _walk_to_project(Path.cwd())
+        asserted = Path(str(explicit)).expanduser().resolve()
+        if discovered is None or asserted != discovered:
+            logger.warning(
+                "Self-improvement project root assertion rejected: discovered=%s asserted=%s",
+                discovered,
+                asserted,
+            )
+            return None
+    return discovered
 
 
 def _git_dir(project_root: Path) -> Path | None:
@@ -375,6 +392,7 @@ def on_post_tool_call(
             session_id=session_id,
             tool_call_id=event_id,
             turn_id=str(kwargs.get("turn_id") or ""),
+            api_request_id=str(kwargs.get("api_request_id") or ""),
             tool_name=tool_name,
             duration_ms=duration_ms,
             outcome=_tool_outcome(result, kwargs.get("status")),

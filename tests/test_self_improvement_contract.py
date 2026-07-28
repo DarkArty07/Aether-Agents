@@ -250,6 +250,90 @@ def test_the_same_command_repeated_in_a_later_turn_is_counted_again(tmp_path: Pa
     assert len(_ledger(root).tool_calls("session-a")) == 2
 
 
+def test_same_deterministic_call_repeated_in_one_turn_is_counted_per_request(tmp_path: Path, monkeypatch) -> None:
+    """Tool-call indices reset on each model request inside one turn; request identity must disambiguate retries."""
+
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("session-a", model="m", platform="cli")
+
+    for request_id in ("request-before", "request-after"):
+        H.on_post_tool_call(
+            tool_name="terminal",
+            args={"command": "pytest -q"},
+            result='{"exit_code": 0}',
+            task_id="t",
+            session_id="session-a",
+            tool_call_id="call_samecontent",
+            turn_id="turn-1",
+            api_request_id=request_id,
+            duration_ms=1,
+        )
+
+    assert len(_ledger(root).tool_calls("session-a")) == 2
+
+
+def test_duplicate_observer_delivery_remains_idempotent(tmp_path: Path, monkeypatch) -> None:
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("session-a", model="m", platform="cli")
+
+    kwargs = {
+        "tool_name": "terminal",
+        "args": {"command": "pytest -q"},
+        "result": '{"exit_code": 0}',
+        "task_id": "t",
+        "session_id": "session-a",
+        "tool_call_id": "call_samecontent",
+        "turn_id": "turn-1",
+        "api_request_id": "request-1",
+        "duration_ms": 1,
+    }
+    H.on_post_tool_call(**kwargs)
+    H.on_post_tool_call(**kwargs)
+
+    assert len(_ledger(root).tool_calls("session-a")) == 1
+
+
+# --------------------------------------------------------------------------
+# F-06 — explicit project roots are assertions, never cross-project authority
+# --------------------------------------------------------------------------
+
+
+def test_explicit_project_root_cannot_redirect_a_foreign_repository(tmp_path: Path, monkeypatch) -> None:
+    aether = _make_project(tmp_path / "canonical")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (foreign / ".git").mkdir()
+    monkeypatch.chdir(foreign)
+
+    H.on_session_start(
+        "foreign-explicit-root",
+        model="m",
+        platform="cli",
+        project_root=aether,
+    )
+
+    assert not (foreign / ".aether").exists()
+    assert not (aether / ".aether").exists()
+
+
+def test_explicit_project_root_may_confirm_the_discovered_aether_root(tmp_path: Path, monkeypatch) -> None:
+    aether = _make_project(tmp_path / "canonical")
+    nested = aether / "src" / "package"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    H.on_session_start(
+        "matching-explicit-root",
+        model="m",
+        platform="cli",
+        project_root=aether,
+    )
+
+    assert _ledger(aether).get_session("matching-explicit-root") is not None
+
+
 # --------------------------------------------------------------------------
 # F-15 / F-16 — ledger identity and durability
 # --------------------------------------------------------------------------
