@@ -37,7 +37,14 @@ class DeterministicACPManager:
         payload = json.loads(prompt)
         artifact = payload["result_artifact"]
         document = artifact["document"]
-        document["result"] = {"answer": "deterministic demo result"}
+        if document["task_id"] == "task-a":
+            document["result"] = {"answer": "SOURCE_OK", "task_id": "task-a"}
+        else:
+            document["result"] = {
+                "answer": "SELECTED_OK",
+                "task_id": document["task_id"],
+                "source_answer": "SOURCE_OK",
+            }
         destination = self.root / artifact["relative_path"]
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(json.dumps(document, sort_keys=True, separators=(",", ":")))
@@ -79,7 +86,15 @@ def bounded_payload(
         "action": "start", "project_root": str(root), "request_id": "bounded-demo",
         "plan_revision": 1, "snapshot_digest": "sha256:" + "a" * 64,
         "contract": {
-            "objective": "isolated bounded selection demo", "expected_outcome": "one candidate completes",
+            "objective": (
+                "Run a deterministic coordination probe. For task-a, return only the result fields "
+                "{\"answer\":\"SOURCE_OK\",\"task_id\":\"task-a\"}. For task-b or task-c, "
+                "read the source evidence artifact identified by the provided handoff snapshot, verify its "
+                "result.answer is SOURCE_OK, and return only the result fields "
+                "{\"answer\":\"SELECTED_OK\",\"task_id\":\"<current task id>\","
+                "\"source_answer\":\"SOURCE_OK\"}."
+            ),
+            "expected_outcome": "task-a proves SOURCE_OK and exactly one selected successor proves it consumed that evidence",
             "included_scopes": ["demo"], "excluded_scopes": [], "time_seconds": 60,
             "model_budget": 10, "qa_reserve": 1, "recovery_reserve": 1, "escalation_conditions": ["demo"],
             "selection_policy_id": POLICY_ID, "selection_candidate_task_ids": ["task-c", "task-b"],
@@ -134,6 +149,15 @@ async def run_demo(
         selected_attempts = [p for p in _event_payloads(events, "attempt.started") if p.get("task_id") == "task-b"]
         unselected_attempts = [p for p in _event_payloads(events, "attempt.started") if p.get("task_id") == "task-c"]
         cleanups = _event_payloads(events, "cleanup.completed")
+        evidence = _event_payloads(events, "evidence.receipt.recorded")
+        evidence_results: dict[str, dict[str, Any]] = {}
+        for receipt in evidence:
+            task_id = receipt.get("task_id")
+            relative_path = receipt.get("artifact", {}).get("relative_path")
+            if isinstance(task_id, str) and isinstance(relative_path, str):
+                document = json.loads((root / relative_path).read_text())
+                if isinstance(document.get("result"), dict):
+                    evidence_results[task_id] = document["result"]
         # The candidate IDs, not worker order, determine the selected task.
         expected_worker = next(p["resolved_worker_id"] for p in selection) if selection else None
         source_closed = context.runtime.task(run_id, "task-a").state is TaskState.CLOSED
@@ -154,6 +178,8 @@ async def run_demo(
             "source_closed": source_closed,
             "selected_closed": selected_closed,
             "adapter_sends": len([call for call in getattr(manager, "calls", ()) if call[0] == "send"]),
+            "source_result": evidence_results.get("task-a"),
+            "selected_result": evidence_results.get("task-b"),
         }
         invariants = {
             "committed": result["committed"], "selected_task_id": result["selected_task_id"] == "task-b",
@@ -163,6 +189,10 @@ async def run_demo(
             "source_closed": result["source_closed"],
             "selected_closed": result["selected_closed"],
             "no_survivors": result["no_survivors"], "status_committed": bool(result["selection"] and result["selection"].get("committed")),
+            "source_semantic_result": result["source_result"] == {"answer": "SOURCE_OK", "task_id": "task-a"},
+            "selected_consumed_handoff": result["selected_result"] == {
+                "answer": "SELECTED_OK", "task_id": "task-b", "source_answer": "SOURCE_OK",
+            },
         }
         result["invariants"] = invariants
         if not all(invariants.values()):

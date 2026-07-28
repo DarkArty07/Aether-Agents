@@ -58,4 +58,10 @@ def test_fake_demo_runs_full_bounded_lifecycle_and_reports_invariants():
     assert summary["unselected_attempts"] == 0
     assert summary["cleanup_completed"] == 2
     assert summary["no_survivors"] is True
+    assert summary["source_result"] == {"answer": "SOURCE_OK", "task_id": "task-a"}
+    assert summary["selected_result"] == {
+        "answer": "SELECTED_OK",
+        "task_id": "task-b",
+        "source_answer": "SOURCE_OK",
+    }
     assert all(summary["invariants"].values())
