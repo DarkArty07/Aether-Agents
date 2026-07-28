@@ -1,8 +1,8 @@
 # v0.19.x Incremental Kernel Migration — Design
 
-**Status:** APPROVED DESIGN — v0.19.3 DETERMINISTIC IMPLEMENTATION AUTHORIZED; LIVE EXECUTION NOT AUTHORIZED
+**Status:** CLOSED AT v0.19.5 — `VIABLE — BOUNDED`
 
-**Design scope:** versioned experimental increments after the frozen v0.19.0 baseline. Chris approved preserving the canonical cleanup-before-handoff order and authorized deterministic v0.19.3 implementation on 2026-07-27. This document does not authorize live ACP execution, configuration changes, gateway restart, merge, tag, deployment or publication.
+**Design scope:** versioned experimental increments after the frozen v0.19.0 baseline. The final bounded hypothesis passed real Gate C on 2026-07-27. See `V0.19.5_GATE_C_EVIDENCE.md` and `ROADMAP_CLOSEOUT.md`. This closeout does not authorize configuration changes, gateway restart, merge, tag, deployment, publication or production activation.
 
 **Baseline authority:** `../v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`
 
@@ -117,8 +117,8 @@ The sequence deliberately separates trusted evidence from executable closure. Co
 | v0.19.2 | The single task can produce trusted, runtime-bound evidence that agent prose or stale state cannot forge. | Verifier receipt bound to exact run/task/attempt/contract/session/artifact generation. |
 | v0.19.3 | A task with trusted evidence can close only after ACPManager-owned cleanup is verified. | Closure receipt or explicit `CLOSE_FAILED`; no surviving managed resource under `CLOSED`. |
 | v0.19.4 | A fixed second task can start from Task A's ledger-bound result without Hermes relay. | Two-agent trace with zero routine Hermes calls between A and B. |
-| v0.19.5 | Harmonia can select the next eligible task inside an approved contract without becoming a second runtime authority. | Revision-bound plan accepted by kernel; no direct Harmonia ACP call. |
-| v0.19.6 | The bounded architecture survives representative failures without restoring Hermes hub-and-spoke. | Fault matrix plus `VIABLE`, `VIABLE WITH BLOCKERS` or `NOT VIABLE`. |
+| v0.19.5 | Harmonia can select the next eligible task inside an approved contract without becoming a second runtime authority. | VALIDATED: revision-bound kernel commit, real selected successor, semantic handoff and no direct Harmonia ACP call. |
+| v0.19.6 | No separate patch was executed. Chris closed the roadmap after the v0.19.5 deterministic fault matrix, fail-closed live corrections and final real Gate C established the intended architecture decision. | CLOSED: formal `VIABLE — BOUNDED` verdict in `ROADMAP_CLOSEOUT.md`; no pending pilot. |
 
 No patch begins until the preceding patch is frozen with evidence. A blocked patch stops the train until the user chooses repair, redesign or abandonment.
 
