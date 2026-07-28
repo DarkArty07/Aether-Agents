@@ -11,7 +11,7 @@ agent:
   level: 1
 model:
   api_mode: chat_completions
-  default: gpt-5.6-terra
+  default: gpt-5.6-luna
   provider: openai-codex
 fallback_providers:
 - provider: openrouter

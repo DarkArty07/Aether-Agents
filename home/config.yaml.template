@@ -449,6 +449,9 @@ mcp_servers:
     env:
       AETHER_HOME: __AETHER_ROOT__/home
       PYTHONPATH: __AETHER_ROOT__/src
+    tools:
+      exclude:
+      - talk_to
   graphify:
     command: __PYTHON_BIN__
     args:

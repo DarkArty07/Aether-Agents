@@ -1,6 +1,10 @@
-# Honcho Memory Provider Setup
+# Honcho Memory Provider Setup — Retired
 
-Honcho is a self-hosted memory layer for AI agents. Aether Agents integrates
+> **Status:** RETIRED / HISTORICAL
+> **Governing decision:** `decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`
+> **Do not use for new installations.** Aether's approved target uses Hermes-native `USER.md` and `MEMORY.md` without Honcho. This document remains temporarily for historical diagnosis and retirement planning.
+
+Honcho is a self-hosted memory layer for AI agents. Historical Aether versions integrated
 Honcho as a Git submodule at `honcho-server/`. It can run with Docker Compose
 or rootless Podman Compose.
 

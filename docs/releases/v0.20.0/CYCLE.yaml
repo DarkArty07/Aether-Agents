@@ -1,0 +1,265 @@
+schema_version: 1
+status: implemented_default_off
+approved_on: "2026-07-28"
+owner: Christopher (DarkArty07)
+
+semver:
+  last_official_release: "0.18.2"
+  technical_predecessor: "0.19.5"
+  technical_predecessor_state: closed_viable_bounded_unpublished
+  candidate_version: "0.20.0"
+  # Renamed after the external logic audit: this increment is the measurement
+  # substrate a self-improvement cycle would need, not the cycle itself. It has
+  # no evaluator, no candidate isolation, no before/after comparison and no
+  # rollback. Calling it a cycle was the source of most documentation drift.
+  candidate_name: Self-Improvement Instrumentation
+  next_minor_scope: undecided_pending_evidence
+
+hypothesis:
+  statement: >-
+    Every verified Hermes session working inside Aether Agents can initialize
+    one measurable, project-isolated SemVer improvement cycle, use Harmonia
+    when specialist work applies, repair framework defects directly only after
+    safe reconciliation, verify corrections, retry the intended Harmonia path,
+    and accumulate evidence without presuming the architecture of the next minor.
+
+runtime_contract:
+  project_root_required: true
+  talk_to_available_to_hermes: false
+  harmonia_when_applicable: true
+  ceremonial_harmonia_runs_forbidden: true
+  direct_framework_repair_inside_aether: true
+  harmonia_retry_after_framework_repair: true
+  cross_project_aether_mutation_forbidden: true
+  direct_takeover_requires_cleanup_verification: true
+
+provider:
+  logical_provider: custom:aether-router
+  current_hermes_model: gpt-5.6-sol
+  provider_is_acceptance_authority: false
+  # Only `requested_model` is actually reachable. Hermes Agent's `post_llm_call`
+  # invocation passes session_id, task_id, turn_id, user_message,
+  # assistant_response, conversation_history, model and platform — and nothing
+  # else — so every field below it stays NULL on every real session. The columns
+  # exist and are honest about being unknown; they are not evidence. Audit F-09.
+  record_when_reported:
+    - requested_model
+  not_supplied_by_the_host_runtime:
+    - resolved_route
+    - resolved_model
+    - latency
+    - input_tokens
+    - output_tokens
+    - cost
+    - errors
+  missing_telemetry_value: unknown
+  secrets_in_evidence_forbidden: true
+
+session_lifecycle:
+  - session_identified
+  - baseline_captured
+  - work_contracted
+  - executing
+  - measuring
+  - classified
+  - repairing_if_framework_defect
+  - verifying
+  - retrying_intended_path_if_repaired
+  - evidence_recorded
+  - session_finalized
+
+failure_classes:
+  - framework_defect
+  - contract_defect
+  - worker_defect
+  - configuration_state
+
+measurements:
+  correctness:
+    required: true
+    fields:
+      - focused_evidence
+      - regression_evidence
+      - build_or_schema_evidence
+      - semantic_acceptance
+      - reverted_changes
+  coordination:
+    required: true
+    fields:
+      - admission_attempts
+      - admission_outcomes
+      - dispatches
+      - terminal_outcomes
+      - cleanup_receipts
+      - survivors
+      - unknown_effects
+      - direct_takeovers
+      - legacy_invocations
+  efficiency:
+    required_when_reported: true
+    fields:
+      - wall_time
+      - time_to_first_useful_result
+      - tool_calls
+      - model_calls
+      - retries
+      - rework
+      - tokens
+      - reported_cost
+  process_quality:
+    required: true
+    fields:
+      - user_corrections
+      - requirement_drift
+      - scope_drift
+      - incomplete_evidence_detected
+      - repeated_defects
+      - reusable_learning
+  isolation_and_safety:
+    required: true
+    fields:
+      - cross_project_writes
+      - concurrent_authority
+      - surviving_resources
+      - sensitive_data_exposure
+      - unauthorized_external_effects
+
+next_version_signals:
+  allowed:
+    - NONE
+    - PATCH_CANDIDATE
+    - MINOR_CAPABILITY_SIGNAL
+    - REQUIRES_MORE_EVIDENCE
+  automatically_approves_version: false
+  product_owner_approval_required: true
+  llm_coordinator_presumed: false
+
+persistence:
+  decision: docs/decisions/PDR-0009-semver-self-improvement-cycle.md
+  operating_model: docs/knowledge/SELF_IMPROVEMENT_CYCLE.md
+  incoming_agent_context: AGENTS.md
+  operational_ledger_target: .aether/self_improvement.db
+  release_evidence_target: docs/releases/v0.20.0/SELF_IMPROVEMENT_EVIDENCE.md
+  context_projection_is_sole_authority: false
+
+artifacts:
+  expected:
+    - docs/decisions/PDR-0009-semver-self-improvement-cycle.md
+    - docs/knowledge/SELF_IMPROVEMENT_CYCLE.md
+    - docs/releases/v0.20.0/CYCLE.yaml
+    - docs/releases/v0.20.0/IMPLEMENTATION_REPORT.md
+    - docs/releases/v0.20.0/BENCHMARK_REPORT.md
+    - docs/releases/v0.20.0/SECURITY_REVIEW.md
+    - docs/releases/v0.20.0/SELF_IMPROVEMENT_EVIDENCE.md
+    - home/plugins/aether-self-improvement/plugin.yaml
+    - home/plugins/aether-self-improvement/__init__.py
+    - src/olympus_v3/self_improvement/manifest.py
+    - src/olympus_v3/self_improvement/ledger.py
+    - src/olympus_v3/self_improvement/hooks.py
+    - src/olympus_v3/self_improvement/evidence.py
+    - tests/test_self_improvement.py
+
+implementation_scope:
+  included:
+    - versioned_cycle_contract
+    - machine_readable_manifest
+    - project_scoped_session_hooks
+    - local_operational_ledger
+    - talk_to_absence_verification
+    - harmonia_admission_phase_classification
+    - cross_project_isolation
+    - release_evidence_generation
+  deferred:
+    # Present only as instructions injected into the first model turn. No state,
+    # no classification and no gate enforces them, so they are not implemented
+    # capabilities of this increment. See EXTERNAL_LOGIC_AUDIT.md F-04.
+    - safe_direct_takeover
+    - framework_repair_verification
+    - harmonia_retry_after_repair
+    - failure_class_classification
+    # `post_llm_call` in Hermes Agent does not pass route, model, latency, token
+    # or cost fields, so these stay NULL on every real session. Recording them
+    # needs an upstream hook-payload change, not activation. Audit F-09.
+    - provider_efficiency_measurement
+    # Sessions record activity counts only. No task statement, acceptance
+    # threshold, baseline measurement or comparison exists, so no signal other
+    # than REQUIRES_MORE_EVIDENCE can be derived. Audit F-04.
+    - next_version_signal_aggregation
+  excluded:
+    - predetermined_llm_coordinator
+    - arbitrary_dag_or_open_ended_planning
+    - global_harmonia_activation
+    - automatic_version_approval
+    - automatic_merge_tag_release_or_deployment
+    - provider_or_model_migration
+    - credential_creation
+    - runtime_restart
+    - mutation_of_other_projects
+    - reopening_the_historical_r8_snake_pilot
+
+acceptance_gates:
+  - new_aether_session_initializes_exactly_one_cycle_record
+  - first_model_turn_receives_cycle_context_without_memory_dependency
+  - manifest_and_semver_state_validate
+  - talk_to_absent_and_harmonia_present
+  - applicable_specialist_work_attempts_harmonia_without_legacy_fallback
+  - pre_and_post_admission_failures_are_distinguished
+  - direct_takeover_waits_for_reconciliation_and_cleanup
+  - framework_repair_is_verified_and_retried_through_harmonia
+  - interrupted_sessions_remain_interrupted_or_reconciliation_required
+  - router_metadata_is_recorded_without_secrets
+  - missing_router_telemetry_remains_unknown
+  - non_aether_projects_cannot_initialize_or_mutate_the_cycle
+  - session_evidence_emits_signals_without_approving_versions
+  - release_evidence_uses_validated_facts_not_model_prose
+  - no_next_minor_architecture_is_predetermined
+
+# Every `pass` below is backed by a test that exercises a real payload or a real
+# production call path. Claims that were previously marked `pass` on the strength
+# of a fabricated payload or a parameter no caller supplies are now stated as
+# what they are. Source: docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md
+gate_status:
+  manifest_reader: pass
+  candidate_version_pinned_to_release_directory: pass_deterministic_tests
+  project_identity_and_isolation: pass_deterministic_tests
+  exact_once_session_initialization: pass_deterministic_tests
+  session_id_reuse_refused: pass_deterministic_tests
+  continued_session_still_records_evidence: pass_deterministic_tests
+  interruption_recorded_without_latching: pass_deterministic_tests
+  concurrent_session_preservation: pass_same_process_only
+  multi_process_contention: not_exercised
+  secret_free_measurement_schema: pass_deterministic_tests
+  harmonia_outcome_classification: pass_against_real_wire_contract
+  tool_outcome_classification: pass_deterministic_tests
+  scoped_tool_call_identity: pass_deterministic_tests
+  ledger_schema_versioning: pass_deterministic_tests
+  baseline_commit_and_dirty_set: pass_deterministic_tests
+  manifest_drift_detection: pass_deterministic_tests
+  atomic_tool_and_coordination_evidence: pass_injected_failure_test
+  deterministic_release_evidence: pass_deterministic_tests
+  plugin_discovery: pass_not_enabled
+  # The plugin is absent from `plugins.enabled` in the versioned template and
+  # plugins are opt-in, so no installation participates in the cycle until an
+  # operator enables it explicitly. Audit F-17.
+  automatic_participation_on_install: not_implemented
+  router_telemetry_recorded: not_reachable_without_upstream_hook_change
+  crash_before_post_tool_call_leaves_evidence: not_implemented
+  live_plugin_activation: blocked_not_authorized
+  live_session_observation: pending_activation
+  bounded_harmonia_pilot: blocked_by_feature_disabled
+  causal_before_after_acceptance: not_implemented_no_evaluator_or_comparison
+  rollback_of_a_candidate_change: not_implemented
+  merge_tag_release_deployment_publication: not_authorized
+
+authorization:
+  documentation_alignment: authorized
+  implementation_plan: authorized
+  source_or_plugin_implementation: authorized
+  harmonia_activation: not_authorized
+  coordination_key_creation: not_authorized
+  runtime_restart: not_authorized
+  merge: not_authorized
+  tag: not_authorized
+  release: not_authorized
+  deployment: not_authorized
+  publication: not_authorized

@@ -1,7 +1,7 @@
 ---
 name: task-delegation
 description: "Delegate tasks to specialist Daimons — decompose, delegate, monitor, and report results."
-version: 1.6.0
+version: 1.6.1
 author: Hermes Agent
 license: MIT
 metadata:
@@ -24,7 +24,7 @@ Delegate implementation work to specialist Daimons (Hefesto, Etalides, Athena, e
 - **Design/UX consultation** → Daedalus
 - **Backend architecture** → Ictinus
 
-If a fine-tuning task takes >3 turns and isn't done → delegate to Hefesto as bulk.
+Do not delegate solely because a fine-tuning task spans more than three chat turns. Continue when the scope remains precise and progress is verifiable; delegate to Hefesto when the material scope grows into scaffolding, a broad refactor, a new feature, or sustained multi-file implementation.
 
 ## Delegation Workflow
 
@@ -50,7 +50,7 @@ Use `open` + `message` for multi-turn conversations or when you need the session
 
 ### 3. Monitor
 
-**Wait for completion silently.** Only report status if stuck >2 minutes.
+**Monitor without noisy narration.** Report status after five polls without completion, after roughly two minutes without a meaningful milestone, or immediately when clarification/blocker/user action is needed.
 
 **Pitfall — Verbose narration:** Don't describe every tool call ("Hefesto just read docker-compose.yml..."). Poll internally, report final result or ask for status if progress stalls.
 
@@ -66,7 +66,11 @@ Synthesize results for the user:
 
 - **Asking for confirmation when path is clear** — If the user says "finish the plan" or "don't ask, just do it", proceed with execution. Don't present options or ask for approval when the task is obvious from context.
 
-- **Verbose polling narration** — Don't narrate every tool call during monitoring. Wait for completion or report status only if stuck >2 minutes.
+- **Delegating recovery of the delegation substrate to the broken substrate** — Before routing a repair through Olympus/Daimons, check whether the incident itself removed their compute, provider credentials, gateway, or ACP availability. If delegation is unavailable because the primary credential is exhausted or the orchestration path is down, Hermes must perform the minimal bootstrap/config recovery directly, even when it spans several profile files. Do not ask an offline Daimon to repair its own authentication. After recovery, run one tiny read-only delegation smoke test (exact expected response, no tools), verify the result, and close the session. This is a bootstrap exception, not permission for unrelated bulk implementation.
+
+- **Shared OAuth credentials across isolated profiles require explicit trade-off handling** — Distinguish sharing the same account from copying the same refresh token. Separate OAuth logins per profile are robust; copying one refresh token is vulnerable to single-use refresh races across concurrent processes. If the user deliberately maintains a shared-token profile layout and asks to preserve it, copy only the intended pool entry, preserve each primary entry/singleton state, write atomically with `0600`, create secure backups, compare token fingerprints without printing secrets, and validate automatic rotation with a smoke test. Identical token fingerprints do not imply identical routing: profile-local `last_status`/reset metadata can mark a healthy shared credential exhausted and force that profile onto a later invalid credential. Compare `hermes auth list` across a healthy and failing profile; when token material matches and only local exhaustion state is stale, use profile-scoped `HERMES_HOME=<profile> hermes auth reset <provider>` rather than recopying secrets. Then require both a no-tool exact-response smoke and the profile's real function (for example, `aether_curate`) to pass.
+
+- **Verbose polling narration:**
 
 - **Timeout too short** — Complex tasks (5+ phases) may need 600s+. If delegate times out, check if the session is still active with `poll`.
 
@@ -78,7 +82,9 @@ Synthesize results for the user:
 
 - **Trusting delegation "completed" status blindly** — Daimons may report "completed" even when the actual work is incomplete or broken. Always verify the result: check that files exist with correct content, services are reachable (health endpoints), and the output matches acceptance criteria. Examples: Hefesto claimed docker-compose.yml was done but it was missing the deriver service and had wrong DB credentials; containers showed "Created" but never actually started. Verification caught these.
 
-- **Hermes fine-tuning vs delegation threshold (v0.16.0+)** — As of v0.16.0 "Hermes Can Write Now", Hermes has `write_file`, `patch`, and `search_files` tools and is expected to handle fine-tuning directly. The old pitfall ("Hermes is blocked from writing files directly") is OBSOLETE. The new rule: if a task is fine-tuning (small edit, config, bug fix, 1-3 files), Hermes does it directly. If it's bulk (scaffolding, new feature, multi-file refactor), delegate to Hefesto. If a fine-tuning task exceeds 3 turns without finishing, escalate to Hefesto as a bulk task with full context.
+- **Follow-up sent to a completed session returns stale output** — A `message()` to a session that already reports `completed` may be accepted while subsequent `poll()` calls keep returning the previous `last_turn`; counters can change without a trustworthy new completion response. Allow one brief progress check. If the requested mutation is still absent, verify state directly, close the stale session, and open a fresh narrowly scoped delegation. Do not keep polling or resend the same follow-up repeatedly. Judge success from the filesystem/test evidence, not the stale response.
+
+- **Hermes fine-tuning vs delegation threshold (v0.16.0+)** — As of v0.16.0 "Hermes Can Write Now", Hermes has `write_file`, `patch`, and `search_files` tools and is expected to handle fine-tuning directly. The old pitfall ("Hermes is blocked from writing files directly") is OBSOLETE. The current rule is scope-based: Hermes keeps precise small edits, configuration, focused bugs, and documentation even when diagnosis spans several turns; scaffolding, new features, broad refactors, and sustained multi-file implementation go to Hefesto. Conversation length alone never changes ownership.
 
 - **Hermes using process.wait on Daimon sessions** — `process(action="wait")` only works for terminal processes with `background=true`. Use `talk_to(action="poll")` for Daimon sessions. Same session_id format but different tools and command structure.
 

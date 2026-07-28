@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import subprocess
 import sys
-
 from pathlib import Path
 
 from olympus_v3.cli.ui.banner import BANNER
 from olympus_v3.cli.wrappers import WRAPPER_TEMPLATE, write_aether_setup_wrapper
-
 
 # ── Banner tests ──────────────────────────────────────────────────
 

@@ -41,6 +41,8 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
+| 🧪 | **Default-Off Coordination Lab** | v0.19 R7 adds an isolated shadow observer, typed failure/recovery evidence, and disposable durable correlation. It is not active in the gateway and never replaces Olympus lifecycle ownership. |
+| 🔬 | **Self-Improvement Instrumentation Bootstrap** | v0.20.0 adds a default-off Hermes lifecycle plugin, project-scoped redacted ledger, interruption reconciliation, and deterministic release-evidence projection. Runtime activation remains separately gated; GitHub integration and release publication follow ODR-0001. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
@@ -74,6 +76,16 @@ Olympus v3 Server
 - **ACP** — Olympus manages Daimon sessions via Agent Client Protocol (HTTP)
 - **Plugin Hooks** — Per-turn observability inside each Daimon: `post_llm_call`, `post_tool_call`, `on_session_end`, `pre_llm_call`
 - **.aether** — 3-layer continuity: capture (hooks) → curate (Ariadna) → inject (first turn)
+
+### v0.19 experimental coordination closeout
+
+v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
+
+The [v0.19.x incremental kernel migration](docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md) is closed at v0.19.5 with verdict **VIABLE — BOUNDED**. It demonstrated one source, two immutable successor candidates, deterministic committed selection, trusted semantic handoff, cleanup and zero survivors. v0.19.6 was closed without a separate patch. Harmonia remains default-off, and v0.19.5 remains an unpublished technical candidate.
+
+### v0.20.0 self-improvement bootstrap
+
+The candidate [v0.20.0 instrumentation bootstrap](docs/releases/v0.20.0/CYCLE.yaml) has an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and can project deterministic release evidence without approving a version. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`. Activation, runtime restart and a live bounded pilot remain separately gated. Commits, push, PR integration, annotated tags and GitHub Releases follow the standing deterministic authority in [ODR-0001](docs/decisions/ODR-0001-main-integration-and-release-automation.md).
 
 ---
 
@@ -109,6 +121,25 @@ Aether-Agents/
 ├── docs/guides/           ← Installation, configuration, quickstart
 └── Makefile               ← setup, update, doctor, clean, test
 ```
+
+---
+
+## 📚 Documentation
+
+The documentation is organized by authority and audience so product intent is not inferred from implementation or release evidence:
+
+- **[Documentation map](docs/README.md)** — canonical index and source-of-truth hierarchy
+- **[Agent onboarding](docs/AGENT_ONBOARDING.md)** — required reading order before changing the project
+- **[Product](docs/product/README.md)** — vision, mission, objectives, scope, and principles
+- **[Architecture](docs/architecture/README.md)** — current and target technical system documentation
+- **[Knowledge](docs/knowledge/README.md)** — shared terminology, constraints, capabilities, and limitations
+- **[Guides](docs/guides/)** — installation, configuration, and task-oriented usage
+- **[Operations](docs/operations/README.md)** — health, updates, recovery, and troubleshooting runbooks
+- **[Technical reference](docs/reference/README.md)** — tools, commands, configuration, and compatibility
+- **[Contributing](docs/contributing/README.md)** — development and documentation workflow
+- **[Decisions](docs/decisions/README.md)** — durable product, architecture, and operational decisions
+
+Release plans, benchmarks, handoffs, and evidence remain under `docs/releases/`; they document specific execution history and do not replace the product vision.
 
 ---
 

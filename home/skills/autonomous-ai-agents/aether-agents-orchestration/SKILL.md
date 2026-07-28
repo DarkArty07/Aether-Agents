@@ -130,6 +130,17 @@ Hefesto completed phases 3-5. Here's what was done:
 
 ## Common Pitfalls
 
+### Harmonia disposable gates can escape an isolated control root
+
+Before a live Harmonia gate, inspect the installed `server.init_server()` rather than assuming `AETHER_HOME` or a config field owns the ledger root. A server that derives storage from `config.profiles_dir.expanduser().resolve().parent` will follow a profiles symlink and may create an ephemeral-key ledger under the canonical runtime home.
+
+Preflight requirements:
+- compute the effective store path from the exact server composition code;
+- require it to equal the frozen control root before generating keys or opening ACP;
+- snapshot both the intended and canonical project-store paths;
+- if a mismatch is discovered after one authorized session, do not rerun: hash and integrity-check the new store, move it intact into the evidence package, leave the canonical path absent, disable config, remove ephemeral keys, and file a framework issue;
+- treat the strict gate as `BLOCKED` even when start/replay/status/stop worked, because a frozen isolation limit failed.
+
 ### 1. Delegating Multi-Phase Tasks Without Checkpoints
 
 **Problem:** Delegate 5-phase task with 600s timeout. Task takes 10 minutes. Timeout occurs, session lost, no way to resume.

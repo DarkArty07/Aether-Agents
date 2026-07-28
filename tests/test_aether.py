@@ -681,7 +681,7 @@ class TestResolveAetherDB:
     def test_creates_aether_directory(self, tmp_path: Path) -> None:
         """resolve_aether_db auto-creates .aether/ if it doesn't exist."""
         project_root = str(tmp_path / "newproject" / "deep")
-        result = resolve_aether_db(project_root)
+        resolve_aether_db(project_root)
         assert (Path(project_root) / ".aether").is_dir()
 
     def test_path_with_spaces(self, tmp_path: Path) -> None:
@@ -1033,9 +1033,9 @@ class TestKeyedAgentKey:
         assert key == ("hefesto", "/project/A")
 
     def test_agent_key_without_project_root(self) -> None:
-        """_agent_key with None project_root returns (name, empty string)."""
+        """_agent_key with None project_root uses the canonical cwd."""
         key = ACPManager._agent_key("hefesto", None)
-        assert key == ("hefesto", "")
+        assert key == ("hefesto", str(Path.cwd().resolve()))
 
     def test_different_projects_different_keys(self) -> None:
         """Different project_roots produce different keys for the same agent."""
@@ -1100,8 +1100,13 @@ def test_send_message_maps_acp_stop_reason_to_persisted_terminal_status(
         project_root=project_root,
     )
     manager.agents[("hefesto", project_root)] = AgentState(
-        name="hefesto", profile_path=profile_path, connection=connection, pid=12345
+        name="hefesto",
+        profile_path=profile_path,
+        connection=connection,
+        pid=12345,
+        status="busy",
     )
+    manager.agents[("hefesto", project_root)].acp_session_ids[session_id] = "acp-session"
 
     asyncio.run(manager.send_message(session_id, "test prompt"))
     asyncio.run(_wait_for_prompt_completion())
@@ -1154,7 +1159,7 @@ def test_close_rejects_nonterminal_status_override(tmp_path: Path) -> None:
         asyncio.run(manager.close("close-session", terminal_status="active"))
 
 
-def test_close_defaults_to_completed_for_active_session(tmp_path: Path) -> None:
+def test_close_defaults_to_cancelled_for_active_session(tmp_path: Path) -> None:
     manager_db = _PromptDB()
     manager = ACPManager(profiles_dir=tmp_path, db=manager_db)
     manager.sessions["close-session"] = SessionInfo(
@@ -1163,8 +1168,8 @@ def test_close_defaults_to_completed_for_active_session(tmp_path: Path) -> None:
 
     result = asyncio.run(manager.close("close-session"))
 
-    assert result == {"status": "completed", "session_id": "close-session"}
-    assert manager_db.status_updates == [("close-session", "completed")]
+    assert result == {"status": "cancelled", "session_id": "close-session"}
+    assert manager_db.status_updates == [("close-session", "cancelled")]
 
 
 # ===========================================================================

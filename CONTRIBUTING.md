@@ -14,21 +14,30 @@ pip install -e ".[dev]"
 
 ## Development Setup
 
-1. Create a feature branch from `dev` (not `main`)
-2. Make your changes
-3. Run tests: `pytest`
-4. Run linter: `ruff check src/`
-5. Push and open a PR to `dev`
+1. Synchronize local `main` with `origin/main`.
+2. Create one bounded feature branch from `main`.
+3. Make your changes.
+4. Run tests: `pytest`.
+5. Run linter: `ruff check src/`.
+6. Push and open a PR directly to `main`.
+
+Before starting a new SemVer candidate, run:
+
+```bash
+python scripts/check_release_governance.py preflight-next-version --version X.Y.Z
+```
 
 ## Branching Model
 
-```
-feature/{name}  →  dev  →  main
+```text
+feature/{name}  →  main
 ```
 
-- **`main`** — Production-ready. Only receives merges from `dev` with a release tag.
-- **`dev`** — Integration branch. All feature branches merge here first.
-- **`feature/{name}`** — Individual features. Branch from `dev`, merge back to `dev`.
+- **`main`** — Latest integrated, tested state. It may be ahead of the latest published release.
+- **`feature/{name}`** — One bounded change, branched from current `origin/main` and merged back through a PR.
+- **`vX.Y.Z` tag + GitHub Release** — Official published version, separate from integration.
+
+Ordinary stacked PRs and long-lived integration branches are not supported. See `docs/decisions/ODR-0001-main-integration-and-release-automation.md`.
 
 ## Commit Format
 
@@ -47,15 +56,17 @@ One logical change per commit. Subject line under 72 characters.
 
 ## Merging
 
-- **Feature → dev:** Squash merge preferred.
-- **dev → main (release):** Merge commit with tag (`v{version}`).
+- **Feature → main:** Merge only after required checks pass. Preserve audited atomic history when it matters; squash only disposable branch history.
+- **Release:** Tag the exact integrated `main` commit with annotated `vX.Y.Z`. The automated release workflow verifies metadata and creates or reconciles the GitHub Release.
+- **Separation:** Merge, release, activation and deployment are distinct operations.
 
 ## Pull Requests
 
-- Target `dev` (not `main`) unless it's a hotfix.
+- Target `main`.
 - Include a clear description of what and why.
 - Reference related issues (`Fixes #12`, `Related to #8`).
-- Ensure CI passes (lint + tests).
+- Ensure CI and release-governance checks pass.
+- Do not start the next SemVer candidate while an earlier candidate PR remains unresolved.
 
 ## Code Style
 
