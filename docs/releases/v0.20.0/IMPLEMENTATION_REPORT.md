@@ -1,4 +1,4 @@
-# v0.20.0 Self-Improvement Bootstrap — Implementation Report
+# v0.20.0 Self-Improvement Instrumentation — Implementation Report
 
 ## Verdict
 
@@ -29,7 +29,9 @@ This increment is **instrumentation, not a self-improvement cycle**. It contains
   - Discoverable Hermes Agent plugin wrapper and manifest.
   - Deliberately absent from `plugins.enabled`.
 - `tests/test_self_improvement.py`
-  - Behavioral and adversarial contract for identity, isolation, exact-once initialization, concurrency, interruption, redaction, atomicity, evidence, and default-off discovery.
+  - Preserved 26-case behavioral and adversarial baseline for identity, isolation, exact-once initialization, concurrency, interruption, redaction, atomicity, evidence, and default-off discovery.
+- `tests/test_self_improvement_contract.py`
+  - 28 audit and independent-review regressions covering real Harmonia envelopes, tool-result truth, request-scoped call identity, explicit-root isolation, lifecycle recovery, worktree baselines, schema refusal and evidence limits.
 
 ## Runtime boundaries
 
@@ -43,9 +45,9 @@ The versioned Olympus MCP configuration excludes `talk_to`. The existing `harmon
 
 ## Verification
 
-- Self-improvement contract: `50 passed` (26 original, unmodified, plus 24 audit regressions)
+- Self-improvement contract: `54 passed` (26 original, unmodified, plus 28 audit and independent-review regressions)
 - Coordination subsystem tests: `943 passed`
-- Full repository suite: `1187 passed`
+- Full consolidated repository suite: `1197 passed`
 - Ruff: pass
 - Manifest/default-off smoke: pass
 - Plugin discovery smoke: pass, not enabled
@@ -56,7 +58,8 @@ Each entry names the finding it closes in `EXTERNAL_LOGIC_AUDIT.md`.
 
 - **F-01** — the Harmonia classifier read `status`/`success`, fields Harmonia never emits. It now reads `error.code` and `state` against the kernel's real contract, preserves `uncertainty`, and treats anything not provably pre-admission as post-admission. Previously 0 of 9 durable states and 3 of 13 error codes classified correctly.
 - **F-02** — a tool result reporting failure without an `error` key or `exit_code` was recorded as a success. The host's own `status` is now used, with a stricter local parser as fallback.
-- **F-03** — `tool_call_id` was a global primary key while Hermes derives it from call content, so the same command in two sessions, or across a verify-then-retry pair, silently collapsed to one row. Identity is now `(session_id, turn_id, tool_call_id)`.
+- **F-03** — `tool_call_id` was a global primary key while Hermes derives it from call content, so repeated commands silently collapsed. Independent review found that `(session_id, turn_id, tool_call_id)` still lost identical calls across model requests inside one turn. Identity is now `(session_id, turn_id, api_request_id, tool_call_id)`, preserving real retries while duplicate observer delivery remains idempotent.
+- **F-06** — environment redirection and nested-repository inheritance were already rejected, but independent review found that an arbitrary explicit `project_root` kwarg could still redirect a foreign repository. The nearest active Git repository is now authoritative; an explicit root may only confirm the same discovered root.
 - **F-07** — `candidate_version` is pinned to its release directory.
 - **F-11** — `on_session_start` never fires on continuation, so resumed sessions recorded nothing. `post_tool_call` and `post_llm_call` now initialize lazily.
 - **F-12** — `_git_head` returned `unknown` for linked worktrees, including this candidate's own. Loose refs are now resolved in the common dir.

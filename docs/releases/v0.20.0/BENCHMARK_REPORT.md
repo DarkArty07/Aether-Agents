@@ -1,4 +1,4 @@
-# v0.20.0 Self-Improvement Bootstrap — Benchmark Report
+# v0.20.0 Self-Improvement Instrumentation — Benchmark Report
 
 ## Scope
 
@@ -9,7 +9,7 @@ This report covers the default-off implementation baseline. It does not claim li
 - Git baseline: `a88b5cc`
 - Last official release: `v0.18.2`
 - Technical predecessor: `v0.19.5`, closed `VIABLE — BOUNDED`, unpublished
-- Candidate: `v0.20.0 — Self-Improvement Cycle Bootstrap`
+- Candidate: `v0.20.0 — Self-Improvement Instrumentation`
 - Logical provider: `custom:aether-router`
 - Manifest digest: `sha256:f31a60f234ed127d27759c56f2a9769233654b920d5ed0996ef8d2f177ff1f8d`
 
@@ -27,9 +27,9 @@ Final results:
 
 | Scope | Result |
 |---|---:|
-| Self-improvement contract (26 original + 24 audit regressions) | 50 passed |
+| Self-improvement contract (26 original + 28 audit and independent-review regressions) | 54 passed |
 | Coordination subsystem | 943 passed |
-| Full repository | 1187 passed |
+| Full consolidated repository | 1197 passed |
 | Ruff | PASS |
 | Plugin discovery | PASS — not enabled |
 
@@ -39,6 +39,12 @@ implementation and the tests judging it had been changed together, leaving a
 green suite in a tree that failed two of its own safety properties. Every
 correction had to satisfy the pre-existing contract as well as the new
 regressions in `tests/test_self_improvement_contract.py`.
+
+A second independent review initially blocked the candidate at `89cba0e`: an
+explicit `project_root` could still redirect a foreign repository, and identical
+tool calls across model requests inside one turn still collided. Commit
+`b2cabfa` closes both gaps with four independent regressions. See
+`INDEPENDENT_PHASE1_REVIEW.md`.
 
 One intended fix was **withheld** for the same reason. Redesigning the
 `authorization` block so that granting a gate opens it rather than invalidating

@@ -6,6 +6,8 @@
 > **Baseline:** `48635b41e8d20caf68742b066e9153b42ac2d883`
 > **Worktree:** `/home/arty/Escritorio/agentes/aether-v020-isolated`
 > **Date:** 2026-07-28
+>
+> **Independent review addendum:** The candidate at `89cba0e` was initially blocked because F-06 still accepted cross-project `project_root` redirection and F-03 still collapsed identical calls across model requests inside one turn. Both residual gaps were corrected in `b2cabfa` and accepted in `INDEPENDENT_PHASE1_REVIEW.md`. The finding dispositions below describe the original correction author's state before that independent amendment.
 
 ---
 
@@ -297,3 +299,16 @@ No push, merge, rebase, tag, release, activation, restart, deployment or publica
 ## 15. Status
 
 **`CORRECTION CANDIDATE VERIFIED`** — verified against a clean checkout of the final commit, and explicitly **not** declared accepted by the party that produced it. Acceptance requires an independent external audit of this branch.
+
+
+---
+
+## 16. Independent disposition
+
+The required second review is complete. It initially rejected this candidate's F-03 and F-06 dispositions after reproducing two residual gaps: same-turn calls still collided across model requests, and an explicit `project_root` could still redirect a foreign repository. Commit `b2cabfa` corrects both without modifying the preserved 26-case baseline.
+
+The independent result is recorded in `INDEPENDENT_PHASE1_REVIEW.md` with final verdict:
+
+**`PHASE 1 ACCEPTED — TRUTHFUL INSTRUMENTATION ONLY`**
+
+This acceptance does not change the audit's architectural verdict. v0.20.0 remains default-off instrumentation, not causal self-improvement; Phases 2 and 3 remain unimplemented.

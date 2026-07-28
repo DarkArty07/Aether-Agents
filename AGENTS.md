@@ -18,7 +18,7 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. The template also excludes `talk_to` while Harmonia is default-off, so a template-based install has no general delegation path — that template is scoped to this project's own dogfooding, not to general installation.
 
-PDR-0009 governs the self-improvement policy. Harmonia activation, keys, runtime restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
+PDR-0009 governs the self-improvement policy. Phase 1 truthful-instrumentation corrections are independently accepted in `docs/releases/v0.20.0/INDEPENDENT_PHASE1_REVIEW.md`; causal self-improvement remains unimplemented. Harmonia activation, keys, runtime restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
 
 ## Git Conventions
 
