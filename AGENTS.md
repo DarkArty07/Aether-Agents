@@ -18,23 +18,43 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. The template also excludes `talk_to` while Harmonia is default-off, so a template-based install has no general delegation path — that template is scoped to this project's own dogfooding, not to general installation.
 
-PDR-0009 governs the policy. Harmonia activation, keys, runtime restart, live pilot, merge, tag, release, deployment and publication remain separately gated. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
+PDR-0009 governs the self-improvement policy. Harmonia activation, keys, runtime restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
 
 ## Git Conventions
 
 ### Branching Model
 
-```
+```text
 feature/{name}  →  main
 ```
 
-- **`main`** — Production-ready. Feature branches merge here directly via PR.
-- **`feature/{name}`** — Individual features. Branch from `main`, merge back to `main`.
+- **`main`** — Latest integrated, tested repository state. It may be ahead of the latest published version while unreleased capabilities remain default-off.
+- **`feature/{name}`** — One bounded change or candidate. Branch from the current `origin/main`, merge back to `main` through a PR, then delete it.
+- **Tag / GitHub Release** — Official published version. Publication is separate from integration and must point to a commit already on `main`.
 
 **Rules:**
-1. Never commit directly to `main`. Always merge via PR from a feature branch.
-2. Never work directly on `main`. Always branch from `main`.
-3. Delete feature branches after merging.
+1. Never commit or develop directly on `main`; use a feature branch and PR.
+2. Every normal PR targets `main`. Stacked PRs are forbidden unless a versioned decision explicitly records the dependency, merge order and removal deadline.
+3. Before opening a new SemVer candidate, the previous candidate must be `MERGED`, `ABANDONED`, or `SUPERSEDED`; `CLOSED` without one of those dispositions is invalid.
+4. A roadmap may close technically while publication remains pending, but the next SemVer candidate must not start on top of an unmerged predecessor.
+5. Merge to `main` does not imply activation, deployment, tag or GitHub Release.
+6. Delete merged feature branches and reconcile issues, PRs and continuity immediately after integration.
+7. Run `python scripts/check_release_governance.py preflight-next-version --version X.Y.Z` from a clean, synchronized `main` before creating a new version branch.
+
+### Standing GitHub Automation Authority
+
+For Aether Agents, the product owner grants agents standing authority to perform routine GitHub lifecycle operations without per-action confirmation:
+
+- create atomic local commits;
+- push feature branches;
+- create, update, retarget and mark PRs ready;
+- enable auto-merge or merge a PR after required checks pass;
+- delete merged branches;
+- create annotated SemVer tags on the integrated `main` commit;
+- create or reconcile GitHub Releases for those tags;
+- update and close related issues and milestones when their merge conditions are satisfied.
+
+This authority applies only when the exact committed candidate passes its required gates in a clean checkout, the PR targets `main`, CI is green or an explicitly documented equivalent gate exists, and no unresolved release blocker remains. Agents must not force-push shared history, bypass required checks, merge a red or ambiguous candidate, publish secrets, or treat GitHub integration as authorization for runtime activation, deployment, data migration, credential changes, spending or production effects.
 
 ### Versioning
 
@@ -202,11 +222,12 @@ chore: merge dev into main
 - Subject line under 72 characters.
 - Body is optional. Use it for "why", not "what".
 
-### Merging
+### Merging and Release Reflection
 
-- **Feature → dev:** Squash merge preferred. Keeps dev history clean.
-- **dev → main (release):** Merge commit with tag. Preserves full history.
-- **After release:** Verify `dev` and `main` are at the same commit hash.
+- **Feature → main:** Merge through a PR after the committed candidate passes required gates. Preserve audited atomic history with a merge commit when traceability matters; squash only when the branch history is intentionally disposable.
+- **After merge:** Verify local and remote `main`, close or update linked issues, delete the merged branch, and remove obsolete stacked PRs or worktrees.
+- **Release:** Create an annotated `vX.Y.Z` tag only on the exact integrated `main` commit after version metadata and release evidence agree. Pushing the tag triggers `.github/workflows/release.yml`, which verifies the boundary, builds artifacts and creates or reconciles the GitHub Release automatically.
+- **No conflation:** A merge can integrate default-off or unreleased work. A tag publishes a version. Runtime activation and deployment are separate operational decisions.
 
 ### README and Website
 

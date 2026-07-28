@@ -10,7 +10,9 @@
 
 **Candidate head:** `e8b287b`
 
-**PR:** #113 remains draft; merge and release are not part of this closeout
+**PR:** #113 remained draft at this historical closeout; merge and release were not part of the original scope.
+
+> **Governance correction (2026-07-28):** ODR-0001 supersedes the inference that a later SemVer candidate may start on an unmerged predecessor. Technical closeout and publication remain separable, but branch disposition must now be `MERGED`, `ABANDONED`, or `SUPERSEDED` before the next version begins.
 
 ## 1. Closed question
 
@@ -107,4 +109,4 @@ This closeout is a versioned technical and architectural boundary only. It does 
 - enable Harmonia in live configuration;
 - modify production state.
 
-Those remain explicit external-effect decisions. The next project topic can start without reopening this roadmap.
+Those were explicit external-effect decisions under the original closeout. Under ODR-0001, GitHub integration and release publication now have standing gated authority; a next SemVer candidate cannot start until this branch is merged, abandoned, or superseded. This historical roadmap does not need to reopen for that repository reconciliation.

@@ -15,6 +15,7 @@ Operations documentation explains how to run, observe, maintain, recover, and sa
 | `TROUBLESHOOTING.md` | Symptom → evidence → diagnosis → safe correction |
 | `HONCHO_RETIREMENT.md` | Removal of legacy Honcho configuration, data, services, docs, and hidden dependencies |
 | `INCIDENTS.md` | Incident evidence, issue tracking, containment, and closeout |
+| [Main integration and release automation](../decisions/ODR-0001-main-integration-and-release-automation.md) | Direct feature-to-main integration, standing GitHub authority, next-version preflight, tags, and automatic GitHub Release reflection |
 | `MULTI_INSTANCE.md` | Concurrent projects, sessions, gateways, and identity correlation |
 
 ## Runbook rules

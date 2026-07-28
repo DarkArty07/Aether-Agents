@@ -33,6 +33,12 @@ Sequences are independent by decision type.
 | [PDR-0002](./PDR-0002-generic-adaptive-software-product.md) | APPROVED | Aether is a generic adaptive software project-production product; its value requires representative same-prompt quality parity or superiority against strong general agents. |
 | [PDR-0001](./PDR-0001-product-essence.md) | SUPERSEDED | Preserved the empirical product essence but incorrectly framed the intended product as personal rather than generic and adaptive. |
 
+## Operational decisions
+
+| Record | Status | Governing decision |
+|---|---|---|
+| [ODR-0001](./ODR-0001-main-integration-and-release-automation.md) | APPROVED | `main` is the integration branch, releases are tag/GitHub Release boundaries, and agents have standing authority to complete gated GitHub lifecycle operations without per-action approval. |
+
 ## Required fields
 
 ```markdown

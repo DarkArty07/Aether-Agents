@@ -173,7 +173,7 @@ v0.20.0 implementation must demonstrate:
 
 Initial approval of this record authorized documentation alignment and preparation of a v0.20.0 implementation plan. On 2026-07-28, the owner separately authorized local plugin/source implementation, manifest loading, the project-scoped ledger, measurement, isolation, and tests. The resulting plugin is implemented default-off.
 
-That separate authorization does not authorize Harmonia activation, coordination-key creation, runtime restart, migration, merge, tag, release, deployment, publication, spending, or model/provider changes.
+That implementation authorization did not originally authorize Harmonia activation, coordination-key creation, runtime restart, migration, merge, tag, release, deployment, publication, spending, or model/provider changes. On 2026-07-28, ODR-0001 added standing gated authority for commits, push, pull requests, merge to `main`, annotated tags and GitHub Releases. Harmonia activation, keys, restart, migration, deployment, spending and model/provider changes remain outside that GitHub authority.
 
 ## References
 
@@ -183,4 +183,5 @@ That separate authorization does not authorize Harmonia activation, coordination
 - Multi-agent model: `docs/knowledge/MULTI_AGENT_MODEL.md`
 - Product authority: `docs/knowledge/AUTHORITY.md`
 - Product completion contract: `docs/product/COMPLETION.md`
+- Main integration and release automation: `docs/decisions/ODR-0001-main-integration-and-release-automation.md`
 - v0.19.x closeout: `docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md`

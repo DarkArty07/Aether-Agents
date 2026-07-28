@@ -1,6 +1,6 @@
 # Contributor Documentation
 
-> **Status:** STRUCTURE CURRENT; existing contributor guide requires reconciliation
+> **Status:** STRUCTURE CURRENT; root contributor workflow reconciled by ODR-0001
 
 This area will explain how to change Aether Agents while preserving product intent, architecture boundaries, and repository quality.
 
@@ -17,9 +17,9 @@ This area will explain how to change Aether Agents while preserving product inte
 | `OLYMPUS_DEVELOPMENT.md` | MCP/ACP development and compatibility verification |
 | `RELEASES.md` | Versioning, metadata synchronization, tags, and closeout evidence |
 
-## Immediate reconciliation required
+## Active workflow
 
-The root `CONTRIBUTING.md` currently describes a `feature → dev → main` model, while the project context describes `feature → main`. Until reconciled, contributors must not assume either document is current without checking repository policy.
+The repository uses direct `feature → main` integration. `main` is the latest integrated, tested state; annotated tags and GitHub Releases represent official published versions. ODR-0001 governs standing GitHub automation authority, branch disposition, next-version preflight and release reflection.
 
 ## Contributor rules
 

@@ -42,7 +42,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
 | 🧪 | **Default-Off Coordination Lab** | v0.19 R7 adds an isolated shadow observer, typed failure/recovery evidence, and disposable durable correlation. It is not active in the gateway and never replaces Olympus lifecycle ownership. |
-| 🔬 | **Self-Improvement Cycle Bootstrap** | v0.20.0 adds a default-off Hermes lifecycle plugin, project-scoped redacted ledger, interruption reconciliation, and deterministic release-evidence projection. Activation and release remain separately gated. |
+| 🔬 | **Self-Improvement Instrumentation Bootstrap** | v0.20.0 adds a default-off Hermes lifecycle plugin, project-scoped redacted ledger, interruption reconciliation, and deterministic release-evidence projection. Runtime activation remains separately gated; GitHub integration and release publication follow ODR-0001. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
@@ -85,7 +85,7 @@ The [v0.19.x incremental kernel migration](docs/releases/v0.19.x-kernel-migratio
 
 ### v0.20.0 self-improvement bootstrap
 
-The candidate [v0.20.0 cycle](docs/releases/v0.20.0/CYCLE.yaml) now has an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and can project deterministic release evidence without approving a version. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`; activation, runtime restart, a live bounded pilot, merge, tag, release and publication remain explicitly unauthorized.
+The candidate [v0.20.0 instrumentation bootstrap](docs/releases/v0.20.0/CYCLE.yaml) has an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and can project deterministic release evidence without approving a version. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`. Activation, runtime restart and a live bounded pilot remain separately gated. Commits, push, PR integration, annotated tags and GitHub Releases follow the standing deterministic authority in [ODR-0001](docs/decisions/ODR-0001-main-integration-and-release-automation.md).
 
 ---
 

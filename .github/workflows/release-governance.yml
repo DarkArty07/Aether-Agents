@@ -1,0 +1,38 @@
+name: Release Governance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate repository release policy
+        run: python scripts/check_release_governance.py policy
+
+  pull-request-target:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require direct integration to main
+        run: >-
+          python scripts/check_release_governance.py pr
+          --base "${{ github.base_ref }}"
+          --head "${{ github.head_ref }}"
