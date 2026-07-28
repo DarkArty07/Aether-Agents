@@ -122,7 +122,7 @@ def kernel(tmp_path: Path):
         writer_authenticator=auth,
         integrity_signer=HMACIntegritySigner(b"integrity-key"),
     )
-    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=10_000_000_000).lease
+    lease = ledger.acquire_lease("ledger-owner", "owner", ttl=120_000_000_000).lease
     assert lease is not None
     context = WriterContext(scope, "owner", "key-owner", "ledger-owner", lease.epoch, lease.expires_at)
     assert ledger.create_contract(make_contract()) in (Result.APPLIED, Result.DUPLICATE)
@@ -210,6 +210,15 @@ def stage(d, attempt=1):
         plan_revision=7,
         snapshot_digest="sha256:snapshot",
     )
+
+
+def test_dispatch_fence_covers_contract_execution_budget(kernel):
+    ledger, _, attempt, _ = kernel
+    before = ledger.clock()
+
+    envelope = stage(dispatcher(kernel), attempt.attempt)
+
+    assert 60_000_000_000 <= envelope.authority.lease_until - before < 61_000_000_000
 
 
 def test_fixed_contract_dispatches_each_task_to_its_exact_bound_principal(fixed_kernel):

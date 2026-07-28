@@ -276,10 +276,11 @@ class KernelDispatcher:
         lease_resource = f"dispatch:{run_id}:{task_id}:{attempt}"
         now = self.ledger.clock()
         writer_remaining = max(1, self._writer.context.expires_at - now)
+        task_budget = contract.limits.time_seconds * 1_000_000_000
         acquired = self.ledger.acquire_lease(
             lease_resource,
             self._owner,
-            ttl=min(10_000_000_000, writer_remaining),
+            ttl=min(task_budget, writer_remaining),
         ).lease
         if acquired is None:
             raise StaleFence("attempt fence unavailable")
