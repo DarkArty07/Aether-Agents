@@ -521,6 +521,57 @@ def test_invalid_committed_selection_cannot_fallback_to_either_successor(two_suc
     assert [payload for kind, payload in effects.calls if kind == "dispatch" and payload["task_id"] in {"task-b", "task-c"}] == []
 
 
+def test_internal_dispatch_unknown_rebuilds_with_integrity_authentication(two_successor_source):
+    _, ledger, _, dispatcher, effects, _, _, _ = two_successor_source
+    committed = commit_selection(
+        ledger,
+        dispatcher,
+        run_id="run-two-successors",
+        contract_id="contract-two-successors",
+        task_id="task-b",
+        worker_id="worker-b",
+    )
+    source_stage = next(
+        payload
+        for payload in event_payloads(ledger, "dispatch.staged")
+        if payload["task_id"] == "task-a"
+    )
+    envelope = dispatcher.stage_successor(
+        "run-two-successors",
+        "task-a",
+        "task-b",
+        project_root=source_stage["project_root"],
+        plan_revision=committed.decision.plan_revision,
+        selection_epoch=committed.decision.selection_epoch,
+        selection_proposal_id=committed.decision.proposal_id,
+        selection_worker_id=committed.decision.resolved_worker_id,
+    )
+    authority = envelope.authority
+    claimed = dispatcher.claim_with(authority)
+    assert claimed is not None
+    assert ledger.mark_outbox_effect_started(
+        authority.message_id,
+        dispatcher._owner,
+        lease=dispatcher._claimed_transport_lease(claimed),
+    ) is Result.APPLIED
+
+    assert run(dispatcher.dispatch_with(authority)) is None
+    unknown = [
+        payload
+        for payload in event_payloads(ledger, "dispatch.unknown")
+        if payload["task_id"] == "task-b"
+    ]
+    assert len(unknown) == 1
+    rebuilt = KernelRunService.rebuild(ledger)
+    assert rebuilt.task("run-two-successors", "task-b").state is TaskState.RUNNING
+    assert len(rebuilt.attempts("run-two-successors", "task-b")) == 1
+    assert [
+        payload
+        for kind, payload in effects.calls
+        if kind == "dispatch" and payload["task_id"] == "task-b"
+    ] == []
+
+
 def test_two_independent_contexts_reconcile_committed_b_once(two_successor_source):
     clock, ledger, runtime, dispatcher, effects, _, writer_context, _ = two_successor_source
     commit_selection(

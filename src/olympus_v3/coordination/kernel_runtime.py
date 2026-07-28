@@ -36,6 +36,8 @@ from .workflow import (
     transition_state,
 )
 
+_INTERNAL_LEDGER_EVENT_KINDS = {"outbox.poison", "dispatch.unknown"}
+
 
 class IdempotencyConflictError(ValueError):
     pass
@@ -120,7 +122,7 @@ class KernelRunService:
             row["fence"],
             1,
         )
-        if row["kind"] == "outbox.poison":
+        if row["kind"] in _INTERNAL_LEDGER_EVENT_KINDS:
             material = json.dumps(
                 [
                     1,
@@ -146,7 +148,7 @@ class KernelRunService:
                 ledger.integrity_signer.key_id,
                 "ledger-integrity",
             ) or not ledger.integrity_signer.verify(material, row["writer_proof"]):
-                raise AuthorityError("internal poison authentication failed")
+                raise AuthorityError("internal ledger event authentication failed")
             return
         if row["kind"] == "contract.advance":
             prior = payload.get("prior_contract", {})
