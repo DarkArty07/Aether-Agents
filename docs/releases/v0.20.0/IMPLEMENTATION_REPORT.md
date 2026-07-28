@@ -2,9 +2,11 @@
 
 ## Verdict
 
-`IMPLEMENTED — DEFAULT OFF`
+`MEASUREMENT SUBSTRATE IMPLEMENTED — DEFAULT OFF`
 
-The source increment approved under PDR-0009 is implemented and deterministically verified. It is not activated, operationally piloted, merged, tagged, released, deployed, or published.
+A default-off, project-scoped, privacy-preserving session ledger is implemented and deterministically verified. It is not activated, operationally piloted, merged, tagged, released, deployed, or published.
+
+This increment is **instrumentation, not a self-improvement cycle**. It contains no evaluator, no candidate isolation, no before/after comparison and no rollback, so no causal claim that Aether improved can be derived from it. The external logic audit (`EXTERNAL_LOGIC_AUDIT.md`) records the full reasoning; the Phase 1 corrections below make the instrumentation truthful, while Phases 2-3 — the parts that would make causality possible — remain unbuilt.
 
 ## Delivered components
 
@@ -41,15 +43,31 @@ The versioned Olympus MCP configuration excludes `talk_to`. The existing `harmon
 
 ## Verification
 
-- Bootstrap tests: `26 passed`
-- Existing Aether continuity tests: `80 passed`
+- Self-improvement contract: `50 passed` (26 original, unmodified, plus 24 audit regressions)
 - Coordination subsystem tests: `943 passed`
-- MCP server schema tests: `11 passed`
-- Full repository suite: `1163 passed`
+- Full repository suite: `1187 passed`
 - Ruff: pass
-- Python compilation: pass
 - Manifest/default-off smoke: pass
 - Plugin discovery smoke: pass, not enabled
+
+## Audit corrections applied (Phase 1)
+
+Each entry names the finding it closes in `EXTERNAL_LOGIC_AUDIT.md`.
+
+- **F-01** — the Harmonia classifier read `status`/`success`, fields Harmonia never emits. It now reads `error.code` and `state` against the kernel's real contract, preserves `uncertainty`, and treats anything not provably pre-admission as post-admission. Previously 0 of 9 durable states and 3 of 13 error codes classified correctly.
+- **F-02** — a tool result reporting failure without an `error` key or `exit_code` was recorded as a success. The host's own `status` is now used, with a stricter local parser as fallback.
+- **F-03** — `tool_call_id` was a global primary key while Hermes derives it from call content, so the same command in two sessions, or across a verify-then-retry pair, silently collapsed to one row. Identity is now `(session_id, turn_id, tool_call_id)`.
+- **F-07** — `candidate_version` is pinned to its release directory.
+- **F-11** — `on_session_start` never fires on continuation, so resumed sessions recorded nothing. `post_tool_call` and `post_llm_call` now initialize lazily.
+- **F-12** — `_git_head` returned `unknown` for linked worktrees, including this candidate's own. Loose refs are now resolved in the common dir.
+- **F-13** — the baseline records a dirty-worktree digest, so uncommitted third-party work cannot be silently folded into a comparison.
+- **F-14** — one interrupted turn latched a session into `reconciliation_required` forever. Turns are now recorded individually and session status is derived, so a session recovers while the interruption stays visible.
+- **F-15** — reusing a session id under a different manifest digest or baseline is refused instead of silently merging evidence.
+- **F-16** — the ledger carries a schema version and refuses an incompatible file loudly. Previously an older schema produced a healthy-looking session with zero evidence.
+- **F-19** — the manifest digest is re-verified at finalization and drift is recorded.
+- **F-24** — the evidence projection now states what it cannot establish and surfaces baseline and drift integrity.
+
+Deliberately **not** applied: the F-08 `authorization` redesign, because it would require rewriting an existing acceptance test. Only its silent-failure half was fixed. See `BENCHMARK_REPORT.md`.
 
 ## Remaining gates
 

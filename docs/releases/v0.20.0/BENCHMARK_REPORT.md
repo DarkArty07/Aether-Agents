@@ -11,7 +11,13 @@ This report covers the default-off implementation baseline. It does not claim li
 - Technical predecessor: `v0.19.5`, closed `VIABLE — BOUNDED`, unpublished
 - Candidate: `v0.20.0 — Self-Improvement Cycle Bootstrap`
 - Logical provider: `custom:aether-router`
-- Initial manifest digest: `sha256:fd74b6019a5d60a5cda11c01e59492dd3f3d6e592a182778ba5def9324d1273a`
+- Manifest digest: `sha256:f31a60f234ed127d27759c56f2a9769233654b920d5ed0996ef8d2f177ff1f8d`
+
+> The previously recorded digest (`sha256:fd74b601…`) had gone stale: the manifest
+> was edited after the report was written, so the stated baseline no longer
+> described the shipped artifact. That is the same class of error this cycle
+> exists to catch, which is why the digest is regenerated whenever this report
+> changes. See `EXTERNAL_LOGIC_AUDIT.md` F-21.
 
 ## Test-first evidence
 
@@ -21,14 +27,26 @@ Final results:
 
 | Scope | Result |
 |---|---:|
-| Self-improvement bootstrap | 26 passed |
-| Existing Aether continuity | 80 passed |
+| Self-improvement contract (26 original + 24 audit regressions) | 50 passed |
 | Coordination subsystem | 943 passed |
-| MCP server schema | 11 passed |
-| Full repository | 1163 passed |
+| Full repository | 1187 passed |
 | Ruff | PASS |
-| Python compile smoke | PASS |
 | Plugin discovery | PASS — not enabled |
+
+The 26 original cases were **not modified** while the audit findings were fixed.
+That constraint is deliberate: the audit's central finding (F-05) was that an
+implementation and the tests judging it had been changed together, leaving a
+green suite in a tree that failed two of its own safety properties. Every
+correction had to satisfy the pre-existing contract as well as the new
+regressions in `tests/test_self_improvement_contract.py`.
+
+One intended fix was **withheld** for the same reason. Redesigning the
+`authorization` block so that granting a gate opens it rather than invalidating
+the manifest (F-08) would have required rewriting
+`test_rejects_contract_that_authorizes_activation_or_release`. The interlock is
+therefore left as designed and only its silence was fixed: an identity failure
+against a directory that does carry a manifest is now logged. Changing the
+interlock's semantics is a product-owner decision, not an implementation one.
 
 ## Harmonia dogfooding
 

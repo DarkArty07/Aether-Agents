@@ -2,8 +2,8 @@
 
 ## Contract
 
-- Candidate: `Self-Improvement Cycle Bootstrap`
-- Manifest digest: `sha256:7b715d2e176aca92fcf78268f38dc9002309cc819a3f9bfe71db380e1331df26`
+- Candidate: `Self-Improvement Instrumentation`
+- Manifest digest: `sha256:f31a60f234ed127d27759c56f2a9769233654b920d5ed0996ef8d2f177ff1f8d`
 - Logical provider: `custom:aether-router`
 - Next-version signal: `REQUIRES_MORE_EVIDENCE`
 
@@ -20,6 +20,19 @@
 ## Coordination outcomes
 
 - none: 0
+- events with an uncertain durable effect: 0
+
+## Measurement integrity
+
+- Sessions without a clean baseline worktree: 0
+- Sessions whose manifest changed mid-session: 0
+
+## What this evidence does not establish
+
+These are counts of recorded activity. They do not measure whether the requested outcome was
+achieved, whether scope was preserved, or whether quality improved. No task statement, baseline
+measurement, candidate measurement, or acceptance threshold is recorded, so no causal claim about
+Aether improving can be derived from this file. Activity volume is not improvement.
 
 ## Authority boundary
 

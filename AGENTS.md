@@ -12,9 +12,13 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 ## Aether self-improvement cycle
 
-Every Hermes session whose verified project root is Aether Agents participates in the active SemVer self-improvement cycle before project work. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`. The cycle wraps the user's real task: use Harmonia when specialist work applies, never use a hidden `talk_to` fallback, preserve and classify failures, verify cleanup before direct takeover, repair Aether directly only for framework defects inside this project, verify the correction, and retry the intended Harmonia path. Accumulate evidence for the next minor without presuming its architecture or approving it automatically. Other projects must never mutate Aether incidentally.
+**Operating policy** — when working inside Aether Agents: use Harmonia when specialist work applies, never use a hidden `talk_to` fallback, preserve and classify failures, verify cleanup before direct takeover, repair Aether directly only for framework defects inside this project, verify the correction, and retry the intended Harmonia path. Accumulate evidence for the next minor without presuming its architecture or approving it automatically. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`.
 
-PDR-0009 governs the cycle. The v0.20.0 plugin/source bootstrap is implemented and verified default-off. Harmonia activation, keys, runtime restart, live pilot, merge, tag, release, deployment and publication remain separately gated.
+**What is enforced by code, and what is not.** The above is policy an agent must follow; it is not a mechanism. The v0.20.0 increment implements a default-off *measurement substrate*: project-identity verification, a redacted project-local ledger, admission-phase classification of Harmonia results, interruption recording, and a deterministic evidence projection that cannot approve a version. It does **not** implement takeover gating, failure-class classification, repair verification, retry correlation, an evaluator, before/after comparison, or rollback. No causal claim that Aether improved can currently be derived from it.
+
+The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. The template also excludes `talk_to` while Harmonia is default-off, so a template-based install has no general delegation path — that template is scoped to this project's own dogfooding, not to general installation.
+
+PDR-0009 governs the policy. Harmonia activation, keys, runtime restart, live pilot, merge, tag, release, deployment and publication remain separately gated. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
 
 ## Git Conventions
 

@@ -30,6 +30,13 @@ v0.20.0 bootstraps an automatic, measured, project-isolated improvement cycle. S
 
 ## Session state machine
 
+> **Status: operating model, not implemented state.** The runtime persists three
+> session states — `active`, `reconciliation_required`, `finalized` — plus a
+> per-turn outcome history. `WORK_CONTRACTED`, `CLASSIFIED`, `REPAIRING`,
+> `VERIFYING` and `RETRYING_INTENDED_PATH` have no representation in code, no
+> column and no transition. The sequence below describes how an agent should
+> work; it is not a machine that enforces it. See `EXTERNAL_LOGIC_AUDIT.md` F-04.
+
 ```text
 SESSION_IDENTIFIED
   -> BASELINE_CAPTURED
@@ -59,7 +66,7 @@ Before project work, the future deterministic hook and Hermes must establish:
 7. any unfinished prior improvement session requiring reconciliation;
 8. the applicable user task and evidence level.
 
-If project identity cannot be proven, the hook must not write Aether state. It injects an identity warning and leaves work direct and fail-closed.
+If project identity cannot be proven, the hook must not write Aether state, and it does not. It leaves work direct and fail-closed. It does **not** inject an identity warning into the model turn — the failure is invisible to the model by design, because the hook cannot distinguish "not an Aether project" from "an Aether project whose contract is unloadable". Where a directory does carry a cycle manifest but fails verification, the hook now logs a warning to the operator, so an owner who has just granted a gate can tell an intentional interlock from a corrupt file.
 
 ## Work applicability
 
