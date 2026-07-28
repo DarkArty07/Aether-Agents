@@ -66,7 +66,15 @@ class DeterministicACPManager:
         }
 
 
-def bounded_payload(root: Path, source_worker: str, candidate_worker_a: str, candidate_worker_b: str) -> dict[str, Any]:
+def bounded_payload(
+    root: Path,
+    source_worker: str,
+    candidate_worker_a: str,
+    candidate_worker_b: str,
+    *,
+    response_delivery: bool = False,
+) -> dict[str, Any]:
+    permissions = ["read", "return_evidence"] if response_delivery else ["read"]
     return {
         "action": "start", "project_root": str(root), "request_id": "bounded-demo",
         "plan_revision": 1, "snapshot_digest": "sha256:" + "a" * 64,
@@ -76,9 +84,9 @@ def bounded_payload(root: Path, source_worker: str, candidate_worker_a: str, can
             "model_budget": 10, "qa_reserve": 1, "recovery_reserve": 1, "escalation_conditions": ["demo"],
             "selection_policy_id": POLICY_ID, "selection_candidate_task_ids": ["task-c", "task-b"],
             "tasks": [
-                {"task_id": "task-a", "worker": source_worker, "worker_permissions": ["read"], "prerequisites": []},
-                {"task_id": "task-c", "worker": candidate_worker_a, "worker_permissions": ["read"], "prerequisites": ["task-a"]},
-                {"task_id": "task-b", "worker": candidate_worker_b, "worker_permissions": ["read"], "prerequisites": ["task-a"]},
+                {"task_id": "task-a", "worker": source_worker, "worker_permissions": permissions, "prerequisites": []},
+                {"task_id": "task-c", "worker": candidate_worker_a, "worker_permissions": permissions, "prerequisites": ["task-a"]},
+                {"task_id": "task-b", "worker": candidate_worker_b, "worker_permissions": permissions, "prerequisites": ["task-a"]},
             ],
         },
     }
@@ -100,7 +108,11 @@ async def run_demo(
     registry = ProjectRuntimeRegistry(home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32))
     service = HarmoniaService(aether_home=home, config=config, registry=registry, discovered_workers=set(workers))
     try:
-        started = await service.handle(bounded_payload(root, *workers))
+        started = await service.handle(bounded_payload(
+            root,
+            *workers,
+            response_delivery=not isinstance(manager, DeterministicACPManager),
+        ))
         if not started.get("ok"):
             raise RuntimeError(f"bounded start failed: {started}")
         context = await registry.get_or_create(root)

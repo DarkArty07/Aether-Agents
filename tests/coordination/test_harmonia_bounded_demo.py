@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.run_harmonia_bounded_demo import bounded_payload
+
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts" / "run_harmonia_bounded_demo.py"
 
@@ -25,6 +27,20 @@ def test_real_demo_requires_second_explicit_dispatch_opt_in():
     result = _run("--mode", "real-acp-manager", "--confirm-isolated-demo")
     assert result.returncode != 0
     assert "--confirm-real-acp-dispatch" in result.stderr
+
+
+def test_real_payload_uses_kernel_materialized_response_evidence(tmp_path):
+    payload = bounded_payload(
+        tmp_path,
+        "hefesto",
+        "ictinus",
+        "daedalus",
+        response_delivery=True,
+    )
+    assert all(
+        task["worker_permissions"] == ["read", "return_evidence"]
+        for task in payload["contract"]["tasks"]
+    )
 
 
 def test_fake_demo_runs_full_bounded_lifecycle_and_reports_invariants():
