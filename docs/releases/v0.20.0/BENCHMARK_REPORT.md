@@ -28,8 +28,8 @@ Final results:
 | Scope | Result |
 |---|---:|
 | Self-improvement contract (26 original + 28 audit and independent-review regressions) | 54 passed |
-| Coordination subsystem | 943 passed |
-| Full consolidated repository | 1197 passed |
+| Coordination subsystem | 944 passed |
+| Full consolidated repository | 1198 passed |
 | Ruff | PASS |
 | Plugin discovery | PASS — not enabled |
 
@@ -43,7 +43,11 @@ regressions in `tests/test_self_improvement_contract.py`.
 A second independent review initially blocked the candidate at `89cba0e`: an
 explicit `project_root` could still redirect a foreign repository, and identical
 tool calls across model requests inside one turn still collided. Commit
-`b2cabfa` closes both gaps with four independent regressions. See
+`b2cabfa` closes both gaps with four independent regressions. The first exact
+checkout then reproduced F-23: `dispatch.unknown` was signed by the internal
+ledger signer but replay attempted external-writer authentication. Commit
+`a0852d8` corrects the event class, adds a deterministic regression, and the
+original concurrent test passed twenty consecutive executions. See
 `INDEPENDENT_PHASE1_REVIEW.md`.
 
 One intended fix was **withheld** for the same reason. Redesigning the

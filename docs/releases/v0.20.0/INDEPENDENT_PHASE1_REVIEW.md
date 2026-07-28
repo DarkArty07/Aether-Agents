@@ -3,7 +3,8 @@
 > **Status:** `PHASE 1 ACCEPTED — TRUTHFUL INSTRUMENTATION ONLY`
 > **Reviewer:** Local Dev agent, independent from the external model that authored the audit and correction candidate
 > **Reviewed candidate:** `89cba0e82d6273a722f6f9e83c0960af89f54590`
-> **Independent correction commit:** `b2cabfa`
+> **Independent self-improvement correction commit:** `b2cabfa`
+> **Integration-stability correction commit:** `a0852d8`
 > **Date:** 2026-07-28
 
 ## Scope
@@ -72,6 +73,24 @@ The durable ledger schema was bumped from 2 to 3 and continues to fail loudly on
 - `test_same_deterministic_call_repeated_in_one_turn_is_counted_per_request`
 - `test_duplicate_observer_delivery_remains_idempotent`
 
+### IR-03 — exact-checkout verification exposed F-23's real cause
+
+The first detached verification run reached the previously intermittent
+`test_two_independent_contexts_reconcile_committed_b_once` failure. The event
+was not randomly corrupted: `dispatch.unknown` is authored by the ledger's
+internal integrity signer, but replay recognized only `outbox.poison` as an
+internal event and attempted to validate `dispatch.unknown` with the external
+writer authenticator.
+
+**Correction:** replay now verifies both internal event kinds against the exact
+ledger-integrity identity and signature. A deterministic regression forces the
+`dispatch.unknown` path, and the original concurrent test passed twenty
+consecutive executions after the correction.
+
+**Independent test:**
+
+- `test_internal_dispatch_unknown_rebuilds_with_integrity_authentication`
+
 ## Review of the original correction claims
 
 After the independent corrections:
@@ -96,6 +115,7 @@ After the independent corrections:
 | F-17 public coordination path | HONESTLY PARTIAL — no automatic participation or general delegation path is claimed |
 | F-19 manifest drift | PASS |
 | F-20/F-21 documentation and digest truth | PASS after reconciliation |
+| F-23 nondeterministic concurrent reconciliation | PASS after IR-03 — internal `dispatch.unknown` authentication is replay-safe and deterministically tested |
 | F-24 activity volume versus quality | PARTIAL by design — evidence names its limits; causal quality remains Phase 2 |
 
 No Phase 2 or Phase 3 mechanism was introduced by this review.
@@ -108,8 +128,8 @@ The reviewed tree passed:
 Original self-improvement contract: 26 passed, unchanged
 Audit and independent regressions: 28 passed
 Combined self-improvement scope: 54 passed
-Coordination subsystem: 943 passed
-Full repository suite: 1197 passed
+Coordination subsystem: 944 passed
+Full repository suite: 1198 passed
 Ruff: PASS
 compileall: PASS
 release-governance policy: PASS

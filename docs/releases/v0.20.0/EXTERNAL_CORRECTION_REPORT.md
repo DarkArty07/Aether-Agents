@@ -305,7 +305,7 @@ No push, merge, rebase, tag, release, activation, restart, deployment or publica
 
 ## 16. Independent disposition
 
-The required second review is complete. It initially rejected this candidate's F-03 and F-06 dispositions after reproducing two residual gaps: same-turn calls still collided across model requests, and an explicit `project_root` could still redirect a foreign repository. Commit `b2cabfa` corrects both without modifying the preserved 26-case baseline.
+The required second review is complete. It initially rejected this candidate's F-03 and F-06 dispositions after reproducing two residual gaps: same-turn calls still collided across model requests, and an explicit `project_root` could still redirect a foreign repository. Commit `b2cabfa` corrects both without modifying the preserved 26-case baseline. Exact-checkout verification then reproduced F-23 and identified its deterministic cause: replay misclassified the internally signed `dispatch.unknown` event. Commit `a0852d8` corrects that path and adds a regression.
 
 The independent result is recorded in `INDEPENDENT_PHASE1_REVIEW.md` with final verdict:
 

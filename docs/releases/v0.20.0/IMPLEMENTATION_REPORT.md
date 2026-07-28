@@ -46,8 +46,8 @@ The versioned Olympus MCP configuration excludes `talk_to`. The existing `harmon
 ## Verification
 
 - Self-improvement contract: `54 passed` (26 original, unmodified, plus 28 audit and independent-review regressions)
-- Coordination subsystem tests: `943 passed`
-- Full consolidated repository suite: `1197 passed`
+- Coordination subsystem tests: `944 passed`
+- Full consolidated repository suite: `1198 passed`
 - Ruff: pass
 - Manifest/default-off smoke: pass
 - Plugin discovery smoke: pass, not enabled
@@ -68,6 +68,7 @@ Each entry names the finding it closes in `EXTERNAL_LOGIC_AUDIT.md`.
 - **F-15** — reusing a session id under a different manifest digest or baseline is refused instead of silently merging evidence.
 - **F-16** — the ledger carries a schema version and refuses an incompatible file loudly. Previously an older schema produced a healthy-looking session with zero evidence.
 - **F-19** — the manifest digest is re-verified at finalization and drift is recorded.
+- **F-23** — exact-checkout verification reproduced the intermittent concurrent reconciliation failure. `dispatch.unknown` is internally integrity-signed and is now verified as an internal ledger event during replay; a deterministic regression covers the path.
 - **F-24** — the evidence projection now states what it cannot establish and surfaces baseline and drift integrity.
 
 Deliberately **not** applied: the F-08 `authorization` redesign, because it would require rewriting an existing acceptance test. Only its silent-failure half was fixed. See `BENCHMARK_REPORT.md`.
