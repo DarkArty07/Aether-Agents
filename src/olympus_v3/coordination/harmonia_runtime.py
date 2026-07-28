@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field, replace
@@ -17,6 +18,14 @@ from typing import Any, Mapping, Protocol
 
 from .closure import CompletionState
 from .contracts import TaskState
+from .harmonia_selection import (
+    Candidate,
+    KernelSelectionValidator,
+    Prerequisite,
+    SelectionAuthority,
+    derive_projection,
+    propose_selection,
+)
 from .harmonia_store import ProjectStoreIdentity, derive_project_store
 from .kernel_dispatcher import DispatchRejected, KernelDispatcher, StaleFence
 from .kernel_runtime import KernelRunService, KernelWriter
@@ -28,7 +37,8 @@ from .ledger import (
     WriterContext,
 )
 from .olympus_adapter import OlympusRuntimeAdapter
-from .selection_commit import rebuild_selection_decisions
+from .protocol import ValidationError
+from .selection_commit import KernelSelectionCommitter, rebuild_selection_decisions
 
 WRITER_ID = "hermes"
 WRITER_KEY_ID = "harmonia-writer-v1"
@@ -181,6 +191,67 @@ class ProjectRuntimeContext:
             except (DispatchRejected, StaleFence):
                 continue
 
+    async def _commit_bounded_selection(self, run_id: str, source_id: str) -> None:
+        """Project and commit one bounded choice, using only kernel state."""
+        run = self.runtime.run(run_id)
+        contract = self.ledger.read_contract(run.contract_id)
+        if contract is None or contract.selection_policy_id is None:
+            return
+        source = self.runtime.task(run_id, source_id)
+        if source.state is not TaskState.CLOSED:
+            return
+        events = self.ledger.events()
+        source_stage = next((json.loads(e["payload"]) for e in events
+                             if e["kind"] == "dispatch.staged"
+                             and json.loads(e["payload"]).get("run_id") == run_id
+                             and json.loads(e["payload"]).get("task_id") == source_id), None)
+        receipt = next((json.loads(e["payload"]) for e in reversed(events)
+                        if e["kind"] == "evidence.receipt.recorded"
+                        and json.loads(e["payload"]).get("run_id") == run_id
+                        and json.loads(e["payload"]).get("task_id") == source_id), None)
+        cleanup = next((json.loads(e["payload"]) for e in reversed(events)
+                        if e["kind"] == "cleanup.completed"
+                        and json.loads(e["payload"]).get("run_id") == run_id
+                        and json.loads(e["payload"]).get("task_id") == source_id), None)
+        if source_stage is None or receipt is None or cleanup is None or contract.task_worker_bindings is None:
+            return
+        prior = rebuild_selection_decisions(self.ledger)
+        if (run_id, 1) in prior:
+            return
+        authority = SelectionAuthority(
+            self.identity.installation_id, self.identity.project_id, run_id, contract.contract_id,
+            contract.generation, contract.revocation_epoch, 1,
+            source_stage.get("plan_revision"), source_stage.get("snapshot_digest"),
+        )
+        candidates = []
+        for task_id in contract.selection_candidate_task_ids:
+            task = self.runtime.task(run_id, task_id)
+            attempts = self.runtime.attempts(run_id, task_id)
+            if task.state is not TaskState.PROPOSED or attempts:
+                return
+            principal = contract.task_worker_bindings.get(task_id)
+            if principal is None:
+                return
+            binding_digest = "sha256:" + hashlib.sha256(
+                json.dumps(principal.to_dict(), sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            candidates.append(Candidate(task_id, principal.actor_id, binding_digest,
+                (Prerequisite(source_id, receipt["receipt_id"], cleanup.get("message_id", "cleanup:" + source_id), TaskState.CLOSED),),
+                TaskState.PROPOSED, True))
+        try:
+            projection = derive_projection(
+                authority, tuple(candidates), approved_task_ids=contract.selection_candidate_task_ids,
+                bindings={task_id: contract.task_worker_bindings[task_id].actor_id for task_id in contract.selection_candidate_task_ids},
+            )
+            proposal = propose_selection(projection)
+            validator = KernelSelectionValidator(authority, tuple(candidates),
+                approved_task_ids=contract.selection_candidate_task_ids,
+                bindings={task_id: contract.task_worker_bindings[task_id].actor_id for task_id in contract.selection_candidate_task_ids})
+            writer = self.dispatcher._writer.context
+            KernelSelectionCommitter(self.ledger, writer).commit(proposal, projection, validator)
+        except (KeyError, ValueError, ValidationError, DispatchRejected, StaleFence):
+            return
+
     async def _stage_fixed_successors(self) -> None:
         if self.runtime is None:
             return
@@ -200,7 +271,8 @@ class ProjectRuntimeContext:
                 contract = self.ledger.read_contract(self.runtime.run(successor["run_id"]).contract_id)
             except (KeyError, ValueError):
                 continue
-            if contract is None or contract.task_worker_bindings is None or successor_id not in contract.task_worker_bindings:
+            if (contract is None or contract.task_worker_bindings is None or successor_id not in contract.task_worker_bindings
+                    or contract.selection_policy_id is not None):
                 continue
             if source.state is not TaskState.CLOSED or target.state not in {TaskState.PROPOSED, TaskState.RUNNING}:
                 continue
@@ -220,6 +292,27 @@ class ProjectRuntimeContext:
                     await self.start_monitor(envelope.authority)
             except DispatchRejected:
                 continue
+
+    async def _after_source_close(self) -> None:
+        """Selection commit precedes committed dispatch; fixed fallback is last."""
+        for event in self.ledger.events():
+            if event["kind"] != "run.created":
+                continue
+            run_id = json.loads(event["payload"]).get("run_id")
+            if not run_id:
+                continue
+            try:
+                contract = self.ledger.read_contract(self.runtime.run(run_id).contract_id)
+                if contract is None or contract.selection_policy_id is None:
+                    continue
+                source = next((task_id for task_id in contract.task_worker_bindings or {}
+                               if task_id not in contract.selection_candidate_task_ids), None)
+                if source:
+                    await self._commit_bounded_selection(run_id, source)
+            except (KeyError, ValueError):
+                continue
+        await self._stage_committed_selections()
+        await self._stage_fixed_successors()
 
     async def start_monitor(self, authority: Any, *, clock=None, poll_interval: float = 1.0):
         if self.closed:
@@ -318,6 +411,21 @@ class ProjectRuntimeContext:
             )
             if binding:
                 await self.start_monitor(self.dispatcher._envelope(payload).authority)
+        if self.runtime is None:
+            return
+        for event in self.ledger.events():
+            if event["kind"] == "run.created":
+                run_id = json.loads(event["payload"]).get("run_id")
+                if run_id:
+                    try:
+                        contract = self.ledger.read_contract(self.runtime.run(run_id).contract_id)
+                        if contract is not None and contract.selection_policy_id is not None:
+                            source = next((task_id for task_id in contract.task_worker_bindings or {}
+                                           if task_id not in contract.selection_candidate_task_ids), None)
+                            if source is not None:
+                                await self._commit_bounded_selection(run_id, source)
+                    except (KeyError, ValueError):
+                        pass
         await self._stage_committed_selections()
         await self._stage_fixed_successors()
 
@@ -413,7 +521,7 @@ class ProjectRuntimeRegistry:
                 worker_id=keys.writer_id,
             )
             context = ProjectRuntimeContext(identity, keys, ledger, runtime, adapter, dispatcher)
-            dispatcher._after_close = context._stage_fixed_successors
+            dispatcher._after_close = context._after_source_close
             return context
         except Exception:
             if ledger is not None:

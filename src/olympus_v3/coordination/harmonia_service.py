@@ -161,6 +161,8 @@ class HarmoniaService:
             amendment_authority=owner,
             status=ContractState.ACTIVE,
             task_worker_bindings=bindings,
+            selection_policy_id=spec.selection_policy_id,
+            selection_candidate_task_ids=spec.selection_candidate_task_ids,
         )
 
     @staticmethod
@@ -376,6 +378,23 @@ class HarmoniaService:
             for task_id, principal in bindings.items()
             if isinstance(principal, Mapping)
         }
+        selection_policy = document.get("selection_policy_id")
+        selection_candidates = document.get("selection_candidate_task_ids", [])
+        selection_commits = [
+            event["payload"] for event in events if event["kind"] == "task.selection.committed"
+        ]
+        selection_commit = selection_commits[-1] if selection_commits else {}
+        selection_evidence = {
+            "mode": "bounded" if selection_policy else "fixed",
+            "policy_id": selection_policy,
+            "candidate_task_ids": list(selection_candidates) if isinstance(selection_candidates, list) else [],
+            "selection_epoch": selection_commit.get("selection_epoch"),
+            "selected_task_id": selection_commit.get("selected_task_id"),
+            "resolved_worker_id": selection_commit.get("resolved_worker_id"),
+            "proposal_digest": selection_commit.get("proposal_digest"),
+            "candidate_digest": selection_commit.get("eligibility_projection_digest"),
+            "committed": bool(selection_commit),
+        }
         return {
             "action": action,
             "ok": True,
@@ -396,6 +415,7 @@ class HarmoniaService:
             "semantic_completion": False,
             "cleanup_state": cleanup_state,
             "uncertainty": uncertainty,
+            "selection": selection_evidence,
             "error": None,
         }
 

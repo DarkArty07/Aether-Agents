@@ -165,8 +165,10 @@ def _harmonia_schema() -> dict:
         "qa_reserve": {"type": "integer", "minimum": 0},
         "recovery_reserve": {"type": "integer", "minimum": 0},
         "escalation_conditions": {"type": "array", "items": {"type": "string"}},
+        "selection_policy_id": {"type": "string", "const": "lowest-canonical-eligible-task-id"},
+        "selection_candidate_task_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2, "uniqueItems": True},
         "tasks": {
-            "type": "array", "minItems": 2, "maxItems": 2,
+            "type": "array", "minItems": 2, "maxItems": 3,
             "items": {"type": "object", "additionalProperties": False,
                 "properties": {
                     "task_id": {"type": "string"}, "worker": {"type": "string"},

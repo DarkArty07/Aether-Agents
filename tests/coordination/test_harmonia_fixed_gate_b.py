@@ -43,6 +43,138 @@ def fixed_payload(root: Path) -> dict:
     }
 
 
+def bounded_payload(root: Path) -> dict:
+    payload = fixed_payload(root)
+    payload["request_id"] = "bounded-gate-b"
+    payload["contract"]["selection_policy_id"] = "lowest-canonical-eligible-task-id"
+    payload["contract"]["selection_candidate_task_ids"] = ["task-c", "task-b"]
+    payload["contract"]["tasks"].append(
+        {"task_id": "task-c", "worker": "daedalus", "worker_permissions": ["verify"], "prerequisites": ["task-a"]}
+    )
+    return payload
+
+
+def test_bounded_selection_requires_explicit_policy_and_two_candidates(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    request = parse_harmonia_request(bounded_payload(root))
+    assert request.contract.selection_policy_id == "lowest-canonical-eligible-task-id"
+    assert request.contract.selection_candidate_task_ids == ("task-c", "task-b")
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda payload: payload["contract"].update(selection_policy_id="other/v1"),
+    lambda payload: payload["contract"].update(selection_candidate_task_ids=["task-b"]),
+    lambda payload: payload["contract"]["tasks"][2].update(prerequisites=[]),
+    lambda payload: payload["contract"]["tasks"][2].update(worker="athena"),
+])
+def test_bounded_selection_rejects_policy_candidate_and_topology_tampering(tmp_path, mutation):
+    root = tmp_path / "project"
+    root.mkdir()
+    payload = bounded_payload(root)
+    mutation(payload)
+    with pytest.raises(InvalidHarmoniaRequest):
+        parse_harmonia_request(payload)
+
+
+def test_bounded_service_e2e_commits_and_dispatches_only_lexical_candidate(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    home = tmp_path / "home"
+    config = CoordinationConfig(True, "legacy", ("legacy", "kernel-single-task"), (str(root),), 1)
+    manager = CompletingManager(root)
+    registry = ProjectRuntimeRegistry(home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32))
+    service = HarmoniaService(aether_home=home, config=config, registry=registry,
+                              discovered_workers={"hefesto", "ictinus", "daedalus"})
+
+    async def scenario():
+        started = await service.handle(bounded_payload(root))
+        context = await registry.get_or_create(root)
+        for _ in range(500):
+            states = {task_id: context.runtime.task(started["run_id"], task_id).state
+                      for task_id in ("task-a", "task-b", "task-c")}
+            if states["task-a"] is TaskState.CLOSED and states["task-b"] is TaskState.CLOSED:
+                break
+            await asyncio.sleep(0)
+        status = await service.handle({"action": "status", "project_root": str(root), "run_id": started["run_id"]})
+        events = context.ledger.events()
+        selection_payload = next(json.loads(e["payload"]) for e in events if e["kind"] == "task.selection.committed")
+        selected_stage = [json.loads(e["payload"]) for e in events if e["kind"] == "dispatch.staged" and json.loads(e["payload"]).get("task_id") == "task-b"]
+        unselected_stage = [json.loads(e["payload"]) for e in events if e["kind"] == "dispatch.staged" and json.loads(e["payload"]).get("task_id") == "task-c"]
+        selected_attempts = [json.loads(e["payload"]) for e in events if e["kind"] == "attempt.started" and json.loads(e["payload"]).get("task_id") == "task-b"]
+        unselected_attempts = [json.loads(e["payload"]) for e in events if e["kind"] == "attempt.started" and json.loads(e["payload"]).get("task_id") == "task-c"]
+        selected_sessions = [json.loads(e["payload"]) for e in events if e["kind"] == "session.bound" and json.loads(e["payload"]).get("task_id") == "task-b"]
+        outbox = context.ledger.outbox()
+        before = (len(events), len(manager.prompts), len([e for e in events if e["kind"] == "task.selection.committed"]))
+        await context.resume_monitors()
+        after_events = context.ledger.events()
+        after = (len(after_events), len(manager.prompts), len([e for e in after_events if e["kind"] == "task.selection.committed"]))
+        states = {task_id: context.runtime.task(started["run_id"], task_id).state.value
+                  for task_id in ("task-a", "task-b", "task-c")}
+        await registry.close()
+        return started, status, events, manager, before, after, states, selection_payload, selected_stage, unselected_stage, selected_attempts, unselected_attempts, selected_sessions, outbox
+
+    (started, status, events, manager, before, after, states, selection_payload,
+     selected_stage, unselected_stage, selected_attempts, unselected_attempts,
+     selected_sessions, outbox) = asyncio.run(scenario())
+    assert started["ok"] is True
+    assert status["selection"] == {
+        "mode": "bounded", "policy_id": "lowest-canonical-eligible-task-id",
+        "candidate_task_ids": ["task-c", "task-b"], "selection_epoch": 1,
+        "selected_task_id": "task-b", "resolved_worker_id": "ictinus",
+        "proposal_digest": status["selection"]["proposal_digest"],
+        "candidate_digest": status["selection"]["candidate_digest"], "committed": True,
+    }
+    assert sum(e["kind"] == "task.selection.committed" for e in events) == 1
+    assert selection_payload["selected_task_id"] == "task-b"
+    assert selection_payload["resolved_worker_id"] == "ictinus"
+    assert len(selected_stage) == len(selected_attempts) == len(selected_sessions) == 1
+    assert not unselected_stage and not unselected_attempts
+    assert any(row["message_id"] == selected_stage[0]["message_id"] for row in outbox)
+    assert [call[1] for call in manager.calls if call[0] == "spawn"] == ["hefesto", "ictinus"]
+    assert manager.sessions == set()
+    assert states == {"task-a": "closed", "task-b": "closed", "task-c": "proposed"}
+    assert before[1:] == after[1:]
+
+
+def test_bounded_restart_after_commit_before_dispatch_reconciles_once(tmp_path):
+    # The durable selection event is recovered before successor staging by a fresh context.
+    root = tmp_path / "project"
+    root.mkdir()
+    home = tmp_path / "home"
+    config = CoordinationConfig(True, "legacy", ("legacy", "kernel-single-task"), (str(root),), 1)
+    manager = CompletingManager(root)
+    registry = ProjectRuntimeRegistry(home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32))
+    service = HarmoniaService(aether_home=home, config=config, registry=registry,
+                              discovered_workers={"hefesto", "ictinus", "daedalus"})
+
+    async def scenario():
+        started = await service.handle(bounded_payload(root))
+        context = await registry.get_or_create(root)
+        context.dispatcher._after_close = None
+        for _ in range(500):
+            if context.runtime.task(started["run_id"], "task-a").state is TaskState.CLOSED:
+                break
+            await asyncio.sleep(0)
+        await context._commit_bounded_selection(started["run_id"], "task-a")
+        selection_count = sum(e["kind"] == "task.selection.committed" for e in context.ledger.events())
+        await registry.close()
+        restarted_registry = ProjectRuntimeRegistry(home, manager, StaticCoordinationKeyProvider(b"w" * 32, b"i" * 32))
+        restarted = await restarted_registry.get_or_create(root)
+        for _ in range(500):
+            if restarted.runtime.task(started["run_id"], "task-b").state is TaskState.CLOSED:
+                break
+            await asyncio.sleep(0)
+        events = restarted.ledger.events()
+        await restarted_registry.close()
+        return selection_count, events, manager
+
+    selection_count, events, manager = asyncio.run(scenario())
+    assert selection_count == 1
+    assert sum(e["kind"] == "task.selection.committed" for e in events) == 1
+    assert len([call for call in manager.calls if call[0] == "spawn" and call[1] == "ictinus"]) == 1
+
+
 def test_start_accepts_exactly_one_fixed_two_task_contract(tmp_path):
     root = tmp_path / "project"
     root.mkdir()

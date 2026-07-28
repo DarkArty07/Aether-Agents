@@ -128,6 +128,24 @@ def test_json_safe_contract_serialization_excludes_secrets():
     assert ExecutionContract.from_dict(wire) == make_contract()
 
 
+def test_bounded_selection_authority_round_trips_and_cannot_be_amended():
+    worker_a = Principal(PROJECT, "hermes", "worker-a")
+    worker_b = Principal(PROJECT, "hermes", "worker-b")
+    contract = make_contract(
+        status=ContractState.ACTIVE,
+        participants=(OWNER, REVIEWER, WORKER, worker_a, worker_b),
+        role_permissions={"owner": ("manage",), "reviewer": ("review",), "worker": ("execute",), "worker-a": ("execute",), "worker-b": ("execute",)},
+        task_worker_bindings={"source": WORKER, "task-a": worker_a, "task-b": worker_b},
+        selection_policy_id="lowest-canonical-eligible-task-id",
+        selection_candidate_task_ids=("task-a", "task-b"),
+    )
+    replayed = ExecutionContract.from_dict(contract.to_dict())
+    assert replayed == contract
+    with pytest.raises(ValidationError):
+        amend_contract(contract, rationale="mutate authority", issuer=OWNER, affected_identities=("task-a",), selection_candidate_task_ids=("task-a", "source"))
+
+
+
 def test_fixed_task_worker_bindings_round_trip_complete_principals_and_are_immutable():
     worker_a = Principal(PROJECT, "hermes", "worker-a")
     worker_b = Principal(PROJECT, "hermes", "worker-b")

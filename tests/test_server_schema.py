@@ -104,7 +104,9 @@ def test_harmonia_schema_is_flat_strict_and_action_conditional():
         ("tasks",),
     }
     assert contract["properties"]["tasks"]["minItems"] == 2
-    assert contract["properties"]["tasks"]["maxItems"] == 2
+    assert contract["properties"]["tasks"]["maxItems"] == 3
+    assert contract["properties"]["selection_policy_id"]["const"] == "lowest-canonical-eligible-task-id"
+    assert contract["properties"]["selection_candidate_task_ids"]["uniqueItems"] is True
 
 
 @pytest.mark.parametrize("action", sorted(TALK_TO_ACTIONS))

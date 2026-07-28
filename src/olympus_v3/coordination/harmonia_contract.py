@@ -34,6 +34,8 @@ _GENESIS_FIELDS = frozenset(
     }
 )
 _FIXED_GENESIS_FIELDS = _GENESIS_FIELDS - {"worker", "worker_permissions"} | {"tasks"}
+_SELECTION_POLICY = "lowest-canonical-eligible-task-id"
+_SELECTION_FIELDS = _FIXED_GENESIS_FIELDS | {"selection_policy_id", "selection_candidate_task_ids"}
 _TASK_FIELDS = frozenset({"task_id", "worker", "worker_permissions", "prerequisites"})
 _START_FIELDS = frozenset(
     {"action", "project_root", "request_id", "contract", "plan_revision", "snapshot_digest"}
@@ -153,22 +155,35 @@ class HarmoniaGenesisSpec:
     recovery_reserve: int
     escalation_conditions: tuple[str, ...]
     tasks: tuple["HarmoniaTaskSpec", ...] = ()
+    selection_policy_id: str | None = None
+    selection_candidate_task_ids: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(cls, value: Any) -> HarmoniaGenesisSpec:
         fixed = isinstance(value, Mapping) and "tasks" in value
-        data = _exact_fields(value, _FIXED_GENESIS_FIELDS if fixed else _GENESIS_FIELDS)
+        bounded = fixed and ("selection_policy_id" in value or "selection_candidate_task_ids" in value)
+        data = _exact_fields(value, _SELECTION_FIELDS if bounded else (_FIXED_GENESIS_FIELDS if fixed else _GENESIS_FIELDS))
         tasks: tuple[HarmoniaTaskSpec, ...] = ()
+        candidate_ids: tuple[str, ...] = ()
         if fixed:
-            if not isinstance(data["tasks"], list) or len(data["tasks"]) != 2:
+            expected_count = 3 if bounded else 2
+            if not isinstance(data["tasks"], list) or len(data["tasks"]) != expected_count:
                 _invalid()
             tasks = tuple(HarmoniaTaskSpec.from_dict(item) for item in data["tasks"])
-            if len({item.task_id for item in tasks}) != 2 or len({item.worker for item in tasks}) != 2:
+            if len({item.task_id for item in tasks}) != expected_count or len({item.worker for item in tasks}) != expected_count:
                 _invalid()
             if any(item.worker in _RESTRICTED_WORKERS for item in tasks):
                 _invalid()
-            if tasks[0].prerequisites or tasks[1].prerequisites != (tasks[0].task_id,):
+            if tasks[0].prerequisites or any(item.prerequisites != (tasks[0].task_id,) for item in tasks[1:]):
                 _invalid()
+            if bounded:
+                if data["selection_policy_id"] != _SELECTION_POLICY:
+                    _invalid()
+                candidate_ids = _string_list(data["selection_candidate_task_ids"], allow_empty=False)
+                if len(candidate_ids) != 2 or set(candidate_ids) != {tasks[1].task_id, tasks[2].task_id}:
+                    _invalid()
+            else:
+                candidate_ids = ()
             worker, permissions = tasks[0].worker, tasks[0].worker_permissions
         else:
             worker = _identifier(data["worker"])
@@ -194,6 +209,8 @@ class HarmoniaGenesisSpec:
             recovery_reserve=recovery_reserve,
             escalation_conditions=_string_list(data["escalation_conditions"], allow_empty=True),
             tasks=tasks,
+            selection_policy_id=_SELECTION_POLICY if bounded else None,
+            selection_candidate_task_ids=candidate_ids,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -214,6 +231,9 @@ class HarmoniaGenesisSpec:
             result.pop("worker")
             result.pop("worker_permissions")
             result["tasks"] = [task.to_dict() for task in self.tasks]
+        if self.selection_policy_id is not None:
+            result["selection_policy_id"] = self.selection_policy_id
+            result["selection_candidate_task_ids"] = list(self.selection_candidate_task_ids)
         return result
 
 
