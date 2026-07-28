@@ -252,13 +252,39 @@ def test_spawn_process_configures_bounded_acp_stream_limit(tmp_path, monkeypatch
     monkeypatch.setattr(acp_manager, "spawn_agent_process", fake_spawn)
 
     async def scenario():
-        manager = ACPManager(profiles_dir=_profiles(tmp_path), acp_stream_limit=2_000_000)
+        isolated_db = tmp_path / "isolated" / "olympus.db"
+        manager = ACPManager(
+            profiles_dir=_profiles(tmp_path),
+            db=SimpleNamespace(db_path=isolated_db),
+            acp_stream_limit=2_000_000,
+        )
         agent = AgentState(name="hefesto", profile_path=manager.profiles_dir / "hefesto")
         await manager._spawn_process(agent, project_root=str(tmp_path))
         assert captured["transport_kwargs"] == {"limit": 2_000_000}
+        assert captured["env"]["OLYMPUS_DB_PATH"] == str(isolated_db.resolve())
         await agent.process_context.__aexit__(None, None, None)
 
     asyncio.run(scenario())
+
+
+def test_session_mapping_uses_manager_owned_observability_db(tmp_path, monkeypatch):
+    canonical = tmp_path / "canonical" / "olympus.db"
+    isolated = tmp_path / "isolated" / "olympus.db"
+    monkeypatch.setenv("OLYMPUS_DB_PATH", str(canonical))
+    manager = ACPManager(
+        profiles_dir=_profiles(tmp_path),
+        db=SimpleNamespace(db_path=isolated),
+    )
+    agent = AgentState(
+        name="hefesto",
+        profile_path=manager.profiles_dir / "hefesto",
+        pid=1234,
+    )
+    session = SessionInfo("logical", "hefesto", "raw", str(tmp_path))
+
+    manager._write_session_mapping(agent, session, "logical")
+
+    assert (agent.profile_path / ".olympus_db_path.1234").read_text() == str(isolated.resolve())
 
 
 def test_concurrent_same_session_send_reserves_exactly_one_prompt(tmp_path):

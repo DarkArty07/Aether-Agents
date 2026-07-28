@@ -568,7 +568,7 @@ class ACPManager:
             env_extra["PYTHONPATH"] = src_dir
 
         # OLYMPUS_DB_PATH so plugin hooks can find the database at spawn time
-        db_path = get_db_path()
+        db_path = self._observability_db_path()
         env_extra["OLYMPUS_DB_PATH"] = str(db_path)
 
         # Load .env if it exists
@@ -665,6 +665,13 @@ class ACPManager:
                 pass
             raise
 
+    def _observability_db_path(self) -> Path:
+        """Return the exact DB owned by this manager, not a process-global default."""
+        configured = getattr(self.db, "db_path", None)
+        if configured is not None:
+            return Path(configured).expanduser().resolve()
+        return get_db_path().expanduser().resolve()
+
     def _write_session_mapping(
         self,
         agent: AgentState,
@@ -675,7 +682,10 @@ class ACPManager:
         pid = agent.pid or os.getpid()
         paths = (
             (agent.profile_path / f".olympus_session.{pid}", session_id),
-            (agent.profile_path / f".olympus_db_path.{pid}", str(get_db_path())),
+            (
+                agent.profile_path / f".olympus_db_path.{pid}",
+                str(self._observability_db_path()),
+            ),
             (
                 agent.profile_path / f".aether_home.{pid}",
                 session.project_root or os.environ.get("AETHER_HOME") or str(Path.cwd().resolve()),
