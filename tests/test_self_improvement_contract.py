@@ -11,6 +11,7 @@ Each test names the audit finding it pins.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -21,6 +22,7 @@ import yaml
 from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES, public_error
 from olympus_v3.coordination.harmonia_service import _STATES as KERNEL_STATES
 from olympus_v3.self_improvement import hooks as H
+from olympus_v3.self_improvement.evidence import render_release_evidence
 from olympus_v3.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
 from olympus_v3.self_improvement.manifest import ManifestError, load_cycle_manifest
 
@@ -450,3 +452,30 @@ def test_identity_failure_with_a_manifest_present_is_reported(tmp_path: Path, mo
     assert any("failed verification" in record.message for record in caplog.records)
 
 
+# --------------------------------------------------------------------------
+# F-24 — the evidence states what it cannot establish
+# --------------------------------------------------------------------------
+
+
+def test_release_evidence_declares_its_own_limits(tmp_path: Path) -> None:
+    root = _make_project(tmp_path / "aether")
+    manifest = load_cycle_manifest(root)
+    ledger = _ledger(root)
+    ledger.start_session(
+        session_id="s",
+        project_root=root,
+        candidate_version=manifest.candidate_version,
+        manifest_digest=manifest.digest,
+        baseline_commit=BASELINE_COMMIT,
+        baseline_dirty_digest="dirty:3:sha256:" + "0" * 64,
+        logical_provider=manifest.logical_provider,
+        requested_model="m",
+        platform="cli",
+        process_id=os.getpid(),
+    )
+
+    rendered = render_release_evidence(manifest, ledger)
+
+    assert "Activity volume is not improvement." in rendered
+    assert "no causal claim about" in rendered
+    assert "Sessions without a clean baseline worktree: 1" in rendered
