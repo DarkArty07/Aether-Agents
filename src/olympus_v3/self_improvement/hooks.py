@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import re
+import subprocess
 import threading
 import uuid
 from dataclasses import dataclass
@@ -42,7 +44,6 @@ _POST_ADMISSION_STATES = frozenset(
         "cancel_requested",
     }
 )
-
 
 
 @dataclass(frozen=True)
@@ -105,14 +106,18 @@ def _git_head(project_root: Path) -> str:
         if not head.startswith("ref:"):
             return "unknown"
         ref = head.split(":", 1)[1].strip()
-        loose = git_dir / ref
-        if loose.is_file():
-            commit = loose.read_text(encoding="utf-8").strip()
-            return commit if _HEX_COMMIT.fullmatch(commit) else "unknown"
         common_dir = git_dir
         commondir = git_dir / "commondir"
         if commondir.is_file():
             common_dir = (git_dir / commondir.read_text(encoding="utf-8").strip()).resolve()
+        # A linked worktree keeps HEAD in its private gitdir but the branch ref
+        # itself lives in the common dir, so both have to be consulted before
+        # falling back to packed-refs.
+        for base in (git_dir, common_dir):
+            loose = base / ref
+            if loose.is_file():
+                commit = loose.read_text(encoding="utf-8").strip()
+                return commit if _HEX_COMMIT.fullmatch(commit) else "unknown"
         packed = common_dir / "packed-refs"
         if packed.is_file():
             for line in packed.read_text(encoding="utf-8").splitlines():
@@ -122,6 +127,33 @@ def _git_head(project_root: Path) -> str:
     except (OSError, UnicodeError, ValueError):
         pass
     return "unknown"
+
+
+def _baseline_dirty_digest(project_root: Path) -> str:
+    """Digest the uncommitted working set so changes stay attributable.
+
+    A baseline commit alone cannot support a before/after claim: an unrelated
+    dirty tree silently changes what "the same suite" even means. Runs once per
+    session, off the hot path, and degrades to `unknown` rather than failing.
+    """
+
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(project_root), "status", "--porcelain=v1"],
+            capture_output=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    if completed.returncode != 0:
+        return "unknown"
+    payload = completed.stdout
+    if not payload.strip():
+        return "clean"
+    entries = sorted(line for line in payload.splitlines() if line.strip())
+    digest = hashlib.sha256(b"\n".join(entries)).hexdigest()
+    return f"dirty:{len(entries)}:sha256:{digest}"
 
 
 def _initialize(session_id: str, model: str, platform: str, kwargs: dict[str, Any]) -> _Runtime | None:
@@ -135,6 +167,13 @@ def _initialize(session_id: str, model: str, platform: str, kwargs: dict[str, An
             return None
         manifest = verify_project_identity(root)
         if manifest is None:
+            # A directory that carries a cycle manifest but fails verification is
+            # an operator-visible condition (malformed contract, or an authorized
+            # gate the loader rejects), not a quiet no-op.
+            if (root / "docs" / "releases" / "v0.20.0" / "CYCLE.yaml").is_file():
+                logger.warning(
+                    "Self-improvement cycle disabled: %s carries a cycle manifest that failed verification", root
+                )
             return None
 
         ledger = SelfImprovementLedger(manifest.ledger_path)
@@ -145,6 +184,7 @@ def _initialize(session_id: str, model: str, platform: str, kwargs: dict[str, An
             candidate_version=manifest.candidate_version,
             manifest_digest=manifest.digest,
             baseline_commit=baseline,
+            baseline_dirty_digest=_baseline_dirty_digest(root),
             logical_provider=manifest.logical_provider,
             requested_model=model or manifest.current_hermes_model,
             platform=platform or "unknown",
@@ -314,7 +354,9 @@ def on_post_tool_call(
 
     del task_id
     try:
-        runtime = _runtime(session_id)
+        # A continued session never fires `on_session_start`, so initialize
+        # lazily here as well or every resumed session records nothing.
+        runtime = _runtime(session_id) or _initialize(session_id, "", "", kwargs)
         if runtime is None:
             return
         event_id = tool_call_id or str(uuid.uuid4())
@@ -353,9 +395,9 @@ def on_post_llm_call(
 ) -> None:
     """Persist whitelisted router metrics while discarding conversation payloads."""
 
-    del user_message, assistant_response, conversation_history, platform
+    del user_message, assistant_response, conversation_history
     try:
-        runtime = _runtime(session_id)
+        runtime = _runtime(session_id) or _initialize(session_id, model, platform, kwargs)
         if runtime is None:
             return
         turn_id = kwargs.get("turn_id") or kwargs.get("api_request_id") or str(uuid.uuid4())
@@ -404,7 +446,14 @@ def on_session_finalize(session_id: str | None, platform: str, **kwargs: Any) ->
     try:
         runtime = _runtime(session_id)
         if runtime is not None:
-            runtime.ledger.finalize_session(session_id)
+            # Re-read the contract: evidence accrued under a digest that no
+            # longer matches the file on disk must be marked, not presented as
+            # if it had been produced under the shipped manifest.
+            current = verify_project_identity(runtime.manifest.project_root)
+            drifted = current is None or current.digest != runtime.manifest.digest
+            runtime.ledger.finalize_session(session_id, manifest_drifted=drifted)
+            if drifted:
+                logger.warning("Cycle manifest changed during session %s; evidence marked as drifted", session_id)
             with _runtime_lock:
                 _runtime_by_session.pop(session_id, None)
     except Exception as exc:

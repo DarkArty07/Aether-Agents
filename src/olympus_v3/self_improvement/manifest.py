@@ -12,20 +12,29 @@ from typing import Any
 import yaml
 
 _MANIFEST = Path("docs/releases/v0.20.0/CYCLE.yaml")
+_CANDIDATE_VERSION = _MANIFEST.parent.name.removeprefix("v")
 _LEDGER = Path(".aether/self_improvement.db")
 _EVIDENCE = Path("docs/releases/v0.20.0/SELF_IMPROVEMENT_EVIDENCE.md")
 _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 _ALLOWED_STATUSES = {"implementation_in_progress", "implemented_default_off"}
-_FORBIDDEN_AUTHORIZATIONS = {
-    "harmonia_activation",
-    "coordination_key_creation",
-    "runtime_restart",
-    "merge",
-    "tag",
-    "release",
-    "deployment",
-    "publication",
-}
+# Deliberate safety interlock: while the candidate is default-off, the contract
+# must assert that none of these gates is open, and a manifest claiming otherwise
+# refuses to load. That strictness is intentional and is covered by an existing
+# acceptance test. What was wrong is that the refusal was *silent* — callers now
+# log it (see `hooks._initialize`), because an owner who grants a gate must not
+# be left unable to distinguish an interlock from a corrupt file.
+_FORBIDDEN_AUTHORIZATIONS = frozenset(
+    {
+        "harmonia_activation",
+        "coordination_key_creation",
+        "runtime_restart",
+        "merge",
+        "tag",
+        "release",
+        "deployment",
+        "publication",
+    }
+)
 
 
 class ManifestError(ValueError):
@@ -87,6 +96,14 @@ def load_cycle_manifest(project_root: Path) -> CycleManifest:
     candidate = _required_text(semver, "candidate_version", "semver")
     if not _SEMVER.fullmatch(candidate):
         raise ManifestError("semver.candidate_version must be MAJOR.MINOR.PATCH")
+    # The loader reads one hard-coded release directory, so a manifest that
+    # declares a different candidate would attribute evidence to a version that
+    # does not exist at that path.
+    if candidate != _CANDIDATE_VERSION:
+        raise ManifestError(
+            f"semver.candidate_version {candidate!r} does not match its release directory "
+            f"({_CANDIDATE_VERSION!r})"
+        )
     next_minor = _required_text(semver, "next_minor_scope", "semver")
     if next_minor != "undecided_pending_evidence":
         raise ManifestError("the next minor scope must remain undecided pending evidence")
@@ -130,7 +147,9 @@ def load_cycle_manifest(project_root: Path) -> CycleManifest:
             raise ManifestError(f"authorization.{key} must be authorized")
     for key in _FORBIDDEN_AUTHORIZATIONS:
         if authorization.get(key) != "not_authorized":
-            raise ManifestError(f"authorization.{key} must remain not_authorized")
+            raise ManifestError(
+                f"authorization.{key} must remain not_authorized while the candidate is default-off"
+            )
 
     return CycleManifest(
         project_root=root,

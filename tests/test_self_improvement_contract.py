@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES, publ
 from olympus_v3.coordination.harmonia_service import _STATES as KERNEL_STATES
 from olympus_v3.self_improvement import hooks as H
 from olympus_v3.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
+from olympus_v3.self_improvement.manifest import ManifestError, load_cycle_manifest
 
 BASELINE_COMMIT = "a" * 40
 
@@ -280,5 +282,171 @@ def test_incompatible_ledger_schema_fails_loudly(tmp_path: Path) -> None:
 
     with pytest.raises(LedgerSchemaError, match="ledger schema"):
         SelfImprovementLedger(path).ensure_schema()
+
+
+# --------------------------------------------------------------------------
+# F-11 — a continued session still produces evidence
+# --------------------------------------------------------------------------
+
+
+def test_session_evidence_survives_a_continuation(tmp_path: Path, monkeypatch) -> None:
+    """`on_session_start` never fires on continuation, so later hooks must initialize."""
+
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+
+    H.on_post_tool_call(
+        tool_name="terminal",
+        args={},
+        result='{"exit_code": 0}',
+        task_id="t",
+        session_id="resumed",
+        tool_call_id="call_1",
+        duration_ms=1,
+    )
+
+    ledger = _ledger(root)
+    assert ledger.get_session("resumed") is not None
+    assert len(ledger.tool_calls("resumed")) == 1
+
+
+def test_post_llm_call_tolerates_the_exact_kwargs_hermes_sends(tmp_path: Path, monkeypatch) -> None:
+    """Payload pinned to `agent/turn_finalizer.py`'s post_llm_call invocation."""
+
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+
+    H.on_post_llm_call(
+        session_id="resumed",
+        task_id="task-1",
+        turn_id="turn-1",
+        user_message="do the thing",
+        assistant_response="done",
+        conversation_history=[],
+        model="gpt-5.6-sol",
+        platform="cli",
+    )
+
+    rows = _ledger(root).model_calls("resumed")
+    assert len(rows) == 1
+    assert rows[0]["requested_model"] == "gpt-5.6-sol"
+
+
+# --------------------------------------------------------------------------
+# F-12 / F-13 — baselines are attributable
+# --------------------------------------------------------------------------
+
+
+def _git(*args: str, cwd: Path) -> None:
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+def _seeded_repo(root: Path) -> Path:
+    root.mkdir()
+    _git("init", "-q", "-b", "main", cwd=root)
+    _git("config", "user.email", "audit@example.invalid", cwd=root)
+    _git("config", "user.name", "audit", cwd=root)
+    (root / "seed.txt").write_text("seed\n", encoding="utf-8")
+    _git("add", "seed.txt", cwd=root)
+    _git("commit", "-qm", "seed", cwd=root)
+    return root
+
+
+def test_git_head_resolves_a_linked_worktree(tmp_path: Path) -> None:
+    """Candidate isolation runs in worktrees, where `.git` is a file."""
+
+    repo = _seeded_repo(tmp_path / "repo")
+    linked = tmp_path / "linked"
+    _git("worktree", "add", "-q", "-b", "candidate", str(linked), cwd=repo)
+
+    expected = subprocess.run(
+        ["git", "-C", str(linked), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    assert H._git_head(linked) == expected
+    assert H._git_head(repo) == expected
+
+
+def test_baseline_records_whether_the_worktree_was_clean(tmp_path: Path) -> None:
+    repo = _seeded_repo(tmp_path / "repo")
+
+    assert H._baseline_dirty_digest(repo) == "clean"
+
+    (repo / "unrelated.txt").write_text("someone else's work\n", encoding="utf-8")
+    dirty = H._baseline_dirty_digest(repo)
+
+    assert dirty.startswith("dirty:1:sha256:")
+
+
+# --------------------------------------------------------------------------
+# F-14 — an interruption is recorded, not latched forever
+# --------------------------------------------------------------------------
+
+
+def test_interrupted_turn_does_not_permanently_poison_the_session(tmp_path: Path, monkeypatch) -> None:
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("s", model="m", platform="cli")
+    ledger = _ledger(root)
+
+    H.on_session_end(session_id="s", completed=True, interrupted=False, model="m", platform="cli")
+    H.on_session_end(session_id="s", completed=False, interrupted=True, model="m", platform="cli")
+    assert ledger.get_session("s")["status"] == "reconciliation_required"
+
+    H.on_session_end(session_id="s", completed=True, interrupted=False, model="m", platform="cli")
+    assert ledger.get_session("s")["status"] == "active"
+
+    H.on_session_finalize(session_id="s", platform="cli")
+    session = ledger.get_session("s")
+
+    assert session["status"] == "finalized"
+    # The interruption stays visible even though the session recovered.
+    assert ledger.turn_outcomes("s") == ["completed", "interrupted", "completed"]
+
+
+# --------------------------------------------------------------------------
+# F-07 / F-19 — manifest identity and mid-session drift
+# --------------------------------------------------------------------------
+
+
+def test_candidate_version_must_match_its_release_directory(tmp_path: Path) -> None:
+    def bump(payload: dict) -> None:
+        payload["semver"]["candidate_version"] = "9.9.9"
+
+    root = _make_project(tmp_path / "aether", mutate=bump)
+
+    with pytest.raises(ManifestError, match="does not match its release directory"):
+        load_cycle_manifest(root)
+
+
+def test_manifest_change_during_a_session_is_marked(tmp_path: Path, monkeypatch) -> None:
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("s", model="m", platform="cli")
+
+    manifest_path = root / "docs" / "releases" / "v0.20.0" / "CYCLE.yaml"
+    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    payload["semver"]["candidate_name"] = "Swapped Mid-Session"
+    manifest_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    H.on_session_finalize(session_id="s", platform="cli")
+
+    assert _ledger(root).get_session("s")["manifest_drifted"] == 1
+
+
+def test_identity_failure_with_a_manifest_present_is_reported(tmp_path: Path, monkeypatch, caplog) -> None:
+    """Granting a gate must not look identical to a corrupt file."""
+
+    def authorize(payload: dict) -> None:
+        payload["authorization"]["harmonia_activation"] = "authorized"
+
+    root = _make_project(tmp_path / "aether", mutate=authorize)
+    monkeypatch.chdir(root)
+
+    with caplog.at_level("WARNING", logger="olympus_v3.self_improvement"):
+        H.on_session_start("s", model="m", platform="cli")
+
+    assert not (root / ".aether").exists()
+    assert any("failed verification" in record.message for record in caplog.records)
 
 
