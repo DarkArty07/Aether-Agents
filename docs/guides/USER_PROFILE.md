@@ -1,81 +1,132 @@
 # User Profile Guide
 
+> **Status:** CURRENT TARGET
+> **Governing decision:** `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`
+
 ## Overview
 
-The `USER.md` file tells Hermes (and other Daimons) who you are and how you like to work. It lives in:
+`USER.md` is the compact, Hermes-managed profile describing who the user is and how they prefer to work.
 
-```
+```text
 home/memories/USER.md
 ```
 
-This file is **personal** — it is loaded into the Hermes context at runtime and adapts the entire Aether Agents experience to your preferences. It is **not** meant to be shared or committed to public repositories.
+Hermes is the sole global profile custodian. It reads the user directly, detects durable preferences and recurring corrections, organizes them, removes stale entries, and passes only relevant context to Daimons.
 
-## What Goes in USER.md
+The user may inspect and correct the profile, but they should not need to maintain it manually for Aether to personalize itself.
 
-### Communication Preferences
-- **Language**: What language you interact in (e.g., `Spanish`, `English`, `Portuguese`)
-- **Response style**: Do you prefer concise answers or detailed explanations?
-- **Tone**: Casual, formal, technical?
+Aether does not use Honcho in the approved target architecture.
 
-### Workflow Preferences
-- **Tool preferences**: Do you prefer certain tools or workflows? (e.g., delegate_task vs external agents)
-- **Decision style**: Do you want to approve every decision, or let Hermes decide on trivial things?
-- **Iteration style**: Do you prefer to iterate together, or get a complete solution in one shot?
+## What belongs in `USER.md`
 
-### Things to Avoid
-- Patterns or approaches you've found don't work for you
-- Over-engineering preferences
-- Tooling you dislike
+### Durable communication preferences
 
-### Personal Context
-- Your role (developer, designer, manager, etc.)
-- Projects you're working on
-- Timezone (useful for scheduling and context)
-- Any accessibility needs
+- Preferred language.
+- Desired level of detail.
+- Tone and interaction style.
+- Formatting preferences that apply across tasks.
 
-## Best Practices
+### Durable workflow preferences
 
-1. **Keep it concise** — USER.md is injected into every conversation. Long files waste context. Aim for 10-15 lines max.
+- Desired autonomy level.
+- How decisions should be presented.
+- Preferred collaboration and iteration style.
+- Tools or approaches the user consistently prefers or rejects.
 
-2. **Write declarative facts, not instructions** — Instead of "Always respond in Spanish", write "Interacts in Spanish". The Daimons will pick it up.
+### Stable personal context relevant to work
 
-3. **Use paragraph separators** — Use `§` on its own line to separate unrelated facts. This helps the Daimons parse distinct topics.
+- General role or experience level.
+- Timezone.
+- Accessibility needs.
+- Stable constraints that materially affect software projects.
 
-4. **Update when preferences change** — If you correct a Daimon multiple times on the same thing, add it to USER.md so it sticks.
+## What does not belong in `USER.md`
 
-5. **Don't duplicate SOUL.md** — SOUL.md defines the agent's identity and rules. USER.md defines your preferences. Keep them separate.
+- Current task progress.
+- Temporary instructions for one request.
+- Commit hashes, issue numbers, release state, or milestone completion.
+- Detailed project requirements or architecture.
+- Passwords, tokens, credentials, or sensitive personal data.
+- A Daimon's unverified interpretation of the user.
+- Imperative instructions that could override a future request.
 
-6. **Avoid sensitive data** — No API keys, passwords, or personal identifiable information. USER.md is a plain text file.
+Project-specific vision and decisions belong in the project's version-controlled documentation. Hot project state belongs in `.aether`. Historical conversation detail belongs in session history.
 
-## Example USER.md
+## Hermes responsibilities
+
+Hermes should:
+
+1. Detect explicit preferences and repeated corrections.
+2. Distinguish durable patterns from one-off requests.
+3. Write compact declarative facts.
+4. Deduplicate overlapping entries.
+5. Correct or remove stale preferences.
+6. Keep personal preferences separate from environment facts.
+7. Give current explicit instructions precedence over stored memory.
+8. Pass only relevant profile context to each Daimon.
+9. Reject secrets and sensitive credentials from plain-text memory.
+10. Preserve provenance when a preference originated from a specialist observation.
+
+Daimons may report a possible preference to Hermes, but they do not independently own or rewrite the global user model.
+
+## `USER.md` versus `MEMORY.md`
+
+| File | Purpose |
+|---|---|
+| `home/memories/USER.md` | User identity, preferences, recurring corrections, and stable work style |
+| `home/memories/MEMORY.md` | Stable environment facts, conventions, tool quirks, and durable operating context |
+| Project documentation | Vision, requirements, scope, architecture, and durable product decisions |
+| `.aether` | Current phase, active task, blockers, and hot project continuity |
+| Skills | Reusable procedures and verified workflows |
+
+A preference about how the user wants work performed belongs in `USER.md`. A stable fact about the environment belongs in `MEMORY.md`. A reusable procedure belongs in a skill.
+
+## Writing style
+
+Use concise declarative facts, not permanent commands.
 
 ```markdown
 # User Profile
 
-Alex — interacts in English. Prefers concise responses. Senior backend developer.
+Christopher — interacts primarily in Spanish. Prefers direct, dense responses without filler.
 §
-Prefers delegate_task for coding tasks. Uses Claude Code only for complex multi-step plans.
+Acts as product owner and does not want routine technical decisions pushed back to him.
 §
-Dislikes over-engineering. Prefers simple solutions over clever abstractions.
-§
-Works in PST timezone. Active on GitHub — prefers PR-based workflow.
+Dislikes unrequested scope expansion and overengineering.
 ```
 
-## Related Files
+Avoid:
 
-| File | Purpose |
-|------|---------|
-| `home/memories/USER.md` | Your personal preferences (this file) |
-| `home/memories/MEMORY.md` | Hermes' notes about your environment and projects |
-| `home/profiles/<daimon>/SOUL.md` | Identity and rules for each Daimon |
+```markdown
+Always answer in Spanish.
+Never ask technical questions.
+Always use framework X.
+```
+
+Imperative phrasing can be misread as authority over later explicit requests.
+
+## Shared skills boundary
+
+User-specific preferences normally remain in `USER.md` rather than being hard-coded into shared skills.
+
+A shared skill may instruct an agent to consult the active user profile, but it should not encode one person's preferences as universal product behavior.
+
+Whether Aether later supports private per-user skills remains an open design question.
 
 ## FAQ
 
-**Q: Is USER.md committed to git?**
-A: The template is. Your personal USER.md should be in `.gitignore` or treated as local-only. The repo ships with an empty template.
+### Is `USER.md` committed to Git?
 
-**Q: Can other Daimons read USER.md?**
-A: Only Hermes reads USER.md directly. When Hermes delegates to other Daimons, relevant context is included in the delegation prompt.
+The template may be versioned. A real user's profile should remain local and private unless the user explicitly chooses another storage model.
 
-**Q: How is USER.md different from MEMORY.md?**
-A: USER.md is about *you* (your preferences, language, style). MEMORY.md is about *the environment* (project paths, tool versions, conventions). Both persist across sessions.
+### Can Daimons read it directly?
+
+The approved model gives Hermes direct custody. Hermes sends relevant context in the task contract or delegation. Daimons should not receive the entire global profile by default.
+
+### What happens when the user changes a preference?
+
+The current explicit instruction wins immediately. Hermes should then correct or supersede the stored profile so the stale preference does not return later.
+
+### Does Aether use Honcho?
+
+No. Honcho is excluded from the approved target product. Current configuration and historical setup material still require a separately authorized retirement task.

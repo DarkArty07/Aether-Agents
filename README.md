@@ -119,6 +119,25 @@ Aether-Agents/
 
 ---
 
+## 📚 Documentation
+
+The documentation is organized by authority and audience so product intent is not inferred from implementation or release evidence:
+
+- **[Documentation map](docs/README.md)** — canonical index and source-of-truth hierarchy
+- **[Agent onboarding](docs/AGENT_ONBOARDING.md)** — required reading order before changing the project
+- **[Product](docs/product/README.md)** — vision, mission, objectives, scope, and principles
+- **[Architecture](docs/architecture/README.md)** — current and target technical system documentation
+- **[Knowledge](docs/knowledge/README.md)** — shared terminology, constraints, capabilities, and limitations
+- **[Guides](docs/guides/)** — installation, configuration, and task-oriented usage
+- **[Operations](docs/operations/README.md)** — health, updates, recovery, and troubleshooting runbooks
+- **[Technical reference](docs/reference/README.md)** — tools, commands, configuration, and compatibility
+- **[Contributing](docs/contributing/README.md)** — development and documentation workflow
+- **[Decisions](docs/decisions/README.md)** — durable product, architecture, and operational decisions
+
+Release plans, benchmarks, handoffs, and evidence remain under `docs/releases/`; they document specific execution history and do not replace the product vision.
+
+---
+
 ## 🔧 Scripts & Makefile
 
 | Command | What it does |
