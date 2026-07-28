@@ -3,7 +3,7 @@
 ## Contract
 
 - Candidate: `Self-Improvement Instrumentation`
-- Manifest digest: `sha256:f31a60f234ed127d27759c56f2a9769233654b920d5ed0996ef8d2f177ff1f8d`
+- Manifest digest: `sha256:fed4ef11bb87cd497a12e03ae273abc91f1d3a663cc74dcc719a057e6d993556`
 - Logical provider: `custom:aether-router`
 - Next-version signal: `REQUIRES_MORE_EVIDENCE`
 
@@ -36,5 +36,5 @@ Aether improving can be derived from this file. Activity volume is not improveme
 
 ## Authority boundary
 
-This evidence does not approve a merge, tag, release, deployment, or next-minor architecture.
-Product-owner approval and the versioned release gates remain required.
+This evidence does not approve a version, deployment, activation, or next-minor architecture.
+The v0.20.0 release is authorized separately by independent review, ODR-0001, and the exact committed release gates; causal self-improvement remains unproven.

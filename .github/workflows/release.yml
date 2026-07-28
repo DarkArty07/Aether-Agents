@@ -51,11 +51,15 @@ jobs:
 
       - name: Create or reconcile GitHub Release
         run: |
+          VERSION="${RELEASE_TAG#v}"
+          NOTES="docs/releases/v${VERSION}/RELEASE_NOTES.md"
+          TITLE="$(head -n 1 "$NOTES" | sed 's/^# //')"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$TITLE" --notes-file "$NOTES"
             gh release upload "$RELEASE_TAG" dist/* --clobber
           else
             gh release create "$RELEASE_TAG" dist/* \
               --verify-tag \
-              --generate-notes \
-              --title "$RELEASE_TAG"
+              --notes-file "$NOTES" \
+              --title "$TITLE"
           fi

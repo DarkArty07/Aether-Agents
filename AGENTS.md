@@ -66,7 +66,16 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
-**Approved experimental exception:** the default-off v0.19.x kernel migration uses micro-patches v0.19.1–v0.19.6 so each authority hypothesis can freeze or stop independently. These patches do not imply production readiness and retain separate implementation, live-execution and release gates.
+**Approved experimental exception:** the default-off v0.19.x kernel migration uses micro-patches v0.19.1–v0.19.6 so each authority hypothesis can freeze or stop independently. These patches do not imply production readiness and retain separate implementation and live-execution gates. Their integrated outcome is published through v0.20.0 rather than as separate public v0.19.x tags.
+
+### v0.20.0 (2026-07-28)
+
+- **release**: Official package metadata, `main`, annotated tag, and GitHub Release identify v0.20.0.
+- **coordination**: The v0.19.x bounded Harmonia foundation is integrated but remains default-off; it does not claim general planning, global replacement, or production activation.
+- **instrumentation**: The `aether-self-improvement` plugin provides privacy-preserving, project-scoped measurement and deterministic evidence while remaining disabled by default.
+- **honesty**: Independent review accepts truthful instrumentation only. Causal evaluation, candidate isolation, promotion, activation, restart, and deployment remain future gates.
+- **governance**: ODR-0001 keeps `main` integrated and automates gated PR, merge, tag, and GitHub Release operations without conflating them with runtime effects.
+- **verification**: The exact release tree passes 54 self-improvement tests, 944 coordination tests, 1198 repository tests, Ruff, compileall, build, policy, and CI on Python 3.11/3.12.
 
 ### v0.18.2 (2026-07-16)
 

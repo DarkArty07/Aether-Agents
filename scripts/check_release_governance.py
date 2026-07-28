@@ -170,6 +170,10 @@ def validate_release(root: Path, tag_name: str) -> list[str]:
     if not changelog_pattern.search(changelog):
         errors.append(f"CHANGELOG has no release heading for {package_version}")
 
+    release_notes = root / "docs" / "releases" / f"v{package_version}" / "RELEASE_NOTES.md"
+    if not release_notes.is_file():
+        errors.append(f"release notes are missing: {release_notes.relative_to(root)}")
+
     if _git(root, "status", "--porcelain"):
         errors.append("release validation requires a clean working tree")
 

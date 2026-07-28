@@ -4,7 +4,7 @@
 
 **A multi-agent team built on [hermes-agent](https://github.com/NousResearch/hermes-agent)**
 
-[![Version](https://img.shields.io/badge/version-0.18.2-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.20.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -83,9 +83,9 @@ v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationall
 
 The [v0.19.x incremental kernel migration](docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md) is closed at v0.19.5 with verdict **VIABLE — BOUNDED**. It demonstrated one source, two immutable successor candidates, deterministic committed selection, trusted semantic handoff, cleanup and zero survivors. v0.19.6 was closed without a separate patch. Harmonia remains default-off, and v0.19.5 remains an unpublished technical candidate.
 
-### v0.20.0 self-improvement bootstrap
+### v0.20.0 self-improvement instrumentation
 
-The candidate [v0.20.0 instrumentation bootstrap](docs/releases/v0.20.0/CYCLE.yaml) has an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and can project deterministic release evidence without approving a version. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`. Activation, runtime restart and a live bounded pilot remain separately gated. Commits, push, PR integration, annotated tags and GitHub Releases follow the standing deterministic authority in [ODR-0001](docs/decisions/ODR-0001-main-integration-and-release-automation.md).
+The [v0.20.0 instrumentation release](docs/releases/v0.20.0/RELEASE_NOTES.md) ships an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and projects deterministic evidence without approving a version. Independent review accepted Phase 1 as truthful instrumentation after closing residual project-identity, repeated-call, and concurrent-replay defects. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`. Activation, runtime restart, a live bounded pilot, causal evaluation, and deployment remain separate gates.
 
 ---
 
