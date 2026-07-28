@@ -109,7 +109,10 @@ def test_release_boundary_requires_annotated_tag_on_current_main(tmp_path: Path)
         encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text("## 0.20.0\n\n- Fixture.\n", encoding="utf-8")
-    _git(tmp_path, "add", "pyproject.toml", "README.md", "CHANGELOG.md")
+    notes = tmp_path / "docs" / "releases" / "v0.20.0" / "RELEASE_NOTES.md"
+    notes.parent.mkdir(parents=True)
+    notes.write_text("# v0.20.0\n", encoding="utf-8")
+    _git(tmp_path, "add", "pyproject.toml", "README.md", "CHANGELOG.md", "docs")
     _git(tmp_path, "commit", "-m", "release: prepare v0.20.0")
     _git(tmp_path, "update-ref", "refs/remotes/origin/main", "HEAD")
     _git(tmp_path, "tag", "-a", "v0.20.0", "-m", "v0.20.0")
