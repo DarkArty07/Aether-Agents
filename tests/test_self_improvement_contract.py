@@ -11,6 +11,7 @@ Each test names the audit finding it pins.
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ import yaml
 from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES, public_error
 from olympus_v3.coordination.harmonia_service import _STATES as KERNEL_STATES
 from olympus_v3.self_improvement import hooks as H
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
+from olympus_v3.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
 
 BASELINE_COMMIT = "a" * 40
 
@@ -193,5 +194,91 @@ def test_host_status_wins_over_local_parsing() -> None:
     assert H._tool_outcome('{"anything": true}', "error") == "error"
     assert H._tool_outcome('{"anything": true}', "blocked") == "error"
     assert H._tool_outcome('{"exit_code": 0}', "ok") == "success"
+
+
+# --------------------------------------------------------------------------
+# F-03 — tool identity is scoped, not global
+# --------------------------------------------------------------------------
+
+
+def test_identical_tool_call_ids_in_two_sessions_are_both_recorded(tmp_path: Path, monkeypatch) -> None:
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("session-a", model="m", platform="cli")
+    H.on_session_start("session-b", model="m", platform="cli")
+
+    for session_id in ("session-a", "session-b"):
+        H.on_post_tool_call(
+            tool_name="terminal",
+            args={},
+            result='{"exit_code": 0}',
+            task_id="t",
+            session_id=session_id,
+            tool_call_id="call_deadbeef",
+            duration_ms=1,
+        )
+
+    ledger = _ledger(root)
+    assert len(ledger.tool_calls("session-a")) == 1
+    assert len(ledger.tool_calls("session-b")) == 1
+    assert ledger.evidence_counts()["tool_calls"] == 2
+
+
+def test_the_same_command_repeated_in_a_later_turn_is_counted_again(tmp_path: Path, monkeypatch) -> None:
+    """The verify-then-retry step reruns one command; both runs are evidence."""
+
+    root = _make_project(tmp_path / "aether")
+    monkeypatch.chdir(root)
+    H.on_session_start("session-a", model="m", platform="cli")
+
+    for turn in ("turn-1", "turn-2"):
+        H.on_post_tool_call(
+            tool_name="terminal",
+            args={"command": "pytest -q"},
+            result='{"exit_code": 0}',
+            task_id="t",
+            session_id="session-a",
+            tool_call_id="call_samecontent",
+            turn_id=turn,
+            duration_ms=1,
+        )
+
+    assert len(_ledger(root).tool_calls("session-a")) == 2
+
+
+# --------------------------------------------------------------------------
+# F-15 / F-16 — ledger identity and durability
+# --------------------------------------------------------------------------
+
+
+def test_reused_session_id_under_a_different_manifest_is_refused(tmp_path: Path) -> None:
+    root = _make_project(tmp_path / "aether")
+    ledger = _ledger(root)
+    common = {
+        "project_root": root,
+        "candidate_version": "0.20.0",
+        "logical_provider": "custom:aether-router",
+        "requested_model": "m",
+        "platform": "cli",
+    }
+    ledger.start_session(session_id="s", manifest_digest="sha256:aaa", baseline_commit=BASELINE_COMMIT, **common)
+
+    with pytest.raises(LedgerSchemaError, match="different manifest digest"):
+        ledger.start_session(
+            session_id="s", manifest_digest="sha256:bbb", baseline_commit=BASELINE_COMMIT, **common
+        )
+
+
+def test_incompatible_ledger_schema_fails_loudly(tmp_path: Path) -> None:
+    """A silent no-op left a healthy-looking session with zero evidence."""
+
+    root = _make_project(tmp_path / "aether")
+    (root / ".aether").mkdir()
+    path = root / ".aether" / "self_improvement.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE cycle_sessions (session_id TEXT PRIMARY KEY, legacy_col TEXT)")
+
+    with pytest.raises(LedgerSchemaError, match="ledger schema"):
+        SelfImprovementLedger(path).ensure_schema()
 
 

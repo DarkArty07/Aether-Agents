@@ -332,6 +332,7 @@ def on_post_tool_call(
         runtime.ledger.record_tool_observation(
             session_id=session_id,
             tool_call_id=event_id,
+            turn_id=str(kwargs.get("turn_id") or ""),
             tool_name=tool_name,
             duration_ms=duration_ms,
             outcome=_tool_outcome(result, kwargs.get("status")),
