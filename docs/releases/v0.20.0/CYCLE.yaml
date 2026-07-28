@@ -4,7 +4,9 @@ approved_on: "2026-07-28"
 owner: Christopher (DarkArty07)
 
 semver:
-  last_official_release: "0.18.2"
+  last_official_release: "0.20.0"
+  release_state: released_default_off
+  released_on: "2026-07-28"
   technical_predecessor: "0.19.5"
   technical_predecessor_state: closed_viable_bounded_unpublished
   candidate_version: "0.20.0"

@@ -11,7 +11,7 @@ This report covers the default-off implementation baseline. It does not claim li
 - Technical predecessor: `v0.19.5`, closed `VIABLE — BOUNDED`, unpublished
 - Candidate: `v0.20.0 — Self-Improvement Instrumentation`
 - Logical provider: `custom:aether-router`
-- Manifest digest: `sha256:f31a60f234ed127d27759c56f2a9769233654b920d5ed0996ef8d2f177ff1f8d`
+- Manifest digest: `sha256:fed4ef11bb87cd497a12e03ae273abc91f1d3a663cc74dcc719a057e6d993556`
 
 > The previously recorded digest (`sha256:fd74b601…`) had gone stale: the manifest
 > was edited after the report was written, so the stated baseline no longer

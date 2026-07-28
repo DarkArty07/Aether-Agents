@@ -1,23 +1,23 @@
-# Aether SemVer Self-Improvement Cycle
+# Aether SemVer Self-Improvement Instrumentation
 
-> **Status:** IMPLEMENTED DEFAULT OFF; operational validation pending
+> **Status:** RELEASED DEFAULT OFF; causal self-improvement and operational validation pending
 > **Approved:** 2026-07-28
 > **Governing decision:** `../decisions/PDR-0009-semver-self-improvement-cycle.md`
 > **Active manifest:** `../releases/v0.20.0/CYCLE.yaml`
 
 ## Purpose
 
-Every Hermes session that verifiably works inside Aether Agents participates in one active SemVer improvement cycle. The cycle uses real project work to evaluate Aether, preserves observable failures, permits direct Hermes framework repair under controlled takeover, verifies corrections, retries the intended path, and accumulates evidence for the next minor version.
+v0.20.0 provides the default-off measurement substrate for a future SemVer self-improvement cycle. When explicitly enabled, the plugin records redacted project-local lifecycle, tool, model, and Harmonia facts. It does not itself evaluate whether the user's requested outcome was achieved, isolate a candidate, compare before and after, approve a version, or perform rollback.
 
-The cycle wraps the user's task. It must not replace product intent, invent unrelated improvement work, or invoke a Daimon ceremonially.
+The approved target cycle wraps the user's task. It must not replace product intent, invent unrelated improvement work, invoke a Daimon ceremonially, or treat recorded activity as improvement.
 
 ## Current and target state
 
 ### Current verified state
 
-- The latest official tag and GitHub Release are v0.18.2.
-- The v0.19.x technical roadmap is closed at v0.19.5 with a `VIABLE — BOUNDED` verdict.
-- v0.19.5 remains an unpublished technical candidate; merge, version reconciliation, tag, Release, and activation are separate gates.
+- The latest official tag and GitHub Release are v0.20.0.
+- The v0.19.x technical roadmap closed at v0.19.5 with a `VIABLE — BOUNDED` verdict and is integrated into v0.20.0 without separate public v0.19.x tags.
+- Harmonia remains default-off; integration and release do not authorize activation.
 - The active Hermes profile uses `custom:aether-router` with `gpt-5.6-sol`.
 - `talk_to` is excluded from Hermes' Olympus tool registration.
 - Harmonia remains available but is default-off; a valid admission currently fails closed with `feature_disabled` and no durable effect.
@@ -26,7 +26,7 @@ The cycle wraps the user's task. It must not replace product intent, invent unre
 
 ### Approved target
 
-v0.20.0 bootstraps an automatic, measured, project-isolated improvement cycle. Source implementation is complete and default-off; activation, runtime restart, a live bounded pilot, merge, release, deployment, and publication remain separately gated. The implementation does not presume that Harmonia should become an LLM-backed agent.
+v0.20.0 releases the project-isolated measurement substrate needed by a future improvement cycle. Source implementation is independently reviewed and default-off; activation, runtime restart, a live bounded pilot, causal evaluation, deployment, and production publication remain separately gated. The implementation does not presume that Harmonia should become an LLM-backed agent.
 
 ## Session state machine
 
@@ -233,6 +233,6 @@ The implementation does not treat `on_session_end` alone as definitive finalizat
 
 ## v0.20.0 acceptance summary
 
-The default-off source candidate proves automatic single initialization, memory-independent context injection, SemVer manifest validation, `talk_to` exclusion in the versioned template, interruption recovery, concurrent-session preservation, Router telemetry without secrets, cross-project isolation, atomic Harmonia classification, evidence-derived version signals, and no predetermined next-minor architecture through deterministic tests. Live Harmonia use, safe takeover, repair/retry, causal before/after acceptance, and provider telemetry coverage remain operational gates after separately authorized activation.
+The released default-off instrumentation proves project identity checks, lazy session initialization, SemVer manifest validation, interruption recovery, concurrent-session preservation, redacted storage, cross-project isolation, real-contract Harmonia classification, request-scoped tool-call identity, manifest-drift detection, and replay-safe internal unknown events through deterministic tests. It does not prove automatic participation, provider telemetry coverage, safe takeover, framework repair/retry, evidence-derived version promotion, or causal before/after acceptance.
 
 Detailed machine-readable scope and gates are in `../releases/v0.20.0/CYCLE.yaml`.

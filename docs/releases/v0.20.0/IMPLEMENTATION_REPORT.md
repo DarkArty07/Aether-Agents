@@ -4,7 +4,7 @@
 
 `MEASUREMENT SUBSTRATE IMPLEMENTED — DEFAULT OFF`
 
-A default-off, project-scoped, privacy-preserving session ledger is implemented and deterministically verified. It is not activated, operationally piloted, merged, tagged, released, deployed, or published.
+A default-off, project-scoped, privacy-preserving session ledger is implemented, independently reviewed, integrated, and released as v0.20.0. It is not activated, operationally piloted, deployed, or enabled in the release configuration.
 
 This increment is **instrumentation, not a self-improvement cycle**. It contains no evaluator, no candidate isolation, no before/after comparison and no rollback, so no causal claim that Aether improved can be derived from it. The external logic audit (`EXTERNAL_LOGIC_AUDIT.md`) records the full reasoning; the Phase 1 corrections below make the instrumentation truthful, while Phases 2-3 — the parts that would make causality possible — remain unbuilt.
 
@@ -83,6 +83,6 @@ The following remain intentionally open or blocked:
 - bounded Harmonia pilot;
 - causal before/after acceptance;
 - coordination key creation;
-- merge, tag, release, deployment, and publication.
+- deployment and production activation/publication.
 
 The next minor architecture remains undecided pending operational evidence and product-owner approval.

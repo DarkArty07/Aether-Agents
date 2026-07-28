@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.20.0] - 2026-07-28
+
+### Added
+- **Bounded Harmonia kernel foundation**: The integrated v0.19.x technical train adds default-off, project-scoped coordination contracts, durable evidence, lifecycle fencing, deterministic bounded selection, semantic handoff, cleanup, and zero-survivor verification while preserving Hermes as product authority and ACPManager as process owner.
+- **Self-improvement instrumentation**: A default-off Hermes plugin records redacted, project-local lifecycle, tool, model, and Harmonia facts without storing prompts, responses, arguments, results, or secrets.
+- **Independent correction evidence**: External adversarial audit and independent follow-up review document the limits of the instrumentation and close residual project-identity, repeated-call, schema, lifecycle, manifest-drift, and internal replay defects.
+- **Automated integration and release governance**: `main` is now the latest integrated, tested state; pull requests target `main`; unresolved predecessor versions block the next SemVer candidate; annotated tags automatically create or reconcile GitHub Releases.
+
+### Changed
+- **Honest capability boundary**: v0.20.0 is released as self-improvement instrumentation, not as causal self-improvement. It contains no frozen evaluator, before/after comparison, automatic promotion, or production rollback mechanism.
+- **GitHub standing authority**: Authorized agents may complete gated commits, push, pull requests, merges, branch cleanup, tags, and GitHub Releases without per-action approval. Runtime activation, deployment, migrations, credentials, spending, and regression acceptance remain separate boundaries.
+- **Clean-checkout dependency compatibility**: The supported MCP dependency remains on the 1.x API line until Olympus deliberately migrates to MCP 2.x.
+
+### Fixed
+- **Real contract classification**: Harmonia outcomes are interpreted from actual `error.code`, `state`, and `uncertainty` fields; host-supplied tool status takes precedence over weaker local inference.
+- **Evidence identity and isolation**: Repeated tool calls are scoped by session, turn, API request, and call identity; foreign workspaces cannot redirect evidence through environment or explicit project-root assertions.
+- **Lifecycle and baseline integrity**: Resumed sessions initialize lazily, linked worktree commits resolve correctly, dirty baselines are digested, interrupted turns remain visible without permanently poisoning sessions, manifest drift is detected, and incompatible ledger schemas fail loudly.
+- **Concurrent replay authentication**: Internally signed `dispatch.unknown` events are verified by the ledger integrity identity during replay, eliminating the previously intermittent concurrent reconciliation failure.
+
+### Testing
+- **Exact committed release tree**: 54 self-improvement tests, 944 coordination tests, and 1198 repository tests pass in a clean checkout on Python 3.11; CI also verifies Python 3.12, build, release policy, and pull-request targeting.
+
+### Operational status
+- **Default off**: Harmonia and the `aether-self-improvement` plugin remain disabled in the release configuration. No runtime activation, restart, deployment, data migration, or provider change is part of this release.
+
 ## [0.18.2] - 2026-07-16
 
 ### Fixed
@@ -640,6 +665,7 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
 [0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0
+[0.20.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.2...v0.20.0
 [0.18.2]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.17.0...v0.18.0
