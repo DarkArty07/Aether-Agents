@@ -12,11 +12,37 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES
 from olympus_v3.self_improvement.ledger import SelfImprovementLedger
 from olympus_v3.self_improvement.manifest import CycleManifest, verify_project_identity
 
 logger = logging.getLogger("olympus_v3.self_improvement")
 _HEX_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
+
+# Codes `HarmoniaService._start_admission_error` returns before any durable run
+# exists. Every other public code may surface once a run could already be
+# durable, so it is never downgraded to pre-admission.
+_PRE_ADMISSION_CODES = frozenset(
+    {"feature_disabled", "invalid_request", "project_not_allowed", "admission_limit"}
+)
+# Durable lifecycle states a successful Harmonia response reports in `state`.
+# `tests/test_self_improvement_contract.py` asserts this stays equal to the
+# kernel's own state set, so a rename upstream breaks the build instead of
+# silently degrading every classification to "unknown".
+_POST_ADMISSION_STATES = frozenset(
+    {
+        "admitted",
+        "dispatch_staged",
+        "retry_wait",
+        "session_bound",
+        "terminal_observed",
+        "cleanup_pending",
+        "cleaned",
+        "reconciliation_required",
+        "cancel_requested",
+    }
+)
+
 
 
 @dataclass(frozen=True)
@@ -190,7 +216,20 @@ def on_pre_llm_call(
         return None
 
 
-def _tool_outcome(result: Any) -> str:
+def _tool_outcome(result: Any, host_status: Any = None) -> str:
+    """Prefer the host's own verdict; only parse the payload when it is absent.
+
+    Hermes already classifies every tool result in `_tool_result_observer_fields`
+    and passes it as `status`. Re-deriving it here was strictly worse: a payload
+    that reports failure without an `error` key or an `exit_code` (`{"ok": false}`,
+    `{"success": false}`, `{"status": "failed"}`) was recorded as a success.
+    """
+
+    if isinstance(host_status, str):
+        if host_status == "ok":
+            return "success"
+        if host_status in {"error", "blocked"}:
+            return "error"
     if not isinstance(result, str) or not result.strip():
         return "unknown"
     try:
@@ -202,42 +241,63 @@ def _tool_outcome(result: Any) -> str:
         return "unknown"
     if payload.get("error") not in (None, "", False):
         return "error"
+    if payload.get("ok") is False or payload.get("success") is False:
+        return "error"
+    status = payload.get("status")
+    if isinstance(status, str) and status.lower() in {
+        "failed",
+        "failure",
+        "error",
+        "timeout",
+        "timed_out",
+        "cancelled",
+        "canceled",
+        "blocked",
+    }:
+        return "error"
     exit_code = payload.get("exit_code")
     if isinstance(exit_code, int):
         return "success" if exit_code == 0 else "error"
     return "success"
 
 
-def _harmonia_classification(result: Any) -> tuple[str, str]:
-    """Extract one allowlisted outcome from a Harmonia result without retaining it."""
+def _harmonia_classification(result: Any) -> tuple[str, str, str | None]:
+    """Classify one Harmonia response against its real public wire contract.
 
-    outcome = "unknown"
+    Returns `(phase, outcome, uncertainty)`. Harmonia reports failures as
+    `{"ok": false, "error": {"code": ...}}` and successes as
+    `{"ok": true, "state": ..., "uncertainty": ...}`; it never emits `status`
+    or `success`. Anything that is not provably pre-admission is treated as
+    post-admission, because a durable run may already exist.
+    """
+
+    payload: Any = None
     if isinstance(result, str):
         try:
             payload = json.loads(result)
         except (json.JSONDecodeError, TypeError):
             payload = None
-        if isinstance(payload, dict):
-            error = payload.get("error")
-            if isinstance(error, dict) and isinstance(error.get("code"), str):
-                outcome = error["code"]
-            elif isinstance(payload.get("status"), str):
-                outcome = payload["status"]
-            elif payload.get("success") is True:
-                outcome = "completed"
-    pre_admission = {
-        "invalid_request",
-        "feature_disabled",
-        "project_not_allowed",
-        "capacity_exhausted",
-        "key_missing",
-    }
-    post_admission = {"accepted", "running", "completed", "failed", "timed_out", "cleanup_failed", "stopped"}
-    if outcome in pre_admission:
-        return "pre_admission", outcome
-    if outcome in post_admission:
-        return "post_admission", outcome
-    return "unknown", outcome
+    if not isinstance(payload, dict):
+        return "unknown", "unknown", None
+
+    uncertainty = payload.get("uncertainty")
+    uncertainty = uncertainty if isinstance(uncertainty, str) and uncertainty else None
+
+    error = payload.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        code = error["code"]
+        if code in _PRE_ADMISSION_CODES:
+            return "pre_admission", code, uncertainty
+        if code in HARMONIA_ERROR_CODES:
+            return "post_admission", code, uncertainty
+        return "unknown", code, uncertainty
+
+    state = payload.get("state")
+    if isinstance(state, str) and state in _POST_ADMISSION_STATES:
+        return "post_admission", state, uncertainty
+    if payload.get("ok") is True:
+        return "post_admission", "unknown", uncertainty
+    return "unknown", "unknown", uncertainty
 
 
 def on_post_tool_call(
@@ -252,7 +312,7 @@ def on_post_tool_call(
 ) -> None:
     """Persist only a redacted tool metric; never persist args or result payloads."""
 
-    del task_id, kwargs
+    del task_id
     try:
         runtime = _runtime(session_id)
         if runtime is None:
@@ -260,20 +320,21 @@ def on_post_tool_call(
         event_id = tool_call_id or str(uuid.uuid4())
         coordination = None
         if tool_name in {"harmonia", "mcp__olympus_v3__harmonia"}:
-            phase, outcome = _harmonia_classification(result)
+            phase, outcome, uncertainty = _harmonia_classification(result)
             action = args.get("action") if isinstance(args, dict) else None
             coordination = {
                 "system": "harmonia",
                 "action": action if action in {"start", "status", "stop"} else "unknown",
                 "phase": phase,
                 "outcome": outcome,
+                "uncertainty": uncertainty,
             }
         runtime.ledger.record_tool_observation(
             session_id=session_id,
             tool_call_id=event_id,
             tool_name=tool_name,
             duration_ms=duration_ms,
-            outcome=_tool_outcome(result),
+            outcome=_tool_outcome(result, kwargs.get("status")),
             coordination=coordination,
         )
     except Exception as exc:
