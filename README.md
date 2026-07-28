@@ -42,6 +42,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
 | 🧪 | **Default-Off Coordination Lab** | v0.19 R7 adds an isolated shadow observer, typed failure/recovery evidence, and disposable durable correlation. It is not active in the gateway and never replaces Olympus lifecycle ownership. |
+| 🔬 | **Self-Improvement Cycle Bootstrap** | v0.20.0 adds a default-off Hermes lifecycle plugin, project-scoped redacted ledger, interruption reconciliation, and deterministic release-evidence projection. Activation and release remain separately gated. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
@@ -80,7 +81,11 @@ Olympus v3 Server
 
 v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
 
-The approved [v0.19.x incremental migration design](docs/releases/v0.19.x-kernel-migration/DESIGN.md) separates composition, trusted evidence, closure, no-relay handoff, bounded Harmonia and the fault pilot into v0.19.1–v0.19.6. Its public coordination surface will be a dedicated `harmonia` MCP tool with initial `start`, `status` and `stop` actions; the kernel remains internal and `talk_to` stays legacy. The [detailed v0.19.1 plan](docs/releases/v0.19.x-kernel-migration/V0.19.1_IMPLEMENTATION_PLAN.md) is complete, but implementation, live ACP, activation, merge, tag and release remain unauthorized.
+The [v0.19.x incremental kernel migration](docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md) is closed at v0.19.5 with verdict **VIABLE — BOUNDED**. It demonstrated one source, two immutable successor candidates, deterministic committed selection, trusted semantic handoff, cleanup and zero survivors. v0.19.6 was closed without a separate patch. Harmonia remains default-off, and v0.19.5 remains an unpublished technical candidate.
+
+### v0.20.0 self-improvement bootstrap
+
+The candidate [v0.20.0 cycle](docs/releases/v0.20.0/CYCLE.yaml) now has an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and can project deterministic release evidence without approving a version. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`; activation, runtime restart, a live bounded pilot, merge, tag, release and publication remain explicitly unauthorized.
 
 ---
 

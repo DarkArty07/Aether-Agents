@@ -8,7 +8,13 @@ v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not ope
 
 ## v0.19.x incremental kernel migration
 
-The six-patch design in `docs/releases/v0.19.x-kernel-migration/DESIGN.md` is approved: v0.19.1 composition, v0.19.2 trusted evidence, v0.19.3 closure, v0.19.4 fixed no-relay handoff, v0.19.5 bounded Harmonia and v0.19.6 fault pilot/verdict. The public coordination surface is a dedicated `harmonia` MCP tool with initial `start`, `status` and `stop` actions; kernel classes remain internal and `talk_to` remains legacy. The detailed v0.19.1 plan is frozen in `docs/releases/v0.19.x-kernel-migration/V0.19.1_IMPLEMENTATION_PLAN.md`. Implementation, live ACP, activation, merge, tag, release and deployment remain blocked behind separate gates.
+The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The demonstrated topology covers one source, two immutable candidate successors, one deterministic committed selection, trusted semantic handoff, cleanup and zero survivors. v0.19.6 was closed without a separate patch; it is not pending. Harmonia remains default-off, and v0.19.5 remains an unpublished technical candidate. Canonical truth: `docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md`.
+
+## Aether self-improvement cycle
+
+Every Hermes session whose verified project root is Aether Agents participates in the active SemVer self-improvement cycle before project work. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`. The cycle wraps the user's real task: use Harmonia when specialist work applies, never use a hidden `talk_to` fallback, preserve and classify failures, verify cleanup before direct takeover, repair Aether directly only for framework defects inside this project, verify the correction, and retry the intended Harmonia path. Accumulate evidence for the next minor without presuming its architecture or approving it automatically. Other projects must never mutate Aether incidentally.
+
+PDR-0009 governs the cycle. The v0.20.0 plugin/source bootstrap is implemented and verified default-off. Harmonia activation, keys, runtime restart, live pilot, merge, tag, release, deployment and publication remain separately gated.
 
 ## Git Conventions
 

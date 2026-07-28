@@ -15,7 +15,10 @@ home/config.yaml
 # --- Runtime (auto-generated) ---
 home/sessions/
 home/logs/
-home/plugins/
+home/plugins/*
+!home/plugins/aether-self-improvement/
+!home/plugins/aether-self-improvement/__init__.py
+!home/plugins/aether-self-improvement/plugin.yaml
 home/.cache/
 home/.olympus/
 home/active_profile
