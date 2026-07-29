@@ -16,7 +16,7 @@ _SIGNALS = {"NONE", "PATCH_CANDIDATE", "MINOR_CAPABILITY_SIGNAL", "REQUIRES_MORE
 # version is refused loudly: `CREATE TABLE IF NOT EXISTS` against an older shape
 # silently no-ops and then every INSERT fails, which produced a healthy-looking
 # session with zero evidence.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class LedgerSchemaError(RuntimeError):
@@ -90,6 +90,27 @@ CREATE TABLE IF NOT EXISTS coordination_events (
     duration_ms INTEGER,
     created_at REAL NOT NULL,
     PRIMARY KEY (session_id, turn_id, api_request_id, event_id)
+);
+CREATE TABLE IF NOT EXISTS improvement_tasks (
+    task_id TEXT PRIMARY KEY,
+    statement TEXT NOT NULL,
+    acceptance_criterion TEXT NOT NULL,
+    baseline_commit TEXT NOT NULL,
+    baseline_dirty_digest TEXT NOT NULL,
+    evaluation_digest TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS evaluation_runs (
+    task_id TEXT NOT NULL REFERENCES improvement_tasks(task_id),
+    phase TEXT NOT NULL CHECK (phase IN ('baseline', 'candidate')),
+    commit_id TEXT NOT NULL,
+    evaluation_digest TEXT NOT NULL,
+    passed INTEGER NOT NULL,
+    failed INTEGER NOT NULL,
+    metric REAL,
+    duration_ms INTEGER,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (task_id, phase)
 );
 CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_model_calls_session ON model_calls(session_id);

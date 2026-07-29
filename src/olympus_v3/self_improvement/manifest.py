@@ -16,25 +16,31 @@ _CANDIDATE_VERSION = _MANIFEST.parent.name.removeprefix("v")
 _LEDGER = Path(".aether/self_improvement.db")
 _EVIDENCE = Path("docs/releases/v0.20.0/SELF_IMPROVEMENT_EVIDENCE.md")
 _SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-_ALLOWED_STATUSES = {"implementation_in_progress", "implemented_default_off"}
-# Deliberate safety interlock: while the candidate is default-off, the contract
-# must assert that none of these gates is open, and a manifest claiming otherwise
-# refuses to load. That strictness is intentional and is covered by an existing
-# acceptance test. What was wrong is that the refusal was *silent* — callers now
-# log it (see `hooks._initialize`), because an owner who grants a gate must not
-# be left unable to distinguish an interlock from a corrupt file.
-_FORBIDDEN_AUTHORIZATIONS = frozenset(
+_ALLOWED_STATUSES = {"implementation_in_progress", "implemented_default_off", "released_default_off"}
+
+# Gates that record an event which has already happened. Their value is a
+# historical fact, so the contract has to be able to state it. v0.20.0 was
+# merged, tagged and published on 2026-07-28 while this block still declared all
+# four closed, so the shipped artifact asserted that its own publication was
+# unauthorized. A contract that cannot describe its own successor state forces
+# the owner to choose between lying and deleting the cycle.
+_HISTORICAL_GATES = frozenset({"merge", "tag", "release", "publication"})
+
+# Gates that would change how the runtime behaves. While the candidate is
+# default-off the contract must still assert these are closed, and a manifest
+# claiming otherwise refuses to load. That interlock is deliberate, is covered by
+# an existing acceptance test, and is NOT relaxed here. What was wrong is that
+# the refusal was *silent* — callers now log it (see `hooks._initialize`) so an
+# owner who grants a gate can tell an intentional interlock from a corrupt file.
+_RUNTIME_GATES = frozenset(
     {
         "harmonia_activation",
         "coordination_key_creation",
         "runtime_restart",
-        "merge",
-        "tag",
-        "release",
         "deployment",
-        "publication",
     }
 )
+_AUTHORIZATION_VALUES = frozenset({"authorized", "not_authorized"})
 
 
 class ManifestError(ValueError):
@@ -57,6 +63,7 @@ class CycleManifest:
     ledger_path: Path
     release_evidence_path: Path
     digest: str
+    open_gates: frozenset[str] = frozenset()
 
 
 def _mapping(value: Any, name: str) -> dict[str, Any]:
@@ -145,11 +152,18 @@ def load_cycle_manifest(project_root: Path) -> CycleManifest:
     for key in ("documentation_alignment", "implementation_plan", "source_or_plugin_implementation"):
         if authorization.get(key) != "authorized":
             raise ManifestError(f"authorization.{key} must be authorized")
-    for key in _FORBIDDEN_AUTHORIZATIONS:
+    for key in _RUNTIME_GATES:
         if authorization.get(key) != "not_authorized":
             raise ManifestError(
                 f"authorization.{key} must remain not_authorized while the candidate is default-off"
             )
+    open_gates = set()
+    for key in _HISTORICAL_GATES:
+        value = authorization.get(key)
+        if value not in _AUTHORIZATION_VALUES:
+            raise ManifestError(f"authorization.{key} must be authorized or not_authorized")
+        if value == "authorized":
+            open_gates.add(key)
 
     return CycleManifest(
         project_root=root,
@@ -164,6 +178,7 @@ def load_cycle_manifest(project_root: Path) -> CycleManifest:
         ledger_path=root / ledger_relative,
         release_evidence_path=root / evidence_relative,
         digest=f"sha256:{hashlib.sha256(raw).hexdigest()}",
+        open_gates=frozenset(open_gates),
     )
 
 
