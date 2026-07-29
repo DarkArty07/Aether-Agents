@@ -16,7 +16,7 @@ _SIGNALS = {"NONE", "PATCH_CANDIDATE", "MINOR_CAPABILITY_SIGNAL", "REQUIRES_MORE
 # version is refused loudly: `CREATE TABLE IF NOT EXISTS` against an older shape
 # silently no-ops and then every INSERT fails, which produced a healthy-looking
 # session with zero evidence.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class LedgerSchemaError(RuntimeError):
@@ -112,11 +112,30 @@ CREATE TABLE IF NOT EXISTS evaluation_runs (
     created_at REAL NOT NULL,
     PRIMARY KEY (task_id, phase)
 );
+CREATE TABLE IF NOT EXISTS promotions (
+    task_id TEXT PRIMARY KEY REFERENCES improvement_tasks(task_id),
+    verdict TEXT NOT NULL,
+    approved_by TEXT NOT NULL,
+    approval_note TEXT NOT NULL,
+    promoted_commit TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_model_calls_session ON model_calls(session_id);
 CREATE INDEX IF NOT EXISTS idx_coordination_events_session ON coordination_events(session_id);
 CREATE INDEX IF NOT EXISTS idx_turn_outcomes_session ON turn_outcomes(session_id);
 """
+
+
+# Paths whose schema has been verified in this process. Reset by tests that
+# rebuild a ledger under the same path.
+_INITIALIZED: set[str] = set()
+
+
+def reset_schema_cache() -> None:
+    """Forget verified paths so a rebuilt ledger is checked again."""
+
+    _INITIALIZED.clear()
 
 
 class SelfImprovementLedger:
@@ -133,9 +152,15 @@ class SelfImprovementLedger:
         return connection
 
     def ensure_schema(self) -> None:
+        # Every read and write called this, re-running PRAGMA and the whole
+        # script each time. The durable check still happens once per path.
+        if str(self.path) in _INITIALIZED:
+            return
         if self.path.parent.is_symlink():
             raise RuntimeError("self-improvement ledger directory must not be a symlink")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # The database is 0600, but a world-readable directory still leaks the
+        # fact and shape of the ledger to any local account.
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         if self.path.is_symlink():
             raise RuntimeError("self-improvement ledger must not be a symlink")
         try:
@@ -159,6 +184,7 @@ class SelfImprovementLedger:
                 )
             connection.executescript(_SCHEMA)
             connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        _INITIALIZED.add(str(self.path))
 
     @staticmethod
     def _safe_text(value: Any, *, limit: int = 256) -> str | None:
