@@ -71,10 +71,13 @@ class FakeOlympusDB:
 
 
 class FakeCursor:
-    def __init__(self, value):
+    def __init__(self, value=0, is_counts_query=False):
         self.value = value
+        self.is_counts_query = is_counts_query
 
     async def fetchone(self):
+        if self.is_counts_query:
+            return (self.value, self.value, self.value)
         return (self.value,)
 
     async def fetchall(self):
@@ -106,7 +109,8 @@ class FakeAetherDB:
         return []
 
     async def _execute(self, query):
-        return FakeCursor(0)
+        is_counts = "(SELECT COUNT(*) FROM sessions)" in query
+        return FakeCursor(0, is_counts_query=is_counts)
 
     async def update_hot_state(self, **values):
         self.hot.update(values)
