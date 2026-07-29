@@ -563,3 +563,56 @@ def test_release_evidence_declares_its_own_limits(tmp_path: Path) -> None:
     assert "Activity volume is not improvement." in rendered
     assert "no causal claim about" in rendered
     assert "Sessions without a clean baseline worktree: 1" in rendered
+
+
+# --------------------------------------------------------------------------
+# F-08 — the contract must be able to state its own release history
+# --------------------------------------------------------------------------
+
+
+def test_historical_gates_may_be_recorded_as_taken(tmp_path: Path) -> None:
+    """v0.20.0 shipped tagged and published while denying both, because a
+    granted gate invalidated the manifest. History is now representable."""
+
+    def release(payload: dict) -> None:
+        for gate in ("merge", "tag", "release", "publication"):
+            payload["authorization"][gate] = "authorized"
+
+    root = _make_project(tmp_path / "aether", mutate=release)
+    manifest = load_cycle_manifest(root)
+
+    assert manifest.open_gates == frozenset({"merge", "tag", "release", "publication"})
+
+
+def test_runtime_gates_remain_closed_while_default_off(tmp_path: Path) -> None:
+    """The interlock is not relaxed: a gate that changes runtime behaviour
+    still refuses to load."""
+
+    for gate in ("harmonia_activation", "coordination_key_creation", "runtime_restart", "deployment"):
+        def grant(payload: dict, key: str = gate) -> None:
+            payload["authorization"][key] = "authorized"
+
+        root = _make_project(tmp_path / f"aether-{gate}", mutate=grant)
+
+        with pytest.raises(ManifestError, match="must remain not_authorized"):
+            load_cycle_manifest(root)
+
+
+def test_malformed_gate_value_is_still_refused(tmp_path: Path) -> None:
+    def corrupt(payload: dict) -> None:
+        payload["authorization"]["tag"] = "probably"
+
+    root = _make_project(tmp_path / "aether", mutate=corrupt)
+
+    with pytest.raises(ManifestError, match="must be authorized or not_authorized"):
+        load_cycle_manifest(root)
+
+
+def test_shipped_manifest_matches_the_published_release_state() -> None:
+    """The repository's own contract must not contradict its git history."""
+
+    root = Path(__file__).resolve().parents[1]
+    manifest = load_cycle_manifest(root)
+
+    assert manifest.status == "released_default_off"
+    assert manifest.open_gates == frozenset({"merge", "tag", "release", "publication"})

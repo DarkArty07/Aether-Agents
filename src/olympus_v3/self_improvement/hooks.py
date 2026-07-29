@@ -216,6 +216,15 @@ def _initialize(session_id: str, model: str, platform: str, kwargs: dict[str, An
         )
         runtime = _Runtime(manifest=manifest, ledger=ledger, baseline_commit=baseline)
         _runtime_by_session[session_id] = runtime
+        if manifest.open_gates:
+            # Surface irreversible steps the contract records as already taken,
+            # so a reader of the log does not have to infer release state from
+            # the absence of a complaint.
+            logger.info(
+                "Cycle v%s records these gates as already taken: %s",
+                manifest.candidate_version,
+                ", ".join(sorted(manifest.open_gates)),
+            )
         if reconciled:
             logger.warning("Marked %d prior self-improvement session(s) for reconciliation", reconciled)
         return runtime
