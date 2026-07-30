@@ -47,23 +47,15 @@ def test_coordination_parses_default_off_harmonia_capability(tmp_path):
     assert coordination.max_active_runs == 1
 
 
-def test_explicit_v0190_shadow_config_remains_parseable_but_does_not_allow_harmonia(tmp_path):
-    coordination = load_config(
-        _write_config(tmp_path, "coordination:\n  enabled: true\n  mode: shadow\n")
-    ).coordination
-
-    assert coordination.enabled is True
-    assert coordination.mode == "shadow"
-    assert coordination.allowed_modes == ("legacy",)
-    assert "kernel-single-task" not in coordination.allowed_modes
-    assert coordination.max_active_runs == 0
+def test_retired_v0190_shadow_config_fails_closed(tmp_path):
+    with pytest.raises(ValueError, match="shadow mode has been retired"):
+        load_config(_write_config(tmp_path, "coordination:\n  enabled: true\n  mode: shadow\n"))
 
 
 @pytest.mark.parametrize(
     "content",
     [
         "coordination:\n  enabled: false\n  mode: active\n",
-        "coordination:\n  enabled: false\n  mode: shadow\n  allowed_modes: [legacy, kernel-single-task]\n",
         "coordination:\n  enabled: false\n  allowed_modes: legacy\n",
         "coordination:\n  enabled: false\n  allowed_modes: [legacy, unknown]\n",
         "coordination:\n  enabled: false\n  allowed_modes: [legacy, legacy]\n",
@@ -77,3 +69,13 @@ def test_explicit_v0190_shadow_config_remains_parseable_but_does_not_allow_harmo
 def test_malformed_harmonia_configuration_fails_closed(tmp_path, content):
     with pytest.raises(ValueError, match="coordination"):
         load_config(_write_config(tmp_path, content))
+
+
+def test_tracked_template_documents_only_the_default_off_kernel_boundary():
+    template = Path("home/olympus_v3.yaml.template").read_text()
+
+    assert "coordination:" in template
+    assert "enabled: false" in template
+    assert "mode: legacy" in template
+    assert "shadow" not in template.lower()
+    assert "R7" not in template

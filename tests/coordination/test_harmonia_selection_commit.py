@@ -26,7 +26,7 @@ from olympus_v3.coordination.ledger import (
     StoreScope,
     WriterContext,
 )
-from olympus_v3.coordination.protocol import Principal, ValidationError
+from olympus_v3.coordination.principal import Principal, ValidationError
 from olympus_v3.coordination.selection_commit import KernelSelectionCommitter, rebuild_selection_decisions
 
 PROJECT = "project-selection"

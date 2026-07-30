@@ -2,6 +2,10 @@
 # Copy to AETHER_HOME/olympus_v3.yaml only when an isolated runtime needs it.
 
 coordination:
-  # R7 remains observational and default-off. Parsing true does not activate it.
+  # Harmonia kernel remains default-off. Configuration does not authorize activation.
   enabled: false
-  mode: shadow
+  mode: legacy
+  allowed_modes:
+    - legacy
+  project_allowlist: []
+  max_active_runs: 0

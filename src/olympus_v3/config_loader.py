@@ -145,13 +145,14 @@ def load_config(config_path: Path | None = None) -> OlympusV3Config:
                 max_active_runs = coordination.get("max_active_runs", 0)
                 if not isinstance(enabled, bool):
                     raise ValueError("coordination.enabled must be a boolean")
-                if mode not in {"legacy", "shadow"}:
-                    raise ValueError("coordination.mode must be 'legacy' or 'shadow'")
+                if mode == "shadow":
+                    raise ValueError("coordination shadow mode has been retired")
+                if mode != "legacy":
+                    raise ValueError("coordination.mode must be 'legacy'")
                 if (
                     not isinstance(allowed_modes, list)
                     or any(value not in {"legacy", "kernel-single-task"} for value in allowed_modes)
                     or len(set(allowed_modes)) != len(allowed_modes)
-                    or (mode == "shadow" and "kernel-single-task" in allowed_modes)
                 ):
                     raise ValueError("coordination.allowed_modes is invalid")
                 if not isinstance(project_allowlist, list):

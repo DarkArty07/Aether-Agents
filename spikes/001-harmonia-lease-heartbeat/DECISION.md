@@ -1,8 +1,8 @@
 # Experimental decision — Harmonia lifecycle authority
 
-**Status:** Experimentally validated and approved for test-first production implementation; Gate C live remains unauthorized
+**Status:** HISTORICAL EXPERIMENTAL DECISION — executable retired after production regression coverage
 **Issue:** [GitHub #107](https://github.com/DarkArty07/Aether-Agents/issues/107)
-**Evidence:** [`README.md`](README.md), [`result.json`](result.json), executable [`main.py`](main.py)
+**Evidence:** [`README.md`](README.md), [`result.json`](result.json), and the historical executable at tag `v0.20.0`
 
 ## Context
 

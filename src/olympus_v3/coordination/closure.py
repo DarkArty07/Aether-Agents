@@ -19,7 +19,7 @@ from .effects import (
     _s,
     _verify_receipt,
 )
-from .protocol import ValidationError
+from .principal import ValidationError
 from .review import GateEvaluation, GateResult, _verify_gate_evaluation
 
 

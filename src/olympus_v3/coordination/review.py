@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Iterable
 
 from .effects import _canon, _hash, _id, _int, _key, _s, _utc
-from .protocol import ValidationError
+from .principal import ValidationError
 
 MAX_REVIEW_ATTEMPTS = 3
 _GATE_EVALUATION_KEY = secrets.token_bytes(32)

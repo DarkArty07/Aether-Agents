@@ -13,7 +13,7 @@ from enum import StrEnum
 from threading import Lock
 from typing import Any, Iterable
 
-from .protocol import ValidationError
+from .principal import ValidationError
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:/-]{0,127}$")
 HEX = re.compile(r"^[0-9a-f]{64}$")

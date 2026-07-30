@@ -4,6 +4,8 @@
 
 **Baseline:** `8c2ddf9 feat(coordination): add verified shadow correlation`
 
+> **Historical path notice (2026-07-29):** paths in this matrix describe the R7 milestone tree. The executable shadow laboratory was later retired from current source; it remains reproducible from tag `v0.20.0` and Git history. See [`../../architecture/EXPERIMENTAL_COORDINATION.md`](../../architecture/EXPERIMENTAL_COORDINATION.md).
+
 **Boundary:** this matrix authorizes repository implementation, disposable stores, isolated tests, controlled zero-tool Olympus observation, documentation, and atomic commits. It does not authorize live configuration changes, gateway restart, runtime activation, production migration, real effects, R8, merge, tag, release, or publication.
 
 ## Classification

@@ -37,7 +37,7 @@ from .ledger import (
     WriterContext,
 )
 from .olympus_adapter import OlympusRuntimeAdapter
-from .protocol import ValidationError
+from .principal import ValidationError
 from .selection_commit import KernelSelectionCommitter, rebuild_selection_decisions
 
 WRITER_ID = "hermes"
