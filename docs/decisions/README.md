@@ -24,6 +24,7 @@ Sequences are independent by decision type.
 
 | Record | Status | Governing decision |
 |---|---|---|
+| [PDR-0009](./PDR-0009-semver-self-improvement-cycle.md) | APPROVED | Every Aether Hermes session participates in a SemVer-governed self-improvement cycle; evidence, not assumption, shapes the next minor, and no LLM coordinator is presumed necessary. |
 | [PDR-0008](./PDR-0008-canonical-definition-and-project-completion.md) | APPROVED | Canonical product definition approved; a project is complete when the user obtains the intended outcome, with Hermes accountable for requirements understanding and honest acceptance evidence. |
 | [PDR-0007](./PDR-0007-studio-experience-progressive-visibility-and-ui.md) | APPROVED | Aether should feel like an intelligent software studio, use progressive visibility, and eventually provide a UI that projects authoritative state without duplicating it. |
 | [PDR-0006](./PDR-0006-hermes-native-user-memory-without-honcho.md) | APPROVED | Hermes Agent is the canonical learning framework; Honcho is excluded; Hermes owns the global user profile, preferences, and memory. |
