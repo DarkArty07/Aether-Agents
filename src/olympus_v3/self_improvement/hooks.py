@@ -216,6 +216,15 @@ def _initialize(session_id: str, model: str, platform: str, kwargs: dict[str, An
         )
         runtime = _Runtime(manifest=manifest, ledger=ledger, baseline_commit=baseline)
         _runtime_by_session[session_id] = runtime
+        if manifest.open_gates:
+            # Surface irreversible steps the contract records as already taken,
+            # so a reader of the log does not have to infer release state from
+            # the absence of a complaint.
+            logger.info(
+                "Cycle v%s records these gates as already taken: %s",
+                manifest.candidate_version,
+                ", ".join(sorted(manifest.open_gates)),
+            )
         if reconciled:
             logger.warning("Marked %d prior self-improvement session(s) for reconciliation", reconciled)
         return runtime
@@ -446,11 +455,23 @@ def on_session_end(
 ) -> None:
     """Record a turn outcome without falsely finalizing a continuing session."""
 
-    del model, platform, kwargs
+    del platform
     try:
         runtime = _runtime(session_id)
         if runtime is not None:
             runtime.ledger.record_turn_outcome(session_id, completed=completed, interrupted=interrupted)
+            # `post_llm_call` only fires for a completed, non-interrupted turn, so
+            # cost and latency evidence described successful turns only. This hook
+            # fires unconditionally; the insert is ignored when the turn already
+            # recorded itself, and lands when it could not.
+            turn_id = kwargs.get("turn_id")
+            if turn_id:
+                runtime.ledger.record_model_call(
+                    session_id=session_id,
+                    turn_id=str(turn_id),
+                    requested_model=model or runtime.manifest.current_hermes_model,
+                    error_code="interrupted" if interrupted else (None if completed else "failed"),
+                )
     except Exception as exc:
         logger.warning("Self-improvement turn finalization failed: %s", exc)
 

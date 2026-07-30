@@ -12,7 +12,7 @@ from olympus_v3.coordination.harmonia_selection import (
     derive_projection,
     propose_selection,
 )
-from olympus_v3.coordination.protocol import ValidationError
+from olympus_v3.coordination.principal import ValidationError
 
 
 def authority(**changes):

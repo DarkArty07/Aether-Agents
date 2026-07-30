@@ -14,6 +14,8 @@
 
 > **Governance correction (2026-07-28):** ODR-0001 supersedes the inference that a later SemVer candidate may start on an unmerged predecessor. Technical closeout and publication remain separable, but branch disposition must now be `MERGED`, `ABANDONED`, or `SUPERSEDED` before the next version begins.
 
+> **Post-closeout maintenance note (2026-07-29):** the bounded kernel path proven here remains in current source. Parallel and pre-kernel R2–R8 laboratories were later retired after consumer tracing; their evidence and historical source remain preserved. Current classification is recorded in [`../../architecture/EXPERIMENTAL_COORDINATION.md`](../../architecture/EXPERIMENTAL_COORDINATION.md).
+
 ## 1. Closed question
 
 This roadmap asked whether Aether could replace Hermes' routine hub-and-spoke coordination with a durable kernel while retaining Hermes as the user-facing strategic authority and ACPManager as lifecycle owner.

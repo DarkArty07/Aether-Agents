@@ -26,7 +26,7 @@ from olympus_v3.coordination.effects import (
     transition_effect,
     verify_approval,
 )
-from olympus_v3.coordination.protocol import ValidationError
+from olympus_v3.coordination.principal import ValidationError
 from olympus_v3.coordination.review import (
     FindingKind,
     GateResult,

@@ -25,7 +25,7 @@ from .evidence import (
 )
 from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
-from .protocol import Principal, ValidationError
+from .principal import Principal, ValidationError
 from .workflow import AttemptState, kernel_acp_session_id, kernel_logical_session
 
 

@@ -5,6 +5,8 @@
 **Exit:** **GO WITH NAMED LIMITS**
 **Runtime state:** tests-only; no coordination runtime exists or is enabled
 
+> **Historical path notice (2026-07-29):** the tests-only Phase 0 harnesses were retired from current source after the production kernel superseded their feasibility purpose. This report and the source at tag `v0.20.0` preserve the evidence. Current classification is in [`../../architecture/EXPERIMENTAL_COORDINATION.md`](../../architecture/EXPERIMENTAL_COORDINATION.md).
+
 ## 1. Decision
 
 Phase 0 establishes that Aether can begin R2, the Cotal-inspired protocol and immutable-contract layer, without replacing Olympus/ACP lifecycle ownership and without touching the live Telegram gateway.

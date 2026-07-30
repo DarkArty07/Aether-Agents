@@ -8,6 +8,8 @@ Given a Harmonia dispatch protected by a ten-second SQLite lease, when the ACP t
 
 This is a throwaway experiment for [GitHub #107](https://github.com/DarkArty07/Aether-Agents/issues/107). It does not modify production coordination code, activate Harmonia, open ACP, close the issue or claim Gate B/Gate C.
 
+> **Retirement notice (2026-07-29):** production lifecycle regressions now cover the selected heartbeat and cleanup invariants, so the throwaway executable was removed from current source. This report and `result.json` remain historical evidence; the exact executable remains available at tag `v0.20.0`.
+
 The spike uses:
 
 - the production `SQLiteLedger` lease implementation;
@@ -15,17 +17,9 @@ The spike uses:
 - the production `Lease` and `LeaseResult` types;
 - disposable SQLite tables for the proposed terminal/cleanup projection.
 
-## Run
+## Historical reproduction
 
-```bash
-PYTHONPATH=src python spikes/001-harmonia-lease-heartbeat/main.py
-```
-
-Optional preserved SQLite artifact:
-
-```bash
-PYTHONPATH=src python spikes/001-harmonia-lease-heartbeat/main.py --db /tmp/harmonia-heartbeat-spike.sqlite
-```
+Check out tag `v0.20.0` to run the original disposable executable. Current behavior is covered directly by `tests/coordination/test_harmonia_lease_lifecycle.py`.
 
 ## Scenarios
 
@@ -74,4 +68,4 @@ A dispatch envelope does not need mutation after renewal: production `check_leas
 
 ### Recommendation for the real build
 
-Proceed with the provisional design in [`DECISION.md`](DECISION.md), then implement it test-first in production code. Keep the spike disposable after the production regression suite covers the same invariants.
+The provisional design in [`DECISION.md`](DECISION.md) was implemented test-first and its maintained regressions now cover the selected invariants. The executable spike was therefore retired.

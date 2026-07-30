@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .contracts import TaskState
-from .protocol import ValidationError
+from .principal import ValidationError
 
 POLICY_ID = "lowest-canonical-eligible-task-id"
 POLICY_VERSION = "1"

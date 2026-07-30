@@ -631,7 +631,7 @@ def test_read_only_worker_returns_json_and_kernel_materializes_evidence(response
 
 def test_real_adapter_rejects_tampered_prompt_before_any_acp_operation(kernel):
     from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
-    from olympus_v3.coordination.protocol import ValidationError
+    from olympus_v3.coordination.principal import ValidationError
 
     class Manager:
         def __init__(self):

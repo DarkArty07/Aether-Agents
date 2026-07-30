@@ -4,6 +4,8 @@
 
 **Implementation outcome:** v0.19.0 implemented deterministic convergence through R11, then froze as experimental/default-off/not operationally validated. R12–R14, another pilot, live coordination, gateway/config mutation, merge, tag, deployment and publication are outside this version.
 
+> **Post-closeout maintenance note (2026-07-29):** this decision records the historical convergence rationale. Current source retains the kernel foundations and removes the non-authoritative R2–R8 executable laboratories; use [`../../architecture/EXPERIMENTAL_COORDINATION.md`](../../architecture/EXPERIMENTAL_COORDINATION.md) for the current code boundary.
+
 ## Decision
 
 Aether will preserve the R2–R7 deterministic coordination kernel and make it the mandatory operational path for new kernel-backed pilots. R8's `PilotStore` runtime remains historical and reproducible but must not be hardened into a second kernel.

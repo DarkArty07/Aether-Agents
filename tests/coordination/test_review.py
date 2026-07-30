@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 import olympus_v3.coordination as coordination
-from olympus_v3.coordination.protocol import ValidationError
+from olympus_v3.coordination.principal import ValidationError
 from olympus_v3.coordination.review import (
     MAX_REVIEW_ATTEMPTS,
     FindingKind,

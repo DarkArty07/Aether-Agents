@@ -9,7 +9,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .protocol import Principal, ValidationError
+from .principal import Principal, ValidationError
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _SECRET_WORDS = ("secret", "password", "credential", "token", "private_key")

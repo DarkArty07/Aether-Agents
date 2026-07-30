@@ -1,5 +1,5 @@
 schema_version: 1
-status: implemented_default_off
+status: released_default_off
 approved_on: "2026-07-28"
 owner: Christopher (DarkArty07)
 
@@ -251,17 +251,22 @@ gate_status:
   bounded_harmonia_pilot: blocked_by_feature_disabled
   causal_before_after_acceptance: not_implemented_no_evaluator_or_comparison
   rollback_of_a_candidate_change: not_implemented
-  merge_tag_release_deployment_publication: not_authorized
+  merge_tag_release_publication: done_2026_07_28
+  deployment_and_activation: not_authorized
 
+# Historical gates record what has already happened; runtime gates record what
+# the system is still forbidden to do. v0.20.0 was merged via PR #128, tagged
+# and pushed on 2026-07-28, so the first four are stated as the facts they are.
+# Keeping them closed made the published artifact deny its own publication.
 authorization:
   documentation_alignment: authorized
   implementation_plan: authorized
   source_or_plugin_implementation: authorized
+  merge: authorized
+  tag: authorized
+  release: authorized
+  publication: authorized
   harmonia_activation: not_authorized
   coordination_key_creation: not_authorized
   runtime_restart: not_authorized
-  merge: not_authorized
-  tag: not_authorized
-  release: not_authorized
   deployment: not_authorized
-  publication: not_authorized
