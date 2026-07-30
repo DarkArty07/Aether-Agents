@@ -29,7 +29,7 @@ jobs:
       - name: Fetch stable branch and tags
         run: git fetch --force --tags origin main:refs/remotes/origin/main
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
