@@ -8,7 +8,7 @@ from typing import Any
 
 from .harmonia_selection import KernelSelectionValidator, SelectionProposal
 from .ledger import AppendResult, Result, SignedEventDraft, SQLiteLedger, WriterContext
-from .protocol import ValidationError
+from .principal import ValidationError
 
 EVENT_KIND = "task.selection.committed"
 

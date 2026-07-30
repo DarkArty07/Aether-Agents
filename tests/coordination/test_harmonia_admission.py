@@ -28,7 +28,7 @@ from olympus_v3.coordination.ledger import (
     StoreScope,
     WriterContext,
 )
-from olympus_v3.coordination.protocol import Principal
+from olympus_v3.coordination.principal import Principal
 
 PROJECT = "project-harmonia"
 CONTRACT = "contract-" + "b" * 32

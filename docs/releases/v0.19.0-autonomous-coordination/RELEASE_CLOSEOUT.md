@@ -6,6 +6,8 @@
 
 **Decision:** v0.19.0 stops at R11. R12–R14 are not part of this version and no live activation, merge, tag, deployment, publication, or release-readiness claim is authorized by this document.
 
+> **Post-closeout maintenance note (2026-07-29):** current source no longer ships the R2–R8 laboratory runtimes that had no authoritative consumer. Their reports remain historical evidence and their source remains available at tag `v0.20.0` and in Git history. See [`../../architecture/EXPERIMENTAL_COORDINATION.md`](../../architecture/EXPERIMENTAL_COORDINATION.md) for the maintained code boundary.
+
 ## 1. Honest release verdict
 
 v0.19.0 contains a substantial experimental coordination subsystem, but it is not a demonstrated replacement for Hermes' live hub-and-spoke orchestration.

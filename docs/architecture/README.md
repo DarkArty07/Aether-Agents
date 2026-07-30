@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-> **Status:** STRUCTURE CURRENT; canonical architecture synthesis pending
+> **Status:** STRUCTURE CURRENT; experimental coordination maintenance boundary documented
 
 Architecture documentation explains how approved product intent is realized technically. It must distinguish the active system from experimental or target designs.
 
@@ -17,7 +17,7 @@ Architecture documentation explains how approved product intent is realized tech
 | `CONFIGURATION_MODEL.md` | Project/profile isolation, templates, environment, and resolution |
 | `DATA_MODEL.md` | Durable stores, ownership, retention, and consistency |
 | `SECURITY_MODEL.md` | Permissions, credentials, trust boundaries, and threat assumptions |
-| `EXPERIMENTAL_COORDINATION.md` | Default-off kernel/Harmonia work, explicitly separated from active behavior |
+| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Maintained default-off kernel/Harmonia code, retired experiments, evidence, and remaining debt |
 
 ## Architecture rules
 

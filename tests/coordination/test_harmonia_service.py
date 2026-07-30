@@ -11,7 +11,7 @@ from olympus_v3.coordination.harmonia_runtime import (
     StaticCoordinationKeyProvider,
 )
 from olympus_v3.coordination.harmonia_service import HarmoniaService
-from olympus_v3.coordination.protocol import Principal
+from olympus_v3.coordination.principal import Principal
 
 
 class Manager:

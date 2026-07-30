@@ -40,7 +40,7 @@ from olympus_v3.coordination.harmonia_service import HarmoniaService
 from olympus_v3.coordination.kernel_dispatcher import DispatchAuthority, KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
-from olympus_v3.coordination.protocol import ValidationError
+from olympus_v3.coordination.principal import ValidationError
 from olympus_v3.coordination.workflow import closure_proposal_hash
 
 PROJECT = "project-a"
