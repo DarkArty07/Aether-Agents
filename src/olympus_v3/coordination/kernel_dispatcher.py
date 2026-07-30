@@ -26,7 +26,7 @@ from .evidence import (
 from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
 from .principal import Principal, ValidationError
-from .workflow import AttemptState, kernel_acp_session_id, kernel_logical_session
+from .workflow import AttemptState, InvalidTransition, kernel_acp_session_id, kernel_logical_session
 
 
 class DispatchRejected(ValueError):
@@ -417,6 +417,13 @@ class KernelDispatcher:
             selection_identity = f":selection:{selection_epoch}:{selection_proposal_id}"
         message_id = "000" + hashlib.sha256(f"successor:{run_id}:{successor_task_id}:{handoff.snapshot_digest}:{plan_revision}{selection_identity}".encode()).hexdigest()[:29]
         attempt = None
+        staging_states = (
+            TaskState.PROPOSED,
+            TaskState.ADMITTED,
+            TaskState.READY,
+            TaskState.DISPATCHED,
+            TaskState.RUNNING,
+        )
         for _ in range(8):
             successor = self.runtime.task(run_id, successor_task_id)
             try:
@@ -432,6 +439,15 @@ class KernelDispatcher:
                 if successor.state is TaskState.DISPATCHED:
                     attempt = self.runtime.start_attempt(run_id, successor_task_id)
                     break
+            except InvalidTransition:
+                current = self.runtime.task(run_id, successor_task_id)
+                if (
+                    successor.state in staging_states
+                    and current.state in staging_states
+                    and staging_states.index(current.state) > staging_states.index(successor.state)
+                ):
+                    continue
+                raise
             except ValueError as exc:
                 # Another authenticated consumer may have won this exact
                 # monotonic transition after our read. Re-read durable state;
