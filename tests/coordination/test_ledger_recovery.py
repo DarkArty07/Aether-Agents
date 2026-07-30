@@ -143,6 +143,35 @@ def test_checkpoint_covers_reconstructed_projection_not_mutable_projection_table
     db.close()
 
 
+def test_projection_verification_uses_one_snapshot_during_concurrent_append(tmp_path, monkeypatch):
+    writer, scope, auth, signer, context = setup(tmp_path)
+    append(writer, auth, context, 1)
+    reader = SQLiteLedger(
+        writer.path,
+        scope,
+        writer_authenticator=auth,
+        integrity_signer=signer,
+    )
+    original_projection_digest = reader._projection_digest
+    concurrent_append_committed = False
+
+    def projection_digest_after_concurrent_append():
+        nonlocal concurrent_append_committed
+        if not concurrent_append_committed:
+            append(writer, auth, context, 2)
+            concurrent_append_committed = True
+        return original_projection_digest()
+
+    monkeypatch.setattr(reader, "_projection_digest", projection_digest_after_concurrent_append)
+    try:
+        assert reader.verify_projections()
+        assert concurrent_append_committed
+        assert writer.verify_projections()
+    finally:
+        reader.close()
+        writer.close()
+
+
 def test_external_anchor_rejects_missing_mismatch_and_short_rollback(tmp_path):
     db, scope, auth, signer, context = setup(tmp_path)
     first = append(db, auth, context, 1)
