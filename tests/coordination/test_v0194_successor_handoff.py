@@ -45,6 +45,7 @@ from olympus_v3.coordination.harmonia_selection import (
 from olympus_v3.coordination.kernel_dispatcher import DispatchRejected, KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 from olympus_v3.coordination.selection_commit import KernelSelectionCommitter
+from olympus_v3.coordination.workflow import InvalidTransition
 
 PROJECT = "project-a"
 OWNER = Principal(PROJECT, "hermes", "owner")
@@ -372,6 +373,58 @@ def test_successor_recovers_crash_after_attempt_before_staged_event(closed_sourc
     assert len(
         [p for p in event_payloads(ledger, "dispatch.staged") if p["task_id"] == "task-b"]
     ) == 1
+
+
+def test_successor_staging_reloads_forward_race_before_transition(closed_source, monkeypatch):
+    _, ledger, runtime, dispatcher, _, root, context = closed_source
+    original_admit = runtime.admit_task
+    competitor_advanced = False
+
+    def admit_after_competitor(run_id, task_id):
+        nonlocal competitor_advanced
+        if not competitor_advanced:
+            competitor = KernelRunService(
+                ledger,
+                writer=KernelWriter(context, dispatcher._writer.authenticator),
+            )
+            competitor.admit_task(run_id, task_id)
+            competitor.mark_task_ready(run_id, task_id)
+            competitor_advanced = True
+        return original_admit(run_id, task_id)
+
+    monkeypatch.setattr(runtime, "admit_task", admit_after_competitor)
+    envelope = dispatcher.stage_successor(
+        "run-fixed",
+        "task-a",
+        "task-b",
+        project_root=str(root),
+        plan_revision=2,
+    )
+
+    assert competitor_advanced
+    assert envelope.authority.task_id == "task-b"
+    assert runtime.task("run-fixed", "task-b").state is TaskState.RUNNING
+    assert len(runtime.attempts("run-fixed", "task-b")) == 1
+    assert len(
+        [p for p in event_payloads(ledger, "dispatch.staged") if p["task_id"] == "task-b"]
+    ) == 1
+
+
+def test_successor_staging_preserves_nonforward_transition_failure(closed_source, monkeypatch):
+    _, _, runtime, dispatcher, _, root, _ = closed_source
+
+    def reject_without_durable_advance(*_args):
+        raise InvalidTransition("nonforward transition")
+
+    monkeypatch.setattr(runtime, "admit_task", reject_without_durable_advance)
+    with pytest.raises(InvalidTransition, match="nonforward transition"):
+        dispatcher.stage_successor(
+            "run-fixed",
+            "task-a",
+            "task-b",
+            project_root=str(root),
+            plan_revision=2,
+        )
 
 
 def test_two_sqlite_successor_consumers_converge_to_one_dispatch(closed_source):
