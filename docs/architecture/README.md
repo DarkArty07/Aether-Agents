@@ -1,6 +1,6 @@
 # Architecture Documentation
 
-> **Status:** STRUCTURE CURRENT; canonical architecture synthesis pending
+> **Status:** STRUCTURE CURRENT; orchestration proposal preserved for product-owner review
 
 Architecture documentation explains how approved product intent is realized technically. It must distinguish the active system from experimental or target designs.
 
@@ -10,7 +10,7 @@ Architecture documentation explains how approved product intent is realized tech
 |---|---|
 | `SYSTEM_CONTEXT.md` | Users, external systems, trust boundaries, and system responsibilities |
 | `SYSTEM_OVERVIEW.md` | Components and runtime topology |
-| `ORCHESTRATION.md` | Hermes routing, decomposition, delegation, monitoring, and synthesis |
+| [`ORCHESTRATION.md`](./ORCHESTRATION.md) | Proposed contract-governed lateral orchestration, authority, handoffs, recovery, and rollout |
 | `DAIMONS.md` | Specialist roles, authority, lifecycle, and non-goals |
 | `OLYMPUS_V3.md` | MCP surface, ACP management, sessions, plugins, and persistence |
 | `CONTINUITY.md` | `.aether` capture, intentional state, curation, and injection |
