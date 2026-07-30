@@ -1197,13 +1197,22 @@ class SQLiteLedger:
         return hashlib.sha256(json.dumps(rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     def verify_projections(self) -> bool:
-        row = self.conn.execute(
-            "SELECT MAX(sequence) FROM events WHERE installation_id=? AND project_id=?",
-            (self.scope.installation_id, self.scope.project_id),
-        ).fetchone()
-        if row[0] is not None and self._projection_digest() != self._projection_digest_at(row[0]):
-            raise ValueError(Result.PROJECTION_MISMATCH.value)
-        return True
+        # A valid WAL commit between these reads must not look like projection
+        # corruption; compare events and projections from one SQLite snapshot.
+        owns_snapshot = not self.conn.in_transaction
+        if owns_snapshot:
+            self.conn.execute("BEGIN")
+        try:
+            row = self.conn.execute(
+                "SELECT MAX(sequence) FROM events WHERE installation_id=? AND project_id=?",
+                (self.scope.installation_id, self.scope.project_id),
+            ).fetchone()
+            if row[0] is not None and self._projection_digest() != self._projection_digest_at(row[0]):
+                raise ValueError(Result.PROJECTION_MISMATCH.value)
+            return True
+        finally:
+            if owns_snapshot:
+                self.conn.rollback()
 
     def checkpoint(self) -> Checkpoint:
         row = self.conn.execute(
