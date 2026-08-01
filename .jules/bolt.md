@@ -1,0 +1,3 @@
+## 2024-08-01 - Batching Independent SQLite Aggregate Queries
+**Learning:** In the SQLite database schema across the application (like `OlympusDB` and `OlympusDBSync`), fetching statistics such as multiple `COUNT(*)` counts across different tables/conditions originally required multiple sequential `.execute()` and `.fetchone()` calls.
+**Action:** Instead of making 3 independent roundtrips, wrap the independent `COUNT(*)` aggregates into scalar subqueries in a single `SELECT` statement: `SELECT (SELECT COUNT(*) FROM a), (SELECT COUNT(*) FROM b)`. This significantly reduces database connection/cursor overhead without sacrificing readability.
