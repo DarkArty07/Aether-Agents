@@ -1,0 +1,3 @@
+## 2024-08-02 - Combine independent SQLite COUNT queries
+**Learning:** Combining multiple independent SQLite aggregate queries (like `COUNT(*)`) across different tables or conditions into a single `SELECT` statement using scalar subqueries (e.g., `SELECT (SELECT ...), (SELECT ...);`) reduces connection and I/O overhead. When combining these subqueries and sharing the same constraint parameter, using explicit index binding like `?1` allows you to safely bind and reuse the same parameter without redundant tuple values.
+**Action:** Always combine independent aggregate queries using scalar subqueries and indexed parameters (`?1`) when they share common constraints.
