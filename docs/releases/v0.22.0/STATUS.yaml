@@ -1,5 +1,5 @@
 schema_version: 1
-status: candidate_isolated_baseline_verification_in_progress
+status: candidate_isolated_baseline_green_identity_blocked
 approved_on: "2026-08-03"
 owner: Christopher (DarkArty07)
 
@@ -29,7 +29,7 @@ release_lineage:
   candidate_worktree:
     branch: feature/v0.22.0-orca-transition
     path: /home/darkarty/orca/workspaces/aether/feature-v0.22.0-orca-transition
-    head: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
+    base_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
     base_ref: origin/main
     managed_by: orca
     setup: skipped_for_isolation_only
@@ -117,6 +117,11 @@ analysis_verification:
       lifecycle_file: 64_passed
       full_suite: 826_passed
       full_suite_duration_seconds: 26.78
+      make_test:
+        checkpoint: d485bd3a85b5d118b8889690631e82adb79560a6
+        passed: 826
+        failed: 0
+        duration_seconds: 29.14
 
 orca:
   cli_command: /home/darkarty/.local/bin/orca-ide
