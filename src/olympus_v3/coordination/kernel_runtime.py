@@ -785,27 +785,41 @@ class KernelRunService:
             "proposed_state": proposed_state.value,
         }
         payload["closure_proposal_hash"] = closure_proposal_hash(payload)
-        prior = [
-            json.loads(event["payload"])
-            for event in self.ledger.events()
-            if event["kind"] == "close.requested"
-            and json.loads(event["payload"]).get("run_id") == authority.run_id
-            and json.loads(event["payload"]).get("task_id") == authority.task_id
-        ]
-        if prior:
+
+        def resolve_existing():
+            self._state()
+            prior = [
+                json.loads(event["payload"])
+                for event in self.ledger.events()
+                if event["kind"] == "close.requested"
+                and json.loads(event["payload"]).get("run_id") == authority.run_id
+                and json.loads(event["payload"]).get("task_id") == authority.task_id
+            ]
+            if not prior:
+                return None
             if prior[0] != payload:
                 raise IdempotencyConflictError("close command conflict")
             return self.task(*key)
+
+        existing = resolve_existing()
+        if existing is not None:
+            return existing
         if task.state is not TaskState.RUNNING:
             raise InvalidTransition("task is not eligible for close intent")
         aggregate = f"task:{authority.run_id}:{authority.task_id}"
-        self._append(
-            aggregate,
-            "close.requested",
-            payload,
-            self._version(aggregate),
-            contract_id=authority.contract_id,
-        )
+        try:
+            self._append(
+                aggregate,
+                "close.requested",
+                payload,
+                self._version(aggregate),
+                contract_id=authority.contract_id,
+            )
+        except ValueError:
+            raced = resolve_existing()
+            if raced is not None:
+                return raced
+            raise
         return self.task(*key)
 
     def complete_task(self, run_id, task_id):
