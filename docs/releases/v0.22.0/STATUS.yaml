@@ -1,0 +1,227 @@
+schema_version: 1
+status: candidate_isolated_baseline_verification_in_progress
+approved_on: "2026-08-03"
+owner: Christopher (DarkArty07)
+
+governing_decision: docs/decisions/PDR-0011-orca-substrate-and-olympus-retirement.md
+
+candidate:
+  version: "0.22.0"
+  name: Orca Substrate and Olympus Retirement
+  capability_boundary: >-
+    Progressively extract Aether-owned behavior, introduce a stable Orca
+    execution adapter, replace generic Olympus lifecycle, and retire unreachable
+    Olympus code through reversible evidence-gated cuts.
+  not_a_release_claim: true
+  source_implementation_started: true
+  orca_runtime_activated_for_aether: false
+  isolated_orca_runtime_started: true
+
+release_lineage:
+  latest_official_release: "0.20.0"
+  latest_official_tag_commit: 39e9e2ac80f0bd9c66f376d3196c93f8967d5d01
+  canonical_main_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  analysis_worktree_branch: docs/canonical-product-documentation
+  analysis_worktree_commit: a88b5ccefe317b5794a445c117b89b570f7845c4
+  analysis_worktree_is_behind_main: true
+  v0_21_state: unreleased_candidate_isolation_work_integrated_on_main
+  version_order_reconciliation_required_before_release: true
+  candidate_worktree:
+    branch: feature/v0.22.0-orca-transition
+    path: /home/darkarty/orca/workspaces/aether/feature-v0.22.0-orca-transition
+    head: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
+    base_ref: origin/main
+    managed_by: orca
+    setup: skipped_for_isolation_only
+
+baseline:
+  source_tree: main@2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  olympus_python_modules: 45
+  olympus_source_lines: 19589
+  olympus_nonblank_source_lines: 17502
+  python_consumer_files_outside_package: 57
+  test_files_importing_olympus: 43
+  test_functions_in_those_files: 588
+  areas:
+    coordination:
+      modules: 21
+      lines: 10853
+    lifecycle_server:
+      modules: 7
+      lines: 4729
+    self_improvement:
+      modules: 7
+      lines: 2023
+    continuity:
+      modules: 3
+      lines: 1291
+    cli:
+      modules: 5
+      lines: 378
+    observability_hooks:
+      modules: 2
+      lines: 315
+  prior_maintenance_reduction:
+    commit: 9bf3eb0
+    files_changed: 84
+    deleted_lines: 12446
+    note: Retired unconsumed coordination experiments before this baseline.
+
+analysis_verification:
+  yaml_manifest: pass
+  module_inventory:
+    result: pass
+    modules_matched: 45
+    lines_matched: 19589
+    classification_counts_matched: true
+  orca_appimage_checksum: pass
+  decision_index_links: pass
+  canonical_main_test_suite:
+    command: >-
+      PYTHONPATH=/tmp/aether-main-v022-baseline/src
+      home/.venv-hermes/bin/python -m pytest -q
+    result: pass
+    passed: 826
+    failed: 0
+    duration_seconds: 28.12
+    source_snapshot: main@2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  release_governance_preflight:
+    command: python3 scripts/check_release_governance.py preflight-next-version --version 0.22.0
+    branch: main
+    synchronized_with_origin_main: true
+    result: pass
+  orca_candidate_isolation:
+    runtime_mode: isolated_headless
+    pairing: disabled
+    remote_environments: 0
+    automations: 0
+    managed_accounts: 0
+    worktree_created_from: origin/main
+    branch_convention_verified: feature/v0.22.0-orca-transition
+  candidate_executable_baseline:
+    initial_result:
+      passed: 825
+      failed: 1
+      duration_seconds: 28.02
+      failure: tests/coordination/test_harmonia_lease_lifecycle.py::test_same_close_command_converges_across_independent_sqlite_connections
+      error: "ValueError: INVALID_INPUT"
+    correction:
+      github_issue: 148
+      continuity_issue: 61
+      commit: a67f7ca
+      scope: src/olympus_v3/coordination/kernel_runtime.py
+      reason: baseline_compatibility_fix_only
+    post_correction:
+      exact_regression: 1_passed
+      repeated_race: 10_of_10_passed
+      lifecycle_file: 64_passed
+      full_suite: 826_passed
+      full_suite_duration_seconds: 26.78
+
+orca:
+  cli_command: /home/darkarty/.local/bin/orca-ide
+  appimage: /home/darkarty/.local/opt/orca/orca-linux.AppImage
+  appimage_sha256: 813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33
+  appimage_size_bytes: 203385690
+  verified_app_version: 1.4.167
+  runtime_status_during_candidate_isolation: ready_isolated_headless
+  orchestration_feature_status: command_contract_available
+  adoption_verdict: conditional_hardened_pilot_only
+  source_of_cli_contract:
+    - live_orca_cli_skill_orchestration
+    - live_orca_cli_skill_orca_cli
+  capabilities_verified_from_live_cli_contract:
+    - runs
+    - tasks
+    - dispatches
+    - supervised_workers
+    - durable_messages
+    - questions_and_replies
+    - worktrees
+    - terminals
+    - dispatch_scoped_completion
+    - recovery_and_takeover
+  not_delegated_to_orca:
+    - product_intent
+    - task_contract_meaning
+    - daimon_selection
+    - protected_effect_authority
+    - semantic_acceptance
+    - project_continuity
+    - ariadna_curation
+    - release_authority
+
+classification:
+  allowed:
+    - PRESERVE
+    - REWRITE
+    - REPLACE
+    - RETIRE
+    - BLOCKED
+  inventory: docs/releases/v0.22.0/OLYMPUS_RETIREMENT_INVENTORY.md
+  equivalence: docs/releases/v0.22.0/ORCA_EQUIVALENCE_MATRIX.md
+
+state_policy:
+  preserve_in_place:
+    - .aether/aether.db
+    - .aether/CONTEXT.md
+    - .aether/self_improvement.db
+  inspect_then_archive_or_retire:
+    - .aether/.consulting/consulting.db
+  freeze_read_only_after_cutover:
+    - $AETHER_HOME/.olympus/olympus_v3.db
+    - $AETHER_HOME/.olympus/projects/*/coordination-v0.19.1.sqlite
+  remove_only_after_zero_live_consumers:
+    - $HERMES_HOME/.olympus_session.*
+    - $HERMES_HOME/.olympus_db_path.*
+    - $HERMES_HOME/.aether_home.*
+
+known_blockers:
+  - id: continuity_project_root_drift
+    github_issue: 147
+    observation: >-
+      aether_status resolves the current project database but hot_state.project_root
+      still names /home/arty/Escritorio/agentes/aether, which does not exist.
+    required_resolution: >-
+      Use a supported, tested reconciliation that preserves continuity history,
+      or fail closed without treating the stale value as canonical. Do not edit
+      aether.db or CONTEXT.md manually.
+
+addressed_candidate_defects:
+  - id: concurrent_close_request_convergence
+    github_issue: 148
+    continuity_issue: 61
+    candidate_commit: a67f7ca
+    disposition: corrected_and_locally_verified_pending_integration
+
+milestones:
+  M0_baseline_and_candidate_isolation: in_progress
+  M1_aether_native_extraction: pending
+  M2_hardened_orca_adapter_vertical_slice: pending
+  M3_orca_lifecycle_parity: pending
+  M4_ariadna_reimplementation: pending
+  M5_active_consumer_and_state_transition: pending
+  M6_progressive_olympus_retirement: pending
+  M7_dependency_and_documentation_cleanup: pending
+  M8_candidate_acceptance: pending
+
+authorization:
+  analysis_and_roadmap: authorized
+  local_aether_native_implementation: authorized
+  local_orca_adapter: authorized
+  isolated_hardened_orca_pilot: authorized
+  reversible_local_retirement_after_gate: authorized
+  destructive_data_migration: not_authorized
+  historical_store_mutation: not_authorized
+  production_activation: not_authorized
+  deployment: not_authorized
+  credential_creation: not_authorized
+  spending: not_authorized
+  force_push: forbidden
+
+next_action:
+  milestone: M0_baseline_and_candidate_isolation
+  requirement: >-
+    Capture the clean candidate-local executable baseline, resolve or fail
+    closed on continuity identity issue #147, and freeze the first extraction
+    contract before source changes.

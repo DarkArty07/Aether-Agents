@@ -1,0 +1,435 @@
+# v0.22.0 Orca Transition and Olympus Retirement Roadmap
+
+> **Status:** M0 IN PROGRESS; AETHER EXTRACTION NOT STARTED  
+> **Date:** 2026-08-03  
+> **Owner:** Christopher (DarkArty07)  
+> **Governing decision:** `PDR-0011`
+
+## 1. Outcome
+
+v0.22.0 will establish an Aether-native product core, use Orca as a replaceable execution substrate through a stable adapter, reimplement Ariadna outside Olympus, and progressively remove the Olympus package after each replacement has passed its gate.
+
+The roadmap completes when the exact v0.22.0 candidate has:
+
+- no active runtime, import, entry point, plugin, template, or current-facing documentation dependency on `olympus_v3`;
+- preserved Aether product authority, continuity, Ariadna, evidence, self-improvement, profiles and acceptance;
+- proven Orca lifecycle, recovery, isolation and cleanup on the affected equivalence class;
+- preserved read-only historical evidence and rollback;
+- passed focused and full regression gates.
+
+It does not include production activation, deployment, credentials, destructive data migration, or automatic release.
+
+## 2. Non-negotiable invariants
+
+Every milestone must preserve:
+
+1. Aether remains the product and decision plane.
+2. Hermes owns product intent, task contracts, routing and synthesis.
+3. Orca does not select participants, authorize effects, accept results or curate `.aether`.
+4. Every operation binds to one canonical `PROJECT_ROOT` and approved profile.
+5. Technical worker completion remains distinct from semantic acceptance.
+6. A failed or stopped worker is not proof of cleanup.
+7. Historical release evidence is not rewritten.
+8. `.aether/aether.db`, `CONTEXT.md`, and self-improvement evidence are not destroyed or silently migrated.
+9. There is no hidden ACP/Olympus fallback after a consumer switches to Orca.
+10. The implementation tree remains independently reversible until final acceptance.
+
+## 3. Baseline and sequencing truth
+
+- Latest official release: `v0.20.0`.
+- Canonical source baseline: `main@2b326f05a36cbb77a9bf9475ef914be6f49d886d`.
+- Current analysis worktree: stale ancestor `docs/canonical-product-documentation@a88b5cc` with extensive unrelated changes.
+- Post-v0.20 candidate-isolation/promotion work is already integrated on `main`.
+- No v0.21.x tag or GitHub Release was found during analysis.
+- The v0.21/v0.22 release-order identity must be reconciled before release, but it does not block local v0.22 candidate analysis.
+- Orca CLI is installed. Analysis began with no runtime; M0 now uses a dedicated
+  headless runtime with pairing disabled and state isolated under `.aether/orca-v022/`.
+
+No implementation milestone may begin in the current stale worktree.
+
+## 4. Milestone M0 — Exact candidate isolation and baseline
+
+### Goal
+
+Create a clean, reproducible v0.22.0 candidate from canonical `main` without disturbing the current dirty documentation worktree.
+
+### Actions
+
+1. Re-fetch and verify `origin/main` and the exact baseline commit.
+2. Reconcile or land the canonical documentation work before selecting the candidate tree.
+3. Create a disposable v0.22.0 worktree/branch from the approved baseline using the existing candidate-isolation mechanism.
+4. Record:
+   - commit;
+   - clean dirty-set digest;
+   - Python and dependency lock/environment identity;
+   - full test, Ruff, compile and build baseline;
+   - source/module/import counts;
+   - Orca AppImage path, digest and runtime state.
+5. Resolve or fail closed on GitHub #147: `hot_state.project_root` currently names a nonexistent legacy root and must not become adapter authority.
+6. Add removal-contract tests that fail if already retired experiments or future deleted modules reappear.
+7. Freeze Olympus: only migration compatibility or migration-blocking fixes may touch it.
+
+### Current evidence
+
+- release-governance preflight: `PASS` on synchronized `main`;
+- Orca-managed top-level worktree:
+  `/home/darkarty/orca/workspaces/aether/feature-v0.22.0-orca-transition`;
+- branch: `feature/v0.22.0-orca-transition` from `origin/main@2b326f0`;
+- clean baseline initially exposed GitHub #148: the concurrent close test failed
+  with `ValueError: INVALID_INPUT`;
+- bounded baseline-compatibility correction: `a67f7ca`;
+- post-correction evidence: exact regression `PASS`, repeated race `10/10`,
+  lifecycle file `64 passed`, full suite `826 passed`;
+- remaining M0 blocker: continuity identity issue #147.
+
+### Acceptance
+
+- clean candidate worktree;
+- exact baseline commit and digest recorded;
+- full existing suite green in the isolated tree;
+- current dirty work preserved unchanged;
+- candidate can be discarded without affecting `main` or `.aether`.
+
+### Rollback
+
+Discard the candidate worktree and branch, stop the dedicated headless runtime,
+and remove only `.aether/orca-v022/`. Production/runtime data and historical
+continuity stores remain unchanged.
+
+## 5. Milestone M1 — Extract the Aether-native core
+
+### Goal
+
+Move every Aether-owned capability out of the Olympus namespace before replacing lifecycle.
+
+### Proposed package boundary
+
+```text
+src/aether_agents/
+  identity.py
+  contracts/
+  continuity/
+  evidence/
+  effects/
+  review/
+  self_improvement/
+  ariadna/
+  orca/
+  mcp/
+  cli/
+```
+
+The final module split may be refined, but lifecycle-independent imports and public contracts must be established before deletion.
+
+### M1.1 Continuity extraction
+
+- move `aether_db.py` and `aether_hooks` behavior;
+- preserve the `.aether/aether.db` schema and path;
+- replace Olympus PID/session lookup with explicit Aether session/project binding;
+- keep hot-start, file-change, issue, decision, task and session behavior;
+- retain `CONTEXT.md` read/validation semantics.
+
+**Gate:** existing continuity tests pass against the new package and a byte-preserving test fixture; no Olympus DB read is required for session summaries.
+
+### M1.2 Self-improvement extraction
+
+- move manifest, ledger, hooks, evidence, causality and promotion;
+- preserve schema version and `.aether/self_improvement.db` rows;
+- replace Harmonia-specific outcome classification with substrate-neutral execution outcomes;
+- keep candidate isolation and human promotion authority.
+
+**Gate:** all self-improvement tests use only `aether_agents.*`; the current ledger remains readable; no automatic activation is introduced.
+
+### M1.3 Authority, contract and evidence extraction
+
+- move or rewrite project principal;
+- define substrate-neutral Aether Run/Task/Attempt contracts;
+- preserve budgets, effect states, review, closure and evidence verification;
+- separate Aether semantic state from Orca operational state.
+
+**Gate:** deterministic contract/evidence/effect/review/closure tests pass without importing the kernel runtime or Orca.
+
+### Rollback
+
+Compatibility imports may temporarily re-export from the new package, so active behavior can return to the prior server while the new modules remain unused. Every shim must name its deletion milestone.
+
+## 6. Milestone M2 — Harden Orca and implement the adapter
+
+### Goal
+
+Exercise one isolated vertical slice without switching Aether's active runtime.
+
+### M2.1 Local hardening
+
+- pin the AppImage/build digest;
+- verify Linux Chromium sandbox;
+- allocate dedicated Orca state and `HERMES_HOME`;
+- enforce Manual permissions and Yolo off;
+- disable telemetry, LAN/mobile relay, plugins and external automations;
+- use a synthetic repository without remotes or credentials;
+- enforce environment and project-root allowlists;
+- verify private file permissions and rollback.
+
+**Gate:** every negative cross-project/profile/network test passes. Failure stops the pilot.
+
+### M2.2 Adapter implementation
+
+Implement a narrow JSON client and validated schemas for:
+
+- runtime status and build identity;
+- Run create/show/list/use;
+- Task create/update/list;
+- worker start/show/read/stop;
+- Dispatch inspection;
+- send/ask/reply/check;
+- terminal and worktree inspection/cleanup;
+- structured effects, residual resources and errors.
+
+The adapter must:
+
+- reject unknown fields where authority depends on them;
+- preserve unknown runtime state as unknown;
+- never silently retry a mutation;
+- correlate Aether contract/task/attempt IDs to Orca IDs;
+- record exact command/build/receipt identity;
+- expose no release or protected effect operation.
+
+### M2.3 Synthetic vertical slice
+
+Run one deterministic task in a disposable repository:
+
+```text
+Aether contract
+-> Orca Run
+-> Task
+-> supervised worker
+-> worker_done
+-> Aether evidence verification
+-> Aether semantic acceptance
+-> explicit cleanup
+-> zero survivors
+```
+
+**Gate:** exact receipts, evidence, restart observation and cleanup pass; rollback removes all pilot state without affecting Aether.
+
+## 7. Milestone M3 — Prove lifecycle parity and switch one bounded path
+
+### Goal
+
+Replace the ACPManager/talk_to lifecycle for a bounded two-worker Aether path while keeping Olympus available only as an explicit rollback path, never as a hidden fallback.
+
+### Cases
+
+1. two independent Tasks and two workers;
+2. question/reply and bounded coordinator wait;
+3. retry after a proven worker failure;
+4. stale Dispatch/terminal rejection;
+5. restart and authority recovery;
+6. partial start with residual resources;
+7. cancellation and full cleanup;
+8. no cross-project/profile access;
+9. no forbidden participant admission;
+10. no protected effect without Aether authorization;
+11. digest-bound evidence and semantic acceptance;
+12. zero workers, terminals, setup processes, worktrees and pending messages after closeout.
+
+### Switch rule
+
+The first active consumer may switch only when the Orca path passes all cases on the exact candidate. The configuration must select one path explicitly. If Orca fails after selection, fail visibly and roll back through an operator-controlled configuration change; do not invoke ACP automatically.
+
+### Retirement unlocked
+
+After parity and switch evidence:
+
+- `acp_manager.py` becomes removable once no other consumer exists;
+- `db.py` and Olympus observability hooks stop receiving writes;
+- the public `talk_to` path can be removed or replaced by an Aether-native execution surface.
+
+## 8. Milestone M4 — Reimplement Ariadna outside Olympus
+
+### Goal
+
+Preserve Aether continuity and curation while removing Ariadna's ACP/Olympus wrapper.
+
+### Contract
+
+Ariadna receives:
+
+- exact project root;
+- continuity database path and schema identity;
+- current hot state and bounded recent evidence;
+- curation request ID;
+- expected output path;
+- freshness baseline;
+- validation requirements.
+
+Ariadna returns:
+
+- structured outcome;
+- exact `CONTEXT.md` path;
+- freshness and digest evidence;
+- validation result;
+- uncertainty or failure.
+
+### Execution
+
+Orca may run Ariadna as a supervised worker, but Aether owns the request, data projection, validation and acceptance. Ariadna must not receive unrestricted secrets, other-project state, or authority to mutate arbitrary files.
+
+### Gate
+
+- valid fresh curation succeeds;
+- stale/missing/invalid output fails visibly;
+- project isolation negative tests pass;
+- `aether_status`, `aether_update`, and `aether_curate` work without `olympus_v3` imports;
+- `.aether/CONTEXT.md` is never edited through an unsupported direct path.
+
+## 9. Milestone M5 — Migrate active consumers and state ownership
+
+### Source/config consumers
+
+Migrate in independently testable cuts:
+
+1. Aether plugin wrappers;
+2. self-improvement plugin import;
+3. profile templates;
+4. Aether configuration template;
+5. setup/update/doctor scripts;
+6. package metadata and entry points;
+7. active skills and current-facing docs;
+8. website and onboarding.
+
+### Data transition
+
+- keep `.aether/aether.db` and `.aether/self_improvement.db` in place;
+- inspect and archive legacy consulting data if present;
+- stop writes to Olympus session and coordination stores;
+- record final read-only fingerprints and archive locations;
+- remove PID markers only after live-process reconciliation;
+- do not copy raw turns, reasoning, tool arguments or secrets into Orca/Aether replacement stores.
+
+### Gate
+
+A clean install and update from the supported predecessor succeed with the new package and preserve project continuity. Rollback restores the prior configuration and reads the untouched legacy stores.
+
+## 10. Milestone M6 — Progressive Olympus retirement
+
+Each cut has a pre-removal characterization, a removal contract, focused tests, full affected tests and rollback.
+
+### Cut R1 — Dead consulting workflow
+
+Remove:
+
+- `consult_action.py`;
+- `consulting_db.py`;
+- direct tests and current-facing references.
+
+Prerequisite: no active route; data inspected and archived without mutation.
+
+### Cut R2 — Harmonia public/runtime wrapper
+
+Remove:
+
+- `harmonia_contract.py`;
+- `harmonia_runtime.py`;
+- `harmonia_service.py`;
+- `harmonia_store.py`;
+- `harmonia_selection.py`;
+- `selection_commit.py`;
+- Harmonia configuration, scripts and tests.
+
+Prerequisite: Orca bounded path is active and historical stores are frozen read-only.
+
+### Cut R3 — Generic kernel lifecycle
+
+Remove:
+
+- dispatcher, runtime, leases, ledger, operational projections and workflow implementation;
+- tests that assert only the retired implementation.
+
+Convert applicable tests into Aether-Orca contract tests before deletion. Preserve Aether contracts, budgets, evidence, effects, review and closure under the new package.
+
+### Cut R4 — ACP lifecycle and Olympus observability
+
+Remove:
+
+- `acp_manager.py`;
+- `db.py`;
+- `olympus_v3_hooks`;
+- ACP config, PID markers and active plugin wrappers;
+- ACP-only dependencies after residual import verification.
+
+Prerequisite: no active ACP process/session, no DB writer, full Orca recovery/cleanup parity.
+
+### Cut R5 — Server, CLI and package facade
+
+Remove:
+
+- old `server.py` after all public capabilities moved;
+- Olympus CLI package after Aether setup/doctor parity;
+- `config_loader.py` after config migration;
+- `coordination/__init__.py` and package `__init__.py`;
+- `olympus` and `olympus-v3` entry points;
+- the `olympus-mcp` package identity.
+
+Prerequisite: zero active imports, entry points, plugins, templates and current-facing references.
+
+## 11. Milestone M7 — Dependency and documentation cleanup
+
+After source retirement:
+
+1. prove whether `agent-client-protocol`, LangGraph and checkpoint dependencies have any remaining consumer;
+2. remove only dependencies with zero imports and zero supported behavior;
+3. rebuild wheel and sdist;
+4. install the wheel in a clean environment;
+5. run setup, doctor and one local no-secret smoke;
+6. update README, installation, configuration, architecture, onboarding and website;
+7. retain historical release references unchanged;
+8. verify package metadata and commands use the Aether identity.
+
+## 12. Milestone M8 — Exact candidate acceptance
+
+### Required evidence
+
+- exact candidate commit and clean tree;
+- focused tests for every migrated boundary;
+- full suite;
+- Ruff and compilation;
+- build and isolated-wheel import/install;
+- clean setup/update/doctor smoke;
+- synthetic and bounded Aether-Orca E2E;
+- restart/recovery evidence;
+- security/isolation negative tests;
+- zero-survivor cleanup;
+- rollback execution;
+- residual import/entry-point/plugin/config/current-doc search;
+- preserved historical references and store fingerprints;
+- disclosed unknowns and limits.
+
+### Release verdicts
+
+- `IMPLEMENTED — DEFAULT OFF`: source transition complete, runtime not activated;
+- `CANDIDATE ACCEPTED`: exact tree passes all source and pilot gates;
+- `RELEASE READY`: package/version/release evidence reconciled;
+- `ACTIVATED`: separate operational authority and live evidence; not implied by release.
+
+## 13. Verification cadence
+
+For each cut:
+
+```text
+characterization test
+-> replacement test
+-> residual consumer search
+-> affected suite
+-> full suite when shared behavior changes
+-> diff review
+-> rollback check
+```
+
+Do not rerun expensive unchanged gates after documentation-only edits unless the candidate tree or gate inputs changed.
+
+## 14. Current stop condition and next action
+
+This analysis completes when PDR-0011, the status manifest, retirement inventory, equivalence matrix and roadmap are internally consistent and validated.
+
+The single next implementation action is **M0: create the v0.22.0 candidate from the reconciled canonical `main` tree and record a clean executable baseline**. No source file should be deleted before that isolation exists.
