@@ -93,11 +93,12 @@ class ProjectionReducer:
         return self._json(value)
 
     def rebuild(self, events: list[dict[str, Any]]) -> dict[str, Any]:
-        from .budget import validate_budget_history
+        from aether_agents.contracts.budget import validate_budget_history
+
         from .workflow import validate_workflow_history
 
-        runs, _, _, _ = validate_workflow_history(events)
-        validate_budget_history(events, runs=runs)
+        runs, tasks, _, _ = validate_workflow_history(events)
+        validate_budget_history(events, runs=runs, tasks=tasks)
         result: dict[str, Any] = {}
         last: dict[str, int] = {}
         for event in events:

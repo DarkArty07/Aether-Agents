@@ -11,8 +11,8 @@ from enum import StrEnum
 from threading import Lock
 from typing import Iterable
 
-from .effects import _canon, _hash, _id, _int, _key, _s, _utc
-from .principal import ValidationError
+from aether_agents.effects import _canon, _hash, _id, _int, _key, _s, _utc
+from aether_agents.identity import ValidationError
 
 MAX_REVIEW_ATTEMPTS = 3
 _GATE_EVALUATION_KEY = secrets.token_bytes(32)

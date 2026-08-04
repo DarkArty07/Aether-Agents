@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from .contracts import ContractState, TaskState
-from .evidence import (
+from aether_agents.contracts import ContractState, TaskState
+from aether_agents.evidence import (
     ARTIFACT_RELATIVE_PATH,
     ARTIFACT_SCHEMA,
     EvidenceIdentity,
@@ -23,9 +23,10 @@ from .evidence import (
     validate_handoff_snapshot,
     verify_artifact,
 )
+from aether_agents.identity import Principal, ValidationError
+
 from .leases import Lease, LeaseResult
 from .ledger import Result, SQLiteLedger, StoreScope
-from .principal import Principal, ValidationError
 from .workflow import AttemptState, InvalidTransition, kernel_acp_session_id, kernel_logical_session
 
 

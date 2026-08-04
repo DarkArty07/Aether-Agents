@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from olympus_v3.coordination.evidence import (
+from aether_agents.evidence import (
     ARTIFACT_RELATIVE_PATH,
     EvidenceIdentity,
     EvidenceVerificationError,

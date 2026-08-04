@@ -1,4 +1,4 @@
-"""Durable, ledger-authorized budget commands for kernel runs."""
+"""Substrate-neutral Aether budget contracts and reducers."""
 
 from __future__ import annotations
 
@@ -213,20 +213,15 @@ def _require_keys(payload, expected):
         raise BudgetTransitionError("invalid budget event schema")
 
 
-def validate_budget_history(events, *, authorized=None, runs=None):
+def validate_budget_history(events, *, authorized=None, runs=None, tasks=None):
     """Validate every budget event as a closed, run-bound event language.
 
     This function is intentionally usable both before an append and during
     replay.  It validates the complete mixed workflow/budget stream so an
     event cannot be made valid merely by filtering it into a smaller history.
     """
-    from .workflow import validate_workflow_history
-
-    workflow_runs, tasks, _, _ = validate_workflow_history(events)
-    if runs is None:
-        runs = workflow_runs
-    elif runs != workflow_runs:
-        raise BudgetTransitionError("workflow run history mismatch")
+    if runs is None or tasks is None:
+        raise BudgetTransitionError("run and task projection required")
     by_run = {}
     for event in _events(events):
         payload = _payload(event)

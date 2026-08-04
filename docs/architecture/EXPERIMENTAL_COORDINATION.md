@@ -10,8 +10,9 @@
 
 This audit records the coordination-maintenance baseline that preceded v0.22.0.
 Its retained-code table is historical: the v0.22.0 R2 cut removed the Harmonia
-public/runtime wrapper and bounded demo while preserving the generic kernel for
-the later R3 extraction and retirement.
+public/runtime wrapper and bounded demo. R3a then moved Aether-owned identity,
+contracts, budgets, evidence, effects, review and closure to `aether_agents`;
+the generic Olympus kernel remains only for the R3b retirement cut.
 
 The maintenance goal is not to advance multi-agent coordination. It is to establish a smaller, truthful, testable baseline before new coordination work begins.
 
@@ -46,9 +47,10 @@ The retired experiments were internally tested. They were removed because they w
 | Package facade | `coordination/__init__.py` | Re-exports only maintained kernel foundations rather than every historical experiment. |
 
 The v0.22.0 candidate subsequently removed the public Harmonia boundary,
-runtime composition, bounded selection and demo rows above. The durable kernel,
-evidence/safety, project identity and lifecycle-adapter rows remain temporarily
-for R3. Historical retention never established production readiness.
+runtime composition, bounded selection and demo rows above. R3a also moved the
+evidence/safety and project-identity product logic out of Olympus without
+legacy copies. The durable kernel and lifecycle adapter remain temporarily for
+R3b. Historical retention never established production readiness.
 
 ## 4. Code retired
 

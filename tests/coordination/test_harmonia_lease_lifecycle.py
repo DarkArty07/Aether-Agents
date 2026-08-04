@@ -13,6 +13,13 @@ from pathlib import Path
 import pytest
 
 import olympus_v3.coordination.kernel_dispatcher as dispatcher_module
+from aether_agents.evidence import (
+    ARTIFACT_RELATIVE_PATH,
+    build_evidence_receipt,
+    verify_artifact,
+)
+from aether_agents.identity import Principal, ValidationError
+from aether_agents.review.closure import CompletionState
 from olympus_v3.acp_manager import ACPManager, AgentState, SessionInfo
 from olympus_v3.coordination import (
     ContractLimits,
@@ -21,7 +28,6 @@ from olympus_v3.coordination import (
     ExecutionContract,
     HMACIntegritySigner,
     HMACWriterAuthenticator,
-    Principal,
     Result,
     SideEffectPolicy,
     SQLiteLedger,
@@ -29,16 +35,9 @@ from olympus_v3.coordination import (
     TaskState,
     WriterContext,
 )
-from olympus_v3.coordination.closure import CompletionState
-from olympus_v3.coordination.evidence import (
-    ARTIFACT_RELATIVE_PATH,
-    build_evidence_receipt,
-    verify_artifact,
-)
 from olympus_v3.coordination.kernel_dispatcher import DispatchAuthority, KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import KernelRunService, KernelWriter
 from olympus_v3.coordination.olympus_adapter import OlympusRuntimeAdapter
-from olympus_v3.coordination.principal import ValidationError
 from olympus_v3.coordination.workflow import closure_proposal_hash
 
 PROJECT = "project-a"

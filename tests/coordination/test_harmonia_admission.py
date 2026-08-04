@@ -7,12 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from olympus_v3.coordination.contracts import (
+from aether_agents.contracts import (
     ContractLimits,
     ContractState,
     ExecutionContract,
     SideEffectPolicy,
 )
+from aether_agents.identity import Principal
 from olympus_v3.coordination.kernel_dispatcher import KernelDispatcher
 from olympus_v3.coordination.kernel_runtime import (
     AdmissionLimitError,
@@ -28,7 +29,6 @@ from olympus_v3.coordination.ledger import (
     StoreScope,
     WriterContext,
 )
-from olympus_v3.coordination.principal import Principal
 
 PROJECT = "project-harmonia"
 CONTRACT = "contract-" + "b" * 32

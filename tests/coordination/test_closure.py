@@ -5,17 +5,7 @@ from itertools import count
 
 import pytest
 
-from olympus_v3.coordination.closure import (
-    CleanupStep,
-    ClosureDecision,
-    ClosureEvidence,
-    ClosureProposal,
-    CompletionAuthority,
-    CompletionState,
-    cleanup_plan,
-    validate_closure,
-)
-from olympus_v3.coordination.effects import (
+from aether_agents.effects import (
     ApprovalReplayCache,
     EffectClass,
     EffectLifecycle,
@@ -26,8 +16,8 @@ from olympus_v3.coordination.effects import (
     transition_effect,
     verify_approval,
 )
-from olympus_v3.coordination.principal import ValidationError
-from olympus_v3.coordination.review import (
+from aether_agents.identity import ValidationError
+from aether_agents.review import (
     FindingKind,
     GateResult,
     ReviewerIdentity,
@@ -38,6 +28,16 @@ from olympus_v3.coordination.review import (
     WaiverReplayCache,
     evaluate_gate,
     sign_waiver,
+)
+from aether_agents.review.closure import (
+    CleanupStep,
+    ClosureDecision,
+    ClosureEvidence,
+    ClosureProposal,
+    CompletionAuthority,
+    CompletionState,
+    cleanup_plan,
+    validate_closure,
 )
 
 NOW = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
@@ -372,7 +372,7 @@ def test_bool_is_rejected_for_generation_and_security_flags():
 
 
 def test_no_public_forgeable_closure_assertion_dtos_exist():
-    import olympus_v3.coordination as coordination
+    import aether_agents as coordination
 
     assert not hasattr(coordination, "ClosureGate")
     assert not hasattr(coordination, "EffectClosure")

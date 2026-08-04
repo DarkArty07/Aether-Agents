@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Iterable
 
-from .effects import (
+from aether_agents.effects import (
     MAX_COLLECTION,
     EffectClass,
     EffectLifecycle,
@@ -19,8 +19,8 @@ from .effects import (
     _s,
     _verify_receipt,
 )
-from .principal import ValidationError
-from .review import GateEvaluation, GateResult, _verify_gate_evaluation
+from aether_agents.identity import ValidationError
+from aether_agents.review import GateEvaluation, GateResult, _verify_gate_evaluation
 
 
 class CompletionAuthority(StrEnum):

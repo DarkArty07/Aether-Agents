@@ -7,9 +7,10 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
+from aether_agents.evidence import ARTIFACT_RELATIVE_PATH, ARTIFACT_SCHEMA, EvidenceVerificationError, HandoffSnapshot
+from aether_agents.identity import ValidationError
+
 from ..acp_manager import ACPManager
-from .evidence import ARTIFACT_RELATIVE_PATH, ARTIFACT_SCHEMA, EvidenceVerificationError, HandoffSnapshot
-from .principal import ValidationError
 from .workflow import kernel_acp_session_id
 
 MAX_RUNTIME_PROMPT_BYTES = 16_384

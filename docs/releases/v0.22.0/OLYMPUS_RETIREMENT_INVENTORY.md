@@ -226,3 +226,36 @@ Candidate delta after R2:
 This is a local source cut only. Integration or activation remains blocked
 until no live Harmonia runtime exists and historical coordination stores are
 fingerprinted and frozen read-only without mutating their contents.
+
+### R3a — Aether-native authority extraction: LOCALLY COMPLETE
+
+The candidate moved, rather than copied, seven Aether-owned modules into the
+new `src/aether_agents/` package boundary: identity, contracts, budget,
+evidence, effects, review and closure. The moved modules contained 2,818 source
+lines. Their imports are now substrate-neutral: an AST gate finds zero imports
+of `olympus_v3` or Orca anywhere under `src/aether_agents`.
+
+Budget validation no longer derives workflow state by importing the Olympus
+workflow. Callers must provide explicit Run and Task projections. The temporary
+Olympus kernel supplies those projections until R3b deletes the kernel.
+
+R3a was observed RED (`4 failed`) before the package existed. The native
+semantic suite passed `143/143`, the complete coordination regression passed
+`407/407`, and the full suite passed `653/653`. Targeted Ruff, compileall,
+residual-import scanning and the seven-file absence contract passed.
+
+Candidate delta after R3a:
+
+| Metric | Canonical baseline | Candidate after R1 | Candidate after R2 | Candidate after R3a |
+|---|---:|---:|---:|---:|
+| Olympus Python modules | 45 | 43 | 37 | 30 |
+| Olympus source lines | 19,589 | 18,234 | 15,991 | 13,183 |
+| Candidate Olympus delta vs baseline | 0 | -1,355 | -3,598 | -6,406 |
+| Aether-native Python modules | 0 | 0 | 0 | 8 |
+| Aether-native source lines | 0 | 0 | 0 | 2,863 |
+| Registered MCP tools | 6 | 6 | 5 | 5 |
+
+The new top-level package and explicit evidence exports add 55 net source lines
+relative to R2; no semantic implementation was duplicated. The only remaining
+compatibility facade is `olympus_v3.coordination.__init__`, and its deletion is
+part of R3b with the operational kernel.

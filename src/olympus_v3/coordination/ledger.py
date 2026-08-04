@@ -20,7 +20,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
-from .contracts import ContractAmendment, ContractState, ExecutionContract
+from aether_agents.contracts import ContractAmendment, ContractState, ExecutionContract
+
 from .projections import ProjectionReducer
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
@@ -738,7 +739,7 @@ class SQLiteLedger:
     def _receipt_input_status(self, draft: SignedEventDraft, message_id: str | None) -> Result | None:
         if draft.kind != "evidence.receipt.recorded":
             return None
-        from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
+        from aether_agents.evidence import EvidenceVerificationError, validate_evidence_receipt_payload
 
         try:
             validate_evidence_receipt_payload(draft.payload)
@@ -928,7 +929,8 @@ class SQLiteLedger:
                 or draft.kind == "evidence.receipt.recorded"
                 or draft.kind in _CLOSURE_LIFECYCLE_KINDS
             ):
-                from .budget import BudgetError, validate_budget_history
+                from aether_agents.contracts.budget import BudgetError, validate_budget_history
+
                 from .workflow import AuthorityError, InvalidTransition, validate_workflow_history
 
                 try:
@@ -946,7 +948,13 @@ class SQLiteLedger:
                             (self.scope.installation_id, self.scope.project_id, draft.payload.get("contract_id")),
                         ).fetchone()
                         authorized = json.loads(contract_row[0])["limits"]["model_budget"] if contract_row else 0
-                        validate_budget_history(history, authorized=authorized)
+                        runs, tasks, _, _ = validate_workflow_history(history)
+                        validate_budget_history(
+                            history,
+                            authorized=authorized,
+                            runs=runs,
+                            tasks=tasks,
+                        )
                 except AuthorityError:
                     self.conn.rollback()
                     return AppendResult(Result.STALE_AUTHORITY)

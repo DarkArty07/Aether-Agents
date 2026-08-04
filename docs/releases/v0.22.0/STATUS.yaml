@@ -252,10 +252,36 @@ retirement_cuts:
     integration_prerequisites:
       - zero_live_harmonia_runtime
       - fingerprint_and_freeze_historical_coordination_stores_read_only
+  R3a_aether_native_authority_extraction:
+    status: locally_verified
+    moved_without_legacy_copies:
+      - principal.py -> src/aether_agents/identity.py
+      - contracts.py -> src/aether_agents/contracts/__init__.py
+      - budget.py -> src/aether_agents/contracts/budget.py
+      - evidence.py -> src/aether_agents/evidence/__init__.py
+      - effects.py -> src/aether_agents/effects/__init__.py
+      - review.py -> src/aether_agents/review/__init__.py
+      - closure.py -> src/aether_agents/review/closure.py
+    moved_semantic_source_lines: 2818
+    remaining_olympus_modules: 30
+    remaining_olympus_source_lines: 13183
+    aether_native_modules: 8
+    aether_native_source_lines: 2863
+    substrate_imports_from_aether_native: 0
+    removal_contract_red: 4_failed
+    semantic_focused_green: 143_passed
+    coordination_regression_green: 407_passed
+    full_suite_green: 653_passed
+    full_suite_duration_seconds: 17.92
+    targeted_ruff: pass
+    compileall: pass
+    residual_legacy_semantic_files: 0
+    compatibility_shim: src/olympus_v3/coordination/__init__.py
+    shim_deletion_cut: R3b
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: pending
+  M1_aether_native_extraction: in_progress_r3a_locally_verified
   M2_hardened_orca_adapter_vertical_slice: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending

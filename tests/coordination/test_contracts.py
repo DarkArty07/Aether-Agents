@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from olympus_v3.coordination import (
+from aether_agents import (
     ContractAmendment,
     ContractLimits,
     ContractState,

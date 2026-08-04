@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from test_evidence_verifier import artifact, identity, write_json
 
-from olympus_v3.coordination.evidence import (
+from aether_agents.evidence import (
     EvidenceVerificationError,
     HandoffSnapshot,
     build_evidence_receipt,

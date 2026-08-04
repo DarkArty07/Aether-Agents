@@ -8,7 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from .budget import (
+from aether_agents.contracts import ContractState, TaskState
+from aether_agents.contracts.budget import (
     OBLIGATIONS,
     Admission,
     BudgetTransitionError,
@@ -19,8 +20,8 @@ from .budget import (
     RetryState,
     reduce_budget,
 )
-from .closure import CompletionState
-from .contracts import ContractState, TaskState
+from aether_agents.review.closure import CompletionState
+
 from .ledger import HMACWriterAuthenticator, Result, SignedEventDraft, SQLiteLedger, WriterContext
 from .workflow import (
     AttemptRecord,
@@ -193,7 +194,8 @@ class KernelRunService:
 
     def _replay(self, events=None):
         events = self.ledger.events() if events is None else events
-        from .budget import validate_budget_history
+        from aether_agents.contracts.budget import validate_budget_history
+
         from .workflow import validate_workflow_history
 
         try:
@@ -208,7 +210,7 @@ class KernelRunService:
             )
             for run_id, contract_id in runs.items()
         }
-        validate_budget_history(events, authorized=contracts, runs=runs)
+        validate_budget_history(events, authorized=contracts, runs=runs, tasks=tasks)
         self._runs = {
             run_id: RunRecord(run_id, contract_id, RuntimeMode.KERNEL.value) for run_id, contract_id in runs.items()
         }
@@ -560,9 +562,17 @@ class KernelRunService:
         }
         contract = self.ledger.read_contract(self.run(run_id).contract_id)
         try:
-            from .budget import validate_budget_history
+            from aether_agents.contracts.budget import validate_budget_history
 
-            validate_budget_history(history + [candidate], authorized=contract.limits.model_budget)
+            from .workflow import validate_workflow_history
+
+            runs, tasks, _, _ = validate_workflow_history(history + [candidate])
+            validate_budget_history(
+                history + [candidate],
+                authorized=contract.limits.model_budget,
+                runs=runs,
+                tasks=tasks,
+            )
         except Exception as exc:
             raise exc
         self._append(

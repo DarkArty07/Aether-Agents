@@ -5,7 +5,7 @@ from itertools import count
 
 import pytest
 
-from olympus_v3.coordination.effects import (
+from aether_agents.effects import (
     ApprovalReplayCache,
     EffectClass,
     EffectLifecycle,
@@ -18,7 +18,7 @@ from olympus_v3.coordination.effects import (
     transition_effect,
     verify_approval,
 )
-from olympus_v3.coordination.principal import ValidationError
+from aether_agents.identity import ValidationError
 
 NOW = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
 HASH_A = "a" * 64

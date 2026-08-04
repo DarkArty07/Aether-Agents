@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
-from .contracts import TaskState
+from aether_agents.contracts import TaskState
 
 
 class AuthorityError(ValueError):
@@ -250,7 +250,7 @@ def validate_workflow_history(events):
     for event in events:
         kind = event.get("kind")
         if kind == "evidence.receipt.recorded":
-            from .evidence import EvidenceVerificationError, validate_evidence_receipt_payload
+            from aether_agents.evidence import EvidenceVerificationError, validate_evidence_receipt_payload
 
             payload = _event_payload(event)
             if not isinstance(payload, dict):
@@ -363,7 +363,7 @@ def validate_workflow_history(events):
             handoff = payload.get("handoff")
             expected_envelope = {"run_id": run_id, "task_id": task_id, "attempt": attempt}
             if handoff is not None:
-                from .evidence import EvidenceVerificationError, HandoffSnapshot
+                from aether_agents.evidence import EvidenceVerificationError, HandoffSnapshot
 
                 try:
                     HandoffSnapshot.from_dict(handoff)
@@ -646,7 +646,7 @@ def validate_workflow_history(events):
                 raise _bad("invalid task release")
             handoff = payload.get("handoff")
             if handoff is not None:
-                from .evidence import EvidenceVerificationError, HandoffSnapshot
+                from aether_agents.evidence import EvidenceVerificationError, HandoffSnapshot
                 try:
                     snapshot = HandoffSnapshot.from_dict(handoff)
                     matching = [item["receipt_id"] for item in satisfied if isinstance(item, dict) and item.get("receipt_id") in receipt_payloads and receipt_payloads[item["receipt_id"]].get("handoff") == handoff]

@@ -149,6 +149,12 @@ The final module split may be refined, but lifecycle-independent imports and pub
 
 **Gate:** deterministic contract/evidence/effect/review/closure tests pass without importing the kernel runtime or Orca.
 
+**Candidate status (R3a): LOCALLY VERIFIED.** Seven semantic modules were moved
+without legacy copies into `aether_agents`; the native package has zero Olympus
+or Orca imports. The semantic gate passes `143/143`, coordination passes
+`407/407`, and the full suite passes `653/653`. The temporary Olympus facade is
+explicitly scheduled for deletion in R3b.
+
 ### Rollback
 
 Compatibility imports may temporarily re-export from the new package, so active behavior can return to the prior server while the new modules remain unused. Every shim must name its deletion milestone.
@@ -355,6 +361,12 @@ and freeze historical stores read-only. The isolated source cut did not mutate
 or migrate any store and does not authorize activation.
 
 ### Cut R3 — Generic kernel lifecycle
+
+R3a extracted identity, contracts, budgets, evidence, effects, review and
+closure into `aether_agents`. Olympus decreased from 37 to 30 modules and from
+15,991 to 13,183 source lines without duplicating the moved implementation.
+
+R3b now removes:
 
 Remove:
 

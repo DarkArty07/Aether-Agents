@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from aether_agents.contracts.budget import OBLIGATIONS
 from olympus_v3.coordination import (
     ContractLimits,
     ContractState,
@@ -24,7 +25,6 @@ from olympus_v3.coordination import (
     WriterContext,
     amend_contract,
 )
-from olympus_v3.coordination.budget import OBLIGATIONS
 
 PROJECT = "project-a"
 OWNER = Principal(PROJECT, "hermes", "owner")
@@ -33,7 +33,7 @@ WORKER = Principal(PROJECT, "hermes", "worker")
 
 def budget_api():
     try:
-        budget = importlib.import_module("olympus_v3.coordination.budget")
+        budget = importlib.import_module("aether_agents.contracts.budget")
         runtime = importlib.import_module("olympus_v3.coordination.kernel_runtime")
     except ModuleNotFoundError as exc:
         pytest.fail(f"missing kernel budget capability: {exc.name}", pytrace=False)

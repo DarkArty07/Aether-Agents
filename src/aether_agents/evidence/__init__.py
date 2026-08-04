@@ -1,3 +1,5 @@
+"""Aether-owned evidence artifacts, receipts, and immutable handoffs."""
+
 from __future__ import annotations
 
 import hashlib
@@ -600,3 +602,21 @@ def validate_evidence_receipt_payload(payload: Any) -> None:
     expected_id = "receipt:" + hashlib.sha256(b"AETHER_EVIDENCE_RECEIPT_V1\0" + _canonical(id_base)).hexdigest()
     if payload["receipt_payload_digest"] != expected_digest or payload["receipt_id"] != expected_id:
         _fail("receipt_invalid")
+
+
+__all__ = [
+    "ARTIFACT_RELATIVE_PATH",
+    "ARTIFACT_SCHEMA",
+    "RECEIPT_SCHEMA",
+    "EvidenceIdentity",
+    "EvidenceReceipt",
+    "EvidenceVerificationError",
+    "HandoffSnapshot",
+    "VerifiedArtifact",
+    "build_evidence_receipt",
+    "create_handoff_snapshot",
+    "materialize_captured_result",
+    "validate_evidence_receipt_payload",
+    "validate_handoff_snapshot",
+    "verify_artifact",
+]

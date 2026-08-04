@@ -4,8 +4,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from olympus_v3.coordination.principal import Principal, ValidationError
-
+from aether_agents.identity import Principal, ValidationError
 
 PROJECT = "project-a"
 OWNER = "hermes"

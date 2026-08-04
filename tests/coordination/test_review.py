@@ -2,9 +2,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-import olympus_v3.coordination as coordination
-from olympus_v3.coordination.principal import ValidationError
-from olympus_v3.coordination.review import (
+import aether_agents as coordination
+from aether_agents.identity import ValidationError
+from aether_agents.review import (
     MAX_REVIEW_ATTEMPTS,
     FindingKind,
     GateResult,
