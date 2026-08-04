@@ -32,7 +32,11 @@ def test_harmonia_tool_is_absent_from_the_public_server() -> None:
 
 def test_retired_harmonia_modules_and_demo_are_absent() -> None:
     for module_name, source_path in RETIRED_MODULES.items():
-        assert importlib.util.find_spec(module_name) is None
+        try:
+            spec = importlib.util.find_spec(module_name)
+        except ModuleNotFoundError:
+            spec = None
+        assert spec is None
         assert not source_path.exists()
     assert not (ROOT / "scripts" / "run_harmonia_bounded_demo.py").exists()
 

@@ -237,7 +237,8 @@ of `olympus_v3` or Orca anywhere under `src/aether_agents`.
 
 Budget validation no longer derives workflow state by importing the Olympus
 workflow. Callers must provide explicit Run and Task projections. The temporary
-Olympus kernel supplies those projections until R3b deletes the kernel.
+Olympus kernel supplied those projections during R3a; R3b subsequently removed
+that caller with the rest of the operational kernel.
 
 R3a was observed RED (`4 failed`) before the package existed. The native
 semantic suite passed `143/143`, the complete coordination regression passed
@@ -256,6 +257,35 @@ Candidate delta after R3a:
 | Registered MCP tools | 6 | 6 | 5 | 5 |
 
 The new top-level package and explicit evidence exports add 55 net source lines
-relative to R2; no semantic implementation was duplicated. The only remaining
-compatibility facade is `olympus_v3.coordination.__init__`, and its deletion is
-part of R3b with the operational kernel.
+relative to R2; no semantic implementation was duplicated. R3a temporarily
+retained `olympus_v3.coordination.__init__`; R3b then deleted that facade with
+the operational kernel.
+
+### R3b — Generic Olympus kernel lifecycle: LOCALLY COMPLETE
+
+With zero source or script consumers outside the retiring package, the
+candidate removed the coordination facade, dispatcher, runtime, leases, SQLite
+ledger, ACP adapter, operational projections and workflow. These eight modules
+accounted for 5,985 source lines. Seventeen implementation-only test files
+accounting for 5,249 lines were also removed.
+
+Before deletion, 13 substrate-neutral tests froze Aether budget conservation,
+limits, idempotency, correction obligations, fresh admission and explicit
+Run/Task binding. The R3b absence contract was observed RED (`2 failed`, `2
+passed`) and then GREEN. The focused retained/absence suite passed `160/160` and
+the full suite passed `406/406`; targeted Ruff, compileall and the AST residual
+import scan passed with zero coordination importers.
+
+Candidate delta after R3b:
+
+| Metric | Canonical baseline | After R1 | After R2 | After R3a | After R3b |
+|---|---:|---:|---:|---:|---:|
+| Olympus Python modules | 45 | 43 | 37 | 30 | 22 |
+| Olympus source lines | 19,589 | 18,234 | 15,991 | 13,183 | 7,198 |
+| Candidate Olympus delta vs baseline | 0 | -1,355 | -3,598 | -6,406 | -12,391 |
+| Aether-native Python modules | 0 | 0 | 0 | 8 | 8 |
+| Aether-native source lines | 0 | 0 | 0 | 2,863 | 2,863 |
+| Registered MCP tools | 6 | 6 | 5 | 5 | 5 |
+
+No coordination package or compatibility shim remains importable. Historical
+stores were not opened, migrated, truncated or deleted by this source cut.

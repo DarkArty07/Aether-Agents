@@ -278,10 +278,42 @@ retirement_cuts:
     residual_legacy_semantic_files: 0
     compatibility_shim: src/olympus_v3/coordination/__init__.py
     shim_deletion_cut: R3b
+    shim_disposition: deleted_in_R3b
+  R3b_generic_olympus_kernel_lifecycle:
+    status: locally_verified
+    deleted_modules:
+      - src/olympus_v3/coordination/__init__.py
+      - src/olympus_v3/coordination/kernel_dispatcher.py
+      - src/olympus_v3/coordination/kernel_runtime.py
+      - src/olympus_v3/coordination/leases.py
+      - src/olympus_v3/coordination/ledger.py
+      - src/olympus_v3/coordination/olympus_adapter.py
+      - src/olympus_v3/coordination/projections.py
+      - src/olympus_v3/coordination/workflow.py
+    deleted_source_lines: 5985
+    deleted_implementation_test_files: 17
+    deleted_implementation_test_lines: 5249
+    replacement_aether_budget_tests: 13
+    kernel_removal_contract_tests: 4
+    remaining_olympus_modules: 22
+    remaining_olympus_source_lines: 7198
+    aether_native_modules: 8
+    aether_native_source_lines: 2863
+    removal_contract_red: 2_failed_2_passed
+    focused_green: 160_passed
+    full_suite_green: 406_passed
+    full_suite_duration_seconds: 5.09
+    targeted_ruff: pass
+    compileall: pass
+    sdist_and_wheel_build: pass
+    wheel_coordination_package_absence: pass
+    residual_coordination_import_scan: pass_zero_importers
+    coordination_package_importable: false
+    persistent_store_mutation: none
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: in_progress_r3a_locally_verified
+  M1_aether_native_extraction: in_progress_m1_3_locally_verified
   M2_hardened_orca_adapter_vertical_slice: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending

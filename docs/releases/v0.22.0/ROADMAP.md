@@ -152,8 +152,8 @@ The final module split may be refined, but lifecycle-independent imports and pub
 **Candidate status (R3a): LOCALLY VERIFIED.** Seven semantic modules were moved
 without legacy copies into `aether_agents`; the native package has zero Olympus
 or Orca imports. The semantic gate passes `143/143`, coordination passes
-`407/407`, and the full suite passes `653/653`. The temporary Olympus facade is
-explicitly scheduled for deletion in R3b.
+`407/407`, and the full suite passes `653/653`. The temporary Olympus facade was
+then deleted by the independently validated R3b cut.
 
 ### Rollback
 
@@ -366,14 +366,20 @@ R3a extracted identity, contracts, budgets, evidence, effects, review and
 closure into `aether_agents`. Olympus decreased from 37 to 30 modules and from
 15,991 to 13,183 source lines without duplicating the moved implementation.
 
-R3b now removes:
-
-Remove:
+**R3b candidate status: LOCALLY VERIFIED.** The following runtime implementation
+was removed with zero active source/script importers:
 
 - dispatcher, runtime, leases, ledger, operational projections and workflow implementation;
 - tests that assert only the retired implementation.
 
-Convert applicable tests into Aether-Orca contract tests before deletion. Preserve Aether contracts, budgets, evidence, effects, review and closure under the new package.
+Applicable tests were converted into substrate-neutral Aether contracts before
+deletion. Aether contracts, budgets, evidence, effects, review and closure
+remain under the new package.
+
+The R3b contract was observed RED and then GREEN. Thirteen pure Aether budget
+tests preserve applicable semantics; the focused gate passes `160/160` and the
+full candidate suite passes `406/406`. Olympus now has 22 modules and 7,198
+source lines. No persistent store was mutated.
 
 ### Cut R4 — ACP lifecycle and Olympus observability
 
@@ -394,7 +400,7 @@ Remove:
 - old `server.py` after all public capabilities moved;
 - Olympus CLI package after Aether setup/doctor parity;
 - `config_loader.py` after config migration;
-- `coordination/__init__.py` and package `__init__.py`;
+- package `__init__.py` after the R3 coordination facade removal;
 - `olympus` and `olympus-v3` entry points;
 - the `olympus-mcp` package identity.
 
