@@ -1,9 +1,12 @@
 """Olympus v3 MCP Server — ACP + Plugin hooks + SQLite.
 
-Exposes 3 MCP tools to Hermes:
+Exposes 6 MCP tools to Hermes:
 - talk_to: open, message, poll, close, cancel, delegate, steer Daimon sessions
 - discover: list available Daimon profiles
-- consult: consulting workflow (start, run, sign, add_agent, status, complete)
+- aether_status: query project continuity
+- aether_update: update project continuity
+- aether_curate: invoke Ariadna curation
+- harmonia: operate the default-off experimental coordination service
 
 Architecture overview:
     Hermes (MCP client)
@@ -11,7 +14,8 @@ Architecture overview:
             -> server.py (this file)
                 -> ACPManager (subprocess lifecycle via agent-client-protocol)
                 -> OlympusDB (async SQLite reads/writes)
-                -> consult_action.py (consult workflow)
+                -> AetherDB (project continuity)
+                -> HarmoniaService (default-off experimental coordination)
 
 Poll reads from SQLite (not ACP streaming). Plugin hooks on the Daimon side
 write per-turn data to the same SQLite database.

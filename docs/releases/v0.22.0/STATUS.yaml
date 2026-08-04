@@ -1,5 +1,5 @@
 schema_version: 1
-status: candidate_isolated_baseline_green_identity_blocked
+status: candidate_progressive_retirement_in_progress
 approved_on: "2026-08-03"
 owner: Christopher (DarkArty07)
 
@@ -173,6 +173,9 @@ state_policy:
     - .aether/self_improvement.db
   inspect_then_archive_or_retire:
     - .aether/.consulting/consulting.db
+  consulting_store_probe:
+    result: absent
+    mutation_performed: false
   freeze_read_only_after_cutover:
     - $AETHER_HOME/.olympus/olympus_v3.db
     - $AETHER_HOME/.olympus/projects/*/coordination-v0.19.1.sqlite
@@ -199,6 +202,27 @@ addressed_candidate_defects:
     candidate_commit: a67f7ca
     disposition: corrected_and_locally_verified_pending_integration
 
+retirement_cuts:
+  R1_dead_consulting_workflow:
+    status: locally_verified
+    deleted_modules:
+      - src/olympus_v3/consult_action.py
+      - src/olympus_v3/consulting_db.py
+    deleted_source_lines: 1373
+    remaining_olympus_modules: 43
+    remaining_olympus_source_lines: 18234
+    live_importers_before_deletion: 0
+    registered_consult_route_before_deletion: false
+    consulting_store_before_deletion: absent
+    removal_contract_red: 2_failed
+    focused_green: 13_passed
+    full_suite_green: 828_passed
+    full_suite_duration_seconds: 28.26
+    ruff: pass
+    compileall: pass
+    fresh_server_import: pass
+    residual_import_scan: pass
+
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
   M1_aether_native_extraction: pending
@@ -206,7 +230,7 @@ milestones:
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
   M5_active_consumer_and_state_transition: pending
-  M6_progressive_olympus_retirement: pending
+  M6_progressive_olympus_retirement: in_progress
   M7_dependency_and_documentation_cleanup: pending
   M8_candidate_acceptance: pending
 
@@ -225,8 +249,8 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M0_baseline_and_candidate_isolation
+  milestone: M6_progressive_olympus_retirement
   requirement: >-
-    Capture the clean candidate-local executable baseline, resolve or fail
-    closed on continuity identity issue #147, and freeze the first extraction
-    contract before source changes.
+    Commit R1, then trace and disconnect the active Harmonia public/runtime
+    wrapper before deleting its implementation. Preserve Aether-owned contracts,
+    evidence and semantic acceptance until their replacement exists.

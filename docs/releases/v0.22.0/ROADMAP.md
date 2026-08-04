@@ -317,15 +317,22 @@ Each cut has a pre-removal characterization, a removal contract, focused tests, 
 
 ### Cut R1 — Dead consulting workflow
 
+**Status: COMPLETE in the isolated candidate.**
+
 Remove:
 
 - `consult_action.py`;
 - `consulting_db.py`;
 - direct tests and current-facing references.
 
-Prerequisite: no active route; data inspected and archived without mutation.
+Evidence: no active route, zero executable importers, no consulting database
+present, removal-contract RED `2 failed`, focused GREEN `13 passed`, residual
+import scan `PASS`, and full suite `828 passed`. The cut removed 2 modules and
+1,373 source lines; Olympus now contains 43 Python modules and 18,234 lines.
 
 ### Cut R2 — Harmonia public/runtime wrapper
+
+**Status: NEXT — active consumers must be disconnected before deletion.**
 
 Remove:
 

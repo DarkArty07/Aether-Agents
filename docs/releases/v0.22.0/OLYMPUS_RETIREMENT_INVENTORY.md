@@ -160,15 +160,29 @@ Historical reports under `docs/releases/v0.19.0-*`, `docs/releases/v0.19.x-*`, a
 
 Current-facing documentation, setup instructions, package metadata, active skills, plugin manifests, and profile templates must instead migrate to the Aether-Orca architecture. Residual-reference verification must therefore distinguish preserved historical evidence from executable or current-facing references.
 
-## 9. First safe retirement candidates
+## 9. Candidate retirement progress
 
-No source deletion occurs during this analysis. Once M0 and M1 exist, the likely first source retirement cut is:
+### R1 — Dead consulting workflow: COMPLETE
 
-1. prove `consult` is not a registered or supported public route;
-2. inspect for `.aether/.consulting/consulting.db` without creating it;
-3. archive/export any existing data under an approved non-destructive policy;
-4. add a removal contract that forbids future imports and DB auto-creation;
-5. remove `consult_action.py`, `consulting_db.py`, their direct tests, and current-facing references;
-6. run the full affected and repository suites.
+The isolated candidate proved that `consult` was not registered, found zero
+executable importers, and found no `.aether/.consulting/consulting.db` to
+preserve. It then removed:
 
-This cut is independent of Orca and lowers legacy surface before the lifecycle transition. It must not begin in the stale analysis worktree.
+- `src/olympus_v3/consult_action.py` — 678 lines;
+- `src/olympus_v3/consulting_db.py` — 695 lines.
+
+The removal contract was observed RED (`2 failed`) before deletion and GREEN
+afterward. Focused schema/removal tests passed `13/13`; the full suite passed
+`828` tests; Ruff, compileall, fresh server import and residual AST import scan
+passed. No persistent data was created, changed or removed.
+
+Candidate delta after R1:
+
+| Metric | Canonical baseline | Candidate after R1 |
+|---|---:|---:|
+| Olympus Python modules | 45 | 43 |
+| Olympus source lines | 19,589 | 18,234 |
+| Source lines removed by R1 | 0 | 1,373 |
+
+The module table above remains the immutable canonical-baseline inventory; these
+two `RETIRE` rows now have an executed disposition in the candidate.
