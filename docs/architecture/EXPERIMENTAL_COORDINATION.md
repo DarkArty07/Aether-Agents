@@ -1,13 +1,17 @@
 # Experimental Coordination Maintenance Audit
 
-> **Status:** CURRENT FOR THE `feature/coordination-maintenance` CANDIDATE; not integrated or activated
+> **Status:** HISTORICAL MAINTENANCE BASELINE; superseded in the v0.22.0 candidate
 > **Date:** 2026-07-29
 > **Baseline:** `origin/main` at `9c73144`
 > **Scope:** v0.19.0 and v0.19.x coordination source, tests, scripts, configuration, and historical evidence
+> **Current transition evidence:** `../releases/v0.22.0/OLYMPUS_RETIREMENT_INVENTORY.md`
 
 ## 1. Purpose
 
-This audit separates coordination code that supports the current default-off Harmonia/kernel path from executable experiments that no longer have authority or a production consumer.
+This audit records the coordination-maintenance baseline that preceded v0.22.0.
+Its retained-code table is historical: the v0.22.0 R2 cut removed the Harmonia
+public/runtime wrapper and bounded demo while preserving the generic kernel for
+the later R3 extraction and retirement.
 
 The maintenance goal is not to advance multi-agent coordination. It is to establish a smaller, truthful, testable baseline before new coordination work begins.
 
@@ -27,7 +31,7 @@ The classification used the following evidence:
 
 The retired experiments were internally tested. They were removed because they were not part of the authoritative runtime, not because their tests happened to fail.
 
-## 3. Code retained
+## 3. Code retained by this historical baseline
 
 | Area | Retained modules | Why it remains useful |
 |---|---|---|
@@ -41,7 +45,10 @@ The retired experiments were internally tested. They were removed because they w
 | Controlled E2E harness | `scripts/run_harmonia_bounded_demo.py` | Exercises the maintained bounded kernel composition in disposable fake mode and requires separate explicit confirmation for real ACP dispatch. |
 | Package facade | `coordination/__init__.py` | Re-exports only maintained kernel foundations rather than every historical experiment. |
 
-These modules are useful foundations. Their presence does **not** establish production readiness or general multi-agent coordination.
+The v0.22.0 candidate subsequently removed the public Harmonia boundary,
+runtime composition, bounded selection and demo rows above. The durable kernel,
+evidence/safety, project identity and lifecycle-adapter rows remain temporarily
+for R3. Historical retention never established production readiness.
 
 ## 4. Code retired
 
@@ -156,9 +163,10 @@ Post-retirement evidence:
 - sdist and wheel build: passed;
 - isolated wheel import: passed with 83 maintained coordination exports.
 
-## 7. Remaining maintenance debt
+## 7. Historical maintenance debt
 
-The retained code is useful but not yet well maintained.
+This section describes debt at the historical maintenance baseline. Current
+disposition and measurements are maintained in the v0.22.0 inventory.
 
 ### 7.1 Private cross-component access
 

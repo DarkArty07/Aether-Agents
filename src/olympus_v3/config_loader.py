@@ -32,20 +32,6 @@ class DaimonProfile:
         return [hermes_bin, "acp", "--profile", self.name]
 
 
-@dataclass(frozen=True)
-class CoordinationConfig:
-    """Default-off coordination configuration.
-
-    Parsing this value never constructs or activates the coordination runtime.
-    """
-
-    enabled: bool = False
-    mode: str = "legacy"
-    allowed_modes: tuple[str, ...] = ("legacy",)
-    project_allowlist: tuple[str, ...] = ()
-    max_active_runs: int = 0
-
-
 @dataclass
 class OlympusV3Config:
     """Olympus v3 configuration."""
@@ -56,7 +42,6 @@ class OlympusV3Config:
     stall_timeout: int = 45
     max_poll_iterations: int = 200
     aether_home: Path = field(default_factory=lambda: _default_aether_home())
-    coordination: CoordinationConfig = field(default_factory=CoordinationConfig)
     daimons: dict[str, DaimonProfile] = field(default_factory=dict)
 
 
@@ -125,62 +110,6 @@ def load_config(config_path: Path | None = None) -> OlympusV3Config:
                 config.db_path = Path(data["db_path"])
             if "profiles_dir" in data:
                 config.profiles_dir = Path(data["profiles_dir"])
-            if "coordination" in data:
-                coordination = data["coordination"]
-                if not isinstance(coordination, dict):
-                    raise ValueError("coordination must be a mapping")
-                unknown = set(coordination) - {
-                    "enabled",
-                    "mode",
-                    "allowed_modes",
-                    "project_allowlist",
-                    "max_active_runs",
-                }
-                if unknown:
-                    raise ValueError(f"coordination has unknown keys: {sorted(unknown)}")
-                enabled = coordination.get("enabled", False)
-                mode = coordination.get("mode", "legacy")
-                allowed_modes = coordination.get("allowed_modes", ["legacy"])
-                project_allowlist = coordination.get("project_allowlist", [])
-                max_active_runs = coordination.get("max_active_runs", 0)
-                if not isinstance(enabled, bool):
-                    raise ValueError("coordination.enabled must be a boolean")
-                if mode == "shadow":
-                    raise ValueError("coordination shadow mode has been retired")
-                if mode != "legacy":
-                    raise ValueError("coordination.mode must be 'legacy'")
-                if (
-                    not isinstance(allowed_modes, list)
-                    or any(value not in {"legacy", "kernel-single-task"} for value in allowed_modes)
-                    or len(set(allowed_modes)) != len(allowed_modes)
-                ):
-                    raise ValueError("coordination.allowed_modes is invalid")
-                if not isinstance(project_allowlist, list):
-                    raise ValueError("coordination.project_allowlist must be a list")
-                canonical_roots: list[str] = []
-                for root in project_allowlist:
-                    if not isinstance(root, str) or not root or root != root.strip():
-                        raise ValueError("coordination.project_allowlist contains an invalid root")
-                    path = Path(root)
-                    if not path.is_absolute():
-                        raise ValueError("coordination.project_allowlist roots must be absolute")
-                    canonical_roots.append(str(path.resolve(strict=False)))
-                if len(set(canonical_roots)) != len(canonical_roots):
-                    raise ValueError("coordination.project_allowlist contains duplicate roots")
-                if (
-                    isinstance(max_active_runs, bool)
-                    or not isinstance(max_active_runs, int)
-                    or max_active_runs not in {0, 1}
-                ):
-                    raise ValueError("coordination.max_active_runs must be 0 or 1")
-                config.coordination = CoordinationConfig(
-                    enabled=enabled,
-                    mode=mode,
-                    allowed_modes=tuple(allowed_modes),
-                    project_allowlist=tuple(canonical_roots),
-                    max_active_runs=max_active_runs,
-                )
-
             logger.info("Loaded config from %s", config_path)
         except ValueError:
             raise

@@ -135,7 +135,7 @@ The final cut must migrate these active classes of consumer, not merely source i
 - `home/olympus_v3.yaml.template`;
 - the `aether-self-improvement` plugin import path;
 - current README, installation, configuration, architecture, onboarding, and website material;
-- the 43 direct-import test files and any indirect tests discovered by the full suite.
+- current direct and indirect test consumers discovered by the full suite.
 
 Generated live profiles and active runtime configuration are migration targets, not version-controlled editing targets. They remain untouched until the operational activation gate.
 
@@ -186,3 +186,43 @@ Candidate delta after R1:
 
 The module table above remains the immutable canonical-baseline inventory; these
 two `RETIRE` rows now have an executed disposition in the candidate.
+
+### R2 — Harmonia public/runtime wrapper: LOCALLY COMPLETE
+
+The candidate first disconnected the `harmonia` MCP tool, server composition,
+legacy `CoordinationConfig`, and the bounded demo. Self-improvement no longer
+imports the retired runtime; it retains only frozen v0.20 wire vocabulary so
+already-recorded default-off observations remain interpretable.
+
+Removed source modules:
+
+- `harmonia_contract.py` — 376 lines;
+- `harmonia_runtime.py` — 543 lines;
+- `harmonia_selection.py` — 212 lines;
+- `harmonia_service.py` — 514 lines;
+- `harmonia_store.py` — 285 lines;
+- `selection_commit.py` — 144 lines.
+
+The six modules account for 2,074 deleted source lines. Additional wiring and
+configuration removal reduces Olympus by 2,243 source lines relative to R1.
+The 268-line `run_harmonia_bounded_demo.py`, 11 wrapper/selection test files,
+and 376 lines from the mixed lifecycle test were also retired. Forty-one tests
+remain in that mixed file to protect the retained kernel behavior.
+
+The R2 contract was observed RED (`8 failed`, `64 passed`) and then GREEN.
+Focused affected tests passed `128/128`; the full candidate suite passed `649`
+tests. Targeted Ruff, compile/import checks, and residual AST import scanning
+passed with zero retired modules or importers.
+
+Candidate delta after R2:
+
+| Metric | Canonical baseline | Candidate after R1 | Candidate after R2 |
+|---|---:|---:|---:|
+| Olympus Python modules | 45 | 43 | 37 |
+| Olympus source lines | 19,589 | 18,234 | 15,991 |
+| Candidate source delta vs baseline | 0 | -1,355 | -3,598 |
+| Registered MCP tools | 6 | 6 | 5 |
+
+This is a local source cut only. Integration or activation remains blocked
+until no live Harmonia runtime exists and historical coordination stores are
+fingerprinted and frozen read-only without mutating their contents.

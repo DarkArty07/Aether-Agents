@@ -19,8 +19,6 @@ from pathlib import Path
 import pytest
 import yaml
 
-from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES, public_error
-from olympus_v3.coordination.harmonia_service import _STATES as KERNEL_STATES
 from olympus_v3.self_improvement import hooks as H
 from olympus_v3.self_improvement.evidence import render_release_evidence
 from olympus_v3.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
@@ -122,16 +120,30 @@ def isolated_runtime_state():
 # --------------------------------------------------------------------------
 
 
-def test_post_admission_state_set_tracks_the_kernel() -> None:
-    """A kernel state rename must break the build, not silently degrade evidence."""
+def _legacy_error(code: str) -> str:
+    return json.dumps({"action": "start", "ok": False, "state": None, "error": {"code": code}})
 
-    assert H._POST_ADMISSION_STATES == KERNEL_STATES
+
+def test_legacy_post_admission_states_are_preserved_without_runtime_imports() -> None:
+    assert H._POST_ADMISSION_STATES == frozenset(
+        {
+            "admitted",
+            "dispatch_staged",
+            "retry_wait",
+            "session_bound",
+            "terminal_observed",
+            "cleanup_pending",
+            "cleaned",
+            "reconciliation_required",
+            "cancel_requested",
+        }
+    )
 
 
 def test_every_public_error_code_is_classified() -> None:
-    for code in HARMONIA_ERROR_CODES:
-        envelope = json.dumps(public_error("start", code))
-        phase, outcome, _ = H._harmonia_classification(envelope)
+    for code in H._LEGACY_COORDINATION_ERROR_CODES:
+        envelope = _legacy_error(code)
+        phase, outcome, _ = H._legacy_coordination_classification(envelope)
 
         assert outcome == code, f"{code} lost its identity"
         assert phase != "unknown", f"{code} was not assigned an admission phase"
@@ -140,17 +152,17 @@ def test_every_public_error_code_is_classified() -> None:
 def test_pre_admission_codes_are_the_only_ones_treated_as_effect_free() -> None:
     """Anything that can surface after admission must not be downgraded."""
 
-    for code in HARMONIA_ERROR_CODES:
-        phase, _, _ = H._harmonia_classification(json.dumps(public_error("start", code)))
+    for code in H._LEGACY_COORDINATION_ERROR_CODES:
+        phase, _, _ = H._legacy_coordination_classification(_legacy_error(code))
         expected = "pre_admission" if code in H._PRE_ADMISSION_CODES else "post_admission"
 
         assert phase == expected, f"{code} classified as {phase}"
 
 
 def test_every_durable_state_is_classified_post_admission() -> None:
-    for state in KERNEL_STATES:
+    for state in H._POST_ADMISSION_STATES:
         envelope = json.dumps({"action": "status", "ok": True, "state": state, "error": None})
-        phase, outcome, _ = H._harmonia_classification(envelope)
+        phase, outcome, _ = H._legacy_coordination_classification(envelope)
 
         assert (phase, outcome) == ("post_admission", state)
 
@@ -166,7 +178,7 @@ def test_uncertain_durable_effect_is_preserved() -> None:
         }
     )
 
-    assert H._harmonia_classification(envelope) == (
+    assert H._legacy_coordination_classification(envelope) == (
         "post_admission",
         "reconciliation_required",
         "terminal_evidence_absent",

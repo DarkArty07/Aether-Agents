@@ -35,7 +35,6 @@ def test_v3_registers_expected_tools():
         "aether_status",
         "aether_update",
         "aether_curate",
-        "harmonia",
     }
 
 
@@ -73,40 +72,6 @@ def test_aether_tool_schemas_expose_current_actions_and_required_roots():
         "recent",
         "decisions",
     }
-
-
-def test_harmonia_schema_is_flat_strict_and_action_conditional():
-    schema = _registered_tools()["harmonia"].inputSchema
-
-    assert schema["additionalProperties"] is False
-    assert schema["required"] == ["action", "project_root"]
-    assert schema["properties"]["action"]["enum"] == ["start", "status", "stop"]
-    assert set(schema["properties"]) == {
-        "action", "project_root", "request_id", "contract", "plan_revision",
-        "snapshot_digest", "run_id", "reason",
-    }
-    assert schema["allOf"] == [
-        {
-            "if": {"properties": {"action": {"const": "start"}}},
-            "then": {"required": ["request_id", "contract", "plan_revision", "snapshot_digest"]},
-        },
-        {
-            "if": {"properties": {"action": {"enum": ["status", "stop"]}}},
-            "then": {"required": ["run_id"]},
-        },
-    ]
-    contract = schema["properties"]["contract"]
-    assert "tasks" not in contract["required"]
-    assert "worker" not in contract["required"]
-    assert "worker_permissions" not in contract["required"]
-    assert {tuple(branch["required"]) for branch in contract["oneOf"]} == {
-        ("worker", "worker_permissions"),
-        ("tasks",),
-    }
-    assert contract["properties"]["tasks"]["minItems"] == 2
-    assert contract["properties"]["tasks"]["maxItems"] == 3
-    assert contract["properties"]["selection_policy_id"]["const"] == "lowest-canonical-eligible-task-id"
-    assert contract["properties"]["selection_candidate_task_ids"]["uniqueItems"] is True
 
 
 @pytest.mark.parametrize("action", sorted(TALK_TO_ACTIONS))

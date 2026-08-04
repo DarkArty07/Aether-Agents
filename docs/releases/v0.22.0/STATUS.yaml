@@ -222,6 +222,36 @@ retirement_cuts:
     compileall: pass
     fresh_server_import: pass
     residual_import_scan: pass
+  R2_harmonia_public_runtime_wrapper:
+    status: locally_verified_integration_blocked
+    deleted_modules:
+      - src/olympus_v3/coordination/harmonia_contract.py
+      - src/olympus_v3/coordination/harmonia_runtime.py
+      - src/olympus_v3/coordination/harmonia_selection.py
+      - src/olympus_v3/coordination/harmonia_service.py
+      - src/olympus_v3/coordination/harmonia_store.py
+      - src/olympus_v3/coordination/selection_commit.py
+    deleted_module_source_lines: 2074
+    deleted_demo: scripts/run_harmonia_bounded_demo.py
+    deleted_demo_lines: 268
+    deleted_wrapper_test_files: 11
+    retained_kernel_tests_in_mixed_lifecycle_file: 41
+    remaining_olympus_modules: 37
+    remaining_olympus_source_lines: 15991
+    registered_mcp_tools: 5
+    removal_contract_red: 8_failed_64_passed
+    focused_green: 128_passed
+    full_suite_green: 649_passed
+    full_suite_duration_seconds: 17.94
+    targeted_ruff: pass
+    compileall: pass
+    sdist_and_wheel_build: pass
+    wheel_retired_module_absence: pass
+    residual_import_scan: pass_zero_importers
+    persistent_store_mutation: none
+    integration_prerequisites:
+      - zero_live_harmonia_runtime
+      - fingerprint_and_freeze_historical_coordination_stores_read_only
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress

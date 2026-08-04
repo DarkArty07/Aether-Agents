@@ -14,15 +14,35 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from olympus_v3.coordination.harmonia_contract import HARMONIA_ERROR_CODES
 from olympus_v3.self_improvement.ledger import SelfImprovementLedger
 from olympus_v3.self_improvement.manifest import CycleManifest, verify_project_identity
 
 logger = logging.getLogger("olympus_v3.self_improvement")
 _HEX_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
 
-# Codes `HarmoniaService._start_admission_error` returns before any durable run
-# exists. Every other public code may surface once a run could already be
+# Frozen v0.20 wire values keep already-recorded default-off observations
+# interpretable after the Harmonia runtime is retired. They are historical
+# evidence vocabulary, not a dependency on a live coordinator.
+_LEGACY_COORDINATION_ERROR_CODES = frozenset(
+    {
+        "feature_disabled",
+        "invalid_request",
+        "project_not_allowed",
+        "key_provider_unavailable",
+        "storage_unavailable",
+        "schema_incompatible",
+        "contract_conflict",
+        "idempotency_conflict",
+        "admission_limit",
+        "not_found",
+        "authority_mismatch",
+        "external_unknown",
+        "internal_failure",
+    }
+)
+
+# Codes the retired v0.20 boundary returned before any durable run existed.
+# Every other historical public code may surface once a run could already be
 # durable, so it is never downgraded to pre-admission.
 _PRE_ADMISSION_CODES = frozenset(
     {"feature_disabled", "invalid_request", "project_not_allowed", "admission_limit"}
@@ -268,7 +288,7 @@ def on_pre_llm_call(
                 "[Aether Self-Improvement Cycle]",
                 f"Candidate: v{manifest.candidate_version} — {manifest.candidate_name}",
                 f"Provider substrate: {manifest.logical_provider}; deterministic evidence remains authoritative.",
-                "Use Harmonia only when specialist work applies; ceremonial runs are forbidden.",
+                "Orca transition candidate: use no coordinator unless an authorized adapter is present.",
                 "The talk_to fallback is forbidden for this cycle.",
                 "Direct takeover requires reconciliation and cleanup evidence.",
                 "Other projects must never initialize or mutate this ledger.",
@@ -327,8 +347,8 @@ def _tool_outcome(result: Any, host_status: Any = None) -> str:
     return "success"
 
 
-def _harmonia_classification(result: Any) -> tuple[str, str, str | None]:
-    """Classify one Harmonia response against its real public wire contract.
+def _legacy_coordination_classification(result: Any) -> tuple[str, str, str | None]:
+    """Classify one historical v0.20 response without importing its runtime.
 
     Returns `(phase, outcome, uncertainty)`. Harmonia reports failures as
     `{"ok": false, "error": {"code": ...}}` and successes as
@@ -354,7 +374,7 @@ def _harmonia_classification(result: Any) -> tuple[str, str, str | None]:
         code = error["code"]
         if code in _PRE_ADMISSION_CODES:
             return "pre_admission", code, uncertainty
-        if code in HARMONIA_ERROR_CODES:
+        if code in _LEGACY_COORDINATION_ERROR_CODES:
             return "post_admission", code, uncertainty
         return "unknown", code, uncertainty
 
@@ -388,7 +408,7 @@ def on_post_tool_call(
         event_id = tool_call_id or str(uuid.uuid4())
         coordination = None
         if tool_name in {"harmonia", "mcp__olympus_v3__harmonia"}:
-            phase, outcome, uncertainty = _harmonia_classification(result)
+            phase, outcome, uncertainty = _legacy_coordination_classification(result)
             action = args.get("action") if isinstance(args, dict) else None
             coordination = {
                 "system": "harmonia",

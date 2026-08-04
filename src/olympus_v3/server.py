@@ -1,12 +1,11 @@
 """Olympus v3 MCP Server — ACP + Plugin hooks + SQLite.
 
-Exposes 6 MCP tools to Hermes:
+Exposes 5 MCP tools to Hermes:
 - talk_to: open, message, poll, close, cancel, delegate, steer Daimon sessions
 - discover: list available Daimon profiles
 - aether_status: query project continuity
 - aether_update: update project continuity
 - aether_curate: invoke Ariadna curation
-- harmonia: operate the default-off experimental coordination service
 
 Architecture overview:
     Hermes (MCP client)
@@ -15,7 +14,6 @@ Architecture overview:
                 -> ACPManager (subprocess lifecycle via agent-client-protocol)
                 -> OlympusDB (async SQLite reads/writes)
                 -> AetherDB (project continuity)
-                -> HarmoniaService (default-off experimental coordination)
 
 Poll reads from SQLite (not ACP streaming). Plugin hooks on the Daimon side
 write per-turn data to the same SQLite database.
@@ -37,12 +35,6 @@ from mcp.server.stdio import stdio_server
 
 from .acp_manager import ACPManager
 from .aether_db import AetherDB, resolve_aether_db, resolve_aether_dir
-from .coordination.harmonia_contract import public_error
-from .coordination.harmonia_runtime import (
-    EnvironmentCoordinationKeyProvider,
-    ProjectRuntimeRegistry,
-)
-from .coordination.harmonia_service import HarmoniaService
 from .db import OlympusDB, get_db_path
 
 logger = logging.getLogger("olympus_v3")
@@ -66,8 +58,6 @@ app = Server("olympus-v3")
 # Global state — initialized in main()
 _db: OlympusDB | None = None
 _manager: ACPManager | None = None
-_harmonia_registry: ProjectRuntimeRegistry | None = None
-_harmonia_service: HarmoniaService | None = None
 
 
 def _get_db() -> OlympusDB:
@@ -88,7 +78,7 @@ def _get_manager() -> ACPManager:
 
 async def init_server() -> None:
     """Initialize database connection and ACP manager."""
-    global _db, _manager, _harmonia_registry, _harmonia_service
+    global _db, _manager
 
     db_path = get_db_path()
     _db = OlympusDB(db_path=db_path)
@@ -100,27 +90,9 @@ async def init_server() -> None:
     _manager = ACPManager(profiles_dir=config.profiles_dir, db=_db)
     logger.info("ACP manager initialized with profiles_dir: %s", config.profiles_dir)
 
-    aether_home = config.aether_home.expanduser().resolve()
-    _harmonia_registry = ProjectRuntimeRegistry(
-        aether_home,
-        _manager,
-        EnvironmentCoordinationKeyProvider(),
-    )
-    _harmonia_service = HarmoniaService(
-        aether_home=aether_home,
-        config=config.coordination,
-        registry=_harmonia_registry,
-        discovered_workers=set(config.daimons),
-    )
-
-
 async def shutdown_server() -> None:
-    """Close Harmonia and database resources once."""
-    global _db, _manager, _harmonia_registry, _harmonia_service
-    registry, _harmonia_registry = _harmonia_registry, None
-    _harmonia_service = None
-    if registry is not None:
-        await registry.close()
+    """Close database resources once."""
+    global _db, _manager
     database, _db = _db, None
     if database is not None:
         await database.close()
@@ -154,71 +126,6 @@ async def _build_response(session_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Public tools
 # ---------------------------------------------------------------------------
-
-
-def _harmonia_schema() -> dict:
-    contract_properties = {
-        "worker": {"type": "string"},
-        "objective": {"type": "string"},
-        "expected_outcome": {"type": "string"},
-        "included_scopes": {"type": "array", "items": {"type": "string"}},
-        "excluded_scopes": {"type": "array", "items": {"type": "string"}},
-        "worker_permissions": {"type": "array", "items": {"type": "string"}},
-        "time_seconds": {"type": "integer", "minimum": 1},
-        "model_budget": {"type": "integer", "minimum": 1},
-        "qa_reserve": {"type": "integer", "minimum": 0},
-        "recovery_reserve": {"type": "integer", "minimum": 0},
-        "escalation_conditions": {"type": "array", "items": {"type": "string"}},
-        "selection_policy_id": {"type": "string", "const": "lowest-canonical-eligible-task-id"},
-        "selection_candidate_task_ids": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2, "uniqueItems": True},
-        "tasks": {
-            "type": "array", "minItems": 2, "maxItems": 3,
-            "items": {"type": "object", "additionalProperties": False,
-                "properties": {
-                    "task_id": {"type": "string"}, "worker": {"type": "string"},
-                    "worker_permissions": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-                    "prerequisites": {"type": "array", "items": {"type": "string"}},
-                },
-                "required": ["task_id", "worker", "worker_permissions", "prerequisites"]},
-        },
-    }
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "action": {"type": "string", "enum": ["start", "status", "stop"]},
-            "project_root": {"type": "string"},
-            "request_id": {"type": "string"},
-            "contract": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": contract_properties,
-                "required": [
-                    key for key in contract_properties
-                    if key not in {"worker", "worker_permissions", "tasks"}
-                ],
-                "oneOf": [
-                    {"required": ["worker", "worker_permissions"]},
-                    {"required": ["tasks"]},
-                ],
-            },
-            "plan_revision": {"type": "integer", "minimum": 1},
-            "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-            "run_id": {"type": "string"},
-            "reason": {"type": "string"},
-        },
-        "required": ["action", "project_root"],
-        "allOf": [
-            {
-                "if": {"properties": {"action": {"const": "start"}}},
-                "then": {"required": ["request_id", "contract", "plan_revision", "snapshot_digest"]},
-            },
-            {
-                "if": {"properties": {"action": {"enum": ["status", "stop"]}}},
-                "then": {"required": ["run_id"]},
-            },
-        ],
-    }
 
 
 @app.list_tools()
@@ -371,14 +278,6 @@ async def list_tools() -> list[mcp_types.Tool]:
                 "required": ["project_root"],
             },
         ),
-        mcp_types.Tool(
-            name="harmonia",
-            description=(
-                "Admit, inspect, or request cleanup for one default-off, contract-bound "
-                "Harmonia kernel task. No action implies semantic completion."
-            ),
-            inputSchema=_harmonia_schema(),
-        ),
     ]
 
 
@@ -398,25 +297,8 @@ async def call_tool(name: str, arguments: dict) -> list[mcp_types.TextContent]:
         return await _handle_aether_update(arguments)
     elif name == "aether_curate":
         return await _handle_aether_curate(arguments)
-    elif name == "harmonia":
-        return await _handle_harmonia(arguments)
     else:
         return [mcp_types.TextContent(type="text", text=f"Unknown tool: {name}")]
-
-
-async def _handle_harmonia(args: dict) -> list[mcp_types.TextContent]:
-    """Route one validated Harmonia action without exposing internal failures."""
-    action = args.get("action") if isinstance(args, dict) else None
-    public_action = action if action in {"start", "status", "stop"} else "status"
-    try:
-        if _harmonia_service is None:
-            result = public_error(public_action, "internal_failure")
-        else:
-            result = await _harmonia_service.handle(args)
-    except Exception:
-        logger.error("Harmonia handler failed")
-        result = public_error(public_action, "internal_failure")
-    return [mcp_types.TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 async def _handle_talk_to(args: dict) -> list[mcp_types.TextContent]:

@@ -332,7 +332,7 @@ import scan `PASS`, and full suite `828 passed`. The cut removed 2 modules and
 
 ### Cut R2 — Harmonia public/runtime wrapper
 
-**Status: NEXT — active consumers must be disconnected before deletion.**
+**Status: LOCALLY COMPLETE — integration/activation remains gated.**
 
 Remove:
 
@@ -344,7 +344,15 @@ Remove:
 - `selection_commit.py`;
 - Harmonia configuration, scripts and tests.
 
-Prerequisite: Orca bounded path is active and historical stores are frozen read-only.
+Local evidence: the public route, server composition, configuration and demo
+were disconnected before physical deletion. The removal contract was observed
+RED (`8 failed`, `64 passed`), focused GREEN passed `128/128`, the full suite
+passed `649`, and the residual import scan found zero importers. Olympus now has
+37 modules and 15,991 source lines.
+
+Integration prerequisite: prove no live Harmonia runtime remains and fingerprint
+and freeze historical stores read-only. The isolated source cut did not mutate
+or migrate any store and does not authorize activation.
 
 ### Cut R3 — Generic kernel lifecycle
 
@@ -437,6 +445,8 @@ Do not rerun expensive unchanged gates after documentation-only edits unless the
 
 ## 14. Current stop condition and next action
 
-This analysis completes when PDR-0011, the status manifest, retirement inventory, equivalence matrix and roadmap are internally consistent and validated.
-
-The single next implementation action is **M0: create the v0.22.0 candidate from the reconciled canonical `main` tree and record a clean executable baseline**. No source file should be deleted before that isolation exists.
+R1 and R2 are locally complete in the isolated candidate. The next source cut
+is **R3: extract the Aether-owned identity, contract, evidence, review and
+semantic-closure boundaries before deleting the generic Olympus kernel
+lifecycle**. Integration remains independently gated by continuity identity,
+zero live Harmonia resources and read-only store preservation.

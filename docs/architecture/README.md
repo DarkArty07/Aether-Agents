@@ -17,7 +17,7 @@ Architecture documentation explains how approved product intent is realized tech
 | `CONFIGURATION_MODEL.md` | Project/profile isolation, templates, environment, and resolution |
 | `DATA_MODEL.md` | Durable stores, ownership, retention, and consistency |
 | `SECURITY_MODEL.md` | Permissions, credentials, trust boundaries, and threat assumptions |
-| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Maintained default-off kernel/Harmonia code, retired experiments, evidence, and remaining debt |
+| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Historical coordination-maintenance baseline; current retirement evidence lives under v0.22.0 |
 
 ## Architecture rules
 

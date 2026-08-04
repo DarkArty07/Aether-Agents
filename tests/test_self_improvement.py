@@ -327,6 +327,8 @@ class TestPluginHooks:
         assert "Candidate: v0.20.0" in context["context"]
         assert "custom:aether-router" in context["context"]
         assert "talk_to fallback is forbidden" in context["context"]
+        assert "Use Harmonia" not in context["context"]
+        assert "Orca transition candidate" in context["context"]
         assert "Next minor architecture: undecided" in context["context"]
 
     def test_context_is_only_injected_on_first_turn(self, tmp_path: Path, monkeypatch) -> None:
