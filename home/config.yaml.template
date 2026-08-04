@@ -439,19 +439,6 @@ mcp_servers:
     - '@upstash/context7-mcp'
     command: npx
     enabled: true
-  olympus_v3:
-    command: __PYTHON_BIN__
-    args:
-    - -m
-    - olympus_v3.server
-    enabled: true
-    timeout: 600
-    env:
-      AETHER_HOME: __AETHER_ROOT__/home
-      PYTHONPATH: __AETHER_ROOT__/src
-    tools:
-      exclude:
-      - talk_to
   graphify:
     command: __PYTHON_BIN__
     args:

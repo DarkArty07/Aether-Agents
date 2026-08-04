@@ -2,9 +2,13 @@
 
 This file is the canonical project context. It is read automatically by hermes-agent, Cursor, and Claude Code.
 
+## v0.22.0 Olympus retirement candidate
+
+The candidate contains no `src/olympus_v3`, ACPManager, lifecycle database, Olympus hooks, MCP facade, CLI, profile plugins, configuration block, entry point, or runtime dependency. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided by the candidate. Identity, contracts, budgets, evidence, effects, review, closure, continuity, and default-off self-improvement remain under `src/aether_agents`. Multi-agent execution is intentionally unavailable until a replacement passes isolation, lifecycle, cleanup, recovery, and rollback gates. Do not create a compatibility shim or hidden fallback.
+
 ## v0.19.0 experimental coordination closeout
 
-v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to -> ACPManager` path remains authoritative, so this version does not replace Hermes hub-and-spoke. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication are outside this closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
+v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. At that historical boundary, `talk_to -> ACPManager` remained authoritative; that path has since been retired in the v0.22.0 candidate. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication were outside the v0.19 closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
 
 ## v0.19.x incremental kernel migration
 
@@ -12,13 +16,13 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 ## Aether self-improvement cycle
 
-**Operating policy** — when working inside Aether Agents: use Harmonia when specialist work applies, never use a hidden `talk_to` fallback, preserve and classify failures, verify cleanup before direct takeover, repair Aether directly only for framework defects inside this project, verify the correction, and retry the intended Harmonia path. Accumulate evidence for the next minor without presuming its architecture or approving it automatically. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`.
+**Operating policy** — no specialist execution runtime is registered in this candidate. Hermes may perform bounded implementation directly; work that materially requires an unavailable specialist stops as an explicit capability gap. Never introduce a hidden `talk_to`, Harmonia, ACP, or renamed fallback. Preserve and classify failures, verify cleanup, and accumulate evidence without presuming or approving the replacement architecture. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`.
 
-**What is enforced by code, and what is not.** The above is policy an agent must follow; it is not a mechanism. The v0.20.0 increment implements a default-off *measurement substrate*: project-identity verification, a redacted project-local ledger, admission-phase classification of Harmonia results, interruption recording, and a deterministic evidence projection that cannot approve a version. It does **not** implement takeover gating, failure-class classification, repair verification, retry correlation, an evaluator, before/after comparison, or rollback. No causal claim that Aether improved can currently be derived from it.
+**What is enforced by code, and what is not.** The default-off measurement substrate implements project-identity verification, a redacted project-local ledger, interruption recording, and deterministic evidence projection that cannot approve a version. Historical Harmonia wire classification was removed with its runtime. The substrate does **not** implement takeover gating, failure-class classification, repair verification, retry correlation, an evaluator, before/after comparison, or rollback. No causal claim that Aether improved can currently be derived from it.
 
-The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. The template also excludes `talk_to` while Harmonia is default-off, so a template-based install has no general delegation path — that template is scoped to this project's own dogfooding, not to general installation.
+The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. A template-based install has no general delegation or Aether MCP path.
 
-PDR-0009 governs the self-improvement policy. Phase 1 truthful-instrumentation corrections are independently accepted in `docs/releases/v0.20.0/INDEPENDENT_PHASE1_REVIEW.md`; causal self-improvement remains unimplemented. Harmonia activation, keys, runtime restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
+PDR-0009 governs the self-improvement policy. Phase 1 truthful-instrumentation corrections are independently accepted in `docs/releases/v0.20.0/INDEPENDENT_PHASE1_REVIEW.md`; causal self-improvement remains unimplemented. Replacement-runtime activation, credentials, restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
 
 ## Git Conventions
 
@@ -265,14 +269,14 @@ Lives at `PROJECT_ROOT/.aether/` (gitignored).
 
 ### How it works
 
-When a Daimon is spawned, the aether plugin hooks inject project context automatically:
+When a profile is launched independently with the `aether` plugin enabled, its hooks inject project context automatically:
 - `pre_llm_call` (first turn): reads hot_state + recent sessions, injects as [.aether Hot Start] context
 - `on_session_start`: creates a session row in aether.db
 - `post_tool_call`: detects write_file/patch/git commit, records file_changes
 - `on_post_llm_call` (first turn): updates hot_state.last_request
 - `on_session_end`: updates session status and hot_state
 
-Hermes interacts with .aether via MCP tools (aether_status, aether_update), NOT via plugin.
+The candidate does not bundle a Hermes continuity MCP facade. Do not write `.aether` manually or restore the retired facade as a shortcut.
 
 ### Database tables
 
@@ -284,26 +288,21 @@ Hermes interacts with .aether via MCP tools (aether_status, aether_update), NOT 
 
 ### Observations and Issues
 
-Hermes (the orchestrator) must log important findings to the `.aether` continuity database, not just store them in memory. This ensures observations are tracked in project state and visible across sessions.
+When an authorized continuity surface is available, Hermes records important findings in the project continuity database. A clean v0.22.0 candidate installation has no such Hermes facade; until a native facade is accepted, preserve durable candidate findings in versioned status/evidence or the project issue tracker rather than mutating the database manually.
 
-Use `aether_update(action="add_issue")` for:
+Durable findings include:
 
 - **Observations** — architectural insights, codebase patterns discovered during work
 - **Discomforts** — inconsistencies, smells, or potential problems noticed
 - **Debug findings** — root causes identified during systematic debugging
 - **Preferences** — user-stated or inferred preferences that should persist
 
-Parameters:
-- `description` (required) — clear summary of the finding
-- `error_type` (optional) — `"observation"` for non-error findings, `"bug"` / `"deployment"` / `"config"` for actual errors
-- `session_id` (optional) — links the issue to the current session
+**Rule:** If a finding would be valuable to a *future session*, it belongs in durable project evidence, not just in ephemeral memory.
 
-**Rule:** If a finding would be valuable to a *future session*, it belongs in `.aether` as an issue, not just in ephemeral memory.
+### Plugin and candidate runtime
 
-### Plugin vs MCP
+- **Plugin (`aether`)**: configured in all six specialist profiles; it acts only if a profile is launched independently.
+- **Hermes MCP facade**: absent from the candidate.
+- **Ariadna curation**: unavailable until an Aether-native invocation path is accepted.
 
-- **Plugin (aether_hooks)**: installed in ALL Daimons (hefesto, etalides, ariadna, daedalus, athena, ictinus). NOT in Hermes.
-- **MCP tools (aether_status, aether_update)**: available to Hermes via the olympus-v3 server.
-- **Ariadna** (future): periodic cron that synthesizes aether.db data into DESIGN.md.
-
-All Daimon configs include `aether` in `plugins.enabled` alongside `olympus_v3`.
+All specialist templates include only `aether` in `plugins.enabled`; no Olympus plugin remains.

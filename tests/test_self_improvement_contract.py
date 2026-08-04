@@ -10,7 +10,6 @@ Each test names the audit finding it pins.
 
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import subprocess
@@ -97,7 +96,7 @@ def _make_project(root: Path, *, mutate=None) -> Path:
         mutate(payload)
     manifest.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     (root / "AGENTS.md").write_text("# Aether Agents — Project Context\n", encoding="utf-8")
-    (root / "pyproject.toml").write_text('[project]\nname = "olympus-mcp"\n', encoding="utf-8")
+    (root / "pyproject.toml").write_text('[project]\nname = "aether-agents"\n', encoding="utf-8")
     git = root / ".git"
     git.mkdir(exist_ok=True)
     (git / "HEAD").write_text(BASELINE_COMMIT + "\n", encoding="utf-8")
@@ -113,76 +112,6 @@ def isolated_runtime_state():
     H.reset_runtime_state()
     yield
     H.reset_runtime_state()
-
-
-# --------------------------------------------------------------------------
-# F-01 — the classifier must match Harmonia's real wire contract
-# --------------------------------------------------------------------------
-
-
-def _legacy_error(code: str) -> str:
-    return json.dumps({"action": "start", "ok": False, "state": None, "error": {"code": code}})
-
-
-def test_legacy_post_admission_states_are_preserved_without_runtime_imports() -> None:
-    assert H._POST_ADMISSION_STATES == frozenset(
-        {
-            "admitted",
-            "dispatch_staged",
-            "retry_wait",
-            "session_bound",
-            "terminal_observed",
-            "cleanup_pending",
-            "cleaned",
-            "reconciliation_required",
-            "cancel_requested",
-        }
-    )
-
-
-def test_every_public_error_code_is_classified() -> None:
-    for code in H._LEGACY_COORDINATION_ERROR_CODES:
-        envelope = _legacy_error(code)
-        phase, outcome, _ = H._legacy_coordination_classification(envelope)
-
-        assert outcome == code, f"{code} lost its identity"
-        assert phase != "unknown", f"{code} was not assigned an admission phase"
-
-
-def test_pre_admission_codes_are_the_only_ones_treated_as_effect_free() -> None:
-    """Anything that can surface after admission must not be downgraded."""
-
-    for code in H._LEGACY_COORDINATION_ERROR_CODES:
-        phase, _, _ = H._legacy_coordination_classification(_legacy_error(code))
-        expected = "pre_admission" if code in H._PRE_ADMISSION_CODES else "post_admission"
-
-        assert phase == expected, f"{code} classified as {phase}"
-
-
-def test_every_durable_state_is_classified_post_admission() -> None:
-    for state in H._POST_ADMISSION_STATES:
-        envelope = json.dumps({"action": "status", "ok": True, "state": state, "error": None})
-        phase, outcome, _ = H._legacy_coordination_classification(envelope)
-
-        assert (phase, outcome) == ("post_admission", state)
-
-
-def test_uncertain_durable_effect_is_preserved() -> None:
-    envelope = json.dumps(
-        {
-            "action": "status",
-            "ok": True,
-            "state": "reconciliation_required",
-            "uncertainty": "terminal_evidence_absent",
-            "error": None,
-        }
-    )
-
-    assert H._legacy_coordination_classification(envelope) == (
-        "post_admission",
-        "reconciliation_required",
-        "terminal_evidence_absent",
-    )
 
 
 # --------------------------------------------------------------------------

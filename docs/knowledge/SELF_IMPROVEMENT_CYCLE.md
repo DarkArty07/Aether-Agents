@@ -7,7 +7,7 @@
 
 ## Purpose
 
-v0.20.0 provides the default-off measurement substrate for a future SemVer self-improvement cycle. When explicitly enabled, the plugin records redacted project-local lifecycle, tool, model, and Harmonia facts. It does not itself evaluate whether the user's requested outcome was achieved, isolate a candidate, compare before and after, approve a version, or perform rollback.
+v0.20.0 introduced the default-off measurement substrate for a future SemVer self-improvement cycle. When explicitly enabled, the plugin records redacted project-local lifecycle, tool, and model facts. It does not itself evaluate whether the user's requested outcome was achieved, compare before and after, approve a version, or perform rollback.
 
 The approved target cycle wraps the user's task. It must not replace product intent, invent unrelated improvement work, invoke a Daimon ceremonially, or treat recorded activity as improvement.
 
@@ -17,16 +17,15 @@ The approved target cycle wraps the user's task. It must not replace product int
 
 - The latest official tag and GitHub Release are v0.20.0.
 - The v0.19.x technical roadmap closed at v0.19.5 with a `VIABLE — BOUNDED` verdict and is integrated into v0.20.0 without separate public v0.19.x tags.
-- Harmonia remains default-off; integration and release do not authorize activation.
 - The active Hermes profile uses `custom:aether-router` with `gpt-5.6-sol`.
-- `talk_to` is excluded from Hermes' Olympus tool registration.
-- Harmonia remains available but is default-off; a valid admission currently fails closed with `feature_disabled` and no durable effect.
+- The v0.22.0 candidate contains no multi-agent execution runtime or Aether MCP facade.
+- `talk_to`, `discover`, and ACP-backed curation are absent rather than disabled.
 - Persistent Hermes memory contains the compact dogfooding policy.
 - The `aether-self-improvement` plugin, strict manifest reader, project-local ledger, and deterministic evidence generator are implemented and tested but not enabled.
 
 ### Approved target
 
-v0.20.0 releases the project-isolated measurement substrate needed by a future improvement cycle. Source implementation is independently reviewed and default-off; activation, runtime restart, a live bounded pilot, causal evaluation, deployment, and production publication remain separately gated. The implementation does not presume that Harmonia should become an LLM-backed agent.
+The project-isolated measurement substrate remains independently reviewed and default-off. Activation, runtime restart, a live bounded pilot, causal evaluation, deployment, and production publication remain separately gated. It does not presume a coordinator or replacement runtime architecture.
 
 ## Session state machine
 
@@ -73,8 +72,8 @@ If project identity cannot be proven, the hook must not write Aether state, and 
 | Work | Normal path |
 |---|---|
 | Precise edit, documentation, configuration, focused diagnostic | Hermes direct |
-| Work that materially benefits from an available Daimon | Harmonia |
-| Framework defect discovered inside Aether | Reconcile, Hermes direct repair, verify, Harmonia retry |
+| Work that materially requires an unavailable specialist | Stop with an explicit capability gap |
+| Framework defect discovered inside Aether | Preserve evidence, Hermes direct repair, verify, compare before and after |
 | Contract defect | Correct the contract; do not rewrite the kernel by default |
 | Worker defect | Correct or reject worker output; do not label it a framework defect |
 | Intentional disabled/configuration state | Report the prerequisite; do not claim runtime failure |
@@ -88,7 +87,7 @@ If no durable run or runtime session exists, direct work may begin after proving
 
 ### After admission but before dispatch
 
-Harmonia owns the run. Stop or terminate it semantically, reconcile durable state, and only then open a separate direct authority.
+If a future authorized runtime owns a durable run, stop or terminate it semantically, reconcile durable state, and only then open a separate direct authority. No such runtime exists in the current candidate.
 
 ### After dispatch or unknown effect
 
@@ -111,11 +110,11 @@ preserve reproducer and evidence
 -> identify root cause and sibling paths
 -> implement bounded correction
 -> run focused and proportional regression evidence
--> retry the same intended path through Harmonia
+-> retry the same intended path when that path still exists and is authorized
 -> compare before and after
 ```
 
-A direct workaround without a Harmonia retry is not evidence that Aether improved.
+A direct workaround without retrying an available intended framework path is not evidence that Aether improved. When the legacy path has been deliberately retired, deterministic replacement acceptance—not compatibility retry—is required.
 
 ## Measurement model
 
@@ -233,6 +232,6 @@ The implementation does not treat `on_session_end` alone as definitive finalizat
 
 ## v0.20.0 acceptance summary
 
-The released default-off instrumentation proves project identity checks, lazy session initialization, SemVer manifest validation, interruption recovery, concurrent-session preservation, redacted storage, cross-project isolation, real-contract Harmonia classification, request-scoped tool-call identity, manifest-drift detection, and replay-safe internal unknown events through deterministic tests. It does not prove automatic participation, provider telemetry coverage, safe takeover, framework repair/retry, evidence-derived version promotion, or causal before/after acceptance.
+The released v0.20.0 evidence proved project identity checks, lazy session initialization, SemVer manifest validation, interruption recovery, concurrent-session preservation, redacted storage, cross-project isolation, historical coordination classification, request-scoped tool-call identity, manifest-drift detection, and replay-safe internal unknown events. The executable historical classifier was removed with the runtime in the v0.22.0 candidate. The current implementation does not prove automatic participation, provider telemetry coverage, safe takeover, framework repair/retry, evidence-derived version promotion, or causal before/after acceptance.
 
 Detailed machine-readable scope and gates are in `../releases/v0.20.0/CYCLE.yaml`.

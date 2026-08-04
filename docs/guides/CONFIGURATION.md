@@ -66,8 +66,6 @@ agent:
   role: orchestrator
   description: "Technical Lead and architect. Investigates, designs, orchestrates, and decides."
   capabilities:
-    - talk_to
-    - discover
     - delegate_task
     - all
   launch_command: "hermes acp"
@@ -141,20 +139,7 @@ Setting `personality: none` returns an empty string, so only the `SOUL.md` ident
 
 ## MCP Servers
 
-Each Daimon connects to Olympus (the Aether Agents MCP server) for inter-agent communication:
-
-```yaml
-mcp_servers:
-  olympus:
-    command: /path/to/.venv/bin/python
-    args:
-      - -m
-      - olympus.server
-    env:
-      AETHER_HOME: /path/to/Aether-Agents/home
-      PYTHONPATH: /path/to/Aether-Agents/src
-    enabled: true
-```
+The v0.22.0 candidate does not register an Aether execution MCP server. Configure only independent MCP integrations required by a profile. Do not add a compatibility command or an unverified delegation fallback.
 
 Additional MCP servers can be added per-profile (e.g., Context7 for documentation lookup):
 
@@ -209,7 +194,7 @@ Each Daimon's `SOUL.md` defines:
 | Model | Profile config | `model.default` | — | Per-profile |
 | Provider | Profile config | `model.provider` | — | Per-profile |
 | Max turns | Profile config | `agent.max_turns` | 60 | 150 (Hermes) |
-| MCP server | Profile config | `mcp_servers.olympus` | — | Required |
+| MCP integrations | Profile config | `mcp_servers` | `{}` | Optional |
 
 ---
 

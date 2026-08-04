@@ -61,8 +61,7 @@ tool_emojis:
   delegate: "☿"
   memory: "⊞"
   skill_manage: "⧉"
-  aether_update: "⏣"
-  aether_status: "◉"
+
   cronjob: "⏱"
   honcho_reasoning: "◍"
 

@@ -590,13 +590,13 @@ git branch -d release/v0.8.0
 
 ### Pre-Release Documentation Audit
 
-After any release that removes files, changes installation method, moves paths, or deprecates commands, run a string audit BEFORE tagging. This is a scoped version of the general post-migration audit (see `autonomous-ai-agents/hermes-agent/references/post-migration-audit.md` for the full methodology).
+After any release that removes files, changes installation method, moves paths, or deprecates commands, run a tracked-content string audit BEFORE tagging.
 
 **Quick audit — version consistency and dangling references:**
 
 ```bash
 # 1. Find references to deleted/moved files in tracked content
-git ls-files | xargs grep -l 'configure\.sh\|start\.sh\|olympus_v2\|\.pi-daimons\|~/.hermes/' 2>/dev/null
+git ls-files | xargs grep -l 'configure\.sh\|start\.sh\|\.pi-daimons\|~/.hermes/' 2>/dev/null
 
 # 2. Find paths that should be placeholders
 grep -rn '/home/[^/]\+/Aether-Agents' --include='*.md' --include='*.yaml' --include='*.html' 2>/dev/null | grep -v '.template'
@@ -616,7 +616,7 @@ grep -rn 'pip install -e \.\|configure\.sh\|start\.sh\|~/.hermes/' website/ 2>/d
 
 **Full migration audit — after path changes, convention shifts, or module renames:**
 
-For major refactoring (`.eter/` → `.aether/`, profile restructuring, script renaming), follow the comprehensive post-migration audit methodology: catalog old conventions, grep for each pattern, classify by priority (functional code > agent configs > docs > CHANGELOG), fix in order, migrate on-disk state, verify clean. See `references/post-migration-audit.md` in the `hermes-agent` skill.
+For major refactoring (`.eter/` → `.aether/`, profile restructuring, script renaming), catalog old conventions, search every tracked occurrence, classify by priority (functional code > agent configs > docs > CHANGELOG), fix in order, migrate authorized on-disk state, and verify a clean residual scan.
 
 Fix all findings, commit, then proceed with tagging.
 
@@ -660,7 +660,7 @@ Fix all findings, commit, then proceed with tagging.
 
 ### Pitfall #N — Pre-Existing CI Failures Don't Block Merge of Unrelated PRs
 
-**Síntoma:** Tu repo tiene CI rojo en main (ej. Ruff lint con 28 errores en `src/olympus_v3/server.py` que ya existían antes de tu PR). Quieres mergear 5 PRs que NO tocan `src/` — solo tocan `home/skills/`, `docs/`, `scripts/`, `CHANGELOG.md`. La tentación es no mergear ninguno hasta arreglar el lint.
+**Síntoma:** Tu repo tiene CI rojo en main (por ejemplo, errores Ruff preexistentes en `src/legacy/server.py`). Quieres mergear PRs que no tocan ese subsistema. La tentación es no mergear ninguna hasta arreglar el lint.
 
 **Decisión correcta:** Mergear las PRs que no tocan `src/` y arreglar el lint en una PR separada de cleanup.
 

@@ -29,5 +29,4 @@ approvals:
   mode: 'off'
 plugins:
   enabled:
-  - olympus_v3
   - aether

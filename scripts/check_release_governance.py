@@ -133,8 +133,11 @@ def validate_policy(root: Path) -> list[str]:
 
     dependencies = pyproject.get("project", {}).get("dependencies", [])
     mcp_specs = [item for item in dependencies if isinstance(item, str) and item.startswith("mcp")]
-    if not mcp_specs or not any("<2" in item for item in mcp_specs):
+    mcp_server = root / "src" / "aether_agents" / "mcp" / "server.py"
+    if mcp_server.exists() and (not mcp_specs or not any("<2" in item for item in mcp_specs)):
         errors.append("pyproject must cap mcp below 2.0 until the server migrates to the 2.x API")
+    if not mcp_server.exists() and mcp_specs:
+        errors.append("pyproject must not retain the mcp dependency without an Aether MCP server")
 
     for relative in (
         "docs/decisions/ODR-0001-main-integration-and-release-automation.md",

@@ -1,5 +1,5 @@
 schema_version: 1
-status: candidate_progressive_retirement_in_progress
+status: candidate_olympus_source_retired
 approved_on: "2026-08-03"
 owner: Christopher (DarkArty07)
 
@@ -9,13 +9,14 @@ candidate:
   version: "0.22.0"
   name: Orca Substrate and Olympus Retirement
   capability_boundary: >-
-    Progressively extract Aether-owned behavior, introduce a stable Orca
-    execution adapter, replace generic Olympus lifecycle, and retire unreachable
-    Olympus code through reversible evidence-gated cuts.
+    Preserve Aether-owned behavior under the native package, physically retire
+    the Olympus execution runtime and distribution surfaces, and keep multi-agent
+    execution unavailable until a replacement passes independent gates.
   not_a_release_claim: true
   source_implementation_started: true
   orca_runtime_activated_for_aether: false
-  isolated_orca_runtime_started: true
+  isolated_orca_runtime_started_during_diagnostics: true
+  isolated_orca_runtime_currently_running: false
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -129,9 +130,9 @@ orca:
   appimage_sha256: 813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33
   appimage_size_bytes: 203385690
   verified_app_version: 1.4.167
-  runtime_status_during_candidate_isolation: ready_isolated_headless
+  runtime_status_during_candidate_isolation: direct_launch_reached_ready_then_gpu_process_failed_repeatedly
   orchestration_feature_status: command_contract_available
-  adoption_verdict: conditional_hardened_pilot_only
+  adoption_verdict: blocked_pending_reproducible_bootstrap_and_isolation
   source_of_cli_contract:
     - live_orca_cli_skill_orchestration
     - live_orca_cli_skill_orca_cli
@@ -197,11 +198,21 @@ known_blockers:
   - id: isolated_orca_continuity_stale_bootstrap
     github_issue: 150
     observation: >-
-      The isolated Orca instance used only for candidate worktree-card projection
-      exited during bootstrap and did not converge after one bounded reopen.
+      The isolated Orca instance did not survive `orca open`; a direct AppImage
+      launch reached runtime/graph ready but its GPU process failed six times and
+      Electron terminated it as unusable. The diagnostic instance is stopped.
     impact: >-
       Orca card synchronization is unavailable; Git history, the candidate
       worktree, tests and product runtime remain unaffected.
+  - id: whole_repository_ruff_debt
+    github_issue: 149
+    observation: >-
+      Whole-repository Ruff reports 134 pre-existing errors concentrated in
+      unchanged skill scripts. The complete modified Python scope and all
+      Aether-native source pass Ruff.
+    impact: >-
+      The global Ruff gate remains red independently of Olympus retirement;
+      the cleanup cut does not mix unrelated skill-script rewrites.
 
 addressed_candidate_defects:
   - id: concurrent_close_request_convergence
@@ -406,6 +417,70 @@ retirement_cuts:
     remaining_olympus_source_lines: 3865
     aether_native_modules: 18
     aether_native_source_lines: 6338
+  R4_final_olympus_executable_retirement:
+    status: locally_verified_source_retired
+    deleted_remaining_modules: 12
+    deleted_remaining_source_lines: 3865
+    remaining_olympus_modules: 0
+    remaining_olympus_source_lines: 0
+    deleted_surfaces:
+      - ACPManager
+      - lifecycle_database
+      - server_and_registered_mcp_tools
+      - configuration_loader
+      - setup_cli_and_wrappers
+      - observability_hooks
+      - six_profile_plugin_wrappers
+      - global_mcp_template
+      - package_entry_points
+    removed_capabilities:
+      - talk_to
+      - discover
+      - aether_status
+      - aether_update
+      - aether_curate
+    replacement_runtime_present: false
+    hidden_fallback_present: false
+    distribution_name: aether-agents
+    distribution_version: "0.22.0"
+    registered_mcp_tools: 0
+    removed_runtime_dependencies:
+      - mcp
+      - agent-client-protocol
+      - langgraph
+      - langgraph-checkpoint-sqlite
+      - langchain-core
+      - graphifyy
+    aether_native_modules: 18
+    aether_native_source_lines: 6242
+    historical_store_mutation: none
+    production_activation: false
+    removal_contract_red: 4_failed
+    focused_green: 104_passed
+    full_suite: 273_passed
+    full_suite_duration_seconds: 1.82
+    targeted_ruff: pass
+    compileall: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    executable_residual_scan: pass_zero
+    wheel:
+      result: pass
+      entries: 23
+      retired_entries: 0
+      console_entry_points: 0
+    sdist:
+      result: pass
+      entries: 52
+      retired_source_entries: 0
+    clean_wheel_install: pass
+    isolated_setup:
+      result: pass
+      idempotent_rerun: pass
+      ambient_pythonpath_isolation: pass
+      generated_configs_retired_references: 0
+    isolated_wrapper_runtime: pass
+    isolated_doctor: pass
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
@@ -414,8 +489,8 @@ milestones:
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
   M5_active_consumer_and_state_transition: pending
-  M6_progressive_olympus_retirement: in_progress
-  M7_dependency_and_documentation_cleanup: pending
+  M6_progressive_olympus_retirement: locally_complete
+  M7_dependency_and_documentation_cleanup: locally_complete
   M8_candidate_acceptance: pending
 
 authorization:
@@ -433,9 +508,8 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M2_hardened_orca_adapter_vertical_slice
+  milestone: cleanup_stop_condition_reached
   requirement: >-
-    Resolve or deterministically classify the isolated Orca stale-bootstrap blocker
-    in GitHub issue 150, then prove the pinned local runtime and negative isolation
-    gates before implementing or exercising an Aether adapter. Do not activate
-    Aether production execution or create workers before those gates pass.
+    Commit the exact zero-Olympus tree and stop. Replacement-runtime design,
+    Orca diagnostics, live configuration migration, historical-store handling,
+    integration and release remain separate later gates.

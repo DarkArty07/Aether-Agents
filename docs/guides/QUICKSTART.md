@@ -42,11 +42,13 @@ home/.venv-hermes/bin/hermes --profile orchestrator
 
 ## 4. Verify
 
-On startup, Olympus discovers Daimon profiles. You should see something like:
+Verify the installed Aether-native package and templates:
 
+```bash
+make doctor
 ```
-[olympus] discovered: ariadna, athena, daedalus, etalides, hefesto, hermes
-```
+
+The v0.22.0 candidate does not expose a multi-agent execution runtime. Specialist profiles are installed, but no process discovers or spawns them until a replacement runtime is accepted.
 
 Quick smoke test:
 

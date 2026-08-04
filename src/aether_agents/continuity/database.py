@@ -153,7 +153,7 @@ def get_aether_db_path() -> Path:
 def resolve_aether_db(project_root: str) -> Path:
     """Resolve aether database path from project_root.
 
-    Used by MCP tools (aether_status, aether_update, aether_curate) to
+    Used by an authorized continuity facade to
     ensure each project reads/writes its own database. Unlike
     get_aether_db_path() which uses AETHER_HOME, this function always
     resolves relative to the given project_root.

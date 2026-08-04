@@ -118,7 +118,7 @@ Fine-tuning a model to act as an orchestrator (like Hermes) requires specialized
 ### 3 Data Layers
 
 1. **Extractive** — Parse existing `aether.db` sessions, `session_search` transcripts, Honcho observations. Immediate but requires curation. ~50-100 examples from 17 existing sessions.
-2. **Instrumented** — Modify Olympus MCP to auto-emit JSONL per `delegate()` call. Structured, clean, accumulates over time. Target: `~/Aether-Agents/home/datasets/orchestration.jsonl`.
+2. **Instrumented** — Once an execution runtime is accepted, emit redacted JSONL through its versioned observation contract. Do not instrument a retired or unavailable runtime. Target: `~/Aether-Agents/home/datasets/orchestration.jsonl`.
 3. **Synthetic** — Generate variations with a large model (DeepSeek V4 Pro). Adds diversity and edge cases. Medium-high quality.
 
 ### Data Estimates

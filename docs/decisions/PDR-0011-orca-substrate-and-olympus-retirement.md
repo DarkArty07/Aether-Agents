@@ -2,6 +2,7 @@
 
 - **Status:** APPROVED
 - **Date:** 2026-08-03
+- **Amended:** 2026-08-03 — retire the remaining executable runtime before replacement design
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** The assumption that Olympus, ACPManager, Harmonia, or the v0.19.x kernel must remain Aether's future execution substrate
 - **Superseded by:** None
@@ -22,16 +23,19 @@ The owner approved `v0.22.0` as the architectural cleanup increment that progres
 
 `v0.22.0` owns the progressive retirement of Olympus and the introduction of an Orca-backed execution path.
 
-This is not permission to delete the package in one cut. Each removal must follow:
+The owner subsequently directed the candidate to finish deletion before more
+replacement design. This does not authorize blind deletion from the baseline:
+Aether-owned semantics must be extracted first, then the remaining executable
+runtime may be removed with its capability gap explicit. The amended sequence is:
 
 ```text
 characterize current behavior
 -> establish the Aether-owned replacement contract
--> implement or bind the replacement
--> prove affected-path parity
--> switch the active consumer
--> prove rollback and cleanup
--> retire the now-unreachable legacy slice
+-> extract and verify Aether-owned behavior
+-> establish a removal contract
+-> retire the legacy executable slice and all current consumers
+-> prove the clean distribution and predecessor-tree rollback
+-> implement and accept any future execution replacement separately
 ```
 
 A passing Orca command is not parity evidence by itself. The replacement must preserve the applicable Aether authority, isolation, continuity, evidence, and cleanup contract.
@@ -89,7 +93,9 @@ Ariadna remains Aether's continuity, context, memory, and curation capability. T
 - `CONTEXT.md` curation and validation;
 - hot-state, session, decision, issue, and file-change continuity;
 - project-scoped hooks and fail-closed project identity;
-- the `aether_status`, `aether_update`, and `aether_curate` product capabilities;
+- the continuity data/semantics and curation acceptance contract; callable
+  `aether_status`, `aether_update`, and `aether_curate` surfaces may remain
+  unavailable until an Aether-native facade is accepted;
 - Ariadna's profile, role, and curation criteria.
 
 Their ACP/Olympus invocation and import paths are implementation details to be replaced.
@@ -111,16 +117,19 @@ No destructive data migration is implicit in this decision.
 
 ### 7. Removal is performed as independently reversible cuts
 
-The final `src/olympus_v3` package deletion is the last source cut, not the first. Earlier cuts extract Aether-owned behavior and replace generic lifecycle consumers.
+The final `src/olympus_v3` package deletion follows the Aether-owned extraction
+cuts, but it need not wait for a replacement execution substrate. The candidate
+may intentionally have no execution runtime between source retirement and
+replacement acceptance.
 
 A cut is admissible only when:
 
 1. its current consumer set is known;
 2. its behavior or irrelevance is characterized by tests;
-3. replacement behavior is independently exercised;
-4. active configuration no longer points at the legacy path;
-5. no live legacy process or write authority survives;
-6. rollback restores the prior path without data loss;
+3. any intentionally unavailable behavior is disclosed rather than stubbed;
+4. candidate configuration no longer points at the legacy path;
+5. the isolated candidate does not activate or overlap a live legacy writer;
+6. rollback uses the exact predecessor tree without data loss;
 7. residual imports and executable references are zero outside preserved historical evidence.
 
 ## Rationale
@@ -173,7 +182,7 @@ Keeping Orca behind a narrow adapter reduces upstream coupling and leaves open a
 
 ### Negative
 
-- The repository temporarily carries both paths and compatibility adapters.
+- The candidate temporarily has no multi-agent execution or curation facade.
 - Some tests must be converted from Olympus implementation tests into substrate-neutral contract tests.
 - Legacy stores require read-only archival policy.
 - Orca must be pinned, hardened, and operationally exercised before it can replace active lifecycle code.
@@ -190,7 +199,9 @@ Keeping Orca behind a narrow adapter reduces upstream coupling and leaves open a
 
 ## Validation or review gate
 
-v0.22.0 cannot claim Olympus retirement until it demonstrates:
+v0.22.0 may claim **source retirement** after proving the zero-residual package
+and distribution gates. It cannot claim **candidate acceptance** or restored
+multi-agent capability until it also demonstrates:
 
 1. an exact canonical baseline and rollback point;
 2. an Aether-native package boundary independent of `olympus_v3`;

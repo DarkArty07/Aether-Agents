@@ -1,18 +1,18 @@
 # v0.22.0 Orca Transition and Olympus Retirement Roadmap
 
-> **Status:** M0 IN PROGRESS; AETHER EXTRACTION NOT STARTED  
+> **Status:** OLYMPUS SOURCE RETIRED; M7 LOCALLY COMPLETE; REPLACEMENT RUNTIME PENDING
 > **Date:** 2026-08-03  
 > **Owner:** Christopher (DarkArty07)  
 > **Governing decision:** `PDR-0011`
 
 ## 1. Outcome
 
-v0.22.0 will establish an Aether-native product core, use Orca as a replaceable execution substrate through a stable adapter, reimplement Ariadna outside Olympus, and progressively remove the Olympus package after each replacement has passed its gate.
+v0.22.0 establishes an Aether-native product core and physically retires the Olympus package before replacement-runtime design continues. Multi-agent execution and ACP-backed curation remain unavailable until a replaceable substrate and Aether-native facade pass their gates.
 
 The roadmap completes when the exact v0.22.0 candidate has:
 
 - no active runtime, import, entry point, plugin, template, or current-facing documentation dependency on `olympus_v3`;
-- preserved Aether product authority, continuity, Ariadna, evidence, self-improvement, profiles and acceptance;
+- preserved Aether product authority, continuity data, Ariadna profile/contract, evidence, self-improvement, profiles and acceptance boundaries;
 - proven Orca lifecycle, recovery, isolation and cleanup on the affected equivalence class;
 - preserved read-only historical evidence and rollback;
 - passed focused and full regression gates.
@@ -250,7 +250,7 @@ Aether contract
 
 ### Goal
 
-Replace the ACPManager/talk_to lifecycle for a bounded two-worker Aether path while keeping Olympus available only as an explicit rollback path, never as a hidden fallback.
+Implement a bounded two-worker Aether path without reintroducing Olympus. Rollback uses the exact predecessor tree and untouched historical stores, never coexisting legacy code or a hidden fallback.
 
 ### Cases
 
@@ -271,13 +271,11 @@ Replace the ACPManager/talk_to lifecycle for a bounded two-worker Aether path wh
 
 The first active consumer may switch only when the Orca path passes all cases on the exact candidate. The configuration must select one path explicitly. If Orca fails after selection, fail visibly and roll back through an operator-controlled configuration change; do not invoke ACP automatically.
 
-### Retirement unlocked
+### Sequencing update
 
-After parity and switch evidence:
-
-- `acp_manager.py` becomes removable once no other consumer exists;
-- `db.py` and Olympus observability hooks stop receiving writes;
-- the public `talk_to` path can be removed or replaced by an Aether-native execution surface.
+At the product owner's direction, R4/R5 removed ACPManager, its database, hooks,
+server and public tools before this milestone. M3 must therefore implement a new
+path from the clean boundary; it may not restore retired code for rollback.
 
 ## 8. Milestone M4 — Reimplement Ariadna outside Olympus
 
@@ -411,6 +409,8 @@ source lines. No persistent store was mutated.
 
 ### Cut R4 — ACP lifecycle and Olympus observability
 
+**Status: LOCALLY IMPLEMENTED — final acceptance in M7.**
+
 Remove:
 
 - `acp_manager.py`;
@@ -419,9 +419,13 @@ Remove:
 - ACP config, PID markers and active plugin wrappers;
 - ACP-only dependencies after residual import verification.
 
-Prerequisite: no active ACP process/session, no DB writer, full Orca recovery/cleanup parity.
+The candidate is isolated and not activated. This source cut did not modify or
+delete live runtime state or historical stores; replacement parity is now a
+prerequisite for restoring execution, not for retaining legacy code.
 
 ### Cut R5 — Server, CLI and package facade
+
+**Status: LOCALLY IMPLEMENTED — final acceptance in M7.**
 
 Remove:
 
@@ -432,9 +436,18 @@ Remove:
 - `olympus` and `olympus-v3` entry points;
 - the `olympus-mcp` package identity.
 
-Prerequisite: zero active imports, entry points, plugins, templates and current-facing references.
+The package is now `aether-agents` 0.22.0 with zero Aether MCP tools. The final
+M7 residual and wheel gates prove zero active imports, entry points, plugins,
+templates and current-facing references.
 
 ## 11. Milestone M7 — Dependency and documentation cleanup
+
+**Status: LOCALLY COMPLETE.** Source dependencies, templates, setup/update/doctor,
+README, guides, active context and website are migrated. The exact local tree
+passes 273 tests, focused Ruff, compileall, shell/YAML parsing, governance,
+zero-executable-residual scanning, 23-entry wheel inspection, 52-entry sdist
+inspection, clean wheel installation, isolated setup/idempotent rerun, wrapper
+isolation, and doctor.
 
 After source retirement:
 
@@ -491,8 +504,9 @@ Do not rerun expensive unchanged gates after documentation-only edits unless the
 
 ## 14. Current stop condition and next action
 
-R1 and R2 are locally complete in the isolated candidate. The next source cut
-is **R3: extract the Aether-owned identity, contract, evidence, review and
-semantic-closure boundaries before deleting the generic Olympus kernel
-lifecycle**. Integration remains independently gated by continuity identity,
-zero live Harmonia resources and read-only store preservation.
+R1–R5 are implemented in the isolated candidate. `src/olympus_v3`, its runtime,
+facades, plugins, templates, entry points and dependencies are absent. The
+M7 gates pass. The immediate action is to commit the exact clean tree and stop.
+Do not resume replacement-runtime design or Orca diagnostics in this cleanup
+task. Live configuration/state transition, candidate acceptance, integration,
+release, and activation remain separately gated.

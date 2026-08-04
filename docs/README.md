@@ -62,7 +62,7 @@ Technical system explanation:
 - system context and components;
 - orchestration and session lifecycle;
 - Daimon roles and authority;
-- Olympus v3;
+- the retired Olympus runtime and the current Aether-native boundary;
 - `.aether` continuity;
 - configuration, runtime, data, and trust boundaries.
 

@@ -101,7 +101,7 @@ def _make_project(tmp_path: Path, *, name: str = "aether") -> Path:
     manifest.parent.mkdir(parents=True)
     manifest.write_text(yaml.safe_dump(_manifest_payload(), sort_keys=False), encoding="utf-8")
     (root / "AGENTS.md").write_text("# Aether Agents — Project Context\n", encoding="utf-8")
-    (root / "pyproject.toml").write_text('[project]\nname = "olympus-mcp"\n', encoding="utf-8")
+    (root / "pyproject.toml").write_text('[project]\nname = "aether-agents"\n', encoding="utf-8")
     git = root / ".git"
     git.mkdir()
     (git / "HEAD").write_text(BASELINE_COMMIT + "\n", encoding="utf-8")
@@ -288,12 +288,12 @@ class TestSelfImprovementLedger:
         with pytest.raises(sqlite3.IntegrityError, match="forced coordination failure"):
             ledger.record_tool_observation(
                 session_id="session-a",
-                tool_call_id="harmonia-atomic",
-                tool_name="mcp__olympus_v3__harmonia",
+                tool_call_id="execution-atomic",
+                tool_name="aether_execution",
                 duration_ms=3,
                 outcome="error",
                 coordination={
-                    "system": "harmonia",
+                    "system": "aether_execution",
                     "action": "start",
                     "phase": "pre_admission",
                     "outcome": "invalid_request",
@@ -326,7 +326,7 @@ class TestPluginHooks:
         assert context["context"].startswith("[Aether Self-Improvement Cycle]")
         assert "Candidate: v0.20.0" in context["context"]
         assert "custom:aether-router" in context["context"]
-        assert "talk_to fallback is forbidden" in context["context"]
+        assert "legacy execution fallback is forbidden" in context["context"]
         assert "Use Harmonia" not in context["context"]
         assert "Orca transition candidate" in context["context"]
         assert "Next minor architecture: undecided" in context["context"]
@@ -441,52 +441,6 @@ class TestPluginHooks:
         assert ledger.get_session("first")["status"] == "active"
         assert ledger.get_session("second")["status"] == "active"
 
-    def test_harmonia_outcomes_are_classified_without_contract_payloads(self, tmp_path: Path, monkeypatch) -> None:
-        root = _make_project(tmp_path)
-        monkeypatch.chdir(root)
-        on_session_start("session-a", model="gpt-5.6-sol", platform="cli")
-        secret = "«redacted:sk-…»"
-
-        on_post_tool_call(
-            tool_name="mcp__olympus_v3__harmonia",
-            args={"action": "start", "contract": {"objective": secret}},
-            result='{"success":false,"error":{"code":"invalid_request"}}',
-            task_id="task-a",
-            session_id="session-a",
-            tool_call_id="harmonia-1",
-            duration_ms=5,
-        )
-        on_post_tool_call(
-            tool_name="mcp__olympus_v3__harmonia",
-            args={"action": "start", "contract": {"objective": secret}},
-            result='{"success":false,"error":{"code":"feature_disabled"}}',
-            task_id="task-a",
-            session_id="session-a",
-            tool_call_id="harmonia-2",
-            duration_ms=7,
-        )
-
-        events = _ledger(root).coordination_events("session-a")
-        assert events == [
-            {
-                "event_id": "harmonia-1",
-                "system": "harmonia",
-                "action": "start",
-                "phase": "pre_admission",
-                "outcome": "invalid_request",
-                "duration_ms": 5,
-            },
-            {
-                "event_id": "harmonia-2",
-                "system": "harmonia",
-                "action": "start",
-                "phase": "pre_admission",
-                "outcome": "feature_disabled",
-                "duration_ms": 7,
-            },
-        ]
-        _ledger(root).checkpoint()
-        assert all(secret.encode() not in path.read_bytes() for path in (root / ".aether").glob("self_improvement.db*"))
 
     def test_foreign_workspace_does_not_create_or_mutate_aether_storage(self, tmp_path: Path, monkeypatch) -> None:
         aether = _make_project(tmp_path)
@@ -571,7 +525,7 @@ def test_plugin_is_discoverable_but_not_enabled_in_template() -> None:
         "on_session_finalize",
     }
     assert "aether-self-improvement" not in config.get("plugins", {}).get("enabled", [])
-    assert config["mcp_servers"]["olympus_v3"]["tools"]["exclude"] == ["talk_to"]
+    assert "olympus_v3" not in config["mcp_servers"]
 
 
 def test_ledger_schema_contains_no_payload_columns(tmp_path: Path) -> None:

@@ -274,7 +274,7 @@ code {
     white-space: nowrap;
 }
 .hermes-node { border-color: rgba(57,255,130,0.3); }
-.olympus-node { border-color: rgba(68,144,255,0.3); }
+.core-node { border-color: rgba(68,144,255,0.3); }
 .daimons-node { border-color: rgba(180,75,255,0.3); }
 
 /* ── Subsection title ────────────────────────── */

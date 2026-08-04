@@ -46,7 +46,7 @@ bash scripts/setup.sh
 1. **Checks Python** — verifies Python 3.11+ is available
 2. **Creates venv** — at `home/.venv-hermes/` inside the project
 3. **Installs hermes-agent** — from PyPI via `pip install hermes-agent`
-4. **Installs olympus_v3** — editable `pip install -e .` from `pyproject.toml`
+4. **Installs Aether Agents** — editable `pip install -e .` from `pyproject.toml`
 5. **Installs CUDA extras** — if `nvidia-smi` is detected, installs faster-whisper
 6. **Generates config.yaml** — copies `.yaml.template` → `config.yaml` per profile, substituting `__AETHER_ROOT__` and `__HERMES_PYTHON__` with real paths
 7. **Creates .env files** — copies `.env.example` → `.env` per profile (skips existing)
@@ -89,7 +89,7 @@ pip install hermes-agent
 pip install -e .
 ```
 
-> The `pip install -e .` installs the `olympus_v3` MCP server from `src/olympus_v3/` in editable mode using the project's `pyproject.toml`.
+> The `pip install -e .` installs the `aether_agents` package from `src/aether_agents/` in editable mode. The v0.22.0 candidate contains no bundled MCP/ACP execution runtime.
 
 ### 3.4 Generate config.yaml for each profile
 
@@ -242,7 +242,7 @@ bash scripts/update.sh
 
 1. **git pull** — fetches latest changes (stashes local changes if needed)
 2. **pip upgrade hermes-agent** — updates to the latest PyPI release
-3. **pip install -e .** — reinstalls olympus_v3 in editable mode
+3. **pip install -e .** — reinstalls Aether Agents in editable mode
 4. **Checks config.yaml** — regenerates only if placeholders are still unresolved
 
 It **preserves** your local `config.yaml`, `.env` files, and the venv. It does **not** overwrite `config.yaml` unless it contains unresolved `__AETHER_ROOT__` or `__HERMES_PYTHON__` placeholders.
@@ -261,7 +261,7 @@ bash scripts/update.sh --regen-config
 |---------|-------|-----|
 | `aether: command not found` | Wrapper script not on PATH | Restart terminal or run `source ~/.bashrc` |
 | `python3: command not found` | Python not installed | Install Python 3.11+ (`sudo apt install python3.12` on Ubuntu) |
-| `ModuleNotFoundError: olympus_v3` | Olympus not installed in venv | Run `bash scripts/setup.sh` again |
+| `ModuleNotFoundError: aether_agents` | Aether Agents not installed in venv | Run `bash scripts/setup.sh` again |
 | venv creation fails | `python3-venv` package missing | `sudo apt install python3-venv` (Ubuntu/Debian) |
 | `nvidia-smi not found` | No NVIDIA drivers installed | Install CUDA toolkit or use cloud STT (`provider: openai`) |
 | `pip install` fails (SSL errors) | Corporate proxy or cert issues | `pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org hermes-agent` |
@@ -283,7 +283,7 @@ v0.8.0 introduces significant structural changes. Key migrations:
 | `~/.local/bin/hermes` symlink | `~/.local/bin/aether` and `~/.local/bin/hermes` wrapper scripts |
 | `HERMES_HOME=~/.hermes/hermes-agent/home` | `HERMES_HOME=<project>/home/` |
 | `configure.sh` (removed in v0.8.1) | `setup.sh` (full automation) |
-| `pip install -e .` (project root) | `pip install hermes-agent` + `pip install -e .` (olympus_v3) |
+| `pip install -e .` (project root) | `pip install hermes-agent` + `pip install -e .` (`aether_agents`) |
 
 To upgrade:
 

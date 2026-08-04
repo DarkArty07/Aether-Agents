@@ -198,7 +198,7 @@ def verify_project_identity(project_root: Path) -> CycleManifest | None:
         if not agents.read_text(encoding="utf-8").startswith("# Aether Agents"):
             return None
         project = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        if project.get("project", {}).get("name") != "olympus-mcp":
+        if project.get("project", {}).get("name") != "aether-agents":
             return None
         return load_cycle_manifest(root)
     except (ManifestError, OSError, TypeError, UnicodeError, ValueError, yaml.YAMLError, tomllib.TOMLDecodeError):

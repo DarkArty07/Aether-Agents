@@ -9,7 +9,7 @@ This area contains stable, reusable knowledge needed by humans and agents to rea
 | Document | Purpose |
 |---|---|
 | `PROJECT_MODEL.md` | Concise mental model of the whole system |
-| `GLOSSARY.md` | Canonical terms: Hermes, Daimon, Olympus, ACP, MCP, `.aether`, Harmonia, and related concepts |
+| `GLOSSARY.md` | Canonical and historical terms: Hermes, Daimon, `.aether`, retired runtimes, and related concepts |
 | `CURRENT_SYSTEM.md` | Verified capabilities and limitations of the active runtime |
 | `TARGET_SYSTEM.md` | Approved future state, clearly separated from current behavior |
 | `CONSTRAINTS.md` | Stable technical, operational, authorization, and compatibility constraints |

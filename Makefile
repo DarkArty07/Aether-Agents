@@ -1,5 +1,5 @@
 # ==============================================================================
-# Aether Agents v0.17.0 — Makefile
+# Aether Agents v0.22.0 — Makefile
 # Common development targets
 # ==============================================================================
 
@@ -38,7 +38,7 @@ honcho-logs: ## Follow Honcho API logs with the detected Compose runtime
 
 # ── Python interpreter ────────────────────────────────────────────────────────
 
-# Prefer the legacy project venv. For pip-installed Hermes, use the interpreter
+# Prefer the project venv. For pip-installed Hermes, use the interpreter
 # colocated with the hermes executable; otherwise fall back to python3.
 PYTHON ?= $(shell if [ -x home/.venv-hermes/bin/python ]; then \
 	printf '%s' home/.venv-hermes/bin/python; \
@@ -52,14 +52,14 @@ else command -v python3; fi)
 # ── Health Check ───────────────────────────────────────────────────────────────
 
 .PHONY: doctor
-doctor: ## Verify installation (python, hermes, olympus, gpu)
+doctor: ## Verify installation (python, hermes, Aether, gpu)
 	@echo "═══ Aether Agents — Doctor ═══"
 	@echo ""
 	@echo "  Python interpreter: $(PYTHON)"
-	@echo -n "  Python 3.11+:       " && ($(PYTHON) -c 'import sys; v=sys.version_info; print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Hermes binary:      " && (hermes --version 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Olympus import:     " && ($(PYTHON) -c "import olympus_v3.server; print('✓ olympus_v3')" 2>/dev/null || echo "✗ FAILED")
-	@echo -n "  NVIDIA GPU:         " && (nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NOT AVAILABLE")
+	@echo -n "  Python 3.11+:       "; $(PYTHON) -c 'import sys; v=sys.version_info; assert v >= (3, 11); print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  Hermes binary:      "; hermes --version 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  Aether import:      "; $(PYTHON) -c "import aether_agents; print('✓ aether_agents')" 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  NVIDIA GPU:         "; gpu="$$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"; if [ -n "$$gpu" ]; then echo "$$gpu"; else echo "NOT AVAILABLE"; fi
 	@echo ""
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────

@@ -354,3 +354,48 @@ Candidate delta after M1.2:
 M1 is locally complete across continuity, identity/authority and
 self-improvement. M2 remains blocked on deterministic recovery or classification
 of the isolated Orca stale-bootstrap interruption in GitHub issue #150.
+
+### R4 — Final executable Olympus retirement: IMPLEMENTED, ACCEPTANCE IN PROGRESS
+
+At the product owner's direction, the candidate retired the remaining runtime
+before designing its replacement. This intentionally removes multi-agent
+execution rather than preserving a compatibility layer. The candidate now has
+zero `src/olympus_v3` modules, imports, package entry points, MCP registrations,
+profile plugins, configuration blocks or runtime dependencies.
+
+Removed in this cut:
+
+- `acp_manager.py`, `db.py`, `server.py`, and `config_loader.py`;
+- the five-file CLI tree and the two-file observability hook plugin;
+- all six profile-side Olympus plugins and their template registrations;
+- the global MCP template and `home/olympus_v3.yaml.template`;
+- `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate`;
+- `mcp`, ACP, LangGraph, LangChain, and Graphify runtime dependencies;
+- stale executable tests, including a 157-line source-tree polling script for
+  an even older `olympus` package;
+- frozen Harmonia wire classification from the active self-improvement hook.
+
+The distribution is now `aether-agents` 0.22.0 and exports only the 18-module
+Aether-native package. The removal contract was observed RED (`4 failed`) and
+then GREEN. Focused retirement, continuity, boundary, and self-improvement tests
+passed `104/104`; the final suite passed `273/273`. Focused Ruff, compileall,
+shell/YAML parsing, governance and zero-executable-residual scanning passed. The
+23-entry wheel and 52-entry sdist contain no retired source or entry points; a
+clean wheel install, isolated setup, idempotent rerun, wrapper isolation and
+doctor smoke all passed. Exact machine-readable evidence is in `STATUS.yaml`.
+
+This cut did not start a replacement runtime, activate Orca, modify live
+configuration, or open/migrate/delete historical stores. Clean installations
+have no Aether execution MCP facade until a separately accepted implementation
+exists. Historical reports retain their original terminology and paths.
+
+Candidate delta after R4:
+
+| Metric | Canonical baseline | After M1.2 | After R4 |
+|---|---:|---:|---:|
+| Olympus Python modules | 45 | 12 | 0 |
+| Olympus source lines | 19,589 | 3,865 | 0 |
+| Candidate Olympus delta vs baseline | 0 | -15,724 | -19,589 |
+| Aether-native Python modules | 0 | 18 | 18 |
+| Aether-native source lines | 0 | 6,338 | 6,242 |
+| Registered Aether MCP tools | 6 | 5 | 0 |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.18.2 — Update Script
+# Aether Agents v0.22.0 — Update Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Updates the repo and dependencies: git pull, pip upgrades, config regeneration.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.18.2"
+SCRIPT_VERSION="0.22.0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
@@ -123,18 +123,19 @@ upgrade_hermes_agent() {
     ok "hermes-agent ${new_version}"
 }
 
-# ── Step 3: Reinstall olympus-mcp ────────────────────────────────────────────
-reinstall_olympus_mcp() {
-    step 3 "Reinstalling olympus-mcp (editable mode)"
+# ── Step 3: Reinstall Aether Agents ──────────────────────────────────────────
+reinstall_aether_agents() {
+    step 3 "Reinstalling Aether Agents (editable mode)"
 
-    info "Installing olympus-mcp from ${PROJECT_ROOT}..."
+    info "Installing Aether Agents from ${PROJECT_ROOT}..."
     "$VENV_DIR/bin/pip" install -e "$PROJECT_ROOT" --quiet 2>/dev/null
-    ok "olympus-mcp reinstalled"
+    ok "Aether Agents reinstalled"
 
-    if "$HERMES_PYTHON" -c "import olympus_v3.server" 2>/dev/null; then
-        ok "olympus_v3.server import verified"
+    if "$HERMES_PYTHON" -c "import aether_agents" 2>/dev/null; then
+        ok "aether_agents import verified"
     else
-        warn "olympus_v3.server import check failed"
+        fail "aether_agents import check failed"
+        exit 1
     fi
 }
 
@@ -207,7 +208,7 @@ main() {
     preflight
     git_pull
     upgrade_hermes_agent
-    reinstall_olympus_mcp
+    reinstall_aether_agents
     regenerate_configs
     print_summary
 }

@@ -8,7 +8,7 @@ This plugin registers 5 hooks in the hermes-agent lifecycle:
 - on_session_end: updates session status, hot_state in aether.db
 
 Session identity is the explicit ``session_id`` supplied by hermes-agent to each
-hook invocation. Persisted Olympus PID/session files are not consulted.
+hook invocation. Persisted legacy PID/session files are not consulted.
 
 DB path resolution (priority order):
 1. AETHER_HOME env var → .aether/aether.db
@@ -257,7 +257,7 @@ def on_pre_llm_call(
 
     On the first turn, if aether.db exists and CONTEXT.md exists and has
     content, returns it as context injection. Freshness is managed by
-    aether_curate — Hermes decides when to re-curate. Otherwise returns
+    the authorized curation surface — Hermes decides when to re-curate. Otherwise returns
     None. Never crashes the agent — all logic wrapped in try/except.
     """
     if not is_first_turn:
@@ -270,7 +270,7 @@ def on_pre_llm_call(
             return None
 
         # Check CONTEXT.md: always inject if it exists and has content.
-        # Freshness is managed by aether_curate — Hermes decides when to re-curate.
+        # Freshness is managed by the authorized curation surface.
         context_md_path = db_path.parent / "CONTEXT.md"
         if context_md_path.exists():
             try:

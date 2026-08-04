@@ -4,7 +4,7 @@
 
 **A multi-agent team built on [hermes-agent](https://github.com/NousResearch/hermes-agent)**
 
-[![Version](https://img.shields.io/badge/version-0.20.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.22.0-blue)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml/badge.svg)](https://github.com/DarkArty07/Aether-Agents/actions/workflows/test.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
@@ -12,7 +12,7 @@
 
 **[hermes-agent](https://github.com/NousResearch/hermes-agent)** is a self-improving AI agent framework by [Nous Research](https://nousresearch.com). It handles LLM routing, tool execution, memory, skills, cron scheduling, and multi-platform gateways (Telegram, Discord, Slack, CLI). You give it a persona (SOUL.md), a config (config.yaml), and API keys — it becomes an autonomous agent.
 
-**Aether Agents** extends hermes-agent into a multi-agent team. Six specialized Daimons — each a hermes-agent instance with its own model, personality, and toolset — are orchestrated by Hermes through **Olympus v3**, an MCP server that manages sessions, routes tasks, and maintains project continuity via **.aether**. The result: a crew of experts that think independently but coordinate through structured delegation. Any OpenAI-compatible provider. Any model per Daimon.
+**Aether Agents** adds product authority, project identity, continuity, evidence, review, effect controls, specialist profiles, and self-improvement instrumentation to hermes-agent. The v0.22.0 candidate has physically retired the legacy Olympus/ACP runtime. Multi-agent execution, `talk_to`, `discover`, and ACP-backed Ariadna curation are therefore intentionally unavailable until a replacement passes isolation, lifecycle, cleanup, and rollback gates. No hidden fallback remains.
 
 </div>
 
@@ -35,57 +35,38 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | | Feature | Description |
 |---|---------|-------------|
 | 🧠 | **6 Specialized Daimons** | Each a hermes-agent instance with its own model, persona (SOUL.md), and tools. Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. |
-| 🏛️ | **Olympus v3 MCP** | ACP sessions, plugin hooks, SQLite shared state. The bridge between orchestrator and executors. |
-| 📜 | **.aether Continuity** | Automatic capture → curation → injection. Daimons always know what project they're on. No blind delegations. |
-| 🔄 | **5-Phase Pipeline** | IDEA → RESEARCH → DESIGN → PLAN → CODE. Sequential quality gates. Hermes decides, Daimons execute. |
+| 📜 | **Aether Continuity** | Project-scoped SQLite state, explicit session identity, bounded context injection, issues, decisions, and file-change evidence. |
+| 🧭 | **Product Authority** | Substrate-neutral contracts, budgets, evidence, protected effects, review, closure, and human acceptance boundaries. |
+| 🧹 | **No Legacy Runtime** | The Olympus package, ACP manager, lifecycle database, hooks, MCP facade, plugins, templates, and entry points are absent. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
-| 🧪 | **Default-Off Coordination Lab** | v0.19 R7 adds an isolated shadow observer, typed failure/recovery evidence, and disposable durable correlation. It is not active in the gateway and never replaces Olympus lifecycle ownership. |
-| 🔬 | **Self-Improvement Instrumentation Bootstrap** | v0.20.0 adds a default-off Hermes lifecycle plugin, project-scoped redacted ledger, interruption reconciliation, and deterministic release-evidence projection. Runtime activation remains separately gated; GitHub integration and release publication follow ODR-0001. |
+| 🔬 | **Default-Off Self-Improvement** | Project-scoped redacted ledger, interruption reconciliation, deterministic evidence projection, isolated candidates, and human promotion authority. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Current candidate architecture
 
 ```
 User
   │
   ▼
-Hermes (Orchestrator)
-  │ MCP (stdio)
-  ▼
-Olympus v3 Server
-  │ ACP (HTTP, localhost)
-  ▼
-┌─────────────────────────────────────┐
-│  Daimon (hermes-agent instance)    │
-│  ┌─────────────────────────────┐   │
-│  │ Plugin: olympus_v3_hooks    │   │
-│  └─────────────────────────────┘   │
-│  ┌─────────────────────────────┐   │
-│  │ Plugin: aether_hooks       │   │
-│  └─────────────────────────────┘   │
-└─────────────────────────────────────┘
-  ↕ SQLite (.aether/)
+Hermes (hermes-agent)
+  │
+  ├── Aether product contracts / authority / evidence
+  ├── Aether continuity hooks ──────────────┐
+  └── default-off self-improvement hooks ──┤
+                                           ▼
+                                  project-local .aether/
 ```
 
-- **MCP** — Hermes speaks to Olympus via Model Context Protocol (stdio)
-- **ACP** — Olympus manages Daimon sessions via Agent Client Protocol (HTTP)
-- **Plugin Hooks** — Per-turn observability inside each Daimon: `post_llm_call`, `post_tool_call`, `on_session_end`, `pre_llm_call`
-- **.aether** — 3-layer continuity: capture (hooks) → curate (Ariadna) → inject (first turn)
-
-### v0.19 experimental coordination closeout
-
-v0.19.0 is frozen at R11 as an **experimental, default-off, and not operationally validated** baseline. R7 demonstrated observational shadow correlation; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to` path still goes directly through Olympus/`ACPManager`: the kernel does not replace Hermes hub-and-spoke, no kernel-backed live pilot was completed, and production migration/rollback was not exercised. See the [canonical closeout](docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md).
-
-The [v0.19.x incremental kernel migration](docs/releases/v0.19.x-kernel-migration/ROADMAP_CLOSEOUT.md) is closed at v0.19.5 with verdict **VIABLE — BOUNDED**. It demonstrated one source, two immutable successor candidates, deterministic committed selection, trusted semantic handoff, cleanup and zero survivors. v0.19.6 was closed without a separate patch. Harmonia remains default-off, and v0.19.5 remains an unpublished technical candidate.
-
-### v0.20.0 self-improvement instrumentation
-
-The [v0.20.0 instrumentation release](docs/releases/v0.20.0/RELEASE_NOTES.md) ships an implemented but **default-off** Hermes Agent plugin. It verifies Aether project identity before creating `.aether/self_improvement.db`, records only allowlisted lifecycle/router/coordination metadata, preserves interrupted and concurrent sessions, and projects deterministic evidence without approving a version. Independent review accepted Phase 1 as truthful instrumentation after closing residual project-identity, repeated-call, and concurrent-replay defects. `hermes plugins list` discovers `aether-self-improvement` as `not enabled`. Activation, runtime restart, a live bounded pilot, causal evaluation, and deployment remain separate gates.
+- **`aether_agents`** owns product semantics and continuity; it has no Olympus or Orca imports.
+- **`.aether/aether.db`** preserves project continuity without migrating existing rows.
+- **`.aether/self_improvement.db`** remains schema 5 and default-off.
+- **Specialist profiles** remain versioned, but no runtime in this candidate spawns or controls them.
+- **Historical v0.19/v0.20 evidence** remains under `docs/releases/` and does not describe an active execution path.
 
 ---
 
@@ -113,7 +94,7 @@ Aether-Agents/
 │   ├── skills/            ← 89 pre-built skills
 │   ├── SOUL.md            ← Hermes orchestrator personality
 │   └── .aether/           ← Project continuity DB (gitignored)
-├── src/olympus_v3/        ← MCP server + ACP + plugin hooks
+├── src/aether_agents/     ← contracts, continuity, evidence, effects, review
 ├── scripts/
 │   ├── setup.sh           ← Full automated setup
 │   ├── update.sh          ← Git pull + pip upgrade
@@ -210,7 +191,7 @@ Full documentation: docs/honcho-setup.md
 
 **Aether Agents** is [MIT licensed](LICENSE) © Christopher (DarkArty07).
 
-Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com) (MIT). Aether Agents extends it with Olympus v3 (MCP/ACP orchestration), .aether (project continuity), 6 Daimon profiles, and automated setup.
+Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com) (MIT). Aether Agents adds product contracts, project continuity, evidence and review boundaries, specialist profiles, self-improvement instrumentation, and automated setup.
 
 ---
 
