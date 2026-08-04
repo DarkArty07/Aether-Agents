@@ -137,8 +137,16 @@ now binds canonical existing project roots, separate profile homes, explicit
 reject forged digests. Continuity hooks treat a persisted `project_root` only as
 an assertion: the known stale value remains untouched, but cannot become current
 authority or drive path relativization. The focused gate passes `94/94` and the
-full suite passes `414/414`. The DB/hook move and byte-preserving fixture remain
-the next M1.1 cut.
+full suite passes `414/414`.
+
+**Candidate status (M1.1b): LOCALLY VERIFIED.** The DB and hook implementation
+was moved without legacy copies into `aether_agents.continuity`. Six profile
+plugin wrappers now delegate to the native package. Hooks bind the explicit
+event `session_id` and optional `result_summary`; they no longer read Olympus
+PID/session files or `olympus_v3.db`. Schema, `.aether/aether.db` path and
+`CONTEXT.md` behavior remain unchanged. A read-only reopen preserves the exact
+database bytes, the focused continuity gate passes `91/91`, and the full suite
+passes `417/417`.
 
 ### M1.2 Self-improvement extraction
 

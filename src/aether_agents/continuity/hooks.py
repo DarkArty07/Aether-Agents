@@ -7,16 +7,13 @@ This plugin registers 5 hooks in the hermes-agent lifecycle:
 - on_post_llm_call: updates hot_state.last_request on first turn
 - on_session_end: updates session status, hot_state in aether.db
 
-Session ID resolution (priority order):
-1. OLYMPUS_SESSION_ID env var (set at spawn time)
-2. {HERMES_HOME}/.olympus_session.{pid} file (PID-suffixed, concurrent-safe)
-3. {HERMES_HOME}/.olympus_session file (generic, backward compatible)
+Session identity is the explicit ``session_id`` supplied by hermes-agent to each
+hook invocation. Persisted Olympus PID/session files are not consulted.
 
 DB path resolution (priority order):
-1. {HERMES_HOME}/.aether_home.{pid} — PID-suffixed file (concurrent-safe)
-2. AETHER_HOME env var → .aether/aether.db
-3. {HERMES_HOME}/.aether_home file → {path}/.aether/aether.db
-4. cwd → .aether/aether.db
+1. AETHER_HOME env var → .aether/aether.db
+2. {HERMES_HOME}/.aether_home file → {path}/.aether/aether.db
+3. cwd → .aether/aether.db
 
 The plugin runs INSIDE the hermes-agent process. It uses synchronous
 sqlite3 (not aiosqlite) because hooks are called synchronously.
@@ -37,9 +34,10 @@ from aether_agents.identity import (
     confirm_recorded_project_root,
     resolve_project_identity,
 )
-from olympus_v3.aether_db import AetherDBSync, get_aether_db_path
 
-logger = logging.getLogger("olympus_v3.aether_hooks")
+from .database import AetherDBSync, get_aether_db_path
+
+logger = logging.getLogger("aether_agents.continuity.hooks")
 
 # ---------------------------------------------------------------------------
 # Module-level state
@@ -47,38 +45,14 @@ logger = logging.getLogger("olympus_v3.aether_hooks")
 
 _aether_db: AetherDBSync | None = None
 _turn_counter: int = 0
-_session_id: str | None = None
 _agent_name: str | None = None
 _request: str | None = None
 
 
 def _get_aether_db() -> AetherDBSync:
-    """Lazy-init the sync database connection using get_aether_db_path().
-
-    Priority for path resolution:
-    1. PID-suffixed .aether_home.{pid} file in HERMES_HOME (concurrent-safe)
-    2. Standard get_aether_db_path() resolution (AETHER_HOME env, .aether_home, cwd)
-    """
+    """Lazy-init the sync database using Aether-owned path resolution."""
     global _aether_db
     if _aether_db is None:
-        # Try PID-suffixed .aether_home file first (concurrent-safe)
-        hermes_home = os.environ.get("HERMES_HOME")
-        if hermes_home:
-            pid = os.getpid()
-            pid_home_file = Path(hermes_home) / f".aether_home.{pid}"
-            if pid_home_file.exists():
-                try:
-                    content = pid_home_file.read_text().strip()
-                    if content:
-                        db_path = Path(content) / ".aether" / "aether.db"
-                        _aether_db = AetherDBSync(db_path=db_path)
-                        _aether_db.ensure_tables()
-                        logger.info(".aether hooks initialized with DB: %s (from PID file)", db_path)
-                        return _aether_db
-                except Exception as e:
-                    logger.debug("Could not read PID aether_home file %s: %s", pid_home_file, e)
-
-        # Fall back to standard resolution
         db_path = get_aether_db_path()
         _aether_db = AetherDBSync(db_path=db_path)
         _aether_db.ensure_tables()
@@ -86,57 +60,15 @@ def _get_aether_db() -> AetherDBSync:
     return _aether_db
 
 
-def _get_session_id(kwargs: dict[str, Any] | None = None) -> str | None:
-    """Read session ID from env var, PID-suffixed file, generic file, or kwargs.
+def _session_binding(session_id: Any) -> str | None:
+    """Validate the explicit hook session identifier without fallback state."""
 
-    Priority:
-    1. OLYMPUS_SESSION_ID env var
-    2. {HERMES_HOME}/.olympus_session.{pid} — PID-suffixed file (concurrent-safe)
-    3. {HERMES_HOME}/.olympus_session — generic file (backward compatible)
-    4. Previously cached value
-    """
-    global _session_id
-
-    # Priority 1: env var
-    sid = os.environ.get("OLYMPUS_SESSION_ID")
-    if sid:
-        _session_id = sid
-        return sid
-
-    # Priority 2: PID-suffixed file (concurrent-safe)
-    hermes_home = os.environ.get("HERMES_HOME")
-    if hermes_home:
-        pid = os.getpid()
-        pid_session_file = Path(hermes_home) / f".olympus_session.{pid}"
-        if pid_session_file.exists():
-            try:
-                content = pid_session_file.read_text().strip()
-                if content:
-                    logger.debug("Read OLYMPUS_SESSION_ID from PID file: %s", content)
-                    _session_id = content
-                    return content
-            except Exception as e:
-                logger.debug("Could not read PID session file %s: %s", pid_session_file, e)
-
-    # Priority 3: generic file (backward compatible)
-    if hermes_home:
-        session_file = Path(hermes_home) / ".olympus_session"
-        try:
-            content = session_file.read_text().strip()
-            if content:
-                logger.debug("Read OLYMPUS_SESSION_ID from file: %s", content)
-                _session_id = content
-                return content
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            logger.debug("Could not read session file %s: %s", session_file, e)
-
-    # Priority 4: previously cached value
-    if _session_id:
-        return _session_id
-
-    return None
+    if not isinstance(session_id, str):
+        return None
+    value = session_id.strip()
+    if not value or len(value) > 256:
+        return None
+    return value
 
 
 def _detect_agent_name() -> str:
@@ -368,8 +300,8 @@ def on_session_start(
     Try/except silently — never crash the agent.
     """
     try:
-        olympus_sid = _get_session_id(kwargs)
-        if not olympus_sid:
+        aether_sid = _session_binding(session_id)
+        if not aether_sid:
             return
 
         db = _get_aether_db()
@@ -378,12 +310,12 @@ def on_session_start(
         platform = kwargs.get("platform")
 
         db.insert_session(
-            session_id=olympus_sid,
+            session_id=aether_sid,
             agent=agent,
             model=model,
             platform=platform,
         )
-        logger.info("on_session_start: session %s created for agent %s", olympus_sid, agent)
+        logger.info("on_session_start: session %s created for agent %s", aether_sid, agent)
     except Exception as e:
         logger.warning("on_session_start hook failed: %s", e)
 
@@ -404,8 +336,8 @@ def on_post_tool_call(
     Try/except silently — never crash the agent.
     """
     try:
-        olympus_sid = _get_session_id(kwargs)
-        if not olympus_sid:
+        aether_sid = _session_binding(session_id)
+        if not aether_sid:
             return
 
         db = _get_aether_db()
@@ -423,14 +355,14 @@ def on_post_tool_call(
                 action = "write" if tool_name == "write_file" else "patch"
                 file_path_rel = _make_relative(file_path)
                 db.insert_file_change(
-                    session_id=olympus_sid,
+                    session_id=aether_sid,
                     agent=agent,
                     file_path=file_path_rel,
                     action=action,
                 )
                 logger.debug(
                     "on_post_tool_call: recorded %s on %s for session %s",
-                    action, file_path_rel, olympus_sid,
+                    action, file_path_rel, aether_sid,
                 )
 
         # Detect git commit in terminal
@@ -448,7 +380,7 @@ def on_post_tool_call(
                     for fp in file_patterns:
                         fp_rel = _make_relative(fp.strip())
                         db.insert_file_change(
-                            session_id=olympus_sid,
+                            session_id=aether_sid,
                             agent=agent,
                             file_path=fp_rel,
                             action="commit",
@@ -456,14 +388,14 @@ def on_post_tool_call(
                 else:
                     # Record a generic commit entry
                     db.insert_file_change(
-                        session_id=olympus_sid,
+                        session_id=aether_sid,
                         agent=agent,
                         file_path="(git commit)",
                         action="commit",
                     )
                 logger.debug(
                     "on_post_tool_call: recorded git commit for session %s",
-                    olympus_sid,
+                    aether_sid,
                 )
 
     except Exception as e:
@@ -513,14 +445,14 @@ def on_session_end(
     """Hook: update session status and hot_state at session end.
 
     Update session status (completed/interrupted/failed).
-    Try to get last turn result from olympus_v3 db for result_summary.
+    Consume an explicit result_summary from the hook event when provided.
     Update hot_state: last_agent, last_session_id, last_result, updated_at,
     total_sessions++.
     Try/except silently — never crash the agent.
     """
     try:
-        olympus_sid = _get_session_id(kwargs)
-        if not olympus_sid:
+        aether_sid = _session_binding(session_id)
+        if not aether_sid:
             return
 
         status = "completed" if completed else ("cancelled" if interrupted else "error")
@@ -529,26 +461,17 @@ def on_session_end(
 
         # Update session status
         db.update_session(
-            session_id=olympus_sid,
+            session_id=aether_sid,
             status=status,
         )
 
-        # Try to get result summary from olympus_v3.db last turn
-        result_summary = None
-        try:
-            from olympus_v3.db import OlympusDBSync, get_db_path
-
-            olympus_db = OlympusDBSync(db_path=get_db_path())
-            progress = olympus_db.get_session_progress(olympus_sid)
-            if progress and progress.get("last_turn"):
-                result_summary = progress["last_turn"][:500]
-        except Exception as e:
-            logger.debug("Could not read olympus_v3.db for result summary: %s", e)
+        supplied_result = kwargs.get("result_summary")
+        result_summary = supplied_result[:500] if isinstance(supplied_result, str) and supplied_result else None
 
         # Update session with result if available
         if result_summary:
             db.update_session(
-                session_id=olympus_sid,
+                session_id=aether_sid,
                 result_summary=result_summary,
             )
 
@@ -559,7 +482,7 @@ def on_session_end(
 
         hot_state_updates = {
             "last_agent": _detect_agent_name(),
-            "last_session_id": olympus_sid,
+            "last_session_id": aether_sid,
             "last_result": result_summary or status,
             "total_sessions": total + 1,
         }
@@ -570,7 +493,7 @@ def on_session_end(
 
         db.update_hot_state(**hot_state_updates)
 
-        logger.info("on_session_end: session %s marked as %s", olympus_sid, status)
+        logger.info("on_session_end: session %s marked as %s", aether_sid, status)
     except Exception as e:
         logger.warning("on_session_end hook failed: %s", e)
 

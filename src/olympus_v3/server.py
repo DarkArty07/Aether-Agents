@@ -33,8 +33,9 @@ from mcp import types as mcp_types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from aether_agents.continuity import AetherDB, resolve_aether_db, resolve_aether_dir
+
 from .acp_manager import ACPManager
-from .aether_db import AetherDB, resolve_aether_db, resolve_aether_dir
 from .db import OlympusDB, get_db_path
 
 logger = logging.getLogger("olympus_v3")

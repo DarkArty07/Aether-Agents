@@ -17,9 +17,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 from acp.schema import PermissionOption
 
+from aether_agents.continuity import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
+from aether_agents.continuity import hooks as hooks_module
 from olympus_v3.acp_manager import ACPManager, AgentState, OlympusACPClient, SessionInfo
-from olympus_v3.aether_db import AetherDBSync, get_aether_db_path, resolve_aether_db, resolve_aether_dir
-from olympus_v3.aether_hooks import hooks as hooks_module
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,7 +47,6 @@ def fresh_hooks(tmp_path: Path):
     # Reset module-level state
     hooks_module._aether_db = None  # type: ignore[attr-defined]
     hooks_module._turn_counter = 0
-    hooks_module._session_id = None
     hooks_module._agent_name = None
     hooks_module._request = None
 
@@ -58,7 +57,6 @@ def fresh_hooks(tmp_path: Path):
     # Cleanup module-level state
     hooks_module._aether_db = None  # type: ignore[attr-defined]
     hooks_module._turn_counter = 0
-    hooks_module._session_id = None
     hooks_module._agent_name = None
     hooks_module._request = None
 
@@ -501,28 +499,24 @@ class TestOnSessionStart:
     """Test on_session_start hook."""
 
     def test_inserts_session_row(self, fresh_hooks: dict) -> None:
-        """Inserts a session row when session ID is available."""
+        """Inserts a session row under the explicit hook session ID."""
         mock_db = fresh_hooks["db"]
 
-        with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-1"),
-            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
-        ):
-            hooks_module.on_session_start(session_id="local-sess-1", model="gpt-4", platform="openai")
+        with patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"):
+            hooks_module.on_session_start(session_id="native-sess-1", model="gpt-4", platform="openai")
 
         mock_db.insert_session.assert_called_once()
         call_kwargs = mock_db.insert_session.call_args
-        assert call_kwargs[1]["session_id"] == "olympus-sess-1"
+        assert call_kwargs[1]["session_id"] == "native-sess-1"
         assert call_kwargs[1]["agent"] == "hefesto"
         assert call_kwargs[1]["model"] == "gpt-4"
         assert call_kwargs[1]["platform"] == "openai"
 
     def test_no_session_id_skips(self, fresh_hooks: dict) -> None:
-        """Does nothing when session ID cannot be resolved."""
+        """Does nothing when the explicit session ID is empty."""
         mock_db = fresh_hooks["db"]
 
-        with patch.object(hooks_module, "_get_session_id", return_value=None):
-            hooks_module.on_session_start(session_id="local-sess-1")
+        hooks_module.on_session_start(session_id="")
 
         mock_db.insert_session.assert_not_called()
 
@@ -535,7 +529,6 @@ class TestOnPostToolCall:
         mock_db = fresh_hooks["db"]
 
         with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-1"),
             patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
             patch.object(hooks_module, "_make_relative", side_effect=lambda x: x),
         ):
@@ -551,7 +544,7 @@ class TestOnPostToolCall:
 
         mock_db.insert_file_change.assert_called_once()
         call_kwargs = mock_db.insert_file_change.call_args[1]
-        assert call_kwargs["session_id"] == "olympus-sess-1"
+        assert call_kwargs["session_id"] == "s1"
         assert call_kwargs["agent"] == "hefesto"
         assert call_kwargs["file_path"] == "/project/src/main.py"
         assert call_kwargs["action"] == "write"
@@ -561,7 +554,6 @@ class TestOnPostToolCall:
         mock_db = fresh_hooks["db"]
 
         with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-2"),
             patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
             patch.object(hooks_module, "_make_relative", side_effect=lambda x: x),
         ):
@@ -581,19 +573,18 @@ class TestOnPostToolCall:
         assert call_kwargs["file_path"] == "/project/src/utils.py"
 
     def test_no_session_id_skips(self, fresh_hooks: dict) -> None:
-        """Does nothing when session ID cannot be resolved."""
+        """Does nothing when the explicit session ID is empty."""
         mock_db = fresh_hooks["db"]
 
-        with patch.object(hooks_module, "_get_session_id", return_value=None):
-            hooks_module.on_post_tool_call(
-                tool_name="write_file",
-                args={"path": "/project/src/main.py"},
-                result="ok",
-                task_id="t1",
-                session_id="s1",
-                tool_call_id="tc1",
-                duration_ms=100,
-            )
+        hooks_module.on_post_tool_call(
+            tool_name="write_file",
+            args={"path": "/project/src/main.py"},
+            result="ok",
+            task_id="t1",
+            session_id="",
+            tool_call_id="tc1",
+            duration_ms=100,
+        )
 
         mock_db.insert_file_change.assert_not_called()
 
@@ -608,15 +599,9 @@ class TestOnSessionEnd:
         # Set up mock returns
         mock_db.get_hot_state.return_value = {"total_sessions": 5}
 
-        with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
-            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
-            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
-        ):
-            # Make the olympus db import fail so we skip result_summary
-            mock_olympus_cls.side_effect = ImportError("No olympus db")
+        with patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"):
             hooks_module.on_session_end(
-                session_id="local-sess-end",
+                session_id="native-sess-end",
                 completed=True,
                 interrupted=False,
                 model="gpt-4",
@@ -625,7 +610,7 @@ class TestOnSessionEnd:
 
         # Verify update_session called with completed status
         mock_db.update_session.assert_called_once_with(
-            session_id="olympus-sess-end",
+            session_id="native-sess-end",
             status="completed",
         )
 
@@ -633,7 +618,7 @@ class TestOnSessionEnd:
         mock_db.update_hot_state.assert_called_once()
         hot_state_kwargs = mock_db.update_hot_state.call_args[1]
         assert hot_state_kwargs["last_agent"] == "hefesto"
-        assert hot_state_kwargs["last_session_id"] == "olympus-sess-end"
+        assert hot_state_kwargs["last_session_id"] == "native-sess-end"
         assert hot_state_kwargs["total_sessions"] == 6  # 5 + 1
 
     def test_interrupted_session(self, fresh_hooks: dict) -> None:
@@ -641,14 +626,9 @@ class TestOnSessionEnd:
         mock_db = fresh_hooks["db"]
         mock_db.get_hot_state.return_value = {"total_sessions": 1}
 
-        with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-int"),
-            patch.object(hooks_module, "_detect_agent_name", return_value="etalides"),
-            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
-        ):
-            mock_olympus_cls.side_effect = ImportError("No olympus db")
+        with patch.object(hooks_module, "_detect_agent_name", return_value="etalides"):
             hooks_module.on_session_end(
-                session_id="local-sess-int",
+                session_id="native-sess-int",
                 completed=False,
                 interrupted=True,
                 model="claude-3",
@@ -834,15 +814,14 @@ class TestHookProjectRoot:
         project_root.mkdir()
 
         monkeypatch.setenv("AETHER_HOME", str(project_root))
-        with patch.object(hooks_module, "_get_session_id", return_value=None):
-            hooks_module.on_post_llm_call(
-                session_id="sess-1",
-                user_message="hello",
-                assistant_response="hi",
-                conversation_history=[],
-                model="gpt-4",
-                platform="openai",
-            )
+        hooks_module.on_post_llm_call(
+            session_id="sess-1",
+            user_message="hello",
+            assistant_response="hi",
+            conversation_history=[],
+            model="gpt-4",
+            platform="openai",
+        )
 
         # Verify canonical project_root was included in update_hot_state call
         call_kwargs = mock_db.update_hot_state.call_args[1]
@@ -854,15 +833,14 @@ class TestHookProjectRoot:
         mock_db = fresh_hooks["db"]
 
         monkeypatch.delenv("AETHER_HOME", raising=False)
-        with patch.object(hooks_module, "_get_session_id", return_value=None):
-            hooks_module.on_post_llm_call(
-                session_id="sess-1",
-                user_message="hello",
-                assistant_response="hi",
-                conversation_history=[],
-                model="gpt-4",
-                platform="openai",
-            )
+        hooks_module.on_post_llm_call(
+            session_id="sess-1",
+            user_message="hello",
+            assistant_response="hi",
+            conversation_history=[],
+            model="gpt-4",
+            platform="openai",
+        )
 
         call_kwargs = mock_db.update_hot_state.call_args[1]
         assert "project_root" not in call_kwargs
@@ -875,14 +853,9 @@ class TestHookProjectRoot:
         project_root.mkdir()
 
         monkeypatch.setenv("AETHER_HOME", str(project_root))
-        with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
-            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
-            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
-        ):
-            mock_olympus_cls.side_effect = ImportError("No olympus db")
+        with patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"):
             hooks_module.on_session_end(
-                session_id="local-sess-end",
+                session_id="native-sess-end",
                 completed=True,
                 interrupted=False,
                 model="gpt-4",
@@ -899,14 +872,9 @@ class TestHookProjectRoot:
         mock_db.get_hot_state.return_value = {"total_sessions": 1}
 
         monkeypatch.delenv("AETHER_HOME", raising=False)
-        with (
-            patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
-            patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
-            patch("olympus_v3.aether_hooks.hooks.OlympusDBSync", create=True) as mock_olympus_cls,
-        ):
-            mock_olympus_cls.side_effect = ImportError("No olympus db")
+        with patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"):
             hooks_module.on_session_end(
-                session_id="local-sess-end",
+                session_id="native-sess-end",
                 completed=True,
                 interrupted=False,
                 model="gpt-4",
@@ -918,93 +886,52 @@ class TestHookProjectRoot:
 
 
 # ===========================================================================
-# PID-suffixed session/home file tests
+# Explicit continuity binding tests
 # ===========================================================================
 
 
-class TestPIDSessionFiles:
-    """Test that hooks read PID-suffixed files correctly for concurrent Daimon isolation.
+class TestExplicitHookBinding:
+    """Hooks use event/session and AETHER_HOME authority, never Olympus PID files."""
 
-    When multiple Daimons share the same HERMES_HOME, PID-suffixed files
-    (.olympus_session.{pid}, .aether_home.{pid}) take priority over their
-    generic counterparts (.olympus_session, .aether_home).
-    """
-
-    def test_session_id_reads_pid_file_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_get_session_id() reads .olympus_session.{pid} over generic .olympus_session."""
+    def test_session_binding_ignores_legacy_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The event session ID is authoritative even when legacy files exist."""
         pid = os.getpid()
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
-
-        # Write PID-suffixed file (priority)
-        pid_file = hermes_home / f".olympus_session.{pid}"
-        pid_file.write_text("olympus-sess-pid-123")
-
-        # Write generic file (should be ignored when PID file exists)
-        generic_file = hermes_home / ".olympus_session"
-        generic_file.write_text("olympus-sess-generic")
+        (hermes_home / f".olympus_session.{pid}").write_text("legacy-pid-session")
+        (hermes_home / ".olympus_session").write_text("legacy-session")
 
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
+        monkeypatch.setenv("OLYMPUS_SESSION_ID", "legacy-env-session")
 
-        # Reset module-level cached session ID
-        hooks_module._session_id = None  # type: ignore[attr-defined]
+        assert hooks_module._session_binding("native-session") == "native-session"  # type: ignore[attr-defined]
+        assert hooks_module._session_binding("") is None  # type: ignore[attr-defined]
+        assert hooks_module._session_binding("x" * 257) is None  # type: ignore[attr-defined]
 
-        result = hooks_module._get_session_id()
-        assert result == "olympus-sess-pid-123"
-
-        # Cleanup module state
-        hooks_module._session_id = None  # type: ignore[attr-defined]
-
-    def test_session_id_falls_back_to_generic(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_get_session_id() falls back to generic .olympus_session when no PID file exists."""
-        hermes_home = tmp_path / "hermes_home"
-        hermes_home.mkdir()
-
-        # Write generic file only (no PID file)
-        generic_file = hermes_home / ".olympus_session"
-        generic_file.write_text("olympus-sess-generic")
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("OLYMPUS_SESSION_ID", raising=False)
-
-        # Reset module-level cached session ID
-        hooks_module._session_id = None  # type: ignore[attr-defined]
-
-        result = hooks_module._get_session_id()
-        assert result == "olympus-sess-generic"
-
-        # Cleanup module state
-        hooks_module._session_id = None  # type: ignore[attr-defined]
-
-    def test_aether_db_reads_pid_home_first(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_get_aether_db() reads .aether_home.{pid} and uses its path over standard resolution."""
+    def test_aether_db_uses_explicit_home_over_legacy_pid_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AETHER_HOME wins even if a legacy PID home file points elsewhere."""
         pid = os.getpid()
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
-
-        project_path = tmp_path / "my_project"
+        project_path = tmp_path / "explicit_project"
         project_path.mkdir()
-
-        # Write PID-suffixed .aether_home file pointing to project path
-        pid_home_file = hermes_home / f".aether_home.{pid}"
-        pid_home_file.write_text(str(project_path))
+        foreign_path = tmp_path / "legacy_project"
+        foreign_path.mkdir()
+        (hermes_home / f".aether_home.{pid}").write_text(str(foreign_path))
 
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("AETHER_HOME", raising=False)
+        monkeypatch.setenv("AETHER_HOME", str(project_path))
 
-        # Reset module-level cached DB
         hooks_module._aether_db = None  # type: ignore[attr-defined]
-
         db = hooks_module._get_aether_db()
         expected_db_path = project_path / ".aether" / "aether.db"
         assert db.db_path == expected_db_path
-
-        # Cleanup module state
         hooks_module._aether_db = None  # type: ignore[attr-defined]
 
     def test_aether_db_falls_back_to_standard(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_get_aether_db() falls back to standard get_aether_db_path() when no PID home file exists."""
+        """_get_aether_db() retains standard generic path fallback compatibility."""
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
 
@@ -1014,7 +941,7 @@ class TestPIDSessionFiles:
         # Reset module-level cached DB
         hooks_module._aether_db = None  # type: ignore[attr-defined]
 
-        # No .aether_home.{pid} and no .aether_home file — should fall back to cwd
+        # No AETHER_HOME or generic .aether_home file — fall back to cwd.
         db = hooks_module._get_aether_db()
         expected_path = Path.cwd() / ".aether" / "aether.db"
         assert db.db_path == expected_path

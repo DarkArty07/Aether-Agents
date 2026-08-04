@@ -24,7 +24,7 @@ from typing import Any
 
 import aiosqlite
 
-logger = logging.getLogger("olympus_v3.aether_db")
+logger = logging.getLogger("aether_agents.continuity.database")
 
 # ---------------------------------------------------------------------------
 # Schema DDL

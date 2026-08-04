@@ -347,15 +347,40 @@ retirement_cuts:
     full_suite_duration_seconds: 4.15
     targeted_ruff: pass
     compileall: pass
-    remaining_M1_1_scope:
-      - move aether_db.py into aether_agents.continuity
-      - move aether_hooks behavior into aether_agents.continuity
-      - replace Olympus PID session lookup
-      - prove byte_preserving_existing_database_fixture
+    completed_by: M1_1b_aether_native_continuity
+  M1_1b_aether_native_continuity:
+    status: locally_verified
+    moved_without_legacy_copies:
+      - src/olympus_v3/aether_db.py -> src/aether_agents/continuity/database.py
+      - src/olympus_v3/aether_hooks/hooks.py -> src/aether_agents/continuity/hooks.py
+      - src/olympus_v3/aether_hooks/__init__.py -> src/aether_agents/continuity/__init__.py
+    moved_source_lines: 1328
+    removed_olympus_pid_and_db_coupling_lines: 60
+    profile_plugin_wrappers_migrated: 6
+    session_identity: explicit_hook_session_id
+    result_summary_source: explicit_hook_event_only
+    olympus_db_reads_for_continuity: 0
+    legacy_continuity_source_files: 0
+    database_schema: preserved
+    database_path: preserved_at_project_dot_aether_aether_db
+    context_md_semantics: preserved
+    byte_preserving_existing_database_read: pass
+    persistent_store_mutation: none
+    contract_red: 4_failed
+    continuity_focused_green: 91_passed
+    server_and_native_boundary_green: 36_passed
+    full_suite_green: 417_passed
+    full_suite_duration_seconds: 5.54
+    targeted_ruff: pass
+    compileall: pass
+    remaining_olympus_modules: 19
+    remaining_olympus_source_lines: 5908
+    aether_native_modules: 11
+    aether_native_source_lines: 4295
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: in_progress_m1_3_and_identity_precondition_locally_verified
+  M1_aether_native_extraction: in_progress_m1_1_and_m1_3_locally_verified
   M2_hardened_orca_adapter_vertical_slice: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
@@ -381,6 +406,6 @@ authorization:
 next_action:
   milestone: M1_aether_native_extraction
   requirement: >-
-    Move aether_db.py and aether_hooks behavior into aether_agents.continuity
-    without changing the SQLite schema or CONTEXT.md semantics. Prove the existing
-    database fixture is byte-preserved and remove only the replaced Olympus copies.
+    Move self-improvement manifest, ledger, hooks, evidence, causality and promotion
+    under aether_agents without changing schema version or ledger rows. Preserve
+    default-off operation, candidate isolation and explicit human promotion authority.

@@ -289,3 +289,36 @@ Candidate delta after R3b:
 
 No coordination package or compatibility shim remains importable. Historical
 stores were not opened, migrated, truncated or deleted by this source cut.
+
+### M1.1b — Aether-native continuity: LOCALLY COMPLETE
+
+The candidate moved the `.aether` async/sync database, hermes-agent hooks and
+plugin initializer into `src/aether_agents/continuity/` without legacy source
+copies. The three files accounted for 1,328 Olympus source lines. Six profile
+plugin wrappers now import the native hook registration.
+
+The moved hooks no longer resolve session identity from
+`OLYMPUS_SESSION_ID`, `.olympus_session.*` or `.aether_home.{pid}`. They bind
+the explicit `session_id` supplied by hermes-agent and accept an explicit,
+bounded `result_summary`; continuity no longer reads `olympus_v3.db`.
+
+The M1.1b contract was observed RED (`4 failed`) and then GREEN. The focused
+continuity/identity suite passed `91/91`, server/native-boundary tests passed
+`36/36`, and the full suite passed `417/417`. Reopening an existing fixture for
+read-only queries preserved its SHA-256 byte-for-byte. No project continuity
+store was opened or mutated during this source cut.
+
+Candidate delta after M1.1b:
+
+| Metric | Candidate after R3b | Candidate after M1.1b |
+|---|---:|---:|
+| Olympus Python modules | 22 | 19 |
+| Olympus source lines | 7,198 | 5,908 |
+| Candidate Olympus delta vs baseline | -12,391 | -13,681 |
+| Aether-native Python modules | 8 | 11 |
+| Aether-native source lines | 2,863 | 4,295 |
+| Registered MCP tools | 5 | 5 |
+
+M1.1 is now locally complete. M1.2 self-improvement extraction is the next
+Aether-native cut; ACP lifecycle retirement remains gated on Orca parity and
+zero live writers/processes.

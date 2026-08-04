@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from aether_agents import identity
-from olympus_v3.aether_hooks import hooks
+from aether_agents.continuity import hooks
 
 
 def repository(path: Path) -> Path:
