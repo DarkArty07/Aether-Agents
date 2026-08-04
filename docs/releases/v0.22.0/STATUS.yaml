@@ -194,6 +194,14 @@ known_blockers:
       Use a supported, tested reconciliation that preserves continuity history,
       or fail closed without treating the stale value as canonical. Do not edit
       aether.db or CONTEXT.md manually.
+  - id: isolated_orca_continuity_stale_bootstrap
+    github_issue: 150
+    observation: >-
+      The isolated Orca instance used only for candidate worktree-card projection
+      exited during bootstrap and did not converge after one bounded reopen.
+    impact: >-
+      Orca card synchronization is unavailable; Git history, the candidate
+      worktree, tests and product runtime remain unaffected.
 
 addressed_candidate_defects:
   - id: concurrent_close_request_convergence
@@ -310,10 +318,44 @@ retirement_cuts:
     residual_coordination_import_scan: pass_zero_importers
     coordination_package_importable: false
     persistent_store_mutation: none
+  M1_1a_aether_native_identity_boundary:
+    status: locally_verified
+    boundary: src/aether_agents/identity.py
+    project_identity:
+      - existing_absolute_canonical_root
+      - symlink_alias_convergence
+      - optional_repository_requirement
+      - path_digest_bound_dto
+      - project_allowlist
+    profile_identity:
+      - existing_absolute_canonical_home
+      - separate_profile_digest
+      - path_digest_bound_dto
+    execution_domains:
+      - live
+      - synthetic
+    continuity_hook_behavior:
+      stale_or_mismatched_recorded_root: preserved_but_not_used_as_authority
+      matching_alias: canonicalized
+      file_path_relativization: active_root_only
+    hot_state_manual_mutation: none
+    contract_red: 7_failed
+    forged_dto_red: 1_failed
+    identity_green: 8_passed
+    continuity_regression_green: 94_passed
+    full_suite_green: 414_passed
+    full_suite_duration_seconds: 4.15
+    targeted_ruff: pass
+    compileall: pass
+    remaining_M1_1_scope:
+      - move aether_db.py into aether_agents.continuity
+      - move aether_hooks behavior into aether_agents.continuity
+      - replace Olympus PID session lookup
+      - prove byte_preserving_existing_database_fixture
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: in_progress_m1_3_locally_verified
+  M1_aether_native_extraction: in_progress_m1_3_and_identity_precondition_locally_verified
   M2_hardened_orca_adapter_vertical_slice: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
@@ -337,8 +379,8 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M6_progressive_olympus_retirement
+  milestone: M1_aether_native_extraction
   requirement: >-
-    Commit R1, then trace and disconnect the active Harmonia public/runtime
-    wrapper before deleting its implementation. Preserve Aether-owned contracts,
-    evidence and semantic acceptance until their replacement exists.
+    Move aether_db.py and aether_hooks behavior into aether_agents.continuity
+    without changing the SQLite schema or CONTEXT.md semantics. Prove the existing
+    database fixture is byte-preserved and remove only the replaced Olympus copies.

@@ -828,10 +828,12 @@ class TestHookProjectRoot:
     """Test that on_post_llm_call and on_session_end write project_root to hot_state."""
 
     def test_post_llm_call_writes_project_root(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-        """on_post_llm_call writes AETHER_HOME as project_root on first turn."""
+        """on_post_llm_call writes a real canonical AETHER_HOME project root."""
         mock_db = fresh_hooks["db"]
+        project_root = fresh_hooks["tmp_path"] / "project"
+        project_root.mkdir()
 
-        monkeypatch.setenv("AETHER_HOME", "/my/project/root")
+        monkeypatch.setenv("AETHER_HOME", str(project_root))
         with patch.object(hooks_module, "_get_session_id", return_value=None):
             hooks_module.on_post_llm_call(
                 session_id="sess-1",
@@ -842,10 +844,10 @@ class TestHookProjectRoot:
                 platform="openai",
             )
 
-        # Verify project_root was included in update_hot_state call
+        # Verify canonical project_root was included in update_hot_state call
         call_kwargs = mock_db.update_hot_state.call_args[1]
         assert "project_root" in call_kwargs
-        assert call_kwargs["project_root"] == "/my/project/root"
+        assert call_kwargs["project_root"] == str(project_root.resolve(strict=True))
 
     def test_post_llm_call_no_project_root_without_aether_home(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
         """on_post_llm_call does not set project_root if AETHER_HOME is not set."""
@@ -866,11 +868,13 @@ class TestHookProjectRoot:
         assert "project_root" not in call_kwargs
 
     def test_session_end_writes_project_root(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-        """on_session_end writes AETHER_HOME as project_root."""
+        """on_session_end writes a real canonical AETHER_HOME project root."""
         mock_db = fresh_hooks["db"]
         mock_db.get_hot_state.return_value = {"total_sessions": 1}
+        project_root = fresh_hooks["tmp_path"] / "project"
+        project_root.mkdir()
 
-        monkeypatch.setenv("AETHER_HOME", "/my/project/root")
+        monkeypatch.setenv("AETHER_HOME", str(project_root))
         with (
             patch.object(hooks_module, "_get_session_id", return_value="olympus-sess-end"),
             patch.object(hooks_module, "_detect_agent_name", return_value="hefesto"),
@@ -887,7 +891,7 @@ class TestHookProjectRoot:
 
         call_kwargs = mock_db.update_hot_state.call_args[1]
         assert "project_root" in call_kwargs
-        assert call_kwargs["project_root"] == "/my/project/root"
+        assert call_kwargs["project_root"] == str(project_root.resolve(strict=True))
 
     def test_session_end_no_project_root_without_aether_home(self, fresh_hooks: dict, monkeypatch: pytest.MonkeyPatch) -> None:
         """on_session_end does not set project_root if AETHER_HOME is not set."""

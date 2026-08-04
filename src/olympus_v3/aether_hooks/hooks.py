@@ -31,6 +31,12 @@ import time
 from pathlib import Path
 from typing import Any
 
+from aether_agents.identity import (
+    IdentityError,
+    ProjectIdentity,
+    confirm_recorded_project_root,
+    resolve_project_identity,
+)
 from olympus_v3.aether_db import AetherDBSync, get_aether_db_path
 
 logger = logging.getLogger("olympus_v3.aether_hooks")
@@ -163,17 +169,54 @@ def _detect_agent_name() -> str:
 
 
 def _make_relative(file_path: str) -> str:
-    """Make a file path relative to the project root detected from hot_state."""
+    """Make a path relative to active identity, never recorded identity alone."""
     try:
+        active = _active_project_identity()
+        if active is None:
+            return file_path
         db = _get_aether_db()
         state = db.get_hot_state()
-        if state and state.get("project_root"):
-            root = state["project_root"]
-            if file_path.startswith(root):
-                return os.path.relpath(file_path, root)
+        recorded = state.get("project_root") if isinstance(state, dict) else None
+        if recorded:
+            try:
+                confirm_recorded_project_root(recorded, active)
+            except IdentityError:
+                logger.warning("Ignoring stale or mismatched hot_state.project_root")
+        candidate = Path(file_path).expanduser().resolve()
+        return str(candidate.relative_to(active.root))
     except Exception:
         pass
     return file_path
+
+
+def _active_project_identity() -> ProjectIdentity | None:
+    """Resolve AETHER_HOME as current authority without creating directories."""
+
+    value = os.environ.get("AETHER_HOME")
+    if not value:
+        return None
+    try:
+        return resolve_project_identity(value, require_repository=False)
+    except IdentityError as exc:
+        logger.warning("Ignoring invalid AETHER_HOME project identity: %s", exc)
+        return None
+
+
+def _project_root_update(db: AetherDBSync, state: dict[str, Any] | None = None) -> dict[str, str]:
+    """Return a canonical root update only when persisted identity confirms it."""
+
+    active = _active_project_identity()
+    if active is None:
+        return {}
+    current = state if isinstance(state, dict) else db.get_hot_state()
+    recorded = current.get("project_root") if isinstance(current, dict) else None
+    if recorded:
+        try:
+            confirm_recorded_project_root(recorded, active)
+        except IdentityError:
+            logger.warning("Preserving stale or mismatched hot_state.project_root")
+            return {}
+    return {"project_root": str(active.root)}
 
 
 def _time_ago(updated_at: float) -> str:
@@ -449,10 +492,7 @@ def on_post_llm_call(
             request_preview = (user_message or "")[:200]
             db = _get_aether_db()
             updates = {"last_request": request_preview}
-            # Write project_root from AETHER_HOME to hot_state for project identity
-            aether_home = os.environ.get("AETHER_HOME")
-            if aether_home:
-                updates["project_root"] = aether_home
+            updates.update(_project_root_update(db))
             db.update_hot_state(**updates)
             _request = request_preview
             logger.debug("on_post_llm_call: updated hot_state.last_request")
@@ -526,10 +566,7 @@ def on_session_end(
         if interrupted:
             hot_state_updates["last_error"] = "Session interrupted"
 
-        # Write project_root from AETHER_HOME to hot_state for project identity
-        aether_home = os.environ.get("AETHER_HOME")
-        if aether_home:
-            hot_state_updates["project_root"] = aether_home
+        hot_state_updates.update(_project_root_update(db, state))
 
         db.update_hot_state(**hot_state_updates)
 

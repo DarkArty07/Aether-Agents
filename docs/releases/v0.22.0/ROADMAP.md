@@ -131,6 +131,15 @@ The final module split may be refined, but lifecycle-independent imports and pub
 
 **Gate:** existing continuity tests pass against the new package and a byte-preserving test fixture; no Olympus DB read is required for session summaries.
 
+**Prerequisite status (M1.1a): LOCALLY VERIFIED.** `aether_agents.identity`
+now binds canonical existing project roots, separate profile homes, explicit
+`live`/`synthetic` execution domains and project allowlists. Path-bound DTOs
+reject forged digests. Continuity hooks treat a persisted `project_root` only as
+an assertion: the known stale value remains untouched, but cannot become current
+authority or drive path relativization. The focused gate passes `94/94` and the
+full suite passes `414/414`. The DB/hook move and byte-preserving fixture remain
+the next M1.1 cut.
+
 ### M1.2 Self-improvement extraction
 
 - move manifest, ledger, hooks, evidence, causality and promotion;
