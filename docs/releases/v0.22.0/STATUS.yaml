@@ -377,10 +377,39 @@ retirement_cuts:
     remaining_olympus_source_lines: 5908
     aether_native_modules: 11
     aether_native_source_lines: 4295
+  M1_2_aether_native_self_improvement:
+    status: locally_verified
+    moved_without_legacy_copies:
+      - src/olympus_v3/self_improvement/__init__.py -> src/aether_agents/self_improvement/__init__.py
+      - src/olympus_v3/self_improvement/causality.py -> src/aether_agents/self_improvement/causality.py
+      - src/olympus_v3/self_improvement/evidence.py -> src/aether_agents/self_improvement/evidence.py
+      - src/olympus_v3/self_improvement/hooks.py -> src/aether_agents/self_improvement/hooks.py
+      - src/olympus_v3/self_improvement/ledger.py -> src/aether_agents/self_improvement/ledger.py
+      - src/olympus_v3/self_improvement/manifest.py -> src/aether_agents/self_improvement/manifest.py
+      - src/olympus_v3/self_improvement/promotion.py -> src/aether_agents/self_improvement/promotion.py
+    moved_source_lines: 2043
+    legacy_self_improvement_source_files: 0
+    plugin_wrapper: home/plugins/aether-self-improvement/__init__.py
+    plugin_enabled_by_default: false
+    ledger_schema_version: 5
+    byte_preserving_existing_ledger_read: pass
+    automatic_activation: false
+    automatic_promotion: false
+    persistent_store_mutation: none
+    contract_red: 3_failed
+    focused_green: 87_passed
+    full_suite_green: 420_passed
+    full_suite_duration_seconds: 4.29
+    targeted_ruff: pass
+    compileall: pass
+    remaining_olympus_modules: 12
+    remaining_olympus_source_lines: 3865
+    aether_native_modules: 18
+    aether_native_source_lines: 6338
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: in_progress_m1_1_and_m1_3_locally_verified
+  M1_aether_native_extraction: locally_complete
   M2_hardened_orca_adapter_vertical_slice: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
@@ -404,8 +433,9 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M1_aether_native_extraction
+  milestone: M2_hardened_orca_adapter_vertical_slice
   requirement: >-
-    Move self-improvement manifest, ledger, hooks, evidence, causality and promotion
-    under aether_agents without changing schema version or ledger rows. Preserve
-    default-off operation, candidate isolation and explicit human promotion authority.
+    Resolve or deterministically classify the isolated Orca stale-bootstrap blocker
+    in GitHub issue 150, then prove the pinned local runtime and negative isolation
+    gates before implementing or exercising an Aether adapter. Do not activate
+    Aether production execution or create workers before those gates pass.

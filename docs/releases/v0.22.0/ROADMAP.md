@@ -157,6 +157,17 @@ passes `417/417`.
 
 **Gate:** all self-improvement tests use only `aether_agents.*`; the current ledger remains readable; no automatic activation is introduced.
 
+**Candidate status (M1.2): LOCALLY VERIFIED.** Seven modules totaling 2,043
+lines were moved without legacy copies into `aether_agents.self_improvement`.
+All internal and test imports are Aether-native; the plugin wrapper moved with
+them but remains absent from `plugins.enabled`. Ledger schema 5 reopens
+byte-for-byte without migration, candidate isolation and named human promotion
+authority are unchanged, and no activation path was added. The focused gate
+passes `87/87` and the full suite passes `420/420`.
+
+With M1.1, M1.2 and M1.3 locally verified, M1 is locally complete. This does
+not approve integration, activation, release or any Orca runtime pilot.
+
 ### M1.3 Authority, contract and evidence extraction
 
 - move or rewrite project principal;

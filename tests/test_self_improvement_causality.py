@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from olympus_v3.self_improvement.causality import (
+from aether_agents.self_improvement.causality import (
     IMPROVED,
     INCOMPLETE,
     INVALID_DIRTY_BASELINE,
@@ -30,7 +30,7 @@ from olympus_v3.self_improvement.causality import (
     record_task,
     render_comparison,
 )
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
+from aether_agents.self_improvement.ledger import SelfImprovementLedger
 
 BASELINE_COMMIT = "a" * 40
 CANDIDATE_COMMIT = "b" * 40

@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
-from olympus_v3.self_improvement.manifest import CycleManifest, verify_project_identity
+from .ledger import SelfImprovementLedger
+from .manifest import CycleManifest, verify_project_identity
 
-logger = logging.getLogger("olympus_v3.self_improvement")
+logger = logging.getLogger("aether_agents.self_improvement")
 _HEX_COMMIT = re.compile(r"^[0-9a-f]{40,64}$")
 
 # Frozen v0.20 wire values keep already-recorded default-off observations

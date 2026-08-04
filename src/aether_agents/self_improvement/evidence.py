@@ -6,8 +6,8 @@ import os
 import tempfile
 from collections.abc import Mapping
 
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
-from olympus_v3.self_improvement.manifest import CycleManifest
+from .ledger import SelfImprovementLedger
+from .manifest import CycleManifest
 
 _SIGNAL_PRECEDENCE = ("MINOR_CAPABILITY_SIGNAL", "PATCH_CANDIDATE", "NONE")
 

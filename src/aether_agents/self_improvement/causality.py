@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
+from .ledger import SelfImprovementLedger
 
 # Verdicts that refuse to compare, because a precondition failed.
 INVALID_EVALUATION_CHANGED = "INVALID_EVALUATION_CHANGED"

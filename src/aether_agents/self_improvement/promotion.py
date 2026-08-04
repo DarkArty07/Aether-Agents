@@ -34,8 +34,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from olympus_v3.self_improvement.causality import IMPROVED, Comparison
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
+from .causality import IMPROVED, Comparison
+from .ledger import SelfImprovementLedger
 
 
 class PromotionRefused(RuntimeError):

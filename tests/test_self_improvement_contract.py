@@ -19,10 +19,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from olympus_v3.self_improvement import hooks as H
-from olympus_v3.self_improvement.evidence import render_release_evidence
-from olympus_v3.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
-from olympus_v3.self_improvement.manifest import ManifestError, load_cycle_manifest
+from aether_agents.self_improvement import hooks as H
+from aether_agents.self_improvement.evidence import render_release_evidence
+from aether_agents.self_improvement.ledger import LedgerSchemaError, SelfImprovementLedger
+from aether_agents.self_improvement.manifest import ManifestError, load_cycle_manifest
 
 BASELINE_COMMIT = "a" * 40
 
@@ -541,7 +541,7 @@ def test_identity_failure_with_a_manifest_present_is_reported(tmp_path: Path, mo
     root = _make_project(tmp_path / "aether", mutate=authorize)
     monkeypatch.chdir(root)
 
-    with caplog.at_level("WARNING", logger="olympus_v3.self_improvement"):
+    with caplog.at_level("WARNING", logger="aether_agents.self_improvement"):
         H.on_session_start("s", model="m", platform="cli")
 
     assert not (root / ".aether").exists()

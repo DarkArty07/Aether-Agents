@@ -322,3 +322,35 @@ Candidate delta after M1.1b:
 M1.1 is now locally complete. M1.2 self-improvement extraction is the next
 Aether-native cut; ACP lifecycle retirement remains gated on Orca parity and
 zero live writers/processes.
+
+### M1.2 — Aether-native self-improvement: LOCALLY COMPLETE
+
+The candidate moved the full seven-module self-improvement package—manifest,
+ledger, hooks, evidence, causality, promotion and initializer—into
+`src/aether_agents/self_improvement/`. The move accounts for 2,043 source lines;
+no Olympus copy remains and no implementation was duplicated.
+
+All four self-improvement suites and the default-off plugin wrapper now import
+the Aether-native package. The ledger remains schema 5, refuses incompatible
+evidence stores as before, and preserves an existing fixture byte-for-byte on
+read-only reopen. The plugin remains absent from `plugins.enabled`; no automatic
+promotion, activation, restart or release path was introduced.
+
+The M1.2 contract was observed RED (`3 failed`) and then GREEN. Focused tests
+passed `87/87`, the full suite passed `420/420`, and targeted Ruff, compileall
+and the zero-Olympus-import scan passed.
+
+Candidate delta after M1.2:
+
+| Metric | Candidate after M1.1b | Candidate after M1.2 |
+|---|---:|---:|
+| Olympus Python modules | 19 | 12 |
+| Olympus source lines | 5,908 | 3,865 |
+| Candidate Olympus delta vs baseline | -13,681 | -15,724 |
+| Aether-native Python modules | 11 | 18 |
+| Aether-native source lines | 4,295 | 6,338 |
+| Registered MCP tools | 5 | 5 |
+
+M1 is locally complete across continuity, identity/authority and
+self-improvement. M2 remains blocked on deterministic recovery or classification
+of the isolated Orca stale-bootstrap interruption in GitHub issue #150.

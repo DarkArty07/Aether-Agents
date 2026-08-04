@@ -10,11 +10,11 @@ from unittest.mock import Mock
 import pytest
 import yaml
 
-from olympus_v3.self_improvement.evidence import (
+from aether_agents.self_improvement.evidence import (
     aggregate_next_version_signal,
     render_release_evidence,
 )
-from olympus_v3.self_improvement.hooks import (
+from aether_agents.self_improvement.hooks import (
     on_post_llm_call,
     on_post_tool_call,
     on_pre_llm_call,
@@ -24,8 +24,8 @@ from olympus_v3.self_improvement.hooks import (
     register,
     reset_runtime_state,
 )
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
-from olympus_v3.self_improvement.manifest import load_cycle_manifest, verify_project_identity
+from aether_agents.self_improvement.ledger import SelfImprovementLedger
+from aether_agents.self_improvement.manifest import load_cycle_manifest, verify_project_identity
 
 CANDIDATE_VERSION = "0.20.0"
 BASELINE_COMMIT = "a" * 40

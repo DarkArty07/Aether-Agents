@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from olympus_v3.self_improvement.causality import (
+from aether_agents.self_improvement.causality import (
     INCOMPLETE,
     INVALID_EVALUATION_CHANGED,
     NO_CHANGE,
@@ -26,8 +26,8 @@ from olympus_v3.self_improvement.causality import (
     record_evaluation_run,
     record_task,
 )
-from olympus_v3.self_improvement.ledger import SelfImprovementLedger
-from olympus_v3.self_improvement.promotion import (
+from aether_agents.self_improvement.ledger import SelfImprovementLedger
+from aether_agents.self_improvement.promotion import (
     CandidateWorktreeError,
     PromotionRefused,
     disposable_candidate,
