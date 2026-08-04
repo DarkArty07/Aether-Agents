@@ -12,7 +12,7 @@
 
 **[hermes-agent](https://github.com/NousResearch/hermes-agent)** is a self-improving AI agent framework by [Nous Research](https://nousresearch.com). It handles LLM routing, tool execution, memory, skills, cron scheduling, and multi-platform gateways (Telegram, Discord, Slack, CLI). You give it a persona (SOUL.md), a config (config.yaml), and API keys — it becomes an autonomous agent.
 
-**Aether Agents** adds product authority, project identity, continuity, evidence, review, effect controls, specialist profiles, and self-improvement instrumentation to hermes-agent. The v0.22.0 candidate has physically retired the legacy Olympus/ACP runtime. Multi-agent execution, `talk_to`, `discover`, and ACP-backed Ariadna curation are therefore intentionally unavailable until a replacement passes isolation, lifecycle, cleanup, and rollback gates. No hidden fallback remains.
+**Aether Agents** adds product authority, project identity, continuity, evidence, review, effect controls, specialist profiles, and inert self-improvement primitives to hermes-agent. The v0.22.0 candidate has physically retired the legacy Olympus/ACP runtime and the obsolete v0.20 self-improvement plugin bootstrap. Multi-agent execution, automatic self-improvement instrumentation, `talk_to`, `discover`, and ACP-backed Ariadna curation are therefore intentionally unavailable until replacements pass their separate acceptance gates. No hidden fallback remains.
 
 </div>
 
@@ -41,7 +41,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
-| 🔬 | **Default-Off Self-Improvement** | Project-scoped redacted ledger, interruption reconciliation, deterministic evidence projection, isolated candidates, and human promotion authority. |
+| 🔬 | **Inert Self-Improvement Primitives** | Schema-compatible redacted ledger, deterministic comparison, isolated candidates, and human promotion authority; no plugin or automatic instrumentation path. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
@@ -57,14 +57,14 @@ Hermes (hermes-agent)
   │
   ├── Aether product contracts / authority / evidence
   ├── Aether continuity hooks ──────────────┐
-  └── default-off self-improvement hooks ──┤
+  └── inert ledger / causality / promotion  │
                                            ▼
                                   project-local .aether/
 ```
 
 - **`aether_agents`** owns product semantics and continuity; it has no Olympus or Orca imports.
 - **`.aether/aether.db`** preserves project continuity without migrating existing rows.
-- **`.aether/self_improvement.db`** remains schema 5 and default-off.
+- **`.aether/self_improvement.db`** remains schema 5 and untouched; no candidate plugin opens it automatically.
 - **Specialist profiles** remain versioned, but no runtime in this candidate spawns or controls them.
 - **Historical v0.19/v0.20 evidence** remains under `docs/releases/` and does not describe an active execution path.
 

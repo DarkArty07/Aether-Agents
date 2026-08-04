@@ -355,7 +355,7 @@ M1 is locally complete across continuity, identity/authority and
 self-improvement. M2 remains blocked on deterministic recovery or classification
 of the isolated Orca stale-bootstrap interruption in GitHub issue #150.
 
-### R4 — Final executable Olympus retirement: IMPLEMENTED, ACCEPTANCE IN PROGRESS
+### R4 — Final executable Olympus retirement: LOCALLY COMPLETE
 
 At the product owner's direction, the candidate retired the remaining runtime
 before designing its replacement. This intentionally removes multi-agent
@@ -373,7 +373,7 @@ Removed in this cut:
 - `mcp`, ACP, LangGraph, LangChain, and Graphify runtime dependencies;
 - stale executable tests, including a 157-line source-tree polling script for
   an even older `olympus` package;
-- frozen Harmonia wire classification from the active self-improvement hook.
+- the active Harmonia wire classifier from the self-improvement hook.
 
 The distribution is now `aether-agents` 0.22.0 and exports only the 18-module
 Aether-native package. The removal contract was observed RED (`4 failed`) and
@@ -389,13 +389,36 @@ configuration, or open/migrate/delete historical stores. Clean installations
 have no Aether execution MCP facade until a separately accepted implementation
 exists. Historical reports retain their original terminology and paths.
 
+### R4.1 — Obsolete v0.20 instrumentation bootstrap: LOCALLY VERIFIED
+
+A final current-surface audit found that the Aether-native extraction still
+carried an executable bootstrap bound to `docs/releases/v0.20.0/CYCLE.yaml` and
+the retired Harmonia operating model. R4.1 removes the
+`aether-self-improvement` plugin, session hooks, strict manifest reader, and
+manifest-bound release-evidence projector rather than inventing a v0.22
+replacement contract during retirement.
+
+The schema-v5 ledger, deterministic causality comparison, isolated-candidate,
+and human-promotion primitives remain as inert libraries. No candidate plugin
+opens `.aether/self_improvement.db`; existing store bytes and all historical
+v0.20 reports remain untouched. Replacement instrumentation is a later,
+separately accepted product boundary.
+
+The removal contract was observed RED (`2 failed`) and then GREEN. The retained
+self-improvement boundary passes `36/36` focused tests and the exact repository
+passes `228/228`. Focused Ruff, compileall, shell/YAML parsing, governance, clean
+installation, isolated setup and doctor pass. The final 20-entry wheel and
+48-entry sdist contain no plugin, hooks, manifest reader, evidence projector, or
+Olympus package.
+
 Candidate delta after R4:
 
-| Metric | Canonical baseline | After M1.2 | After R4 |
-|---|---:|---:|---:|
-| Olympus Python modules | 45 | 12 | 0 |
-| Olympus source lines | 19,589 | 3,865 | 0 |
-| Candidate Olympus delta vs baseline | 0 | -15,724 | -19,589 |
-| Aether-native Python modules | 0 | 18 | 18 |
-| Aether-native source lines | 0 | 6,338 | 6,242 |
-| Registered Aether MCP tools | 6 | 5 | 0 |
+| Metric | Canonical baseline | After M1.2 | After R4 | After R4.1 |
+|---|---:|---:|---:|---:|
+| Olympus Python modules | 45 | 12 | 0 | 0 |
+| Olympus source lines | 19,589 | 3,865 | 0 | 0 |
+| Candidate Olympus delta vs baseline | 0 | -15,724 | -19,589 | -19,589 |
+| Aether-native Python modules | 0 | 18 | 18 | 15 |
+| Aether-native source lines | 0 | 6,338 | 6,242 | 5,500 |
+| Registered Aether MCP tools | 6 | 5 | 0 | 0 |
+| Executable self-improvement plugins | 1 | 1 | 1 | 0 |

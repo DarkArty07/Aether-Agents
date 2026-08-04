@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 
-# Add the src directory to Python path so olympus modules are importable
+# Add the src directory so tests exercise the repository source tree.
 _src = Path(__file__).resolve().parent.parent / "src"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))

@@ -322,7 +322,7 @@ Orca may run Ariadna as a supervised worker, but Aether owns the request, data p
 Migrate in independently testable cuts:
 
 1. Aether plugin wrappers;
-2. self-improvement plugin import;
+2. retirement of the obsolete v0.20 self-improvement plugin import;
 3. profile templates;
 4. Aether configuration template;
 5. setup/update/doctor scripts;
@@ -440,14 +440,30 @@ The package is now `aether-agents` 0.22.0 with zero Aether MCP tools. The final
 M7 residual and wheel gates prove zero active imports, entry points, plugins,
 templates and current-facing references.
 
+### Cut R4.1 — Obsolete v0.20 self-improvement bootstrap
+
+**Status: LOCALLY VERIFIED.**
+
+Remove:
+
+- the `aether-self-improvement` plugin wrapper and manifest;
+- v0.20-bound session hooks;
+- the strict v0.20 cycle-manifest reader;
+- the manifest-bound release-evidence projector;
+- tests whose only acceptance subject was that executable bootstrap.
+
+Preserve the schema-v5 ledger, deterministic causality comparison, disposable
+candidate, and human-promotion primitives as inert libraries. Preserve
+`.aether/self_improvement.db` and all v0.20 reports byte-for-byte. Do not design
+or activate replacement instrumentation in this retirement cut.
+
 ## 11. Milestone M7 — Dependency and documentation cleanup
 
-**Status: LOCALLY COMPLETE.** Source dependencies, templates, setup/update/doctor,
-README, guides, active context and website are migrated. The exact local tree
-passes 273 tests, focused Ruff, compileall, shell/YAML parsing, governance,
-zero-executable-residual scanning, 23-entry wheel inspection, 52-entry sdist
-inspection, clean wheel installation, isolated setup/idempotent rerun, wrapper
-isolation, and doctor.
+**Status: LOCALLY COMPLETE.** Source dependencies, templates,
+setup/update/doctor, README, guides, active context and website are migrated.
+The exact R4.1 tree passes 228 tests, focused Ruff, compileall, shell/YAML
+parsing, governance, zero-retired-bootstrap scanning, a 20-entry wheel, a
+48-entry sdist, clean wheel installation, isolated setup and doctor.
 
 After source retirement:
 

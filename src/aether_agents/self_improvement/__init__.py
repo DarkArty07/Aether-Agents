@@ -1,1 +1,1 @@
-"""Project-scoped self-improvement cycle support for Aether Agents."""
+"""Inert ledger, causality, and promotion primitives for Aether Agents."""

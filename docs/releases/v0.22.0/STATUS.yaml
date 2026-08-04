@@ -1,5 +1,5 @@
 schema_version: 1
-status: candidate_olympus_source_retired
+status: candidate_olympus_and_v020_bootstrap_retired
 approved_on: "2026-08-03"
 owner: Christopher (DarkArty07)
 
@@ -390,6 +390,7 @@ retirement_cuts:
     aether_native_source_lines: 4295
   M1_2_aether_native_self_improvement:
     status: locally_verified
+    superseded_by: R4_1_v020_self_improvement_bootstrap_retirement
     moved_without_legacy_copies:
       - src/olympus_v3/self_improvement/__init__.py -> src/aether_agents/self_improvement/__init__.py
       - src/olympus_v3/self_improvement/causality.py -> src/aether_agents/self_improvement/causality.py
@@ -400,8 +401,9 @@ retirement_cuts:
       - src/olympus_v3/self_improvement/promotion.py -> src/aether_agents/self_improvement/promotion.py
     moved_source_lines: 2043
     legacy_self_improvement_source_files: 0
-    plugin_wrapper: home/plugins/aether-self-improvement/__init__.py
-    plugin_enabled_by_default: false
+    plugin_wrapper_at_extraction: home/plugins/aether-self-improvement/__init__.py
+    plugin_later_retired: true
+    plugin_enabled_by_default_at_extraction: false
     ledger_schema_version: 5
     byte_preserving_existing_ledger_read: pass
     automatic_activation: false
@@ -481,6 +483,53 @@ retirement_cuts:
       generated_configs_retired_references: 0
     isolated_wrapper_runtime: pass
     isolated_doctor: pass
+  R4_1_v020_self_improvement_bootstrap_retirement:
+    status: locally_verified
+    deleted_source:
+      - src/aether_agents/self_improvement/evidence.py
+      - src/aether_agents/self_improvement/hooks.py
+      - src/aether_agents/self_improvement/manifest.py
+    deleted_plugin: home/plugins/aether-self-improvement
+    removed_runtime_dependency: pyyaml
+    deleted_obsolete_test_suites:
+      - tests/test_self_improvement.py
+      - tests/test_self_improvement_contract.py
+    replacement_runtime_present: false
+    replacement_instrumentation_present: false
+    preserved_primitives:
+      - src/aether_agents/self_improvement/ledger.py
+      - src/aether_agents/self_improvement/causality.py
+      - src/aether_agents/self_improvement/promotion.py
+    preserved_store: .aether/self_improvement.db
+    ledger_schema_version: 5
+    historical_v020_evidence_modified: false
+    active_cycle_manifest: none
+    automatic_activation: false
+    automatic_project_writes: false
+    aether_native_modules: 15
+    aether_native_source_lines: 5500
+    inert_self_improvement_modules: 4
+    inert_self_improvement_source_lines: 1205
+    removal_contract_red: 2_failed
+    focused_green: 36_passed
+    full_suite: 228_passed
+    full_suite_duration_seconds: 1.16
+    targeted_ruff: pass
+    compileall: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    retired_bootstrap_residual_scan: pass_zero
+    wheel:
+      result: pass
+      entries: 20
+      retired_bootstrap_entries: 0
+    sdist:
+      result: pass
+      entries: 48
+      retired_bootstrap_entries: 0
+    clean_wheel_install: pass
+    isolated_setup: pass
+    isolated_doctor: pass
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
@@ -510,6 +559,7 @@ authorization:
 next_action:
   milestone: cleanup_stop_condition_reached
   requirement: >-
-    Commit the exact zero-Olympus tree and stop. Replacement-runtime design,
-    Orca diagnostics, live configuration migration, historical-store handling,
-    integration and release remain separate later gates.
+    Commit the exact zero-Olympus, zero-v0.20-bootstrap tree and stop.
+    Replacement-runtime or instrumentation design, Orca diagnostics, live
+    configuration migration, historical-store handling, integration and release
+    remain separate later gates.

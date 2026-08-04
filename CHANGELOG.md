@@ -3,12 +3,13 @@
 ## [0.22.0] - Unreleased
 
 ### Removed
-- **Olympus executable boundary**: Removed the final 12 `olympus_v3` modules, including ACPManager, lifecycle database, server, configuration loader, CLI, observability hooks, package facade, profile plugins, templates, and console entry points.
-- **Legacy public tools**: Removed `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` rather than retaining stubs or a hidden fallback.
-- **Retired dependencies and procedures**: Removed MCP/ACP, LangGraph, LangChain, Graphify runtime dependencies and active skills/references that instructed installations to use the retired path.
+- **Olympus runtime**: Removed `src/olympus_v3`, ACPManager, its lifecycle database, MCP server, CLI, hooks, six profile plugins, global configuration, templates, entry points, and retired runtime dependencies.
+- **Public legacy tools**: Removed `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` without a compatibility shim or hidden fallback.
+- **v0.20 instrumentation bootstrap**: Removed the `aether-self-improvement` plugin, session hooks, strict v0.20 manifest reader, and manifest-bound release-evidence projector. Historical v0.20 evidence remains versioned.
+- **Retired dependencies and procedures**: Removed MCP/ACP, LangGraph, LangChain, Graphify, and the now-unconsumed PyYAML runtime dependency plus active skills/references that instructed installations to use the retired path.
 
 ### Changed
-- **Aether-native distribution**: Renamed the candidate distribution to `aether-agents` 0.22.0. It exports the 18-module native identity, contracts, evidence, effects, review, continuity, and default-off self-improvement core with no console entry point.
+- **Aether-native distribution**: Renamed the candidate distribution to `aether-agents` 0.22.0. It exports native identity, contracts, evidence, effects, review, continuity, and inert self-improvement ledger/causality/promotion primitives with no console entry point.
 - **Explicit capability gap**: Specialist profiles remain product contracts, but multi-agent execution and Ariadna curation are intentionally unavailable until an independently accepted runtime and facade exist.
 - **Current-facing truth**: Updated Hermes/profile policies, README, guides, website, templates, roadmap, inventory, and the amended PDR-0011 sequencing decision.
 
@@ -17,8 +18,8 @@
 - **Truthful doctor gate**: Doctor accepts an explicit Python interpreter, fails on missing Python/Hermes/Aether imports, and reports absent NVIDIA GPUs correctly.
 
 ### Testing
-- **Zero-residual candidate**: 273 repository tests pass; focused Ruff, compileall, shell/YAML parsing, release governance, and executable residual scanning pass.
-- **Distribution and installation**: The 23-entry wheel and 52-entry sdist contain no retired source or entry points. Clean wheel installation, isolated setup, idempotent rerun, wrapper isolation, and doctor smoke pass.
+- **Zero-residual candidate**: 228 repository tests pass; focused Ruff, compileall, shell/YAML parsing, release governance, and executable residual scanning pass.
+- **Distribution and installation**: The 20-entry wheel and 48-entry sdist contain no retired source, v0.20 bootstrap, or entry points. Clean wheel installation, isolated setup, idempotent rerun, wrapper isolation, and doctor smoke pass.
 
 ### Operational status
 - **No activation or data migration**: Orca was not activated, no specialist workers were created, and no live configuration or historical continuity/session store was migrated, truncated, or deleted.
