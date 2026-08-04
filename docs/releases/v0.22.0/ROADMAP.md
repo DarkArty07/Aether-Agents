@@ -520,9 +520,18 @@ Do not rerun expensive unchanged gates after documentation-only edits unless the
 
 ## 14. Current stop condition and next action
 
-R1–R5 are implemented in the isolated candidate. `src/olympus_v3`, its runtime,
-facades, plugins, templates, entry points and dependencies are absent. The
-M7 gates pass. The immediate action is to commit the exact clean tree and stop.
-Do not resume replacement-runtime design or Orca diagnostics in this cleanup
-task. Live configuration/state transition, candidate acceptance, integration,
-release, and activation remain separately gated.
+R1–R5 are implemented and committed in the isolated candidate.
+`src/olympus_v3`, its runtime, facades, plugins, templates, entry points and
+dependencies are absent, and the M7 source gates pass.
+
+The owner separately authorized replacement-runtime research on 2026-08-04.
+The verified product topology, native Hermes findings, non-blocking supervision
+model and implementation increments are recorded in
+`ORCA_SUPERVISED_SESSIONS_DESIGN.md`. This research does not mark M2 as started
+or passed.
+
+The immediate implementation gate is to resolve issue #150 and prove a pinned,
+isolated Orca runtime can cold-start, restart and stop without survivors. Only
+then should M2 proceed to substrate-neutral worktree identity and a read-only
+JSON adapter. No Aether Dispatch, live configuration/state transition,
+candidate acceptance, integration, release or activation is implied.

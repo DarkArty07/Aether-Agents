@@ -241,4 +241,5 @@ This approval does not authorize destructive data migration, mutation of histori
 - v0.22.0 manifest: `docs/releases/v0.22.0/STATUS.yaml`
 - Retirement inventory: `docs/releases/v0.22.0/OLYMPUS_RETIREMENT_INVENTORY.md`
 - Orca equivalence matrix: `docs/releases/v0.22.0/ORCA_EQUIVALENCE_MATRIX.md`
+- Supervised Hermes sessions design: `docs/releases/v0.22.0/ORCA_SUPERVISED_SESSIONS_DESIGN.md`
 - Migration roadmap: `docs/releases/v0.22.0/ROADMAP.md`

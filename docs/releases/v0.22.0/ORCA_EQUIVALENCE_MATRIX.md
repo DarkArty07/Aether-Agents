@@ -94,6 +94,31 @@ The current CLI contract explicitly provides:
 
 These are strong replacement seams for ACPManager, OlympusDB, the Harmonia service, and most of the kernel's operational persistence.
 
+### 4.1 Verified Hermes integration in the pinned AppImage
+
+Inspection of the pinned AppImage on 2026-08-04 established that Orca treats
+`hermes` as a native TUI agent. Its public startup path detects `hermes`, launches
+`hermes --tui`, and uses a bounded `hermes-query` transport that constructs
+`hermes chat --query=... --tui`. Orca also recognizes Hermes lifecycle/tool
+hooks and provides a managed `orca-status` plugin.
+
+This removes the need for an agent-identity shim, but does not complete the
+Aether adapter:
+
+- `worker-start --agent hermes` has no per-dispatch `HERMES_HOME` option, so
+  profile-bound Aether workers initially require low-level worktree, terminal,
+  and tracked Dispatch composition;
+- the installed Hermes 0.19.1 has no invocation-level `--profile` flag, so an
+  exact profile home must be supplied in each worker process environment;
+- Orca does not currently expose native cold-resume argv for Hermes sessions;
+- exact Hermes transcript sourcing is not guaranteed by `worker-read`;
+- the managed status plugin can report bounded prompts, assistant responses,
+  tool arguments, and tool results, which requires a privacy gate before live
+  credential-bearing profiles may use it.
+
+The product topology and implementation increments are specified in
+`ORCA_SUPERVISED_SESSIONS_DESIGN.md`.
+
 ## 5. Semantics Orca does not establish for Aether
 
 ### 5.1 Product authority

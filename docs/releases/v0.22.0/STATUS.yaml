@@ -147,6 +147,20 @@ orca:
     - terminals
     - dispatch_scoped_completion
     - recovery_and_takeover
+    - native_hermes_tui_agent
+    - hermes_query_startup
+    - managed_hermes_status_hooks
+  hermes_integration_research:
+    researched_on: "2026-08-04"
+    design: docs/releases/v0.22.0/ORCA_SUPERVISED_SESSIONS_DESIGN.md
+    installed_hermes_version: "0.19.1"
+    profile_selection: explicit_process_hermes_home_required
+    composed_worker_start_supports_per_dispatch_profile_env: false
+    native_hermes_cold_resume_verified: false
+    exact_hermes_transcript_source_verified: false
+    managed_status_hook_privacy_gate_required: true
+    aether_worktree_identity_extension_required: true
+    substrate_neutral_evidence_identity_required: true
   not_delegated_to_orca:
     - product_intent
     - task_contract_meaning
@@ -166,6 +180,7 @@ classification:
     - BLOCKED
   inventory: docs/releases/v0.22.0/OLYMPUS_RETIREMENT_INVENTORY.md
   equivalence: docs/releases/v0.22.0/ORCA_EQUIVALENCE_MATRIX.md
+  supervised_sessions_design: docs/releases/v0.22.0/ORCA_SUPERVISED_SESSIONS_DESIGN.md
 
 state_policy:
   preserve_in_place:
