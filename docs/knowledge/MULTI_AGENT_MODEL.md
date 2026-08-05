@@ -6,10 +6,11 @@
 > **Implementation authorization:** None
 
 > **v0.22.0 amendment:** This document preserves the approved v0.19 conceptual
-> and experimental model. PDR-0011 retired Harmonia, the kernel, Olympus, ACPManager,
-> and their executable surfaces. It is not a current runtime design and must not
-> be used to restore a compatibility path. Current product authority is defined in
-> `AUTHORITY.md`; replacement execution remains gated by the v0.22.0 roadmap.
+> and experimental model. PDR-0012 retired Harmonia, the kernel, Olympus, ACPManager,
+> the pre-emptively extracted native core, and their executable surfaces. It is not
+> a current runtime design and must not be used to restore a compatibility path.
+> Current product authority is defined in `AUTHORITY.md`; the Hermes-led Orca swarm
+> remains gated by the v0.22.0 roadmap.
 
 ## Purpose
 

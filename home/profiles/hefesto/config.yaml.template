@@ -29,6 +29,3 @@ display:
 max_iterations: 80
 approvals:
   mode: 'off'
-plugins:
-  enabled:
-  - aether

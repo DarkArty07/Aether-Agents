@@ -1,5 +1,5 @@
 schema_version: 1
-status: candidate_native_core_retirement_in_progress
+status: candidate_native_core_retirement_locally_verified
 approved_on: "2026-08-05"
 owner: Christopher (DarkArty07)
 
@@ -16,6 +16,7 @@ candidate:
     until the Hermes-led Orca swarm path passes independent gates.
   not_a_release_claim: true
   source_implementation_started: true
+  native_runtime_source_present: false
   orca_runtime_activated_for_aether: false
   isolated_orca_runtime_started_during_diagnostics: true
   isolated_orca_runtime_currently_running: false
@@ -246,8 +247,8 @@ known_blockers:
     github_issue: 149
     observation: >-
       Whole-repository Ruff reports 134 pre-existing errors concentrated in
-      unchanged skill scripts. The complete modified Python scope and all
-      Aether-native source pass Ruff.
+      unchanged skill scripts. The complete modified Python tooling and test
+      scope passes Ruff; the candidate has no production Python source tree.
     impact: >-
       The global Ruff gate remains red independently of Olympus retirement;
       the cleanup cut does not mix unrelated skill-script rewrites.
@@ -633,11 +634,63 @@ retirement_cuts:
       ambient_source_override_isolation: pass
     historical_store_mutation: none
     runtime_service_or_credential_effects: none
+  R4_2_disconnected_aether_native_core_retirement:
+    status: locally_verified
+    governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
+    github_issue: 160
+    observed_red: 5_failed_8_passed
+    deleted_native_python_modules: 15
+    deleted_native_source_lines: 5500
+    deleted_native_nonblank_source_lines: 4802
+    deleted_profile_plugin_files: 12
+    deleted_obsolete_test_files: 18
+    deleted_obsolete_test_lines: 3438
+    deleted_residual_dependency_file: src/requirements.txt
+    removed_runtime_dependencies:
+      - aiosqlite
+      - langgraph
+      - langchain-core
+    python_distribution_present: false
+    build_backend_present: false
+    editable_aether_install_present: false
+    source_directory_present: false
+    profile_continuity_plugins_present: 0
+    registered_aether_mcp_tools: 0
+    replacement_runtime_present: false
+    orca_activated: false
+    focused_green: 25_passed
+    full_suite: 25_passed
+    full_suite_duration_seconds: 0.37
+    targeted_ruff: pass
+    compileall_tooling_and_tests: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    executable_residual_scan: pass_zero
+    current_markdown_links:
+      files: 32
+      checked: 71
+      broken: 0
+    isolated_setup:
+      result: pass
+      passes: 2
+      generated_configs: 7
+      placeholders: 0
+      profile_plugins: 0
+      idempotent_rerun: pass
+    isolated_wrapper_runtime: pass
+    isolated_doctor: pass
+    protected_aether_db:
+      path: .aether/aether.db
+      size_bytes: 53248
+      sha256_before: 30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc
+      sha256_after: 30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc
+      mutation: none
+    runtime_service_or_credential_effects: none
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
-  M1_aether_native_extraction: locally_complete
-  M2_hardened_orca_adapter_vertical_slice: pending
+  M1_preemptive_aether_native_extraction: superseded_and_retired
+  M2_minimal_observed_orca_integration_seam: pending
   M3_orca_lifecycle_parity: pending
   M4_ariadna_reimplementation: pending
   M5_active_consumer_and_state_transition: pending
@@ -647,8 +700,8 @@ milestones:
 
 authorization:
   analysis_and_roadmap: authorized
-  local_aether_native_implementation: authorized
-  local_orca_adapter: authorized
+  disconnected_aether_native_implementation: retired_not_authorized
+  minimal_observed_orca_integration_after_M0: authorized
   isolated_hardened_orca_pilot: authorized
   reversible_local_retirement_after_gate: authorized
   destructive_data_migration: not_authorized

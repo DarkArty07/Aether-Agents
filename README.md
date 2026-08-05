@@ -12,7 +12,13 @@
 
 **[hermes-agent](https://github.com/NousResearch/hermes-agent)** is a self-improving AI agent framework by [Nous Research](https://nousresearch.com). It handles LLM routing, tool execution, memory, skills, cron scheduling, and multi-platform gateways (Telegram, Discord, Slack, CLI). You give it a persona (SOUL.md), a config (config.yaml), and API keys — it becomes an autonomous agent.
 
-**Aether Agents** adds product authority, project identity, continuity, evidence, review, effect controls, specialist profiles, and inert self-improvement primitives to hermes-agent. The v0.22.0 candidate has physically retired the legacy Olympus/ACP runtime and the obsolete v0.20 self-improvement plugin bootstrap. Multi-agent execution, automatic self-improvement instrumentation, `talk_to`, `discover`, and ACP-backed Ariadna curation are therefore intentionally unavailable until replacements pass their separate acceptance gates. No hidden fallback remains.
+**Aether Agents** defines the product vision, Hermes behavior, specialist roles,
+participation policy, skills, verification expectations, and release authority for
+an AI software team. The v0.22.0 candidate has physically retired Olympus/ACP and
+the disconnected Python core extracted from it. The target is a Hermes-led Orca
+swarm, but multi-agent execution and Ariadna curation remain intentionally
+unavailable until that path passes its separate isolation, lifecycle, cleanup,
+recovery, and rollback gates. No hidden fallback remains.
 
 </div>
 
@@ -35,37 +41,43 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | | Feature | Description |
 |---|---------|-------------|
 | 🧠 | **6 Specialized Daimons** | Each a hermes-agent instance with its own model, persona (SOUL.md), and tools. Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. |
-| 📜 | **Aether Continuity** | Project-scoped SQLite state, explicit session identity, bounded context injection, issues, decisions, and file-change evidence. |
-| 🧭 | **Product Authority** | Substrate-neutral contracts, budgets, evidence, protected effects, review, closure, and human acceptance boundaries. |
-| 🧹 | **No Legacy Runtime** | The Olympus package, ACP manager, lifecycle database, hooks, MCP facade, plugins, templates, and entry points are absent. |
+| 🧭 | **Product Layer** | Hermes behavior, product decisions, specialist participation, verification policy, semantic acceptance, and release authority. |
+| 🐋 | **Orca Swarm Target** | Hermes will create one Run, dispatch independent Tasks before waiting, work alongside agents, and use Orca messaging instead of brokering every interaction. |
+| 🧹 | **No Native Runtime** | Olympus, ACP, the extracted Python core, continuity plugins, MCP facade, package distribution, and entry points are absent. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
-| 🛠️ | **89 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
+| 🛠️ | **95 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
-| 🔬 | **Inert Self-Improvement Primitives** | Schema-compatible redacted ledger, deterministic comparison, isolated candidates, and human promotion authority; no plugin or automatic instrumentation path. |
+| 🗃️ | **Protected History** | Existing `.aether` stores and release evidence are preserved without an active candidate reader, writer, migration, or deletion path. |
 | ⏰ | **Cron Scheduling** | Automated tasks with delivery to Telegram, Discord, Slack. Reports, audits, maintenance — unattended. |
 | 💬 | **Multi-Platform** | CLI, Telegram, Discord, Slack, WhatsApp. All via hermes-agent gateway. |
 
 ---
 
-## 🏗️ Current candidate architecture
+## 🏗️ Target architecture and current boundary
 
 ```
 User
   │
   ▼
 Hermes (hermes-agent)
-  │
-  ├── Aether product contracts / authority / evidence
-  ├── Aether continuity hooks ──────────────┐
-  └── inert ledger / causality / promotion  │
-                                           ▼
-                                  project-local .aether/
+  ├── interprets product intent and decomposes work
+  ├── implements bounded work in parallel
+  └── creates and supervises one Orca Run
+                      │
+            independent Tasks / Dispatches
+             ┌────────┴────────┐
+             ▼                 ▼
+         Worker A  ← messages → Worker B
+             └────────┬────────┘
+                      ▼
+          one feature integration branch
 ```
 
-- **`aether_agents`** owns product semantics and continuity; it has no Olympus or Orca imports.
-- **`.aether/aether.db`** preserves project continuity without migrating existing rows.
-- **`.aether/self_improvement.db`** remains schema 5 and untouched; no candidate plugin opens it automatically.
-- **Specialist profiles** remain versioned, but no runtime in this candidate spawns or controls them.
+- **Aether** owns product meaning through Hermes, profiles, skills, decisions, and acceptance policy—not through a parallel coordination kernel.
+- **Orca** is intended to own Run, Task, Dispatch, messages, workers, terminals, worktrees, recovery, and cleanup mechanics.
+- **One feature branch** is the integration line; potentially conflicting writers use Orca child worktrees, while strictly disjoint scopes may share the current checkout.
+- **Existing `.aether` stores** are preserved and untouched; this candidate has no continuity or self-improvement reader/writer.
+- **Specialist profiles** remain versioned, but no accepted runtime in this candidate invokes them yet.
 - **Historical v0.19/v0.20 evidence** remains under `docs/releases/` and does not describe an active execution path.
 
 ---
@@ -92,14 +104,14 @@ candidate does not currently provide a runtime that invokes them.
 Aether-Agents/
 ├── home/
 │   ├── profiles/         ← Daimon configs (config.yaml.template)
-│   ├── skills/            ← 89 pre-built skills
+│   ├── skills/            ← 95 pre-built skills
 │   ├── SOUL.md            ← Hermes orchestrator personality
-│   └── .aether/           ← Project continuity DB (gitignored)
-├── src/aether_agents/     ← contracts, continuity, evidence, effects, review
+│   └── config.yaml.template ← Hermes configuration template
 ├── scripts/
-│   ├── setup.sh           ← Full automated setup
-│   ├── update.sh          ← Git pull + pip upgrade
+│   ├── setup.sh           ← Install Hermes + generate configs/wrappers
+│   ├── update.sh          ← Git pull + Hermes/config update
 │   └── start-gateway.sh  ← Systemd gateway manager
+├── .aether/               ← protected local/historical state (gitignored)
 ├── docs/guides/           ← Installation, configuration, quickstart
 └── Makefile               ← setup, update, doctor, clean, test
 ```
@@ -129,8 +141,8 @@ Release plans, benchmarks, handoffs, and evidence remain under `docs/releases/`;
 
 | Command | What it does |
 |---------|-------------|
-| `bash scripts/setup.sh` | Full setup: venv, pip, config, wrappers |
-| `bash scripts/update.sh` | Git pull + pip upgrade (preserves config) |
+| `bash scripts/setup.sh` | Install Hermes, generate config, and create wrappers |
+| `bash scripts/update.sh` | Git pull + Hermes upgrade + config check |
 | `bash scripts/start-gateway.sh start` | Start/stop/restart gateway service |
 | `make doctor` | Verify installation health |
 | `make setup` | Shortcut for setup.sh |
@@ -162,7 +174,7 @@ stack, or separate memory authority is required by the candidate.
 
 **Aether Agents** is [MIT licensed](LICENSE) © Christopher (DarkArty07).
 
-Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com) (MIT). Aether Agents adds product contracts, project continuity, evidence and review boundaries, specialist profiles, self-improvement instrumentation, and automated setup.
+Built on [hermes-agent](https://github.com/NousResearch/hermes-agent) by [Nous Research](https://nousresearch.com) (MIT). Aether Agents adds product vision, Hermes policy, specialist profiles, skills, verification and acceptance doctrine, release governance, and automated setup. Orca is the intended multi-agent execution substrate after separate acceptance.
 
 ---
 

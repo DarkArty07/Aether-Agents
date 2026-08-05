@@ -1,14 +1,14 @@
 ---
 name: aether-agents-orchestration
-description: "Use when coordinating Aether specialists. Enforces the current runtime boundary."
-version: 2.0.0
+description: "Use when coordinating Aether specialists. Enforces the Hermes-Orca boundary."
+version: 2.1.0
 ---
 
 # Aether execution boundary
 
 ## Current truth
 
-The v0.22.0 candidate has no specialist execution runtime, Aether MCP facade, or compatibility fallback. `talk_to`, `discover`, ACPManager, Harmonia, and ACP-backed curation are absent, not disabled.
+The v0.22.0 candidate has no specialist execution runtime, native Python core, continuity plugin, Aether MCP facade, or compatibility fallback. `talk_to`, `discover`, ACPManager, Harmonia, and ACP-backed curation are absent, not disabled. PDR-0012 assigns product judgment to Hermes/Aether and targets Orca for Run, Task, Dispatch, worker, message, worktree, recovery, and cleanup mechanics after separate acceptance.
 
 ## Procedure
 
@@ -18,7 +18,8 @@ The v0.22.0 candidate has no specialist execution runtime, Aether MCP facade, or
 4. If the task materially requires an unavailable specialist, stop with an explicit capability gap.
 5. Never restore a retired module, tool name, wrapper, plugin, database, or process solely to obtain delegation.
 6. Never use another project's runtime or profile as an Aether fallback.
-7. Preserve profile definitions and Aether product contracts independently of execution availability.
+7. Preserve profile definitions, skills, product decisions, and acceptance policy independently of execution availability.
+8. When the accepted Orca path exists, create all independent Tasks and Dispatches before waiting, allow direct/group worker messaging, and use child worktrees for potentially conflicting writers under one feature integration branch.
 
 ## Verification
 
@@ -27,6 +28,7 @@ Before claiming specialist execution is available, require deterministic evidenc
 ## Forbidden shortcuts
 
 - compatibility shims under a renamed package;
+- a disconnected Aether policy kernel or pre-emptive stable adapter API;
 - hidden ACP or legacy-store fallback;
 - treating a profile definition as a running worker;
 - treating terminal/process completion as semantic acceptance;

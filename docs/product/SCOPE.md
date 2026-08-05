@@ -66,7 +66,7 @@ Approved placement:
 - `MEMORY.md` for stable environment facts and durable conventions;
 - Hermes skills for reusable procedures;
 - version-controlled project documents for vision, scope, requirements, architecture, and durable decisions;
-- `.aether` for hot project continuity;
+- version-controlled project documents for hot project continuity; existing `.aether` stores are protected historical/local state without a candidate reader or writer;
 - session history for historical conversation recall.
 
 Hermes is the global user-profile custodian. Daimons may report observations, but they do not own independent global profiles.

@@ -4,7 +4,7 @@ This file is the canonical project context. It is read automatically by hermes-a
 
 ## v0.22.0 Olympus retirement candidate
 
-The candidate contains no `src/olympus_v3`, ACPManager, lifecycle database, Olympus hooks, MCP facade, CLI, profile plugins, configuration block, entry point, or runtime dependency. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided by the candidate. Identity, contracts, budgets, evidence, effects, review, closure, continuity, and inert self-improvement ledger/causality/promotion primitives remain under `src/aether_agents`. The v0.20 self-improvement plugin, hooks, manifest reader, and release-evidence projector are also absent. Multi-agent execution is intentionally unavailable until a replacement passes isolation, lifecycle, cleanup, recovery, and rollback gates. Do not create a compatibility shim or hidden fallback.
+The candidate contains no `src/olympus_v3`, `src/aether_agents`, ACPManager, lifecycle database, Olympus or Aether continuity hooks, MCP facade, CLI, profile plugins, Python distribution, entry point, or runtime dependency. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided. PDR-0012 supersedes the pre-emptive native-core extraction: Aether remains the Hermes product layer—vision, profiles, policies, skills, routing judgment and semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch, worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution is intentionally unavailable until that Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery and rollback gates. Do not create a compatibility shim, hidden fallback, or disconnected policy kernel.
 
 ## v0.19.0 experimental coordination closeout
 
@@ -18,7 +18,7 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 **Operating policy** — no specialist execution runtime is registered in this candidate. Hermes may perform bounded implementation directly; work that materially requires an unavailable specialist stops as an explicit capability gap. Never introduce a hidden `talk_to`, Harmonia, ACP, or renamed fallback. Preserve and classify failures, verify cleanup, and accumulate evidence without presuming or approving the replacement architecture. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md`; `docs/releases/v0.20.0/CYCLE.yaml` is historical evidence, not an active candidate manifest.
 
-**What is enforced by code, and what is not.** The candidate preserves the schema-v5 redacted project-local ledger plus deterministic causality and human-promotion primitives. They are inert library components: no plugin initializes them, no hook records sessions, no active manifest grants a cycle, and no release-evidence projector runs. Historical Harmonia wire classification and the entire v0.20 executable bootstrap were removed. The remaining primitives do **not** implement automatic project participation, takeover gating, failure-class classification, repair verification, retry correlation, an evaluator, runtime before/after execution, or rollback. No causal claim that Aether improved can currently be derived from them.
+**What is enforced by code, and what is not.** The candidate contains no self-improvement runtime, ledger implementation, hook, active manifest, evaluator, causality engine, promotion implementation, or release-evidence projector. Existing schema-v5 databases and v0.20 evidence are preserved as historical/local data but have no candidate reader or writer. PDR-0009 remains product policy only. No causal claim that Aether improved can currently be derived from the candidate.
 
 The `aether-self-improvement` plugin itself is absent, not merely disabled. A clean installation has no supported self-improvement activation path, general delegation path, or Aether MCP facade.
 
@@ -262,47 +262,20 @@ Never commit:
 - `home/profiles/hermes/.env` — Secrets (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 
-## .aether — Project Continuity
+## .aether — Preserved project state
 
-`.aether/` is the project state database that provides hot start context to Daimons.
-Lives at `PROJECT_ROOT/.aether/` (gitignored).
+Existing `PROJECT_ROOT/.aether/` data is gitignored and protected historical/local
+state. The v0.22.0 candidate has no plugin, hook, MCP facade, or Python reader/writer
+for `aether.db`, `self_improvement.db`, or `CONTEXT.md`. Source retirement does not
+authorize opening, rewriting, migrating, truncating, or deleting those stores.
 
-### How it works
+The historical database schema may contain `hot_state`, `sessions`, `file_changes`,
+`decisions`, and `issues`; that schema is evidence about prior releases, not an
+active candidate API. Durable candidate findings must be recorded in versioned
+status/evidence or the project issue tracker until a separately accepted continuity
+surface exists. Never edit `.aether/CONTEXT.md` or its databases manually as a
+shortcut.
 
-When a profile is launched independently with the `aether` plugin enabled, its hooks inject project context automatically:
-- `pre_llm_call` (first turn): reads hot_state + recent sessions, injects as [.aether Hot Start] context
-- `on_session_start`: creates a session row in aether.db
-- `post_tool_call`: detects write_file/patch/git commit, records file_changes
-- `on_post_llm_call` (first turn): updates hot_state.last_request
-- `on_session_end`: updates session status and hot_state
-
-The candidate does not bundle a Hermes continuity MCP facade. Do not write `.aether` manually or restore the retired facade as a shortcut.
-
-### Database tables
-
-- `hot_state` — single-row project snapshot (phase, task, last session, blockers, etc.)
-- `sessions` — per-Daimon session history (agent, request, result, files modified)
-- `file_changes` — file write/patch/commit tracking (session, agent, path, action)
-- `decisions` — architectural decisions (title, rationale, alternatives, status)
-- `issues` — blockers and errors (description, resolution, status)
-
-### Observations and Issues
-
-When an authorized continuity surface is available, Hermes records important findings in the project continuity database. A clean v0.22.0 candidate installation has no such Hermes facade; until a native facade is accepted, preserve durable candidate findings in versioned status/evidence or the project issue tracker rather than mutating the database manually.
-
-Durable findings include:
-
-- **Observations** — architectural insights, codebase patterns discovered during work
-- **Discomforts** — inconsistencies, smells, or potential problems noticed
-- **Debug findings** — root causes identified during systematic debugging
-- **Preferences** — user-stated or inferred preferences that should persist
-
-**Rule:** If a finding would be valuable to a *future session*, it belongs in durable project evidence, not just in ephemeral memory.
-
-### Plugin and candidate runtime
-
-- **Plugin (`aether`)**: configured in all six specialist profiles; it acts only if a profile is launched independently.
-- **Hermes MCP facade**: absent from the candidate.
-- **Ariadna curation**: unavailable until an Aether-native invocation path is accepted.
-
-All specialist templates include only `aether` in `plugins.enabled`; no Olympus plugin remains.
+All six specialist templates have no Aether or Olympus plugin activation. Ariadna
+curation and general specialist invocation remain unavailable until the Hermes-led
+Orca path is independently accepted.

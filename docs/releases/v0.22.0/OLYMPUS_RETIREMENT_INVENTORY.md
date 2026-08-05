@@ -422,3 +422,38 @@ Candidate delta after R4:
 | Aether-native source lines | 0 | 6,338 | 6,242 | 5,500 |
 | Registered Aether MCP tools | 6 | 5 | 0 | 0 |
 | Executable self-improvement plugins | 1 | 1 | 1 | 0 |
+
+### R4.2 — Disconnected native core: LOCALLY VERIFIED
+
+PDR-0012 superseded the earlier decision to retain a pre-emptive Aether Python
+decision plane. The final current-surface audit found no Hermes→Orca consumer of
+the extracted package. R4.2 therefore removes the package before implementing an
+Orca seam:
+
+- 15 native Python modules, 5,500 physical lines and 4,802 nonblank lines;
+- six profile continuity plugins comprising 12 tracked files;
+- 18 implementation-only test files comprising 3,438 physical lines;
+- `src/requirements.txt`, `aiosqlite`, editable installation, package build and
+  release artifact upload;
+- active profile and documentation claims that `.aether` is a writable candidate
+  API.
+
+The removal contract was observed RED (`5 failed`, `8 passed`) and then GREEN.
+All `25/25` retained tests, Ruff, compileall, shell/YAML parsing, release
+governance, residual scans, two isolated setup passes, seven configs, wrapper and
+doctor checks pass. The candidate now has zero production `src/` files, zero
+profile runtime plugins, zero Aether MCP tools and no Python distribution.
+
+The local `.aether/aether.db` remained 53,248 bytes with SHA-256
+`30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc`.
+No runtime, credential, service, store, deployment or activation effect occurred.
+
+| Metric | After R4.1 | After R4.2 |
+|---|---:|---:|
+| Olympus Python modules | 0 | 0 |
+| Aether-native Python modules | 15 | 0 |
+| Aether-native source lines | 5,500 | 0 |
+| Production `src/` files | 16 | 0 |
+| Profile Aether plugin files | 12 | 0 |
+| Python runtime dependencies | 1 | 0 |
+| Registered Aether MCP tools | 0 | 0 |

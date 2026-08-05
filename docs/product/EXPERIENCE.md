@@ -231,9 +231,9 @@ The UI is not a source of truth.
 | UI information | Authoritative source |
 |---|---|
 | Product vision and decisions | Version-controlled product docs and decision records |
-| Contract, task, gate, retry, and semantic state | Aether-native contracts and evidence; no active execution projection in v0.22.0 |
+| Contract, task, gate, retry, and semantic state | Version-controlled Aether policy now; future Orca operational state plus Hermes semantic acceptance after separate validation |
 | Retired process and session state | Read-only historical release/runtime evidence only |
-| Current project continuity | `.aether` |
+| Current project continuity | Version-controlled project documents and Hermes session context; existing `.aether` stores are protected historical/local state |
 | User profile and global memory | Hermes-native memory stores |
 | Source and artifact content | Repository and artifact stores |
 | Test or build claims | Executed reports and receipts |

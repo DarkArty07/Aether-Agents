@@ -160,7 +160,7 @@ if [ "${1:-}" = "--version" ]; then
 elif [[ "${2:-}" == *"sys.version_info"* ]]; then
     echo "3.11.15"
 else
-    echo "✓ aether_agents"
+    echo "✓ product-assets"
 fi
 """
     fake_python = fake_bin / "python"
@@ -191,4 +191,4 @@ fi
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "local-hermes" in result.stdout
-    assert "✓ aether_agents" in result.stdout
+    assert "✓ product-assets" in result.stdout

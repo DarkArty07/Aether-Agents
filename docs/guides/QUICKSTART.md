@@ -37,34 +37,26 @@ aether
 Or run directly without the wrapper:
 
 ```bash
-home/.venv-hermes/bin/hermes --profile orchestrator
+HERMES_HOME="$PWD/home" home/.venv-hermes/bin/hermes
 ```
 
 ## 4. Verify
 
-Verify the installed Aether-native package and templates:
+Verify Hermes, the root template, all six profile templates, and the absence of a native runtime plugin:
 
 ```bash
 make doctor
 ```
 
-The v0.22.0 candidate does not expose a multi-agent execution runtime. Specialist profiles are installed, but no process discovers or spawns them until a replacement runtime is accepted.
+The v0.22.0 candidate does not expose a multi-agent execution runtime. Specialist profiles are installed as product contracts, but no process discovers or spawns them until the Hermes-led Orca path is accepted.
 
-Quick smoke test:
+## 5. Current execution boundary
 
-```bash
-make doctor
-```
-
-## 5. First Delegation
-
-Talk to a Daimon right from the Hermes prompt:
-
-```
-> Talk to Hefesto about implementing a feature
-```
-
-Or use `delegate_task` in a session to hand work to a specific agent.
+Hermes performs bounded work directly. Do not use `talk_to`, `delegate_task`, a
+profile wrapper, or a restored compatibility shim to simulate specialist
+execution. The target is one Hermes-supervised Orca Run with independent Tasks,
+worker-to-worker messages, and child worktrees for potentially conflicting
+writers; that target is not activated in this candidate.
 
 ## 6. Gateway (Optional)
 

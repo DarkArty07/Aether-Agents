@@ -1,6 +1,7 @@
 # Aether Native Core Retirement Implementation Plan
 
 > **For Hermes:** Execute this plan through the current task contract; use `milestone-implementation-governance` for the atomic retirement and exact-candidate closure.
+> **Status:** EXECUTED — LOCALLY VERIFIED
 
 **Goal:** Remove the disconnected Aether-native Python core extracted from Olympus while preserving Aether's Hermes profiles, skills, configuration, operational tooling, historical evidence, and future Orca swarm boundary.
 

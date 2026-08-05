@@ -1,11 +1,12 @@
 # PDR-0011: Orca execution substrate and progressive Olympus retirement
 
-- **Status:** APPROVED
+- **Status:** PARTIALLY SUPERSEDED
 - **Date:** 2026-08-03
 - **Amended:** 2026-08-03 — retire the remaining executable runtime before replacement design
+- **Superseded:** 2026-08-05 — PDR-0012 retires the pre-emptive native core and stable adapter API
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** The assumption that Olympus, ACPManager, Harmonia, or the v0.19.x kernel must remain Aether's future execution substrate
-- **Superseded by:** None
+- **Superseded by:** PDR-0012 for the retained Python decision plane, continuity implementation, self-improvement primitives, and pre-designed adapter API; progressive Olympus retirement and historical preservation remain authoritative
 
 ## Context
 

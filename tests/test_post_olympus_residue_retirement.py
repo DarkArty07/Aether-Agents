@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,17 @@ CURRENT_PRODUCT_DOCS = (
     ROOT / "docs" / "product" / "PRINCIPLES.md",
     ROOT / "docs" / "product" / "EXPERIENCE.md",
     ROOT / "docs" / "knowledge" / "AUTHORITY.md",
+)
+
+PROFILE_TEMPLATES = tuple(sorted((ROOT / "home" / "profiles").glob("*/config.yaml.template")))
+PROFILE_AETHER_PLUGINS = tuple(sorted((ROOT / "home" / "profiles").glob("*/plugins/aether")))
+
+CURRENT_NATIVE_CORE_SURFACES = (
+    ROOT / "AGENTS.md",
+    ROOT / "README.md",
+    ROOT / "CONTRIBUTING.md",
+    ROOT / "docs" / "guides" / "INSTALLATION.md",
+    ROOT / "website" / "index.html",
 )
 
 
@@ -125,4 +137,82 @@ def test_current_documentation_indexes_do_not_plan_olympus_docs() -> None:
         for path in index_paths
         if "OLYMPUS_" in path.read_text(encoding="utf-8")
     ]
+    assert hits == []
+
+
+def test_disconnected_aether_native_runtime_and_profile_plugins_are_absent() -> None:
+    retired = (ROOT / "src", *PROFILE_AETHER_PLUGINS)
+    remaining = [str(path.relative_to(ROOT)) for path in retired if path.exists()]
+
+    assert len(PROFILE_AETHER_PLUGINS) == 0
+    assert remaining == []
+
+
+def test_profile_templates_do_not_enable_aether_continuity_plugin() -> None:
+    assert len(PROFILE_TEMPLATES) == 6
+    enabled = [
+        str(path.relative_to(ROOT))
+        for path in PROFILE_TEMPLATES
+        if re.search(r"(?m)^\s*-\s+aether\s*$", path.read_text(encoding="utf-8"))
+    ]
+
+    assert enabled == []
+
+
+def test_repository_is_not_an_aether_python_runtime_distribution() -> None:
+    pyproject_path = ROOT / "pyproject.toml"
+    pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    text = pyproject_path.read_text(encoding="utf-8").lower()
+
+    assert "project" not in pyproject
+    assert "build-system" not in pyproject
+    assert "aiosqlite" not in text
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.22.0"
+
+
+def test_operations_and_ci_do_not_install_import_or_build_removed_runtime() -> None:
+    surfaces = (
+        ROOT / "scripts" / "setup.sh",
+        ROOT / "scripts" / "update.sh",
+        ROOT / "Makefile",
+        ROOT / ".github" / "PULL_REQUEST_TEMPLATE.md",
+        ROOT / ".github" / "workflows" / "test.yml",
+        ROOT / ".github" / "workflows" / "release.yml",
+    )
+    forbidden = (
+        "aether_agents",
+        "install_aether_agents",
+        "reinstall_aether_agents",
+        "pip install -e .",
+        'pip install -e ".[dev]"',
+        "python -m build",
+        "ruff check src",
+        "compileall -q src",
+    )
+    hits: list[str] = []
+    for path in surfaces:
+        text = path.read_text(encoding="utf-8")
+        for needle in forbidden:
+            if needle in text:
+                hits.append(f"{path.relative_to(ROOT)}: {needle}")
+
+    assert hits == []
+
+
+def test_current_surfaces_do_not_advertise_removed_native_core() -> None:
+    forbidden_claims = (
+        "remain under `src/aether_agents`",
+        "`aether_agents` owns product semantics",
+        "**`aether_agents`** — product identity",
+        "installs the `aether_agents` package",
+        "native <code>aether_agents</code> package owns",
+        "src/aether_agents/     ←",
+    )
+    hits: list[str] = []
+    for path in CURRENT_NATIVE_CORE_SURFACES:
+        text = path.read_text(encoding="utf-8")
+        for claim in forbidden_claims:
+            if claim in text:
+                hits.append(f"{path.relative_to(ROOT)}: {claim}")
+
     assert hits == []

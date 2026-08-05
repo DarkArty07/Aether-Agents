@@ -11,8 +11,10 @@
 This audit records the coordination-maintenance baseline that preceded v0.22.0.
 Its retained-code table is historical: the v0.22.0 R2 cut removed the Harmonia
 public/runtime wrapper and bounded demo. R3a then moved Aether-owned identity,
-contracts, budgets, evidence, effects, review and closure to `aether_agents`;
-R3b then removed the generic Olympus kernel and its package facade.
+contracts, budgets, evidence, effects, review and closure to a temporary native
+package; R3b removed the generic Olympus kernel and its package facade. PDR-0012
+subsequently retired that disconnected native package as well. None of these
+historical classifications defines a current executable surface.
 
 The maintenance goal is not to advance multi-agent coordination. It is to establish a smaller, truthful, testable baseline before new coordination work begins.
 

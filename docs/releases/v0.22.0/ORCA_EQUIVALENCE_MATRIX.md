@@ -1,9 +1,14 @@
 # v0.22.0 Aether–Orca Equivalence Matrix
 
-> **Status:** CONTRACT ANALYSIS; ORCA NOT YET ACTIVATED FOR AETHER  
+> **Status:** SUPERSEDED CONTRACT ANALYSIS; ORCA NOT YET ACTIVATED FOR AETHER
 > **Date:** 2026-08-03  
 > **Orca CLI:** `/home/darkarty/.local/bin/orca-ide`  
 > **Pinned AppImage digest:** `sha256:813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33`
+
+> **Supersession:** PDR-0012 rejects the pre-emptive native core and stable
+> adapter API proposed below. The verified Orca capability inventory remains
+> evidence, but any adapter must be introduced only from an observed integration
+> need and must not duplicate Orca lifecycle mechanics.
 
 ## 1. Boundary
 
@@ -174,7 +179,7 @@ Run and terminal identity do not replace canonical Aether project identity. The 
 - no cross-project worktree or profile reference;
 - no unapproved remote or credential-bearing environment.
 
-## 6. Minimum stable adapter contract
+## 6. Historical adapter proposal (superseded)
 
 The adapter should be introduced under an Aether-owned namespace such as:
 

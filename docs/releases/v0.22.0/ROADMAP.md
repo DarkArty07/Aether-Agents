@@ -449,9 +449,9 @@ Remove:
 - `olympus` and `olympus-v3` entry points;
 - the `olympus-mcp` package identity.
 
-The package is now `aether-agents` 0.22.0 with zero Aether MCP tools. The final
-M7 residual and wheel gates prove zero active imports, entry points, plugins,
-templates and current-facing references.
+At this historical cut the candidate became the `aether-agents` 0.22.0 Python
+distribution with zero Aether MCP tools. PDR-0012 later retired that disconnected
+distribution in R4.2.
 
 ### Cut R4.1 — Obsolete v0.20 self-improvement bootstrap
 
@@ -465,18 +465,35 @@ Remove:
 - the manifest-bound release-evidence projector;
 - tests whose only acceptance subject was that executable bootstrap.
 
-Preserve the schema-v5 ledger, deterministic causality comparison, disposable
-candidate, and human-promotion primitives as inert libraries. Preserve
-`.aether/self_improvement.db` and all v0.20 reports byte-for-byte. Do not design
-or activate replacement instrumentation in this retirement cut.
+This cut initially preserved the schema-v5 ledger, deterministic causality
+comparison, disposable candidate, and human-promotion primitives as inert
+libraries. R4.2 subsequently removed those unconsumed implementations while
+preserving `.aether/self_improvement.db` and all v0.20 reports byte-for-byte.
+
+### Cut R4.2 — Disconnected Aether native core
+
+**Status: LOCALLY VERIFIED.**
+
+PDR-0012 supersedes the pre-emptive native-core requirement. The candidate removes:
+
+- all 15 native Python modules (5,500 physical lines);
+- all six two-file profile continuity plugins;
+- 18 implementation-only test files;
+- `src/requirements.txt`, `aiosqlite`, editable installation, package build and artifact upload;
+- current documentation and profile claims that `.aether` is an active API.
+
+The contract was observed RED (`5 failed`, `8 passed`) and then GREEN. The exact
+working tree passes `25/25` retained tests, Ruff, compileall, shell/YAML parsing,
+release governance, zero-runtime scanning, two isolated setup passes, seven
+resolved configs, wrapper isolation and candidate-local doctor. Existing
+`.aether/aether.db` remains 53,248 bytes with SHA-256
+`30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc`.
 
 ## 11. Milestone M7 — Dependency and documentation cleanup
 
 **Status: LOCALLY COMPLETE.** Source dependencies, templates,
 setup/update/doctor, README, guides, active context and website are migrated.
-The exact R4.1 tree passes 228 tests, focused Ruff, compileall, shell/YAML
-parsing, governance, zero-retired-bootstrap scanning, a 20-entry wheel, a
-48-entry sdist, clean wheel installation, isolated setup and doctor.
+R4.1's package evidence remains historical; R4.2 removes the package itself.
 
 **Post-retirement cleanup: LOCALLY VERIFIED.** Issues #154–#158 remove the
 remaining active Honcho and Graphify installation/configuration surfaces,
@@ -489,16 +506,14 @@ sdist, clean wheel installation, two isolated setup passes with seven resolved
 configs, and a candidate-local doctor smoke. No runtime, service, credential,
 historical store, or local data was changed.
 
-After source retirement:
+The current content/config product gate is:
 
-1. prove whether `agent-client-protocol`, LangGraph and checkpoint dependencies have any remaining consumer;
-2. remove only dependencies with zero imports and zero supported behavior;
-3. rebuild wheel and sdist;
-4. install the wheel in a clean environment;
-5. run setup, doctor and one local no-secret smoke;
-6. update README, installation, configuration, architecture, onboarding and website;
-7. retain historical release references unchanged;
-8. verify package metadata and commands use the Aether identity.
+1. no production `src/` tree, runtime dependency, plugin, entry point, or editable install;
+2. tooling-only `pyproject.toml` plus `VERSION` product metadata;
+3. seven valid config outputs and idempotent setup;
+4. candidate-local wrapper and doctor;
+5. current README, guides, product policy, profiles and website aligned with PDR-0012;
+6. historical release references and protected stores unchanged.
 
 ## 12. Milestone M8 — Exact candidate acceptance
 
@@ -508,7 +523,7 @@ After source retirement:
 - focused tests for every migrated boundary;
 - full suite;
 - Ruff and compilation;
-- build and isolated-wheel import/install;
+- tooling/test compilation and explicit package absence;
 - clean setup/update/doctor smoke;
 - synthetic and bounded Aether-Orca E2E;
 - restart/recovery evidence;
@@ -523,7 +538,7 @@ After source retirement:
 
 - `IMPLEMENTED — DEFAULT OFF`: source transition complete, runtime not activated;
 - `CANDIDATE ACCEPTED`: exact tree passes all source and pilot gates;
-- `RELEASE READY`: package/version/release evidence reconciled;
+- `RELEASE READY`: product version, source tree and release evidence reconciled;
 - `ACTIVATED`: separate operational authority and live evidence; not implied by release.
 
 ## 13. Verification cadence
@@ -544,18 +559,18 @@ Do not rerun expensive unchanged gates after documentation-only edits unless the
 
 ## 14. Current stop condition and next action
 
-R1–R5 are implemented and committed in the isolated candidate.
-`src/olympus_v3`, its runtime, facades, plugins, templates, entry points and
-dependencies are absent, and the M7 source gates pass.
+R1–R5 are committed and R4.2 is locally verified in the isolated candidate.
+`src/olympus_v3`, `src/aether_agents`, the remaining `src/requirements.txt`,
+runtime facades, plugins, templates, entry points and dependencies are absent.
+The M7 content/config product gates pass.
 
-The owner separately authorized replacement-runtime research on 2026-08-04.
-The verified product topology, native Hermes findings, non-blocking supervision
-model and implementation increments are recorded in
-`ORCA_SUPERVISED_SESSIONS_DESIGN.md`. This research does not mark M2 as started
-or passed.
+PDR-0012 supersedes the stable session service, private adapter ledger and
+pre-emptive API proposed by the earlier Orca research. Its installed-capability
+findings remain evidence; it is not an implementation plan and does not mark M2
+as started or passed.
 
 The immediate implementation gate is to resolve issue #150 and prove a pinned,
 isolated Orca runtime can cold-start, restart and stop without survivors. Only
-then should M2 proceed to substrate-neutral worktree identity and a read-only
-JSON adapter. No Aether Dispatch, live configuration/state transition,
+then may M2 discover the smallest required Hermes–Orca seam from the public
+Run/Task/Dispatch/message/worktree contract. No Aether Dispatch, live configuration/state transition,
 candidate acceptance, integration, release or activation is implied.

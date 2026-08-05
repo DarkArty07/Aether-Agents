@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aether Agents — Multi-Agent System built on hermes-agent</title>
-    <meta name="description" content="Aether product authority, project continuity, evidence, review, and specialist profiles built on hermes-agent.">
+    <title>Aether Agents — Hermes-led AI software team</title>
+    <meta name="description" content="Aether product vision, Hermes policy, specialist profiles, skills, verification, and acceptance built on hermes-agent.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
@@ -37,13 +37,13 @@
             <div class="hero-badge">Built on hermes-agent · Open Source · MIT</div>
             <h1>Aether Agents</h1>
             <p class="hero-subtitle">
-                Product authority, project continuity, evidence, review boundaries, and specialist profiles built on <strong>hermes-agent</strong>.
+                Product vision, Hermes policy, specialist profiles, skills, verification, and acceptance built on <strong>hermes-agent</strong>.
             </p>
             <div class="hero-install">
-                <pre><code><span class="c-dim">$</span> git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
+                <pre><code><span class="c-dim">$</span> git clone https://github.com/DarkArty07/Aether-Agents.git
 <span class="c-dim">$</span> cd Aether-Agents
 <span class="c-dim">$</span> bash scripts/setup.sh</code></pre>
-                <button class="copy-btn" data-copy="git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git&#10;cd Aether-Agents&#10;bash scripts/setup.sh">Copy</button>
+                <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git&#10;cd Aether-Agents&#10;bash scripts/setup.sh">Copy</button>
             </div>
         </div>
     </section>
@@ -54,7 +54,7 @@
             <div class="section-label">Overview</div>
             <h2>What is Aether Agents?</h2>
             <p class="section-desc">
-                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It defines product intent, authority, specialist roles, continuity, evidence, effects, review, and completion boundaries around Hermes. The v0.22.0 candidate intentionally contains no multi-agent execution runtime while its replacement remains gated.
+                Aether Agents is not a chatbot wrapper nor a second coordination kernel. It defines product intent, Hermes behavior, specialist roles, participation, verification, semantic acceptance, and release authority. The v0.22.0 candidate intentionally contains no multi-agent execution runtime while its Hermes-led Orca replacement remains gated.
             </p>
 
             <div class="callout">
@@ -68,7 +68,7 @@
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
-                    Every project tracked by Aether gets a <code>.aether/</code> directory at its root — shared state across the team.
+                    Existing <code>.aether/</code> stores are protected historical/local state; this candidate does not open, rewrite, migrate, or delete them.
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
@@ -84,7 +84,7 @@
             <div class="section-label">Architecture</div>
             <h2>How it works</h2>
             <p class="section-desc">
-                Hermes runs on hermes-agent while the native <code>aether_agents</code> package owns project identity, continuity, evidence, effects, review, and closure. No Aether execution MCP server is registered in this candidate.
+                Hermes runs on hermes-agent and applies Aether's versioned product decisions, profiles, skills, verification policy, and acceptance doctrine. Orca is the intended owner of Runs, Tasks, Dispatches, workers, messages, worktrees, recovery, and cleanup after separate acceptance.
             </p>
 
             <div class="arch-diagram">
@@ -98,23 +98,24 @@
                     <span>Hermes</span>
                     <span class="node-sub">Orchestrator</span>
                 </div>
-                <div class="arch-arrow">→ native contracts →</div>
+                <div class="arch-arrow">→ product policy →</div>
                 <div class="arch-node core-node">
                     <span class="node-icon">⚙</span>
-                    <span>Aether Core</span>
-                    <span class="node-sub">Continuity · Evidence · Review</span>
+                    <span>Aether Product Layer</span>
+                    <span class="node-sub">Profiles · Skills · Acceptance</span>
                 </div>
             </div>
 
             <h3 class="subsection-title">Execution status</h3>
-            <p class="section-desc">Multi-agent start, message, poll, retry, cancel, close, discovery, and curation operations are unavailable until a replacement demonstrates project/profile isolation, authority, durable recovery, cleanup, and rollback.</p>
+            <p class="section-desc">The target is one Hermes-supervised Orca Run with independent Tasks dispatched before waiting, direct/group worker messaging, and one feature integration branch with child worktrees for potentially conflicting writers. Multi-agent execution remains unavailable until the path demonstrates project/profile isolation, durable recovery, cleanup, and rollback.</p>
 
-            <h3 class="subsection-title">.aether/ — Shared Project State</h3>
-            <p class="section-desc">Every project tracked by Aether gets this directory structure at its root. Each Daimon owns a subdirectory.</p>
+            <h3 class="subsection-title">.aether/ — Protected Historical State</h3>
+            <p class="section-desc">Existing local stores may preserve state from prior releases. The candidate has no continuity plugin, reader, writer, or curation facade; the files remain untouched until a separately accepted continuity design exists.</p>
 
             <pre class="code-block"><code>PROJECT/.aether/
-├── aether.db    ← continuity state and session records
-└── CONTEXT.md   ← curated project context injected into Daimon sessions</code></pre>
+├── aether.db              ← preserved prior-release state
+├── self_improvement.db    ← preserved historical instrumentation state
+└── CONTEXT.md             ← preserved prior curated context</code></pre>
         </div>
     </section>
 

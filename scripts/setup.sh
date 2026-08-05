@@ -3,7 +3,7 @@
 # Aether Agents v0.22.0 — Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
-# Automated installation: Python venv, pip packages, config generation, wrappers.
+# Automated installation: Hermes venv, config generation, and wrappers.
 # Idempotent — safe to re-run. Preserves existing config and .env files.
 #
 # Usage:  bash scripts/setup.sh
@@ -57,13 +57,13 @@ sed_inplace() {
 
 # ── Verify repo structure ─────────────────────────────────────────────────────
 verify_repo() {
-    if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
-        fail "pyproject.toml not found at $PROJECT_ROOT"
+    if [ ! -f "$PROJECT_ROOT/VERSION" ]; then
+        fail "VERSION not found at $PROJECT_ROOT"
         fail "Run this script from the Aether-Agents repo root: bash scripts/setup.sh"
         exit 1
     fi
-    if [ ! -d "$PROJECT_ROOT/src/aether_agents" ]; then
-        fail "src/aether_agents/ not found — is this the Aether-Agents repository?"
+    if [ ! -f "$PROJECT_ROOT/home/config.yaml.template" ]; then
+        fail "home/config.yaml.template not found — is this the Aether-Agents repository?"
         exit 1
     fi
     if [ ! -d "$PROJECT_ROOT/home/profiles" ]; then
@@ -187,33 +187,9 @@ install_hermes_agent() {
     fi
 }
 
-# ── Step 4: Install Aether Agents ─────────────────────────────────────────────
-install_aether_agents() {
-    step 4 "Installing Aether Agents (editable mode)"
-
-    info "Installing Aether Agents from ${PROJECT_ROOT}..."
-    set +o pipefail
-    clean_python_env "$VENV_DIR/bin/pip" install --quiet -e "$PROJECT_ROOT" 2>&1 | tail -n 3
-    local pip_exit="${PIPESTATUS[0]}"
-    set -o pipefail
-    if [ "$pip_exit" -ne 0 ]; then
-        fail "pip install -e . failed (exit ${pip_exit})"
-        exit "$pip_exit"
-    fi
-
-    ok "Aether Agents installed in editable mode"
-
-    if clean_python_env "$HERMES_PYTHON" -c "import aether_agents" 2>/dev/null; then
-        ok "aether_agents import verified"
-    else
-        fail "aether_agents import check failed"
-        exit 1
-    fi
-}
-
-# ── Step 5: Install CUDA extras (optional) ────────────────────────────────────
+# ── Step 4: Install CUDA extras (optional) ────────────────────────────────────
 install_cuda_extras() {
-    step 5 "Installing CUDA extras (optional)"
+    step 4 "Installing CUDA extras (optional)"
 
     if ! command -v nvidia-smi &>/dev/null; then
         warn "No NVIDIA GPU detected — skipping faster-whisper"
@@ -234,9 +210,9 @@ install_cuda_extras() {
     fi
 }
 
-# ── Step 6: Setup .env files ──────────────────────────────────────────────────
+# ── Step 5: Setup .env files ──────────────────────────────────────────────────
 setup_env_files() {
-    step 6 "Setting up .env files from templates"
+    step 5 "Setting up .env files from templates"
 
     local created=0
     local existing=0
@@ -277,9 +253,9 @@ setup_env_files() {
     fi
 }
 
-# ── Step 7: Generate config.yaml from templates ──────────────────────────────
+# ── Step 6: Generate config.yaml from templates ──────────────────────────────
 generate_configs() {
-    step 7 "Generating config.yaml from templates"
+    step 6 "Generating config.yaml from templates"
 
     local generated=0
     local skipped=0
@@ -345,9 +321,9 @@ generate_configs() {
     fi
 }
 
-# ── Step 8: Create wrapper scripts ─────────────────────────────────────────────
+# ── Step 7: Create wrapper scripts ─────────────────────────────────────────────
 create_wrappers() {
-    step 8 "Creating wrapper scripts"
+    step 7 "Creating wrapper scripts"
 
     mkdir -p "$HOME/.local/bin"
 
@@ -383,9 +359,9 @@ exec \"${HERMES_BIN}\" \"\$@\"
 
 }
 
-# ── Step 9: Add HERMES_HOME to .bashrc ────────────────────────────────────────
+# ── Step 8: Add HERMES_HOME to .bashrc ────────────────────────────────────────
 setup_bashrc() {
-    step 9 "Configuring shell environment"
+    step 8 "Configuring shell environment"
 
     local export_line="export HERMES_HOME=\"${PROJECT_ROOT}/home\""
     local bashrc="$HOME/.bashrc"
@@ -432,9 +408,9 @@ setup_bashrc() {
     fi
 }
 
-# ── Step 10: Update .gitignore ────────────────────────────────────────────────
+# ── Step 9: Update .gitignore ─────────────────────────────────────────────────
 update_gitignore() {
-    step 10 "Updating .gitignore"
+    step 9 "Updating .gitignore"
 
     local gitignore="$PROJECT_ROOT/.gitignore"
 
@@ -474,7 +450,7 @@ print_summary() {
     echo ""
     echo "  2. ${BOLD}Restart your terminal${NC} (or run: source ~/.bashrc)"
     echo ""
-    echo "  3. ${BOLD}Start Hermes with Aether profiles and core:${NC}"
+    echo "  3. ${BOLD}Start Hermes with Aether profiles and skills:${NC}"
     echo "     aether"
     echo ""
     echo "     ${DIM}The v0.22.0 candidate does not enable specialist execution or curation.${NC}"
@@ -525,7 +501,6 @@ main() {
     detect_python
     create_venv
     install_hermes_agent
-    install_aether_agents
     install_cuda_extras
     setup_env_files
     generate_configs

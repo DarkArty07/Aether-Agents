@@ -9,7 +9,7 @@
 
 v0.20.0 introduced a default-off measurement substrate for a future SemVer self-improvement cycle. The v0.22.0 candidate retired its plugin, hooks, strict release-manifest reader, and manifest-bound evidence projector because they were coupled to the removed Harmonia/Olympus operating model. Historical reports remain authoritative for what v0.20 shipped.
 
-The candidate preserves only schema-compatible ledger, deterministic comparison, isolated-candidate, and human-promotion primitives. They are inert: nothing initializes a session, injects model context, records tool/model calls, reads a cycle manifest, or projects release evidence automatically.
+PDR-0012 subsequently retired the extracted ledger, causality, candidate, and promotion implementation because it had no active consumer and pre-empted the accepted Hermes–Orca boundary. Existing schema-v5 databases remain untouched historical/local state. Nothing in the candidate initializes a session, opens a ledger, injects model context, records tool/model calls, reads a cycle manifest, compares candidates, or projects release evidence automatically.
 
 The approved target cycle wraps the user's task. It must not replace product intent, invent unrelated improvement work, invoke a Daimon ceremonially, or treat recorded activity as improvement.
 
@@ -24,7 +24,7 @@ The approved target cycle wraps the user's task. It must not replace product int
 - `talk_to`, `discover`, and ACP-backed curation are absent rather than disabled.
 - Persistent Hermes memory contains the compact dogfooding policy.
 - The `aether-self-improvement` plugin, strict manifest reader, session hooks, and deterministic evidence projector are absent.
-- The project-local ledger, causality comparison, candidate isolation, and human-promotion primitives remain implemented and tested without an activation path.
+- No project-local ledger, causality comparison, candidate-isolation, or promotion implementation remains in the candidate; PDR-0009 remains product policy and historical evidence only.
 
 ### Approved target
 

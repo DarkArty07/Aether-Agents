@@ -46,13 +46,12 @@ bash scripts/setup.sh
 1. **Checks Python** — verifies Python 3.11+ is available
 2. **Creates venv** — at `home/.venv-hermes/` inside the project
 3. **Installs hermes-agent** — from PyPI via `pip install hermes-agent`
-4. **Installs Aether Agents** — editable `pip install -e .` from `pyproject.toml`
-5. **Installs CUDA extras** — if `nvidia-smi` is detected, installs faster-whisper
-6. **Generates config.yaml** — copies `.yaml.template` → `config.yaml` per profile, substituting `__AETHER_ROOT__` and `__HERMES_PYTHON__` with real paths
-7. **Creates .env files** — copies `.env.example` → `.env` per profile (skips existing)
-8. **Creates wrapper scripts** — `aether` and `hermes` in `~/.local/bin/`
-9. **Sets HERMES_HOME** — adds export to `~/.bashrc`
-10. **Updates .gitignore** — adds `home/.venv-hermes/`
+4. **Installs CUDA extras** — if `nvidia-smi` is detected, installs faster-whisper
+5. **Creates .env files** — copies `.env.example` → `.env` per profile (skips existing)
+6. **Generates config.yaml** — creates the Hermes root config plus six profile configs, substituting `__AETHER_ROOT__` and `__HERMES_PYTHON__` with real paths
+7. **Creates wrapper scripts** — `aether` and `hermes` in `~/.local/bin/`
+8. **Configures the shell** — adds `HERMES_HOME` and `~/.local/bin` without installing an Aether Python package
+9. **Updates .gitignore** — adds `home/.venv-hermes/`
 
 The script is **idempotent** — safe to re-run. It preserves existing `config.yaml` and `.env` files.
 
@@ -86,10 +85,9 @@ source home/.venv-hermes/bin/activate
 
 ```bash
 pip install hermes-agent
-pip install -e .
 ```
 
-> The `pip install -e .` installs the `aether_agents` package from `src/aether_agents/` in editable mode. The v0.22.0 candidate contains no bundled MCP/ACP execution runtime.
+> Aether v0.22.0 is a Hermes product/configuration repository, not a Python runtime distribution. Do not install the repository in editable mode. The candidate contains no bundled MCP/ACP execution runtime or native policy kernel.
 
 ### 3.4 Generate config.yaml for each profile
 
@@ -242,8 +240,7 @@ bash scripts/update.sh
 
 1. **git pull** — fetches latest changes (stashes local changes if needed)
 2. **pip upgrade hermes-agent** — updates to the latest PyPI release
-3. **pip install -e .** — reinstalls Aether Agents in editable mode
-4. **Checks config.yaml** — regenerates only if placeholders are still unresolved
+3. **Checks config.yaml** — handles the Hermes root plus six profiles and regenerates only files with unresolved placeholders
 
 It **preserves** your local `config.yaml`, `.env` files, and the venv. It does **not** overwrite `config.yaml` unless it contains unresolved `__AETHER_ROOT__` or `__HERMES_PYTHON__` placeholders.
 
@@ -261,7 +258,6 @@ bash scripts/update.sh --regen-config
 |---------|-------|-----|
 | `aether: command not found` | Wrapper script not on PATH | Restart terminal or run `source ~/.bashrc` |
 | `python3: command not found` | Python not installed | Install Python 3.11+ (`sudo apt install python3.12` on Ubuntu) |
-| `ModuleNotFoundError: aether_agents` | Aether Agents not installed in venv | Run `bash scripts/setup.sh` again |
 | venv creation fails | `python3-venv` package missing | `sudo apt install python3-venv` (Ubuntu/Debian) |
 | `nvidia-smi not found` | No NVIDIA drivers installed | Install CUDA toolkit or use cloud STT (`provider: openai`) |
 | `pip install` fails (SSL errors) | Corporate proxy or cert issues | `pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org hermes-agent` |
@@ -283,7 +279,7 @@ v0.8.0 introduces significant structural changes. Key migrations:
 | `~/.local/bin/hermes` symlink | `~/.local/bin/aether` and `~/.local/bin/hermes` wrapper scripts |
 | `HERMES_HOME=~/.hermes/hermes-agent/home` | `HERMES_HOME=<project>/home/` |
 | `configure.sh` (removed in v0.8.1) | `setup.sh` (full automation) |
-| `pip install -e .` (project root) | `pip install hermes-agent` + `pip install -e .` (`aether_agents`) |
+| Editable project installation | `pip install hermes-agent`; Aether remains profiles, skills, configuration, and product policy |
 
 To upgrade:
 

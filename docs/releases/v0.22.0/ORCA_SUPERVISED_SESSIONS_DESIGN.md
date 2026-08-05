@@ -1,9 +1,15 @@
 # Aether–Orca Supervised Sessions Design
 
-> **Status:** RESEARCHED DESIGN; NOT IMPLEMENTED OR ACTIVATED
+> **Status:** SUPERSEDED RESEARCHED DESIGN; NOT IMPLEMENTED OR ACTIVATED
 > **Date:** 2026-08-04
-> **Decision authority:** PDR-0011
+> **Decision authority:** Superseded by PDR-0012
 > **Pinned Orca AppImage:** `sha256:813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33`
+
+> **Supersession:** The installed-capability findings and Hermes-led parallel
+> outcome remain useful evidence. PDR-0012 rejects the proposed stable Aether
+> session service, private adapter ledger, and pre-emptive product API. A future
+> integration must begin from Orca's public Run/Task/Dispatch/message/worktree
+> contract and add only the smallest observed Aether-specific seam.
 
 ## 1. Product outcome
 

@@ -195,7 +195,7 @@ Ask:
 
 This document defines the approved target authority model.
 
-The current candidate contains Hermes and Aether-native semantic/continuity libraries but no multi-agent execution runtime. Future runtime mechanics must be documented separately in architecture and release evidence and accepted under PDR-0011 before activation.
+The current candidate contains Hermes-facing profiles, skills, policies and product decisions but no Aether Python runtime, continuity plugin, or multi-agent execution path. Future runtime mechanics must use Orca's operational ownership, be documented separately in architecture and release evidence, and be accepted under PDR-0012 before activation.
 
 No current-runtime claim should be inferred solely from this target model.
 

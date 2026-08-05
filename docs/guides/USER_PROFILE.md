@@ -76,7 +76,7 @@ Daimons may report a possible preference to Hermes, but they do not independentl
 | `home/memories/USER.md` | User identity, preferences, recurring corrections, and stable work style |
 | `home/memories/MEMORY.md` | Stable environment facts, conventions, tool quirks, and durable operating context |
 | Project documentation | Vision, requirements, scope, architecture, and durable product decisions |
-| `.aether` | Current phase, active task, blockers, and hot project continuity |
+| Existing `.aether` stores | Protected historical/local project state; no candidate reader or writer |
 | Skills | Reusable procedures and verified workflows |
 
 A preference about how the user wants work performed belongs in `USER.md`. A stable fact about the environment belongs in `MEMORY.md`. A reusable procedure belongs in a skill.

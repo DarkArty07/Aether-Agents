@@ -90,7 +90,7 @@ Hermes is the custodian of the global user model. As the primary agent, it detec
 
 Honcho is excluded from the target product. Aether should operate without an external semantic memory service and without depending on Honcho for installation, personalization, continuity, or authority.
 
-Daimons may contribute observations, but they do not independently own the user profile. Project-specific knowledge remains in project documentation and `.aether`; user preferences remain in Hermes-managed profile and memory; reusable procedures remain in skills.
+Daimons may contribute observations, but they do not independently own the user profile. Current project-specific knowledge remains in version-controlled project documentation; existing `.aether` stores are protected historical/local state. User preferences remain in Hermes-managed profile and memory; reusable procedures remain in skills.
 
 ## Product experience and ambition
 

@@ -68,8 +68,8 @@ The user acts primarily as product owner and is not expected to provide advanced
 
 - The **user** owns vision, visible behavior, material scope, priorities, accepted compromises, consequential external effects, and final acceptance.
 - **Hermes** translates product intent into a bounded work contract and synthesizes material escalations in product language.
-- **Aether-native contracts and policy** define tasks, budgets, evidence, protected effects, review, and semantic closure without granting product authority to an execution substrate.
-- **No multi-agent execution runtime is active** in the v0.22.0 candidate. A replacement must pass PDR-0011 gates before it may own operational lifecycle state.
+- **Aether product decisions and Hermes policy** define participation, verification, protected effects, review, and semantic acceptance without granting product authority to an execution substrate.
+- **No multi-agent execution runtime is active** in the v0.22.0 candidate. The Hermes-led Orca path must pass PDR-0012 gates before it may own operational lifecycle state.
 - **Daimons** exercise specialist judgment inside explicit task and authority boundaries.
 - **Deterministic policy and tools** enforce permissions, budgets, evidence gates, and irreversible-effect boundaries.
 
@@ -86,7 +86,7 @@ Aether decides routine, reversible technical mechanics autonomously. It escalate
 - No retired runtime, renamed adapter, or hidden fallback may be used to simulate that capability.
 - Disagreements resolve through current intent, approved decisions, contract, evidence, quality doctrine, and domain authority—not majority vote.
 
-The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md); PDR-0011 and the v0.22 roadmap govern any replacement runtime.
+The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md); PDR-0012 and the v0.22 roadmap govern the Hermes-led Orca replacement.
 
 ## Approved learning and memory doctrine
 
@@ -95,7 +95,7 @@ The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT
 - Honcho is excluded from the approved target product because it caused operational problems and creates an unnecessary external memory dependency.
 - Hermes is the custodian of the global user profile: it detects preferences, separates durable patterns from one-off requests, organizes and corrects memory, and passes only relevant context to Daimons.
 - Daimons may report observations but do not independently own or redefine the global user model.
-- `USER.md` stores user identity and preferences; `MEMORY.md` stores stable environment facts and conventions; skills store reusable procedures; project documents and `.aether` preserve project authority and continuity.
+- `USER.md` stores user identity and preferences; `MEMORY.md` stores stable environment facts and conventions; skills store reusable procedures; version-controlled project documents preserve current project authority and continuity. Existing `.aether` stores remain protected historical/local state until a new continuity surface is accepted.
 - Current explicit instructions always override stored preferences and learned procedures.
 - Shared skills should remain reusable and user-neutral rather than hard-coding one user's preferences.
 
@@ -180,7 +180,7 @@ Product discovery Phases 1 through 8 are complete. The canonical set now answers
 - who benefits from it;
 - how it learns and adapts to the user;
 - why and when specialist agents participate;
-- what Hermes, Aether-native policy, future execution substrates, and Daimons are meant to accomplish;
+- what Hermes, Aether product policy, Orca execution mechanics, and Daimons are meant to accomplish;
 - how requirements are discovered and preserved;
 - when a software project is complete;
 - how quality and comparative product value are evaluated;

@@ -227,7 +227,7 @@ Hermes provides learning mechanics, but Aether still needs product rules for:
 - User preferences and personal facts belong in Hermes-managed `USER.md`.
 - Stable environment facts and compact operational lessons belong in Hermes-managed `MEMORY.md`.
 - Reusable procedures belong in Hermes skills.
-- Project vision, scope, requirements, architecture decisions, and current milestone authority belong in version-controlled project documentation and `.aether` continuity—not only in memory or skills.
+- Project vision, scope, requirements, architecture decisions, and current milestone authority belong in version-controlled project documentation—not only in memory or skills. Existing `.aether` stores are protected historical/local state, not an active candidate continuity API.
 - Source, tests, artifacts, and executed evidence remain authoritative for actual behavior.
 
 ### 2. Scope and promotion

@@ -2,6 +2,9 @@
 
 > **For Hermes:** Execute this plan through the current task contract; use `milestone-implementation-governance` for the atomic implementation and closure gate.
 > **Status:** EXECUTED — LOCALLY VERIFIED
+> **Historical boundary:** PDR-0012 and R4.2 subsequently retired the extracted
+> native package, plugins and distribution. The metrics below describe the exact
+> earlier post-Olympus cleanup tree and are preserved as execution evidence.
 
 **Goal:** Remove the remaining active Honcho and Graphify installation surfaces and make every current-facing product document agree that Olympus/Harmonia are historical and that multi-agent execution is unavailable in the v0.22.0 candidate.
 

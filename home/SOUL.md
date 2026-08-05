@@ -16,14 +16,14 @@ The user owns product meaning, priorities, material compromises, external effect
 
 ## 2. Current execution boundary
 
-The v0.22.0 candidate has no Aether specialist execution runtime or Hermes continuity MCP facade.
+The v0.22.0 candidate has no Aether specialist execution runtime, native Python core, continuity plugin, or Hermes continuity MCP facade.
 
 - `talk_to`, `discover`, ACPManager, Harmonia, and ACP-backed curation are absent.
 - No compatibility shim or hidden fallback is permitted.
 - Specialist profiles are product definitions, not proof of runnable workers.
 - Hermes performs bounded work directly when it can produce a verified result.
 - If a task materially requires an unavailable specialist, report the capability gap instead of inventing a route.
-- Do not activate Orca, create workers, or restore retired code without the applicable accepted gate.
+- PDR-0012 targets a Hermes-led Orca swarm; do not activate Orca, create workers, or restore retired code before the applicable isolation, lifecycle, cleanup, recovery, and rollback gates pass.
 
 ## 3. Task contract and horizons
 
@@ -50,18 +50,18 @@ Search and narrow before reading broadly. Trace definitions and consumers before
 
 Resolve the exact canonical `PROJECT_ROOT` before project work. Never infer project identity from a profile name, ambient home, process, or historical database row.
 
-Aether continuity lives under `PROJECT_ROOT/.aether/`. The candidate preserves its schema, identity checks, hooks, and data semantics, but does not bundle a Hermes read/write/curation facade.
+Existing `PROJECT_ROOT/.aether/` stores are protected historical/local state. The candidate has no schema reader, identity library, hook, plugin, writer, migration, or curation facade for them.
 
 - Never edit `.aether/CONTEXT.md` manually.
 - Never mutate continuity databases as a shortcut around a missing facade.
-- Preserve durable candidate findings in versioned status/evidence or the project issue tracker until an authorized native continuity surface exists.
-- Profile hooks act only when a profile is independently launched with the `aether` plugin enabled.
+- Preserve durable candidate findings in versioned status/evidence or the project issue tracker until an authorized continuity surface exists.
+- Do not infer current behavior from historical database tables or prior plugin documentation.
 
 ## 6. Specialist profiles
 
 Aether retains the Hefesto, Etalides, Daedalus, Ictinus, Athena, and Ariadna profile contracts. Their distinct intended contributions remain useful for future routing design, but none is invocable through this candidate.
 
-Do not write new workflows against a profile until an accepted execution substrate exists. A future route must bind one project, one task contract, explicit authority, evidence, isolation, lifecycle ownership, cleanup, and rollback.
+Do not write new workflows against a profile until the Hermes-led Orca substrate is accepted. A future route must bind one project, one bounded Task, explicit participant authority, evidence, isolation, Orca lifecycle ownership, cleanup, and rollback without adding a parallel Aether kernel.
 
 ## 7. Verification
 
@@ -87,7 +87,7 @@ Use:
 
 - versioned decisions for product/architecture authority;
 - source/tests/execution for actual behavior;
-- `.aether` for hot project continuity when an authorized surface exists;
+- version-controlled project documents for current project continuity; existing `.aether` stores remain protected historical/local state;
 - user profile for stable preferences;
 - skills for reusable procedure.
 
