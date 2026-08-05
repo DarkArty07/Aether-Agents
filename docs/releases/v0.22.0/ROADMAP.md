@@ -1,18 +1,25 @@
 # v0.22.0 Orca Transition and Olympus Retirement Roadmap
 
-> **Status:** OLYMPUS SOURCE RETIRED; M7 LOCALLY COMPLETE; REPLACEMENT RUNTIME PENDING
-> **Date:** 2026-08-03  
+> **Status:** OLYMPUS SOURCE RETIRED; DISCONNECTED NATIVE CORE RETIREMENT IN PROGRESS; ORCA SWARM PENDING
+> **Date:** 2026-08-05
 > **Owner:** Christopher (DarkArty07)  
-> **Governing decision:** `PDR-0011`
+> **Governing decision:** `PDR-0012` (preserving the applicable retirement and data-safety clauses of `PDR-0011`)
 
 ## 1. Outcome
 
-v0.22.0 establishes an Aether-native product core and physically retires the Olympus package before replacement-runtime design continues. Multi-agent execution and ACP-backed curation remain unavailable until a replaceable substrate and Aether-native facade pass their gates.
+v0.22.0 physically retires Olympus and the disconnected Python core that was
+extracted from it before replacement-runtime work continues. Aether remains the
+Hermes product layer—vision, profiles, policies, skills, routing judgment and
+semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch,
+worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution
+remains unavailable until the Hermes-led Orca swarm path passes its separate gates.
 
 The roadmap completes when the exact v0.22.0 candidate has:
 
 - no active runtime, import, entry point, plugin, template, or current-facing documentation dependency on `olympus_v3`;
-- preserved Aether product authority, continuity data, Ariadna profile/contract, evidence, self-improvement, profiles and acceptance boundaries;
+- no disconnected `aether_agents` runtime package, profile plugin, editable install or package-build surface;
+- preserved Aether product authority in Hermes, product decisions, profiles, skills and acceptance policy;
+- preserved local continuity and self-improvement stores without an active writer or destructive migration;
 - proven Orca lifecycle, recovery, isolation and cleanup on the affected equivalence class;
 - preserved read-only historical evidence and rollback;
 - passed focused and full regression gates.
@@ -23,9 +30,9 @@ It does not include production activation, deployment, credentials, destructive 
 
 Every milestone must preserve:
 
-1. Aether remains the product and decision plane.
-2. Hermes owns product intent, task contracts, routing and synthesis.
-3. Orca does not select participants, authorize effects, accept results or curate `.aether`.
+1. Aether remains the product layer; it does not duplicate Orca runtime state.
+2. Hermes owns product intent, task decomposition, routing, supervision, synthesis and semantic acceptance.
+3. Orca owns Run/Task/Dispatch, worker, terminal, worktree, message, recovery and cleanup mechanics.
 4. Every operation binds to one canonical `PROJECT_ROOT` and approved profile.
 5. Technical worker completion remains distinct from semantic acceptance.
 6. A failed or stopped worker is not proof of cleanup.
@@ -96,7 +103,13 @@ Discard the candidate worktree and branch, stop the dedicated headless runtime,
 and remove only `.aether/orca-v022/`. Production/runtime data and historical
 continuity stores remain unchanged.
 
-## 5. Milestone M1 — Extract the Aether-native core
+## 5. Historical milestone M1 — Extract the Aether-native core (superseded)
+
+> **Disposition (2026-08-05):** The extraction was completed and verified as
+> recorded below, but PDR-0012 determined that the resulting package has no
+> production consumer in the Hermes-led Orca swarm target. Its implementation is
+> being retired under #160. The following text remains historical evidence and is
+> not the current target architecture.
 
 ### Goal
 

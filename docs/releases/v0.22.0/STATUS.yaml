@@ -1,22 +1,45 @@
 schema_version: 1
-status: candidate_olympus_and_v020_bootstrap_retired
-approved_on: "2026-08-03"
+status: candidate_native_core_retirement_in_progress
+approved_on: "2026-08-05"
 owner: Christopher (DarkArty07)
 
-governing_decision: docs/decisions/PDR-0011-orca-substrate-and-olympus-retirement.md
+governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
+preserved_prior_decision: docs/decisions/PDR-0011-orca-substrate-and-olympus-retirement.md
 
 candidate:
   version: "0.22.0"
   name: Orca Substrate and Olympus Retirement
   capability_boundary: >-
-    Preserve Aether-owned behavior under the native package, physically retire
-    the Olympus execution runtime and distribution surfaces, and keep multi-agent
-    execution unavailable until a replacement passes independent gates.
+    Preserve Aether's Hermes product layer, profiles, policies, skills, historical
+    stores and release authority; physically retire Olympus plus the disconnected
+    native Python core extracted from it; and keep multi-agent execution unavailable
+    until the Hermes-led Orca swarm path passes independent gates.
   not_a_release_claim: true
   source_implementation_started: true
   orca_runtime_activated_for_aether: false
   isolated_orca_runtime_started_during_diagnostics: true
   isolated_orca_runtime_currently_running: false
+
+architecture_correction:
+  approved_on: "2026-08-05"
+  github_issue: 160
+  target: hermes_led_orca_swarm
+  aether_owns:
+    - product_vision_and_requirements
+    - hermes_task_decomposition_routing_and_synthesis
+    - daimon_profiles_participation_policy_and_skills
+    - semantic_acceptance_and_release_authority
+  orca_owns:
+    - run_task_and_dispatch_state
+    - worker_terminal_and_worktree_lifecycle
+    - direct_and_group_messages
+    - recovery_and_cleanup_mechanics
+  branch_topology:
+    integration_line: one_feature_branch
+    disjoint_scopes: current_worktree_permitted
+    potentially_conflicting_writers: child_worktrees_required
+  native_core_disposition: retire_before_orca_adapter_implementation
+  historical_stores: preserve_unmodified_without_active_writer
 
 release_lineage:
   latest_official_release: "0.20.0"

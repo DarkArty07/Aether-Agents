@@ -24,7 +24,8 @@ Sequences are independent by decision type.
 
 | Record | Status | Governing decision |
 |---|---|---|
-| [PDR-0011](./PDR-0011-orca-substrate-and-olympus-retirement.md) | APPROVED, AMENDED | v0.22.0 extracts Aether-owned behavior and retires the Olympus executable boundary before replacement design; execution remains unavailable until separate evidence, isolation, cleanup, and rollback gates pass. |
+| [PDR-0012](./PDR-0012-hermes-orca-swarm-boundary.md) | APPROVED | Hermes leads one Orca Run with parallel Tasks and direct worker messaging; Aether remains the product layer and does not retain a disconnected Python coordination/authority core. |
+| [PDR-0011](./PDR-0011-orca-substrate-and-olympus-retirement.md) | PARTIALLY SUPERSEDED | Its Olympus source retirement, capability-gap honesty, historical evidence, and non-destructive store policy remain; PDR-0012 supersedes pre-emptive `aether_agents` core retention. |
 | [PDR-0009](./PDR-0009-semver-self-improvement-cycle.md) | APPROVED | Every Aether Hermes session participates in a SemVer-governed self-improvement cycle; evidence, not assumption, shapes the next minor, and no LLM coordinator is presumed necessary. |
 | [PDR-0008](./PDR-0008-canonical-definition-and-project-completion.md) | APPROVED | Canonical product definition approved; a project is complete when the user obtains the intended outcome, with Hermes accountable for requirements understanding and honest acceptance evidence. |
 | [PDR-0007](./PDR-0007-studio-experience-progressive-visibility-and-ui.md) | APPROVED | Aether should feel like an intelligent software studio, use progressive visibility, and eventually provide a UI that projects authoritative state without duplicating it. |
