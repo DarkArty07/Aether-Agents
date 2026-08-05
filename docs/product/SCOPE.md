@@ -3,6 +3,7 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
 
 ## Scope model
@@ -70,7 +71,7 @@ Approved placement:
 
 Hermes is the global user-profile custodian. Daimons may report observations, but they do not own independent global profiles.
 
-Honcho is outside the target product. The current provider configuration and historical integration artifacts require a later bounded retirement task.
+Honcho is outside the target product. The v0.22.0 candidate has removed its provider configuration, submodule, container stack, setup commands, and active operational documentation while retaining historical decisions and release evidence.
 
 The exact review, correction, export, reset, deletion, shared-skill ownership, and optional private-skill experience remain later design decisions.
 
@@ -99,7 +100,7 @@ Their classification must be justified by the observed failure they address and 
 
 ## Experimental
 
-Current release documents contain experimental coordination work, including the default-off kernel and Harmonia migration. Experimental capability must remain clearly separated from current verified product behavior.
+Historical release documents contain the retired default-off kernel and Harmonia migration. That evidence remains preserved, but the v0.22.0 candidate has no active multi-agent execution runtime.
 
 An experiment does not redefine the product merely because it is newer or technically ambitious.
 
@@ -114,7 +115,6 @@ The following remain future or unresolved rather than silently assumed:
 - privacy and access boundaries for memory, prompts, evidence, and diagnostics;
 - user-facing review, correction, export, reset, and deletion of Hermes-managed memory;
 - shared-skill write ownership and optional private per-user skills;
-- safe retirement of Honcho configuration and historical integration artifacts;
 - the comparative benchmark corpus and evaluators;
 - runtime enforcement of participant policy and lateral authority;
 - production migration, activation, and broader participant-policy enforcement beyond the validated bounded v0.19.5 no-relay topology;

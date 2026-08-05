@@ -92,20 +92,21 @@ Never commit:
 
 ## Architecture Overview
 
-Aether Agents uses a 3-layer orchestrator pattern:
+The v0.22.0 candidate contains three source boundaries:
 
-1. **Hermes** — Orchestrator (MCP tools, memory, skills, delegation)
-2. **Olympus v3** — MCP server bridging Hermes to Daimons (ACP + Plugin + SQLite)
-3. **Daimons** — Specialized sub-agents (Hefesto, Etalides, Ariadna, Athena, Daedalus, Ictinus)
+1. **Hermes Agent** — user-facing agent framework, memory, skills, tools, and gateways.
+2. **`aether_agents`** — product identity, contracts, continuity, evidence, effects, review, and inert self-improvement primitives.
+3. **Daimon profiles** — versioned specialist contracts with no active execution runtime in this candidate.
+
+The legacy execution package and MCP facade are absent. Do not restore a compatibility shim or hidden fallback; replacement execution remains gated by PDR-0011 and the v0.22 roadmap.
 
 ### .aether Continuity System
 
-Daimons receive project context via the `.aether` plugin:
+Daimon profiles launched independently may receive project context via the `.aether` plugin:
 - **Capture:** Hooks write session data to `aether.db`
-- **Curation:** Ariadna synthesizes `CONTEXT.md` (5 sections, 1500 chars max)
 - **Injection:** `pre_llm_call` hook injects `[.aether Context]` on first turn
 
-Hermes interacts with `.aether` via MCP tools: `aether_status`, `aether_update`, `aether_curate`.
+The candidate provides no Hermes continuity MCP facade and no supported Ariadna invocation path. Never edit `.aether/CONTEXT.md` or its database manually as a substitute.
 
 ## Questions?
 

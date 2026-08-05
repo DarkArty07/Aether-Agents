@@ -545,6 +545,71 @@ retirement_cuts:
     clean_wheel_install: pass
     isolated_setup: pass
     isolated_doctor: pass
+  post_olympus_residue_cleanup:
+    status: locally_verified
+    issues:
+      - 154
+      - 155
+      - 156
+      - 157
+      - 158
+    removed_source_surfaces:
+      - honcho_submodule
+      - honcho_compose_stack
+      - honcho_setup_script_and_make_targets
+      - honcho_provider_configuration
+      - honcho_active_setup_and_skill_guidance
+      - graphify_mcp_template
+      - graphify_provider_file
+      - unresolved_python_bin_placeholder
+    corrected_setup_contracts:
+      - root_hermes_config_generation
+      - seven_config_idempotence
+      - candidate_local_doctor_binary
+      - inherited_python_source_override_isolation
+    preserved:
+      - historical_decisions
+      - historical_release_and_benchmark_evidence
+      - historical_local_data_ignore_rules
+      - acp_v1_evidence_decoder
+      - local_services_and_data
+    replacement_runtime_present: false
+    retirement_contract_red: 8_failed
+    root_config_regression_red: 1_failed
+    doctor_precedence_regression_red: 1_failed
+    doctor_environment_regression_red: 1_failed
+    focused_green: 19_passed
+    full_suite: 239_passed
+    targeted_ruff: pass
+    compileall: pass
+    yaml_templates: 7_passed
+    shell_parse: pass
+    active_residual_scan: pass_zero
+    markdown_links:
+      checked: 48
+      broken: 0
+    wheel:
+      result: pass
+      entries: 20
+      retired_executable_entries: 0
+      console_entry_points: 0
+    sdist:
+      result: pass
+      entries: 49
+      retired_executable_entries: 0
+      intentional_retirement_contract_tests: 2
+    clean_wheel_install: pass
+    isolated_setup:
+      result: pass
+      passes: 2
+      generated_configs: 7
+      idempotent_configs: 7
+    isolated_doctor:
+      result: pass
+      candidate_local_hermes: pass
+      ambient_source_override_isolation: pass
+    historical_store_mutation: none
+    runtime_service_or_credential_effects: none
 
 milestones:
   M0_baseline_and_candidate_isolation: in_progress
@@ -572,9 +637,9 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: cleanup_stop_condition_reached
+  milestone: M0_orca_bootstrap_gate
   requirement: >-
-    Commit the exact zero-Olympus, zero-v0.20-bootstrap tree and stop.
-    Replacement-runtime or instrumentation design, Orca diagnostics, live
-    configuration migration, historical-store handling, integration and release
-    remain separate later gates.
+    Resolve issue #150 and prove a pinned isolated Orca runtime can cold-start,
+    restart and stop without survivors before M2 begins. Live configuration
+    migration, historical-store handling, candidate acceptance, release and
+    activation remain separate later gates.

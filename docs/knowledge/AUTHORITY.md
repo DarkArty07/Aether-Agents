@@ -1,8 +1,8 @@
 # Authority Model
 
-> **Status:** APPROVED TARGET — current runtime parity not yet verified
+> **Status:** APPROVED TARGET — v0.22.0 has no multi-agent execution runtime
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **Governing decisions:** `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
 
 ## Purpose
@@ -88,9 +88,9 @@ Hermes should:
 
 Hermes does not gain authority to redefine product vision merely by owning interpretation or synthesis.
 
-### Harmonia and coordination kernel
+### Coordination substrate
 
-Harmonia and the kernel own operational coordination within the approved contract:
+A future accepted coordination substrate may own operational coordination within an approved contract:
 
 - task state;
 - dependencies;
@@ -100,7 +100,9 @@ Harmonia and the kernel own operational coordination within the approved contrac
 - lifecycle and terminal-state consistency;
 - coordination policy enforcement.
 
-They do not own product meaning. Operational authority must not silently become product authority. Harmonia and the kernel must enforce user/project Daimon availability policy and may not select a disabled or forbidden role.
+It does not own product meaning. Operational authority must not silently become product authority. Any accepted substrate must enforce user/project Daimon availability policy and may not select a disabled or forbidden role.
+
+The v0.22.0 candidate has no active coordination substrate, specialist execution path, or curation facade. The historical Harmonia/Olympus runtime is retired and cannot be used as a fallback.
 
 ### Daimons
 
@@ -193,7 +195,7 @@ Ask:
 
 This document defines the approved target authority model.
 
-The current runtime may still contain hub-and-spoke behavior, incomplete Harmonia/kernel enforcement, or authority paths that rely on prompts rather than deterministic policy. Those mechanics must be documented separately in `CURRENT_SYSTEM.md`, architecture documents, and release evidence when created.
+The current candidate contains Hermes and Aether-native semantic/continuity libraries but no multi-agent execution runtime. Future runtime mechanics must be documented separately in architecture and release evidence and accepted under PDR-0011 before activation.
 
 No current-runtime claim should be inferred solely from this target model.
 

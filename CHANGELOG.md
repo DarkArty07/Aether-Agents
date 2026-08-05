@@ -7,19 +7,21 @@
 - **Public legacy tools**: Removed `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` without a compatibility shim or hidden fallback.
 - **v0.20 instrumentation bootstrap**: Removed the `aether-self-improvement` plugin, session hooks, strict v0.20 manifest reader, and manifest-bound release-evidence projector. Historical v0.20 evidence remains versioned.
 - **Retired dependencies and procedures**: Removed MCP/ACP, LangGraph, LangChain, Graphify, and the now-unconsumed PyYAML runtime dependency plus active skills/references that instructed installations to use the retired path.
+- **Honcho installation surface**: Removed the Honcho submodule, Compose stack, setup script, Make targets, provider configuration, active setup guide, and Aether-specific operational skill reference. Hermes-native memory remains enabled and no local service or data store is touched.
+- **Graphify configuration residue**: Removed the enabled MCP template block, unresolved `__PYTHON_BIN__` command, and tracked provider file after the package and runtime dependency had already been retired.
 
 ### Changed
 - **Aether-native distribution**: Renamed the candidate distribution to `aether-agents` 0.22.0. It exports native identity, contracts, evidence, effects, review, continuity, and inert self-improvement ledger/causality/promotion primitives with no console entry point.
 - **Explicit capability gap**: Specialist profiles remain product contracts, but multi-agent execution and Ariadna curation are intentionally unavailable until an independently accepted runtime and facade exist.
-- **Current-facing truth**: Updated Hermes/profile policies, README, guides, website, templates, roadmap, inventory, and the amended PDR-0011 sequencing decision.
+- **Current-facing truth**: Updated Hermes/profile policies, README, contributor guidance, product/knowledge documents, indexes, templates, roadmap, inventory, and the amended PDR-0011 sequencing decision. The v0.19 multi-agent model is explicitly historical.
 
 ### Fixed
-- **Reproducible isolated setup**: Setup now executes submodule operations from the exact project root, ignores ambient global Hermes `PYTHONPATH` overrides, and produces valid isolated wrappers.
-- **Truthful doctor gate**: Doctor accepts an explicit Python interpreter, fails on missing Python/Hermes/Aether imports, and reports absent NVIDIA GPUs correctly.
+- **Reproducible isolated setup**: Setup ignores ambient global Hermes source overrides, produces valid isolated wrappers, and now generates the root `home/config.yaml` as well as all six profile configs while preserving configured files on rerun.
+- **Truthful doctor gate**: Doctor prefers the candidate-local Hermes binary, removes inherited Python source overrides, accepts explicit command-line overrides, fails on missing Python/Hermes/Aether imports, and reports absent NVIDIA GPUs correctly.
 
 ### Testing
-- **Zero-residual candidate**: 228 repository tests pass; focused Ruff, compileall, shell/YAML parsing, release governance, and executable residual scanning pass.
-- **Distribution and installation**: The 20-entry wheel and 48-entry sdist contain no retired source, v0.20 bootstrap, or entry points. Clean wheel installation, isolated setup, idempotent rerun, wrapper isolation, and doctor smoke pass.
+- **Zero-residual candidate**: 239 repository tests pass; focused Ruff, compileall, shell/YAML parsing, active-surface scanning, and 48 current Markdown links pass.
+- **Distribution and installation**: The 20-entry wheel and 49-entry sdist contain no retired executable source or entry points; the sdist preserves two retirement-contract tests. Clean wheel installation, two isolated setup passes, seven resolved configs, wrapper isolation, and a candidate-local doctor smoke pass.
 
 ### Operational status
 - **No activation or data migration**: Orca was not activated, no specialist workers were created, and no live configuration or historical continuity/session store was migrated, truncated, or deleted.

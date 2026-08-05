@@ -83,15 +83,7 @@ detect_wsl() {
     fi
 }
 
-# ── Init submodules (for users who cloned without --recurse-submodules) ───────
-init_submodules() {
-    if [ -f ".gitmodules" ]; then
-        info "Initializing git submodules..."
-        (cd "$PROJECT_ROOT" && git submodule update --init --recursive 2>/dev/null) && ok "Submodules initialized" || warn "Submodule init skipped (no network or not a git repo)"
-    fi
-}
-
-# ── Step 1: Detect Python 3.11+ ───────────────────────────────────────────────
+# ── Step 1: Detect Python 3.11+ ────────────────────────────────────────────────
 detect_python() {
     step 1 "Detecting Python 3.11+"
 
@@ -291,6 +283,30 @@ generate_configs() {
 
     local generated=0
     local skipped=0
+
+    local root_template="$PROJECT_ROOT/home/config.yaml.template"
+    local root_config="$PROJECT_ROOT/home/config.yaml"
+    if [ -f "$root_template" ]; then
+        if [ -f "$root_config" ]; then
+            if grep -q "__AETHER_ROOT__\|__HERMES_PYTHON__" "$root_config" 2>/dev/null; then
+                warn "home/config.yaml has unresolved placeholders — regenerating"
+                cp "$root_template" "$root_config"
+                sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+                sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+                ok "home/config.yaml regenerated"
+                generated=$((generated + 1))
+            else
+                ok "home/config.yaml already configured — skipping"
+                skipped=$((skipped + 1))
+            fi
+        else
+            cp "$root_template" "$root_config"
+            sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+            sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+            ok "home/config.yaml generated from template"
+            generated=$((generated + 1))
+        fi
+    fi
 
     for profile_dir in "$PROJECT_ROOT/home/profiles"/*/; do
         [ -d "$profile_dir" ] || continue
@@ -506,7 +522,6 @@ main() {
 
     verify_repo
     detect_wsl
-    init_submodules
     detect_python
     create_venv
     install_hermes_agent

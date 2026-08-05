@@ -465,6 +465,17 @@ The exact R4.1 tree passes 228 tests, focused Ruff, compileall, shell/YAML
 parsing, governance, zero-retired-bootstrap scanning, a 20-entry wheel, a
 48-entry sdist, clean wheel installation, isolated setup and doctor.
 
+**Post-retirement cleanup: LOCALLY VERIFIED.** Issues #154–#158 remove the
+remaining active Honcho and Graphify installation/configuration surfaces,
+reclassify current Olympus/Harmonia documentation under PDR-0011, generate the
+root Hermes config during clean setup, and make doctor inspect the
+candidate-local Hermes installation without inherited source overrides. The
+exact cleanup tree passes 239 tests, Ruff, compileall, shell/YAML parsing, 48
+current Markdown links, active-residual scanning, a 20-entry wheel, a 49-entry
+sdist, clean wheel installation, two isolated setup passes with seven resolved
+configs, and a candidate-local doctor smoke. No runtime, service, credential,
+historical store, or local data was changed.
+
 After source retirement:
 
 1. prove whether `agent-client-protocol`, LangGraph and checkpoint dependencies have any remaining consumer;

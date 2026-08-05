@@ -76,3 +76,119 @@ def test_wrapper_generation_is_valid_and_idempotent(tmp_path: Path) -> None:
         wrapper = home / ".local" / "bin" / name
         assert wrapper.read_text() == expected
         subprocess.run(["bash", "-n", wrapper], check=True)
+
+
+def test_config_generation_includes_hermes_home_and_preserves_existing_file(tmp_path: Path) -> None:
+    fake_project = tmp_path / "project"
+    root_template = fake_project / "home" / "config.yaml.template"
+    profile_template = fake_project / "home" / "profiles" / "hefesto" / "config.yaml.template"
+    root_template.parent.mkdir(parents=True)
+    profile_template.parent.mkdir(parents=True)
+
+    template = "root: __AETHER_ROOT__\npython: __HERMES_PYTHON__\n"
+    root_template.write_text(template)
+    profile_template.write_text(template)
+
+    python_path = fake_project / "home" / ".venv-hermes" / "bin" / "python"
+    command = (
+        f'source "{SETUP}"; '
+        f'PROJECT_ROOT="{fake_project}"; '
+        f'HERMES_PYTHON="{python_path}"; '
+        "generate_configs"
+    )
+    _run_bash(command)
+
+    expected = f"root: {fake_project}\npython: {python_path}\n"
+    root_config = root_template.with_name("config.yaml")
+    profile_config = profile_template.with_name("config.yaml")
+    assert root_config.read_text() == expected
+    assert profile_config.read_text() == expected
+
+    root_config.write_text("preserved: true\n")
+    _run_bash(command)
+    assert root_config.read_text() == "preserved: true\n"
+
+
+def test_makefile_prefers_candidate_local_hermes_over_path(tmp_path: Path) -> None:
+    local_hermes = tmp_path / "home" / ".venv-hermes" / "bin" / "hermes"
+    global_bin = tmp_path / "global-bin"
+    global_hermes = global_bin / "hermes"
+    local_hermes.parent.mkdir(parents=True)
+    global_bin.mkdir()
+
+    for binary in (local_hermes, global_hermes):
+        binary.write_text("#!/usr/bin/env bash\nexit 0\n")
+        binary.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PATH"] = f"{global_bin}:{env['PATH']}"
+    env["HERMES"] = "hermes"
+    probe_makefile = tmp_path / "probe.mk"
+    probe_makefile.write_text(
+        f"include {ROOT / 'Makefile'}\n\n"
+        "print-hermes:\n"
+        "\t@printf '%s\\n' '$(HERMES)'\n"
+    )
+    result = subprocess.run(
+        [
+            "make",
+            "--no-print-directory",
+            "-C",
+            str(tmp_path),
+            "-f",
+            str(probe_makefile),
+            "print-hermes",
+        ],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.stdout.strip() == "home/.venv-hermes/bin/hermes"
+
+
+def test_make_doctor_removes_inherited_python_source_overrides(tmp_path: Path) -> None:
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    probe = """#!/usr/bin/env bash
+if [ -n "${PYTHONPATH+x}" ] || [ -n "${HERMES_PYTHON_SRC_ROOT+x}" ]; then
+    exit 42
+fi
+if [ "${1:-}" = "--version" ]; then
+    echo "local-hermes"
+elif [[ "${2:-}" == *"sys.version_info"* ]]; then
+    echo "3.11.15"
+else
+    echo "✓ aether_agents"
+fi
+"""
+    fake_python = fake_bin / "python"
+    fake_hermes = fake_bin / "hermes"
+    for binary in (fake_python, fake_hermes):
+        binary.write_text(probe)
+        binary.chmod(0o755)
+
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "/unrelated/hermes/source"
+    env["HERMES_PYTHON_SRC_ROOT"] = "/unrelated/hermes/source"
+    result = subprocess.run(
+        [
+            "make",
+            "--no-print-directory",
+            "-C",
+            str(tmp_path),
+            "-f",
+            str(ROOT / "Makefile"),
+            f"PYTHON={fake_python}",
+            f"HERMES={fake_hermes}",
+            "doctor",
+        ],
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "local-hermes" in result.stdout
+    assert "✓ aether_agents" in result.stdout

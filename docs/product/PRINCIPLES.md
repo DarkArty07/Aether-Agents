@@ -3,6 +3,7 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
 
 These principles contain the approved product baseline established through discovery Phases 1 through 8. Detailed implementation, shared-skill write governance, memory review UX, future UI design, benchmark construction, migration, and runtime enforcement remain later design and validation work.
@@ -82,7 +83,7 @@ The exact user-facing review, correction, export, reset, and deletion experience
 
 - **Rule:** Aether must operate without Honcho or another required external semantic memory service.
 - **Why:** Honcho caused operational problems, increases installation and service complexity, and creates an unnecessary second memory authority.
-- **Favors:** Hermes-native memory, fewer services, clear ownership, and a bounded retirement migration.
+- **Favors:** Hermes-native memory, zero required external memory services, and clear ownership.
 - **Rejects:** Honcho as a normal dependency, hidden fallback, installation requirement, or source of product authority.
 
 ### 11. User preferences do not become universal skills
@@ -108,7 +109,7 @@ The approved authority and escalation model is defined below and in `../knowledg
 - **Favors:** Selective participation, the shortest reliable work path, and specialist use justified by material impact.
 - **Rejects:** Mandatory ceremonies or full-team workflows for tasks that do not need them.
 
-The approved participation policy classifies each Daimon as `required`, `allowed`, `disabled`, or `forbidden` in the applicable scope. Current user policy takes precedence over default routing, learned preferences, peer proposals, and fallback behavior. The canonical model is `../knowledge/MULTI_AGENT_MODEL.md`.
+The approved participation policy classifies each Daimon as `required`, `allowed`, `disabled`, or `forbidden` in the applicable scope. Current user policy takes precedence over default routing, learned preferences, peer proposals, and fallback behavior. Current authority is defined in `../knowledge/AUTHORITY.md`; `../knowledge/MULTI_AGENT_MODEL.md` preserves the historical v0.19 operating model.
 
 ### 14. New Daimons require a distinct software contribution
 
@@ -268,12 +269,12 @@ The canonical target authority matrix is maintained in `../knowledge/AUTHORITY.m
 - **Favors:** Direct bounded handoffs, shared evidence, accountable ownership, durable task state, and Hermes visibility through milestones and escalations rather than all peer chatter.
 - **Rejects:** Mandatory Hermes relay and unrestricted self-organizing agents without contract authority.
 
-### Harmonia coordinates but does not govern the product
+### The execution substrate must not govern the product
 
-- **Rule:** Harmonia and the kernel may coordinate admitted work, dependencies, budgets, evidence, retries, and recovery, but may not redefine product intent, override participant policy, become domain owners, or acquire Olympus lifecycle authority.
-- **Why:** Moving routine coordination out of Hermes should not create a second strategic authority or another mandatory relay.
-- **Favors:** Bounded selection, deterministic validation, one authority per fact, and no direct Harmonia ACP lifecycle ownership.
-- **Rejects:** Harmonia amendments, forbidden-Daimon selection, direct ACP calls outside her authority, and self-approval.
+- **Rule:** A future accepted substrate may coordinate admitted work, dependencies, budgets, evidence, retries, and recovery, but may not redefine product intent, override participant policy, become a domain owner, or accept its own results.
+- **Why:** Moving routine coordination out of Hermes must not create a second strategic authority or another mandatory relay.
+- **Favors:** Bounded selection, deterministic validation, one authority per fact, explicit lifecycle ownership, and replaceable adapters.
+- **Rejects:** Runtime-authored product amendments, forbidden-Daimon selection, hidden fallback, self-approval, and substrate identity embedded in Aether semantic contracts.
 
 ### Evidence and authority resolve disagreements
 
@@ -282,7 +283,7 @@ The canonical target authority matrix is maintained in `../knowledge/AUTHORITY.m
 - **Favors:** Independent domain gates, reproducible evidence, bounded correction, explicit waiver, Hermes cross-domain synthesis, and product-owner escalation only for material consequences.
 - **Rejects:** Voting, repetition, model-size authority, indefinite unsupported blocking, and specialist preference presented as fact.
 
-The canonical target operating model and its relationship to v0.19.0/v0.19.x are documented in `../knowledge/MULTI_AGENT_MODEL.md`.
+The retired v0.19.0/v0.19.x operating model is preserved in `../knowledge/MULTI_AGENT_MODEL.md`. Any replacement execution model is governed by PDR-0011 and must preserve these authority principles.
 
 ## Engineering principles
 

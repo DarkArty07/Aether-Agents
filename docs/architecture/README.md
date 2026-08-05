@@ -12,7 +12,7 @@ Architecture documentation explains how approved product intent is realized tech
 | `SYSTEM_OVERVIEW.md` | Components and runtime topology |
 | `ORCHESTRATION.md` | Hermes routing, decomposition, delegation, monitoring, and synthesis |
 | `DAIMONS.md` | Specialist roles, authority, lifecycle, and non-goals |
-| `OLYMPUS_V3.md` | MCP surface, ACP management, sessions, plugins, and persistence |
+| `RUNTIME_SUBSTRATE.md` | Accepted execution substrate, lifecycle, isolation, recovery, and cleanup after PDR-0011 gates pass |
 | `CONTINUITY.md` | `.aether` capture, intentional state, curation, and injection |
 | `CONFIGURATION_MODEL.md` | Project/profile isolation, templates, environment, and resolution |
 | `DATA_MODEL.md` | Durable stores, ownership, retention, and consistency |

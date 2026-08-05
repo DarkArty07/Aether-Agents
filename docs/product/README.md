@@ -3,6 +3,7 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery Phases 1 through 8 complete
 > **Authority:** Christopher (DarkArty07), product owner
 > **Governing decisions:** [`PDR-0002`](../decisions/PDR-0002-generic-adaptive-software-product.md), [`PDR-0003`](../decisions/PDR-0003-quality-doctrine-and-model-economics.md), [`PDR-0004`](../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md), [`PDR-0005`](../decisions/PDR-0005-multi-agent-participation-and-coordination.md), [`PDR-0006`](../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md), [`PDR-0007`](../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md), [`PDR-0008`](../decisions/PDR-0008-canonical-definition-and-project-completion.md)
+> **v0.22.0 runtime decision:** [`PDR-0011`](../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md)
 > **Implementation authorization:** None
 
 This directory defines what Aether Agents is, why it exists, what it should become, and which boundaries all technical work must preserve.
@@ -67,7 +68,8 @@ The user acts primarily as product owner and is not expected to provide advanced
 
 - The **user** owns vision, visible behavior, material scope, priorities, accepted compromises, consequential external effects, and final acceptance.
 - **Hermes** translates product intent into a bounded work contract and synthesizes material escalations in product language.
-- **Harmonia and the coordination kernel** manage tasks, dependencies, handoffs, evidence, recovery, and semantic closure without redefining intent; Olympus and ACPManager retain process and ACP-session lifecycle ownership.
+- **Aether-native contracts and policy** define tasks, budgets, evidence, protected effects, review, and semantic closure without granting product authority to an execution substrate.
+- **No multi-agent execution runtime is active** in the v0.22.0 candidate. A replacement must pass PDR-0011 gates before it may own operational lifecycle state.
 - **Daimons** exercise specialist judgment inside explicit task and authority boundaries.
 - **Deterministic policy and tools** enforce permissions, budgets, evidence gates, and irreversible-effect boundaries.
 
@@ -80,11 +82,11 @@ Aether decides routine, reversible technical mechanics autonomously. It escalate
 - Current user policy overrides defaults, historical workflows, learned preferences, peer proposals, and fallback routing.
 - Disabling a Daimon does not silently waive quality; Aether must use an honest alternative or escalate the residual consequence.
 - Hermes centralizes user intent and product synthesis, but must not remain the mandatory relay for every specialist message or handoff.
-- Authorized Daimons may collaborate laterally inside an approved contract with bounded authority, evidence, budgets, and traceability.
-- Harmonia coordinates contract state and bounded execution without becoming product authority, domain owner, mandatory relay, or ACP lifecycle owner.
+- Authorized Daimons may collaborate laterally only after an accepted runtime enforces bounded authority, evidence, budgets, traceability, and participant policy.
+- No retired runtime, renamed adapter, or hidden fallback may be used to simulate that capability.
 - Disagreements resolve through current intent, approved decisions, contract, evidence, quality doctrine, and domain authority—not majority vote.
 
-The canonical target model and analysis of v0.19.0/v0.19.x are in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md).
+The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md); PDR-0011 and the v0.22 roadmap govern any replacement runtime.
 
 ## Approved learning and memory doctrine
 
@@ -141,7 +143,7 @@ Aether is not:
 | 7 | Intelligent software studio experience, progressive visibility, and future UI | APPROVED and persisted in `PDR-0007` |
 | 8 | Requirements responsibility, project completion, non-negotiable boundaries, and canonical validation | APPROVED and persisted in `PDR-0008` |
 
-Phase 6 is grounded in the installed Hermes Agent implementation and current Aether configuration: [`docs/knowledge/HERMES_LEARNING_MODEL.md`](../knowledge/HERMES_LEARNING_MODEL.md). Hermes' native learning loop is approved as canonical, Honcho is excluded from the target product, and Hermes owns global user-profile and memory management. Current configuration still names Honcho and requires a later bounded retirement task.
+Phase 6 is grounded in the installed Hermes Agent implementation and Aether's tracked template: [`docs/knowledge/HERMES_LEARNING_MODEL.md`](../knowledge/HERMES_LEARNING_MODEL.md). Hermes' native learning loop is canonical, Hermes owns global user-profile and memory management, and the v0.22.0 candidate has retired the tracked Honcho configuration and installation surfaces.
 
 ## Important distinctions
 
@@ -178,7 +180,7 @@ Product discovery Phases 1 through 8 are complete. The canonical set now answers
 - who benefits from it;
 - how it learns and adapts to the user;
 - why and when specialist agents participate;
-- what Hermes, Harmonia, Olympus, the kernel, and Daimons are meant to accomplish;
+- what Hermes, Aether-native policy, future execution substrates, and Daimons are meant to accomplish;
 - how requirements are discovered and preserved;
 - when a software project is complete;
 - how quality and comparative product value are evaluated;

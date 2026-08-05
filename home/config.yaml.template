@@ -305,7 +305,6 @@ memory:
   user_profile_enabled: true
   memory_char_limit: 4000
   user_char_limit: 3000
-  provider: honcho
 delegation:
   model: deepseek-v4-flash
   provider: llmgateway
@@ -439,19 +438,6 @@ mcp_servers:
     - '@upstash/context7-mcp'
     command: npx
     enabled: true
-  graphify:
-    command: __PYTHON_BIN__
-    args:
-    - -m
-    - graphify.serve
-    - __AETHER_ROOT__/graphify-out/graph.json
-    enabled: true
-    env:
-      GRAPHIFY_PROJECT: __AETHER_ROOT__
-      OPENAI_API_KEY: ${LLMGATEWAY_API_KEY}
-      OPENAI_BASE_URL: https://api.llmgateway.io/v1
-      OPENAI_MODEL: deepseek-v4-flash
-    timeout: 600
 platform_toolsets:
   cli:
   - browser

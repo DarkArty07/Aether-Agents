@@ -1,9 +1,15 @@
 # Multi-Agent Operating Model
 
-> **Status:** APPROVED TARGET — current runtime parity not yet verified
+> **Status:** HISTORICAL — v0.19 operating model; runtime retired in v0.22.0
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **Governing decisions:** `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
+
+> **v0.22.0 amendment:** This document preserves the approved v0.19 conceptual
+> and experimental model. PDR-0011 retired Harmonia, the kernel, Olympus, ACPManager,
+> and their executable surfaces. It is not a current runtime design and must not
+> be used to restore a compatibility path. Current product authority is defined in
+> `AUTHORITY.md`; replacement execution remains gated by the v0.22.0 roadmap.
 
 ## Purpose
 

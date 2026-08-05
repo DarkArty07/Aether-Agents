@@ -21,7 +21,7 @@
 ## ⚡ Quick Start
 
 ```bash
-git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
+git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 bash scripts/setup.sh
 ```
@@ -81,7 +81,8 @@ Hermes (hermes-agent)
 | **Daedalus** | UX/UI Designer | 2 | Designs experiences, not just mockups. |
 | **Ictinus** | Backend Architect | 1 | Scales databases, APIs, infrastructure. Consultant on demand. |
 
-Level 2 Daimons execute tasks. Level 1 Consultants provide expert input when summoned.
+These profiles preserve the approved specialist roles and contracts. The v0.22.0
+candidate does not currently provide a runtime that invokes them.
 
 ---
 
@@ -133,9 +134,6 @@ Release plans, benchmarks, handoffs, and evidence remain under `docs/releases/`;
 | `bash scripts/start-gateway.sh start` | Start/stop/restart gateway service |
 | `make doctor` | Verify installation health |
 | `make setup` | Shortcut for setup.sh |
-| `make setup-honcho` | Initialize Honcho and start it with detected Docker Compose or Podman Compose |
-| `make honcho-up` / `make honcho-down` | Start or stop Honcho with the detected Compose runtime |
-| `make honcho-logs` | Follow Honcho API logs with the detected Compose runtime |
 
 ---
 
@@ -148,42 +146,15 @@ Release plans, benchmarks, handoffs, and evidence remain under `docs/releases/`;
 nano home/.env
 ```
 
-Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them to your machine's paths. Primary routes are Hermes on `openai-codex/gpt-5.6-sol` and all six Daimons on `openai-codex/gpt-5.6-terra`; profile-specific OpenRouter entries are intentional fallback routes. Graphify is the explicit exception: its semantic inference uses `llmgateway/deepseek-v4-flash`. See [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md) for full options.
+Config templates use `__AETHER_ROOT__` and `__HERMES_PYTHON__` placeholders — `setup.sh` resolves them to your machine's paths. Primary routes are Hermes on `openai-codex/gpt-5.6-sol` and all six Daimons on `openai-codex/gpt-5.6-terra`; profile-specific OpenRouter entries are intentional fallback routes. See [docs/guides/CONFIGURATION.md](docs/guides/CONFIGURATION.md) for full options.
 
 ---
 
-## 🧠 Memory Provider (Honcho)
+## 🧠 Memory and Learning
 
-Aether Agents uses [Honcho](https://github.com/plastic-labs/honcho) as a self-hosted memory layer for all Daimons. Honcho provides:
-
-- **Persistent user profiles** — traits, preferences, communication style
-- **Semantic memory search** — cross-session context recall
-- **Dialectic reasoning** — synthesized answers from accumulated observations
-
-### Prerequisites
-
-- A supported Compose runtime: Docker Compose v2, legacy `docker-compose`, or Podman Compose.
-- 4 GB free RAM for the API, deriver, PostgreSQL + pgvector, and Redis containers.
-
-### Setup
-
-    make setup-honcho
-
-The setup script detects the available Compose runtime, initializes the Honcho submodule, generates `honcho-server/.env` from its template using configured keys, and starts the services.
-
-### Commands
-
-    make honcho-up       # Start services with the detected Compose runtime
-    make honcho-down     # Stop services while preserving named volumes
-    make honcho-logs     # Follow API logs with the detected Compose runtime
-
-### Architecture
-
-Honcho runs as four internal containers: API, deriver, PostgreSQL + pgvector, and Redis. Only the API is host-bound at `127.0.0.1:8010`; PostgreSQL and Redis remain internal to the Compose network. Daimons query Honcho through MCP tools (`honcho_profile`, `honcho_search`, `honcho_reasoning`).
-
-The submodule includes compatibility patches for its configured providers. See `honcho-server/PATCHES.md` for details.
-
-Full documentation: docs/honcho-setup.md
+Aether uses Hermes Agent's built-in `USER.md`, `MEMORY.md`, session search,
+skills, and Curator. No external semantic-memory service, submodule, container
+stack, or separate memory authority is required by the candidate.
 
 ---
 

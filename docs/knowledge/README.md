@@ -14,9 +14,9 @@ This area contains stable, reusable knowledge needed by humans and agents to rea
 | `TARGET_SYSTEM.md` | Approved future state, clearly separated from current behavior |
 | `CONSTRAINTS.md` | Stable technical, operational, authorization, and compatibility constraints |
 | [AUTHORITY.md](./AUTHORITY.md) | Approved target model for product-owner authority, technical autonomy, delegation, and escalation boundaries |
-| [MULTI_AGENT_MODEL.md](./MULTI_AGENT_MODEL.md) | Approved target model for Daimon participation, lateral coordination, disagreement resolution, and v0.19.x alignment |
+| [MULTI_AGENT_MODEL.md](./MULTI_AGENT_MODEL.md) | Historical v0.19 model for Daimon participation and retired lateral-coordination experiments; PDR-0011 governs any replacement runtime |
 | [HERMES_LEARNING_MODEL.md](./HERMES_LEARNING_MODEL.md) | Verified current Hermes learning mechanics plus approved governance: Hermes owns user memory, native learning is canonical, and Honcho is retired |
-| [SELF_IMPROVEMENT_CYCLE.md](./SELF_IMPROVEMENT_CYCLE.md) | Approved SemVer operating model for automatic Aether session entry, measurement, safe direct repair, Harmonia retry, cross-project isolation, and evidence-derived next-minor signals |
+| [SELF_IMPROVEMENT_CYCLE.md](./SELF_IMPROVEMENT_CYCLE.md) | Current policy and historical cycle evidence; v0.22.0 retains only inert ledger, causality, and human-promotion primitives with no executable bootstrap |
 | `KNOWN_LIMITATIONS.md` | Confirmed limitations and where they are tracked |
 
 ## Knowledge rules

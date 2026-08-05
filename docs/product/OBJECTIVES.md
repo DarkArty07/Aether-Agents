@@ -3,6 +3,7 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
 
 ## Outcome model
@@ -124,9 +125,9 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Outcome:** Authorized Daimons can exchange bounded work, artifacts, evidence, review requests, and dependency handoffs directly after contract admission, while Hermes remains responsible for intent, amendments, escalation, and final synthesis.
 - **Beneficiary:** Users, specialist agents, and operators paying the context, latency, and inference cost.
 - **Why it matters:** Using the strongest model as the message bus for every handoff wastes capacity and constrains specialist autonomy, but unrestricted self-organization would endanger vision and authority.
-- **Evidence:** A fixed two-agent handoff with zero routine Hermes relay, bounded Harmonia selection committed by the kernel, durable traceability, no duplicate semantic authority, and representative fault tests without hidden hub-and-spoke fallback.
-- **Failure condition:** Hermes still relays routine results, selects every next agent, or dispatches every retry; Harmonia becomes a second product or lifecycle authority; lateral work escapes contract or participant bounds.
-- **Horizon:** Approved target direction. v0.19.x closed at v0.19.5 as `VIABLE — BOUNDED` for the demonstrated default-off topology; broader participant-policy enforcement, production migration, activation, and global replacement remain future work.
+- **Evidence:** A future accepted runtime must prove a fixed two-agent handoff with zero routine Hermes relay, durable traceability, no duplicate semantic authority, representative fault tests, and no hidden fallback.
+- **Failure condition:** Hermes still relays routine results, selects every next agent, or dispatches every retry; the runtime becomes a second product authority; lateral work escapes contract or participant bounds.
+- **Horizon:** Approved target direction. v0.19.5 remains historical bounded evidence; PDR-0011 retired its runtime, and v0.22.0 provides no replacement execution path.
 
 ### Objective 14: Build a coherent user model through Hermes
 
@@ -144,7 +145,7 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Why it matters:** Honcho caused operational problems, adds service and data complexity, and duplicates memory responsibilities already present in Hermes.
 - **Evidence:** Clean installation and runtime without Honcho, native cross-session preference persistence, no hidden dependency, and retired setup documentation.
 - **Failure condition:** Aether cannot start or personalize without Honcho, silently loses required behavior after removal, or introduces another competing general memory engine.
-- **Horizon:** Approved target direction; current configuration migration remains pending.
+- **Horizon:** Implemented in the v0.22.0 candidate; tracked configuration, setup, documentation, and distribution surfaces no longer require Honcho.
 
 ### Objective 16: Make complex coordination understandable without making the user manage it
 

@@ -3,6 +3,7 @@
 > **Status:** APPROVED PRODUCT BASELINE — future UI not implemented
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
 
 ## Experience statement
@@ -96,7 +97,7 @@ Available for verification and optimization:
 Available to advanced users and maintainers:
 
 - coordination ledger events;
-- Olympus sessions and lifecycle facts;
+- historical runtime sessions and lifecycle evidence, when explicitly retained;
 - raw evidence references;
 - contract generations and amendments;
 - capability, fence, lease, and reconciliation state;
@@ -230,8 +231,8 @@ The UI is not a source of truth.
 | UI information | Authoritative source |
 |---|---|
 | Product vision and decisions | Version-controlled product docs and decision records |
-| Contract, task, gate, retry, and semantic state | Coordination ledger and kernel projection |
-| ACP process and session state | Olympus / ACPManager |
+| Contract, task, gate, retry, and semantic state | Aether-native contracts and evidence; no active execution projection in v0.22.0 |
+| Retired process and session state | Read-only historical release/runtime evidence only |
 | Current project continuity | `.aether` |
 | User profile and global memory | Hermes-native memory stores |
 | Source and artifact content | Repository and artifact stores |

@@ -26,48 +26,6 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 2. **Gateway env does not auto-load profile `.env`.** `systemctl --user hermes-gateway*.service` does NOT source `home/.env` or the profile `.env`. MCP servers that need API keys (Bearer, OPENCODE_*, etc.) work from a shell smoke test but fail under the gateway. Fix: a drop-in override at `~/.config/systemd/user/hermes-gateway.service.d/override.conf` with `EnvironmentFile=`. See `references/mcp-server-configuration.md` §"Gateway env-loading pitfall".
 3. **Prometeo and Aether-Agents are independent hermes-agent instances.** Separate `config.yaml`, separate `.env`, separate `hermes-gateway*.service`. Adding an MCP to one does not affect the other. Before editing, confirm which instance you are modifying by `echo $HERMES_HOME` and `pwd`.
 
-### Pitfall #N — Graphify `serve` Uses Relative Path, Breaks from Gateway CWD
-
-**Síntoma:** Agregas `mcp_servers.graphify` a `config.yaml` con `args: ["-m", "graphify.serve"]`. El gateway arranca graphify, pero `_load_graph()` falla con `FileNotFoundError: graph.json not found`. Desde shell con `python -m graphify.serve` funciona perfecto.
-
-**Causa raíz:** `graphify.serve` lee `sys.argv[1]` para el path del graph.json, con default `graphify-out/graph.json` (relativa). Cuando lo lanza el gateway via MCP, el CWD del proceso es el del gateway (típicamente el home del venv o el directorio del usuario), NO la raíz del repo Aether-Agents. La resolución relativa falla.
-
-**Fix correcto (pasado en sesión 06-04):**
-
-```yaml
-mcp_servers:
-  graphify:
-    command: /home/prometeo/Aether-Agents/home/.venv-hermes/bin/python3.11
-    args:
-      - -m
-      - graphify.serve
-      - /home/prometeo/Aether-Agents/graphify-out/graph.json  # ← ABSOLUTA, no relativa
-    enabled: true
-    env:
-      GRAPHIFY_PROJECT: /home/prometeo/Aether-Agents
-      OPENCODE_API_KEY: ${OPENCODE_API_KEY}
-    timeout: 600
-```
-
-La ruta absoluta como `argv[1]` resuelve el problema sin importar el CWD del proceso.
-
-**Diagnóstico rápido cuando graphify no arranca:**
-```bash
-# 1. Verifica el proceso y su CWD
-GW_PID=$(systemctl --user show -p MainPID hermes-gateway.service | cut -d= -f2)
-cat /proc/$GW_PID/cwd 2>/dev/null  # te dice el CWD del gateway
-
-# 2. Verifica si la ruta existe desde ese CWD
-sudo -u $(whoami) ls -l $(cat /proc/$GW_PID/cwd 2>/dev/null)/graphify-out/graph.json
-# Si falla, el problema es CWD relativa
-
-# 3. Test directo del módulo
-cd / && home/.venv-hermes/bin/python -m graphify.serve /home/prometeo/Aether-Agents/graphify-out/graph.json
-# Si esto funciona, confirma que el fix es pasar ruta absoluta
-```
-
-**Regla:** Cualquier MCP server que abra un archivo en el proyecto (graph.json, db.sqlite, .env) DEBE recibir la ruta absoluta via args o env var, nunca depender de CWD.
-
 ## Memory & Configuration Pitfalls
 
 ### Pitfall: Memory Snapshot Frozen at Session Start — Char Limit Header Stale
@@ -84,7 +42,7 @@ cd / && home/.venv-hermes/bin/python -m graphify.serve /home/prometeo/Aether-Age
 **Resolution:** The raise takes effect on the NEXT session that starts cold (new agent process → fresh `load_from_disk()` → new snapshot with new caps). No code path to reload snapshot mid-session by design.
 
 **Do NOT:**
-- Confuse `provider: honcho` with char-limit invalidation. Honcho is a parallel external memory system; the built-in `memory_char_limit` / `user_char_limit` in config.yaml still govern the local `MEMORY.md` / `USER.md` files independently.
+- Confuse an optional external memory provider with char-limit invalidation. The built-in `memory_char_limit` / `user_char_limit` in config.yaml govern the local `MEMORY.md` / `USER.md` files independently.
 - Trust the rendered `[X% — N/L]` header as ground truth about config.yaml — it shows session-state, not config-state.
-- Suggest "Honcho overrides char limits" as an explanation for stale headers. Different bug, different fix.
+- Suggest that an external provider overrides built-in char limits as an explanation for stale headers. Different bug, different fix.
 - Try to mutate the snapshot from inside the running agent. No public API exists. Restart is the only path.

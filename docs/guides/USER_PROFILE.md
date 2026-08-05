@@ -129,4 +129,4 @@ The current explicit instruction wins immediately. Hermes should then correct or
 
 ### Does Aether use Honcho?
 
-No. Honcho is excluded from the approved target product. Current configuration and historical setup material still require a separately authorized retirement task.
+No. Honcho is excluded from the approved product and the v0.22.0 candidate has removed its tracked provider, setup, service, and operational-documentation surfaces. Historical decisions and release evidence remain available for traceability.
