@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 ACCEPTED; M1.1 CORRECTION 1 AUTHORIZED; NOT ACTIVATED
+> **Status:** M0 ACCEPTED; M1.1 CORRECTION 2 AUTHORIZED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -1394,21 +1394,24 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.1 Correction 1 — Harden qualification boundaries** as one bounded
-repository-local external-agent task. The provisional implementation at
-`a683dd681d5924197c3b3add7f534ae83a795cae` preserves the happy-path Orca
-identity but is not accepted: independent probes proved comment-only binding,
-nested side-effect, secret-redaction, ambient-root and timeout-descendant defects.
-`M1_1_INDEPENDENT_REVIEW.md` and the immutable correction task define the exact
-repair. Starting Orca or creating runtime state remains forbidden.
+Execute **M1.1 Correction 2 — Close remaining isolation gaps** as one bounded
+repository-local external-agent task. Correction 1 at
+`32b72ee4e8a8dd18d5131b7f38793139a14eaff8` fixes the original five findings but
+is not accepted: independent probes proved a hidden dynamic APPIMAGE reassignment,
+global TMPDIR escape, inter-call side-effect concealment and missing required
+directories. Its reports also claim 39/64 tests while the committed tree contains
+37/62. `M1_1_CORRECTION_1_REVIEW.md` and the immutable Correction 2 task define
+the final bounded repair. Starting Orca or creating runtime state remains
+forbidden.
 
 ### STOP CONDITION
 
-The correction stops when the external agent has written its separate correction
-report and two branch-local atomic commits. Hermes then inspects the exact diff
-and test bodies and independently reproduces every original gate plus all five
-adversarial regressions. M1.2 remains blocked until Hermes accepts corrected M1.1
-through a separate acceptance marker.
+Correction 2 stops when the external agent has written its separate report and two
+branch-local atomic commits. Hermes then inspects the exact diff and independently
+reproduces all original, Correction 1 and Correction 2 regressions. M1.2 remains
+blocked until Hermes creates a separate acceptance marker. If this third total
+M1.1 attempt fails an equivalent boundary, stop automatic patching and revisit
+the qualification design.
 
 ### LATER GATES
 
