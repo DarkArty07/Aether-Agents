@@ -13,13 +13,15 @@ architecture, 24-tool contract, trace/learning schemas, measurement contract,
 16-case catalog and M0–M12 roadmap are frozen in
 `docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`.
 
-The current implementation scope is M1.1 only: a repository-local external
-coding agent may create the declared Orca qualification script, deterministic
-tests, evidence and branch-local atomic commits. It may inspect executable,
-version, digest and public catalog metadata read-only. It must not start Orca,
-create runtime state, install dependencies, launch workers, begin M1.2, push,
-merge, rebase, amend, tag, Release or touch protected local data. Hermes audits
-the exact commits and reruns the gates before issuing the next task prompt.
+M1.1a exact installed identity and catalog are accepted as the bounded read-only
+basis for M1.2. M1.1b reusable adversarial isolation is deferred accepted debt and
+blocks M1.3. The current scope is M1.2 only: a repository-local external coding
+agent may invoke exactly two isolated `orca agent-context --json` reads and create
+the declared structured seam matrix, report and branch-local atomic commit. It
+must not execute mapped operations, start Orca runtime, create runtime state,
+install dependencies, launch workers, implement an adapter or MCP package, begin
+M1.3, push, merge, rebase, amend, tag, Release or touch protected local data.
+Hermes audits the exact commit and catalog mapping before any later authorization.
 
 ## v0.19.0 experimental coordination closeout
 
@@ -41,7 +43,7 @@ system; audit is secondary. The M0 design separates a compact semantic event
 index from protected secret-redacted model-visible learning episodes, labels and
 versioned dataset lineage. The design is accepted, but no capture store, dataset
 builder, exporter, trainer, upload, prompt/model mutation or promotion path exists
-or is authorized by M1.1.
+or is authorized by M1.1a or M1.2.
 
 The `aether-self-improvement` plugin itself is absent, not merely disabled. A clean installation has no supported self-improvement activation path, general delegation path, or Aether MCP facade.
 

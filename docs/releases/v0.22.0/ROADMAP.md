@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 ACCEPTED; M1.1 DESIGN REASSESSMENT REQUIRED; NOT ACTIVATED
+> **Status:** M1.1a ACCEPTED; M1.1b DEFERRED; M1.2 AUTHORIZED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -214,8 +214,9 @@ parallelism is expected to improve quality or time more than coordination cost.
 ## 8. Design closure sequence
 
 M0 closed on 2026-08-06 when the product owner accepted the detailed design and
-frozen use-case catalog. The current horizon is M1.1 only; later M1 packages do
-not become active until Hermes independently accepts the preceding task.
+frozen use-case catalog. M1.1a identity/catalog evidence is accepted as a bounded
+fast-track prerequisite and the current horizon is read-only M1.2 seam mapping.
+M1.1b remains a mandatory blocker before M1.3 lifecycle work.
 
 ### M0 — Final design and traceable use cases
 
@@ -759,6 +760,12 @@ secrets and performs no worker/model call.
 
 **Verify:** run the qualification test and probe twice; require byte-equivalent
 identity fields and no new files outside the isolated root/evidence allowlist.
+
+**Fast-track disposition (2026-08-07):** M1.1a exact installed identity and
+catalog are accepted in `M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md` as the read-only
+basis for M1.2. Reusable adversarial isolation remains M1.1b accepted debt and
+must close before M1.3. This split does not label the rejected generic qualifier
+accepted and authorizes no lifecycle operation.
 
 #### M1.2 — Freeze the structured provider seam matrix
 
@@ -1394,23 +1401,19 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Pause M1.1 implementation and perform a bounded **qualifier design reassessment**.
-Correction 2 at `539c09b79edff460ce152f9134c14866390bf542` closes R1-R4
-and preserves the real Orca happy path, but final independent probes proved that
-`tmp/.mount_orca-*` can hide arbitrary files and a `printf -v APPIMAGE` mutation
-evades the shell blacklist. The required FIFO test was also skipped by an invalid
-fixture while its report called the coverage PASS. `M1_1_CORRECTION_2_REVIEW.md`
-records the evidence and recommends candidate-specific canonical verification
-instead of another blacklist correction. Starting Orca or creating runtime state
-remains forbidden.
+Execute **M1.2 — Freeze the structured provider seam matrix** as one fast,
+read-only external-agent task. M1.1a pins the exact installed launcher, AppImage,
+version and 220-command catalog. M1.2 may invoke only two isolated
+`agent-context --json` reads, then map the 24 Aether MCP tools and M2–M5 provider
+capabilities as `SUPPORTED`, `PARTIAL`, `MISSING` or `UNKNOWN`. It may not execute
+any mapped operation, implement an adapter or begin lifecycle work.
 
 ### STOP CONDITION
 
-The reassessment stops when the product owner and Hermes freeze one bounded design:
-candidate-specific canonical launcher verification with exact inventory, or a
-dependency-backed real shell parser with its scope consequences. No implementation
-task follows automatically. M1.2 remains blocked until a revised implementation
-passes independent acceptance and Hermes creates a separate acceptance marker.
+M1.2 stops after one exact three-artifact commit and external-agent report. Hermes
+then reproduces the catalog and audits every positive and unresolved mapping.
+M1.1b and M1.3 remain blocked regardless of the M1.2 verdict; no runtime or adapter
+work follows without a separate acceptance gate.
 
 ### LATER GATES
 

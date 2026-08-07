@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_accepted_mcp_first_m1_1_design_reassessment_required
+status: m1_1a_accepted_m1_1b_deferred_m1_2_authorized
 approved_on: "2026-08-06"
 owner: Christopher (DarkArty07)
 
@@ -103,7 +103,7 @@ mcp_architecture:
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: false
   qualification_implementation_authorized: true
-  qualification_implementation_scope: M1_1_repository_task_only
+  qualification_implementation_scope: M1_2_read_only_catalog_seam_matrix_only
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
@@ -112,7 +112,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M1_1_qualifier_design_reassessment
+  active_task: M1_2_freeze_structured_provider_seam_matrix
   successor_agents_are_stateless: true
   next_prompt_requires_independent_acceptance: true
   external_agent_git:
@@ -204,6 +204,20 @@ m1_1_correction_2_review:
   automatic_correction_retry_exhausted: true
   next_action: candidate_specific_vs_dependency_backed_parser_design_decision
   M1_2_authorized: false
+
+m1_1_fast_track:
+  accepted_on: "2026-08-07"
+  authorization_source: user_requested_prompt_and_faster_advancement
+  acceptance_path: docs/releases/v0.22.0/M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md
+  M1_1a_identity_and_catalog: accepted_read_only_basis_for_M1_2
+  M1_1b_reusable_isolation_qualifier: deferred_accepted_debt
+  M1_1b_closure_deadline: before_any_M1_3_operation
+  M1_2_authorized: read_only_catalog_and_seam_matrix_only
+  M1_3_authorized: false
+  known_debt:
+    - mount_prefix_subtree_bypasses_exact_inventory
+    - generic_bash_mutation_blacklist_not_fail_closed
+    - mandatory_fifo_test_skipped_by_invalid_fixture
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -855,11 +869,12 @@ milestones:
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
     status: in_progress
-    active_package: M1_1_qualifier_design_reassessment
-    M1_1_freeze_source_and_executable_identity: correction_2_rejected_design_reassessment_required
-    M1_2_structured_provider_seam_matrix: blocked_pending_M1_1_acceptance
-    M1_3_isolated_lifecycle_and_rollback: blocked_pending_explicit_operation_authority
-    M1_4_provider_decision: blocked_pending_M1_1_to_M1_3
+    active_package: M1_2_structured_provider_seam_matrix
+    M1_1a_exact_identity_and_catalog: accepted
+    M1_1b_reusable_isolation_qualifier: deferred_blocker_before_M1_3
+    M1_2_structured_provider_seam_matrix: authorized_read_only
+    M1_3_isolated_lifecycle_and_rollback: blocked_pending_M1_1b_and_explicit_operation_authority
+    M1_4_provider_decision: blocked_pending_M1_1_through_M1_3
   M2_aether_mcp_foundation: blocked_pending_D1
   M3_lifecycle_through_aether_mcp: blocked_pending_M2
   M4_one_synthetic_worker: blocked_pending_M3
@@ -875,11 +890,11 @@ milestones:
 authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
-  M1_1_repository_implementation: paused_pending_design_reassessment
-  M1_2_repository_implementation: not_yet_authorized
+  M1_1_repository_implementation: M1_1b_deferred
+  M1_2_repository_implementation: authorized_read_only_documentation_and_evidence
   M1_3_orca_runtime_operation: not_authorized
   M2_aether_mcp_source_implementation: not_authorized
-  external_agent_branch_local_atomic_commits_for_M1_1: authorized
+  external_agent_branch_local_atomic_commit_for_active_M1_2_task: authorized
   external_agent_push_merge_rebase_amend_tag_release: forbidden
   orca_runtime_start: not_authorized
   worker_or_model_execution: not_authorized
@@ -895,14 +910,13 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M1_1_qualifier_design_reassessment
-  executor: Hermes_and_product_owner
+  milestone: M1_2_freeze_structured_provider_seam_matrix
+  executor: repository_local_external_coding_agent
   acceptance_owner: Hermes
   requirement: >-
-    Freeze a bounded qualifier design after three failed implementation attempts.
-    Decide between candidate-specific canonical launcher verification with exact
-    no-exception inventory (recommended) and a dependency-backed real shell parser
-    with explicit scope consequences. Do not authorize another correction merely
-    by adding blacklist cases or prefix exceptions. Do not start Orca, create
-    runtime state, install dependencies, launch workers, access providers, mutate
-    protected state or begin M1.2.
+    Read the exact pinned public Orca catalog twice under isolated HOME/XDG/TMP,
+    then map all 24 Aether MCP tools and every M2-M5 provider capability to exact
+    public structured commands with SUPPORTED/PARTIAL/MISSING/UNKNOWN evidence.
+    Do not execute mapped operations, implement adapter/MCP code, access private
+    state, install dependencies or begin M1.3. M1.1b remains an explicit blocker
+    before any lifecycle operation.
