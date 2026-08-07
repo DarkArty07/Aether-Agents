@@ -141,11 +141,12 @@ def test_current_documentation_indexes_do_not_plan_olympus_docs() -> None:
 
 
 def test_disconnected_aether_native_runtime_and_profile_plugins_are_absent() -> None:
-    retired = (ROOT / "src", *PROFILE_AETHER_PLUGINS)
+    retired = (ROOT / "src" / "aether_agents", ROOT / "src" / "olympus_v3", *PROFILE_AETHER_PLUGINS)
     remaining = [str(path.relative_to(ROOT)) for path in retired if path.exists()]
 
     assert len(PROFILE_AETHER_PLUGINS) == 0
     assert remaining == []
+    assert {path.name for path in (ROOT / "src").iterdir()} == {"aether_mcp"}
 
 
 def test_profile_templates_do_not_enable_aether_continuity_plugin() -> None:
@@ -159,14 +160,27 @@ def test_profile_templates_do_not_enable_aether_continuity_plugin() -> None:
     assert enabled == []
 
 
-def test_repository_is_not_an_aether_python_runtime_distribution() -> None:
+def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     pyproject_path = ROOT / "pyproject.toml"
     pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
     text = pyproject_path.read_text(encoding="utf-8").lower()
 
-    assert "project" not in pyproject
-    assert "build-system" not in pyproject
+    assert pyproject["build-system"] == {
+        "requires": ["setuptools==83.0.0"],
+        "build-backend": "setuptools.build_meta",
+    }
+    assert pyproject["project"] == {
+        "name": "aether-mcp",
+        "version": "0.22.0.dev0",
+        "requires-python": ">=3.11",
+        "dependencies": ["mcp==1.28.1"],
+        "scripts": {"aether-mcp": "aether_mcp.__main__:main"},
+    }
+    assert pyproject["tool"]["setuptools"]["packages"]["find"] == {"where": ["src"]}
     assert "aiosqlite" not in text
+    assert "cryptography" not in text
+    assert "aether-agents" not in text
+    assert "olympus" not in text
     assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.22.0"
 
 

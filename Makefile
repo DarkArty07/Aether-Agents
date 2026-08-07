@@ -70,6 +70,10 @@ test: ## Run test suite (if tests/ exists)
 		echo "No tests/ directory found — skipping"; \
 	fi
 
+.PHONY: mcp-smoke
+mcp-smoke: ## Run the default-off Aether MCP stdio process through clean EOF
+	PYTHONPATH=src $(PYTHON) -m aether_mcp </dev/null
+
 # ── Help ───────────────────────────────────────────────────────────────────────
 
 .PHONY: help

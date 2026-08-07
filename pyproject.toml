@@ -1,3 +1,19 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aether-mcp"
+version = "0.22.0.dev0"
+requires-python = ">=3.11"
+dependencies = ["mcp==1.28.1"]
+
+[project.scripts]
+aether-mcp = "aether_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
