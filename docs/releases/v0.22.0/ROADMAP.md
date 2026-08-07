@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 ACCEPTED; M1.1 REPOSITORY IMPLEMENTATION AUTHORIZED; NOT ACTIVATED
+> **Status:** M0 ACCEPTED; M1.1 CORRECTION 1 AUTHORIZED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -1394,17 +1394,21 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.1 — Freeze source and executable identity** as one bounded
-repository-local external-agent task. The task may create only the declared
-qualification script, deterministic tests, evidence and its report. Read-only
-Orca executable/version/digest/catalog inspection is permitted; starting Orca
-or creating runtime state is not.
+Execute **M1.1 Correction 1 — Harden qualification boundaries** as one bounded
+repository-local external-agent task. The provisional implementation at
+`a683dd681d5924197c3b3add7f534ae83a795cae` preserves the happy-path Orca
+identity but is not accepted: independent probes proved comment-only binding,
+nested side-effect, secret-redaction, ambient-root and timeout-descendant defects.
+`M1_1_INDEPENDENT_REVIEW.md` and the immutable correction task define the exact
+repair. Starting Orca or creating runtime state remains forbidden.
 
 ### STOP CONDITION
 
-M1.1 stops when the external agent has written its report and branch-local atomic
-commits. Hermes then inspects the exact diff and test bodies and independently
-reproduces the declared gates. M1.2 remains blocked until Hermes accepts M1.1.
+The correction stops when the external agent has written its separate correction
+report and two branch-local atomic commits. Hermes then inspects the exact diff
+and test bodies and independently reproduces every original gate plus all five
+adversarial regressions. M1.2 remains blocked until Hermes accepts corrected M1.1
+through a separate acceptance marker.
 
 ### LATER GATES
 

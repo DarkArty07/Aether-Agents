@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_accepted_mcp_first_m1_1_repository_implementation_authorized
+status: m0_accepted_mcp_first_m1_1_correction_1_authorized
 approved_on: "2026-08-06"
 owner: Christopher (DarkArty07)
 
@@ -112,7 +112,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M1_1_freeze_orca_source_and_executable_identity
+  active_task: M1_1_correction_1_harden_qualification_boundaries
   successor_agents_are_stateless: true
   next_prompt_requires_independent_acceptance: true
   external_agent_git:
@@ -122,6 +122,29 @@ implementation_workflow:
     rebase: forbidden
     amend: forbidden
     tag_or_release: forbidden
+
+m1_1_independent_review:
+  implementation_head: a683dd681d5924197c3b3add7f534ae83a795cae
+  implementer_status: pass_provisional
+  independent_status: rejected_correction_required
+  reviewed_on: "2026-08-06"
+  review_path: docs/releases/v0.22.0/M1_1_INDEPENDENT_REVIEW.md
+  reproduced_green_evidence:
+    focused_tests: 22
+    full_tests: 47
+    ruff: pass
+    compileall: pass
+    real_probe_two_run_determinism: pass
+    committed_evidence_byte_match: pass
+    happy_path_orca_process_survivors: 0
+  blocking_findings:
+    - comment_only_launcher_binding_accepted
+    - nested_side_effect_file_accepted
+    - child_controlled_secret_leaked_in_error
+    - outside_tmp_and_ambient_xdg_roots_accepted
+    - timeout_descendant_survived
+  correction_task: docs/external-agent/TASK-M1.1-CORRECTION-1.md
+  M1_2_authorized: false
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -773,8 +796,8 @@ milestones:
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
     status: in_progress
-    active_package: M1_1
-    M1_1_freeze_source_and_executable_identity: authorized_not_started
+    active_package: M1_1_correction_1
+    M1_1_freeze_source_and_executable_identity: provisional_implementation_rejected_correction_1_authorized
     M1_2_structured_provider_seam_matrix: blocked_pending_M1_1_acceptance
     M1_3_isolated_lifecycle_and_rollback: blocked_pending_explicit_operation_authority
     M1_4_provider_decision: blocked_pending_M1_1_to_M1_3
@@ -793,7 +816,7 @@ milestones:
 authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
-  M1_1_repository_implementation: authorized
+  M1_1_repository_implementation: correction_1_authorized
   M1_2_repository_implementation: not_yet_authorized
   M1_3_orca_runtime_operation: not_authorized
   M2_aether_mcp_source_implementation: not_authorized
@@ -813,12 +836,12 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M1_1_freeze_orca_source_and_executable_identity
+  milestone: M1_1_correction_1_harden_qualification_boundaries
   executor: repository_local_external_coding_agent
   acceptance_owner: Hermes
   requirement: >-
-    Create the roadmap-declared qualification script, deterministic tests and M1
-    evidence through read-only Orca executable, version, digest and public catalog
-    metadata inspection. Do not start Orca, create runtime state, install
-    dependencies, launch workers, access providers, mutate protected state or
-    begin M1.2. Stop for Hermes independent audit and acceptance.
+    Correct only the five independently reproduced M1.1 fail-closed defects,
+    strengthen the overclaimed executable coverage and refresh provisional
+    evidence while preserving the frozen Orca identity. Do not start Orca, create
+    runtime state, install dependencies, launch workers, access providers, mutate
+    protected state or begin M1.2. Stop for Hermes independent re-audit.
