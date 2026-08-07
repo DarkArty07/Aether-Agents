@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_accepted_mcp_first_m1_1_correction_2_authorized
+status: m0_accepted_mcp_first_m1_1_design_reassessment_required
 approved_on: "2026-08-06"
 owner: Christopher (DarkArty07)
 
@@ -112,7 +112,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M1_1_correction_2_close_remaining_isolation_gaps
+  active_task: M1_1_qualifier_design_reassessment
   successor_agents_are_stateless: true
   next_prompt_requires_independent_acceptance: true
   external_agent_git:
@@ -175,6 +175,34 @@ m1_1_correction_1_review:
   correction_task: docs/external-agent/TASK-M1.1-CORRECTION-2.md
   total_M1_1_implementation_attempt: 2
   next_attempt_is_final_before_design_reassessment: true
+  M1_2_authorized: false
+
+m1_1_correction_2_review:
+  correction_head: 539c09b79edff460ce152f9134c14866390bf542
+  implementation_commit: fa33e91398256e771ead539378c42977e92a9f29
+  implementer_status: pass
+  independent_status: rejected_design_reassessment_required
+  reviewed_on: "2026-08-07"
+  review_path: docs/releases/v0.22.0/M1_1_CORRECTION_2_REVIEW.md
+  reproduced_green_evidence:
+    focused_tests_collected: 52
+    focused_tests_passed: 51
+    focused_tests_skipped: 1
+    full_tests_passed: 76
+    full_tests_skipped: 1
+    ruff: pass
+    compileall: pass
+    real_probe_two_run_determinism: pass
+    committed_evidence_byte_match: pass
+    correction_2_R1_to_R4: pass
+    test_owned_process_survivors: 0
+  blocking_findings:
+    - mount_prefix_subtree_bypasses_exact_inventory
+    - printf_v_appimage_mutation_bypasses_blacklist_parser
+    - mandatory_fifo_test_skipped_but_reported_as_pass
+  total_M1_1_implementation_attempts: 3
+  automatic_correction_retry_exhausted: true
+  next_action: candidate_specific_vs_dependency_backed_parser_design_decision
   M1_2_authorized: false
 
 release_lineage:
@@ -827,8 +855,8 @@ milestones:
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
     status: in_progress
-    active_package: M1_1_correction_2
-    M1_1_freeze_source_and_executable_identity: correction_1_rejected_correction_2_authorized
+    active_package: M1_1_qualifier_design_reassessment
+    M1_1_freeze_source_and_executable_identity: correction_2_rejected_design_reassessment_required
     M1_2_structured_provider_seam_matrix: blocked_pending_M1_1_acceptance
     M1_3_isolated_lifecycle_and_rollback: blocked_pending_explicit_operation_authority
     M1_4_provider_decision: blocked_pending_M1_1_to_M1_3
@@ -847,7 +875,7 @@ milestones:
 authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
-  M1_1_repository_implementation: correction_2_authorized
+  M1_1_repository_implementation: paused_pending_design_reassessment
   M1_2_repository_implementation: not_yet_authorized
   M1_3_orca_runtime_operation: not_authorized
   M2_aether_mcp_source_implementation: not_authorized
@@ -867,14 +895,14 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M1_1_correction_2_close_remaining_isolation_gaps
-  executor: repository_local_external_coding_agent
+  milestone: M1_1_qualifier_design_reassessment
+  executor: Hermes_and_product_owner
   acceptance_owner: Hermes
   requirement: >-
-    Correct only the four independently reproduced remaining isolation defects,
-    add the missing executable coverage and reconcile report counts with the exact
-    committed test tree while preserving frozen Orca identity and accepted process
-    cleanup. Do not start Orca, create runtime state, install dependencies, launch
-    workers, access providers, mutate protected state or begin M1.2. Stop for
-    Hermes independent re-audit; a further equivalent failure triggers design
-    reassessment rather than another automatic correction.
+    Freeze a bounded qualifier design after three failed implementation attempts.
+    Decide between candidate-specific canonical launcher verification with exact
+    no-exception inventory (recommended) and a dependency-backed real shell parser
+    with explicit scope consequences. Do not authorize another correction merely
+    by adding blacklist cases or prefix exceptions. Do not start Orca, create
+    runtime state, install dependencies, launch workers, access providers, mutate
+    protected state or begin M1.2.

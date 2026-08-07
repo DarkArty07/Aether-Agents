@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 ACCEPTED; M1.1 CORRECTION 2 AUTHORIZED; NOT ACTIVATED
+> **Status:** M0 ACCEPTED; M1.1 DESIGN REASSESSMENT REQUIRED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -1394,24 +1394,23 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.1 Correction 2 — Close remaining isolation gaps** as one bounded
-repository-local external-agent task. Correction 1 at
-`32b72ee4e8a8dd18d5131b7f38793139a14eaff8` fixes the original five findings but
-is not accepted: independent probes proved a hidden dynamic APPIMAGE reassignment,
-global TMPDIR escape, inter-call side-effect concealment and missing required
-directories. Its reports also claim 39/64 tests while the committed tree contains
-37/62. `M1_1_CORRECTION_1_REVIEW.md` and the immutable Correction 2 task define
-the final bounded repair. Starting Orca or creating runtime state remains
-forbidden.
+Pause M1.1 implementation and perform a bounded **qualifier design reassessment**.
+Correction 2 at `539c09b79edff460ce152f9134c14866390bf542` closes R1-R4
+and preserves the real Orca happy path, but final independent probes proved that
+`tmp/.mount_orca-*` can hide arbitrary files and a `printf -v APPIMAGE` mutation
+evades the shell blacklist. The required FIFO test was also skipped by an invalid
+fixture while its report called the coverage PASS. `M1_1_CORRECTION_2_REVIEW.md`
+records the evidence and recommends candidate-specific canonical verification
+instead of another blacklist correction. Starting Orca or creating runtime state
+remains forbidden.
 
 ### STOP CONDITION
 
-Correction 2 stops when the external agent has written its separate report and two
-branch-local atomic commits. Hermes then inspects the exact diff and independently
-reproduces all original, Correction 1 and Correction 2 regressions. M1.2 remains
-blocked until Hermes creates a separate acceptance marker. If this third total
-M1.1 attempt fails an equivalent boundary, stop automatic patching and revisit
-the qualification design.
+The reassessment stops when the product owner and Hermes freeze one bounded design:
+candidate-specific canonical launcher verification with exact inventory, or a
+dependency-backed real shell parser with its scope consequences. No implementation
+task follows automatically. M1.2 remains blocked until a revised implementation
+passes independent acceptance and Hermes creates a separate acceptance marker.
 
 ### LATER GATES
 
