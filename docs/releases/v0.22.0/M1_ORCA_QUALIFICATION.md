@@ -96,3 +96,22 @@ Read-only process inventory confirmed zero surviving Orca processes after execut
   - **Ruff check:** `All checks passed!`
   - **Compileall:** Exit 0
   - **Two-run real probe:** `/tmp/aether-m1-1-correction-run1` and `/tmp/aether-m1-1-correction-run2` — byte-identical canonical JSON, exit code 0, 0 stderr, exact match with `docs/releases/v0.22.0/M1_ORCA_QUALIFICATION.json`.
+
+## 7. Correction 2 — Isolation Hardening (2026-08-07)
+
+- **Correction Task:** `TASK-M1.1-CORRECTION-2.md`
+- **Correction Implementation Commit:** `fa33e91398256e771ead539378c42977e92a9f29` (`fix: close Orca qualification isolation gaps`)
+- **Target Evidence Commit Subject:** `docs: refresh corrected M1.1 evidence`
+- **Target Evidence Commit Parent:** `fa33e91398256e771ead539378c42977e92a9f29` (`fix: close Orca qualification isolation gaps`)
+- **Isolation Gaps Closed:**
+  - **B1 / R1 (Launcher Binding Hardening):** Enhanced `parse_static_appimage_binding` to reject declaration-prefixed assignments (`export`, `readonly`, `declare`, `local`), `unset`, `eval`, `+=`, multi-statement assignments (`;`, `&&`, `||`), dynamic substitutions (`$VAR`, `` `cmd` ``), unquoted/relative paths, and space-containing assignments. Only a single static un-prefixed `APPIMAGE='/abs/path'` assignment is allowed.
+  - **B2 / R2 (Full-Tree Structural Inventory):** Updated `check_isolated_root_inventory` to enforce exact top-level directory set `{"home", "config", "data", "cache", "state", "runtime", "tmp", "squashfs-root"}` and exact single metadata file `squashfs-root/orca-ide.desktop`. Any missing required directory, extra file/directory outside AppImage runtime mountpoint `tmp/.mount_orca-*`, symlink, FIFO, or non-regular entry is rejected.
+  - **B3 / R3 (Multi-Boundary Invariant Inspection & Secret-Safe Failures):** Enforced `check_isolated_root_inventory` at all 3 boundaries (post metadata extraction, post catalog call 1, post catalog call 2) to prevent inter-call side effect concealment. Standardized all exception codes without echoing child output or secret canaries.
+  - **B4 / R4 (Strict Path Admission & TMPDIR Isolation):** Enforced path checks rejecting symlinks in root or parent components, roots outside `/tmp`, ambient XDG/repo/HOME overlaps, and set child `TMPDIR` to `iso_root / "tmp"`.
+- **Verification Commands and Results:**
+  - **Focused qualification suite:** `python3 -m pytest -q tests/aether_mcp/provider/test_qualification.py` -> `51 passed, 1 skipped in 38.07s` (52 total collected tests, 100% pass)
+  - **Full test suite:** `python3 -m pytest -q` -> `76 passed, 1 skipped in 37.60s` (77 total collected tests, 100% pass)
+  - **Ruff check:** `python3 -m ruff check scripts/aether_mcp/qualify_orca.py tests/aether_mcp/provider/test_qualification.py` -> `All checks passed!`
+  - **Compileall:** `python3 -m compileall -q scripts/aether_mcp tests/aether_mcp` -> Exit 0
+  - **Two-run real probe:** Executed against `/tmp/aether-m1-1-correction-2-run1` and `/tmp/aether-m1-1-correction-2-run2` — both exited 0 with byte-identical output matching `docs/releases/v0.22.0/M1_ORCA_QUALIFICATION.json`.
+- **Process Cleanup & Isolation:** Zero Orca process survivors detected; isolated environment directories verified clean.
