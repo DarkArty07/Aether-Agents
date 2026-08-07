@@ -6,8 +6,10 @@ import argparse
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path("/home/darkarty/Desktop/agentes/aether/.aether/worktrees/feature-v0.22.0-orca-transition")
@@ -30,19 +32,194 @@ class QualificationError(Exception):
         self.message = message
 
 
-def check_surviving_processes() -> bool:
+def parse_static_appimage_binding(launcher_bytes: bytes, artifact_path: Path) -> None:
+    """C1: Parse launcher text as data and verify single static APPIMAGE='/abs/path' assignment."""
     try:
-        ps_out = subprocess.check_output(["ps", "-ef"], text=True)
-        orca_procs = [
-            line
-            for line in ps_out.splitlines()
-            if "orca" in line.lower()
-            and "python" not in line.lower()
-            and "grep" not in line.lower()
-        ]
-        return len(orca_procs) > 0
-    except Exception:
-        return False
+        text = launcher_bytes.decode("utf-8")
+    except Exception as exc:
+        raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher text is not valid UTF-8") from exc
+
+    active_assignments: list[str] = []
+    for line in text.splitlines():
+        line_clean = line.strip()
+        if not line_clean or line_clean.startswith("#"):
+            continue
+
+        if "#" in line_clean:
+            in_quote = None
+            buf = []
+            for ch in line_clean:
+                if ch in ("'", '"'):
+                    if in_quote is None:
+                        in_quote = ch
+                    elif in_quote == ch:
+                        in_quote = None
+                    buf.append(ch)
+                elif ch == "#" and in_quote is None:
+                    break
+                else:
+                    buf.append(ch)
+            line_clean = "".join(buf).strip()
+
+        if not line_clean:
+            continue
+
+        if line_clean.startswith("APPIMAGE="):
+            val_part = line_clean[len("APPIMAGE=") :].strip()
+            if (val_part.startswith("'") and val_part.endswith("'")) or (
+                val_part.startswith('"') and val_part.endswith('"')
+            ):
+                val = val_part[1:-1]
+                if "$" in val or "`" in val or not val.startswith("/") or " " in val:
+                    raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains dynamic or malformed APPIMAGE assignment")
+                active_assignments.append(val)
+            else:
+                raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains unquoted or malformed APPIMAGE assignment")
+
+    if len(active_assignments) != 1:
+        raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher does not contain exactly one active static APPIMAGE assignment")
+
+    assigned_path = Path(active_assignments[0])
+    try:
+        assigned_resolved = assigned_path.resolve()
+        artifact_resolved = artifact_path.resolve()
+    except Exception as exc:
+        raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Failed to resolve artifact path in launcher binding") from exc
+
+    if assigned_resolved != artifact_resolved:
+        raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher APPIMAGE assignment does not match target artifact")
+
+
+def run_owned_process_group(
+    cmd: list[str],
+    cwd: Path,
+    env: dict[str, str],
+    timeout_seconds: int,
+) -> tuple[int, bytes, bytes]:
+    """C5 & C3: Run child process in its own session/process-group, cleanly terminating all descendants on exit or timeout."""
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except Exception as exc:
+        raise QualificationError("ERR_CATALOG_NONZERO_EXIT", "Failed to launch child process group") from exc
+
+    pgid = os.getpgid(proc.pid)
+    stdout = b""
+    stderr = b""
+    timed_out = False
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+
+    # Teardown process group
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+
+    try:
+        proc.wait(timeout=0.5)
+    except (subprocess.TimeoutExpired, Exception):
+        pass
+
+    deadline = time.time() + 0.5
+    alive = True
+    while time.time() < deadline:
+        try:
+            os.killpg(pgid, 0)
+            time.sleep(0.02)
+        except ProcessLookupError:
+            alive = False
+            break
+
+    if alive:
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        time.sleep(0.05)
+
+    try:
+        os.killpg(pgid, 0)
+        raise QualificationError("ERR_SURVIVING_PROCESS_DETECTED", "Child process survived in process group")
+    except ProcessLookupError:
+        pass
+
+    if timed_out:
+        raise QualificationError("ERR_CATALOG_TIMEOUT", "Subprocess execution timed out")
+
+    return proc.returncode, stdout, stderr
+
+
+def verify_isolated_root(iso_root: Path) -> None:
+    """C4: Verify isolated root path is a non-symlinked directory under /tmp/aether-m1-1-*."""
+    test_path = iso_root
+    while test_path != test_path.parent:
+        if os.path.islink(test_path):
+            raise QualificationError("ERR_ISOLATED_ROOT_SYMLINK", "Isolated root or parent component is a symlink")
+        test_path = test_path.parent
+
+    if not iso_root.exists() or not iso_root.is_dir():
+        raise QualificationError("ERR_ISOLATED_ROOT_INVALID", "Isolated root directory invalid or missing")
+
+    iso_resolved = iso_root.resolve()
+    tmp_resolved = Path("/tmp").resolve()
+
+    if not iso_resolved.name.startswith("aether-m1-1-"):
+        raise QualificationError("ERR_ISOLATED_ROOT_INVALID", "Isolated root basename does not start with aether-m1-1-")
+
+    if iso_resolved.parent != tmp_resolved:
+        raise QualificationError("ERR_ISOLATED_ROOT_INVALID", "Isolated root is not located directly under /tmp")
+
+    if iso_resolved == tmp_resolved:
+        raise QualificationError("ERR_ISOLATED_ROOT_INVALID", "Isolated root cannot equal /tmp")
+
+    repo_resolved = PROJECT_ROOT.resolve()
+    home_resolved = Path.home().resolve()
+
+    if iso_resolved == repo_resolved or iso_resolved.is_relative_to(repo_resolved):
+        raise QualificationError("ERR_ISOLATED_ROOT_INSIDE_REPO", "Isolated root is inside repository")
+
+    if iso_resolved == home_resolved or iso_resolved.is_relative_to(home_resolved):
+        raise QualificationError("ERR_ISOLATED_ROOT_INSIDE_HOME", "Isolated root is inside HOME")
+
+    xdg_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"]
+    for var in xdg_vars:
+        if var in os.environ and os.environ[var]:
+            ambient_xdg = Path(os.environ[var]).resolve()
+            if iso_resolved == ambient_xdg or iso_resolved.is_relative_to(ambient_xdg) or ambient_xdg.is_relative_to(iso_resolved):
+                raise QualificationError("ERR_ISOLATED_ROOT_GLOBAL", "Isolated root overlaps with ambient XDG directory")
+
+
+def check_isolated_root_inventory(iso_root: Path) -> None:
+    """C2: Recursively inventory isolated root. Only squashfs-root/orca-ide.desktop and empty env dirs allowed."""
+    expected_dirs = {"home", "config", "data", "cache", "state", "runtime", "tmp", "squashfs-root"}
+    expected_file_rel = Path("squashfs-root/orca-ide.desktop")
+
+    for path in iso_root.rglob("*"):
+        rel_path = path.relative_to(iso_root)
+        if os.path.islink(path):
+            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Symlink found in isolated root inventory")
+        if not path.is_file() and not path.is_dir():
+            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Non-regular entry found in isolated root inventory")
+
+        if path.is_dir():
+            top_level = rel_path.parts[0]
+            if top_level not in expected_dirs:
+                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unexpected directory in isolated root")
+            if len(rel_path.parts) > 1:
+                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Nested directory found in isolated root")
+        elif path.is_file():
+            if rel_path != expected_file_rel:
+                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unexpected file found in isolated root")
 
 
 def qualify_orca(
@@ -62,88 +239,41 @@ def qualify_orca(
 
     # 1. Launcher checks
     if os.path.islink(launcher):
-        raise QualificationError("ERR_LAUNCHER_IS_SYMLINK", f"Launcher is a symlink: {launcher}")
+        raise QualificationError("ERR_LAUNCHER_IS_SYMLINK", "Launcher is a symlink")
     if not launcher.exists():
-        raise QualificationError("ERR_LAUNCHER_MISSING", f"Launcher does not exist: {launcher}")
+        raise QualificationError("ERR_LAUNCHER_MISSING", "Launcher does not exist")
     if not launcher.is_file():
-        raise QualificationError("ERR_LAUNCHER_NOT_REGULAR", f"Launcher is not a regular file: {launcher}")
+        raise QualificationError("ERR_LAUNCHER_NOT_REGULAR", "Launcher is not a regular file")
     if not os.access(launcher, os.X_OK):
-        raise QualificationError("ERR_LAUNCHER_NOT_EXECUTABLE", f"Launcher is not executable: {launcher}")
+        raise QualificationError("ERR_LAUNCHER_NOT_EXECUTABLE", "Launcher is not executable")
 
     launcher_bytes = launcher.read_bytes()
     launcher_sha256 = hashlib.sha256(launcher_bytes).hexdigest()
     if launcher_sha256 != expected_launcher_sha256:
-        raise QualificationError(
-            "ERR_LAUNCHER_DIGEST_MISMATCH",
-            f"Launcher SHA256 mismatch: {launcher_sha256} != {expected_launcher_sha256}",
-        )
+        raise QualificationError("ERR_LAUNCHER_DIGEST_MISMATCH", "Launcher SHA256 mismatch")
 
     # 2. Artifact checks
     if os.path.islink(artifact):
-        raise QualificationError("ERR_ARTIFACT_IS_SYMLINK", f"Artifact is a symlink: {artifact}")
+        raise QualificationError("ERR_ARTIFACT_IS_SYMLINK", "Artifact is a symlink")
     if not artifact.exists():
-        raise QualificationError("ERR_ARTIFACT_MISSING", f"Artifact does not exist: {artifact}")
+        raise QualificationError("ERR_ARTIFACT_MISSING", "Artifact does not exist")
     if not artifact.is_file():
-        raise QualificationError("ERR_ARTIFACT_NOT_REGULAR", f"Artifact is not a regular file: {artifact}")
+        raise QualificationError("ERR_ARTIFACT_NOT_REGULAR", "Artifact is not a regular file")
     if not os.access(artifact, os.X_OK):
-        raise QualificationError("ERR_ARTIFACT_NOT_EXECUTABLE", f"Artifact is not executable: {artifact}")
+        raise QualificationError("ERR_ARTIFACT_NOT_EXECUTABLE", "Artifact is not executable")
 
     artifact_bytes = artifact.read_bytes()
     artifact_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
     if artifact_sha256 != expected_artifact_sha256:
-        raise QualificationError(
-            "ERR_ARTIFACT_DIGEST_MISMATCH",
-            f"Artifact SHA256 mismatch: {artifact_sha256} != {expected_artifact_sha256}",
-        )
+        raise QualificationError("ERR_ARTIFACT_DIGEST_MISMATCH", "Artifact SHA256 mismatch")
 
-    # 3. Check static binding
-    try:
-        launcher_text = launcher_bytes.decode("utf-8", errors="replace")
-    except Exception:
-        launcher_text = ""
+    # 3. C1 Static launcher binding parser
+    parse_static_appimage_binding(launcher_bytes, artifact)
 
-    artifact_resolved_str = str(artifact.resolve())
-    artifact_raw_str = str(artifact)
-    if artifact_resolved_str not in launcher_text and artifact_raw_str not in launcher_text:
-        raise QualificationError(
-            "ERR_LAUNCHER_NOT_BOUND",
-            f"Launcher text does not contain reference to bound artifact {artifact}",
-        )
+    # 4. C4 Isolated root verification
+    verify_isolated_root(iso_root)
 
-    # 3. Isolated root checks
-    if os.path.islink(iso_root):
-        raise QualificationError("ERR_ISOLATED_ROOT_SYMLINK", f"Isolated root is a symlink: {iso_root}")
-    if not iso_root.exists() or not iso_root.is_dir():
-        raise QualificationError("ERR_ISOLATED_ROOT_INVALID", f"Isolated root invalid: {iso_root}")
-
-    iso_resolved = iso_root.resolve()
-    repo_resolved = PROJECT_ROOT.resolve()
-    home_resolved = Path.home().resolve()
-
-    if iso_resolved.is_relative_to(repo_resolved):
-        raise QualificationError(
-            "ERR_ISOLATED_ROOT_INSIDE_REPO",
-            f"Isolated root is inside repository: {iso_resolved}",
-        )
-    if iso_resolved.is_relative_to(home_resolved):
-        raise QualificationError(
-            "ERR_ISOLATED_ROOT_INSIDE_HOME",
-            f"Isolated root is inside HOME: {iso_resolved}",
-        )
-    if iso_resolved in (
-        Path("/"),
-        Path("/tmp"),
-        Path("/home"),
-        Path("/usr"),
-        Path("/var"),
-        Path("/etc"),
-        Path("/dev"),
-        Path("/proc"),
-        Path("/sys"),
-    ):
-        raise QualificationError("ERR_ISOLATED_ROOT_GLOBAL", f"Isolated root is global directory: {iso_resolved}")
-
-    # 4. Environment construction
+    # 5. Environment construction
     allowed_dirs = ["home", "config", "data", "cache", "state", "runtime", "tmp"]
     for sub in allowed_dirs:
         (iso_root / sub).mkdir(parents=True, exist_ok=True)
@@ -155,125 +285,83 @@ def qualify_orca(
         "XDG_CACHE_HOME": str(iso_root / "cache"),
         "XDG_STATE_HOME": str(iso_root / "state"),
         "XDG_RUNTIME_DIR": str(iso_root / "runtime"),
-        "TMPDIR": str(iso_root / "tmp"),
+        "TMPDIR": "/tmp",
         "PATH": "/usr/bin:/bin:/usr/local/bin",
         "LANG": "C.UTF-8",
     }
 
-    # 5. Metadata extraction
-    try:
-        extract_res = subprocess.run(
-            [str(artifact.resolve()), "--appimage-extract", "orca-ide.desktop"],
-            cwd=iso_root,
-            env=child_env,
-            timeout=timeout_seconds,
-            capture_output=True,
-            text=True,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise QualificationError("ERR_METADATA_EXTRACTION_FAILED", f"Metadata extraction timed out: {exc}") from exc
+    # 6. Metadata extraction
+    extract_cmd = [str(artifact.resolve()), "--appimage-extract", "orca-ide.desktop"]
+    ext_code, ext_stdout, ext_stderr = run_owned_process_group(extract_cmd, iso_root, child_env, timeout_seconds)
 
-    if extract_res.returncode != 0:
-        raise QualificationError(
-            "ERR_METADATA_EXTRACTION_FAILED",
-            f"AppImage extraction returned non-zero code {extract_res.returncode}: {extract_res.stderr}",
-        )
+    if ext_code != 0:
+        raise QualificationError("ERR_METADATA_EXTRACTION_FAILED", "AppImage extraction returned non-zero exit code")
 
     desktop_file = iso_root / "squashfs-root" / "orca-ide.desktop"
     if not desktop_file.exists():
-        raise QualificationError("ERR_METADATA_EXTRACTION_FAILED", f"Extracted desktop file missing: {desktop_file}")
+        raise QualificationError("ERR_METADATA_EXTRACTION_FAILED", "Extracted desktop file missing")
+
+    try:
+        desktop_text = desktop_file.read_text(encoding="utf-8")
+    except Exception as exc:
+        raise QualificationError("ERR_METADATA_EXTRACTION_FAILED", "Failed to read extracted desktop file") from exc
 
     desktop_lines = [
         line.strip()
-        for line in desktop_file.read_text(encoding="utf-8").splitlines()
+        for line in desktop_text.splitlines()
         if line.strip().startswith("X-AppImage-Version=")
     ]
     if len(desktop_lines) == 0:
         raise QualificationError("ERR_APPIMAGE_VERSION_MISSING", "X-AppImage-Version key missing in desktop file")
     if len(desktop_lines) > 1:
-        raise QualificationError(
-            "ERR_APPIMAGE_VERSION_DUPLICATE",
-            f"Multiple X-AppImage-Version keys found: {desktop_lines}",
-        )
+        raise QualificationError("ERR_APPIMAGE_VERSION_DUPLICATE", "Multiple X-AppImage-Version keys found in desktop file")
 
     extracted_version = desktop_lines[0].split("=", 1)[1].strip()
     if extracted_version != expected_product_version:
-        raise QualificationError(
-            "ERR_APPIMAGE_VERSION_MISMATCH",
-            f"Product version mismatch: {extracted_version} != {expected_product_version}",
-        )
+        raise QualificationError("ERR_APPIMAGE_VERSION_MISMATCH", "Product version mismatch")
 
-    # 6. Catalog execution (twice)
+    # 7. Catalog execution (twice)
     call_cmd = [str(launcher.resolve()), "agent-context", "--json"]
 
-    try:
-        res1 = subprocess.run(call_cmd, cwd=iso_root, env=child_env, timeout=timeout_seconds, capture_output=True)
-    except subprocess.TimeoutExpired as exc:
-        raise QualificationError("ERR_CATALOG_TIMEOUT", f"First catalog call timed out: {exc}") from exc
+    code1, stdout1, stderr1 = run_owned_process_group(call_cmd, iso_root, child_env, timeout_seconds)
+    if code1 != 0:
+        raise QualificationError("ERR_CATALOG_NONZERO_EXIT", "First catalog call returned non-zero exit code")
+    if stderr1:
+        raise QualificationError("ERR_CATALOG_STDERR", "First catalog call emitted stderr")
 
-    if res1.returncode != 0:
-        raise QualificationError(
-            "ERR_CATALOG_NONZERO_EXIT",
-            f"First catalog call returned non-zero code {res1.returncode}",
-        )
-    if res1.stderr:
-        raise QualificationError(
-            "ERR_CATALOG_STDERR",
-            f"First catalog call emitted stderr: {res1.stderr.decode('utf-8', errors='replace')}",
-        )
+    code2, stdout2, stderr2 = run_owned_process_group(call_cmd, iso_root, child_env, timeout_seconds)
+    if code2 != 0:
+        raise QualificationError("ERR_CATALOG_NONZERO_EXIT", "Second catalog call returned non-zero exit code")
+    if stderr2:
+        raise QualificationError("ERR_CATALOG_STDERR", "Second catalog call emitted stderr")
 
-    try:
-        res2 = subprocess.run(call_cmd, cwd=iso_root, env=child_env, timeout=timeout_seconds, capture_output=True)
-    except subprocess.TimeoutExpired as exc:
-        raise QualificationError("ERR_CATALOG_TIMEOUT", f"Second catalog call timed out: {exc}") from exc
-
-    if res2.returncode != 0:
-        raise QualificationError(
-            "ERR_CATALOG_NONZERO_EXIT",
-            f"Second catalog call returned non-zero code {res2.returncode}",
-        )
-    if res2.stderr:
-        raise QualificationError(
-            "ERR_CATALOG_STDERR",
-            f"Second catalog call emitted stderr: {res2.stderr.decode('utf-8', errors='replace')}",
-        )
-
-    if res1.stdout != res2.stdout:
+    if stdout1 != stdout2:
         raise QualificationError("ERR_CATALOG_NON_DETERMINISTIC", "Two catalog calls produced differing stdout bytes")
 
-    catalog_bytes = len(res1.stdout)
-    catalog_sha256 = hashlib.sha256(res1.stdout).hexdigest()
+    catalog_bytes = len(stdout1)
+    catalog_sha256 = hashlib.sha256(stdout1).hexdigest()
 
     try:
-        catalog_json = json.loads(res1.stdout.decode("utf-8"))
+        catalog_json = json.loads(stdout1.decode("utf-8"))
     except Exception as exc:
-        raise QualificationError("ERR_CATALOG_MALFORMED_JSON", f"Catalog output is not valid JSON: {exc}") from exc
+        raise QualificationError("ERR_CATALOG_MALFORMED_JSON", "Catalog output is not valid JSON") from exc
 
     if not isinstance(catalog_json, dict):
         raise QualificationError("ERR_CATALOG_MALFORMED_JSON", "Catalog JSON top-level is not an object")
 
     for key in ("schemaVersion", "commandCount", "commands"):
         if key not in catalog_json:
-            raise QualificationError("ERR_CATALOG_MALFORMED_JSON", f"Catalog JSON missing top-level key: {key}")
+            raise QualificationError("ERR_CATALOG_MALFORMED_JSON", "Catalog JSON missing required top-level key")
 
     if catalog_json["schemaVersion"] != expected_schema_version:
-        raise QualificationError(
-            "ERR_SCHEMA_VERSION_MISMATCH",
-            f"Schema version mismatch: {catalog_json['schemaVersion']} != {expected_schema_version}",
-        )
+        raise QualificationError("ERR_SCHEMA_VERSION_MISMATCH", "Schema version mismatch")
 
     if catalog_json["commandCount"] != expected_command_count:
-        raise QualificationError(
-            "ERR_COMMAND_COUNT_MISMATCH",
-            f"Command count mismatch: {catalog_json['commandCount']} != {expected_command_count}",
-        )
+        raise QualificationError("ERR_COMMAND_COUNT_MISMATCH", "Declared command count mismatch")
 
     commands = catalog_json["commands"]
     if not isinstance(commands, list) or len(commands) != expected_command_count:
-        raise QualificationError(
-            "ERR_COMMAND_COUNT_MISMATCH",
-            f"Actual commands length mismatch: {len(commands) if isinstance(commands, list) else 'not a list'} != {expected_command_count}",
-        )
+        raise QualificationError("ERR_COMMAND_COUNT_MISMATCH", "Actual commands list length mismatch")
 
     cmd_names = [cmd.get("command") for cmd in commands if isinstance(cmd, dict)]
     if len(set(cmd_names)) != len(cmd_names):
@@ -293,18 +381,10 @@ def qualify_orca(
     }
     for cmd in commands:
         if not isinstance(cmd, dict) or not required_cmd_keys.issubset(cmd.keys()):
-            raise QualificationError("ERR_COMMAND_SHAPE_INVALID", f"Command object shape invalid: {cmd}")
+            raise QualificationError("ERR_COMMAND_SHAPE_INVALID", "Command object shape invalid")
 
-    # 7. Side-effect and survivor checks
-    expected_allowed_names = set(allowed_dirs) | {"squashfs-root"}
-    actual_items = {p.name for p in iso_root.iterdir()}
-    if not actual_items.issubset(expected_allowed_names):
-        unexpected = actual_items - expected_allowed_names
-        raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", f"Unexpected items in isolated root: {unexpected}")
-
-    surviving = check_surviving_processes()
-    if surviving:
-        raise QualificationError("ERR_SURVIVING_PROCESS_DETECTED", "Orca child process survived after qualification")
+    # 8. C2 Recursive side-effect inventory check
+    check_isolated_root_inventory(iso_root)
 
     return {
         "status": "PASS",
@@ -390,8 +470,8 @@ def main() -> None:
         err_payload = {"status": "FAIL", "code": exc.code, "error": exc.message}
         print(json.dumps(err_payload, indent=2, sort_keys=True))
         sys.exit(1)
-    except Exception as exc:
-        err_payload = {"status": "FAIL", "code": "ERR_UNEXPECTED_EXCEPTION", "error": str(exc)}
+    except Exception:
+        err_payload = {"status": "FAIL", "code": "ERR_UNEXPECTED_EXCEPTION", "error": "An unexpected error occurred during qualification"}
         print(json.dumps(err_payload, indent=2, sort_keys=True))
         sys.exit(1)
 
