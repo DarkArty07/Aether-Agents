@@ -1,0 +1,40 @@
+{
+  "bound_appimage_identity": {
+    "appimage_path": "/home/darkarty/.local/opt/orca/orca-linux.AppImage",
+    "appimage_sha256": "813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33",
+    "appimage_size_bytes": 203385690,
+    "statically_bound": true
+  },
+  "catalog_identity": {
+    "actual_command_count": 220,
+    "catalog_bytes": 153496,
+    "catalog_sha256": "068e1d66737f19835536e4a1573a2f931bffe9821af9c1bdff855f902898944b",
+    "declared_command_count": 220,
+    "determinism_verified": true,
+    "schema_version": 1
+  },
+  "execution_authorizations": {
+    "model_call_requested": false,
+    "network_call_requested": false,
+    "orca_runtime_started": false,
+    "protected_state_accessed": false,
+    "worker_launched": false
+  },
+  "isolation_and_effects": {
+    "ambient_environment_forwarded": false,
+    "isolated_root_clean": true,
+    "surviving_processes_detected": false,
+    "unexpected_files_created": false
+  },
+  "launcher_identity": {
+    "launcher_path": "/home/darkarty/.local/bin/orca",
+    "launcher_sha256": "89efbb54323f6eb2372aa59f32d0e0d330486ae6764b7dd5896705c638a90208",
+    "launcher_size_bytes": 1015,
+    "launcher_type": "Bash wrapper"
+  },
+  "product_version_identity": {
+    "metadata_source": "orca-ide.desktop / X-AppImage-Version",
+    "product_version": "1.4.167"
+  },
+  "status": "PASS"
+}
