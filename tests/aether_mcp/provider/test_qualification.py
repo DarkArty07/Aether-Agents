@@ -13,10 +13,15 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = ROOT / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+QUALIFIER_DIR = SCRIPTS_DIR / "aether_mcp"
+if str(QUALIFIER_DIR) not in sys.path:
+    sys.path.insert(0, str(QUALIFIER_DIR))
 
-from aether_mcp.qualify_orca import QualificationError, main, qualify_orca  # noqa: E402
+import qualify_orca as qualifier_module  # type: ignore[import-not-found]  # noqa: E402
+
+QualificationError = qualifier_module.QualificationError
+main = qualifier_module.main
+qualify_orca = qualifier_module.qualify_orca
 
 REAL_LAUNCHER = Path("/home/darkarty/.local/bin/orca")
 REAL_ARTIFACT = Path("/home/darkarty/.local/opt/orca/orca-linux.AppImage")
@@ -1367,7 +1372,7 @@ def test_c3_forced_unexpected_python_exception_cli(monkeypatch: pytest.MonkeyPat
     def mock_verify(root: Path) -> None:
         raise RuntimeError(canary)
 
-    monkeypatch.setattr("aether_mcp.qualify_orca.verify_isolated_root", mock_verify)
+    monkeypatch.setattr(qualifier_module, "verify_isolated_root", mock_verify)
 
     monkeypatch.setattr(
         sys,

@@ -146,7 +146,9 @@ def test_disconnected_aether_native_runtime_and_profile_plugins_are_absent() -> 
 
     assert len(PROFILE_AETHER_PLUGINS) == 0
     assert remaining == []
-    assert {path.name for path in (ROOT / "src").iterdir()} == {"aether_mcp"}
+    src_entries = {path.name for path in (ROOT / "src").iterdir()}
+    assert "aether_mcp" in src_entries
+    assert src_entries <= {"aether_mcp", "aether_mcp.egg-info"}
 
 
 def test_profile_templates_do_not_enable_aether_continuity_plugin() -> None:
@@ -211,6 +213,21 @@ def test_operations_and_ci_do_not_install_import_or_build_removed_runtime() -> N
                 hits.append(f"{path.relative_to(ROOT)}: {needle}")
 
     assert hits == []
+
+
+def test_ci_installs_declared_aether_mcp_distribution_dependencies() -> None:
+    workflows = (
+        ROOT / ".github" / "workflows" / "test.yml",
+        ROOT / ".github" / "workflows" / "release.yml",
+    )
+
+    missing_project_install = [
+        str(path.relative_to(ROOT))
+        for path in workflows
+        if "pip install ." not in path.read_text(encoding="utf-8")
+    ]
+
+    assert missing_project_install == []
 
 
 def test_current_surfaces_do_not_advertise_removed_native_core() -> None:
