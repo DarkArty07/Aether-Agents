@@ -77,3 +77,22 @@ Read-only process inventory confirmed zero surviving Orca processes after execut
 - **No Protected State Read/Modified:** Protected `.aether` stores, credentials, and profile configs were untouched.
 - **No External Dependencies Installed:** Qualification uses standard library Python 3.11 only.
 - **M1.2 Not Started:** Scope remains bounded strictly to M1.1 identity freezing. Acceptance remains provisional until Hermes independent verification.
+
+## 6. Correction 1 — Boundary Hardening (2026-08-07)
+
+- **Correction Task:** `TASK-M1.1-CORRECTION-1.md`
+- **Correction Implementation Commit:** `d17de965fb2bbd679bedb8087750c41945141f9f` (`fix: harden Orca qualification boundaries`)
+- **Target Evidence Commit Subject:** `docs: refresh provisional M1.1 qualification evidence`
+- **Target Evidence Commit Parent:** `d17de965fb2bbd679bedb8087750c41945141f9f`
+- **Defects Corrected:**
+  - **C1 (Exact launcher binding):** Implemented non-executing parser `parse_static_appimage_binding` requiring single static `APPIMAGE='/abs/path'` assignment ignoring comments and rejecting dynamic/duplicate assignments.
+  - **C2 (Recursive inventory):** Implemented `check_isolated_root_inventory` recursively checking every entry under `isolated_root`. Allowed file is strictly `squashfs-root/orca-ide.desktop` and env directories remain empty.
+  - **C3 (Secret-safe failures):** Standardized all error messages to static bounded strings without echoing child stderr, stdout, version strings, or `str(exc)`.
+  - **C4 (Exact /tmp admission):** Required `isolated_root` to be a non-symlinked directory directly under `/tmp` with basename starting `aether-m1-1-` and rejected ambient XDG/HOME overlaps.
+  - **C5 (Owned process group):** Implemented `run_owned_process_group` with `start_new_session=True` and bounded SIGTERM -> SIGKILL process group teardown.
+- **Verification Commands and Results:**
+  - **Focused qualification suite:** `39 passed in 27.28s` (100% pass)
+  - **Full test suite:** `64 passed in 26.96s` (100% pass)
+  - **Ruff check:** `All checks passed!`
+  - **Compileall:** Exit 0
+  - **Two-run real probe:** `/tmp/aether-m1-1-correction-run1` and `/tmp/aether-m1-1-correction-run2` — byte-identical canonical JSON, exit code 0, 0 stderr, exact match with `docs/releases/v0.22.0/M1_ORCA_QUALIFICATION.json`.
