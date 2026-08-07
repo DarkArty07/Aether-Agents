@@ -410,24 +410,24 @@ class OlympusDB:
         # Force WAL checkpoint so async reader sees fresh data from sync hook writes
         await self._execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-        # Count turns
+        # Combine independent aggregate queries into a single round-trip using scalar subqueries.
+        # Explicit index binding (?1) reuses the same parameter for all subqueries.
         cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
+            """
+            SELECT
+                (SELECT COUNT(*) FROM turns WHERE session_id = ?1 AND role = 'assistant') as thoughts,
+                (SELECT COUNT(*) FROM turns WHERE session_id = ?1 AND content IS NOT NULL AND content != '') as messages,
+                (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?1) as tool_calls,
+                (SELECT MAX(timestamp) FROM turns WHERE session_id = ?1) as heartbeat_timestamp
+            """,
             (session_id,),
         )
-        thoughts = (await cursor.fetchone())[0]
-
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-            (session_id,),
-        )
-        messages = (await cursor.fetchone())[0]
-
-        # Count tool calls
-        cursor = await self._execute(
-            "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-        )
-        tool_calls_count = (await cursor.fetchone())[0]
+        counts_row = await cursor.fetchone()
+        if counts_row:
+            thoughts, messages, tool_calls_count, heartbeat_timestamp = counts_row
+        else:
+            thoughts = messages = tool_calls_count = 0
+            heartbeat_timestamp = None
 
         # Latest turn
         latest = await self.get_latest_turn(session_id)
@@ -462,14 +462,6 @@ class OlympusDB:
         clarification_needed = bool(
             re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
         ) if last_turn_content else False
-
-        # Heartbeat timestamp
-        cursor = await self._execute(
-            "SELECT MAX(timestamp) FROM turns WHERE session_id = ?",
-            (session_id,),
-        )
-        row = await cursor.fetchone()
-        heartbeat_timestamp = row[0] if row and row[0] is not None else None
 
         return {
             "thoughts": thoughts,
@@ -702,24 +694,24 @@ class OlympusDBSync:
             # Force WAL checkpoint so reader sees fresh data from sync hook writes
             cursor.execute("PRAGMA wal_checkpoint = TRUNCATE")
 
-            # Count turns
+            # Combine independent aggregate queries into a single round-trip using scalar subqueries.
+            # Explicit index binding (?1) reuses the same parameter for all subqueries.
             cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND role = 'assistant'",
+                """
+                SELECT
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ?1 AND role = 'assistant') as thoughts,
+                    (SELECT COUNT(*) FROM turns WHERE session_id = ?1 AND content IS NOT NULL AND content != '') as messages,
+                    (SELECT COUNT(*) FROM tool_calls WHERE session_id = ?1) as tool_calls,
+                    (SELECT MAX(timestamp) FROM turns WHERE session_id = ?1) as heartbeat_timestamp
+                """,
                 (session_id,),
             )
-            thoughts = cursor.fetchone()[0]
-
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM turns WHERE session_id = ? AND content IS NOT NULL AND content != ''",
-                (session_id,),
-            )
-            messages = cursor.fetchone()[0]
-
-            # Count tool calls
-            cursor = conn.execute(
-                "SELECT COUNT(*) FROM tool_calls WHERE session_id = ?", (session_id,)
-            )
-            tool_calls_count = cursor.fetchone()[0]
+            counts_row = cursor.fetchone()
+            if counts_row:
+                thoughts, messages, tool_calls_count, heartbeat_timestamp = counts_row
+            else:
+                thoughts = messages = tool_calls_count = 0
+                heartbeat_timestamp = None
 
             # Latest turn
             cursor = conn.execute(
@@ -759,14 +751,6 @@ class OlympusDBSync:
             clarification_needed = bool(
                 re.search(r"CLARIFICATION\s+NEEDED", last_turn_content, re.IGNORECASE)
             ) if last_turn_content else False
-
-            # Heartbeat timestamp
-            cursor = conn.execute(
-                "SELECT MAX(timestamp) FROM turns WHERE session_id = ?",
-                (session_id,),
-            )
-            row = cursor.fetchone()
-            heartbeat_timestamp = row[0] if row and row[0] is not None else None
 
             return {
                 "thoughts": thoughts,
