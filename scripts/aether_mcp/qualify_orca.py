@@ -64,6 +64,23 @@ def parse_static_appimage_binding(launcher_bytes: bytes, artifact_path: Path) ->
         if not line_clean:
             continue
 
+        # 1. Unset targeting APPIMAGE
+        if "unset" in line_clean and "APPIMAGE" in line_clean:
+            raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains unset APPIMAGE")
+
+        # 2. Eval targeting APPIMAGE
+        if "eval" in line_clean and "APPIMAGE" in line_clean:
+            raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains eval APPIMAGE")
+
+        # 3. Additive assignment
+        if "APPIMAGE+=" in line_clean:
+            raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains additive APPIMAGE assignment")
+
+        # 4. Multi-statement line containing APPIMAGE assignment
+        if (";" in line_clean or "&&" in line_clean or "||" in line_clean) and "APPIMAGE=" in line_clean:
+            raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains multi-statement APPIMAGE assignment")
+
+        # 5. Exact literal assignment or forbidden declaration prefix
         if line_clean.startswith("APPIMAGE="):
             val_part = line_clean[len("APPIMAGE=") :].strip()
             if (val_part.startswith("'") and val_part.endswith("'")) or (
@@ -75,6 +92,9 @@ def parse_static_appimage_binding(launcher_bytes: bytes, artifact_path: Path) ->
                 active_assignments.append(val)
             else:
                 raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains unquoted or malformed APPIMAGE assignment")
+        elif "APPIMAGE=" in line_clean or any(line_clean.startswith(prefix) for prefix in ("export ", "readonly ", "declare ", "local ")):
+            if "APPIMAGE" in line_clean:
+                raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher contains declaration-prefixed or complex APPIMAGE assignment")
 
     if len(active_assignments) != 1:
         raise QualificationError("ERR_LAUNCHER_NOT_BOUND", "Launcher does not contain exactly one active static APPIMAGE assignment")
@@ -200,26 +220,54 @@ def verify_isolated_root(iso_root: Path) -> None:
 
 
 def check_isolated_root_inventory(iso_root: Path) -> None:
-    """C2: Recursively inventory isolated root. Only squashfs-root/orca-ide.desktop and empty env dirs allowed."""
-    expected_dirs = {"home", "config", "data", "cache", "state", "runtime", "tmp", "squashfs-root"}
-    expected_file_rel = Path("squashfs-root/orca-ide.desktop")
+    """C3 & C2: Recursively inventory isolated root. Prove exact required directory set and desktop metadata file."""
+    required_dirs = {"home", "config", "data", "cache", "state", "runtime", "tmp", "squashfs-root"}
+    required_file = Path("squashfs-root/orca-ide.desktop")
 
-    for path in iso_root.rglob("*"):
-        rel_path = path.relative_to(iso_root)
-        if os.path.islink(path):
-            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Symlink found in isolated root inventory")
-        if not path.is_file() and not path.is_dir():
-            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Non-regular entry found in isolated root inventory")
+    for rdir in required_dirs:
+        dir_path = iso_root / rdir
+        if not dir_path.exists() or not dir_path.is_dir() or os.path.islink(dir_path):
+            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Required directory missing or invalid in isolated root")
 
-        if path.is_dir():
+    desktop_file = iso_root / required_file
+    if not desktop_file.exists() or not desktop_file.is_file() or os.path.islink(desktop_file):
+        raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Required metadata file missing or invalid in isolated root")
+
+    stack = [iso_root]
+    while stack:
+        current = stack.pop()
+        try:
+            entries = list(os.scandir(current))
+        except OSError:
+            rel_curr = current.relative_to(iso_root)
+            if len(rel_curr.parts) >= 2 and rel_curr.parts[0] == "tmp" and rel_curr.parts[1].startswith(".mount_orca-"):
+                continue
+            raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unreadable entry in isolated root inventory")
+
+        for entry in entries:
+            path = Path(entry.path)
+            rel_path = path.relative_to(iso_root)
+
+            if entry.is_symlink():
+                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Symlink found in isolated root inventory")
+            if not entry.is_file() and not entry.is_dir():
+                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Non-regular entry found in isolated root inventory")
+
             top_level = rel_path.parts[0]
-            if top_level not in expected_dirs:
+            if top_level not in required_dirs:
                 raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unexpected directory in isolated root")
-            if len(rel_path.parts) > 1:
-                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Nested directory found in isolated root")
-        elif path.is_file():
-            if rel_path != expected_file_rel:
-                raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unexpected file found in isolated root")
+
+            if entry.is_dir():
+                if len(rel_path.parts) > 1:
+                    if top_level == "tmp" and rel_path.parts[1].startswith(".mount_orca-"):
+                        continue
+                    raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Nested directory found in isolated root")
+                stack.append(path)
+            elif entry.is_file():
+                if rel_path != required_file:
+                    if top_level == "tmp" and rel_path.parts[1].startswith(".mount_orca-"):
+                        continue
+                    raise QualificationError("ERR_UNEXPECTED_FILES_CREATED", "Unexpected file found in isolated root")
 
 
 def qualify_orca(
@@ -285,7 +333,7 @@ def qualify_orca(
         "XDG_CACHE_HOME": str(iso_root / "cache"),
         "XDG_STATE_HOME": str(iso_root / "state"),
         "XDG_RUNTIME_DIR": str(iso_root / "runtime"),
-        "TMPDIR": "/tmp",
+        "TMPDIR": str(iso_root / "tmp"),
         "PATH": "/usr/bin:/bin:/usr/local/bin",
         "LANG": "C.UTF-8",
     }
@@ -320,6 +368,9 @@ def qualify_orca(
     if extracted_version != expected_product_version:
         raise QualificationError("ERR_APPIMAGE_VERSION_MISMATCH", "Product version mismatch")
 
+    # Boundary 1: Check exact inventory immediately after successful metadata extraction and version verification
+    check_isolated_root_inventory(iso_root)
+
     # 7. Catalog execution (twice)
     call_cmd = [str(launcher.resolve()), "agent-context", "--json"]
 
@@ -329,11 +380,17 @@ def qualify_orca(
     if stderr1:
         raise QualificationError("ERR_CATALOG_STDERR", "First catalog call emitted stderr")
 
+    # Boundary 2: Check exact inventory immediately after successful catalog call 1
+    check_isolated_root_inventory(iso_root)
+
     code2, stdout2, stderr2 = run_owned_process_group(call_cmd, iso_root, child_env, timeout_seconds)
     if code2 != 0:
         raise QualificationError("ERR_CATALOG_NONZERO_EXIT", "Second catalog call returned non-zero exit code")
     if stderr2:
         raise QualificationError("ERR_CATALOG_STDERR", "Second catalog call emitted stderr")
+
+    # Boundary 3: Check exact inventory immediately after successful catalog call 2
+    check_isolated_root_inventory(iso_root)
 
     if stdout1 != stdout2:
         raise QualificationError("ERR_CATALOG_NON_DETERMINISTIC", "Two catalog calls produced differing stdout bytes")
@@ -382,9 +439,6 @@ def qualify_orca(
     for cmd in commands:
         if not isinstance(cmd, dict) or not required_cmd_keys.issubset(cmd.keys()):
             raise QualificationError("ERR_COMMAND_SHAPE_INVALID", "Command object shape invalid")
-
-    # 8. C2 Recursive side-effect inventory check
-    check_isolated_root_inventory(iso_root)
 
     return {
         "status": "PASS",

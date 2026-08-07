@@ -16,7 +16,7 @@ SCRIPTS_DIR = ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-from aether_mcp.qualify_orca import QualificationError, qualify_orca  # noqa: E402
+from aether_mcp.qualify_orca import QualificationError, main, qualify_orca  # noqa: E402
 
 REAL_LAUNCHER = Path("/home/darkarty/.local/bin/orca")
 REAL_ARTIFACT = Path("/home/darkarty/.local/opt/orca/orca-linux.AppImage")
@@ -711,7 +711,7 @@ def test_c2_symlink_in_isolated_root_rejected(iso_root: Path, tmp_path: Path) ->
     assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
 
 
-def test_c2_unexpected_entry_type_in_isolated_root_rejected(iso_root: Path, tmp_path: Path) -> None:
+def test_c2_extra_regular_file_in_isolated_root_rejected(iso_root: Path, tmp_path: Path) -> None:
     fake_art = tmp_path / "art.AppImage"
     fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/extra_file.txt\n  exit 0\nfi\n")
     fake_art.chmod(0o755)
@@ -1042,3 +1042,497 @@ fi
                 os.kill(child_pid, signal.SIGKILL)
             except OSError:
                 pass
+
+
+# --- R1 Regression Tests ---
+
+def test_r1_hidden_export_appimage_dynamic_reassignment_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    # Valid literal assignment followed by an active export APPIMAGE="$DYNAMIC"
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+export APPIMAGE="$DYNAMIC_OTHER_ARTIFACT"
+"""
+    fake_launcher = tmp_path / "orca_export_dyn"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_LAUNCHER_NOT_BOUND"
+
+
+def test_r1_same_line_semicolon_reassignment_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    script = f"#!/bin/sh\nAPPIMAGE='{fake_art}'; APPIMAGE='/other'\n"
+    fake_launcher = tmp_path / "orca_semicolon"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_LAUNCHER_NOT_BOUND"
+
+
+def test_r1_additive_appimage_assignment_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    script = f"#!/bin/sh\nAPPIMAGE='{fake_art}'\nAPPIMAGE+='/extra'\n"
+    fake_launcher = tmp_path / "orca_additive"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_LAUNCHER_NOT_BOUND"
+
+
+def test_r1_unset_appimage_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    script = f"#!/bin/sh\nAPPIMAGE='{fake_art}'\nunset APPIMAGE\n"
+    fake_launcher = tmp_path / "orca_unset"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_LAUNCHER_NOT_BOUND"
+
+
+def test_r1_eval_interpolated_appimage_mutation_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    script = f"#!/bin/sh\nAPPIMAGE='{fake_art}'\neval \"APPIMAGE='/other'\"\n"
+    fake_launcher = tmp_path / "orca_eval"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_LAUNCHER_NOT_BOUND"
+
+
+# --- R2 Regression Test ---
+
+def test_r2_global_tmpdir_escape_contained_and_detected(iso_root: Path, tmp_path: Path) -> None:
+    sentinel_name = f"sentinel_r2_{os.urandom(4).hex()}.txt"
+    global_tmp_sentinel = Path("/tmp") / sentinel_name
+
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    payload = '{"schemaVersion": 1, "commandCount": 1, "commands": [{"command": "c1", "aliases": [], "argumentMode": "none", "examples": [], "flags": [], "notes": [], "path": [], "positionalArgs": [], "summary": "", "usage": ""}]}'
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+if [ "$1" = "agent-context" ]; then
+  echo "escape" > "$TMPDIR/{sentinel_name}"
+  printf '%s' '{payload}'
+  exit 0
+fi
+"""
+    fake_launcher = tmp_path / "orca_tmpdir_escape"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    try:
+        with pytest.raises(QualificationError) as exc_info:
+            qualify_orca(
+                launcher_path=fake_launcher,
+                artifact_path=fake_art,
+                isolated_root=iso_root,
+                expected_launcher_sha256=launch_sha,
+                expected_artifact_sha256=art_sha,
+                expected_product_version=REAL_VERSION,
+                expected_schema_version=1,
+                expected_command_count=1,
+            )
+        assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
+        assert not global_tmp_sentinel.exists()
+        assert (iso_root / "tmp" / sentinel_name).exists()
+    finally:
+        if global_tmp_sentinel.exists():
+            global_tmp_sentinel.unlink()
+
+
+# --- R3 Regression Test ---
+
+def test_r3_intercall_side_effect_concealment_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    flag_file = tmp_path / "call_count.txt"
+    payload = '{"schemaVersion": 1, "commandCount": 1, "commands": [{"command": "c1", "aliases": [], "argumentMode": "none", "examples": [], "flags": [], "notes": [], "path": [], "positionalArgs": [], "summary": "", "usage": ""}]}'
+
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+if [ "$1" = "agent-context" ]; then
+  if [ ! -f '{flag_file}' ]; then
+    touch '{flag_file}'
+    touch "$HOME/stage-effect.txt"
+  else
+    rm -f "$HOME/stage-effect.txt"
+  fi
+  printf '%s' '{payload}'
+  exit 0
+fi
+"""
+    fake_launcher = tmp_path / "orca_intercall_side_effect"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
+
+
+# --- R4 Regression Test ---
+
+def test_r4_missing_required_env_dir_rejected(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    payload = '{"schemaVersion": 1, "commandCount": 1, "commands": [{"command": "c1", "aliases": [], "argumentMode": "none", "examples": [], "flags": [], "notes": [], "path": [], "positionalArgs": [], "summary": "", "usage": ""}]}'
+
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+if [ "$1" = "agent-context" ]; then
+  rm -rf "$HOME"
+  printf '%s' '{payload}'
+  exit 0
+fi
+"""
+    fake_launcher = tmp_path / "orca_remove_home"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    with pytest.raises(QualificationError) as exc_info:
+        qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+    assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
+
+
+# --- Additional Executable Coverage Tests (Section 7) ---
+
+def test_c3_metadata_child_stderr_canary_cli_boundary(iso_root: Path, tmp_path: Path) -> None:
+    canary = "SUPER_SECRET_CANARY_METADATA_STDERR"
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text(f"#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  echo '{canary}' >&2\n  exit 1\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    fake_launcher = tmp_path / "orca_meta_stderr"
+    fake_launcher.write_text(f"#!/bin/sh\nAPPIMAGE='{fake_art}'\n")
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    cmd = [
+        sys.executable,
+        str(SCRIPTS_DIR / "aether_mcp" / "qualify_orca.py"),
+        "--launcher", str(fake_launcher),
+        "--artifact", str(fake_art),
+        "--isolated-root", str(iso_root),
+        "--expected-launcher-sha256", launch_sha,
+        "--expected-artifact-sha256", art_sha,
+        "--expected-product-version", REAL_VERSION,
+        "--expected-catalog-schema-version", "1",
+        "--expected-command-count", "1",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert proc.stderr == ""
+    assert canary not in proc.stdout
+
+
+def test_c3_canary_in_unexpected_filename_not_echoed(iso_root: Path) -> None:
+    canary = "SUPER_SECRET_CANARY_FILENAME_7777"
+    secret_file = iso_root / f"bad_{canary}.txt"
+    secret_file.write_text("data")
+    try:
+        with pytest.raises(QualificationError) as exc_info:
+            qualify_orca(
+                launcher_path=REAL_LAUNCHER,
+                artifact_path=REAL_ARTIFACT,
+                isolated_root=iso_root,
+                expected_launcher_sha256=REAL_LAUNCHER_SHA256,
+                expected_artifact_sha256=REAL_ARTIFACT_SHA256,
+                expected_product_version=REAL_VERSION,
+                expected_schema_version=REAL_SCHEMA_VERSION,
+                expected_command_count=REAL_COMMAND_COUNT,
+            )
+        assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
+        assert canary not in exc_info.value.message
+        assert canary not in str(exc_info.value)
+    finally:
+        if secret_file.exists():
+            secret_file.unlink()
+
+
+def test_c3_forced_unexpected_python_exception_cli(monkeypatch: pytest.MonkeyPatch, iso_root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    canary = "SUPER_SECRET_CANARY_INTERNAL_CRASH"
+
+    def mock_verify(root: Path) -> None:
+        raise RuntimeError(canary)
+
+    monkeypatch.setattr("aether_mcp.qualify_orca.verify_isolated_root", mock_verify)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "qualify_orca.py",
+            "--launcher", str(REAL_LAUNCHER),
+            "--artifact", str(REAL_ARTIFACT),
+            "--isolated-root", str(iso_root),
+            "--expected-launcher-sha256", REAL_LAUNCHER_SHA256,
+            "--expected-artifact-sha256", REAL_ARTIFACT_SHA256,
+            "--expected-product-version", REAL_VERSION,
+            "--expected-catalog-schema-version", str(REAL_SCHEMA_VERSION),
+            "--expected-command-count", str(REAL_COMMAND_COUNT),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert canary not in captured.out
+    assert "ERR_UNEXPECTED_EXCEPTION" in captured.out
+
+
+def test_c4_outside_var_tmp_root_rejected() -> None:
+    var_tmp_base = Path("/var/tmp")
+    if not var_tmp_base.exists() or not os.access(var_tmp_base, os.W_OK):
+        pytest.skip("/var/tmp directory unavailable or not writable")
+
+    out_root = var_tmp_base / f"aether-m1-1-vartmp-{os.urandom(4).hex()}"
+    out_root.mkdir()
+    try:
+        with pytest.raises(QualificationError) as exc_info:
+            qualify_orca(
+                launcher_path=REAL_LAUNCHER,
+                artifact_path=REAL_ARTIFACT,
+                isolated_root=out_root,
+                expected_launcher_sha256=REAL_LAUNCHER_SHA256,
+                expected_artifact_sha256=REAL_ARTIFACT_SHA256,
+                expected_product_version=REAL_VERSION,
+                expected_schema_version=REAL_SCHEMA_VERSION,
+                expected_command_count=REAL_COMMAND_COUNT,
+            )
+        assert exc_info.value.code == "ERR_ISOLATED_ROOT_INVALID"
+    finally:
+        shutil.rmtree(out_root, ignore_errors=True)
+
+
+def test_c5_success_path_descendant_process_cleanup(iso_root: Path, tmp_path: Path) -> None:
+    pid_file = tmp_path / "child_pid_ok.txt"
+
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    payload = '{"schemaVersion": 1, "commandCount": 1, "commands": [{"command": "c1", "aliases": [], "argumentMode": "none", "examples": [], "flags": [], "notes": [], "path": [], "positionalArgs": [], "summary": "", "usage": ""}]}'
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+if [ "$1" = "agent-context" ]; then
+  sleep 30 >/dev/null 2>&1 &
+  echo $! > '{pid_file}'
+  printf '%s' '{payload}'
+  exit 0
+fi
+"""
+    fake_launcher = tmp_path / "orca_child_ok"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    child_pid = None
+    try:
+        res = qualify_orca(
+            launcher_path=fake_launcher,
+            artifact_path=fake_art,
+            isolated_root=iso_root,
+            expected_launcher_sha256=launch_sha,
+            expected_artifact_sha256=art_sha,
+            expected_product_version=REAL_VERSION,
+            expected_schema_version=1,
+            expected_command_count=1,
+        )
+        assert res["status"] == "PASS"
+
+        if pid_file.exists():
+            child_pid = int(pid_file.read_text().strip())
+            with pytest.raises(OSError):
+                os.kill(child_pid, 0)
+    finally:
+        if child_pid is not None:
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
+def test_c2_real_fifo_in_isolated_root_rejected(iso_root: Path) -> None:
+    fifo_path = iso_root / "home" / "test_fifo"
+    try:
+        os.mkfifo(fifo_path)
+    except Exception as exc:
+        pytest.skip(f"os.mkfifo not supported on this filesystem: {exc}")
+
+    try:
+        with pytest.raises(QualificationError) as exc_info:
+            qualify_orca(
+                launcher_path=REAL_LAUNCHER,
+                artifact_path=REAL_ARTIFACT,
+                isolated_root=iso_root,
+                expected_launcher_sha256=REAL_LAUNCHER_SHA256,
+                expected_artifact_sha256=REAL_ARTIFACT_SHA256,
+                expected_product_version=REAL_VERSION,
+                expected_schema_version=REAL_SCHEMA_VERSION,
+                expected_command_count=REAL_COMMAND_COUNT,
+            )
+        assert exc_info.value.code == "ERR_UNEXPECTED_FILES_CREATED"
+    finally:
+        if fifo_path.exists() or fifo_path.is_fifo():
+            try:
+                fifo_path.unlink()
+            except OSError:
+                pass
+
+
+def test_c2_observed_child_env_paths(iso_root: Path, tmp_path: Path) -> None:
+    fake_art = tmp_path / "art.AppImage"
+    fake_art.write_text("#!/bin/sh\nif [ \"$1\" = \"--appimage-extract\" ]; then\n  mkdir -p squashfs-root\n  echo 'X-AppImage-Version=1.4.167' > squashfs-root/orca-ide.desktop\n  exit 0\nfi\n")
+    fake_art.chmod(0o755)
+    art_sha = subprocess.check_output(["sha256sum", str(fake_art)]).decode().split()[0]
+
+    payload = '{"schemaVersion": 1, "commandCount": 1, "commands": [{"command": "c1", "aliases": [], "argumentMode": "none", "examples": [], "flags": [], "notes": [], "path": [], "positionalArgs": [], "summary": "", "usage": ""}]}'
+
+    script = f"""#!/bin/sh
+APPIMAGE='{fake_art}'
+if [ "$1" = "agent-context" ]; then
+  if [ "$TMPDIR" != "{iso_root}/tmp" ]; then
+    exit 2
+  fi
+  if [ "$HOME" != "{iso_root}/home" ]; then
+    exit 3
+  fi
+  if [ "$XDG_CONFIG_HOME" != "{iso_root}/config" ]; then
+    exit 4
+  fi
+  printf '%s' '{payload}'
+  exit 0
+fi
+"""
+    fake_launcher = tmp_path / "orca_env_check"
+    fake_launcher.write_text(script)
+    fake_launcher.chmod(0o755)
+    launch_sha = subprocess.check_output(["sha256sum", str(fake_launcher)]).decode().split()[0]
+
+    res = qualify_orca(
+        launcher_path=fake_launcher,
+        artifact_path=fake_art,
+        isolated_root=iso_root,
+        expected_launcher_sha256=launch_sha,
+        expected_artifact_sha256=art_sha,
+        expected_product_version=REAL_VERSION,
+        expected_schema_version=1,
+        expected_command_count=1,
+    )
+    assert res["status"] == "PASS"
