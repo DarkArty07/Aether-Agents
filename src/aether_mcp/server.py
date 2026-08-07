@@ -6,13 +6,22 @@ import asyncio
 import queue
 import sys
 import threading
+import warnings
 
 import anyio
 from mcp import types
-from mcp.server.fastmcp import FastMCP
-from mcp.shared.message import SessionMessage
 
-from aether_mcp import PROTOCOL_ID, SERVER_NAME, __version__
+warnings.filterwarnings(
+    "ignore",
+    message=r"Field 'lifespan' has an incomplete definition:.*",
+    category=UserWarning,
+    module=r"pydantic_settings\.sources\.utils",
+)
+
+from mcp.server.fastmcp import FastMCP  # noqa: E402
+from mcp.shared.message import SessionMessage  # noqa: E402
+
+from aether_mcp import PROTOCOL_ID, SERVER_NAME, __version__  # noqa: E402
 
 INSTRUCTIONS = f"{PROTOCOL_ID}; Aether package {__version__}; default-off; no tools registered."
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from mcp.types import LATEST_PROTOCOL_VERSION
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
-PYTHON = Path("/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/bin/python3")
+PYTHON = Path(sys.executable)
 
 
 @pytest.fixture

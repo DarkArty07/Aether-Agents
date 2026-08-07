@@ -31,6 +31,17 @@ REAL_VERSION = "1.4.167"
 REAL_SCHEMA_VERSION = 1
 REAL_COMMAND_COUNT = 220
 
+LOCAL_ORCA_FIXTURE_AVAILABLE = (
+    REAL_LAUNCHER.is_file()
+    and os.access(REAL_LAUNCHER, os.X_OK)
+    and REAL_ARTIFACT.is_file()
+    and os.access(REAL_ARTIFACT, os.X_OK)
+)
+pytestmark = pytest.mark.skipif(
+    not LOCAL_ORCA_FIXTURE_AVAILABLE,
+    reason="requires the pinned local Orca launcher and AppImage qualification fixture",
+)
+
 
 def make_temp_isolated_root() -> Path:
     base = Path("/tmp") / f"aether-m1-1-test-{os.urandom(4).hex()}"
