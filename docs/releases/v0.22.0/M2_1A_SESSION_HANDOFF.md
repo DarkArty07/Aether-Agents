@@ -6,6 +6,8 @@
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Implementation commit:** `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`
 > **Clean-checkout CI correction:** `5d0e20df2f68df27e036d0e47410e238d753782e`
+> **Portable local/CI gate correction:** `894bbaebefbe3636fca4dddb421eabc30f0df9af`
+> **Product-assets inventory correction:** `eb166c8cf988e55c32c565c932a6b33212082244`
 > **Draft PR:** [#163](https://github.com/DarkArty07/Aether-Agents/pull/163)
 
 ## 1. Why this handoff exists
@@ -15,17 +17,23 @@ Orca-managed Git worktree and the current Hermes conversation. It records only
 verified state. It does not authorize another milestone, merge, release or live
 activation.
 
-The initial documentation closeout is
-`ca1373c1eac2297014b58113fead87dd98eed2d2`. Clean GitHub CI then exposed a
-dependency-install and Python namespace-test defect that the shared local venv
-had masked. The correction is
-`5d0e20df2f68df27e036d0e47410e238d753782e`.
+The closeout lineage after implementation is:
 
-The final documentation reconciliation that contains this updated handoff is
+1. initial documentation closeout `ca1373c1eac2297014b58113fead87dd98eed2d2`;
+2. distribution-install and namespace correction
+   `5d0e20df2f68df27e036d0e47410e238d753782e`;
+3. first documentation reconciliation
+   `b88ccea6ab0e5d9cec0c3df74cced14cdf09304a`;
+4. portable interpreter, local-only Orca gate and stderr correction
+   `894bbaebefbe3636fca4dddb421eabc30f0df9af`;
+5. bounded product-assets inventory correction
+   `eb166c8cf988e55c32c565c932a6b33212082244`.
+
+The final documentation closeout that contains this updated handoff is
 identified by:
 
-- subject: `docs: reconcile M2.1a closeout after clean CI fix`;
-- parent: `5d0e20df2f68df27e036d0e47410e238d753782e`.
+- subject: `docs: finalize M2.1a handoff after green CI`;
+- parent: `eb166c8cf988e55c32c565c932a6b33212082244`.
 
 The future session must resolve its actual hash from Git/GitHub rather than
 assuming a hash written inside its own commit.
@@ -101,6 +109,31 @@ Evidence on the clean installed environment before commit
 - generated venv and egg-info removed after verification;
 - staged secret scan: 4 files, 0 findings.
 
+Subsequent clean CI exposed two more local-machine assumptions. Commit
+`894bbaebefbe3636fca4dddb421eabc30f0df9af` makes the bootstrap use the active
+`sys.executable` without resolving uv's venv symlink, marks the M1 qualifier
+suite as a local gate when the pinned Orca launcher/AppImage are absent, and
+suppresses only the exact known FastMCP/Pydantic lifespan warning so the MCP
+stderr contract remains empty. It does not suppress unrelated warnings.
+
+Commit `eb166c8cf988e55c32c565c932a6b33212082244` replaces the obsolete
+`product-assets` claim that `src/` must not exist with an exact `git ls-files`
+inventory of the three allowed `src/aether_mcp` files.
+
+Final evidence before documentation-only closeout:
+
+- local pinned Orca suite: `82 passed, 1 skipped in 19.98s`;
+- simulated clean runner without Orca: `30 passed, 52 skipped in 3.23s` before
+  the final product-assets regression was added;
+- GitHub Actions run `31226110759` on
+  `eb166c8cf988e55c32c565c932a6b33212082244`: SUCCESS;
+- Python 3.11: PASS;
+- Python 3.12: PASS;
+- product-assets: PASS;
+- policy: PASS;
+- pull-request-target: PASS;
+- generated cache, venv and egg-info survivors: 0.
+
 ## 4. Git and GitHub state at closeout
 
 - base: `origin/main@2b326f05a36cbb77a9bf9475ef914be6f49d886d`;
@@ -155,9 +188,9 @@ gh pr view 163 --repo DarkArty07/Aether-Agents \
   --json state,isDraft,headRefOid,baseRefName,url
 ```
 
-Verify that the remote head is the final documentation reconciliation whose
-subject is `docs: reconcile M2.1a closeout after clean CI fix` and whose parent is
-`5d0e20df2f68df27e036d0e47410e238d753782e`.
+Verify that the remote head is the final documentation closeout whose subject is
+`docs: finalize M2.1a handoff after green CI` and whose parent is
+`eb166c8cf988e55c32c565c932a6b33212082244`.
 
 If a local worktree is needed again and the local branch still exists:
 
