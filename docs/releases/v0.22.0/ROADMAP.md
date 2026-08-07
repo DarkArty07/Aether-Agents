@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 FAST PATH ACCEPTED; M2.1a AUTHORIZED; M1.1b DEFERRED; NOT ACTIVATED
+> **Status:** M2.1a ACCEPTED; SESSION CLOSED; M1.1b DEFERRED; NOT ACTIVATED
 > **Date:** 2026-08-07
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** M2.1a default-off zero-tool MCP bootstrap only; provider and runtime remain gated
+> **Implementation authorization:** none after M2.1a closeout; next sequence requires an owner decision and a new frozen task
 
 ## 1. Objective
 
@@ -31,9 +31,12 @@ plane, with:
 - The historical Aether native coordination core is retired from the candidate.
 - The current candidate has no accepted multi-agent execution runtime.
 - Orca is not running for this design work.
-- The Aether MCP package, tools, semantic/learning stores, config, and runtime do
-  not exist.
-- Hermes currently performs bounded work directly.
+- The accepted M2.1a candidate contains one default-off `aether_mcp` package and
+  real stdio MCP process with exactly zero tools. It is not registered or active.
+- Aether MCP tools, provider adapter, semantic/learning stores and runtime
+  composition do not exist.
+- Hermes currently performs bounded work directly; no next implementation task
+  is authorized after the M2.1a session closeout.
 - PDR-0012 defines the Hermes–Orca ownership boundary.
 - PDR-0013 defines the target roster and personality model.
 - ADR-0001 approves MCP-first control and partially supersedes the prior
@@ -214,9 +217,11 @@ parallelism is expected to improve quality or time more than coordination cost.
 ## 8. Design closure sequence
 
 M0 closed on 2026-08-06 when the product owner accepted the detailed design and
-frozen use-case catalog. M1.1a identity/catalog evidence is accepted as a bounded
-fast-track prerequisite and the current horizon is read-only M1.2 seam mapping.
-M1.1b remains a mandatory blocker before M1.3 lifecycle work.
+frozen use-case catalog. M1.1a identity/catalog evidence and the M1.2 seam matrix
+are accepted at their bounded read-only limits. M2.1a is accepted at
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`. The session is closed with no active
+implementation task. M1.1b remains a mandatory blocker before any Orca provider
+or lifecycle operation.
 
 ### M0 — Final design and traceable use cases
 
@@ -688,11 +693,13 @@ the deterministic test harness uses ephemeral keys only.
 | D6 | Separate post-Release operation authority | Execute M12 on the named installation | Fine-tuning, external upload, model promotion |
 
 `D0` was granted by the product owner on 2026-08-06 and is recorded in
-`M0_DESIGN_ACCEPTANCE.md`. The owner fast-tracked only the provider-independent
-M2.1a package/stdio bootstrap under D0. It may expose zero tools and perform no
-provider, storage or registration effect. M1.1b is deferred, D1–D6 remain
-ungranted, and no lower gate implies a later gate. An Orca adapter, provider
-call, MCP tool or M2.2+ package still requires its named gate.
+`M0_DESIGN_ACCEPTANCE.md`. The owner fast-tracked and accepted only the
+provider-independent M2.1a package/stdio bootstrap under D0. It exposes zero
+tools and performs no provider, storage or registration effect. The fast-track
+is exhausted. M1.1b is deferred, D1–D6 remain ungranted, and no lower gate
+implies a later gate. A redesigned M1.1b or provider-independent M2.2 task now
+requires an explicit sequencing decision and a separately frozen task; any Orca
+adapter, provider or lifecycle operation remains blocked.
 
 ### 10.4 Tool-to-milestone coverage
 
@@ -821,6 +828,13 @@ namespace/entry point remains absent.
 **GREEN:** `python -m aether_mcp` starts one local stdio MCP process, exposes
 protocol metadata and cleanly exits on EOF without network listeners or provider
 effects.
+
+**Fast-track completion (2026-08-07):** accepted at
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`. Exact-commit evidence: 17 focused
+tests passed; the full suite passed 80 with 1 skipped; Ruff, compileall,
+`make mcp-smoke`, diff and secret scans passed; zero tools, registration, Orca
+calls and surviving processes were observed. Session handoff:
+`M2_1A_SESSION_HANDOFF.md`. No part of M2.2 was authorized or started.
 
 #### M2.2 — Implement canonical protocol and stable errors
 

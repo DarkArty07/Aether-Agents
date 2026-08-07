@@ -1,0 +1,165 @@
+# Aether Agents v0.22.0 — M2.1a Session Handoff
+
+> **Closeout timestamp:** 2026-08-07T16:39:10-06:00
+> **Status:** SESSION CLOSED — M2.1a ACCEPTED; NO NEXT IMPLEMENTATION AUTHORIZED
+> **Project:** `/home/darkarty/Desktop/agentes/aether`
+> **Branch:** `feature/v0.22.0-orca-transition`
+> **Implementation commit:** `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`
+> **Draft PR:** [#163](https://github.com/DarkArty07/Aether-Agents/pull/163)
+
+## 1. Why this handoff exists
+
+This is the durable recovery point for Chris and Hermes after closing the local
+Orca-managed Git worktree and the current Hermes conversation. It records only
+verified state. It does not authorize another milestone, merge, release or live
+activation.
+
+The documentation closeout commit that contains this file is identified by:
+
+- subject: `docs: close M2.1a session with durable handoff`;
+- parent: `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`.
+
+The future session must resolve its actual hash from Git/GitHub rather than
+assuming a hash written inside its own commit.
+
+## 2. What closed successfully
+
+M2.1a created the first bounded Aether MCP process:
+
+- package/version: `aether-mcp` / `0.22.0.dev0`;
+- namespace: `src/aether_mcp`;
+- transport: local stdio only;
+- SDK: `mcp==1.28.1`;
+- product protocol marker: `aether.mcp/v1alpha1`;
+- negotiated MCP protocol during acceptance: `2025-11-25`;
+- registered tools: exactly zero;
+- registration/activation: absent;
+- Orca invocation/adapter/storage: absent;
+- network listener, child process, persistent file effect and process survivor:
+  absent.
+
+The public `FastMCP.run_stdio_async()` path was independently probed and stayed
+alive for more than five seconds after stdin EOF. The accepted implementation
+therefore uses a bounded stdio reader around FastMCP's low-level protocol server
+and disables the unused asyncio wakeup socket. This behavior is covered by real
+client handshake, EOF and live-FD tests.
+
+## 3. Exact acceptance evidence
+
+Acceptance was reproduced on the exact implementation commit:
+
+- focused tests: `17 passed in 2.82s`;
+- full suite: `80 passed, 1 skipped in 19.95s`;
+- Ruff: PASS;
+- compileall: PASS;
+- `make mcp-smoke`: PASS;
+- staged secret scan: 8 files, 0 findings;
+- diff/whitespace: PASS;
+- changed paths: exactly 8;
+- active configuration registration: absent;
+- production references to Orca: absent;
+- surviving Python Aether MCP processes: 0.
+
+TDD provenance is preserved in
+`docs/external-agent/REPORT-M2.1A.md`: the behavioral RED was 6 failed and 11
+passed before production code existed. The external Codex agent produced the
+implementation but its restricted sandbox could not write the linked-worktree
+Git index and caused three environmental Orca-catalog failures. Hermes audited
+the code, reproduced the complete suite outside that sandbox, classified those
+failures as environmental and created the exact scoped commit.
+
+## 4. Git and GitHub state at closeout
+
+- base: `origin/main@2b326f05a36cbb77a9bf9475ef914be6f49d886d`;
+- implementation branch has no merge-base drift from that base;
+- remote branch: `origin/feature/v0.22.0-orca-transition`;
+- Draft PR: `#163`, target `main`;
+- PR purpose: remote preservation and candidate discussion;
+- PR readiness: Draft, not authorized for merge;
+- tag, GitHub Release, activation and deployment: none;
+- local worktree disposition: remove only after this handoff commit is pushed and
+  remote equality is verified;
+- main checkout dirty state: pre-existing work on
+  `docs/canonical-product-documentation`; preserve it untouched.
+
+## 5. Deliberately unproven or blocked
+
+M2.1a does **not** prove or authorize:
+
+- M1.1b reusable isolation qualification;
+- D1 provider-seam authority;
+- M2.2 canonical protocol/error implementation;
+- any Aether MCP tool, adapter, journal, storage or encryption;
+- any Orca provider, Run, Task, Dispatch, worker or lifecycle operation;
+- Hermes registration or runtime activation;
+- candidate-wide integration, merge, SemVer tag, GitHub Release or deployment;
+- causal self-improvement, learning capture, dataset export or fine-tuning.
+
+M1.1b remains deferred accepted debt and must close before any Orca provider or
+lifecycle operation. M2.2+ remains separately gated even where provider
+independent.
+
+## 6. Single continuation point
+
+There is no active implementation task. The next session begins with one product
+sequencing decision from Chris:
+
+1. resume and redesign M1.1b isolation qualification; or
+2. authorize a new provider-independent M2.2 task while preserving M1.1b as a
+   hard blocker before all Orca provider/lifecycle work.
+
+Do not infer either option from roadmap order, continuity text or this handoff.
+After Chris decides, freeze exactly one new task with RED, deterministic
+acceptance, forbidden effects and stop conditions before editing code.
+
+## 7. Resume checklist
+
+```bash
+cd /home/darkarty/Desktop/agentes/aether
+git fetch origin --prune
+git log -2 --oneline origin/feature/v0.22.0-orca-transition
+gh pr view 163 --repo DarkArty07/Aether-Agents \
+  --json state,isDraft,headRefOid,baseRefName,url
+```
+
+Verify that the remote head is the documentation closeout commit whose subject
+is `docs: close M2.1a session with durable handoff` and whose parent is
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`.
+
+If a local worktree is needed again and the local branch still exists:
+
+```bash
+git worktree add \
+  .aether/worktrees/feature-v0.22.0-orca-transition \
+  feature/v0.22.0-orca-transition
+```
+
+If reconstructing from a clone without that local branch:
+
+```bash
+git worktree add -b feature/v0.22.0-orca-transition \
+  .aether/worktrees/feature-v0.22.0-orca-transition \
+  origin/feature/v0.22.0-orca-transition
+```
+
+Then read, in order:
+
+1. this handoff;
+2. `docs/releases/v0.22.0/STATUS.yaml`;
+3. `docs/releases/v0.22.0/ROADMAP.md`;
+4. `AGENTS.md`;
+5. `docs/external-agent/REPORT-M2.1A.md`;
+6. curated `.aether/CONTEXT.md`, treating continuity as secondary to committed
+   project authority when they disagree.
+
+## 8. Stop boundary
+
+The current session ends after:
+
+1. committing and pushing this handoff plus authority reconciliation;
+2. verifying Draft PR #163 points at the same closeout commit;
+3. updating and curating project continuity through supported actions;
+4. confirming no owned agent/MCP process survives;
+5. removing the clean local feature worktree and pruning worktree metadata.
+
+No dependent implementation is permitted during closeout.

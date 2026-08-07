@@ -1,5 +1,5 @@
 schema_version: 1
-status: m2_1a_default_off_bootstrap_authorized_m1_1b_deferred
+status: m2_1a_accepted_session_closed_awaiting_owner_sequence
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -22,7 +22,9 @@ candidate:
   native_runtime_source_present: false
   aether_mcp_design_direction_approved: true
   aether_mcp_detailed_design_accepted: true
-  aether_mcp_source_implementation_started: false
+  aether_mcp_source_implementation_started: true
+  aether_mcp_source_implementation_head: cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d
+  aether_mcp_zero_tool_stdio_accepted: true
   aether_mcp_registered: false
   detailed_mcp_design_complete_for_owner_review: true
   detailed_execution_roadmap_proposed: true
@@ -31,7 +33,7 @@ candidate:
   planned_release_milestones: M0-M11
   planned_post_release_activation_milestone: M12
   planned_new_runtime_namespace: src/aether_mcp
-  planned_new_runtime_namespace_present: false
+  planned_new_runtime_namespace_present: true
   learning_trace_primary_purpose_owner_clarified: true
   learning_episode_detailed_design_accepted: true
   learning_capture_source_implementation_started: false
@@ -101,8 +103,9 @@ mcp_architecture:
   trace_schema: docs/reference/AETHER_TRACE_SCHEMA.md
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
-  implementation_authorized: true
-  implementation_scope: M2_1a_default_off_zero_tool_bootstrap_only
+  implementation_authorized: false
+  implementation_scope: none_session_closed
+  last_accepted_scope: M2_1a_default_off_zero_tool_bootstrap
   qualification_implementation_authorized: false
   qualification_implementation_scope: M1_1b_deferred_by_owner
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
@@ -113,7 +116,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M2_1a_default_off_mcp_bootstrap
+  active_task: none_session_closed_awaiting_owner_sequence
   successor_agents_are_stateless: true
   next_prompt_requires_independent_acceptance: true
   external_agent_git:
@@ -255,11 +258,40 @@ m0_provider_seam_amendment:
   aether_owned_version_pinned_schemas: allowed_after_separate_fixture_authorization
   public_command_composition: allowed_after_separate_composition_acceptance
   private_state_gui_shell_fallback: forbidden
-  current_authorized_task: M2_1a_default_off_mcp_bootstrap
+  current_authorized_task: none
   canonical_manifest: docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json
   canonical_manifest_sha256: 186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe
   M1_3_authorized: false
   M2_authorized: false
+
+m2_1a_acceptance:
+  accepted_on: "2026-08-07"
+  implementation_commit: cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d
+  handoff: docs/releases/v0.22.0/M2_1A_SESSION_HANDOFF.md
+  draft_pr: 163
+  draft_pr_url: https://github.com/DarkArty07/Aether-Agents/pull/163
+  server_name: aether-mcp
+  package_version: 0.22.0.dev0
+  product_protocol: aether.mcp/v1alpha1
+  sdk_version: 1.28.1
+  negotiated_mcp_protocol: "2025-11-25"
+  registered_tools: 0
+  registration: absent
+  activation: absent
+  orca_calls: 0
+  evidence:
+    focused_tests_passed: 17
+    full_tests_passed: 80
+    full_tests_skipped: 1
+    ruff: pass
+    compileall: pass
+    mcp_smoke: pass
+    secret_scan_findings: 0
+    process_survivors: 0
+  next_gate: owner_selects_redesigned_M1_1b_or_new_provider_independent_M2_2_task
+  M1_1b_status: deferred_mandatory_before_orca_provider_or_lifecycle
+  D1_granted: false
+  M2_2_authorized: false
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -273,6 +305,9 @@ release_lineage:
   candidate_worktree:
     branch: feature/v0.22.0-orca-transition
     path: /home/darkarty/Desktop/agentes/aether/.aether/worktrees/feature-v0.22.0-orca-transition
+    close_after_handoff_push: true
+    remote_branch: origin/feature/v0.22.0-orca-transition
+    draft_pr: 163
     base_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
     base_ref: origin/main
     managed_by: orca

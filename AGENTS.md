@@ -4,7 +4,7 @@ This file is the canonical project context. It is read automatically by hermes-a
 
 ## v0.22.0 Olympus retirement candidate
 
-The candidate contains no `src/olympus_v3`, `src/aether_agents`, ACPManager, lifecycle database, Olympus or Aether continuity hooks, MCP facade, CLI, profile plugins, Python distribution, entry point, or runtime dependency. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided. PDR-0012 supersedes the pre-emptive native-core extraction: Aether remains the Hermes product layer—vision, profiles, policies, skills, routing judgment and semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch, worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution is intentionally unavailable until that Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery and rollback gates. Do not create a compatibility shim, hidden fallback, or disconnected policy kernel.
+The candidate contains no `src/olympus_v3`, `src/aether_agents`, ACPManager, lifecycle database, Olympus or Aether continuity hooks, legacy MCP facade, CLI or profile plugins. M2.1a adds only the bounded `aether-mcp` Python distribution and entry point under `src/aether_mcp`, pinned to `mcp==1.28.1`, default-off, stdio-only and with exactly zero tools. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided by the candidate. PDR-0012 supersedes the pre-emptive native-core extraction: Aether remains the Hermes product layer—vision, profiles, policies, skills, routing judgment and semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch, worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution remains unavailable until that Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery and rollback gates. Do not create a compatibility shim, hidden fallback or disconnected policy kernel.
 
 ## v0.22.0 MCP-first implementation gate
 
@@ -17,14 +17,19 @@ M1.1a exact installed identity and catalog are accepted as the bounded read-only
 basis for M1.2. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
 catalog maps 49 capabilities only partially and lacks 6 required public seams.
 The owner accepted the M0 fast path: version-pinned Aether schema bundles and
-composition of public commands only. At the owner's direction M1.1b is deferred,
-not active. The current scope is M2.1a only: one repository-local external agent
-may bootstrap the default-off `aether_mcp` package and a real zero-tool stdio MCP
-process under `docs/external-agent/TASK-M2.1A.md`. This provider-independent slice
-must not invoke Orca, register or activate MCP, implement an adapter/tool/storage,
-install dependencies, begin M1.3 or M2.2+, push, merge, rebase, amend, tag,
-Release or touch protected local data. D1 remains ungranted; M1.1b must close
-before any Orca provider or lifecycle operation.
+composition of public commands only. M2.1a is accepted at
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`: the repository now contains one
+provider-independent, default-off, zero-tool stdio MCP bootstrap. Canonical
+closeout and resume instructions are in
+`docs/releases/v0.22.0/M2_1A_SESSION_HANDOFF.md` and Draft PR #163.
+
+There is no active implementation task after this session. The next session must
+obtain Chris's sequencing decision before freezing either a redesigned M1.1b or
+a separately authorized provider-independent M2.2 task. M1.1b remains deferred
+accepted debt and a hard prerequisite before any Orca provider or lifecycle
+operation. D1 remains ungranted. Do not invoke Orca, register or activate MCP,
+implement an adapter/tool/storage, begin M1.3 or M2.2+, merge, tag, Release or
+touch protected local data without the corresponding new gate.
 
 ## v0.19.0 experimental coordination closeout
 
