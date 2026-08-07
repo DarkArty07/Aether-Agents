@@ -1,6 +1,6 @@
 schema_version: 1
-status: m1_2_accepted_provider_seam_insufficient_design_decision_required
-approved_on: "2026-08-06"
+status: m0_fast_path_accepted_m1_1b_authorized
+approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
 governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
@@ -102,19 +102,19 @@ mcp_architecture:
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: false
-  qualification_implementation_authorized: false
-  qualification_implementation_scope: M1_2_complete_M0_design_reconciliation_only
+  qualification_implementation_authorized: true
+  qualification_implementation_scope: M1_1b_canonical_candidate_verifier_only
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
 implementation_workflow:
-  mode: product_owner_design_decision
+  mode: external_coding_agent_stepwise
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M0_reconcile_provider_seam_acceptance
+  active_task: M1_1b_canonical_candidate_verifier
   successor_agents_are_stateless: true
-  next_prompt_requires_independent_acceptance: false
+  next_prompt_requires_independent_acceptance: true
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
@@ -210,7 +210,8 @@ m1_1_fast_track:
   authorization_source: user_requested_prompt_and_faster_advancement
   acceptance_path: docs/releases/v0.22.0/M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md
   M1_1a_identity_and_catalog: accepted_read_only_basis_for_M1_2
-  M1_1b_reusable_isolation_qualifier: deferred_accepted_debt
+  M1_1b_reusable_isolation_qualifier: authorized_candidate_specific_closure
+  M1_1b_task: docs/external-agent/TASK-M1.1B.md
   M1_1b_closure_deadline: before_any_M1_3_operation
   M1_2_authorized: read_only_catalog_and_seam_matrix_only
   M1_3_authorized: false
@@ -243,6 +244,20 @@ m1_2_independent_review:
   gate: INSUFFICIENT
   next_action: M0_provider_seam_design_decision
   M1_3_authorized: false
+
+m0_provider_seam_amendment:
+  status: accepted
+  accepted_on: "2026-08-07"
+  accepted_by: Christopher_DarkArty07
+  record: docs/releases/v0.22.0/M0_PROVIDER_SEAM_AMENDMENT.md
+  aether_owned_version_pinned_schemas: allowed_after_separate_fixture_authorization
+  public_command_composition: allowed_after_separate_composition_acceptance
+  private_state_gui_shell_fallback: forbidden
+  current_authorized_task: M1_1b_canonical_candidate_verifier
+  canonical_manifest: docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json
+  canonical_manifest_sha256: 186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe
+  M1_3_authorized: false
+  M2_authorized: false
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -893,13 +908,13 @@ milestones:
   historical_native_core_retirement: locally_complete
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
-    status: blocked_return_to_M0_design
-    active_package: M0_provider_seam_design_reconciliation
+    status: in_progress
+    active_package: M1_1b_canonical_candidate_verifier
     M1_1a_exact_identity_and_catalog: accepted
-    M1_1b_reusable_isolation_qualifier: deferred_blocker_before_M1_3
+    M1_1b_reusable_isolation_qualifier: authorized_candidate_specific_verifier
     M1_2_structured_provider_seam_matrix: accepted_provider_seam_insufficient
     M1_3_isolated_lifecycle_and_rollback: blocked_pending_M1_1b_and_explicit_operation_authority
-    M1_4_provider_decision: blocked_pending_M0_reconciliation_M1_1b_and_M1_3
+    M1_4_provider_decision: blocked_pending_M1_1b_and_M1_3
   M2_aether_mcp_foundation: blocked_pending_D1
   M3_lifecycle_through_aether_mcp: blocked_pending_M2
   M4_one_synthetic_worker: blocked_pending_M3
@@ -915,11 +930,11 @@ milestones:
 authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
-  M1_1_repository_implementation: M1_1b_deferred
+  M1_1_repository_implementation: M1_1b_authorized_candidate_verifier_only
   M1_2_repository_implementation: complete
   M1_3_orca_runtime_operation: not_authorized
   M2_aether_mcp_source_implementation: not_authorized
-  external_agent_branch_local_atomic_commit_for_active_M1_2_task: no_longer_authorized
+  external_agent_branch_local_atomic_commit_for_active_M1_1b_task: authorized
   external_agent_push_merge_rebase_amend_tag_release: forbidden
   orca_runtime_start: not_authorized
   worker_or_model_execution: not_authorized
@@ -935,11 +950,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M0_reconcile_provider_seam_acceptance
-  executor: product_owner_and_Hermes
-  acceptance_owner: Christopher_DarkArty07
+  milestone: M1_1b_canonical_candidate_verifier
+  executor: repository_local_external_coding_agent
+  acceptance_owner: Hermes
   requirement: >-
-    Choose whether Aether must wait for upstream Orca machine-readable contracts
-    or may own version-pinned schemas learned from separately authorized isolated
-    fixtures and compose only public commands for missing aggregate semantics.
-    Do not implement the choice, execute provider operations or begin M1.3/M2.
+    Replace the rejected Bash parser and broad mount-prefix exception with the
+    immutable canonical provider manifest, exact-byte verification, positive
+    ENOTCONN transient cleanup and exact final inventory. Make FIFO coverage
+    execute honestly. Do not execute mapped operations or begin M1.3/M2.

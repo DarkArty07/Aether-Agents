@@ -231,12 +231,27 @@ It never accepts a free-form command string. It requires structured JSON
 responses and maps provider errors into stable Aether error classes without
 claiming unsupported semantics.
 
+The accepted M0 provider-seam fast path permits a version-pinned Aether schema
+bundle when the public Orca catalog names commands and arguments but omits
+result, effect, timeout or recovery schemas. Such a bundle is derived only from
+separately authorized isolated public-command fixtures, pins their exact evidence
+digests and fails closed on material drift. It does not convert an observation
+into provider authority or admit undocumented/private state.
+
+An aggregate capability absent from the public catalog may be composed only from
+described public Orca operations under one explicit idempotency, partial-result,
+reconciliation and cleanup plan. Aether owns the adapter plan and receipts; Orca
+continues to own every operational resource and lifecycle effect. Canonical
+authority: `docs/releases/v0.22.0/M0_PROVIDER_SEAM_AMENDMENT.md`.
+
 Every Run pins:
 
 - provider type;
 - executable/artifact identity;
 - version and digest;
 - operation catalog/schema digest;
+- Aether-owned qualified schema-bundle digest when the provider catalog is
+  incomplete;
 - adapter version;
 - supported capability set.
 

@@ -518,7 +518,11 @@ intent/capability/effect. Read-only.
 ### 4.2 `orca_describe`
 
 Returns exact command/API identifier, arguments schema, output schema, effect
-class, capability requirements, and provider version. Read-only.
+class, capability requirements, provider version and schema authority. Output,
+effect, timeout or recovery fields may come from a version-pinned Aether schema
+bundle accepted under `M0_PROVIDER_SEAM_AMENDMENT.md` when Orca's public catalog
+omits them. Provider-declared and Aether-qualified fields must remain distinctly
+labeled. Read-only.
 
 ### 4.3 `orca_call`
 
@@ -528,6 +532,7 @@ Invokes one described operation with:
 - structured `arguments`;
 - mutation identity for any non-read operation;
 - catalog/schema digest;
+- qualified schema-bundle digest when applicable;
 - expected effect and reason.
 
 No shell command, interpolation, undocumented field, or private storage access is
@@ -537,12 +542,19 @@ accepted.
 
 Submits an admitted independent batch. Returns one receipt per call and an
 aggregate classification. `PARTIAL` is preserved; no implicit rollback or retry.
+The batch envelope is Aether-owned composition; every member remains an admitted
+version-pinned public Orca operation.
 
 ### 4.5 `orca_events`
 
 Reads version-matched provider events from a cursor with `wait_ms=0` by default.
 Returns provider-native and conservative normalized classifications, source time,
 arrival time, cursor, and unknown fields.
+
+When Orca has no public native event stream, a later accepted adapter may return a
+composed observation view from public read operations and Aether's own receipts.
+It must label that view `AETHER_COMPOSED`, must not claim provider-native event
+ordering/completeness, and must not inspect private provider state.
 
 ## 5. Learning-data tools
 

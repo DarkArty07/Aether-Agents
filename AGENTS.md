@@ -14,14 +14,15 @@ architecture, 24-tool contract, trace/learning schemas, measurement contract,
 `docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`.
 
 M1.1a exact installed identity and catalog are accepted as the bounded read-only
-basis for M1.2. M1.1b reusable adversarial isolation is deferred accepted debt and
-blocks M1.3. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
+basis for M1.2. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
 catalog maps 49 capabilities only partially and lacks 6 required public seams.
-The current scope is one M0 provider-seam design decision only. No external-agent
-implementation task, Orca runtime operation, adapter/MCP source, dependency
-installation, worker, M1.3, push, merge, rebase, amend, tag, Release or protected
-local-data access is authorized. Canonical evidence:
-`docs/releases/v0.22.0/M1_2_INDEPENDENT_REVIEW.md`.
+The owner accepted the M0 fast path: version-pinned Aether schema bundles and
+composition of public commands only. The current scope is M1.1b only: one
+repository-local external agent may replace the heuristic qualifier with the
+canonical candidate manifest and bounded ENOTCONN cleanup contract in
+`docs/external-agent/TASK-M1.1B.md`. It must not execute mapped lifecycle
+operations, implement adapter/MCP source, install dependencies, begin M1.3/M2,
+push, merge, rebase, amend, tag, Release or touch protected local data.
 
 ## v0.19.0 experimental coordination closeout
 

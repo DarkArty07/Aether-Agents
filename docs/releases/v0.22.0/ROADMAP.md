@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M1.2 ACCEPTED — PROVIDER SEAM INSUFFICIENT; DESIGN DECISION REQUIRED; NOT ACTIVATED
-> **Date:** 2026-08-06
+> **Status:** M0 FAST PATH ACCEPTED; M1.1b AUTHORIZED; M1.3/M2 BLOCKED; NOT ACTIVATED
+> **Date:** 2026-08-07
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** M0 provider-seam design reconciliation only; source and runtime remain gated
+> **Implementation authorization:** M1.1b canonical candidate verifier only; source and runtime remain gated
 
 ## 1. Objective
 
@@ -1401,23 +1401,22 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Resolve one bounded M0 provider-seam design decision. M1.2 is accepted with
-verdict `INSUFFICIENT`: 49 capabilities have public commands but no catalog-level
-result/effect/timeout/recovery contracts, and 6 required aggregate capabilities
-have no matching public command. Choose between waiting for Orca to publish the
-missing contracts or authorizing a version-pinned Aether adapter to validate
-observed JSON schemas and compose only public commands. Private-state, GUI, shell
-or retired-runtime fallbacks remain forbidden.
+Execute **M1.1b — canonical candidate verifier** as one external-agent task. Pin
+the accepted launcher/AppImage/catalog through the immutable provider manifest,
+remove the generic Bash parser, positively identify only transient disconnected
+FUSE cleanup and require exact final inventory. Fix the FIFO regression so it
+executes without a false skip. No provider lifecycle operation is authorized.
 
 ### STOP CONDITION
 
-Stop after the product owner records that design choice and its exact limits.
-M1.1b, M1.3 and M2 remain blocked. Do not prepare adapter code, execute provider
-operations or turn the recommended fast path into implementation authority.
+Stop after one exact M1.1b implementation/evidence commit and report. Hermes then
+reproduces manifest identity, focused/full tests, two real read-only probes,
+bounded cleanup and zero survivors. M1.3 and M2 remain blocked regardless of the
+implementer result until independent acceptance and separate authorization.
 
 ### LATER GATES
 
-Accepted M0 seam amendment -> close M1.1b -> separately authorized isolated
+Close M1.1b -> separately authorized isolated
 contract fixtures/lifecycle -> M1.4 provider decision -> M2 MCP foundation -> M3
 lifecycle -> M4 one worker -> M5 real two-worker swarm -> M6 roster -> M7
 learning-data qualification -> M8 verifier/Ariadna decisions -> M9
