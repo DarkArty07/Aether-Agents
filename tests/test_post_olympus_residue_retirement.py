@@ -230,6 +230,18 @@ def test_ci_installs_declared_aether_mcp_distribution_dependencies() -> None:
     assert missing_project_install == []
 
 
+def test_product_assets_ci_accepts_exact_bounded_mcp_source() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+
+    assert "assert not (root / 'src').exists()" not in workflow
+    for relative_path in (
+        "aether_mcp/__init__.py",
+        "aether_mcp/__main__.py",
+        "aether_mcp/server.py",
+    ):
+        assert relative_path in workflow
+
+
 def test_current_surfaces_do_not_advertise_removed_native_core() -> None:
     forbidden_claims = (
         "remain under `src/aether_agents`",
