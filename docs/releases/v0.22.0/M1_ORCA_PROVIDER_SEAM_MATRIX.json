@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "PROVISIONAL",
+  "status": "ACCEPTED_INSUFFICIENT",
   "source_identity": {
     "launcher_path": "/home/darkarty/.local/bin/orca",
     "launcher_size": 1015,
@@ -135,7 +135,8 @@
         "coordinator_start",
         "dispatch_abandon",
         "orchestration_reset",
-        "task_update"
+        "task_update",
+        "worker_abandon"
       ],
       "no_seam_reason": null,
       "effect_class": "LOCAL_APPEND_ONLY",
@@ -260,9 +261,9 @@
     {
       "tool_name": "orca_batch",
       "milestone": "M4",
-      "ownership": "Orca-provider",
+      "ownership": "hybrid",
       "required_provider_capability_ids": [],
-      "no_seam_reason": "Executes an independent batch of allowlisted low-level Orca provider operations.",
+      "no_seam_reason": "Aether owns the admitted batch envelope; each item uses capabilities mapped by its described low-level operation, so no distinct Orca batch command is required.",
       "effect_class": "LOCAL_REVERSIBLE",
       "evaluated_in_m1_2": true
     },
@@ -3283,7 +3284,7 @@
       "worktree_management": 7
     },
     "required_M2_to_M5_total": 55,
-    "blocking_missing_or_unknown_ids": [
+    "blocking_non_supported_ids": [
       "agent_context_read",
       "cat_describe",
       "cat_search",
@@ -3339,6 +3340,14 @@
       "worktree_remove",
       "worktree_set",
       "worktree_show"
+    ],
+    "blocking_missing_or_unknown_ids": [
+      "events_read",
+      "resource_cleanup",
+      "resource_inventory",
+      "run_cancel",
+      "run_close",
+      "task_cancel"
     ],
     "provisional_gate": "INSUFFICIENT"
   }

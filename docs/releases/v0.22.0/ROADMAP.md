@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M1.1a ACCEPTED; M1.1b DEFERRED; M1.2 AUTHORIZED; NOT ACTIVATED
+> **Status:** M1.2 ACCEPTED — PROVIDER SEAM INSUFFICIENT; DESIGN DECISION REQUIRED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** M1.1 repository task only; later packages remain gated
+> **Implementation authorization:** M0 provider-seam design reconciliation only; source and runtime remain gated
 
 ## 1. Objective
 
@@ -1401,24 +1401,24 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.2 — Freeze the structured provider seam matrix** as one fast,
-read-only external-agent task. M1.1a pins the exact installed launcher, AppImage,
-version and 220-command catalog. M1.2 may invoke only two isolated
-`agent-context --json` reads, then map the 24 Aether MCP tools and M2–M5 provider
-capabilities as `SUPPORTED`, `PARTIAL`, `MISSING` or `UNKNOWN`. It may not execute
-any mapped operation, implement an adapter or begin lifecycle work.
+Resolve one bounded M0 provider-seam design decision. M1.2 is accepted with
+verdict `INSUFFICIENT`: 49 capabilities have public commands but no catalog-level
+result/effect/timeout/recovery contracts, and 6 required aggregate capabilities
+have no matching public command. Choose between waiting for Orca to publish the
+missing contracts or authorizing a version-pinned Aether adapter to validate
+observed JSON schemas and compose only public commands. Private-state, GUI, shell
+or retired-runtime fallbacks remain forbidden.
 
 ### STOP CONDITION
 
-M1.2 stops after one exact three-artifact commit and external-agent report. Hermes
-then reproduces the catalog and audits every positive and unresolved mapping.
-M1.1b and M1.3 remain blocked regardless of the M1.2 verdict; no runtime or adapter
-work follows without a separate acceptance gate.
+Stop after the product owner records that design choice and its exact limits.
+M1.1b, M1.3 and M2 remain blocked. Do not prepare adapter code, execute provider
+operations or turn the recommended fast path into implementation authority.
 
 ### LATER GATES
 
-M1.2 structured seam matrix -> separately authorized M1.3 isolated lifecycle ->
-M1.4 provider decision -> M2 MCP foundation -> M3 lifecycle -> M4 one worker ->
-M5 real two-worker swarm -> M6 roster -> M7 learning-data qualification -> M8
-verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation ->
-M11 Release -> M12 activation.
+Accepted M0 seam amendment -> close M1.1b -> separately authorized isolated
+contract fixtures/lifecycle -> M1.4 provider decision -> M2 MCP foundation -> M3
+lifecycle -> M4 one worker -> M5 real two-worker swarm -> M6 roster -> M7
+learning-data qualification -> M8 verifier/Ariadna decisions -> M9
+productization -> M10 controlled evaluation -> M11 Release -> M12 activation.

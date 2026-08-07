@@ -1,6 +1,6 @@
 # M1 Orca Provider Seam Qualification Matrix
 
-> **Status:** PROVISIONAL QUALIFICATION REPORT
+> **Status:** ACCEPTED — PROVIDER SEAM INSUFFICIENT
 > **Date:** 2026-08-07
 > **Target Candidate:** Orca v1.4.167
 > **Implementation Owner:** Repository-local external coding agent
@@ -64,7 +64,7 @@ The 24 frozen Aether MCP tools are partitioned between Aether-local responsibili
 | `orca_search` | M2 | Orca-provider | READ_ONLY | True | Yes |
 | `orca_describe` | M2 | Orca-provider | READ_ONLY | True | Yes |
 | `orca_call` | M2 | Orca-provider | READ_ONLY | True | Yes |
-| `orca_batch` | M4 | Orca-provider | LOCAL_REVERSIBLE | True | No (Aether-local) |
+| `orca_batch` | M4 | hybrid | LOCAL_REVERSIBLE | True | No distinct seam (Aether-owned batch envelope) |
 | `orca_events` | M2 | Orca-provider | READ_ONLY | True | Yes |
 | `learning_capture` | M7 | Aether-local | LOCAL_APPEND_ONLY | False | No (Aether-local) |
 | `learning_label` | M7 | Aether-local | LOCAL_APPEND_ONLY | False | No (Aether-local) |
@@ -137,7 +137,7 @@ Every required low-level M2–M5 capability domain is summarized below:
 ## 4. Gaps and Seam Deficiencies
 
 ### 4.1 MISSING Capabilities (No Public Orca Seam)
-The following 5 capabilities have no public structured command in the Orca catalog:
+The following 6 capabilities have no public structured command in the Orca catalog:
 
 - **`events_read`** (Domain: `event_observation`): Read stream of Orca provider events.
   - *Gap:* No public structured Orca command satisfies this required capability.
@@ -216,10 +216,10 @@ The following 49 capabilities correspond to public commands in Orca, but lack ma
 ### 5.1 Seam Qualification Verdict
 Does every required M2–M5 operation have a public structured seam in Orca?
 
-**NO.** Out of 54 required capabilities across 12 domains:
+**NO.** Out of 55 required capabilities across 12 domains:
 - 0 capabilities satisfy the strict `SUPPORTED` standard (because output schemas, timeout contracts, and recovery semantics are absent from catalog JSON metadata).
 - 49 capabilities are `PARTIAL` (public command exists, but output schema / timeout / recovery contracts are not machine-readable in the catalog).
-- 5 capabilities are `MISSING` (no public Orca command exists for Run cancellation, Run closure, Task cancellation, event stream observation, aggregate resource inventory, or aggregate resource cleanup).
+- 6 capabilities are `MISSING` (no public Orca command exists for Run cancellation, Run closure, Task cancellation, event stream observation, aggregate resource inventory, or aggregate resource cleanup).
 
 ### 5.2 Status of M1.1b and M1.3
 - **M1.1b Status:** Remains OPEN as accepted debt. The reusable adversarial isolation qualifier is not fully closed.
@@ -229,4 +229,3 @@ Does every required M2–M5 operation have a public structured seam in Orca?
 **Recommendation:** `RETURN_TO_M0_DESIGN`
 
 Because essential control operations (Run cancel/close, Task cancel, resource cleanup) have no public structured command, and output/timeout/recovery contracts are not publicly structured in catalog metadata, the provider seam is insufficient. Aether cannot build a robust, deterministic provider adapter without returning to M0 design to address missing seams or revise expectations.
-

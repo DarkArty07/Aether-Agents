@@ -1,5 +1,5 @@
 schema_version: 1
-status: m1_1a_accepted_m1_1b_deferred_m1_2_authorized
+status: m1_2_accepted_provider_seam_insufficient_design_decision_required
 approved_on: "2026-08-06"
 owner: Christopher (DarkArty07)
 
@@ -102,19 +102,19 @@ mcp_architecture:
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: false
-  qualification_implementation_authorized: true
-  qualification_implementation_scope: M1_2_read_only_catalog_seam_matrix_only
+  qualification_implementation_authorized: false
+  qualification_implementation_scope: M1_2_complete_M0_design_reconciliation_only
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
 implementation_workflow:
-  mode: external_coding_agent_stepwise
+  mode: product_owner_design_decision
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M1_2_freeze_structured_provider_seam_matrix
+  active_task: M0_reconcile_provider_seam_acceptance
   successor_agents_are_stateless: true
-  next_prompt_requires_independent_acceptance: true
+  next_prompt_requires_independent_acceptance: false
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
@@ -218,6 +218,31 @@ m1_1_fast_track:
     - mount_prefix_subtree_bypasses_exact_inventory
     - generic_bash_mutation_blacklist_not_fail_closed
     - mandatory_fifo_test_skipped_by_invalid_fixture
+
+m1_2_independent_review:
+  implementation_head: f9c3460a25cf5b9b97c329fab47817d678652f54
+  implementer_status: pass_task_complete_gate_insufficient
+  independent_status: accepted_provider_seam_insufficient
+  reviewed_on: "2026-08-07"
+  review_path: docs/releases/v0.22.0/M1_2_INDEPENDENT_REVIEW.md
+  tools_evaluated: 24
+  capability_total: 55
+  supported: 0
+  partial: 49
+  missing: 6
+  unknown: 0
+  catalog_commands: 220
+  catalog_two_run_byte_identical: true
+  catalog_command_paths_verified: 49
+  catalog_unique_command_paths_verified: 45
+  catalog_flag_mismatches: 0
+  catalog_structured_result_effect_timeout_recovery_keys: 0
+  cleanup_wait_observed_ms: 100
+  process_survivors: 0
+  temporary_root_survivors: 0
+  gate: INSUFFICIENT
+  next_action: M0_provider_seam_design_decision
+  M1_3_authorized: false
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -868,13 +893,13 @@ milestones:
   historical_native_core_retirement: locally_complete
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
-    status: in_progress
-    active_package: M1_2_structured_provider_seam_matrix
+    status: blocked_return_to_M0_design
+    active_package: M0_provider_seam_design_reconciliation
     M1_1a_exact_identity_and_catalog: accepted
     M1_1b_reusable_isolation_qualifier: deferred_blocker_before_M1_3
-    M1_2_structured_provider_seam_matrix: authorized_read_only
+    M1_2_structured_provider_seam_matrix: accepted_provider_seam_insufficient
     M1_3_isolated_lifecycle_and_rollback: blocked_pending_M1_1b_and_explicit_operation_authority
-    M1_4_provider_decision: blocked_pending_M1_1_through_M1_3
+    M1_4_provider_decision: blocked_pending_M0_reconciliation_M1_1b_and_M1_3
   M2_aether_mcp_foundation: blocked_pending_D1
   M3_lifecycle_through_aether_mcp: blocked_pending_M2
   M4_one_synthetic_worker: blocked_pending_M3
@@ -891,10 +916,10 @@ authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
   M1_1_repository_implementation: M1_1b_deferred
-  M1_2_repository_implementation: authorized_read_only_documentation_and_evidence
+  M1_2_repository_implementation: complete
   M1_3_orca_runtime_operation: not_authorized
   M2_aether_mcp_source_implementation: not_authorized
-  external_agent_branch_local_atomic_commit_for_active_M1_2_task: authorized
+  external_agent_branch_local_atomic_commit_for_active_M1_2_task: no_longer_authorized
   external_agent_push_merge_rebase_amend_tag_release: forbidden
   orca_runtime_start: not_authorized
   worker_or_model_execution: not_authorized
@@ -910,13 +935,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M1_2_freeze_structured_provider_seam_matrix
-  executor: repository_local_external_coding_agent
-  acceptance_owner: Hermes
+  milestone: M0_reconcile_provider_seam_acceptance
+  executor: product_owner_and_Hermes
+  acceptance_owner: Christopher_DarkArty07
   requirement: >-
-    Read the exact pinned public Orca catalog twice under isolated HOME/XDG/TMP,
-    then map all 24 Aether MCP tools and every M2-M5 provider capability to exact
-    public structured commands with SUPPORTED/PARTIAL/MISSING/UNKNOWN evidence.
-    Do not execute mapped operations, implement adapter/MCP code, access private
-    state, install dependencies or begin M1.3. M1.1b remains an explicit blocker
-    before any lifecycle operation.
+    Choose whether Aether must wait for upstream Orca machine-readable contracts
+    or may own version-pinned schemas learned from separately authorized isolated
+    fixtures and compose only public commands for missing aggregate semantics.
+    Do not implement the choice, execute provider operations or begin M1.3/M2.

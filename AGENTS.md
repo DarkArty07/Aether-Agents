@@ -15,13 +15,13 @@ architecture, 24-tool contract, trace/learning schemas, measurement contract,
 
 M1.1a exact installed identity and catalog are accepted as the bounded read-only
 basis for M1.2. M1.1b reusable adversarial isolation is deferred accepted debt and
-blocks M1.3. The current scope is M1.2 only: a repository-local external coding
-agent may invoke exactly two isolated `orca agent-context --json` reads and create
-the declared structured seam matrix, report and branch-local atomic commit. It
-must not execute mapped operations, start Orca runtime, create runtime state,
-install dependencies, launch workers, implement an adapter or MCP package, begin
-M1.3, push, merge, rebase, amend, tag, Release or touch protected local data.
-Hermes audits the exact commit and catalog mapping before any later authorization.
+blocks M1.3. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
+catalog maps 49 capabilities only partially and lacks 6 required public seams.
+The current scope is one M0 provider-seam design decision only. No external-agent
+implementation task, Orca runtime operation, adapter/MCP source, dependency
+installation, worker, M1.3, push, merge, rebase, amend, tag, Release or protected
+local-data access is authorized. Canonical evidence:
+`docs/releases/v0.22.0/M1_2_INDEPENDENT_REVIEW.md`.
 
 ## v0.19.0 experimental coordination closeout
 
