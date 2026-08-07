@@ -5,6 +5,7 @@
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** None
 - **Superseded by:** None
+- **Refined by:** PDR-0012 and ADR-0001 replace the retired Olympus/ledger runtime examples with Aether MCP semantic trace plus Orca operational facts; the studio/progressive-visibility decision remains approved
 
 ## Context
 
@@ -93,9 +94,9 @@ The exact delivery surface—desktop, web, TUI, or a combination—remains a lat
 The UI must read and present authoritative state from the appropriate domain:
 
 - product decisions and version-controlled documents;
-- contract and coordination ledger state;
+- Aether contract and semantic trace state;
 - `.aether` continuity;
-- Olympus runtime/session facts;
+- source-labelled Orca runtime/session facts;
 - source, artifacts, tests, builds, screenshots, and receipts;
 - Hermes-managed user profile and memory.
 

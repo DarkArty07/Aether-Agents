@@ -7,9 +7,14 @@
 
 > **Supersession:** The installed-capability findings and Hermes-led parallel
 > outcome remain useful evidence. PDR-0012 rejects the proposed stable Aether
-> session service, private adapter ledger, and pre-emptive product API. A future
-> integration must begin from Orca's public Run/Task/Dispatch/message/worktree
-> contract and add only the smallest observed Aether-specific seam.
+> session service, private adapter ledger, and pre-emptive API below. ADR-0001
+> later approves one bounded MCP-first Aether control/trace plane based on an
+> explicit product requirement, still using Orca's public
+> Run/Task/Dispatch/message/worktree contract and never duplicating operational
+> state. Current design: `../../architecture/AETHER_MCP.md`,
+> `../../reference/AETHER_MCP_CONTRACT.md`, and
+> `../../architecture/ORCHESTRATION.md`.
+> Current roster: `../../architecture/DAIMONS.md` under PDR-0013.
 
 ## 1. Product outcome
 

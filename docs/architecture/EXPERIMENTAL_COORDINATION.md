@@ -218,7 +218,7 @@ Harmonia remains default-off. This maintenance does not prove:
 - an LLM planner;
 - product improvement over a strong general agent.
 
-## 8. Maintenance sequence before new coordination work
+## 8. Historical maintenance sequence
 
 1. Replace private dispatcher/ledger access with narrow public authority methods.
 2. Add deterministic characterization tests around those boundaries.
@@ -227,4 +227,8 @@ Harmonia remains default-off. This maintenance does not prove:
 5. Run the complete repository suite and independent candidate review.
 6. Only then freeze the next bounded coordination hypothesis.
 
-The next coordination increment must start from this maintained kernel baseline, not from the retired R2–R8 laboratory APIs.
+This sequence describes the maintenance decision at the historical boundary.
+PDR-0012 subsequently retired the maintained kernel baseline itself. Current
+coordination design starts from Orca's public Run/Task/Dispatch/message/worktree
+contract under `ORCHESTRATION.md`; it must not restore either the kernel baseline
+or the earlier R2–R8 laboratory APIs.

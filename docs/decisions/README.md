@@ -24,9 +24,10 @@ Sequences are independent by decision type.
 
 | Record | Status | Governing decision |
 |---|---|---|
-| [PDR-0012](./PDR-0012-hermes-orca-swarm-boundary.md) | APPROVED | Hermes leads one Orca Run with parallel Tasks and direct worker messaging; Aether remains the product layer and does not retain a disconnected Python coordination/authority core. |
+| [PDR-0013](./PDR-0013-swarm-roster-and-personality-model.md) | APPROVED | Aether uses a small stable roster of reusable archetypes, permits multiple workers per archetype, retires Athena and Etalides from the target, keeps Ariadna conditional, and designs an Independent Verifier before implementation. |
+| [PDR-0012](./PDR-0012-hermes-orca-swarm-boundary.md) | PARTIALLY SUPERSEDED | Its Hermes–Orca authority boundary, direct/swarm choice, and retirement of the disconnected native coordination core remain; ADR-0001 supersedes its demand-driven-adapter/CLI-first assumption. |
 | [PDR-0011](./PDR-0011-orca-substrate-and-olympus-retirement.md) | PARTIALLY SUPERSEDED | Its Olympus source retirement, capability-gap honesty, historical evidence, and non-destructive store policy remain; PDR-0012 supersedes pre-emptive `aether_agents` core retention. |
-| [PDR-0009](./PDR-0009-semver-self-improvement-cycle.md) | APPROVED | Every Aether Hermes session participates in a SemVer-governed self-improvement cycle; evidence, not assumption, shapes the next minor, and no LLM coordinator is presumed necessary. |
+| [PDR-0009](./PDR-0009-semver-self-improvement-cycle.md) | APPROVED | Evidence, not assumption, shapes SemVer-governed improvement; the proposed MCP trace primarily preserves protected rich learning episodes for evaluation/refinement and future fine-tuning, without automatic training or promotion. |
 | [PDR-0008](./PDR-0008-canonical-definition-and-project-completion.md) | APPROVED | Canonical product definition approved; a project is complete when the user obtains the intended outcome, with Hermes accountable for requirements understanding and honest acceptance evidence. |
 | [PDR-0007](./PDR-0007-studio-experience-progressive-visibility-and-ui.md) | APPROVED | Aether should feel like an intelligent software studio, use progressive visibility, and eventually provide a UI that projects authoritative state without duplicating it. |
 | [PDR-0006](./PDR-0006-hermes-native-user-memory-without-honcho.md) | APPROVED | Hermes Agent is the canonical learning framework; Honcho is excluded; Hermes owns the global user profile, preferences, and memory. |
@@ -35,6 +36,12 @@ Sequences are independent by decision type.
 | [PDR-0003](./PDR-0003-quality-doctrine-and-model-economics.md) | APPROVED | Quality begins with not doing unrequested work, then technical correctness, creative product quality, continuity, proportional verification and security, current documentation, and cost-aware model allocation. |
 | [PDR-0002](./PDR-0002-generic-adaptive-software-product.md) | APPROVED | Aether is a generic adaptive software project-production product; its value requires representative same-prompt quality parity or superiority against strong general agents. |
 | [PDR-0001](./PDR-0001-product-essence.md) | SUPERSEDED | Preserved the empirical product essence but incorrectly framed the intended product as personal rather than generic and adaptive. |
+
+## Architecture decisions
+
+| Record | Status | Governing decision |
+|---|---|---|
+| [ADR-0001](./ADR-0001-aether-mcp-control-and-trace-plane.md) | APPROVED | Hermes controls an Orca-backed swarm through one Aether MCP; Aether owns typed validation, a compact semantic index, protected learning episodes/labels/datasets, and measurement while Orca remains the only operational source of truth. |
 
 ## Operational decisions
 

@@ -6,6 +6,21 @@ This file is the canonical project context. It is read automatically by hermes-a
 
 The candidate contains no `src/olympus_v3`, `src/aether_agents`, ACPManager, lifecycle database, Olympus or Aether continuity hooks, MCP facade, CLI, profile plugins, Python distribution, entry point, or runtime dependency. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided. PDR-0012 supersedes the pre-emptive native-core extraction: Aether remains the Hermes product layer—vision, profiles, policies, skills, routing judgment and semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch, worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution is intentionally unavailable until that Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery and rollback gates. Do not create a compatibility shim, hidden fallback, or disconnected policy kernel.
 
+## v0.22.0 MCP-first implementation gate
+
+M0 was accepted by the product owner on 2026-08-06. The detailed Aether MCP
+architecture, 24-tool contract, trace/learning schemas, measurement contract,
+16-case catalog and M0–M12 roadmap are frozen in
+`docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`.
+
+The current implementation scope is M1.1 only: a repository-local external
+coding agent may create the declared Orca qualification script, deterministic
+tests, evidence and branch-local atomic commits. It may inspect executable,
+version, digest and public catalog metadata read-only. It must not start Orca,
+create runtime state, install dependencies, launch workers, begin M1.2, push,
+merge, rebase, amend, tag, Release or touch protected local data. Hermes audits
+the exact commits and reruns the gates before issuing the next task prompt.
+
 ## v0.19.0 experimental coordination closeout
 
 v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. At that historical boundary, `talk_to -> ACPManager` remained authoritative; that path has since been retired in the v0.22.0 candidate. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication were outside the v0.19 closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
@@ -19,6 +34,14 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 **Operating policy** — no specialist execution runtime is registered in this candidate. Hermes may perform bounded implementation directly; work that materially requires an unavailable specialist stops as an explicit capability gap. Never introduce a hidden `talk_to`, Harmonia, ACP, or renamed fallback. Preserve and classify failures, verify cleanup, and accumulate evidence without presuming or approving the replacement architecture. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md`; `docs/releases/v0.20.0/CYCLE.yaml` is historical evidence, not an active candidate manifest.
 
 **What is enforced by code, and what is not.** The candidate contains no self-improvement runtime, ledger implementation, hook, active manifest, evaluator, causality engine, promotion implementation, or release-evidence projector. Existing schema-v5 databases and v0.20 evidence are preserved as historical/local data but have no candidate reader or writer. PDR-0009 remains product policy only. No causal claim that Aether improved can currently be derived from the candidate.
+
+**Accepted v0.22 learning-data design.** The owner clarified that Aether MCP trace
+data is primarily for evaluating, improving and eventually fine-tuning the
+system; audit is secondary. The M0 design separates a compact semantic event
+index from protected secret-redacted model-visible learning episodes, labels and
+versioned dataset lineage. The design is accepted, but no capture store, dataset
+builder, exporter, trainer, upload, prompt/model mutation or promotion path exists
+or is authorized by M1.1.
 
 The `aether-self-improvement` plugin itself is absent, not merely disabled. A clean installation has no supported self-improvement activation path, general delegation path, or Aether MCP facade.
 

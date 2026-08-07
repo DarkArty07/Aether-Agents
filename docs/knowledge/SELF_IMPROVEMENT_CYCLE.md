@@ -11,7 +11,11 @@ v0.20.0 introduced a default-off measurement substrate for a future SemVer self-
 
 PDR-0012 subsequently retired the extracted ledger, causality, candidate, and promotion implementation because it had no active consumer and pre-empted the accepted Hermes–Orca boundary. Existing schema-v5 databases remain untouched historical/local state. Nothing in the candidate initializes a session, opens a ledger, injects model context, records tool/model calls, reads a cycle manifest, compares candidates, or projects release evidence automatically.
 
-The approved target cycle wraps the user's task. It must not replace product intent, invent unrelated improvement work, invoke a Daimon ceremonially, or treat recorded activity as improvement.
+The approved target cycle wraps the user's task. It must not replace product
+intent, invent unrelated improvement work, invoke a Daimon ceremonially, or
+treat recorded activity as improvement. Under the proposed v0.22 MCP design,
+recorded semantic events index protected full learning episodes; capture creates
+evidence candidates, not proof of improvement.
 
 ## Current and target state
 
@@ -175,10 +179,19 @@ Unavailable metrics are recorded as `unknown`. They are not copied from another 
 | Aether defect or interruption | GitHub issue plus `.aether` issue |
 | Durable product or architecture decision | Versioned PDR/ADR plus `.aether` decision |
 | Current session and measurements | Local improvement ledger |
+| Replayable model/tool/swarm episode | Future accepted Aether MCP learning episode store |
+| Curated training/evaluation candidate | Versioned local dataset manifest with source lineage |
 | Release-level aggregate evidence | Versioned release evidence |
 | Actual behavior | Source, tests, artifacts, and executed runtime evidence |
 
 All Aether framework defects and interruptions follow the existing duplicate-check and GitHub issue policy. The ledger does not replace issue tracking.
+
+Rich episodes may support prompt, policy, skill, routing, SFT, preference,
+tool-trajectory or repair analysis, but none is automatically eligible. Full
+model-visible content must be secret-redacted, project-authorized and isolated;
+hidden chain-of-thought is never required. Evaluation-only lineages cannot enter
+training data. Export, training, provider upload and promotion remain separate
+owner gates.
 
 ## SemVer accumulation
 
@@ -214,8 +227,11 @@ Never record credentials, tokens, account identifiers that expose private pools,
 3. **AGENTS.md and agent onboarding** — incoming-session discovery.
 4. **Historical CYCLE.yaml files** — release evidence only; no active loader exists.
 5. **Hermes memory** — compact fallback fact.
-6. **Future accepted instrumentation boundary** — currently absent.
-7. **`.aether/self_improvement.db`** — project-local operational events and measurements.
+6. **Future accepted Aether MCP instrumentation boundary** — proposed compact
+   semantic events plus protected learning episodes/labels/dataset lineage;
+   currently absent.
+7. **`.aether/self_improvement.db`** — protected historical/local v0.20 data with
+   no v0.22 candidate reader or writer.
 8. **Release evidence** — validated aggregate facts.
 
 `.aether/CONTEXT.md` is a projection and cannot be the sole source because curation can fail or drift.

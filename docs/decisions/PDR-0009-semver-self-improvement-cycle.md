@@ -17,6 +17,24 @@ human-promotion primitives remain inert. Reinstating automatic participation
 requires a new accepted implementation boundary; this PDR is not activation
 authority.
 
+## v0.22 learning-trace clarification
+
+On 2026-08-06 the owner clarified that the primary purpose of Aether trace data
+is to improve and refine the system—including future fine-tuning—not merely to
+provide an audit log. A compact event ledger remains necessary for authority,
+correlation and cleanup, but it is not sufficient learning evidence.
+
+The proposed Aether MCP design therefore adds separately protected, full
+secret-redacted model-visible episodes plus versioned labels and derived dataset
+manifests. These may support evaluation, prompt/policy/skill improvement,
+routing, supervised fine-tuning, preference learning, tool-use trajectories and
+failure/repair analysis.
+
+This clarification does not authorize capture activation, importing historical
+data, external export, training, model changes, automatic prompt/skill/policy
+mutation, promotion, deployment or spending. Dataset quality, causal comparison,
+holdout isolation and owner promotion remain independent gates.
+
 ## Context
 
 Aether must learn from real use of its own coordination and development paths rather than hide defects behind a legacy fallback or choose future architecture before evidence exists. The owner removed the model-visible `talk_to` tool from the active Aether dogfood Hermes profile and established a project boundary: inside Aether, Hermes may diagnose and repair the framework directly; inside any other project, Hermes works directly on that project and must not mutate Aether incidentally.

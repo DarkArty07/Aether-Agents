@@ -1,5 +1,11 @@
 # Aether Native Core Retirement Implementation Plan
 
+> **Status:** HISTORICAL COMPLETED RETIREMENT PLAN. It proves removal of the
+> disconnected native core and the deliberate absence of a replacement at that
+> cut. ADR-0001 later approved a new bounded Aether MCP control/trace plane; this
+> plan does not govern that proposed design. See
+> `../../architecture/AETHER_MCP.md` and `ROADMAP.md`.
+
 > **For Hermes:** Execute this plan through the current task contract; use `milestone-implementation-governance` for the atomic retirement and exact-candidate closure.
 > **Status:** EXECUTED — LOCALLY VERIFIED
 

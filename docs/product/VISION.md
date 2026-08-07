@@ -3,8 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Canonical definition
 
@@ -72,11 +72,11 @@ Multi-agent architecture is a means. Preserved intent, adaptive assistance, soft
 
 Aether centralizes product vision but decentralizes routine coordination.
 
-The product owner may classify any Daimon as required, allowed, disabled, or forbidden. Aether must respect that policy across direct selection, peer proposals, fallback routing, and recovery. The current suspension of Athena is the empirical precedent for this general rule.
+The product owner may classify any Daimon as required, allowed, disabled, or forbidden. Aether must respect that policy across direct selection, peer proposals, fallback routing, and recovery. PDR-0013 records the current target roster: Athena and Etalides are retired and forbidden, Ariadna is conditional and disabled, and no hidden equivalent may bypass those dispositions.
 
 Hermes remains responsible for understanding intent, preparing the contract, product synthesis, material amendments, and escalation. It should not relay every routine message or handoff.
 
-Authorized Daimons may eventually collaborate laterally within an approved contract. A future accepted coordination substrate may own task state, dependencies, evidence, budgets, and recovery without acquiring product authority. The v0.22.0 candidate intentionally has no such execution runtime.
+Authorized Daimons may eventually collaborate laterally within an approved contract. Stable archetypes may have multiple temporary workers when independent Tasks justify them; Aether does not need a new personality per technology or subtask. A future accepted Orca path may own task state, dependencies, evidence, budgets, and recovery without acquiring product authority. The v0.22.0 candidate intentionally has no such execution runtime.
 
 Specialist disagreements are resolved through current user intent, approved decisions, contract, artifacts, reproducible evidence, quality doctrine, and domain authority—not majority vote.
 

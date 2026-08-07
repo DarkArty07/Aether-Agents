@@ -3,8 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **v0.22.0 runtime decision:** `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`
+> **Implementation authorization:** Documentation and design only
 
 These principles contain the approved product baseline established through discovery Phases 1 through 8. Detailed implementation, shared-skill write governance, memory review UX, future UI design, benchmark construction, migration, and runtime enforcement remain later design and validation work.
 
@@ -109,7 +109,7 @@ The approved authority and escalation model is defined below and in `../knowledg
 - **Favors:** Selective participation, the shortest reliable work path, and specialist use justified by material impact.
 - **Rejects:** Mandatory ceremonies or full-team workflows for tasks that do not need them.
 
-The approved participation policy classifies each Daimon as `required`, `allowed`, `disabled`, or `forbidden` in the applicable scope. Current user policy takes precedence over default routing, learned preferences, peer proposals, and fallback behavior. Current authority is defined in `../knowledge/AUTHORITY.md`; `../knowledge/MULTI_AGENT_MODEL.md` preserves the historical v0.19 operating model.
+The approved participation policy classifies each Daimon as `required`, `allowed`, `disabled`, or `forbidden` in the applicable scope. Current user policy takes precedence over default routing, learned preferences, peer proposals, and fallback behavior. PDR-0013 adds a small stable roster and permits multiple workers from one archetype instead of personality proliferation. Current authority is defined in `../knowledge/AUTHORITY.md`; `../architecture/DAIMONS.md` defines the target roster; `../knowledge/MULTI_AGENT_MODEL.md` preserves the historical v0.19 operating model.
 
 ### 14. New Daimons require a distinct software contribution
 
@@ -140,7 +140,7 @@ The approved participation policy classifies each Daimon as `required`, `allowed
 - **Favors:** Clear ownership, canonical sources, explicit status, supersession, link validation, contradiction checks, and documentation work included in completion when relevant.
 - **Rejects:** Documentation as an optional afterthought, duplicated authorities, release evidence presented as product vision, and unverified summaries.
 
-A dedicated documentation or continuity Daimon is a possible mechanism, not yet an approved role design.
+Ariadna is an approved conditional role design, disabled until evidence shows that bounded handoff curation adds value beyond Hermes-native continuity. Documentation remains an Aether responsibility regardless of whether Ariadna is ever activated.
 
 ### 18. Comparative project quality is the product proof
 
@@ -283,7 +283,7 @@ The canonical target authority matrix is maintained in `../knowledge/AUTHORITY.m
 - **Favors:** Independent domain gates, reproducible evidence, bounded correction, explicit waiver, Hermes cross-domain synthesis, and product-owner escalation only for material consequences.
 - **Rejects:** Voting, repetition, model-size authority, indefinite unsupported blocking, and specialist preference presented as fact.
 
-The retired v0.19.0/v0.19.x operating model is preserved in `../knowledge/MULTI_AGENT_MODEL.md`. Any replacement execution model is governed by PDR-0011 and must preserve these authority principles.
+The retired v0.19.0/v0.19.x operating model is preserved in `../knowledge/MULTI_AGENT_MODEL.md`. The replacement execution boundary is governed by PDR-0012; the target roster is governed by PDR-0013; both must preserve these authority principles.
 
 ## Engineering principles
 

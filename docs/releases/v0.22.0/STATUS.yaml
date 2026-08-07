@@ -1,22 +1,44 @@
 schema_version: 1
-status: candidate_native_core_retirement_locally_verified
-approved_on: "2026-08-05"
+status: m0_accepted_mcp_first_m1_1_repository_implementation_authorized
+approved_on: "2026-08-06"
 owner: Christopher (DarkArty07)
 
 governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
 preserved_prior_decision: docs/decisions/PDR-0011-orca-substrate-and-olympus-retirement.md
+current_architecture_decision: docs/decisions/ADR-0001-aether-mcp-control-and-trace-plane.md
 
 candidate:
   version: "0.22.0"
-  name: Orca Substrate and Olympus Retirement
+  name: Aether MCP and Orca Swarm
   capability_boundary: >-
     Preserve Aether's Hermes product layer, profiles, policies, skills, historical
-    stores and release authority; physically retire Olympus plus the disconnected
-    native Python core extracted from it; and keep multi-agent execution unavailable
-    until the Hermes-led Orca swarm path passes independent gates.
+    stores and release authority; keep Olympus plus the disconnected native Python
+    core retired; design one bounded Aether MCP control, semantic trace and
+    protected learning-episode plane over Orca; and keep multi-agent execution
+    unavailable until the MCP and Hermes-led Orca swarm path pass independent
+    gates.
   not_a_release_claim: true
   source_implementation_started: true
   native_runtime_source_present: false
+  aether_mcp_design_direction_approved: true
+  aether_mcp_detailed_design_accepted: true
+  aether_mcp_source_implementation_started: false
+  aether_mcp_registered: false
+  detailed_mcp_design_complete_for_owner_review: true
+  detailed_execution_roadmap_proposed: true
+  detailed_execution_roadmap_accepted: true
+  detailed_execution_roadmap_path: docs/releases/v0.22.0/ROADMAP.md
+  planned_release_milestones: M0-M11
+  planned_post_release_activation_milestone: M12
+  planned_new_runtime_namespace: src/aether_mcp
+  planned_new_runtime_namespace_present: false
+  learning_trace_primary_purpose_owner_clarified: true
+  learning_episode_detailed_design_accepted: true
+  learning_capture_source_implementation_started: false
+  learning_capture_activated: false
+  concrete_use_case_catalog_proposed: true
+  concrete_use_case_catalog_frozen: true
+  use_case_catalog_path: docs/releases/v0.22.0/USE_CASE_CATALOG.md
   orca_runtime_activated_for_aether: false
   isolated_orca_runtime_started_during_diagnostics: true
   isolated_orca_runtime_currently_running: false
@@ -42,6 +64,65 @@ architecture_correction:
   native_core_disposition: retire_before_orca_adapter_implementation
   historical_stores: preserve_unmodified_without_active_writer
 
+mcp_architecture:
+  approved_on: "2026-08-06"
+  control_boundary: mcp_first_for_hermes
+  normal_hermes_orca_cli_access: forbidden
+  provider_seam: version_matched_public_structured_orca_interface
+  transport_target: local_stdio
+  protocol_target: aether.mcp/v1alpha1
+  sampling: disabled
+  operational_source_of_truth: orca
+  aether_trace_owns:
+    - contract_and_use_case_references
+    - declared_rationale_and_authorization
+    - aether_to_orca_identity_correlation
+    - operation_requests_and_receipts
+    - artifact_and_evidence_references
+    - semantic_acceptance_and_cleanup_reconciliation
+    - measurement_facts_and_unknowns
+  aether_trace_does_not_own:
+    - run_task_or_dispatch_runtime_state
+    - worker_terminal_or_worktree_lifecycle
+    - operational_message_authority_or_lifecycle
+    - orca_recovery_or_scheduler_state
+  aether_learning_owns_when_explicitly_admitted:
+    - secret_redacted_model_visible_episode_content
+    - outcome_correction_preference_and_quality_labels
+    - episode_dataset_export_and_revocation_lineage
+    - local_versioned_dataset_candidates
+  aether_learning_does_not_authorize:
+    - credentials_or_hidden_chain_of_thought_storage
+    - external_upload_or_training
+    - prompt_model_route_or_skill_mutation
+    - candidate_promotion_activation_or_release
+  detailed_design: docs/architecture/AETHER_MCP.md
+  tool_contract: docs/reference/AETHER_MCP_CONTRACT.md
+  trace_schema: docs/reference/AETHER_TRACE_SCHEMA.md
+  learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
+  measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
+  implementation_authorized: false
+  qualification_implementation_authorized: true
+  qualification_implementation_scope: M1_1_repository_task_only
+  m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
+  activation_authorized: false
+
+implementation_workflow:
+  mode: external_coding_agent_stepwise
+  product_owner: Christopher (DarkArty07)
+  orchestrator_and_acceptance_owner: Hermes
+  one_active_task_at_a_time: true
+  active_task: M1_1_freeze_orca_source_and_executable_identity
+  successor_agents_are_stateless: true
+  next_prompt_requires_independent_acceptance: true
+  external_agent_git:
+    local_atomic_commits: allowed
+    push: forbidden
+    merge: forbidden
+    rebase: forbidden
+    amend: forbidden
+    tag_or_release: forbidden
+
 release_lineage:
   latest_official_release: "0.20.0"
   latest_official_tag_commit: 39e9e2ac80f0bd9c66f376d3196c93f8967d5d01
@@ -53,7 +134,7 @@ release_lineage:
   version_order_reconciliation_required_before_release: true
   candidate_worktree:
     branch: feature/v0.22.0-orca-transition
-    path: /home/darkarty/orca/workspaces/aether/feature-v0.22.0-orca-transition
+    path: /home/darkarty/Desktop/agentes/aether/.aether/worktrees/feature-v0.22.0-orca-transition
     base_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
     base_ref: origin/main
     managed_by: orca
@@ -688,22 +769,41 @@ retirement_cuts:
     runtime_service_or_credential_effects: none
 
 milestones:
-  M0_baseline_and_candidate_isolation: in_progress
-  M1_preemptive_aether_native_extraction: superseded_and_retired
-  M2_minimal_observed_orca_integration_seam: pending
-  M3_orca_lifecycle_parity: pending
-  M4_ariadna_reimplementation: pending
-  M5_active_consumer_and_state_transition: pending
-  M6_progressive_olympus_retirement: locally_complete
-  M7_dependency_and_documentation_cleanup: locally_complete
-  M8_candidate_acceptance: pending
+  historical_native_core_retirement: locally_complete
+  M0_final_design_and_traceable_use_cases: accepted
+  M1_orca_provider_qualification:
+    status: in_progress
+    active_package: M1_1
+    M1_1_freeze_source_and_executable_identity: authorized_not_started
+    M1_2_structured_provider_seam_matrix: blocked_pending_M1_1_acceptance
+    M1_3_isolated_lifecycle_and_rollback: blocked_pending_explicit_operation_authority
+    M1_4_provider_decision: blocked_pending_M1_1_to_M1_3
+  M2_aether_mcp_foundation: blocked_pending_D1
+  M3_lifecycle_through_aether_mcp: blocked_pending_M2
+  M4_one_synthetic_worker: blocked_pending_M3
+  M5_two_worker_real_swarm: blocked_pending_M4_and_D3_for_model_run
+  M6_stable_roster_qualification: blocked_pending_M5
+  M7_learning_episode_and_dataset_qualification: blocked_pending_M6_and_D2
+  M8_verifier_and_ariadna_decision: blocked_pending_M7
+  M9_productization: blocked_pending_M8
+  M10_controlled_use_case_evaluation: blocked_pending_M9_and_D3
+  M11_exact_candidate_acceptance_and_release: blocked_pending_M10_and_D5
+  M12_persistent_activation: blocked_pending_release_and_D6
 
 authorization:
   analysis_and_roadmap: authorized
-  disconnected_aether_native_implementation: retired_not_authorized
-  minimal_observed_orca_integration_after_M0: authorized
-  isolated_hardened_orca_pilot: authorized
-  reversible_local_retirement_after_gate: authorized
+  M0_design_acceptance: granted_2026_08_06
+  M1_1_repository_implementation: authorized
+  M1_2_repository_implementation: not_yet_authorized
+  M1_3_orca_runtime_operation: not_authorized
+  M2_aether_mcp_source_implementation: not_authorized
+  external_agent_branch_local_atomic_commits_for_M1_1: authorized
+  external_agent_push_merge_rebase_amend_tag_release: forbidden
+  orca_runtime_start: not_authorized
+  worker_or_model_execution: not_authorized
+  dependency_installation: not_authorized
+  mcp_registration_or_activation: not_authorized
+  profile_or_participant_mutation: not_authorized
   destructive_data_migration: not_authorized
   historical_store_mutation: not_authorized
   production_activation: not_authorized
@@ -713,9 +813,12 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M0_orca_bootstrap_gate
+  milestone: M1_1_freeze_orca_source_and_executable_identity
+  executor: repository_local_external_coding_agent
+  acceptance_owner: Hermes
   requirement: >-
-    Resolve issue #150 and prove a pinned isolated Orca runtime can cold-start,
-    restart and stop without survivors before M2 begins. Live configuration
-    migration, historical-store handling, candidate acceptance, release and
-    activation remain separate later gates.
+    Create the roadmap-declared qualification script, deterministic tests and M1
+    evidence through read-only Orca executable, version, digest and public catalog
+    metadata inspection. Do not start Orca, create runtime state, install
+    dependencies, launch workers, access providers, mutate protected state or
+    begin M1.2. Stop for Hermes independent audit and acceptance.

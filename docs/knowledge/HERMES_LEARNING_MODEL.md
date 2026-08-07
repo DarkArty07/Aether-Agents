@@ -21,7 +21,11 @@ Hermes Agent already provides the core self-improvement loop Aether needs:
 - skill usage and provenance tracking;
 - periodic skill lifecycle maintenance through Curator.
 
-Aether should reuse these mechanisms. Its own responsibility is to define authority, scope, project isolation, write ownership, and quality rules around them.
+Aether should reuse these mechanisms. Its own responsibility is to define
+authority, scope, project isolation, write ownership and quality rules around
+them, plus a separate evidence corpus for evaluation and future fine-tuning.
+Hermes memory/skills are active product learning surfaces; they are not a
+replacement for replayable Run episodes or curated datasets.
 
 ## Tracked Aether configuration
 
@@ -279,4 +283,11 @@ Phase 6 approved the following:
 5. Daimons may report observations but do not independently own the global user model.
 6. Shared skills should remain reusable and user-neutral; current user preferences normally belong in `USER.md`.
 
-Remaining design work includes defining shared-skill write governance, deciding whether private per-user skills are needed, and governing how MCP-derived observations become evidence or durable learning. The Honcho source/config retirement is complete in the v0.22.0 candidate.
+The proposed MCP-derived learning boundary is now specified in
+`../reference/AETHER_LEARNING_EPISODE_SCHEMA.md`: compact semantic events index
+protected replayable episodes, and versioned labels/lineage create local dataset
+candidates without automatic training or promotion. Owner acceptance and every
+implementation/activation/export/training gate remain pending. Remaining design
+work outside that schema includes shared-skill write governance and whether
+private per-user skills are needed. The Honcho source/config retirement is
+complete in the v0.22.0 candidate.

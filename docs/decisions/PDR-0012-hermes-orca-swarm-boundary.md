@@ -1,10 +1,12 @@
 # PDR-0012: Hermes-led Orca swarm boundary
 
-- **Status:** APPROVED
+- **Status:** PARTIALLY SUPERSEDED
 - **Date:** 2026-08-05
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** PDR-0011's requirement to retain a pre-emptive Python decision-plane implementation under `src/aether_agents`; v0.22.0 M1 native-core retention
 - **Preserves:** PDR-0011's Olympus source retirement, capability-gap honesty, historical evidence, local-store non-destruction, and runtime-activation gates
+- **Refined by:** PDR-0013 for the target roster, personality model, and profile dispositions
+- **Partially superseded by:** ADR-0001 for MCP-first Hermes control, semantic traceability, and the bounded Aether-owned provider facade; the ownership boundary and native-core retirement remain authoritative
 
 ## Context
 
@@ -153,6 +155,9 @@ On 2026-08-05 the owner clarified the Hermes-led Orca swarm target and directed 
 ## References
 
 - GitHub issue: #160
+- Swarm roster decision: `PDR-0013-swarm-roster-and-personality-model.md`
+- Canonical archetypes: `../architecture/DAIMONS.md`
+- Target operating model: `../architecture/ORCHESTRATION.md`
 - Prior retirement decision: `PDR-0011-orca-substrate-and-olympus-retirement.md`
 - v0.22.0 roadmap: `docs/releases/v0.22.0/ROADMAP.md`
 - Installed Orca guides: `orca-ide skills get orchestration` and `orca-ide skills get orca-cli`

@@ -3,8 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery Phases 1 through 8 complete
 > **Authority:** Christopher (DarkArty07), product owner
 > **Governing decisions:** [`PDR-0002`](../decisions/PDR-0002-generic-adaptive-software-product.md), [`PDR-0003`](../decisions/PDR-0003-quality-doctrine-and-model-economics.md), [`PDR-0004`](../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md), [`PDR-0005`](../decisions/PDR-0005-multi-agent-participation-and-coordination.md), [`PDR-0006`](../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md), [`PDR-0007`](../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md), [`PDR-0008`](../decisions/PDR-0008-canonical-definition-and-project-completion.md)
-> **v0.22.0 runtime decision:** [`PDR-0011`](../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md)
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** [`PDR-0012`](../decisions/PDR-0012-hermes-orca-swarm-boundary.md), [`PDR-0013`](../decisions/PDR-0013-swarm-roster-and-personality-model.md)
+> **Implementation authorization:** Documentation and design only; no swarm activation or profile mutation
 
 This directory defines what Aether Agents is, why it exists, what it should become, and which boundaries all technical work must preserve.
 
@@ -85,8 +85,10 @@ Aether decides routine, reversible technical mechanics autonomously. It escalate
 - Authorized Daimons may collaborate laterally only after an accepted runtime enforces bounded authority, evidence, budgets, traceability, and participant policy.
 - No retired runtime, renamed adapter, or hidden fallback may be used to simulate that capability.
 - Disagreements resolve through current intent, approved decisions, contract, evidence, quality doctrine, and domain authority—not majority vote.
+- Aether uses a small set of stable specialist archetypes and may create several workers from one archetype for independent Tasks; it does not create a new personality per technology or subtask.
+- The target roster retains Hefesto, Daedalus, and Ictinus; keeps Ariadna conditional and disabled; proposes an unimplemented Independent Verifier; and retires Athena and Etalides from future routing.
 
-The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md); PDR-0012 and the v0.22 roadmap govern the Hermes-led Orca replacement.
+The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md). PDR-0012 and [`docs/architecture/ORCHESTRATION.md`](../architecture/ORCHESTRATION.md) govern the Hermes-led Orca replacement; PDR-0013 and [`docs/architecture/DAIMONS.md`](../architecture/DAIMONS.md) govern the target roster.
 
 ## Approved learning and memory doctrine
 
@@ -154,11 +156,11 @@ Phase 6 is grounded in the installed Hermes Agent implementation and Aether's tr
 
 ### Security versus bureaucracy
 
-Security remains a quality dimension, but it is proportional to actual risk. The temporary suspension of Athena is an empirical warning that a specialist can reduce total quality when its process cost and added complexity exceed its risk reduction.
+Security remains a quality dimension, but it is proportional to actual risk. Athena has target retirement and forbidden participation status under PDR-0013 because its process cost and added complexity exceeded its risk reduction. Critical work that materially requires unavailable independent security judgment must expose that capability gap rather than route through a hidden equivalent.
 
 ### Documentation ownership versus role design
 
-Current documentation is required. A dedicated documentation or continuity Daimon is a possible mechanism, but its exact role, authority, and workflow are not yet approved.
+Current documentation is required. Ariadna is a conditional, disabled handoff-curation archetype whose distinct value over Hermes-native continuity must be proven before activation; she is not a standing project manager or documentation owner.
 
 ## Product change rules
 

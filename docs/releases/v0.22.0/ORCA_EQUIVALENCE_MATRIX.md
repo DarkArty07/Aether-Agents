@@ -6,9 +6,14 @@
 > **Pinned AppImage digest:** `sha256:813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33`
 
 > **Supersession:** PDR-0012 rejects the pre-emptive native core and stable
-> adapter API proposed below. The verified Orca capability inventory remains
-> evidence, but any adapter must be introduced only from an observed integration
-> need and must not duplicate Orca lifecycle mechanics.
+> adapter API proposed below. ADR-0001 later establishes an observed product
+> requirement for one bounded Aether MCP control/trace plane while preserving
+> Orca's sole operational ownership. The verified Orca capability inventory
+> remains evidence; the historical API sketch below is not the current contract.
+> Current design: `../../architecture/AETHER_MCP.md`,
+> `../../reference/AETHER_MCP_CONTRACT.md`, and
+> `../../architecture/ORCHESTRATION.md`. No Aether MCP/runtime is implemented or
+> activated.
 
 ## 1. Boundary
 
