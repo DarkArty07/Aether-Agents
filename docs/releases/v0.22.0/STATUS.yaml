@@ -1,5 +1,5 @@
 schema_version: 1
-status: m2_1a_accepted_session_closed_awaiting_owner_sequence
+status: m2_1a_accepted_clean_ci_corrected_session_closed_awaiting_owner_sequence
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -288,6 +288,24 @@ m2_1a_acceptance:
     mcp_smoke: pass
     secret_scan_findings: 0
     process_survivors: 0
+  clean_checkout_integration:
+    initial_github_run: 31224905578
+    initial_python_3_11: failed_missing_mcp_dependency
+    initial_python_3_12: failed_missing_mcp_dependency
+    root_causes:
+      - workflows_did_not_install_declared_project_distribution
+      - M1_qualification_test_import_collided_with_new_production_package_namespace
+      - source_inventory_rejected_standard_noneditable_build_egg_info
+    correction_commit: 5d0e20df2f68df27e036d0e47410e238d753782e
+    correction_scope:
+      - .github/workflows/test.yml
+      - .github/workflows/release.yml
+      - tests/aether_mcp/provider/test_qualification.py
+      - tests/test_post_olympus_residue_retirement.py
+    clean_environment_full_tests_passed: 81
+    clean_environment_full_tests_skipped: 1
+    clean_environment_ruff: pass
+    generated_artifact_survivors: 0
   next_gate: owner_selects_redesigned_M1_1b_or_new_provider_independent_M2_2_task
   M1_1b_status: deferred_mandatory_before_orca_provider_or_lifecycle
   D1_granted: false
