@@ -3,7 +3,7 @@
 > **Status:** ACCEPTED
 > **Accepted by:** Christopher (DarkArty07)
 > **Acceptance date:** 2026-08-07
-> **Scope:** Design authority only; no Orca lifecycle or Aether MCP source implementation
+> **Scope:** Fast-path design plus M2.1a provider-independent bootstrap; no Orca/provider operation
 > **Supersedes only:** The requirement that every admitted provider result/effect/timeout/recovery contract must be published by Orca's catalog itself
 
 ## 1. Decision
@@ -103,7 +103,8 @@ accepted fast-path amendment
 
 M1.1b must replace the generic Bash-mutation blacklist with the canonical manifest
 `ORCA_PROVIDER_MANIFEST.json` and close cleanup/inventory evidence before any M1.3
-operation.
+or other Orca provider operation. It is deliberately deferred and does not block
+the provider-independent M2.1a zero-tool stdio bootstrap.
 
 ## 7. Current authorization
 
@@ -111,17 +112,17 @@ Authorized now:
 
 - versioned documentation for this decision;
 - canonical Orca identity manifest;
-- one repository-local external-agent M1.1b implementation task;
-- read-only identity/catalog probes and AppImage metadata extraction bounded by
-  that task.
+- one repository-local external-agent M2.1a implementation task;
+- the default-off `aether_mcp` package metadata and one real zero-tool stdio MCP
+  process with no provider, storage, profile or network effect.
 
 Not authorized:
 
 - Runs, Tasks, Dispatches, workers, messages, terminals or worktrees;
-- mapped Orca operations other than `agent-context --json`;
-- adapter or Aether MCP source;
+- any Orca command, metadata extraction or catalog probe;
+- M1.1b execution, provider adapter, MCP tools, storage or registration;
 - schema fixture capture for operational commands;
-- M1.3, M2, activation, deployment, merge, tag or Release.
+- M1.3, M2.2+, activation, deployment, merge, tag or Release.
 
 ## 8. Acceptance evidence
 
@@ -132,4 +133,4 @@ Not authorized:
 - canonical candidate manifest:
   `docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json`
 - next implementation contract:
-  `docs/external-agent/TASK-M1.1B.md`
+  `docs/external-agent/TASK-M2.1A.md`

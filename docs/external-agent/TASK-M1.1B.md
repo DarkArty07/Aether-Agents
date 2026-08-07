@@ -1,9 +1,10 @@
 # TASK-M1.1B — Replace Heuristic Qualification with a Canonical Candidate Verifier
 
-> **Status:** ACTIVE IMPLEMENTATION HANDOFF
+> **Status:** DEFERRED BY PRODUCT OWNER — DO NOT EXECUTE
 > **Task owner:** Hermes
 > **Implementation owner:** One repository-local external coding agent
 > **Acceptance owner:** Hermes after independent exact-commit reproduction
+> **Superseding active task:** `docs/external-agent/TASK-M2.1A.md`
 
 ```text
 PROJECT_ROOT: /home/darkarty/Desktop/agentes/aether/.aether/worktrees/feature-v0.22.0-orca-transition
@@ -17,7 +18,9 @@ EVIDENCE_JSON: docs/releases/v0.22.0/M1_ORCA_QUALIFICATION.json
 EVIDENCE_REPORT: docs/releases/v0.22.0/M1_ORCA_QUALIFICATION.md
 ```
 
-This task is immutable after handoff. Do not edit it or the canonical manifest.
+The product owner deferred this handoff before implementation. Its historical
+contract is preserved below, but no agent is authorized to execute it. Do not
+edit the canonical manifest.
 This is a qualifier redesign, not Correction 3 and not another Bash blacklist.
 
 ## 1. Objective

@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M0 FAST PATH ACCEPTED; M1.1b AUTHORIZED; M1.3/M2 BLOCKED; NOT ACTIVATED
+> **Status:** M0 FAST PATH ACCEPTED; M2.1a AUTHORIZED; M1.1b DEFERRED; NOT ACTIVATED
 > **Date:** 2026-08-07
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** M1.1b canonical candidate verifier only; source and runtime remain gated
+> **Implementation authorization:** M2.1a default-off zero-tool MCP bootstrap only; provider and runtime remain gated
 
 ## 1. Objective
 
@@ -688,9 +688,11 @@ the deterministic test harness uses ephemeral keys only.
 | D6 | Separate post-Release operation authority | Execute M12 on the named installation | Fine-tuning, external upload, model promotion |
 
 `D0` was granted by the product owner on 2026-08-06 and is recorded in
-`M0_DESIGN_ACCEPTANCE.md`. The active implementation scope is deliberately
-narrower than the full M1 milestone: M1.1 only. D1–D6 remain ungranted, and no
-lower gate implies a later gate.
+`M0_DESIGN_ACCEPTANCE.md`. The owner fast-tracked only the provider-independent
+M2.1a package/stdio bootstrap under D0. It may expose zero tools and perform no
+provider, storage or registration effect. M1.1b is deferred, D1–D6 remain
+ungranted, and no lower gate implies a later gate. An Orca adapter, provider
+call, MCP tool or M2.2+ package still requires its named gate.
 
 ### 10.4 Tool-to-milestone coverage
 
@@ -1401,23 +1403,23 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.1b — canonical candidate verifier** as one external-agent task. Pin
-the accepted launcher/AppImage/catalog through the immutable provider manifest,
-remove the generic Bash parser, positively identify only transient disconnected
-FUSE cleanup and require exact final inventory. Fix the FIFO regression so it
-executes without a false skip. No provider lifecycle operation is authorized.
+Execute **M2.1a — default-off MCP bootstrap** as one external-agent task. Add only
+the `aether_mcp` package metadata, static identity, a real zero-tool stdio MCP
+process, focused tests and the bounded smoke target. It must not invoke Orca,
+open a socket, persist state, register with Hermes or implement any MCP tool.
 
 ### STOP CONDITION
 
-Stop after one exact M1.1b implementation/evidence commit and report. Hermes then
-reproduces manifest identity, focused/full tests, two real read-only probes,
-bounded cleanup and zero survivors. M1.3 and M2 remain blocked regardless of the
-implementer result until independent acceptance and separate authorization.
+Stop after one exact M2.1a implementation/evidence commit and report. Hermes then
+reproduces package metadata, real initialize/list-tools handshake, EOF behavior,
+focused/full tests and zero socket/process/file effects. M1.1b, D1, provider
+adapter, M1.3 and M2.2+ remain blocked regardless of the implementer result.
 
 ### LATER GATES
 
-Close M1.1b -> separately authorized isolated
-contract fixtures/lifecycle -> M1.4 provider decision -> M2 MCP foundation -> M3
-lifecycle -> M4 one worker -> M5 real two-worker swarm -> M6 roster -> M7
+Accept M2.1a -> separately authorize M2.2 or return to M1.1b/provider
+qualification as required. Before any Orca operation: close M1.1b -> separately
+authorized isolated contract fixtures/lifecycle -> M1.4 provider decision ->
+provider adapter -> M3 lifecycle -> M4 one worker -> M5 real two-worker swarm -> M6 roster -> M7
 learning-data qualification -> M8 verifier/Ariadna decisions -> M9
 productization -> M10 controlled evaluation -> M11 Release -> M12 activation.

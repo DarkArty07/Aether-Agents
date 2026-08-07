@@ -17,12 +17,14 @@ M1.1a exact installed identity and catalog are accepted as the bounded read-only
 basis for M1.2. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
 catalog maps 49 capabilities only partially and lacks 6 required public seams.
 The owner accepted the M0 fast path: version-pinned Aether schema bundles and
-composition of public commands only. The current scope is M1.1b only: one
-repository-local external agent may replace the heuristic qualifier with the
-canonical candidate manifest and bounded ENOTCONN cleanup contract in
-`docs/external-agent/TASK-M1.1B.md`. It must not execute mapped lifecycle
-operations, implement adapter/MCP source, install dependencies, begin M1.3/M2,
-push, merge, rebase, amend, tag, Release or touch protected local data.
+composition of public commands only. At the owner's direction M1.1b is deferred,
+not active. The current scope is M2.1a only: one repository-local external agent
+may bootstrap the default-off `aether_mcp` package and a real zero-tool stdio MCP
+process under `docs/external-agent/TASK-M2.1A.md`. This provider-independent slice
+must not invoke Orca, register or activate MCP, implement an adapter/tool/storage,
+install dependencies, begin M1.3 or M2.2+, push, merge, rebase, amend, tag,
+Release or touch protected local data. D1 remains ungranted; M1.1b must close
+before any Orca provider or lifecycle operation.
 
 ## v0.19.0 experimental coordination closeout
 
