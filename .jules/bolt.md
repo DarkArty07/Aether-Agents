@@ -1,0 +1,3 @@
+## 2024-05-18 - Combining Independent SQLite Aggregate Queries
+**Learning:** When executing multiple independent SQLite aggregate queries (like COUNT or MAX) that share the same constraint parameter, executing them as separate round-trips incurs unnecessary overhead. Combining them into a single SELECT statement using scalar subqueries with explicit index binding (`?1`) drastically reduces database connection and I/O overhead.
+**Action:** Next time you see multiple aggregate queries sharing common parameters, combine them into a single query using scalar subqueries and explicit parameter bindings.
