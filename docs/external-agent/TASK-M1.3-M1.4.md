@@ -1,6 +1,6 @@
 # TASK M1.3–M1.4 — Isolated Orca lifecycle qualification and provider verdict
 
-> **Status:** AUTHORIZED / FROZEN
+> **Status:** CLOSED — M1.3 BLOCKED; M1.4 `D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`
 > **Authorized by:** Christopher (DarkArty07)
 > **Authorization date:** 2026-08-08
 > **Executor and evidence owner:** Hermes
@@ -161,3 +161,15 @@ Stop immediately after M1.4 evidence, exact-commit verification, Draft PR update
 - the bounded product choices.
 
 Do not start any later milestone while waiting for the owner's decision.
+
+## 11. Closure
+
+- Authorization contract commit: `1e45ca87d5b4400132b03e1eb0a7a738dfe10a86`.
+- M1.3 technical commit: `7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239`.
+- M1.3 provider lifecycle result: `BLOCKED`.
+- Final probes: two independent `ERR_RUNTIME_START_SHAPE` results at `cold_start`.
+- Namespace rollback: zero process, listener and mount survivors; both roots removed.
+- Aggregate seams: six `UNSUPPORTED`, zero promoted compositions.
+- M1.4 verdict: `D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`.
+- D1 granted: false.
+- Next implementation authority: none; product-owner decision required.

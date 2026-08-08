@@ -32,17 +32,17 @@ provider-independent M2.2 protocol/errors. M1.1b is accepted at
 closed. M2.2 is accepted at `59989d63f01930485715499156000d9fedfff037` with
 24 exported schemas, 50 stable errors and zero callable tools.
 
-Chris separately authorized M1.3 and M1.4 on 2026-08-08. Hermes may invoke only
-the exact manifest-authenticated Orca launcher inside the isolated lifecycle
-harness frozen by `docs/external-agent/TASK-M1.3-M1.4.md`. The harness may start
-one headless foreground runtime, create only synthetic Run/Task records, exercise
-documented status/read/reset operations, restart it, stop its owned process group
-and remove its temporary root. No worker, dispatch, terminal/worktree creation,
-credential, model, remote environment or installed/global state mutation is
-authorized. M1.4 may issue a technical provider verdict but cannot grant D1.
-Stop after M1.4, Draft-PR CI and cleanup. Do not register or activate MCP,
-implement an adapter/storage/lifecycle service, begin M2.3 or M3, merge, tag or
-Release.
+Chris separately authorized M1.3 and M1.4 on 2026-08-08. Both milestones are
+closed. M1.3 technical implementation is `7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239`;
+two final exact-candidate probes both stopped fail-closed at cold start with
+`ERR_RUNTIME_START_SHAPE`, while namespace rollback left zero process, listener,
+mount or root survivors and protected global state remained unchanged. All six
+missing M1.2 aggregate seams remain `UNSUPPORTED`. M1.4 therefore records
+`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 is not granted and no adapter contract
+is frozen. The mandatory stop boundary has been reached. No implementation
+milestone is currently authorized. Await the product owner's provider decision;
+do not register or activate MCP, implement an adapter/storage/lifecycle service,
+begin M2.3 or M3, merge, tag or Release.
 
 ## v0.19.0 experimental coordination closeout
 

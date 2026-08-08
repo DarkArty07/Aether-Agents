@@ -1,5 +1,5 @@
 schema_version: 1
-status: m1_3_m1_4_authorized_in_progress
+status: m1_4_closed_d1_blocked_awaiting_owner_decision
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -103,11 +103,11 @@ mcp_architecture:
   trace_schema: docs/reference/AETHER_TRACE_SCHEMA.md
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
-  implementation_authorized: true
-  implementation_scope: isolated_M1_3_then_M1_4_provider_decision_only
+  implementation_authorized: false
+  implementation_scope: none_awaiting_owner_provider_decision
   last_accepted_scope: M2_2_provider_independent_protocol
-  qualification_implementation_authorized: true
-  qualification_implementation_scope: M1_3_isolated_lifecycle_then_M1_4_verdict
+  qualification_implementation_authorized: false
+  qualification_implementation_scope: M1_3_and_M1_4_closed
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
@@ -116,9 +116,9 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: docs/external-agent/TASK-M1.3-M1.4.md
+  active_task: none_stop_boundary_reached
   successor_agents_are_stateless: true
-  next_prompt_requires_independent_acceptance: true
+  next_prompt_requires_owner_decision: true
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
@@ -222,7 +222,7 @@ m1_1_fast_track:
   M1_1b_closed_on: "2026-08-08"
   M1_1b_closure_deadline: satisfied
   M1_2_authorized: read_only_catalog_and_seam_matrix_only
-  M1_3_authorized: false
+  M1_3_authorized: completed_blocked
   resolved_debt:
     - exact_inventory_has_zero_prefix_exceptions
     - generic_bash_parser_removed
@@ -259,8 +259,8 @@ m1_2_independent_review:
   process_survivors: 0
   temporary_root_survivors: 0
   gate: INSUFFICIENT
-  next_action: execute_isolated_M1_3_then_M1_4_verdict
-  M1_3_authorized: true
+  next_action: completed_M1_3_blocked_and_M1_4_d1_blocked
+  M1_3_authorized: completed_blocked
 
 m0_provider_seam_amendment:
   status: accepted
@@ -270,12 +270,50 @@ m0_provider_seam_amendment:
   aether_owned_version_pinned_schemas: allowed_after_separate_fixture_authorization
   public_command_composition: allowed_after_separate_composition_acceptance
   private_state_gui_shell_fallback: forbidden
-  current_authorized_task: M1_3_isolated_lifecycle_then_M1_4_provider_decision
+  current_authorized_task: none_awaiting_owner_decision
   canonical_manifest: docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json
   canonical_manifest_sha256: 186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe
-  M1_3_authorized: true
-  M1_4_authorized: true
+  M1_3_authorized: completed_blocked
+  M1_4_authorized: completed_d1_blocked
   M2_authorized: false_pending_owner_decision_after_M1_4
+
+m1_3_lifecycle_closure:
+  closed_on: "2026-08-08"
+  status: blocked
+  technical_commit: 7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239
+  technical_tree: 3974b33e096cde76c78f7427ca57b34fa9fff278
+  acceptance: docs/releases/v0.22.0/M1_3_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M1_3_LIFECYCLE_EVIDENCE.json
+  evidence_sha256: 4b0178b1951b1549591b28f28182b49e1f12ec05b8c2246ba4cff1b39bafdff5
+  final_probes: 2
+  final_probe_status: blocked
+  final_probe_code: ERR_RUNTIME_START_SHAPE
+  final_probe_stage: cold_start
+  process_survivors: 0
+  listener_survivors: 0
+  mount_survivors: 0
+  temporary_root_survivors: 0
+  protected_state_unchanged: true
+  proven_compositions: 0
+  unsupported_compositions: 6
+  lifecycle_accepted: false
+  D1_ready: false
+
+m1_4_provider_decision:
+  closed_on: "2026-08-08"
+  status: closed
+  record: docs/releases/v0.22.0/M1_4_PROVIDER_DECISION.md
+  technical_verdict: D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT
+  D1_ready: false
+  D1_granted: false
+  adapter_contract_frozen: false
+  adapter_implementation_authorized: false
+  next_milestone_authorized: false
+  owner_decision_required: true
+  owner_options:
+    - require_official_orca_contract_additions
+    - rescope_product_contract
+    - qualify_different_provider_boundary
 
 m2_1a_acceptance:
   accepted_on: "2026-08-07"
@@ -334,7 +372,7 @@ m2_1a_acceptance:
     github_policy: pass
     github_pull_request_target: pass
     generated_artifact_survivors: 0
-  next_gate: M1_3_then_M1_4_then_owner_decision
+  next_gate: owner_provider_decision_after_M1_4
   M1_1b_status: accepted
   D1_granted: false
   M2_2_authorized: completed_provider_independent_only
@@ -366,7 +404,7 @@ m2_2_acceptance:
   network_effects: 0
   storage_effects: 0
   activation: absent
-  next_milestone_authorized: M1_3_then_M1_4_only
+  next_milestone_authorized: none_awaiting_owner_provider_decision
   github_acceptance_head: b092abf044cd79f51748a950c2f4bed934a69f40
   github_required_checks_passed: 5
   github_required_checks_failed: 0
@@ -1033,15 +1071,15 @@ milestones:
   historical_native_core_retirement: locally_complete
   M0_final_design_and_traceable_use_cases: accepted
   M1_orca_provider_qualification:
-    status: deferred_before_provider_operations
-    active_package: none
+    status: closed_d1_blocked_provider_seam_insufficient
+    active_package: none_stop_boundary_reached
     M1_1a_exact_identity_and_catalog: accepted
-    M1_1b_reusable_isolation_qualifier: deferred_by_owner
+    M1_1b_reusable_isolation_qualifier: accepted
     M1_2_structured_provider_seam_matrix: accepted_provider_seam_insufficient
-    M1_3_isolated_lifecycle_and_rollback: blocked_pending_M1_1b_and_explicit_operation_authority
-    M1_4_provider_decision: blocked_pending_M1_1b_and_M1_3
-  M2_aether_mcp_foundation: M2_1a_provider_independent_bootstrap_authorized
-  M3_lifecycle_through_aether_mcp: blocked_pending_M2
+    M1_3_isolated_lifecycle_and_rollback: closed_blocked_ERR_RUNTIME_START_SHAPE
+    M1_4_provider_decision: closed_D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT
+  M2_aether_mcp_foundation: M2_1a_and_M2_2_accepted_M2_3_not_authorized
+  M3_lifecycle_through_aether_mcp: blocked_pending_future_D1_and_M2
   M4_one_synthetic_worker: blocked_pending_M3
   M5_two_worker_real_swarm: blocked_pending_M4_and_D3_for_model_run
   M6_stable_roster_qualification: blocked_pending_M5
@@ -1055,14 +1093,15 @@ milestones:
 authorization:
   analysis_and_roadmap: authorized
   M0_design_acceptance: granted_2026_08_06
-  M1_1_repository_implementation: M1_1b_deferred
+  M1_1_repository_implementation: complete
   M1_2_repository_implementation: complete
-  M1_3_orca_runtime_operation: not_authorized
-  M2_aether_mcp_source_implementation: M2_1a_zero_tool_bootstrap_only
-  external_agent_branch_local_atomic_commit_for_active_M1_1b_task: revoked
-  external_agent_branch_local_atomic_commit_for_active_M2_1a_task: authorized
+  M1_3_orca_runtime_operation: complete_no_further_operation_authorized
+  M1_4_provider_decision: complete_D1_blocked
+  D1: not_granted
+  M2_aether_mcp_source_implementation: no_new_scope_authorized
+  external_agent_branch_local_atomic_commit_for_active_task: no_active_task
   external_agent_push_merge_rebase_amend_tag_release: forbidden
-  orca_runtime_start: not_authorized
+  orca_runtime_start: not_authorized_after_M1_3_closure
   worker_or_model_execution: not_authorized
   dependency_installation: not_authorized
   mcp_registration_or_activation: not_authorized
@@ -1076,11 +1115,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: M2_1a_default_off_mcp_bootstrap
-  executor: repository_local_external_coding_agent
-  acceptance_owner: Hermes
+  milestone: owner_provider_decision_after_M1_4
+  executor: Christopher_DarkArty07
+  acceptance_owner: Christopher_DarkArty07
   requirement: >-
-    Bootstrap only the default-off aether_mcp package and a real zero-tool stdio
-    MCP process using the pinned SDK. Prove handshake, clean EOF and zero
-    socket/provider/file effects. Do not execute M1.1b, Orca, adapter, M1.3 or
-    M2.2+.
+    Decide whether to require official Orca structured contract additions,
+    re-scope the product contract, or qualify a different provider boundary.
+    No implementation milestone, adapter, M2.3, M3, registration, activation,
+    merge, tag or Release is authorized while this decision is pending.

@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M2.1a ACCEPTED; SESSION CLOSED; M1.1b DEFERRED; NOT ACTIVATED
-> **Date:** 2026-08-07
+> **Status:** M1.4 CLOSED; D1 BLOCKED; OWNER DECISION REQUIRED; NOT ACTIVATED
+> **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** none after M2.1a closeout; next sequence requires an owner decision and a new frozen task
+> **Implementation authorization:** none after M1.4 closeout; next sequence requires an owner decision and a new frozen task
 
 ## 1. Objective
 
@@ -217,12 +217,15 @@ parallelism is expected to improve quality or time more than coordination cost.
 ## 8. Design closure sequence
 
 M0 closed on 2026-08-06 when the product owner accepted the detailed design and
-frozen use-case catalog. M1.1a identity/catalog evidence and the M1.2 seam matrix
-are accepted at their bounded read-only limits. M2.1a's initial implementation
-was accepted at `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`; its corrected code
-head is `f31c6b610f9cbd0de38a617187d5497c194f9105`. Chris authorized the bounded
-M1.1b then provider-independent M2.2 sequence on 2026-08-08. M1.1b remains a
-mandatory blocker before any Orca provider or lifecycle operation.
+frozen use-case catalog. M1.1a and M1.1b exact identity/qualification are
+accepted; M1.2 is accepted as evidence that the provider seam is insufficient.
+M2.1a's default-off bootstrap is accepted at corrected code head
+`f31c6b610f9cbd0de38a617187d5497c194f9105`; provider-independent M2.2 is accepted
+at `59989d63f01930485715499156000d9fedfff037`. M1.3 then closed BLOCKED at
+`7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239` after two exact-candidate cold-start
+probes failed with `ERR_RUNTIME_START_SHAPE`. M1.4 records
+`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`. No later implementation gate is
+authorized until the product owner decides the provider path.
 
 ### M0 — Final design and traceable use cases
 
@@ -807,11 +810,23 @@ records and must classify each of the six missing M1.2 aggregate seams as
 `PROVEN_COMPOSED` or `UNSUPPORTED`. Canonical contract:
 `../../external-agent/TASK-M1.3-M1.4.md`.
 
+**Closure (2026-08-08): BLOCKED.** The reusable isolated harness closed at
+`7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239`. Two final exact-candidate probes
+both failed closed at cold start with `ERR_RUNTIME_START_SHAPE`; each namespace
+rollback left zero process, listener, mount or root survivors and protected
+global state remained unchanged. All six missing aggregate seams are
+`UNSUPPORTED`. See `M1_3_ACCEPTANCE.md` and `M1_3_LIFECYCLE_EVIDENCE.json`.
+
 #### M1.4 — Close the provider decision
 
 M1 evidence records the exact supported catalog and every gap. If the seam is
 sufficient, freeze the adapter contract and dependency versions. If not, stop;
 do not design a hidden fallback.
+
+**Closure (2026-08-08):** `D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`. D1 is not
+granted; no adapter contract is frozen. The product owner must decide whether to
+require official Orca seam additions, re-scope the product contract or qualify a
+different provider boundary. See `M1_4_PROVIDER_DECISION.md`.
 
 **Proposed atomic commits:**
 
@@ -1436,22 +1451,21 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M1.3 — isolated Orca lifecycle qualification**, then **M1.4 — provider
-decision**, under `../../external-agent/TASK-M1.3-M1.4.md`. Use only the exact
-authenticated Orca candidate inside an M1-owned HOME/XDG/tmp root. Create no
-worker, dispatch, terminal or worktree and touch no installed/global Orca state.
+M1.3 and M1.4 are closed. The current state is
+`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 remains false. Await the product
+owner's provider decision. No implementation milestone is authorized.
 
 ### STOP CONDITION
 
-Stop after M1.4 evidence, exact-commit verification, terminal Draft-PR CI and
-cleanup. M1.4 may recommend `D1_READY_FOR_OWNER_DECISION` or
-`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`, but only the product owner can grant D1.
-Do not start M2.3, the provider adapter, M3, registration or activation.
+The mandatory post-M1.4 stop boundary is active. Preserve the evidence, complete
+only exact-commit/Draft-PR verification and cleanup, then stop. Do not start
+M2.3, the provider adapter, M3, registration or activation.
 
 ### LATER GATES
 
-Owner decision after M1.4 -> if D1 is granted, separately authorize M2.3 and the
-version-pinned provider adapter -> M3 lifecycle -> M4 one worker -> M5 real
+Owner decision after M1.4 -> require a newly qualified provider boundary or amend
+the product contract -> only after a future D1 grant, separately authorize M2.3
+and a version-pinned adapter -> M3 lifecycle -> M4 one worker -> M5 real
 two-worker swarm -> M6 roster -> M7 learning-data qualification -> M8
 verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation ->
 M11 Release -> M12 activation.
