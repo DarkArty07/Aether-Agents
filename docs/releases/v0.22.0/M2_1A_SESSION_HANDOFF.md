@@ -1,13 +1,14 @@
 # Aether Agents v0.22.0 — M2.1a Session Handoff
 
 > **Closeout timestamp:** 2026-08-07T16:39:10-06:00
-> **Status:** SESSION CLOSED — M2.1a ACCEPTED; NO NEXT IMPLEMENTATION AUTHORIZED
+> **Status:** M2.1a-R1 CORRECTED; LONG-HORIZON SUCCESSORS AUTHORIZED
 > **Project:** `/home/darkarty/Desktop/agentes/aether`
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Implementation commit:** `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`
 > **Clean-checkout CI correction:** `5d0e20df2f68df27e036d0e47410e238d753782e`
 > **Portable local/CI gate correction:** `894bbaebefbe3636fca4dddb421eabc30f0df9af`
 > **Product-assets inventory correction:** `eb166c8cf988e55c32c565c932a6b33212082244`
+> **Release source-boundary correction:** `f31c6b610f9cbd0de38a617187d5497c194f9105`
 > **Draft PR:** [#163](https://github.com/DarkArty07/Aether-Agents/pull/163)
 
 ## 1. Why this handoff exists
@@ -120,6 +121,13 @@ Commit `eb166c8cf988e55c32c565c932a6b33212082244` replaces the obsolete
 `product-assets` claim that `src/` must not exist with an exact `git ls-files`
 inventory of the three allowed `src/aether_mcp` files.
 
+The 2026-08-08 audit proved that `release.yml` retained the same obsolete
+assertion even though `test.yml` was corrected. Commit
+`f31c6b610f9cbd0de38a617187d5497c194f9105` adds a two-workflow regression and
+uses the same exact three-file inventory in Release. The focused regression
+passed and the local suite reproduced `82 passed, 1 skipped`; the remaining skip
+is the separately authorized M1.1b FIFO fixture, not M2.1a evidence.
+
 Final evidence before documentation-only closeout:
 
 - local pinned Orca suite: `82 passed, 1 skipped in 19.98s`;
@@ -143,40 +151,36 @@ Final evidence before documentation-only closeout:
 - PR purpose: remote preservation and candidate discussion;
 - PR readiness: Draft, not authorized for merge;
 - tag, GitHub Release, activation and deployment: none;
-- local worktree disposition: remove only after the final reconciliation commit
-  is pushed, Draft PR #163 points to it and GitHub checks are terminal;
+- local worktree disposition: removed after the original `a446c707` closeout;
+  recreated on 2026-08-08 solely for the authorized three-milestone sequence and
+  to be removed again after final push and terminal checks;
 - main checkout dirty state: pre-existing work on
   `docs/canonical-product-documentation`; preserve it untouched.
 
 ## 5. Deliberately unproven or blocked
 
-M2.1a does **not** prove or authorize:
+M2.1a itself does **not** prove or authorize:
 
-- M1.1b reusable isolation qualification;
+- M1.1b reusable isolation qualification, which received a separate 2026-08-08
+  implementation gate;
 - D1 provider-seam authority;
-- M2.2 canonical protocol/error implementation;
+- M2.2 canonical protocol/error implementation, which received a separate
+  provider-independent 2026-08-08 implementation gate;
 - any Aether MCP tool, adapter, journal, storage or encryption;
 - any Orca provider, Run, Task, Dispatch, worker or lifecycle operation;
 - Hermes registration or runtime activation;
 - candidate-wide integration, merge, SemVer tag, GitHub Release or deployment;
 - causal self-improvement, learning capture, dataset export or fine-tuning.
 
-M1.1b remains deferred accepted debt and must close before any Orca provider or
-lifecycle operation. M2.2+ remains separately gated even where provider
-independent.
+M1.1b must close before any Orca provider or lifecycle operation. M2.3+ remains
+separately gated. The long-horizon authorization does not grant D1, adapter,
+storage, registration, activation, merge, tag or Release.
 
 ## 6. Single continuation point
 
-There is no active implementation task. The next session begins with one product
-sequencing decision from Chris:
-
-1. resume and redesign M1.1b isolation qualification; or
-2. authorize a new provider-independent M2.2 task while preserving M1.1b as a
-   hard blocker before all Orca provider/lifecycle work.
-
-Do not infer either option from roadmap order, continuity text or this handoff.
-After Chris decides, freeze exactly one new task with RED, deterministic
-acceptance, forbidden effects and stop conditions before editing code.
+Chris resolved the sequencing decision on 2026-08-08: complete M2.1a-R1, then
+M1.1b, then provider-independent M2.2 in one bounded long-horizon session. Durable
+progress and final timing are recorded in `LONG_HORIZON_EXECUTION.md`.
 
 ## 7. Resume checklist
 

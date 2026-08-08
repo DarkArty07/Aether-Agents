@@ -17,19 +17,21 @@ M1.1a exact installed identity and catalog are accepted as the bounded read-only
 basis for M1.2. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
 catalog maps 49 capabilities only partially and lacks 6 required public seams.
 The owner accepted the M0 fast path: version-pinned Aether schema bundles and
-composition of public commands only. M2.1a is accepted at
-`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`: the repository now contains one
+composition of public commands only. M2.1a was initially accepted at
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`; its clean-runner and Release
+boundary corrections culminate in `f31c6b610f9cbd0de38a617187d5497c194f9105`.
+The repository now contains one
 provider-independent, default-off, zero-tool stdio MCP bootstrap. Canonical
 closeout and resume instructions are in
 `docs/releases/v0.22.0/M2_1A_SESSION_HANDOFF.md` and Draft PR #163.
 
-There is no active implementation task after this session. The next session must
-obtain Chris's sequencing decision before freezing either a redesigned M1.1b or
-a separately authorized provider-independent M2.2 task. M1.1b remains deferred
-accepted debt and a hard prerequisite before any Orca provider or lifecycle
-operation. D1 remains ungranted. Do not invoke Orca, register or activate MCP,
-implement an adapter/tool/storage, begin M1.3 or M2.2+, merge, tag, Release or
-touch protected local data without the corresponding new gate.
+Chris authorized one bounded long-horizon sequence on 2026-08-08:
+M2.1a-R1 closeout correction, then M1.1b canonical-candidate qualification, then
+provider-independent M2.2 protocol/errors. M1.1b remains a hard prerequisite
+before any Orca provider or lifecycle operation. D1 remains ungranted. Do not
+invoke Orca beyond M1.1b's exact metadata extraction and two read-only catalog
+probes, register or activate MCP, implement an adapter/storage/lifecycle service,
+begin M1.3 or M2.3+, merge, tag, Release or touch protected local data.
 
 ## v0.19.0 experimental coordination closeout
 

@@ -218,10 +218,11 @@ parallelism is expected to improve quality or time more than coordination cost.
 
 M0 closed on 2026-08-06 when the product owner accepted the detailed design and
 frozen use-case catalog. M1.1a identity/catalog evidence and the M1.2 seam matrix
-are accepted at their bounded read-only limits. M2.1a is accepted at
-`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`. The session is closed with no active
-implementation task. M1.1b remains a mandatory blocker before any Orca provider
-or lifecycle operation.
+are accepted at their bounded read-only limits. M2.1a's initial implementation
+was accepted at `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`; its corrected code
+head is `f31c6b610f9cbd0de38a617187d5497c194f9105`. Chris authorized the bounded
+M1.1b then provider-independent M2.2 sequence on 2026-08-08. M1.1b remains a
+mandatory blocker before any Orca provider or lifecycle operation.
 
 ### M0 — Final design and traceable use cases
 
@@ -829,12 +830,16 @@ namespace/entry point remains absent.
 protocol metadata and cleanly exits on EOF without network listeners or provider
 effects.
 
-**Fast-track completion (2026-08-07):** accepted at
-`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`. Exact-commit evidence: 17 focused
+**Fast-track completion (2026-08-07; corrected 2026-08-08):** initial
+implementation accepted at `cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`;
+clean-runner and Release source-boundary corrections culminate in
+`f31c6b610f9cbd0de38a617187d5497c194f9105`. Initial exact-commit evidence: 17 focused
 tests passed; the full suite passed 80 with 1 skipped; Ruff, compileall,
 `make mcp-smoke`, diff and secret scans passed; zero tools, registration, Orca
 calls and surviving processes were observed. Session handoff:
-`M2_1A_SESSION_HANDOFF.md`. No part of M2.2 was authorized or started.
+`M2_1A_SESSION_HANDOFF.md`. The 2026-08-08 correction reproduced 82 passed with
+1 known M1.1b skip and repaired both product-asset workflows. M2.2 remained
+unstarted until the separately authorized long-horizon sequence.
 
 #### M2.2 — Implement canonical protocol and stable errors
 
