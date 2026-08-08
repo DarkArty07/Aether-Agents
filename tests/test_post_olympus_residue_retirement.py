@@ -236,9 +236,10 @@ def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
         ROOT / ".github" / "workflows" / "release.yml",
     )
     expected_sources = (
-        "aether_mcp/__init__.py",
-        "aether_mcp/__main__.py",
-        "aether_mcp/server.py",
+        "src/aether_mcp/__init__.py",
+        "src/aether_mcp/__main__.py",
+        "src/aether_mcp/protocol.py",
+        "src/aether_mcp/server.py",
     )
 
     for path in workflows:
