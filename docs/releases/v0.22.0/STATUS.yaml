@@ -333,10 +333,39 @@ m2_1a_acceptance:
     github_policy: pass
     github_pull_request_target: pass
     generated_artifact_survivors: 0
-  next_gate: execute_authorized_M1_1b_then_provider_independent_M2_2
-  M1_1b_status: authorized_next_mandatory_before_orca_provider_or_lifecycle
+  next_gate: owner_selects_new_horizon_after_long_horizon_closeout
+  M1_1b_status: accepted
   D1_granted: false
-  M2_2_authorized: true_provider_independent_only
+  M2_2_authorized: completed_provider_independent_only
+
+m2_2_acceptance:
+  accepted_on: "2026-08-08"
+  task: docs/external-agent/TASK-M2.2.md
+  acceptance: docs/releases/v0.22.0/M2_2_ACCEPTANCE.md
+  technical_commit: 59989d63f01930485715499156000d9fedfff037
+  protocol: aether.mcp/v1alpha1
+  schema_snapshot: schemas/aether-mcp/v1alpha1/bundle.json
+  schema_snapshot_sha256: e7f39a76ac4795ade2ec0a15bf64b4cab2233b912cf2285b0ce76d2805a2e605
+  schema_snapshot_bytes: 94139
+  tool_schemas: 24
+  stable_error_codes: 50
+  callable_tools: 0
+  registered_tools: 0
+  focused_tests_passed: 22
+  full_tests_passed: 81
+  full_tests_skipped: 0
+  ruff: pass
+  compileall: pass
+  schema_drift: pass
+  mcp_smoke: pass
+  workflow_yaml: pass
+  tracked_source_inventory: pass
+  M1_1b_evidence_unchanged: pass
+  provider_effects: 0
+  network_effects: 0
+  storage_effects: 0
+  activation: absent
+  next_milestone_authorized: false
 
 release_lineage:
   latest_official_release: "0.20.0"

@@ -49,11 +49,12 @@ Execute exactly three milestones in this order:
 
 ### M2.2
 
-- Status: PENDING
-- RED: pending
-- GREEN: pending
-- Commit: pending
-- Schema drift: pending
+- Status: LOCALLY COMPLETE
+- RED: protocol module and snapshot absent; exact workflow contract then failed for missing `src/aether_mcp/protocol.py` in both workflows.
+- GREEN: focused `22 passed`; full suite `81 passed, 0 skipped`; 24 schemas, 50 stable errors, zero callable tools, Ruff, compileall and smoke passed.
+- Commit: `59989d63f01930485715499156000d9fedfff037` (`feat: add bounded Aether MCP protocol contract`)
+- Schema drift: generated 94,139-byte bundle equals committed snapshot; SHA-256 `e7f39a76ac4795ade2ec0a15bf64b4cab2233b912cf2285b0ce76d2805a2e605`.
+- Acceptance: `M2_2_ACCEPTANCE.md`
 
 ## Final gate
 

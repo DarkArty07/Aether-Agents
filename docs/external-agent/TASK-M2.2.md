@@ -1,6 +1,6 @@
 # TASK M2.2 — Canonical Protocol and Stable Errors
 
-> **Status:** AUTHORIZED AND FROZEN
+> **Status:** ACCEPTED
 > **Authorized by:** Christopher, 2026-08-08
 > **Milestone:** Aether Agents v0.22.0 M2.2
 > **Execution owner:** Hermes
@@ -20,6 +20,12 @@ validation.
 - `tests/aether_mcp/test_protocol.py` (new)
 - `schemas/aether-mcp/v1alpha1/bundle.json` (generated snapshot)
 - M2.2 acceptance/status/roadmap/long-horizon documentation
+
+**Coherence amendment discovered by integration RED:** because product-asset
+workflows enforce the exact tracked `src/` inventory, M2.2 also updates
+`.github/workflows/test.yml`, `.github/workflows/release.yml`, and the shared
+workflow contract in `tests/test_post_olympus_residue_retirement.py` to add only
+`src/aether_mcp/protocol.py`.
 
 No new runtime dependency is authorized.
 
@@ -105,3 +111,8 @@ Do not implement principal derivation, project admission behavior, persistence,
 migrations, encryption, provider calls, lifecycle, learning capture, registration,
 activation, merge, tag or Release. Stop after deterministic protocol/schema
 artifacts, tests, documentation, pushed Draft-PR update and terminal CI.
+
+## Accepted implementation
+
+- Technical commit: `59989d63f01930485715499156000d9fedfff037`
+- Acceptance: `docs/releases/v0.22.0/M2_2_ACCEPTANCE.md`

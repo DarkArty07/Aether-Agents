@@ -854,6 +854,13 @@ command string, idempotency mismatch and secret-bearing error text.
 **Pass:** generated snapshots match `schemas/aether-mcp/v1alpha1/`; all 24 tool
 schemas are present but only M2 tools are registered as callable.
 
+**Completion (2026-08-08):** accepted at
+`59989d63f01930485715499156000d9fedfff037`. The exact 24 schemas and 50 stable
+errors are exported; the generated 94,139-byte bundle matches its committed
+snapshot. M2.2 registers zero callable tools rather than stubs; registration of
+the M2 subset remains with M2.3/M2.6. Focused tests passed 22 and the full suite
+passed 81 with zero skips; see `M2_2_ACCEPTANCE.md`.
+
 #### M2.3 — Implement trusted principal and project admission
 
 Derive coordinator identity from launch/session context. Resolve canonical project
