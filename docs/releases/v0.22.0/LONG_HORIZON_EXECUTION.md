@@ -36,15 +36,16 @@ Execute exactly three milestones in this order:
 - RED: `test_product_asset_workflows_accept_exact_bounded_mcp_source` failed on the stale `release.yml` assertion.
 - GREEN: focused regression passed; full suite `82 passed, 1 skipped`; workflow YAML, Ruff, compileall, release-assets simulation and diff checks passed.
 - Commit: `f31c6b610f9cbd0de38a617187d5497c194f9105` (`fix: reconcile M2.1a release source boundary`)
-- CI: pending push
+- CI: 5/5 required checks passed on pushed head `07e7278`.
 
 ### M1.1b
 
-- Status: PENDING
-- RED: pending
-- GREEN: pending
-- Commit: pending
-- Real probe: pending
+- Status: LOCALLY COMPLETE
+- RED: CLI identity overrides, Bash-semantics parser and readable mount-prefix bypass each failed as expected; the repaired FIFO test executed and passed without skip.
+- GREEN: focused `29 passed`; full suite `60 passed, 0 skipped`; Ruff, compileall, M2.1a smoke, diff and secret scans passed.
+- Commit: `eb7a23baaeb969ef388268786d187d6f4c8bef7d` (`feat: qualify canonical Orca candidate exactly`)
+- Real probe: two fresh roots produced identical output matching `M1_ORCA_QUALIFICATION.json`; zero processes and temporary roots survived.
+- Acceptance: `M1_1B_ACCEPTANCE.md`
 
 ### M2.2
 

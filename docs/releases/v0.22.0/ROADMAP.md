@@ -771,11 +771,12 @@ secrets and performs no worker/model call.
 **Verify:** run the qualification test and probe twice; require byte-equivalent
 identity fields and no new files outside the isolated root/evidence allowlist.
 
-**Fast-track disposition (2026-08-07):** M1.1a exact installed identity and
-catalog are accepted in `M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md` as the read-only
-basis for M1.2. Reusable adversarial isolation remains M1.1b accepted debt and
-must close before M1.3. This split does not label the rejected generic qualifier
-accepted and authorizes no lifecycle operation.
+**Completion (2026-08-08):** M1.1a exact installed identity/catalog evidence and
+M1.1b canonical exact-byte qualification are accepted. M1.1b closes at
+`eb7a23baaeb969ef388268786d187d6f4c8bef7d` with `29 passed` focused and
+`60 passed, 0 skipped` repository-wide; see `M1_1B_ACCEPTANCE.md`. The rejected
+generic Bash parser remains historical and was removed. This closure does not
+grant D1 or authorize an Orca adapter or lifecycle operation.
 
 #### M1.2 — Freeze the structured provider seam matrix
 

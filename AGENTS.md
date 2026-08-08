@@ -27,11 +27,11 @@ closeout and resume instructions are in
 
 Chris authorized one bounded long-horizon sequence on 2026-08-08:
 M2.1a-R1 closeout correction, then M1.1b canonical-candidate qualification, then
-provider-independent M2.2 protocol/errors. M1.1b remains a hard prerequisite
-before any Orca provider or lifecycle operation. D1 remains ungranted. Do not
-invoke Orca beyond M1.1b's exact metadata extraction and two read-only catalog
-probes, register or activate MCP, implement an adapter/storage/lifecycle service,
-begin M1.3 or M2.3+, merge, tag, Release or touch protected local data.
+provider-independent M2.2 protocol/errors. M1.1b is accepted at
+`eb7a23baaeb969ef388268786d187d6f4c8bef7d`; its exact-candidate blocker is
+closed. M2.2 is the active bounded task. D1 remains ungranted. Do not invoke Orca,
+register or activate MCP, implement an adapter/storage/lifecycle service, begin
+M1.3 or M2.3+, merge, tag, Release or touch protected local data.
 
 ## v0.19.0 experimental coordination closeout
 

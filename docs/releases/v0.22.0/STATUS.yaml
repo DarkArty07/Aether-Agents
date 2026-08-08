@@ -214,16 +214,28 @@ m1_1_fast_track:
   authorization_source: user_requested_prompt_and_faster_advancement
   acceptance_path: docs/releases/v0.22.0/M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md
   M1_1a_identity_and_catalog: accepted_read_only_basis_for_M1_2
-  M1_1b_reusable_isolation_qualifier: deferred_by_owner
+  M1_1b_reusable_isolation_qualifier: accepted_canonical_exact_byte_candidate
   M1_1b_task: docs/external-agent/TASK-M1.1B.md
-  M1_1b_current_authority: deferred_by_owner
-  M1_1b_closure_deadline: before_any_M1_3_operation
+  M1_1b_acceptance: docs/releases/v0.22.0/M1_1B_ACCEPTANCE.md
+  M1_1b_technical_commit: eb7a23baaeb969ef388268786d187d6f4c8bef7d
+  M1_1b_current_authority: accepted
+  M1_1b_closed_on: "2026-08-08"
+  M1_1b_closure_deadline: satisfied
   M1_2_authorized: read_only_catalog_and_seam_matrix_only
   M1_3_authorized: false
-  known_debt:
-    - mount_prefix_subtree_bypasses_exact_inventory
-    - generic_bash_mutation_blacklist_not_fail_closed
-    - mandatory_fifo_test_skipped_by_invalid_fixture
+  resolved_debt:
+    - exact_inventory_has_zero_prefix_exceptions
+    - generic_bash_parser_removed
+    - mandatory_fifo_test_executes_without_skip
+  acceptance_evidence:
+    focused_tests_passed: 29
+    focused_tests_skipped: 0
+    full_tests_passed: 60
+    full_tests_skipped: 0
+    real_probe_two_run_determinism: pass
+    committed_evidence_exact_match: pass
+    process_survivors: 0
+    temporary_root_survivors: 0
 
 m1_2_independent_review:
   implementation_head: f9c3460a25cf5b9b97c329fab47817d678652f54
