@@ -37,7 +37,7 @@ Before every real fixture:
 - verify the canonical manifest digest and Orca product/catalog identity;
 - reject symlinks, non-executables, identity drift and unexpected environment roots.
 
-Every child receives only an explicit environment rooted below one `mkdtemp` directory under `/tmp`, including `HOME`, all XDG roots and `TMPDIR`. Runtime traffic is limited to one harness-selected loopback port. Pairing is disabled. No credential, account, model, worker, browser, GUI or remote environment is admitted.
+Every child receives only an explicit environment rooted below one `mkdtemp` directory under `/tmp`, including `HOME`, all XDG roots and `TMPDIR`. Inside the unprivileged user/network namespace, the exact launcher may additionally receive the fixed public AppImage runtime control `APPIMAGE_EXTRACT_AND_RUN=1`; this executes the exact admitted AppImage without a forbidden FUSE mount and does not authorize an internal binary path. Runtime traffic is limited to one harness-selected loopback port inside the network namespace. Pairing is disabled. No credential, account, model, worker, browser, GUI or remote environment is admitted.
 
 The harness owns the foreground `serve` child and its process group. It may send bounded `SIGINT`, then `SIGTERM` and finally `SIGKILL` only to that owned group. Broad name-based process termination is forbidden.
 
