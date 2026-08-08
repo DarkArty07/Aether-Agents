@@ -50,6 +50,7 @@ jobs:
           bash -n scripts/setup.sh scripts/update.sh scripts/start-gateway.sh
           python - <<'PY'
           from pathlib import Path
+          import subprocess
           import yaml
 
           root = Path('.')
@@ -57,7 +58,12 @@ jobs:
           assert len(templates) == 7
           for path in templates:
               yaml.safe_load(path.read_text())
-          assert not (root / 'src').exists()
+          source_files = set(subprocess.check_output(['git', 'ls-files', 'src'], text=True).splitlines())
+          assert source_files == {
+              'src/aether_mcp/__init__.py',
+              'src/aether_mcp/__main__.py',
+              'src/aether_mcp/server.py',
+          }
           assert not list((root / 'home/profiles').glob('*/plugins/aether'))
           print('release_assets=PASS')
           PY
