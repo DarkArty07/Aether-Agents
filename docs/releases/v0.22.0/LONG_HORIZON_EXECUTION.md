@@ -49,16 +49,18 @@ Execute exactly three milestones in this order:
 
 ### M2.2
 
-- Status: LOCALLY COMPLETE
+- Status: COMPLETE — LOCAL AND CI
 - RED: protocol module and snapshot absent; exact workflow contract then failed for missing `src/aether_mcp/protocol.py` in both workflows.
 - GREEN: focused `22 passed`; full suite `81 passed, 0 skipped`; 24 schemas, 50 stable errors, zero callable tools, Ruff, compileall and smoke passed.
 - Commit: `59989d63f01930485715499156000d9fedfff037` (`feat: add bounded Aether MCP protocol contract`)
 - Schema drift: generated 94,139-byte bundle equals committed snapshot; SHA-256 `e7f39a76ac4795ade2ec0a15bf64b4cab2233b912cf2285b0ce76d2805a2e605`.
 - Acceptance: `M2_2_ACCEPTANCE.md`
+- CI: 5/5 required checks passed on pushed acceptance head `b092abf`.
 
 ## Final gate
 
-- Exact committed-tree verification: pending
-- Pull request synchronization: pending
-- Continuity reconciliation: pending
-- Finish time and elapsed duration: pending
+- Exact committed-tree verification: PASS on detached `b092abf044cd79f51748a950c2f4bed934a69f40` in a fresh Python 3.11 venv; clean-install provenance was under that venv, full suite `81 passed, 0 skipped`, Ruff, compileall, smoke, source inventory, schema drift, status authority and delta secret scan passed.
+- Pull request synchronization: Draft PR #163 reached the same head and all five required checks passed. A final documentation-only ledger commit follows this recorded gate.
+- Continuity reconciliation: PASS; `AGENTS.md`, `ROADMAP.md`, `STATUS.yaml`, M1.1b acceptance and M2.2 acceptance agree that the authorized sequence is complete and no next implementation is authorized.
+- Technical verification time: `2026-08-08T05:25:03-06:00` (epoch `1786188303`).
+- Finish time and elapsed duration: captured after terminal documentation CI and cleanup in the final PR comment, avoiding a self-invalidating post-CI commit.

@@ -366,6 +366,14 @@ m2_2_acceptance:
   storage_effects: 0
   activation: absent
   next_milestone_authorized: false
+  github_acceptance_head: b092abf044cd79f51748a950c2f4bed934a69f40
+  github_required_checks_passed: 5
+  github_required_checks_failed: 0
+  detached_clean_install_tests_passed: 81
+  detached_clean_install_tests_skipped: 0
+  detached_tree_gate: pass
+  clean_install_provenance: venv_site_packages
+  technical_verification_at: "2026-08-08T05:25:03-06:00"
 
 release_lineage:
   latest_official_release: "0.20.0"
@@ -382,6 +390,9 @@ release_lineage:
     prior_closeout_removed_after_a446c707: true
     recreated_for_authorized_long_horizon_on: "2026-08-08"
     close_after_long_horizon_push: true
+    durable_worktree_required_after_closeout: false
+    closeout_disposition: remove_after_terminal_documentation_ci
+    path_is_historical_after_closeout: true
     remote_branch: origin/feature/v0.22.0-orca-transition
     draft_pr: 163
     base_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d

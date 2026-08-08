@@ -77,6 +77,15 @@ GREEN at the accepted technical commit:
 - diff and narrow secret scans: PASS;
 - M1.1b committed evidence unchanged: PASS.
 
+Remote and clean-tree closure:
+
+- Draft PR #163 required checks: 5/5 PASS at acceptance head `b092abf`;
+- detached clean-install gate: `81 passed, 0 skipped`;
+- installed-module provenance: fresh venv `site-packages`, not an ambient worktree;
+- detached tree remained Git-clean after verification;
+- M1.1b temporary-root survivors: `0`;
+- Orca process survivors: `0`.
+
 ## Preserved boundaries
 
 M2.2 did not:
