@@ -30,11 +30,19 @@ M2.1a-R1 closeout correction, then M1.1b canonical-candidate qualification, then
 provider-independent M2.2 protocol/errors. M1.1b is accepted at
 `eb7a23baaeb969ef388268786d187d6f4c8bef7d`; its exact-candidate blocker is
 closed. M2.2 is accepted at `59989d63f01930485715499156000d9fedfff037` with
-24 exported schemas, 50 stable errors and zero callable tools. The authorized
-three-milestone sequence is complete; no next implementation is authorized. D1
-remains ungranted. Do not invoke Orca, register or activate MCP, implement an
-adapter/storage/lifecycle service, begin M1.3 or M2.3+, merge, tag, Release or
-touch protected local data.
+24 exported schemas, 50 stable errors and zero callable tools.
+
+Chris separately authorized M1.3 and M1.4 on 2026-08-08. Hermes may invoke only
+the exact manifest-authenticated Orca launcher inside the isolated lifecycle
+harness frozen by `docs/external-agent/TASK-M1.3-M1.4.md`. The harness may start
+one headless foreground runtime, create only synthetic Run/Task records, exercise
+documented status/read/reset operations, restart it, stop its owned process group
+and remove its temporary root. No worker, dispatch, terminal/worktree creation,
+credential, model, remote environment or installed/global state mutation is
+authorized. M1.4 may issue a technical provider verdict but cannot grant D1.
+Stop after M1.4, Draft-PR CI and cleanup. Do not register or activate MCP,
+implement an adapter/storage/lifecycle service, begin M2.3 or M3, merge, tag or
+Release.
 
 ## v0.19.0 experimental coordination closeout
 

@@ -801,6 +801,12 @@ partial state creation and repeated cleanup.
 **Pass:** no global/installed Orca state changes, cleanup is idempotent and zero
 M1-owned survivors remain.
 
+**Authorized (2026-08-08):** one exact-candidate, loopback-only headless fixture
+under an M1-owned HOME/XDG/tmp root. It may create only synthetic Run/Task
+records and must classify each of the six missing M1.2 aggregate seams as
+`PROVEN_COMPOSED` or `UNSUPPORTED`. Canonical contract:
+`../../external-agent/TASK-M1.3-M1.4.md`.
+
 #### M1.4 — Close the provider decision
 
 M1 evidence records the exact supported catalog and every gap. If the seam is
@@ -1430,23 +1436,22 @@ applicable design/implementation boundary.
 
 ### NOW
 
-Execute **M2.1a — default-off MCP bootstrap** as one external-agent task. Add only
-the `aether_mcp` package metadata, static identity, a real zero-tool stdio MCP
-process, focused tests and the bounded smoke target. It must not invoke Orca,
-open a socket, persist state, register with Hermes or implement any MCP tool.
+Execute **M1.3 — isolated Orca lifecycle qualification**, then **M1.4 — provider
+decision**, under `../../external-agent/TASK-M1.3-M1.4.md`. Use only the exact
+authenticated Orca candidate inside an M1-owned HOME/XDG/tmp root. Create no
+worker, dispatch, terminal or worktree and touch no installed/global Orca state.
 
 ### STOP CONDITION
 
-Stop after one exact M2.1a implementation/evidence commit and report. Hermes then
-reproduces package metadata, real initialize/list-tools handshake, EOF behavior,
-focused/full tests and zero socket/process/file effects. M1.1b, D1, provider
-adapter, M1.3 and M2.2+ remain blocked regardless of the implementer result.
+Stop after M1.4 evidence, exact-commit verification, terminal Draft-PR CI and
+cleanup. M1.4 may recommend `D1_READY_FOR_OWNER_DECISION` or
+`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`, but only the product owner can grant D1.
+Do not start M2.3, the provider adapter, M3, registration or activation.
 
 ### LATER GATES
 
-Accept M2.1a -> separately authorize M2.2 or return to M1.1b/provider
-qualification as required. Before any Orca operation: close M1.1b -> separately
-authorized isolated contract fixtures/lifecycle -> M1.4 provider decision ->
-provider adapter -> M3 lifecycle -> M4 one worker -> M5 real two-worker swarm -> M6 roster -> M7
-learning-data qualification -> M8 verifier/Ariadna decisions -> M9
-productization -> M10 controlled evaluation -> M11 Release -> M12 activation.
+Owner decision after M1.4 -> if D1 is granted, separately authorize M2.3 and the
+version-pinned provider adapter -> M3 lifecycle -> M4 one worker -> M5 real
+two-worker swarm -> M6 roster -> M7 learning-data qualification -> M8
+verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation ->
+M11 Release -> M12 activation.
