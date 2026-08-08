@@ -1,0 +1,1125 @@
+schema_version: 1
+status: m1_4_closed_d1_blocked_awaiting_owner_decision
+approved_on: "2026-08-07"
+owner: Christopher (DarkArty07)
+
+governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
+preserved_prior_decision: docs/decisions/PDR-0011-orca-substrate-and-olympus-retirement.md
+current_architecture_decision: docs/decisions/ADR-0001-aether-mcp-control-and-trace-plane.md
+
+candidate:
+  version: "0.22.0"
+  name: Aether MCP and Orca Swarm
+  capability_boundary: >-
+    Preserve Aether's Hermes product layer, profiles, policies, skills, historical
+    stores and release authority; keep Olympus plus the disconnected native Python
+    core retired; design one bounded Aether MCP control, semantic trace and
+    protected learning-episode plane over Orca; and keep multi-agent execution
+    unavailable until the MCP and Hermes-led Orca swarm path pass independent
+    gates.
+  not_a_release_claim: true
+  source_implementation_started: true
+  native_runtime_source_present: false
+  aether_mcp_design_direction_approved: true
+  aether_mcp_detailed_design_accepted: true
+  aether_mcp_source_implementation_started: true
+  aether_mcp_source_implementation_head: cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d
+  aether_mcp_zero_tool_stdio_accepted: true
+  aether_mcp_registered: false
+  detailed_mcp_design_complete_for_owner_review: true
+  detailed_execution_roadmap_proposed: true
+  detailed_execution_roadmap_accepted: true
+  detailed_execution_roadmap_path: docs/releases/v0.22.0/ROADMAP.md
+  planned_release_milestones: M0-M11
+  planned_post_release_activation_milestone: M12
+  planned_new_runtime_namespace: src/aether_mcp
+  planned_new_runtime_namespace_present: true
+  learning_trace_primary_purpose_owner_clarified: true
+  learning_episode_detailed_design_accepted: true
+  learning_capture_source_implementation_started: false
+  learning_capture_activated: false
+  concrete_use_case_catalog_proposed: true
+  concrete_use_case_catalog_frozen: true
+  use_case_catalog_path: docs/releases/v0.22.0/USE_CASE_CATALOG.md
+  orca_runtime_activated_for_aether: false
+  isolated_orca_runtime_started_during_diagnostics: true
+  isolated_orca_runtime_currently_running: false
+
+architecture_correction:
+  approved_on: "2026-08-05"
+  github_issue: 160
+  target: hermes_led_orca_swarm
+  aether_owns:
+    - product_vision_and_requirements
+    - hermes_task_decomposition_routing_and_synthesis
+    - daimon_profiles_participation_policy_and_skills
+    - semantic_acceptance_and_release_authority
+  orca_owns:
+    - run_task_and_dispatch_state
+    - worker_terminal_and_worktree_lifecycle
+    - direct_and_group_messages
+    - recovery_and_cleanup_mechanics
+  branch_topology:
+    integration_line: one_feature_branch
+    disjoint_scopes: current_worktree_permitted
+    potentially_conflicting_writers: child_worktrees_required
+  native_core_disposition: retire_before_orca_adapter_implementation
+  historical_stores: preserve_unmodified_without_active_writer
+
+mcp_architecture:
+  approved_on: "2026-08-06"
+  control_boundary: mcp_first_for_hermes
+  normal_hermes_orca_cli_access: forbidden
+  provider_seam: version_matched_public_structured_orca_interface
+  transport_target: local_stdio
+  protocol_target: aether.mcp/v1alpha1
+  sampling: disabled
+  operational_source_of_truth: orca
+  aether_trace_owns:
+    - contract_and_use_case_references
+    - declared_rationale_and_authorization
+    - aether_to_orca_identity_correlation
+    - operation_requests_and_receipts
+    - artifact_and_evidence_references
+    - semantic_acceptance_and_cleanup_reconciliation
+    - measurement_facts_and_unknowns
+  aether_trace_does_not_own:
+    - run_task_or_dispatch_runtime_state
+    - worker_terminal_or_worktree_lifecycle
+    - operational_message_authority_or_lifecycle
+    - orca_recovery_or_scheduler_state
+  aether_learning_owns_when_explicitly_admitted:
+    - secret_redacted_model_visible_episode_content
+    - outcome_correction_preference_and_quality_labels
+    - episode_dataset_export_and_revocation_lineage
+    - local_versioned_dataset_candidates
+  aether_learning_does_not_authorize:
+    - credentials_or_hidden_chain_of_thought_storage
+    - external_upload_or_training
+    - prompt_model_route_or_skill_mutation
+    - candidate_promotion_activation_or_release
+  detailed_design: docs/architecture/AETHER_MCP.md
+  tool_contract: docs/reference/AETHER_MCP_CONTRACT.md
+  trace_schema: docs/reference/AETHER_TRACE_SCHEMA.md
+  learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
+  measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
+  implementation_authorized: false
+  implementation_scope: none_awaiting_owner_provider_decision
+  last_accepted_scope: M2_2_provider_independent_protocol
+  qualification_implementation_authorized: false
+  qualification_implementation_scope: M1_3_and_M1_4_closed
+  m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
+  activation_authorized: false
+
+implementation_workflow:
+  mode: external_coding_agent_stepwise
+  product_owner: Christopher (DarkArty07)
+  orchestrator_and_acceptance_owner: Hermes
+  one_active_task_at_a_time: true
+  active_task: none_stop_boundary_reached
+  successor_agents_are_stateless: true
+  next_prompt_requires_owner_decision: true
+  external_agent_git:
+    local_atomic_commits: allowed
+    push: forbidden
+    merge: forbidden
+    rebase: forbidden
+    amend: forbidden
+    tag_or_release: forbidden
+
+m1_1_independent_review:
+  implementation_head: a683dd681d5924197c3b3add7f534ae83a795cae
+  implementer_status: pass_provisional
+  independent_status: rejected_correction_required
+  reviewed_on: "2026-08-06"
+  review_path: docs/releases/v0.22.0/M1_1_INDEPENDENT_REVIEW.md
+  reproduced_green_evidence:
+    focused_tests: 22
+    full_tests: 47
+    ruff: pass
+    compileall: pass
+    real_probe_two_run_determinism: pass
+    committed_evidence_byte_match: pass
+    happy_path_orca_process_survivors: 0
+  blocking_findings:
+    - comment_only_launcher_binding_accepted
+    - nested_side_effect_file_accepted
+    - child_controlled_secret_leaked_in_error
+    - outside_tmp_and_ambient_xdg_roots_accepted
+    - timeout_descendant_survived
+  correction_task: docs/external-agent/TASK-M1.1-CORRECTION-1.md
+  M1_2_authorized: false
+
+m1_1_correction_1_review:
+  correction_head: 32b72ee4e8a8dd18d5131b7f38793139a14eaff8
+  implementer_status: pass
+  independent_status: rejected_correction_2_required
+  reviewed_on: "2026-08-07"
+  review_path: docs/releases/v0.22.0/M1_1_CORRECTION_1_REVIEW.md
+  reproduced_green_evidence:
+    focused_tests_collected: 37
+    focused_tests_passed: 37
+    full_tests_passed: 62
+    ruff: pass
+    compileall: pass
+    real_probe_two_run_determinism: pass
+    committed_evidence_byte_match: pass
+    original_C1_to_C5: pass
+    test_owned_process_survivors: 0
+  report_count_mismatch:
+    claimed_focused: 39
+    actual_focused: 37
+    claimed_full: 64
+    actual_full: 62
+  blocking_findings:
+    - dynamic_export_appimage_reassignment_accepted
+    - child_tmpdir_escapes_to_global_tmp
+    - inter_call_side_effect_concealed_by_end_only_inventory
+    - missing_required_environment_directory_accepted
+  correction_task: docs/external-agent/TASK-M1.1-CORRECTION-2.md
+  total_M1_1_implementation_attempt: 2
+  next_attempt_is_final_before_design_reassessment: true
+  M1_2_authorized: false
+
+m1_1_correction_2_review:
+  correction_head: 539c09b79edff460ce152f9134c14866390bf542
+  implementation_commit: fa33e91398256e771ead539378c42977e92a9f29
+  implementer_status: pass
+  independent_status: rejected_design_reassessment_required
+  reviewed_on: "2026-08-07"
+  review_path: docs/releases/v0.22.0/M1_1_CORRECTION_2_REVIEW.md
+  reproduced_green_evidence:
+    focused_tests_collected: 52
+    focused_tests_passed: 51
+    focused_tests_skipped: 1
+    full_tests_passed: 76
+    full_tests_skipped: 1
+    ruff: pass
+    compileall: pass
+    real_probe_two_run_determinism: pass
+    committed_evidence_byte_match: pass
+    correction_2_R1_to_R4: pass
+    test_owned_process_survivors: 0
+  blocking_findings:
+    - mount_prefix_subtree_bypasses_exact_inventory
+    - printf_v_appimage_mutation_bypasses_blacklist_parser
+    - mandatory_fifo_test_skipped_but_reported_as_pass
+  total_M1_1_implementation_attempts: 3
+  automatic_correction_retry_exhausted: true
+  next_action: candidate_specific_vs_dependency_backed_parser_design_decision
+  M1_2_authorized: false
+
+m1_1_fast_track:
+  accepted_on: "2026-08-07"
+  authorization_source: user_requested_prompt_and_faster_advancement
+  acceptance_path: docs/releases/v0.22.0/M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md
+  M1_1a_identity_and_catalog: accepted_read_only_basis_for_M1_2
+  M1_1b_reusable_isolation_qualifier: accepted_canonical_exact_byte_candidate
+  M1_1b_task: docs/external-agent/TASK-M1.1B.md
+  M1_1b_acceptance: docs/releases/v0.22.0/M1_1B_ACCEPTANCE.md
+  M1_1b_technical_commit: eb7a23baaeb969ef388268786d187d6f4c8bef7d
+  M1_1b_current_authority: accepted
+  M1_1b_closed_on: "2026-08-08"
+  M1_1b_closure_deadline: satisfied
+  M1_2_authorized: read_only_catalog_and_seam_matrix_only
+  M1_3_authorized: completed_blocked
+  resolved_debt:
+    - exact_inventory_has_zero_prefix_exceptions
+    - generic_bash_parser_removed
+    - mandatory_fifo_test_executes_without_skip
+  acceptance_evidence:
+    focused_tests_passed: 29
+    focused_tests_skipped: 0
+    full_tests_passed: 60
+    full_tests_skipped: 0
+    real_probe_two_run_determinism: pass
+    committed_evidence_exact_match: pass
+    process_survivors: 0
+    temporary_root_survivors: 0
+
+m1_2_independent_review:
+  implementation_head: f9c3460a25cf5b9b97c329fab47817d678652f54
+  implementer_status: pass_task_complete_gate_insufficient
+  independent_status: accepted_provider_seam_insufficient
+  reviewed_on: "2026-08-07"
+  review_path: docs/releases/v0.22.0/M1_2_INDEPENDENT_REVIEW.md
+  tools_evaluated: 24
+  capability_total: 55
+  supported: 0
+  partial: 49
+  missing: 6
+  unknown: 0
+  catalog_commands: 220
+  catalog_two_run_byte_identical: true
+  catalog_command_paths_verified: 49
+  catalog_unique_command_paths_verified: 45
+  catalog_flag_mismatches: 0
+  catalog_structured_result_effect_timeout_recovery_keys: 0
+  cleanup_wait_observed_ms: 100
+  process_survivors: 0
+  temporary_root_survivors: 0
+  gate: INSUFFICIENT
+  next_action: completed_M1_3_blocked_and_M1_4_d1_blocked
+  M1_3_authorized: completed_blocked
+
+m0_provider_seam_amendment:
+  status: accepted
+  accepted_on: "2026-08-07"
+  accepted_by: Christopher_DarkArty07
+  record: docs/releases/v0.22.0/M0_PROVIDER_SEAM_AMENDMENT.md
+  aether_owned_version_pinned_schemas: allowed_after_separate_fixture_authorization
+  public_command_composition: allowed_after_separate_composition_acceptance
+  private_state_gui_shell_fallback: forbidden
+  current_authorized_task: none_awaiting_owner_decision
+  canonical_manifest: docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json
+  canonical_manifest_sha256: 186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe
+  M1_3_authorized: completed_blocked
+  M1_4_authorized: completed_d1_blocked
+  M2_authorized: false_pending_owner_decision_after_M1_4
+
+m1_3_lifecycle_closure:
+  closed_on: "2026-08-08"
+  status: blocked
+  technical_commit: 7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239
+  technical_tree: 3974b33e096cde76c78f7427ca57b34fa9fff278
+  acceptance: docs/releases/v0.22.0/M1_3_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M1_3_LIFECYCLE_EVIDENCE.json
+  evidence_sha256: 4b0178b1951b1549591b28f28182b49e1f12ec05b8c2246ba4cff1b39bafdff5
+  final_probes: 2
+  final_probe_status: blocked
+  final_probe_code: ERR_RUNTIME_START_SHAPE
+  final_probe_stage: cold_start
+  process_survivors: 0
+  listener_survivors: 0
+  mount_survivors: 0
+  temporary_root_survivors: 0
+  protected_state_unchanged: true
+  proven_compositions: 0
+  unsupported_compositions: 6
+  lifecycle_accepted: false
+  D1_ready: false
+
+m1_4_provider_decision:
+  closed_on: "2026-08-08"
+  status: closed
+  record: docs/releases/v0.22.0/M1_4_PROVIDER_DECISION.md
+  technical_verdict: D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT
+  D1_ready: false
+  D1_granted: false
+  adapter_contract_frozen: false
+  adapter_implementation_authorized: false
+  next_milestone_authorized: false
+  owner_decision_required: true
+  owner_options:
+    - require_official_orca_contract_additions
+    - rescope_product_contract
+    - qualify_different_provider_boundary
+
+m2_1a_acceptance:
+  accepted_on: "2026-08-07"
+  initial_implementation_commit: cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d
+  corrected_code_head: f31c6b610f9cbd0de38a617187d5497c194f9105
+  release_boundary_correction: pass
+  handoff: docs/releases/v0.22.0/M2_1A_SESSION_HANDOFF.md
+  draft_pr: 163
+  draft_pr_url: https://github.com/DarkArty07/Aether-Agents/pull/163
+  server_name: aether-mcp
+  package_version: 0.22.0.dev0
+  product_protocol: aether.mcp/v1alpha1
+  sdk_version: 1.28.1
+  negotiated_mcp_protocol: "2025-11-25"
+  registered_tools: 0
+  registration: absent
+  activation: absent
+  orca_calls: 0
+  evidence:
+    focused_tests_passed: 17
+    full_tests_passed: 80
+    full_tests_skipped: 1
+    ruff: pass
+    compileall: pass
+    mcp_smoke: pass
+    secret_scan_findings: 0
+    process_survivors: 0
+  clean_checkout_integration:
+    initial_github_run: 31224905578
+    initial_python_3_11: failed_missing_mcp_dependency
+    initial_python_3_12: failed_missing_mcp_dependency
+    root_causes:
+      - workflows_did_not_install_declared_project_distribution
+      - M1_qualification_test_import_collided_with_new_production_package_namespace
+      - source_inventory_rejected_standard_noneditable_build_egg_info
+    correction_commit: 5d0e20df2f68df27e036d0e47410e238d753782e
+    correction_scope:
+      - .github/workflows/test.yml
+      - .github/workflows/release.yml
+      - tests/aether_mcp/provider/test_qualification.py
+      - tests/test_post_olympus_residue_retirement.py
+    clean_environment_full_tests_passed: 81
+    clean_environment_full_tests_skipped: 1
+    clean_environment_ruff: pass
+    portable_gate_correction_commit: 894bbaebefbe3636fca4dddb421eabc30f0df9af
+    product_assets_correction_commit: eb166c8cf988e55c32c565c932a6b33212082244
+    local_pinned_fixture_final_tests_passed: 82
+    local_pinned_fixture_final_tests_skipped: 1
+    clean_runner_without_orca_tests_passed: 30
+    clean_runner_without_orca_tests_skipped: 52
+    github_green_code_head: eb166c8cf988e55c32c565c932a6b33212082244
+    github_green_run: 31226110759
+    github_python_3_11: pass
+    github_python_3_12: pass
+    github_product_assets: pass
+    github_policy: pass
+    github_pull_request_target: pass
+    generated_artifact_survivors: 0
+  next_gate: owner_provider_decision_after_M1_4
+  M1_1b_status: accepted
+  D1_granted: false
+  M2_2_authorized: completed_provider_independent_only
+
+m2_2_acceptance:
+  accepted_on: "2026-08-08"
+  task: docs/external-agent/TASK-M2.2.md
+  acceptance: docs/releases/v0.22.0/M2_2_ACCEPTANCE.md
+  technical_commit: 59989d63f01930485715499156000d9fedfff037
+  protocol: aether.mcp/v1alpha1
+  schema_snapshot: schemas/aether-mcp/v1alpha1/bundle.json
+  schema_snapshot_sha256: e7f39a76ac4795ade2ec0a15bf64b4cab2233b912cf2285b0ce76d2805a2e605
+  schema_snapshot_bytes: 94139
+  tool_schemas: 24
+  stable_error_codes: 50
+  callable_tools: 0
+  registered_tools: 0
+  focused_tests_passed: 22
+  full_tests_passed: 81
+  full_tests_skipped: 0
+  ruff: pass
+  compileall: pass
+  schema_drift: pass
+  mcp_smoke: pass
+  workflow_yaml: pass
+  tracked_source_inventory: pass
+  M1_1b_evidence_unchanged: pass
+  provider_effects: 0
+  network_effects: 0
+  storage_effects: 0
+  activation: absent
+  next_milestone_authorized: none_awaiting_owner_provider_decision
+  github_acceptance_head: b092abf044cd79f51748a950c2f4bed934a69f40
+  github_required_checks_passed: 5
+  github_required_checks_failed: 0
+  detached_clean_install_tests_passed: 81
+  detached_clean_install_tests_skipped: 0
+  detached_tree_gate: pass
+  clean_install_provenance: venv_site_packages
+  technical_verification_at: "2026-08-08T05:25:03-06:00"
+
+release_lineage:
+  latest_official_release: "0.20.0"
+  latest_official_tag_commit: 39e9e2ac80f0bd9c66f376d3196c93f8967d5d01
+  canonical_main_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  analysis_worktree_branch: docs/canonical-product-documentation
+  analysis_worktree_commit: a88b5ccefe317b5794a445c117b89b570f7845c4
+  analysis_worktree_is_behind_main: true
+  v0_21_state: unreleased_candidate_isolation_work_integrated_on_main
+  version_order_reconciliation_required_before_release: true
+  candidate_worktree:
+    branch: feature/v0.22.0-orca-transition
+    path: /home/darkarty/Desktop/agentes/aether/.aether/worktrees/feature-v0.22.0-orca-transition
+    prior_closeout_removed_after_a446c707: true
+    recreated_for_authorized_long_horizon_on: "2026-08-08"
+    close_after_long_horizon_push: true
+    durable_worktree_required_after_closeout: false
+    closeout_disposition: remove_after_terminal_documentation_ci
+    path_is_historical_after_closeout: true
+    remote_branch: origin/feature/v0.22.0-orca-transition
+    draft_pr: 163
+    base_commit: 2b326f05a36cbb77a9bf9475ef914be6f49d886d
+    base_ref: origin/main
+    managed_by: hermes_git_worktree
+    setup: skipped_for_isolation_only
+
+baseline:
+  source_tree: main@2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  olympus_python_modules: 45
+  olympus_source_lines: 19589
+  olympus_nonblank_source_lines: 17502
+  python_consumer_files_outside_package: 57
+  test_files_importing_olympus: 43
+  test_functions_in_those_files: 588
+  areas:
+    coordination:
+      modules: 21
+      lines: 10853
+    lifecycle_server:
+      modules: 7
+      lines: 4729
+    self_improvement:
+      modules: 7
+      lines: 2023
+    continuity:
+      modules: 3
+      lines: 1291
+    cli:
+      modules: 5
+      lines: 378
+    observability_hooks:
+      modules: 2
+      lines: 315
+  prior_maintenance_reduction:
+    commit: 9bf3eb0
+    files_changed: 84
+    deleted_lines: 12446
+    note: Retired unconsumed coordination experiments before this baseline.
+
+analysis_verification:
+  yaml_manifest: pass
+  module_inventory:
+    result: pass
+    modules_matched: 45
+    lines_matched: 19589
+    classification_counts_matched: true
+  orca_appimage_checksum: pass
+  decision_index_links: pass
+  canonical_main_test_suite:
+    command: >-
+      PYTHONPATH=/tmp/aether-main-v022-baseline/src
+      home/.venv-hermes/bin/python -m pytest -q
+    result: pass
+    passed: 826
+    failed: 0
+    duration_seconds: 28.12
+    source_snapshot: main@2b326f05a36cbb77a9bf9475ef914be6f49d886d
+  release_governance_preflight:
+    command: python3 scripts/check_release_governance.py preflight-next-version --version 0.22.0
+    branch: main
+    synchronized_with_origin_main: true
+    result: pass
+  orca_candidate_isolation:
+    runtime_mode: isolated_headless
+    pairing: disabled
+    remote_environments: 0
+    automations: 0
+    managed_accounts: 0
+    worktree_created_from: origin/main
+    branch_convention_verified: feature/v0.22.0-orca-transition
+  candidate_executable_baseline:
+    initial_result:
+      passed: 825
+      failed: 1
+      duration_seconds: 28.02
+      failure: tests/coordination/test_harmonia_lease_lifecycle.py::test_same_close_command_converges_across_independent_sqlite_connections
+      error: "ValueError: INVALID_INPUT"
+    correction:
+      github_issue: 148
+      continuity_issue: 61
+      commit: a67f7ca
+      scope: src/olympus_v3/coordination/kernel_runtime.py
+      reason: baseline_compatibility_fix_only
+    post_correction:
+      exact_regression: 1_passed
+      repeated_race: 10_of_10_passed
+      lifecycle_file: 64_passed
+      full_suite: 826_passed
+      full_suite_duration_seconds: 26.78
+      make_test:
+        checkpoint: d485bd3a85b5d118b8889690631e82adb79560a6
+        passed: 826
+        failed: 0
+        duration_seconds: 29.14
+
+orca:
+  cli_command: /home/darkarty/.local/bin/orca-ide
+  appimage: /home/darkarty/.local/opt/orca/orca-linux.AppImage
+  appimage_sha256: 813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33
+  appimage_size_bytes: 203385690
+  verified_app_version: 1.4.167
+  runtime_status_during_candidate_isolation: direct_launch_reached_ready_then_gpu_process_failed_repeatedly
+  orchestration_feature_status: command_contract_available
+  adoption_verdict: blocked_pending_reproducible_bootstrap_and_isolation
+  source_of_cli_contract:
+    - live_orca_cli_skill_orchestration
+    - live_orca_cli_skill_orca_cli
+  capabilities_verified_from_live_cli_contract:
+    - runs
+    - tasks
+    - dispatches
+    - supervised_workers
+    - durable_messages
+    - questions_and_replies
+    - worktrees
+    - terminals
+    - dispatch_scoped_completion
+    - recovery_and_takeover
+    - native_hermes_tui_agent
+    - hermes_query_startup
+    - managed_hermes_status_hooks
+  hermes_integration_research:
+    researched_on: "2026-08-04"
+    design: docs/releases/v0.22.0/ORCA_SUPERVISED_SESSIONS_DESIGN.md
+    installed_hermes_version: "0.19.1"
+    profile_selection: explicit_process_hermes_home_required
+    composed_worker_start_supports_per_dispatch_profile_env: false
+    native_hermes_cold_resume_verified: false
+    exact_hermes_transcript_source_verified: false
+    managed_status_hook_privacy_gate_required: true
+    aether_worktree_identity_extension_required: true
+    substrate_neutral_evidence_identity_required: true
+  not_delegated_to_orca:
+    - product_intent
+    - task_contract_meaning
+    - daimon_selection
+    - protected_effect_authority
+    - semantic_acceptance
+    - project_continuity
+    - ariadna_curation
+    - release_authority
+
+classification:
+  allowed:
+    - PRESERVE
+    - REWRITE
+    - REPLACE
+    - RETIRE
+    - BLOCKED
+  inventory: docs/releases/v0.22.0/OLYMPUS_RETIREMENT_INVENTORY.md
+  equivalence: docs/releases/v0.22.0/ORCA_EQUIVALENCE_MATRIX.md
+  supervised_sessions_design: docs/releases/v0.22.0/ORCA_SUPERVISED_SESSIONS_DESIGN.md
+
+state_policy:
+  preserve_in_place:
+    - .aether/aether.db
+    - .aether/CONTEXT.md
+    - .aether/self_improvement.db
+  inspect_then_archive_or_retire:
+    - .aether/.consulting/consulting.db
+  consulting_store_probe:
+    result: absent
+    mutation_performed: false
+  freeze_read_only_after_cutover:
+    - $AETHER_HOME/.olympus/olympus_v3.db
+    - $AETHER_HOME/.olympus/projects/*/coordination-v0.19.1.sqlite
+  remove_only_after_zero_live_consumers:
+    - $HERMES_HOME/.olympus_session.*
+    - $HERMES_HOME/.olympus_db_path.*
+    - $HERMES_HOME/.aether_home.*
+
+known_blockers:
+  - id: continuity_project_root_drift
+    github_issue: 147
+    observation: >-
+      aether_status resolves the current project database but hot_state.project_root
+      still names /home/arty/Escritorio/agentes/aether, which does not exist.
+    required_resolution: >-
+      Use a supported, tested reconciliation that preserves continuity history,
+      or fail closed without treating the stale value as canonical. Do not edit
+      aether.db or CONTEXT.md manually.
+  - id: isolated_orca_continuity_stale_bootstrap
+    github_issue: 150
+    observation: >-
+      The isolated Orca instance did not survive `orca open`; a direct AppImage
+      launch reached runtime/graph ready but its GPU process failed six times and
+      Electron terminated it as unusable. The diagnostic instance is stopped.
+    impact: >-
+      Orca card synchronization is unavailable; Git history, the candidate
+      worktree, tests and product runtime remain unaffected.
+  - id: whole_repository_ruff_debt
+    github_issue: 149
+    observation: >-
+      Whole-repository Ruff reports 134 pre-existing errors concentrated in
+      unchanged skill scripts. The complete modified Python tooling and test
+      scope passes Ruff; the candidate has no production Python source tree.
+    impact: >-
+      The global Ruff gate remains red independently of Olympus retirement;
+      the cleanup cut does not mix unrelated skill-script rewrites.
+
+addressed_candidate_defects:
+  - id: concurrent_close_request_convergence
+    github_issue: 148
+    continuity_issue: 61
+    candidate_commit: a67f7ca
+    disposition: corrected_and_locally_verified_pending_integration
+
+retirement_cuts:
+  R1_dead_consulting_workflow:
+    status: locally_verified
+    deleted_modules:
+      - src/olympus_v3/consult_action.py
+      - src/olympus_v3/consulting_db.py
+    deleted_source_lines: 1373
+    remaining_olympus_modules: 43
+    remaining_olympus_source_lines: 18234
+    live_importers_before_deletion: 0
+    registered_consult_route_before_deletion: false
+    consulting_store_before_deletion: absent
+    removal_contract_red: 2_failed
+    focused_green: 13_passed
+    full_suite_green: 828_passed
+    full_suite_duration_seconds: 28.26
+    ruff: pass
+    compileall: pass
+    fresh_server_import: pass
+    residual_import_scan: pass
+  R2_harmonia_public_runtime_wrapper:
+    status: locally_verified_integration_blocked
+    deleted_modules:
+      - src/olympus_v3/coordination/harmonia_contract.py
+      - src/olympus_v3/coordination/harmonia_runtime.py
+      - src/olympus_v3/coordination/harmonia_selection.py
+      - src/olympus_v3/coordination/harmonia_service.py
+      - src/olympus_v3/coordination/harmonia_store.py
+      - src/olympus_v3/coordination/selection_commit.py
+    deleted_module_source_lines: 2074
+    deleted_demo: scripts/run_harmonia_bounded_demo.py
+    deleted_demo_lines: 268
+    deleted_wrapper_test_files: 11
+    retained_kernel_tests_in_mixed_lifecycle_file: 41
+    remaining_olympus_modules: 37
+    remaining_olympus_source_lines: 15991
+    registered_mcp_tools: 5
+    removal_contract_red: 8_failed_64_passed
+    focused_green: 128_passed
+    full_suite_green: 649_passed
+    full_suite_duration_seconds: 17.94
+    targeted_ruff: pass
+    compileall: pass
+    sdist_and_wheel_build: pass
+    wheel_retired_module_absence: pass
+    residual_import_scan: pass_zero_importers
+    persistent_store_mutation: none
+    integration_prerequisites:
+      - zero_live_harmonia_runtime
+      - fingerprint_and_freeze_historical_coordination_stores_read_only
+  R3a_aether_native_authority_extraction:
+    status: locally_verified
+    moved_without_legacy_copies:
+      - principal.py -> src/aether_agents/identity.py
+      - contracts.py -> src/aether_agents/contracts/__init__.py
+      - budget.py -> src/aether_agents/contracts/budget.py
+      - evidence.py -> src/aether_agents/evidence/__init__.py
+      - effects.py -> src/aether_agents/effects/__init__.py
+      - review.py -> src/aether_agents/review/__init__.py
+      - closure.py -> src/aether_agents/review/closure.py
+    moved_semantic_source_lines: 2818
+    remaining_olympus_modules: 30
+    remaining_olympus_source_lines: 13183
+    aether_native_modules: 8
+    aether_native_source_lines: 2863
+    substrate_imports_from_aether_native: 0
+    removal_contract_red: 4_failed
+    semantic_focused_green: 143_passed
+    coordination_regression_green: 407_passed
+    full_suite_green: 653_passed
+    full_suite_duration_seconds: 17.92
+    targeted_ruff: pass
+    compileall: pass
+    residual_legacy_semantic_files: 0
+    compatibility_shim: src/olympus_v3/coordination/__init__.py
+    shim_deletion_cut: R3b
+    shim_disposition: deleted_in_R3b
+  R3b_generic_olympus_kernel_lifecycle:
+    status: locally_verified
+    deleted_modules:
+      - src/olympus_v3/coordination/__init__.py
+      - src/olympus_v3/coordination/kernel_dispatcher.py
+      - src/olympus_v3/coordination/kernel_runtime.py
+      - src/olympus_v3/coordination/leases.py
+      - src/olympus_v3/coordination/ledger.py
+      - src/olympus_v3/coordination/olympus_adapter.py
+      - src/olympus_v3/coordination/projections.py
+      - src/olympus_v3/coordination/workflow.py
+    deleted_source_lines: 5985
+    deleted_implementation_test_files: 17
+    deleted_implementation_test_lines: 5249
+    replacement_aether_budget_tests: 13
+    kernel_removal_contract_tests: 4
+    remaining_olympus_modules: 22
+    remaining_olympus_source_lines: 7198
+    aether_native_modules: 8
+    aether_native_source_lines: 2863
+    removal_contract_red: 2_failed_2_passed
+    focused_green: 160_passed
+    full_suite_green: 406_passed
+    full_suite_duration_seconds: 5.09
+    targeted_ruff: pass
+    compileall: pass
+    sdist_and_wheel_build: pass
+    wheel_coordination_package_absence: pass
+    residual_coordination_import_scan: pass_zero_importers
+    coordination_package_importable: false
+    persistent_store_mutation: none
+  M1_1a_aether_native_identity_boundary:
+    status: locally_verified
+    boundary: src/aether_agents/identity.py
+    project_identity:
+      - existing_absolute_canonical_root
+      - symlink_alias_convergence
+      - optional_repository_requirement
+      - path_digest_bound_dto
+      - project_allowlist
+    profile_identity:
+      - existing_absolute_canonical_home
+      - separate_profile_digest
+      - path_digest_bound_dto
+    execution_domains:
+      - live
+      - synthetic
+    continuity_hook_behavior:
+      stale_or_mismatched_recorded_root: preserved_but_not_used_as_authority
+      matching_alias: canonicalized
+      file_path_relativization: active_root_only
+    hot_state_manual_mutation: none
+    contract_red: 7_failed
+    forged_dto_red: 1_failed
+    identity_green: 8_passed
+    continuity_regression_green: 94_passed
+    full_suite_green: 414_passed
+    full_suite_duration_seconds: 4.15
+    targeted_ruff: pass
+    compileall: pass
+    completed_by: M1_1b_aether_native_continuity
+  M1_1b_aether_native_continuity:
+    status: locally_verified
+    moved_without_legacy_copies:
+      - src/olympus_v3/aether_db.py -> src/aether_agents/continuity/database.py
+      - src/olympus_v3/aether_hooks/hooks.py -> src/aether_agents/continuity/hooks.py
+      - src/olympus_v3/aether_hooks/__init__.py -> src/aether_agents/continuity/__init__.py
+    moved_source_lines: 1328
+    removed_olympus_pid_and_db_coupling_lines: 60
+    profile_plugin_wrappers_migrated: 6
+    session_identity: explicit_hook_session_id
+    result_summary_source: explicit_hook_event_only
+    olympus_db_reads_for_continuity: 0
+    legacy_continuity_source_files: 0
+    database_schema: preserved
+    database_path: preserved_at_project_dot_aether_aether_db
+    context_md_semantics: preserved
+    byte_preserving_existing_database_read: pass
+    persistent_store_mutation: none
+    contract_red: 4_failed
+    continuity_focused_green: 91_passed
+    server_and_native_boundary_green: 36_passed
+    full_suite_green: 417_passed
+    full_suite_duration_seconds: 5.54
+    targeted_ruff: pass
+    compileall: pass
+    remaining_olympus_modules: 19
+    remaining_olympus_source_lines: 5908
+    aether_native_modules: 11
+    aether_native_source_lines: 4295
+  M1_2_aether_native_self_improvement:
+    status: locally_verified
+    superseded_by: R4_1_v020_self_improvement_bootstrap_retirement
+    moved_without_legacy_copies:
+      - src/olympus_v3/self_improvement/__init__.py -> src/aether_agents/self_improvement/__init__.py
+      - src/olympus_v3/self_improvement/causality.py -> src/aether_agents/self_improvement/causality.py
+      - src/olympus_v3/self_improvement/evidence.py -> src/aether_agents/self_improvement/evidence.py
+      - src/olympus_v3/self_improvement/hooks.py -> src/aether_agents/self_improvement/hooks.py
+      - src/olympus_v3/self_improvement/ledger.py -> src/aether_agents/self_improvement/ledger.py
+      - src/olympus_v3/self_improvement/manifest.py -> src/aether_agents/self_improvement/manifest.py
+      - src/olympus_v3/self_improvement/promotion.py -> src/aether_agents/self_improvement/promotion.py
+    moved_source_lines: 2043
+    legacy_self_improvement_source_files: 0
+    plugin_wrapper_at_extraction: home/plugins/aether-self-improvement/__init__.py
+    plugin_later_retired: true
+    plugin_enabled_by_default_at_extraction: false
+    ledger_schema_version: 5
+    byte_preserving_existing_ledger_read: pass
+    automatic_activation: false
+    automatic_promotion: false
+    persistent_store_mutation: none
+    contract_red: 3_failed
+    focused_green: 87_passed
+    full_suite_green: 420_passed
+    full_suite_duration_seconds: 4.29
+    targeted_ruff: pass
+    compileall: pass
+    remaining_olympus_modules: 12
+    remaining_olympus_source_lines: 3865
+    aether_native_modules: 18
+    aether_native_source_lines: 6338
+  R4_final_olympus_executable_retirement:
+    status: locally_verified_source_retired
+    deleted_remaining_modules: 12
+    deleted_remaining_source_lines: 3865
+    remaining_olympus_modules: 0
+    remaining_olympus_source_lines: 0
+    deleted_surfaces:
+      - ACPManager
+      - lifecycle_database
+      - server_and_registered_mcp_tools
+      - configuration_loader
+      - setup_cli_and_wrappers
+      - observability_hooks
+      - six_profile_plugin_wrappers
+      - global_mcp_template
+      - package_entry_points
+    removed_capabilities:
+      - talk_to
+      - discover
+      - aether_status
+      - aether_update
+      - aether_curate
+    replacement_runtime_present: false
+    hidden_fallback_present: false
+    distribution_name: aether-agents
+    distribution_version: "0.22.0"
+    registered_mcp_tools: 0
+    removed_runtime_dependencies:
+      - mcp
+      - agent-client-protocol
+      - langgraph
+      - langgraph-checkpoint-sqlite
+      - langchain-core
+      - graphifyy
+    aether_native_modules: 18
+    aether_native_source_lines: 6242
+    historical_store_mutation: none
+    production_activation: false
+    removal_contract_red: 4_failed
+    focused_green: 104_passed
+    full_suite: 273_passed
+    full_suite_duration_seconds: 1.82
+    targeted_ruff: pass
+    compileall: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    executable_residual_scan: pass_zero
+    wheel:
+      result: pass
+      entries: 23
+      retired_entries: 0
+      console_entry_points: 0
+    sdist:
+      result: pass
+      entries: 52
+      retired_source_entries: 0
+    clean_wheel_install: pass
+    isolated_setup:
+      result: pass
+      idempotent_rerun: pass
+      ambient_pythonpath_isolation: pass
+      generated_configs_retired_references: 0
+    isolated_wrapper_runtime: pass
+    isolated_doctor: pass
+  R4_1_v020_self_improvement_bootstrap_retirement:
+    status: locally_verified
+    deleted_source:
+      - src/aether_agents/self_improvement/evidence.py
+      - src/aether_agents/self_improvement/hooks.py
+      - src/aether_agents/self_improvement/manifest.py
+    deleted_plugin: home/plugins/aether-self-improvement
+    removed_runtime_dependency: pyyaml
+    deleted_obsolete_test_suites:
+      - tests/test_self_improvement.py
+      - tests/test_self_improvement_contract.py
+    replacement_runtime_present: false
+    replacement_instrumentation_present: false
+    preserved_primitives:
+      - src/aether_agents/self_improvement/ledger.py
+      - src/aether_agents/self_improvement/causality.py
+      - src/aether_agents/self_improvement/promotion.py
+    preserved_store: .aether/self_improvement.db
+    ledger_schema_version: 5
+    historical_v020_evidence_modified: false
+    active_cycle_manifest: none
+    automatic_activation: false
+    automatic_project_writes: false
+    aether_native_modules: 15
+    aether_native_source_lines: 5500
+    inert_self_improvement_modules: 4
+    inert_self_improvement_source_lines: 1205
+    removal_contract_red: 2_failed
+    focused_green: 36_passed
+    full_suite: 228_passed
+    full_suite_duration_seconds: 1.16
+    targeted_ruff: pass
+    compileall: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    retired_bootstrap_residual_scan: pass_zero
+    wheel:
+      result: pass
+      entries: 20
+      retired_bootstrap_entries: 0
+    sdist:
+      result: pass
+      entries: 48
+      retired_bootstrap_entries: 0
+    clean_wheel_install: pass
+    isolated_setup: pass
+    isolated_doctor: pass
+  post_olympus_residue_cleanup:
+    status: locally_verified
+    issues:
+      - 154
+      - 155
+      - 156
+      - 157
+      - 158
+    removed_source_surfaces:
+      - honcho_submodule
+      - honcho_compose_stack
+      - honcho_setup_script_and_make_targets
+      - honcho_provider_configuration
+      - honcho_active_setup_and_skill_guidance
+      - graphify_mcp_template
+      - graphify_provider_file
+      - unresolved_python_bin_placeholder
+    corrected_setup_contracts:
+      - root_hermes_config_generation
+      - seven_config_idempotence
+      - candidate_local_doctor_binary
+      - inherited_python_source_override_isolation
+    preserved:
+      - historical_decisions
+      - historical_release_and_benchmark_evidence
+      - historical_local_data_ignore_rules
+      - acp_v1_evidence_decoder
+      - local_services_and_data
+    replacement_runtime_present: false
+    retirement_contract_red: 8_failed
+    root_config_regression_red: 1_failed
+    doctor_precedence_regression_red: 1_failed
+    doctor_environment_regression_red: 1_failed
+    focused_green: 19_passed
+    full_suite: 239_passed
+    targeted_ruff: pass
+    compileall: pass
+    yaml_templates: 7_passed
+    shell_parse: pass
+    active_residual_scan: pass_zero
+    markdown_links:
+      checked: 48
+      broken: 0
+    wheel:
+      result: pass
+      entries: 20
+      retired_executable_entries: 0
+      console_entry_points: 0
+    sdist:
+      result: pass
+      entries: 49
+      retired_executable_entries: 0
+      intentional_retirement_contract_tests: 2
+    clean_wheel_install: pass
+    isolated_setup:
+      result: pass
+      passes: 2
+      generated_configs: 7
+      idempotent_configs: 7
+    isolated_doctor:
+      result: pass
+      candidate_local_hermes: pass
+      ambient_source_override_isolation: pass
+    historical_store_mutation: none
+    runtime_service_or_credential_effects: none
+  R4_2_disconnected_aether_native_core_retirement:
+    status: locally_verified
+    governing_decision: docs/decisions/PDR-0012-hermes-orca-swarm-boundary.md
+    github_issue: 160
+    observed_red: 5_failed_8_passed
+    deleted_native_python_modules: 15
+    deleted_native_source_lines: 5500
+    deleted_native_nonblank_source_lines: 4802
+    deleted_profile_plugin_files: 12
+    deleted_obsolete_test_files: 18
+    deleted_obsolete_test_lines: 3438
+    deleted_residual_dependency_file: src/requirements.txt
+    removed_runtime_dependencies:
+      - aiosqlite
+      - langgraph
+      - langchain-core
+    python_distribution_present: false
+    build_backend_present: false
+    editable_aether_install_present: false
+    source_directory_present: false
+    profile_continuity_plugins_present: 0
+    registered_aether_mcp_tools: 0
+    replacement_runtime_present: false
+    orca_activated: false
+    focused_green: 25_passed
+    full_suite: 25_passed
+    full_suite_duration_seconds: 0.37
+    targeted_ruff: pass
+    compileall_tooling_and_tests: pass
+    yaml_and_shell_parse: pass
+    release_governance_policy: pass
+    executable_residual_scan: pass_zero
+    current_markdown_links:
+      files: 32
+      checked: 71
+      broken: 0
+    isolated_setup:
+      result: pass
+      passes: 2
+      generated_configs: 7
+      placeholders: 0
+      profile_plugins: 0
+      idempotent_rerun: pass
+    isolated_wrapper_runtime: pass
+    isolated_doctor: pass
+    protected_aether_db:
+      path: .aether/aether.db
+      size_bytes: 53248
+      sha256_before: 30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc
+      sha256_after: 30799762ec52a33ec5344987ef8b949581e1781eb3882f1499e584359222a9bc
+      mutation: none
+    runtime_service_or_credential_effects: none
+
+milestones:
+  historical_native_core_retirement: locally_complete
+  M0_final_design_and_traceable_use_cases: accepted
+  M1_orca_provider_qualification:
+    status: closed_d1_blocked_provider_seam_insufficient
+    active_package: none_stop_boundary_reached
+    M1_1a_exact_identity_and_catalog: accepted
+    M1_1b_reusable_isolation_qualifier: accepted
+    M1_2_structured_provider_seam_matrix: accepted_provider_seam_insufficient
+    M1_3_isolated_lifecycle_and_rollback: closed_blocked_ERR_RUNTIME_START_SHAPE
+    M1_4_provider_decision: closed_D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT
+  M2_aether_mcp_foundation: M2_1a_and_M2_2_accepted_M2_3_not_authorized
+  M3_lifecycle_through_aether_mcp: blocked_pending_future_D1_and_M2
+  M4_one_synthetic_worker: blocked_pending_M3
+  M5_two_worker_real_swarm: blocked_pending_M4_and_D3_for_model_run
+  M6_stable_roster_qualification: blocked_pending_M5
+  M7_learning_episode_and_dataset_qualification: blocked_pending_M6_and_D2
+  M8_verifier_and_ariadna_decision: blocked_pending_M7
+  M9_productization: blocked_pending_M8
+  M10_controlled_use_case_evaluation: blocked_pending_M9_and_D3
+  M11_exact_candidate_acceptance_and_release: blocked_pending_M10_and_D5
+  M12_persistent_activation: blocked_pending_release_and_D6
+
+authorization:
+  analysis_and_roadmap: authorized
+  M0_design_acceptance: granted_2026_08_06
+  M1_1_repository_implementation: complete
+  M1_2_repository_implementation: complete
+  M1_3_orca_runtime_operation: complete_no_further_operation_authorized
+  M1_4_provider_decision: complete_D1_blocked
+  D1: not_granted
+  M2_aether_mcp_source_implementation: no_new_scope_authorized
+  external_agent_branch_local_atomic_commit_for_active_task: no_active_task
+  external_agent_push_merge_rebase_amend_tag_release: forbidden
+  orca_runtime_start: not_authorized_after_M1_3_closure
+  worker_or_model_execution: not_authorized
+  dependency_installation: not_authorized
+  mcp_registration_or_activation: not_authorized
+  profile_or_participant_mutation: not_authorized
+  destructive_data_migration: not_authorized
+  historical_store_mutation: not_authorized
+  production_activation: not_authorized
+  deployment: not_authorized
+  credential_creation: not_authorized
+  spending: not_authorized
+  force_push: forbidden
+
+next_action:
+  milestone: owner_provider_decision_after_M1_4
+  executor: Christopher_DarkArty07
+  acceptance_owner: Christopher_DarkArty07
+  requirement: >-
+    Decide whether to require official Orca structured contract additions,
+    re-scope the product contract, or qualify a different provider boundary.
+    No implementation milestone, adapter, M2.3, M3, registration, activation,
+    merge, tag or Release is authorized while this decision is pending.

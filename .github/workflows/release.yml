@@ -39,15 +39,35 @@ jobs:
       - name: Install release dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install build ruff
+          pip install .
+          pip install pytest pyyaml ruff
 
       - name: Verify release candidate
         run: |
-          ruff check src/ tests/ scripts/check_release_governance.py
+          ruff check tests/ scripts/check_release_governance.py
           pytest tests/ -q
-          python -m compileall -q src
-          python -m build
+          python -m compileall -q tests scripts/check_release_governance.py
+          bash -n scripts/setup.sh scripts/update.sh scripts/start-gateway.sh
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import yaml
+
+          root = Path('.')
+          templates = [root / 'home/config.yaml.template', *sorted((root / 'home/profiles').glob('*/config.yaml.template'))]
+          assert len(templates) == 7
+          for path in templates:
+              yaml.safe_load(path.read_text())
+          source_files = set(subprocess.check_output(['git', 'ls-files', 'src'], text=True).splitlines())
+          assert source_files == {
+              'src/aether_mcp/__init__.py',
+              'src/aether_mcp/__main__.py',
+              'src/aether_mcp/protocol.py',
+              'src/aether_mcp/server.py',
+          }
+          assert not list((root / 'home/profiles').glob('*/plugins/aether'))
+          print('release_assets=PASS')
+          PY
 
       - name: Create or reconcile GitHub Release
         run: |
@@ -56,9 +76,8 @@ jobs:
           TITLE="$(head -n 1 "$NOTES" | sed 's/^# //')"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --title "$TITLE" --notes-file "$NOTES"
-            gh release upload "$RELEASE_TAG" dist/* --clobber
           else
-            gh release create "$RELEASE_TAG" dist/* \
+            gh release create "$RELEASE_TAG" \
               --verify-tag \
               --notes-file "$NOTES" \
               --title "$TITLE"

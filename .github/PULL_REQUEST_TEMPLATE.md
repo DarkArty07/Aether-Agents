@@ -15,7 +15,7 @@ Fixes #<!-- issue number -->
 ## Testing
 - [ ] All existing tests pass (`pytest`)
 - [ ] New tests added for new functionality
-- [ ] Linter passes (`ruff check src/`)
+- [ ] Linter passes (`ruff check tests/ scripts/check_release_governance.py`)
 
 ## Checklist
 - [ ] One logical change per commit

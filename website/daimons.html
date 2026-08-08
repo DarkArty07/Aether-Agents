@@ -56,17 +56,17 @@
                             <span class="daimon-name">Hermes</span>
                             <span class="daimon-tag tag-hermes">Orchestrator</span>
                         </div>
-                        <p>The only agent the user speaks to directly. Decomposes tasks, routes to the right Daimon, and synthesizes results. Owns <code>.aether/.hermes/</code>.</p>
+                        <p>The user-facing technical lead. Interprets intent, implements bounded work, and owns synthesis and acceptance. Specialist execution is unavailable in the current candidate.</p>
                         <div class="daimon-detail">
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Primary model:</span> <span>gpt-5.6-sol via openai-codex</span></div>
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>talk_to, discover, aether_status, aether_update, aether_curate, memory</span></div>
-                            <div class="daimon-detail-row"><span class="daimon-detail-label">SOUL.md Limits:</span> <span>No implement code · No direct web search · No skip session close</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Key Tools:</span> <span>file, terminal, web, memory, skills</span></div>
+                            <div class="daimon-detail-row"><span class="daimon-detail-label">Authority:</span> <span>Direct bounded implementation · No unauthorized external effects</span></div>
                             <div class="daimon-detail-row"><span class="daimon-detail-label">Workflows:</span> <span>project-init, feature, bug-fix, security-review, research, refactor</span></div>
                         </div>
                         <div class="daimon-rules">
-                            <span class="rule">→ No implement code</span>
-                            <span class="rule">→ No direct web search</span>
-                            <span class="rule">→ No skip session close</span>
+                            <span class="rule">→ Scope fidelity first</span>
+                            <span class="rule">→ Verify material claims</span>
+                            <span class="rule">→ No hidden execution fallback</span>
                         </div>
                     </div>
                 </div>
@@ -240,8 +240,8 @@
                     <div><strong style="color: var(--c-hermes);">Hermes</strong></div>
                     <div>Orchestrator</div>
                     <div><code>gpt-5.6-sol</code></div>
-                    <div>talk_to, discover, aether_status, aether_update, aether_curate, memory</div>
-                    <div>No implement code, No direct web search</div>
+                    <div>file, terminal, web, memory, skills</div>
+                    <div>No unauthorized external effects</div>
                 </div>
                 <div class="lifecycle-row" style="grid-template-columns: 100px 130px 140px 1fr 1fr;">
                     <div><strong style="color: var(--c-ariadna);">Ariadna</strong></div>

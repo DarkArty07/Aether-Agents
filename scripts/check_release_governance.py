@@ -9,7 +9,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -72,11 +71,11 @@ def _git(root: Path, *args: str) -> str:
     return _run(("git", *args), cwd=root).stdout.strip()
 
 
-def _package_version(root: Path) -> Version:
-    payload = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    raw = payload.get("project", {}).get("version")
-    if not isinstance(raw, str):
-        raise GovernanceError("pyproject.toml does not define project.version")
+def _product_version(root: Path) -> Version:
+    version_path = root / "VERSION"
+    if not version_path.is_file():
+        raise GovernanceError("VERSION file is missing")
+    raw = version_path.read_text(encoding="utf-8").strip()
     try:
         return Version.parse(raw)
     except ValueError as exc:
@@ -100,7 +99,6 @@ def validate_policy(root: Path) -> list[str]:
     contributing = (root / "CONTRIBUTING.md").read_text(encoding="utf-8")
     contributor_index = (root / "docs/contributing/README.md").read_text(encoding="utf-8")
     test_workflow = (root / ".github/workflows/test.yml").read_text(encoding="utf-8")
-    pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
     policy_texts = {
         "AGENTS.md": agents,
@@ -131,11 +129,6 @@ def validate_policy(root: Path) -> list[str]:
     if "branches: [main, dev]" in test_workflow:
         errors.append("test workflow still treats removed dev branch as active")
 
-    dependencies = pyproject.get("project", {}).get("dependencies", [])
-    mcp_specs = [item for item in dependencies if isinstance(item, str) and item.startswith("mcp")]
-    if not mcp_specs or not any("<2" in item for item in mcp_specs):
-        errors.append("pyproject must cap mcp below 2.0 until the server migrates to the 2.x API")
-
     for relative in (
         "docs/decisions/ODR-0001-main-integration-and-release-automation.md",
         ".github/workflows/release-governance.yml",
@@ -153,24 +146,24 @@ def validate_release(root: Path, tag_name: str) -> list[str]:
     except ValueError as exc:
         return [str(exc)]
 
-    package_version = _package_version(root)
-    if tag_version != package_version:
+    product_version = _product_version(root)
+    if tag_version != product_version:
         errors.append(
-            f"tag {tag_name} disagrees with pyproject version {package_version}"
+            f"tag {tag_name} disagrees with product version {product_version}"
         )
 
     readme = (root / "README.md").read_text(encoding="utf-8")
-    if f"version-{package_version}-" not in readme:
-        errors.append(f"README version badge does not contain {package_version}")
+    if f"version-{product_version}-" not in readme:
+        errors.append(f"README version badge does not contain {product_version}")
 
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     changelog_pattern = re.compile(
-        rf"(?m)^##\s+(?:\[)?v?{re.escape(str(package_version))}(?:\])?(?:\s|$)"
+        rf"(?m)^##\s+(?:\[)?v?{re.escape(str(product_version))}(?:\])?(?:\s|$)"
     )
     if not changelog_pattern.search(changelog):
-        errors.append(f"CHANGELOG has no release heading for {package_version}")
+        errors.append(f"CHANGELOG has no release heading for {product_version}")
 
-    release_notes = root / "docs" / "releases" / f"v{package_version}" / "RELEASE_NOTES.md"
+    release_notes = root / "docs" / "releases" / f"v{product_version}" / "RELEASE_NOTES.md"
     if not release_notes.is_file():
         errors.append(f"release notes are missing: {release_notes.relative_to(root)}")
 
@@ -317,7 +310,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             errors = validate_next_version_preflight(root, args.version)
         else:  # pragma: no cover - argparse enforces this
             raise GovernanceError(f"unsupported command: {args.command}")
-    except (GovernanceError, FileNotFoundError, tomllib.TOMLDecodeError) as exc:
+    except (GovernanceError, FileNotFoundError) as exc:
         errors = [str(exc)]
     return _print_result(errors)
 

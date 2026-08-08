@@ -1,9 +1,9 @@
 # Authority Model
 
-> **Status:** APPROVED TARGET — current runtime parity not yet verified
+> **Status:** APPROVED TARGET — v0.22.0 has no multi-agent execution runtime
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **Governing decisions:** `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`, `../decisions/ADR-0001-aether-mcp-control-and-trace-plane.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Purpose
 
@@ -35,6 +35,10 @@ Aether is designed for a user acting primarily as a product owner. Technical exp
 | Model selection | Aether | Route according to difficulty, consequence, quality, and cost |
 | Tool and MCP selection | Aether | Use the minimum sufficient capabilities within permission boundaries |
 | Tests and evidence | Aether | Select and execute proportionally; disclose unsupported claims |
+| Rich learning-episode capture and project consent | User/project policy | Default to structured data; never escalate capture silently |
+| Episode outcome, correction, preference, and quality labels | User for product truth; Hermes/evaluator for declared technical scopes | Preserve source/authority; worker self-report cannot self-accept |
+| Local learning-dataset curation | Aether within frozen consent, quality, privacy, lineage, and contamination rules | Produce reproducible candidates without granting training eligibility |
+| Dataset upload, training/fine-tuning, spending, model/prompt/route change, or promotion | User through separate explicit gates | Prepare evidence/options; never infer authority from capture/export |
 | Bounded defect correction | Aether | Correct without changing requested behavior |
 | Documentation and continuity | Aether | Keep canonical knowledge aligned and record supersession |
 | Credentials and sensitive data | User | Provide or authorize explicitly; Aether minimizes exposure |
@@ -88,9 +92,27 @@ Hermes should:
 
 Hermes does not gain authority to redefine product vision merely by owning interpretation or synthesis.
 
-### Harmonia and coordination kernel
+### Aether MCP control and trace plane
 
-Harmonia and the kernel own operational coordination within the approved contract:
+The target Aether MCP is Hermes' exclusive normal interface to an Orca-backed
+swarm. It owns deterministic validation, protocol schemas, operation
+idempotency, Aether-to-Orca correlation, concise declared rationale,
+authorization/evidence receipts, a compact semantic event index, and—when
+explicitly admitted—protected secret-redacted model-visible episodes, labels,
+dataset lineage, and local curation/export projections.
+
+It does not own product meaning, Task decomposition, specialist judgment, Orca
+runtime state, technical acceptance, final user acceptance, Release, or
+activation authority. It also cannot make captured content training-eligible by
+itself, upload data, start fine-tuning, mutate prompts/models/routes, spend money,
+or promote a candidate. It may deny or block an operation that violates an
+admitted contract, identity, participant, effect, version, or privacy boundary,
+but it may not create a new product decision to make the operation pass. MCP
+server-initiated LLM sampling and hidden coordinator loops are excluded.
+
+### Orca coordination substrate
+
+A future accepted Orca path may own operational coordination within an approved contract:
 
 - task state;
 - dependencies;
@@ -100,7 +122,13 @@ Harmonia and the kernel own operational coordination within the approved contrac
 - lifecycle and terminal-state consistency;
 - coordination policy enforcement.
 
-They do not own product meaning. Operational authority must not silently become product authority. Harmonia and the kernel must enforce user/project Daimon availability policy and may not select a disabled or forbidden role.
+It does not own product meaning. Operational authority must not silently become product authority. Any accepted substrate must enforce user/project Daimon availability policy and may not select a disabled or forbidden role.
+
+The v0.22.0 candidate has no active coordination substrate, specialist execution
+path, MCP facade, or curation facade. The historical Harmonia/Olympus runtime is
+retired and cannot be used as a fallback. `../architecture/AETHER_MCP.md` and
+`../architecture/ORCHESTRATION.md` define the proposed MCP-first Hermes–Orca
+operating model without claiming implementation or activation.
 
 ### Daimons
 
@@ -125,6 +153,10 @@ A Daimon may not silently:
 - independently redefine or persist the global user profile without Hermes' curation;
 - promote a specialist-local assumption into a global user preference;
 - invoke, recommend as already authorized, or indirectly route through a Daimon that user/project policy marks disabled or forbidden.
+- create Tasks, start child workers, delegate recursively, or admit another participant;
+- treat an Orca message or `worker_done` state as new product authority or final acceptance.
+
+The target roster and each archetype's detailed authority contract are defined in `../architecture/DAIMONS.md`. Athena and Etalides have target retirement and forbidden status; Ariadna is conditional and disabled; the Independent Verifier is proposed but not implemented.
 
 ### Deterministic policy and tools
 
@@ -193,7 +225,14 @@ Ask:
 
 This document defines the approved target authority model.
 
-The current runtime may still contain hub-and-spoke behavior, incomplete Harmonia/kernel enforcement, or authority paths that rely on prompts rather than deterministic policy. Those mechanics must be documented separately in `CURRENT_SYSTEM.md`, architecture documents, and release evidence when created.
+The current candidate contains Hermes-facing profiles, skills, policies and
+product decisions but no implemented Aether MCP, native coordination runtime,
+continuity plugin, or multi-agent execution path. Six profile directories remain
+physically tracked, but PDR-0013 defines the smaller target roster and does not
+authorize their mutation. Future runtime mechanics must preserve Orca's
+operational ownership behind the ADR-0001 MCP control/trace boundary, be
+documented separately in architecture and release evidence, and pass separate
+implementation and activation gates.
 
 No current-runtime claim should be inferred solely from this target model.
 

@@ -30,7 +30,3 @@ display:
 max_iterations: 50
 approvals:
   mode: 'off'
-plugins:
-  enabled:
-  - olympus_v3
-  - aether

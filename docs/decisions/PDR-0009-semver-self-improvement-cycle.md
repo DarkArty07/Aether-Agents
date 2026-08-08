@@ -4,7 +4,36 @@
 - **Date:** 2026-07-28
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** Any assumption that Aether's next coordinator or next minor version must be model-backed
-- **Superseded by:** None
+- **Superseded by:** PDR-0011 for the executable v0.20 bootstrap; governance principles remain approved
+
+## v0.22 implementation amendment
+
+At the owner's direction, PDR-0011 retires the v0.20 plugin, hooks, strict
+manifest reader, and manifest-bound evidence projector before replacement
+design. Sections describing automatic session participation and executable
+layered enforcement now document the historical v0.20 decision, not current
+candidate behavior. The schema-v5 ledger, causality, candidate-isolation, and
+human-promotion primitives remain inert. Reinstating automatic participation
+requires a new accepted implementation boundary; this PDR is not activation
+authority.
+
+## v0.22 learning-trace clarification
+
+On 2026-08-06 the owner clarified that the primary purpose of Aether trace data
+is to improve and refine the system—including future fine-tuning—not merely to
+provide an audit log. A compact event ledger remains necessary for authority,
+correlation and cleanup, but it is not sufficient learning evidence.
+
+The proposed Aether MCP design therefore adds separately protected, full
+secret-redacted model-visible episodes plus versioned labels and derived dataset
+manifests. These may support evaluation, prompt/policy/skill improvement,
+routing, supervised fine-tuning, preference learning, tool-use trajectories and
+failure/repair analysis.
+
+This clarification does not authorize capture activation, importing historical
+data, external export, training, model changes, automatic prompt/skill/policy
+mutation, promotion, deployment or spending. Dataset quality, causal comparison,
+holdout isolation and owner promotion remain independent gates.
 
 ## Context
 
@@ -65,7 +94,7 @@ The approved design candidate is:
 
 Its intended capability is automatic, measurable, project-isolated cycle initialization and evidence accumulation for Aether sessions. It includes a versioned cycle contract, machine-readable manifest, deterministic session hooks, local operational ledger, Aether Router measurement, mandatory absence of `talk_to`, Harmonia use when applicable, safe direct takeover, repair verification, and next-minor evidence signals.
 
-The active manifest is `docs/releases/v0.20.0/CYCLE.yaml`. This approval does not claim that the runtime behavior is implemented.
+The manifest approved for that historical boundary was `docs/releases/v0.20.0/CYCLE.yaml`. It is not an active v0.22 candidate manifest.
 
 ### 5. Aether Router is compute substrate, not acceptance authority
 

@@ -62,13 +62,13 @@ Technical system explanation:
 - system context and components;
 - orchestration and session lifecycle;
 - Daimon roles and authority;
-- Olympus v3;
-- `.aether` continuity;
+- the retired Olympus and disconnected native runtimes;
+- the Hermes product layer, protected `.aether` history, and target Orca boundary;
 - configuration, runtime, data, and trust boundaries.
 
 ### Guides — `docs/guides/`
 
-Task-oriented instructions for installation, configuration, first use, delegation, continuity, and gateway use. Existing guides remain in place but require a factual refresh.
+Task-oriented instructions for installation, configuration, first use, the current specialist capability gap, protected historical state, and gateway use.
 
 ### Reference — `docs/reference/`
 

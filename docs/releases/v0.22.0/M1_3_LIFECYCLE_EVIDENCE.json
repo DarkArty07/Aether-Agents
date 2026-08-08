@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "milestone": "M1.3",
+  "candidate": {
+    "candidate_id": "orca-linux-x86_64-appimage-1.4.167",
+    "manifest_sha256": "186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe",
+    "catalog_sha256": "068e1d66737f19835536e4a1573a2f931bffe9821af9c1bdff855f902898944b",
+    "catalog_determinism_verified": true
+  },
+  "harness": {
+    "network": "fresh loopback-only user/network namespace",
+    "mount": "fresh private mount namespace with exact-byte staged candidate",
+    "process": "fresh PID namespace",
+    "worker_namespace_uid": 1000,
+    "worker_effective_capabilities": 0,
+    "electron_sandbox_disabled": false,
+    "appimage_extract_and_run": true,
+    "xvfb_sha256": "567a9b39284e303522fdc178059fe60d0e9917b811bd5066fb63260fd198a97c",
+    "xvfb_tcp_listener": false
+  },
+  "final_probes": [
+    {
+      "probe": 1,
+      "status": "BLOCKED",
+      "code": "ERR_RUNTIME_START_SHAPE",
+      "stage": "cold_start",
+      "start_attempt": 1,
+      "elapsed_seconds": 9.241,
+      "startup_output_contract_violation": true,
+      "process_survivors": 0,
+      "listener_survivors": 0,
+      "mount_survivors": 0,
+      "staged_home_unmounted": true,
+      "isolated_root_survived": false,
+      "global_state_unchanged": true
+    },
+    {
+      "probe": 2,
+      "status": "BLOCKED",
+      "code": "ERR_RUNTIME_START_SHAPE",
+      "stage": "cold_start",
+      "start_attempt": 1,
+      "elapsed_seconds": 9.21,
+      "startup_output_contract_violation": true,
+      "process_survivors": 0,
+      "listener_survivors": 0,
+      "mount_survivors": 0,
+      "staged_home_unmounted": true,
+      "isolated_root_survived": false,
+      "global_state_unchanged": true
+    }
+  ],
+  "protected_state": {
+    "entry_count": 131,
+    "fingerprint_before": "777187ea9badc967be59be641122f3d74f1f41b2290e59472141f3a200efa6d6",
+    "fingerprint_after": "777187ea9badc967be59be641122f3d74f1f41b2290e59472141f3a200efa6d6",
+    "private_file_contents_read": false,
+    "unchanged": true
+  },
+  "unproven_compositions": [
+    "events_read",
+    "resource_cleanup",
+    "resource_inventory",
+    "run_cancel",
+    "run_close",
+    "task_cancel"
+  ],
+  "result": {
+    "status": "BLOCKED",
+    "lifecycle_accepted": false,
+    "d1_ready": false,
+    "reason": "The exact candidate did not produce one unambiguous structured cold-start record in either final probe."
+  }
+}

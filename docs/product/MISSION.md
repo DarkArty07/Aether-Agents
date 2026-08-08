@@ -3,7 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Mission statement
 
@@ -81,7 +82,13 @@ Aether uses `hermes-agent` as its underlying agent framework so that it does not
 
 Hermes' native `USER.md`, `MEMORY.md`, automatic review, `skill_manage`, `/learn`, session search, and Curator are the canonical learning stack. Hermes is responsible for detecting, organizing, correcting, and selectively sharing the user's durable preferences and profile.
 
-Honcho is not part of the approved target product. Aether must eventually remove the current Honcho provider configuration and operate without an external memory service, through a separately authorized migration.
+That canonical **user-knowledge** stack is distinct from Aether MCP's proposed
+**system-learning evidence**: protected secret-redacted execution episodes,
+corrections, outcomes, labels and dataset lineage used to evaluate and refine
+prompts, policies, skills, routing, coordination and future fine-tuning. Episode
+storage must not become a competing global user profile or memory authority.
+
+Honcho is not part of the approved target product. The v0.22.0 candidate uses Hermes-native memory and has removed the tracked Honcho provider, installation, and operational surfaces.
 
 ## Mission boundaries
 
@@ -112,7 +119,6 @@ The mission does not require Aether to:
 - Optional autonomy profiles for users who want more or less technical control.
 - Exact UI and policy for reviewing, correcting, exporting, resetting, and deleting Hermes-managed user memory.
 - Shared-skill write ownership and whether private per-user skills are needed.
-- Safe retirement of the current Honcho configuration and historical integration artifacts.
 - Exact ownership model for documentation and continuity.
 - Exact escalation budgets and bounded-attempt limits.
 - Runtime enforcement of required, allowed, disabled, and forbidden Daimon policy.

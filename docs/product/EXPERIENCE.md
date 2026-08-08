@@ -2,8 +2,8 @@
 
 > **Status:** APPROVED PRODUCT BASELINE — future UI not implemented
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **Governing decisions:** `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`, `../decisions/ADR-0001-aether-mcp-control-and-trace-plane.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Experience statement
 
@@ -30,7 +30,7 @@ Aether should not feel like:
 
 - a permanent settings panel;
 - a noisy swarm of agents;
-- six competing personalities asking the user to coordinate them;
+- several competing personalities asking the user to coordinate them;
 - a terminal that requires architectural expertise for ordinary decisions;
 - a chain of confirmations for reversible internal work;
 - a black box that reports completion without evidence;
@@ -41,18 +41,24 @@ Aether should not feel like:
 ```text
 User describes desired product outcome
         ↓
-Hermes understands intent and prepares contract
+Hermes understands intent and prepares a contract
         ↓
-Aether coordinates authorized specialists and tools
+Hermes chooses direct work or an authorized Orca swarm
         ↓
-User sees meaningful progress, risks, and decisions
+Hermes controls and observes the swarm through Aether MCP
         ↓
-Aether presents evidence-backed result
+Orca runs bounded Tasks while Hermes supervises and works
+        ↓
+Hermes reviews, integrates, and presents an evidence-backed result
         ↓
 User accepts, redirects, or rejects product outcome
 ```
 
-The user should interact primarily with Hermes. Direct specialist access may exist for focused consultation, but it must not require the user to manage the team.
+The user should interact primarily with Hermes. Aether MCP is the target typed
+control and trace surface behind that conversation; the version-matched public
+Orca CLI or API is a provider-driver detail below the MCP, not the normal Hermes
+or user interface. Direct specialist access may exist for focused consultation,
+but it must not require the user to manage the team.
 
 ## Progressive visibility
 
@@ -95,12 +101,18 @@ Available for verification and optimization:
 
 Available to advanced users and maintainers:
 
-- coordination ledger events;
-- Olympus sessions and lifecycle facts;
+- Aether semantic trace events and source-labelled Orca operational events;
+- authorized protected learning-episode replay with exactness/redaction/gap
+  indicators, labels and dataset lineage;
+- historical runtime sessions and lifecycle evidence, when explicitly retained;
 - raw evidence references;
 - contract generations and amendments;
 - capability, fence, lease, and reconciliation state;
 - diagnostic and failure history.
+
+Protected content is never the default product-owner view. Access must remain
+project-scoped, purpose-bound and progressively disclosed; credentials and hidden
+chain-of-thought are unavailable rather than merely hidden by the UI.
 
 No user is required to inspect deeper levels to use Aether normally.
 
@@ -177,6 +189,7 @@ Should show:
 - dependencies and handoffs;
 - current stage and blockers;
 - participant-policy status such as required, allowed, disabled, or forbidden.
+- distinction between a stable archetype and its temporary Task-bound worker instances.
 
 The view must not turn normal interaction into agent micromanagement.
 
@@ -230,9 +243,9 @@ The UI is not a source of truth.
 | UI information | Authoritative source |
 |---|---|
 | Product vision and decisions | Version-controlled product docs and decision records |
-| Contract, task, gate, retry, and semantic state | Coordination ledger and kernel projection |
-| ACP process and session state | Olympus / ACPManager |
-| Current project continuity | `.aether` |
+| Contract, task, gate, retry, and semantic state | Version-controlled Aether policy now; future Orca operational state plus Hermes semantic acceptance after separate validation |
+| Retired process and session state | Read-only historical release/runtime evidence only |
+| Current project continuity | Version-controlled project documents and Hermes session context; existing `.aether` stores are protected historical/local state |
 | User profile and global memory | Hermes-native memory stores |
 | Source and artifact content | Repository and artifact stores |
 | Test or build claims | Executed reports and receipts |

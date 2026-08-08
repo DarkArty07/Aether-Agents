@@ -3,7 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Outcome model
 
@@ -81,7 +82,7 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Why it matters:** Stale documentation causes agents to infer intent, repeat mistakes, and act from obsolete architecture or product assumptions.
 - **Evidence:** Explicit documentation ownership, link and contradiction checks, release reconciliation, and cold-reader tests showing that a new agent can understand the project without guessing.
 - **Failure condition:** Documentation is stale, contradictory, incomplete at important boundaries, or maintained only as an afterthought.
-- **Horizon:** Core product objective. A dedicated documentation or continuity Daimon is a possible mechanism, not yet an approved role design.
+- **Horizon:** Core product objective. Ariadna is a conditional, disabled handoff-curation design; current documentation remains Aether's responsibility and does not depend on her activation.
 
 ### Objective 9: Adapt to the individual user
 
@@ -124,9 +125,9 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Outcome:** Authorized Daimons can exchange bounded work, artifacts, evidence, review requests, and dependency handoffs directly after contract admission, while Hermes remains responsible for intent, amendments, escalation, and final synthesis.
 - **Beneficiary:** Users, specialist agents, and operators paying the context, latency, and inference cost.
 - **Why it matters:** Using the strongest model as the message bus for every handoff wastes capacity and constrains specialist autonomy, but unrestricted self-organization would endanger vision and authority.
-- **Evidence:** A fixed two-agent handoff with zero routine Hermes relay, bounded Harmonia selection committed by the kernel, durable traceability, no duplicate semantic authority, and representative fault tests without hidden hub-and-spoke fallback.
-- **Failure condition:** Hermes still relays routine results, selects every next agent, or dispatches every retry; Harmonia becomes a second product or lifecycle authority; lateral work escapes contract or participant bounds.
-- **Horizon:** Approved target direction. v0.19.x closed at v0.19.5 as `VIABLE — BOUNDED` for the demonstrated default-off topology; broader participant-policy enforcement, production migration, activation, and global replacement remain future work.
+- **Evidence:** A future accepted runtime must prove a fixed two-agent handoff with zero routine Hermes relay, durable traceability, no duplicate semantic authority, representative fault tests, and no hidden fallback.
+- **Failure condition:** Hermes still relays routine results, selects every next agent, or dispatches every retry; the runtime becomes a second product authority; lateral work escapes contract or participant bounds.
+- **Horizon:** Approved target direction. v0.19.5 remains historical bounded evidence; PDR-0011 retired its runtime; PDR-0012 assigns future operational mechanics to Orca; and v0.22.0 still provides no accepted replacement execution path.
 
 ### Objective 14: Build a coherent user model through Hermes
 
@@ -144,7 +145,7 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Why it matters:** Honcho caused operational problems, adds service and data complexity, and duplicates memory responsibilities already present in Hermes.
 - **Evidence:** Clean installation and runtime without Honcho, native cross-session preference persistence, no hidden dependency, and retired setup documentation.
 - **Failure condition:** Aether cannot start or personalize without Honcho, silently loses required behavior after removal, or introduces another competing general memory engine.
-- **Horizon:** Approved target direction; current configuration migration remains pending.
+- **Horizon:** Implemented in the v0.22.0 candidate; tracked configuration, setup, documentation, and distribution surfaces no longer require Honcho.
 
 ### Objective 16: Make complex coordination understandable without making the user manage it
 
@@ -172,6 +173,27 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Evidence:** Traceable product contracts, material ambiguity escalations, explicit requirement amendments, scope-drift detection, acceptance evidence, and user confirmation or previously approved objective acceptance.
 - **Failure condition:** Aether silently interprets material ambiguity, rewrites requirements after implementation, declares completion from technical terminality alone, or delivers something the user says is not what they wanted.
 - **Horizon:** Immediate and permanent product objective.
+
+### Objective 19: Learn from real episodes without self-certifying improvement
+
+- **Outcome:** Aether preserves faithful secret-redacted model-visible episodes,
+  user corrections, evidence, outcomes and resource metrics so it can diagnose
+  behavior, compare strategies and build reproducible evaluation or future
+  fine-tuning candidates.
+- **Beneficiary:** Users and maintainers seeking a system that improves rather
+  than repeatedly losing the causes of success and failure.
+- **Why it matters:** Compact audit events and self-reported completion cannot
+  explain which prompts, context, assignments, tool trajectories, coordination
+  or recovery choices produced an outcome.
+- **Evidence:** Replayable sealed episodes; explicit fidelity/gaps/redactions;
+  authoritative labels; uncontaminated lineage-isolated datasets; frozen
+  baseline/candidate evaluations; user acceptance of material trade-offs.
+- **Failure condition:** Aether records only summaries, silently captures
+  secrets, treats every completion as a gold example, leaks evaluation data into
+  training, or promotes a change from its own confidence/prose.
+- **Horizon:** Approved product purpose and proposed v0.22.0 data contract;
+  capture implementation, training, spending, promotion and activation remain
+  separate later gates.
 
 ## Approved quality hierarchy
 

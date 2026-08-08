@@ -1,16 +1,16 @@
 # ==============================================================================
-# Aether Agents v0.17.0 — Makefile
+# Aether Agents v0.22.0 — Makefile
 # Common development targets
 # ==============================================================================
 
 # ── Setup & Install ────────────────────────────────────────────────────────────
 
 .PHONY: setup
-setup: ## Run full setup (venv, packages, config, wrappers)
+setup: ## Install Hermes and generate Aether configs and wrappers
 	bash scripts/setup.sh
 
 .PHONY: update
-update: ## Update repo and upgrade dependencies
+update: ## Update repo, Hermes, and generated configuration
 	bash scripts/update.sh
 
 # ── Gateway ────────────────────────────────────────────────────────────────────
@@ -19,26 +19,9 @@ update: ## Update repo and upgrade dependencies
 gateway: ## Delegate to start-gateway.sh (pass extra args: make gateway ARGS="start")
 	bash scripts/start-gateway.sh $(ARGS)
 
-# ── Honcho (Memory Provider) ───────────────────────────────────────────────────
-
-.PHONY: setup-honcho
-setup-honcho: ## Setup Honcho: submodule, .env, detected Compose runtime up
-	bash scripts/setup-honcho.sh
-
-.PHONY: honcho-up honcho-down honcho-logs
-honcho-up honcho-down honcho-logs: COMPOSE = $(shell bash scripts/setup-honcho.sh --detect-compose)
-honcho-up: ## Start Honcho services with the detected Compose runtime
-	$(COMPOSE) up -d
-
-honcho-down: ## Stop Honcho services with the detected Compose runtime
-	$(COMPOSE) down
-
-honcho-logs: ## Follow Honcho API logs with the detected Compose runtime
-	$(COMPOSE) logs -f api
-
 # ── Python interpreter ────────────────────────────────────────────────────────
 
-# Prefer the legacy project venv. For pip-installed Hermes, use the interpreter
+# Prefer the project venv. For pip-installed Hermes, use the interpreter
 # colocated with the hermes executable; otherwise fall back to python3.
 PYTHON ?= $(shell if [ -x home/.venv-hermes/bin/python ]; then \
 	printf '%s' home/.venv-hermes/bin/python; \
@@ -49,17 +32,24 @@ elif command -v hermes >/dev/null 2>&1; then \
 	else command -v python3; fi; \
 else command -v python3; fi)
 
+HERMES := $(shell if [ -x home/.venv-hermes/bin/hermes ]; then \
+	printf '%s' home/.venv-hermes/bin/hermes; \
+	elif command -v hermes >/dev/null 2>&1; then command -v hermes; \
+	else printf '%s' hermes; fi)
+
+CLEAN_PYTHON_ENV := env -u PYTHONPATH -u HERMES_PYTHON_SRC_ROOT
+
 # ── Health Check ───────────────────────────────────────────────────────────────
 
 .PHONY: doctor
-doctor: ## Verify installation (python, hermes, olympus, gpu)
+doctor: ## Verify Hermes and Aether product assets
 	@echo "═══ Aether Agents — Doctor ═══"
 	@echo ""
 	@echo "  Python interpreter: $(PYTHON)"
-	@echo -n "  Python 3.11+:       " && ($(PYTHON) -c 'import sys; v=sys.version_info; print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Hermes binary:      " && (hermes --version 2>/dev/null || echo "NOT FOUND")
-	@echo -n "  Olympus import:     " && ($(PYTHON) -c "import olympus_v3.server; print('✓ olympus_v3')" 2>/dev/null || echo "✗ FAILED")
-	@echo -n "  NVIDIA GPU:         " && (nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NOT AVAILABLE")
+	@echo -n "  Python 3.11+:       "; $(CLEAN_PYTHON_ENV) $(PYTHON) -c 'import sys; v=sys.version_info; assert v >= (3, 11); print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  Hermes binary:      "; $(CLEAN_PYTHON_ENV) $(HERMES) --version 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  Product assets:     "; $(CLEAN_PYTHON_ENV) $(PYTHON) -c "from pathlib import Path; root=Path('.'); profiles=list((root/'home/profiles').glob('*/config.yaml.template')); assert (root/'VERSION').is_file(); assert (root/'home/config.yaml.template').is_file(); assert len(profiles) == 6; assert not list((root/'home/profiles').glob('*/plugins/aether')); print('✓ root config + 6 profiles; no native runtime plugin')" 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  NVIDIA GPU:         "; gpu="$$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"; if [ -n "$$gpu" ]; then echo "$$gpu"; else echo "NOT AVAILABLE"; fi
 	@echo ""
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
@@ -79,6 +69,10 @@ test: ## Run test suite (if tests/ exists)
 	else \
 		echo "No tests/ directory found — skipping"; \
 	fi
+
+.PHONY: mcp-smoke
+mcp-smoke: ## Run the default-off Aether MCP stdio process through clean EOF
+	PYTHONPATH=src $(PYTHON) -m aether_mcp </dev/null
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 

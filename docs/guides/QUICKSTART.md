@@ -37,32 +37,26 @@ aether
 Or run directly without the wrapper:
 
 ```bash
-home/.venv-hermes/bin/hermes --profile orchestrator
+HERMES_HOME="$PWD/home" home/.venv-hermes/bin/hermes
 ```
 
 ## 4. Verify
 
-On startup, Olympus discovers Daimon profiles. You should see something like:
-
-```
-[olympus] discovered: ariadna, athena, daedalus, etalides, hefesto, hermes
-```
-
-Quick smoke test:
+Verify Hermes, the root template, all six profile templates, and the absence of a native runtime plugin:
 
 ```bash
 make doctor
 ```
 
-## 5. First Delegation
+The v0.22.0 candidate does not expose a multi-agent execution runtime. Specialist profiles are installed as product contracts, but no process discovers or spawns them until the Hermes-led Orca path is accepted.
 
-Talk to a Daimon right from the Hermes prompt:
+## 5. Current execution boundary
 
-```
-> Talk to Hefesto about implementing a feature
-```
-
-Or use `delegate_task` in a session to hand work to a specific agent.
+Hermes performs bounded work directly. Do not use `talk_to`, `delegate_task`, a
+profile wrapper, or a restored compatibility shim to simulate specialist
+execution. The target is one Hermes-supervised Orca Run with independent Tasks,
+worker-to-worker messages, and child worktrees for potentially conflicting
+writers; that target is not activated in this candidate.
 
 ## 6. Gateway (Optional)
 

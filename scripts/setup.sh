@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.18.2 — Setup Script
+# Aether Agents v0.22.0 — Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
-# Automated installation: Python venv, pip packages, config generation, wrappers.
+# Automated installation: Hermes venv, config generation, and wrappers.
 # Idempotent — safe to re-run. Preserves existing config and .env files.
 #
 # Usage:  bash scripts/setup.sh
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.18.2"
+SCRIPT_VERSION="0.22.0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
@@ -28,6 +28,12 @@ warn() { echo -e "  ${YELLOW}⚠${NC} $*"; }
 fail() { echo -e "  ${RED}✗${NC} $*" >&2; }
 info() { echo -e "  ${BLUE}→${NC} $*"; }
 step() { echo -e "\n${BOLD}[$1]${NC} $2"; }
+
+# Keep the candidate venv independent from an editable/global Hermes checkout
+# inherited by the invoking shell (common when setup runs from Hermes itself).
+clean_python_env() {
+    env -u PYTHONPATH -u HERMES_PYTHON_SRC_ROOT "$@"
+}
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,13 +57,13 @@ sed_inplace() {
 
 # ── Verify repo structure ─────────────────────────────────────────────────────
 verify_repo() {
-    if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
-        fail "pyproject.toml not found at $PROJECT_ROOT"
+    if [ ! -f "$PROJECT_ROOT/VERSION" ]; then
+        fail "VERSION not found at $PROJECT_ROOT"
         fail "Run this script from the Aether-Agents repo root: bash scripts/setup.sh"
         exit 1
     fi
-    if [ ! -d "$PROJECT_ROOT/src/olympus_v3" ]; then
-        fail "src/olympus_v3/ not found — is this the Aether-Agents repository?"
+    if [ ! -f "$PROJECT_ROOT/home/config.yaml.template" ]; then
+        fail "home/config.yaml.template not found — is this the Aether-Agents repository?"
         exit 1
     fi
     if [ ! -d "$PROJECT_ROOT/home/profiles" ]; then
@@ -77,15 +83,7 @@ detect_wsl() {
     fi
 }
 
-# ── Init submodules (for users who cloned without --recurse-submodules) ───────
-init_submodules() {
-    if [ -f ".gitmodules" ]; then
-        info "Initializing git submodules..."
-        git submodule update --init --recursive 2>/dev/null && ok "Submodules initialized" || warn "Submodule init skipped (no network or not a git repo)"
-    fi
-}
-
-# ── Step 1: Detect Python 3.11+ ───────────────────────────────────────────────
+# ── Step 1: Detect Python 3.11+ ────────────────────────────────────────────────
 detect_python() {
     step 1 "Detecting Python 3.11+"
 
@@ -159,7 +157,7 @@ create_venv() {
     "$PYTHON_CMD" -m venv "$VENV_DIR"
     ok "Created venv at ${VENV_DIR}"
 
-    "$VENV_DIR/bin/pip" install --upgrade pip --quiet 2>/dev/null || true
+    clean_python_env "$VENV_DIR/bin/pip" install --upgrade pip --quiet 2>/dev/null || true
     ok "Upgraded pip"
 }
 
@@ -169,7 +167,7 @@ install_hermes_agent() {
 
     info "Installing hermes-agent (this may take a moment)..."
     set +o pipefail
-    "$VENV_DIR/bin/pip" install --quiet hermes-agent 2>&1 | tail -n 3
+    clean_python_env "$VENV_DIR/bin/pip" install --quiet --upgrade hermes-agent 2>&1 | tail -n 3
     local pip_exit="${PIPESTATUS[0]}"
     set -o pipefail
     if [ "$pip_exit" -ne 0 ]; then
@@ -180,7 +178,7 @@ install_hermes_agent() {
 
     if [ -x "$HERMES_BIN" ]; then
         local hermes_version
-        hermes_version=$("$HERMES_BIN" --version 2>&1 || echo "unknown")
+        hermes_version=$(clean_python_env "$HERMES_BIN" --version 2>&1 || echo "unknown")
         ok "hermes-agent ${hermes_version}"
         ok "Binary: ${HERMES_BIN}"
     else
@@ -189,34 +187,9 @@ install_hermes_agent() {
     fi
 }
 
-# ── Step 4: Install olympus-mcp ───────────────────────────────────────────────
-install_olympus_mcp() {
-    step 4 "Installing olympus-mcp (editable mode)"
-
-    info "Installing olympus-mcp from ${PROJECT_ROOT}..."
-    set +o pipefail
-    "$VENV_DIR/bin/pip" install --quiet -e "$PROJECT_ROOT" 2>&1 | tail -n 3
-    local pip_exit="${PIPESTATUS[0]}"
-    set -o pipefail
-    if [ "$pip_exit" -ne 0 ]; then
-        fail "pip install -e . failed (exit ${pip_exit})"
-        exit "$pip_exit"
-    fi
-
-    ok "olympus-mcp installed in editable mode"
-
-    # Verify the MCP server is importable
-    if "$HERMES_PYTHON" -c "import olympus_v3.server" 2>/dev/null; then
-        ok "olympus_v3.server import verified"
-    else
-        warn "olympus_v3.server import check failed — may need PYTHONPATH set"
-        info "The MCP server path will be set in config.yaml"
-    fi
-}
-
-# ── Step 5: Install CUDA extras (optional) ────────────────────────────────────
+# ── Step 4: Install CUDA extras (optional) ────────────────────────────────────
 install_cuda_extras() {
-    step 5 "Installing CUDA extras (optional)"
+    step 4 "Installing CUDA extras (optional)"
 
     if ! command -v nvidia-smi &>/dev/null; then
         warn "No NVIDIA GPU detected — skipping faster-whisper"
@@ -229,7 +202,7 @@ install_cuda_extras() {
     info "GPU detected: ${gpu_name}"
     info "Installing faster-whisper with CUDA support..."
 
-    if "$VENV_DIR/bin/pip" install faster-whisper 2>&1; then
+    if clean_python_env "$VENV_DIR/bin/pip" install faster-whisper 2>&1; then
         ok "faster-whisper installed — CUDA STT support available"
     else
         warn "faster-whisper installation failed — STT will use CPU fallback"
@@ -237,9 +210,9 @@ install_cuda_extras() {
     fi
 }
 
-# ── Step 6: Setup .env files ──────────────────────────────────────────────────
+# ── Step 5: Setup .env files ──────────────────────────────────────────────────
 setup_env_files() {
-    step 6 "Setting up .env files from templates"
+    step 5 "Setting up .env files from templates"
 
     local created=0
     local existing=0
@@ -280,12 +253,36 @@ setup_env_files() {
     fi
 }
 
-# ── Step 7: Generate config.yaml from templates ──────────────────────────────
+# ── Step 6: Generate config.yaml from templates ──────────────────────────────
 generate_configs() {
-    step 7 "Generating config.yaml from templates"
+    step 6 "Generating config.yaml from templates"
 
     local generated=0
     local skipped=0
+
+    local root_template="$PROJECT_ROOT/home/config.yaml.template"
+    local root_config="$PROJECT_ROOT/home/config.yaml"
+    if [ -f "$root_template" ]; then
+        if [ -f "$root_config" ]; then
+            if grep -q "__AETHER_ROOT__\|__HERMES_PYTHON__" "$root_config" 2>/dev/null; then
+                warn "home/config.yaml has unresolved placeholders — regenerating"
+                cp "$root_template" "$root_config"
+                sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+                sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+                ok "home/config.yaml regenerated"
+                generated=$((generated + 1))
+            else
+                ok "home/config.yaml already configured — skipping"
+                skipped=$((skipped + 1))
+            fi
+        else
+            cp "$root_template" "$root_config"
+            sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+            sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+            ok "home/config.yaml generated from template"
+            generated=$((generated + 1))
+        fi
+    fi
 
     for profile_dir in "$PROJECT_ROOT/home/profiles"/*/; do
         [ -d "$profile_dir" ] || continue
@@ -324,9 +321,9 @@ generate_configs() {
     fi
 }
 
-# ── Step 8: Create wrapper scripts ─────────────────────────────────────────────
+# ── Step 7: Create wrapper scripts ─────────────────────────────────────────────
 create_wrappers() {
-    step 8 "Creating wrapper scripts"
+    step 7 "Creating wrapper scripts"
 
     mkdir -p "$HOME/.local/bin"
 
@@ -336,8 +333,10 @@ create_wrappers() {
 # Aether Agents wrapper — auto-generated by setup.sh v${SCRIPT_VERSION}
 # Points to .venv-hermes/bin/hermes (default profile)
 
-export HERMES_HOME=\\"${PROJECT_ROOT}/home\\"
-exec \\"${HERMES_BIN}\\" \\"\\$@\\"
+export HERMES_HOME=\"${PROJECT_ROOT}/home\"
+unset PYTHONPATH
+unset HERMES_PYTHON_SRC_ROOT
+exec \"${HERMES_BIN}\" \"\$@\"
 "
 
     for name in aether hermes; do
@@ -357,34 +356,12 @@ exec \\"${HERMES_BIN}\\" \\"\\$@\\"
         ok "${name} → ${wrapper_path}"
     done
 
-    # ── aether-setup wrapper — points to Olympus v3 setup wizard ─────────
-    local setup_content
-    setup_content="#!/bin/bash
-# Aether Agents aether-setup wrapper — auto-generated by setup.sh v${SCRIPT_VERSION}
-# Runs the Olympus v3 setup wizard (olympus_v3.cli.setup)
 
-export HERMES_HOME=\\"${PROJECT_ROOT}/home\\"
-exec \\"${HERMES_PYTHON}\\" -m olympus_v3.cli.setup \\"\\$@\\"
-"
-
-    local setup_wrapper_path="$HOME/.local/bin/aether-setup"
-    if [ -f "$setup_wrapper_path" ]; then
-        local current_setup
-        current_setup=$(cat "$setup_wrapper_path" 2>/dev/null || echo "")
-        if [ "$current_setup" = "$setup_content" ]; then
-            ok "aether-setup wrapper already up-to-date — skipping"
-            return 0
-        fi
-    fi
-
-    echo "$setup_content" > "$setup_wrapper_path"
-    chmod +x "$setup_wrapper_path"
-    ok "aether-setup → ${setup_wrapper_path}"
 }
 
-# ── Step 9: Add HERMES_HOME to .bashrc ────────────────────────────────────────
+# ── Step 8: Add HERMES_HOME to .bashrc ────────────────────────────────────────
 setup_bashrc() {
-    step 9 "Configuring shell environment"
+    step 8 "Configuring shell environment"
 
     local export_line="export HERMES_HOME=\"${PROJECT_ROOT}/home\""
     local bashrc="$HOME/.bashrc"
@@ -431,9 +408,9 @@ setup_bashrc() {
     fi
 }
 
-# ── Step 10: Update .gitignore ────────────────────────────────────────────────
+# ── Step 9: Update .gitignore ─────────────────────────────────────────────────
 update_gitignore() {
-    step 10 "Updating .gitignore"
+    step 9 "Updating .gitignore"
 
     local gitignore="$PROJECT_ROOT/.gitignore"
 
@@ -473,12 +450,10 @@ print_summary() {
     echo ""
     echo "  2. ${BOLD}Restart your terminal${NC} (or run: source ~/.bashrc)"
     echo ""
-    echo "  3. ${BOLD}Start Aether Agents:${NC}"
+    echo "  3. ${BOLD}Start Hermes with Aether profiles and skills:${NC}"
     echo "     aether"
     echo ""
-    echo "  4. ${BOLD}Run the orchestration setup wizard:${NC}"
-    echo "     aether-setup"
-    echo "     (Also available: aether-setup --help)"
+    echo "     ${DIM}The v0.22.0 candidate does not enable specialist execution or curation.${NC}"
     echo ""
     echo -e "${BLUE}Installation details:${NC}"
     echo "     Project root:   ${PROJECT_ROOT}"
@@ -523,11 +498,9 @@ main() {
 
     verify_repo
     detect_wsl
-    init_submodules
     detect_python
     create_venv
     install_hermes_agent
-    install_olympus_mcp
     install_cuda_extras
     setup_env_files
     generate_configs
@@ -537,4 +510,6 @@ main() {
     print_summary
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
