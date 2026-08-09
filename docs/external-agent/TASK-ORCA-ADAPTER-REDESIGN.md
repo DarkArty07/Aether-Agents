@@ -1,6 +1,6 @@
 # Orca Adapter Redesign and Bounded Orchestration Qualification
 
-> **Status:** AUTHORIZED / FROZEN / IN PROGRESS
+> **Status:** CLOSED WITH BLOCKED PRODUCT GATE
 > **Owner authorization:** Christopher (DarkArty07), 2026-08-08
 > **Execution owner:** Hermes
 > **Candidate:** Aether Agents `v0.22.0.dev0`
@@ -311,13 +311,13 @@ with the exact missing evidence rather than using another execution path.
 
 ### R6 — Final acceptance audit and handoff
 
-- [ ] Inspect every changed file and requirement-to-evidence mapping.
-- [ ] Run focused, affected, full, schema, packaging, smoke, secret, and forbidden-
+- [x] Inspect every changed file and requirement-to-evidence mapping.
+- [x] Run focused, affected, full, schema, packaging, smoke, secret, and forbidden-
       path checks proportional to the final changes.
-- [ ] Verify exact committed tree in a detached clean environment.
-- [ ] Reconcile ROADMAP, STATUS, AGENTS, acceptance evidence, and this checklist.
-- [ ] Verify no task-owned resources survive.
-- [ ] Produce a reproducible handoff and stop before integration/activation.
+- [x] Verify exact committed tree in a detached clean environment.
+- [x] Reconcile ROADMAP, STATUS, AGENTS, acceptance evidence, and this checklist.
+- [x] Verify no task-owned resources survive.
+- [x] Produce a reproducible handoff and stop before integration/activation.
 
 **Acceptance:** clean exact candidate, honest unknowns/blockers, no unrelated
 changes, and no protected effect.
@@ -344,7 +344,7 @@ changes, and no protected effect.
 | R3 | `CLOSED_BLOCKED` | framing/cold status PASS; coordinator bootstrap unqualified; 23 passed/1 deselected; zero survivors; D1 false |
 | R4 | `COMPLETED_RESTRICTED` | exact binding, immutable argv, atomic journal, idempotency, UNKNOWN/reconciliation; 16 passed; mutations unavailable; 0 tools |
 | R5 | `CLOSED_BLOCKED_NOT_EXECUTED` | coordinator binding unqualified; 0 tools/executors/workers/models/resources; lower-level evidence preserved |
-| R6 | `PENDING` | — |
+| R6 | `CLOSED_WITH_BLOCKED_PRODUCT_GATE` | detached exact tree: 125 passed/1 deselected; Ruff/schema/build/wheel/security/cleanup PASS; D1 false |
 
 ## 12. Final stop boundary
 

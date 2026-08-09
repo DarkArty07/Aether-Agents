@@ -1,6 +1,6 @@
 # M1.4-R1 — Adaptive Orca provider and ownership decision
 
-> **Status:** APPROVED SUCCESSOR DESIGN; IMPLEMENTATION/QUALIFICATION IN PROGRESS
+> **Status:** APPROVED SUCCESSOR DESIGN; R0-R6 CLOSED; PROVIDER ORCHESTRATION BLOCKED
 > **Date:** 2026-08-08
 > **Decision owner:** Christopher (DarkArty07)
 > **Execution owner:** Hermes
@@ -240,3 +240,11 @@ R5 closed `BLOCKED / NOT EXECUTED`. No provider-backed worker, model, terminal,
 worktree, Run or Task was started. The block preserves R1-R4 lower-level evidence
 without treating deterministic adapter tests as agent-orchestration acceptance.
 D1 remains false.
+
+## 13. R6 final disposition
+
+R0-R6 close with the adaptive architecture, `v1alpha2` schemas and restricted
+foundation accepted. Provider-backed agent orchestration, trusted coordinator
+binding, D1, registration and activation remain blocked. The next action is an
+owner decision on a public headless coordinator-admission primitive or a separately
+authorized isolated desktop/UI-backed qualification.

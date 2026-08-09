@@ -6,7 +6,7 @@
 - **Partially supersedes:** PDR-0012 section 6's demand-driven-adapter condition and the v0.22.0 CLI-first/no-Aether-MCP roadmap assumption
 - **Preserves:** PDR-0012's Hermes–Orca ownership boundary, retirement of Olympus and the disconnected native core, no hidden fallback, no duplicated Orca operational state, and separate activation/release gates
 - **Refined by:** Detailed contracts under `../architecture/AETHER_MCP.md`, `../reference/`, and `../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`
-- **Implementation boundary:** bounded R0-R6 redesign/qualification authorized; no MCP registration, model-backed worker, Release, or activation
+- **Implementation boundary:** bounded R0-R6 redesign/qualification closed with the provider product gate blocked; no MCP registration, model-backed worker, Release, or activation
 
 ## Context
 
@@ -304,13 +304,10 @@ stepwise external-agent workflow are recorded in
 
 The owner selected the adaptive provider path on 2026-08-08 and authorized the
 ordered R0-R6 task in
-`../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. It may amend the default-off
-contract, requalify the exact candidate in fresh isolation, implement the minimum
-adapter/journal/reconciler foundation, and attempt one no-model two-worker
-synthetic slice. It may form local atomic English commits. It may not register or
-activate MCP, use private provider state, launch model-backed workers, use
-credentials or spend, push, merge, rebase, amend, tag, Release, deploy, or start a
-persistent service.
+`../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. The task closes with the
+default-off contract and restricted adapter/journal/reconciler foundation
+implemented, the two-worker slice blocked/not executed, and zero tools activated.
+Any coordinator-admission qualification now requires a separate owner decision.
 
 ## References
 

@@ -170,6 +170,6 @@ R4 does not provide:
 - a real worker, model or provider account;
 - an R5 slice.
 
-R5 remains blocked by `R3_LIFECYCLE_ACCEPTANCE.md`. It must close without executing
-a provider-backed two-worker slice unless a separate owner-authorized coordinator-
-binding gate supplies new evidence.
+R5 was blocked by `R3_LIFECYCLE_ACCEPTANCE.md` and later closed without executing
+a provider-backed two-worker slice. A future R5-R1 requires a separate owner-
+authorized coordinator-binding gate with new evidence.

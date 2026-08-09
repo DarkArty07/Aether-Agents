@@ -1,11 +1,11 @@
 # Aether MCP Tool Contract
 
-> **Status:** APPROVED ADAPTIVE `v1alpha2` SUCCESSOR; IMPLEMENTATION IN PROGRESS; ZERO TOOLS CALLABLE
+> **Status:** `v1alpha2` SCHEMAS/RESTRICTED FOUNDATION IMPLEMENTED; PROVIDER ORCHESTRATION BLOCKED; ZERO TOOLS CALLABLE
 > **Date:** 2026-08-08
 > **Protocol:** `aether.mcp/v1alpha2`
 > **Server namespace:** `aether` (`mcp__aether__*` in Hermes)
 > **Authority:** ADR-0001 and `../architecture/AETHER_MCP.md`
-> **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
+> **Closed implementation scope:** bounded R0-R6 default-off redesign and qualification
 
 ## 1. Contract rules
 
@@ -748,10 +748,10 @@ server-initiated progress/notification delivery for correctness. MCP roots may
 help locate a candidate project but are never authoritative; `project_admit` and
 `project_inspect` establish identity.
 
-## 10. Implementation gate
+## 10. Final implementation disposition
 
 The owner accepted the adaptive successor and bounded R0-R6 implementation task on
-2026-08-08. Implementation must remain default-off with zero registered/callable
-tools and follow the frozen RED/GREEN milestone sequence. Registration,
-model-backed execution, credentials/spend, integration, Release, and activation
-remain later gates.
+2026-08-08. R6 closes with the 15 schemas and restricted foundation implemented,
+zero registered/callable tools, and provider-backed orchestration blocked.
+Registration, model-backed execution, credentials/spend, integration, Release,
+and activation remain later gates after a separate coordinator-admission decision.

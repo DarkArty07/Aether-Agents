@@ -1,10 +1,10 @@
 # Aether MCP Control and Trace Plane
 
-> **Status:** APPROVED ADAPTIVE TARGET; BOUNDED IMPLEMENTATION IN PROGRESS; NOT ACTIVATED
+> **Status:** ADAPTIVE SCHEMAS/RESTRICTED FOUNDATION IMPLEMENTED; PROVIDER ORCHESTRATION BLOCKED; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Authority:** ADR-0001, PDR-0012, and PDR-0013
 > **Protocol target:** `aether.mcp/v1alpha2`
-> **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
+> **Closed implementation scope:** bounded R0-R6 default-off redesign and qualification
 
 ## 1. Purpose
 
@@ -720,9 +720,10 @@ Implementation planning must include deterministic tests for:
   terminal binding remains unqualified; every mutation and R5 are blocked.
 - Model-backed workers, Release, and activation remain unauthorized.
 
-### Final design gate
+### Final disposition
 
-Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08. The
-next acceptance gate is executed evidence: exact lifecycle, successor protocol,
-adapter/reconciliation behavior, and the bounded synthetic slice. Design prose
-alone cannot grant D1 or activation.
+Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08. R6
+accepts the successor protocol and restricted adapter/reconciliation foundation,
+but R3/R5 leave trusted coordinator admission and provider-backed orchestration
+blocked. The next gate is a separate owner decision; design prose and lower-level
+deterministic tests cannot grant D1 or activation.

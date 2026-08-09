@@ -1,5 +1,5 @@
 schema_version: 1
-status: adaptive_orca_redesign_r5_closed_blocked_r6_pending
+status: adaptive_orca_redesign_r0_r6_closed_with_blocked_product_gate
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -116,9 +116,9 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: R5_closed_blocked_awaiting_R6_audit
+  active_task: none_r0_r6_closed
   successor_agents_are_stateless: true
-  next_prompt_requires_owner_decision: false
+  next_prompt_requires_owner_decision: true
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
@@ -328,7 +328,7 @@ adaptive_orca_redesign:
     - R4_adapter_and_reconciler_foundation
     - R5_two_worker_synthetic_slice
     - R6_final_acceptance_audit_and_handoff
-  active_milestone: R5_closed_blocked_awaiting_R6_audit
+  active_milestone: R0_R6_closed_with_blocked_product_gate
   operational_tool_target: 15
   callable_tools: 0
   registered_tools: 0
@@ -430,6 +430,24 @@ adaptive_orca_redesign:
     runtime_survivors: 0
     callable_tools: 0
     registered_tools: 0
+    D1_granted: false
+  r6:
+    status: closed_with_blocked_product_gate
+    acceptance: docs/releases/v0.22.0/R6_FINAL_ACCEPTANCE.md
+    evidence: docs/releases/v0.22.0/R6_FINAL_EVIDENCE.json
+    audited_input_commit: fc4c5b1880eed956ce6e9a4dfd6a14ed07f08445
+    audited_input_tree: eb6753ebc7c3de0e0f9992e943f8e808c1220029
+    detached_exact_tree_tests: 125_passed_1_deselected
+    detached_ruff: pass
+    clean_wheel_install_and_import: pass
+    schema_regeneration: pass
+    strict_yaml_and_links: pass
+    changed_secret_shape_hits: 0
+    runtime_survivors: 0
+    registered_tools: 0
+    callable_tools: 0
+    provider_orchestration_accepted: false
+    D1_ready: false
     D1_granted: false
 
 m2_1a_acceptance:
@@ -1233,11 +1251,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: R6_final_acceptance_audit_and_handoff
+  milestone: owner_decision_on_coordinator_admission_gate
   executor: Hermes
   acceptance_owner: Hermes_for_deterministic_gate_Christopher_for_product_or_D1_decisions
   requirement: >-
-    Audit the exact final tree against every R0-R6 acceptance and non-goal; run the
-    canonical suite/build/schema/zero-tool/security/cleanup gates; reconcile all
-    documents and produce a reproducible local handoff. Do not push, activate,
-    register, merge, tag, Release or deploy.
+    R0-R6 are closed. Decide whether to request a versioned public headless
+    coordinator-admission primitive from Orca or authorize a separately isolated
+    desktop/UI-backed qualification. Until then do not push the local redesign,
+    grant D1, register tools, activate, merge, tag, Release or deploy.

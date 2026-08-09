@@ -1,6 +1,6 @@
 # Hermes–Orca Swarm Operating Model
 
-> **Status:** APPROVED ADAPTIVE OPERATING MODEL; IMPLEMENTATION IN PROGRESS; NOT ACTIVATED
+> **Status:** APPROVED ADAPTIVE MODEL; PROVIDER-BACKED EXECUTION BLOCKED; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Authority:** PDR-0012, PDR-0013, and ADR-0001
 > **Current truth:** Hermes performs bounded work directly; no accepted Aether multi-agent execution path exists.
@@ -434,11 +434,12 @@ The following remain unproven:
 
 Therefore activation remains `NO-GO`.
 
-## Authorized synthetic qualification sequence
+## Blocked future synthetic qualification sequence
 
-The bounded R0-R6 task may validate the mechanics below without model credentials
-or spending. MCP remains unregistered/default-off; the harness invokes the
-implementation directly.
+The bounded R0-R6 task closed before the mechanics below could be accepted because
+trusted coordinator admission remains unqualified. A future R5-R1 may validate
+them only under a separate owner-authorized gate, without model credentials or
+spending. MCP remains unregistered/default-off.
 
 ### Pilot A — one synthetic worker
 

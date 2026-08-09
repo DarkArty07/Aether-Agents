@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** R5 CLOSED BLOCKED/NOT EXECUTED; R6 AUDIT NEXT; D1 FALSE; NOT ACTIVATED
+> **Status:** R0-R6 CLOSED WITH BLOCKED PRODUCT GATE; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, ADR-0001, and M1.4-R1
-> **Implementation authorization:** bounded R0-R6 default-off redesign/qualification in `../../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`
+> **Closed implementation scope:** bounded R0-R6 default-off redesign/qualification in `../../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`
 
 ## 1. Objective
 
@@ -923,6 +923,13 @@ executed because trusted coordinator binding remains unqualified and R4 contains
 no provider executor. R5 closes `BLOCKED / NOT EXECUTED` with zero workers,
 models, tools and runtime survivors. See `R5_SYNTHETIC_SLICE_ACCEPTANCE.md`.
 
+**R6 closure (2026-08-08):** the exact detached input tree passes 125 canonical
+tests with one blocked real probe deselected, Ruff, schema regeneration, clean
+wheel install/import, security checks and zero-resource cleanup. The adaptive
+architecture, protocol and restricted foundation are accepted; provider-backed
+agent orchestration, D1 and activation remain blocked. See
+`R6_FINAL_ACCEPTANCE.md` and `R6_FINAL_EVIDENCE.json`.
+
 #### M2.3 — Implement trusted principal and project admission
 
 Derive coordinator identity from launch/session context. Resolve canonical project
@@ -1493,23 +1500,24 @@ applicable design/implementation boundary.
 
 ### NOW
 
-M1.3 and M1.4 remain closed historical gates. M1.4-R1 records the owner's adaptive
-provider decision, and the bounded R0-R6 successor task is active. D1 remains
-false, MCP remains zero-tool/default-off, and Release/activation remain blocked.
+R0-R6 are closed with the provider product gate blocked. The next action is an
+owner decision between a public headless coordinator-admission primitive and a
+separately isolated desktop/UI-backed qualification. D1 remains false, MCP remains
+zero-tool/default-off, and Release/activation remain blocked.
 
 ### STOP CONDITION
 
-Execute only the ordered R0-R6 successor task. Stop immediately if exact provider
-identity drifts, structured qualification cannot be made reliable, a composition
-requires a private/undocumented seam, owned-resource cleanup cannot be proven, or
-the same approach fails three times. In every case preserve `UNKNOWN`/failure
-evidence and zero owned survivors. Do not register/activate MCP, use models or
-credentials, push, merge, tag, Release, or deploy.
+Do not continue implementation or provider execution under the closed R0-R6 task.
+Preserve the local candidate and exact evidence. Any new qualification must have a
+separate authorized task, exact provider identity, public structured seams, honest
+`UNKNOWN`/failure states and zero owned survivors. Do not register/activate MCP,
+use models or credentials, push, merge, tag, Release, or deploy.
 
 ### LATER GATES
 
-Finish R0-R6 -> owner reviews D1 proposal and residual degraded guarantees ->
-separately authorize MCP registration and model/account/budget selection -> real
-model-backed swarm qualification -> M6 roster -> separate M7 learning boundary ->
-M8 verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation
--> M11 Release -> M12 activation.
+Owner selects and authorizes coordinator-admission gate -> qualify the trusted
+binding -> execute R5-R1 two-worker synthetic slice -> review D1 and residual
+degraded guarantees -> separately authorize MCP registration and
+model/account/budget selection -> real model-backed swarm qualification -> M6
+roster -> separate M7 learning boundary -> M8 verifier/Ariadna decisions -> M9
+productization -> M10 controlled evaluation -> M11 Release -> M12 activation.

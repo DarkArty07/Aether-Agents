@@ -49,9 +49,12 @@ no trusted headless coordinator-terminal bootstrap was qualified. R4 implements 
 restricted default-off exact-build planner, atomic append-only operation journal,
 idempotency, `UNKNOWN` and injected read-only reconciliation; it contains no live
 provider executor and every current mutation remains unavailable. R5 closed
-`BLOCKED / NOT EXECUTED` with zero workers, tools, models or runtime resources;
-R6 is the final audit/handoff only. Orca remains the sole mutable runtime
-authority, MCP remains zero-tool/default-off, and D1 remains false. Local atomic
+`BLOCKED / NOT EXECUTED` with zero workers, tools, models or runtime resources.
+R6 closes the local candidate with architecture/protocol/restricted-foundation
+evidence accepted and the provider-backed product gate blocked. Orca remains the
+sole mutable runtime authority, MCP remains zero-tool/default-off, and D1 remains
+false. The next action requires an owner decision on public headless coordinator
+admission or a separately isolated desktop/UI-backed qualification. Local atomic
 English commits are allowed. Model-backed workers, credentials/spend, push, merge,
 rebase, amend, tag, Release, deployment, registration, persistent services and
 activation remain forbidden.
