@@ -1,5 +1,5 @@
 schema_version: 1
-status: m1_4_closed_d1_blocked_awaiting_owner_decision
+status: adaptive_orca_redesign_r0_complete
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -103,22 +103,22 @@ mcp_architecture:
   trace_schema: docs/reference/AETHER_TRACE_SCHEMA.md
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
-  implementation_authorized: false
-  implementation_scope: none_awaiting_owner_provider_decision
+  implementation_authorized: true
+  implementation_scope: bounded_R0_R6_default_off_adapter_redesign
   last_accepted_scope: M2_2_provider_independent_protocol
-  qualification_implementation_authorized: false
-  qualification_implementation_scope: M1_3_and_M1_4_closed
+  qualification_implementation_authorized: true
+  qualification_implementation_scope: R3_exact_isolated_lifecycle_requalification
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
 implementation_workflow:
-  mode: external_coding_agent_stepwise
+  mode: hermes_stepwise_milestones
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: none_stop_boundary_reached
+  active_task: R0_complete_awaiting_R1_start
   successor_agents_are_stateless: true
-  next_prompt_requires_owner_decision: true
+  next_prompt_requires_owner_decision: false
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
@@ -270,12 +270,12 @@ m0_provider_seam_amendment:
   aether_owned_version_pinned_schemas: allowed_after_separate_fixture_authorization
   public_command_composition: allowed_after_separate_composition_acceptance
   private_state_gui_shell_fallback: forbidden
-  current_authorized_task: none_awaiting_owner_decision
+  current_authorized_task: docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md
   canonical_manifest: docs/releases/v0.22.0/ORCA_PROVIDER_MANIFEST.json
   canonical_manifest_sha256: 186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe
   M1_3_authorized: completed_blocked
   M1_4_authorized: completed_d1_blocked
-  M2_authorized: false_pending_owner_decision_after_M1_4
+  M2_authorized: bounded_successor_contract_and_adapter_foundation_only
 
 m1_3_lifecycle_closure:
   closed_on: "2026-08-08"
@@ -309,11 +309,34 @@ m1_4_provider_decision:
   adapter_contract_frozen: false
   adapter_implementation_authorized: false
   next_milestone_authorized: false
-  owner_decision_required: true
+  owner_decision_required: false_resolved_by_successor_redesign_authorization
   owner_options:
     - require_official_orca_contract_additions
     - rescope_product_contract
     - qualify_different_provider_boundary
+
+adaptive_orca_redesign:
+  authorized_on: "2026-08-08"
+  authorized_by: Christopher_DarkArty07
+  task: docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md
+  selected_owner_path: rescope_around_public_orca_capabilities
+  milestone_sequence:
+    - R0_isolation_and_frozen_plan
+    - R1_ownership_catalog_and_debt_redesign
+    - R2_successor_alpha_protocol_contract
+    - R3_exact_orca_lifecycle_adaptation
+    - R4_adapter_and_reconciler_foundation
+    - R5_two_worker_synthetic_slice
+    - R6_final_acceptance_audit_and_handoff
+  active_milestone: R0_complete_awaiting_R1_start
+  operational_tool_target: 15
+  callable_tools: 0
+  registered_tools: 0
+  D1_granted: false
+  real_model_workers_authorized: false
+  credentials_or_spend_authorized: false
+  activation_authorized: false
+  integration_authorized: false
 
 m2_1a_acceptance:
   accepted_on: "2026-08-07"

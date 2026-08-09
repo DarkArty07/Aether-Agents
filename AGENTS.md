@@ -37,12 +37,21 @@ closed. M1.3 technical implementation is `7dd413b86c1d4c0a44f1f39b1f9b86089f4c22
 two final exact-candidate probes both stopped fail-closed at cold start with
 `ERR_RUNTIME_START_SHAPE`, while namespace rollback left zero process, listener,
 mount or root survivors and protected global state remained unchanged. All six
-missing M1.2 aggregate seams remain `UNSUPPORTED`. M1.4 therefore records
-`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 is not granted and no adapter contract
-is frozen. The mandatory stop boundary has been reached. No implementation
-milestone is currently authorized. Await the product owner's provider decision;
-do not register or activate MCP, implement an adapter/storage/lifecycle service,
-begin M2.3 or M3, merge, tag or Release.
+missing M1.2 aggregate seams remained `UNSUPPORTED` under that frozen decision.
+M1.4 therefore recorded `D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 was not
+granted and no adapter contract was frozen at that boundary.
+
+Chris then selected the bounded adaptive redesign path on 2026-08-08 and
+authorized the ordered R0-R6 sequence in
+`docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. That task may redesign the
+ownership/capability contract, reduce the operational MCP catalog to 15 designed
+tools, adapt the exact isolated AppImage lifecycle harness, implement the minimum
+default-off adapter/journal/reconciler foundation, and attempt one isolated
+provider-backed two-worker synthetic slice. It must preserve Orca as sole mutable
+runtime authority, keep zero MCP tools registered/callable, avoid model-backed
+workers/credentials/spend, and stop after R6. Local atomic English commits are
+allowed. Push, merge, rebase, amend, tag, Release, deployment, registration,
+persistent services and activation remain forbidden.
 
 ## v0.19.0 experimental coordination closeout
 
