@@ -750,8 +750,12 @@ help locate a candidate project but are never authoritative; `project_admit` and
 
 ## 10. Final implementation disposition
 
-The owner accepted the adaptive successor and bounded R0-R6 implementation task on
-2026-08-08. R6 closes with the 15 schemas and restricted foundation implemented,
-zero registered/callable tools, and provider-backed orchestration blocked.
-Registration, model-backed execution, credentials/spend, integration, Release,
-and activation remain later gates after a separate coordinator-admission decision.
+The owner accepted the adaptive successor and bounded R0-R6 task on 2026-08-08,
+then authorized completion through M2 with a strict stop before M3 on 2026-08-09.
+M2 closes with all 15 schemas, trusted project admission, durable operation and
+semantic trace, protected-content primitives, manifest validation and a
+version-pinned read-only Orca catalog implemented internally. The exact Orca
+1.4.167 desktop-backed coordinator binding passed two isolated restart/rebind
+probes; headless `serve` admission remains unavailable. There are still zero
+registered/callable MCP tools. M3, workers, models, credentials/spend,
+registration, integration, Release and activation remain later gates.

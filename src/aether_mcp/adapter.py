@@ -142,6 +142,15 @@ class AdapterPolicy:
             qualified_mutations=frozenset(),
         )
 
+    @classmethod
+    def m2_desktop_qualified(cls, build: ProviderBuildBinding) -> AdapterPolicy:
+        """Admit only the mutation proven by two isolated desktop probes."""
+        return cls(
+            provider_build_digest=build.digest,
+            coordinator_binding_qualified=True,
+            qualified_mutations=frozenset({"run_create"}),
+        )
+
 
 @dataclass(frozen=True)
 class PlannedCall:

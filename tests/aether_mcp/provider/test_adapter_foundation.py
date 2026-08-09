@@ -108,6 +108,13 @@ def test_r3_policy_allows_exact_status_but_rejects_every_mutation() -> None:
     assert _error_code(exc) == "ERR_COORDINATOR_BINDING_UNQUALIFIED"
 
 
+def test_m2_desktop_qualified_policy_admits_only_run_create() -> None:
+    build = _build()
+    policy = AdapterPolicy.m2_desktop_qualified(build)
+    assert policy.coordinator_binding_qualified is True
+    assert policy.qualified_mutations == frozenset({"run_create"})
+
+
 def test_mutation_requires_exact_build_principal_project_and_generation() -> None:
     planner, build = _planner()
     foreign_build = _build(manifest="f" * 64)

@@ -1,5 +1,5 @@
 schema_version: 1
-status: adaptive_orca_redesign_r0_r6_closed_with_blocked_product_gate
+status: m0_m2_complete_m3_not_started_default_off
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -15,8 +15,8 @@ candidate:
     stores and release authority; keep Olympus plus the disconnected native Python
     core retired; design one bounded Aether MCP control, semantic trace and
     protected learning-episode plane over Orca; and keep multi-agent execution
-    unavailable until the MCP and Hermes-led Orca swarm path pass independent
-    gates.
+    unavailable; M2 implements only the default-off zero-tool control, trace,
+    privacy and read-only catalog foundation, while M3 lifecycle has not started.
   not_a_release_claim: true
   source_implementation_started: true
   native_runtime_source_present: false
@@ -44,6 +44,40 @@ candidate:
   orca_runtime_activated_for_aether: false
   isolated_orca_runtime_started_during_diagnostics: true
   isolated_orca_runtime_currently_running: false
+  m2_foundation_complete: true
+  m3_started: false
+  callable_tools: 0
+
+m2_foundation_completion:
+  completed_on: "2026-08-09"
+  owner_authority: user_requested_completion_through_M2_with_strict_stop_before_M3
+  exact_orca_candidate: orca-linux-appimage-1.4.167
+  appimage_sha256: 813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33
+  coordinator_qualification:
+    mode: isolated_desktop_renderer_public_cli
+    independent_fresh_profiles: 2
+    lifecycle: terminal_run_task_restart_recovery_rebind_complete_reset
+    consumer_generation_after_rebind: 2
+    workers: 0
+    models: 0
+    credentials_or_spend: false
+    process_survivors: 0
+    terminal_survivors: 0
+    temporary_root_survivors: 0
+    headless_serve_admission: unavailable
+  foundation:
+    trusted_project_admission: implemented
+    sqlite_wal_schema_version: 2
+    durable_before_effect_receipts: implemented
+    semantic_decision_and_evidence_trace: implemented
+    protected_content: aes_256_gcm_fail_closed_without_key
+    production_key_provider_enabled: false
+    provider_catalog_version: "1.4.167"
+    provider_catalog_sha256: 00df83ec1686a56344c78a49d75ff8dec63d988e588642236172180742b23c25
+    provider_catalog_effects: read_only_only
+    manifest_validation: deterministic_dag_and_write_scope
+    mcp_registered: false
+    mcp_callable_tools: 0
 
 architecture_correction:
   approved_on: "2026-08-05"
@@ -104,10 +138,10 @@ mcp_architecture:
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: true
-  implementation_scope: bounded_R0_R6_default_off_adapter_redesign
-  last_accepted_scope: M2_2_provider_independent_protocol
+  implementation_scope: M0_through_M2_default_off_foundation
+  last_accepted_scope: M2_7_foundation_closure
   qualification_implementation_authorized: true
-  qualification_implementation_scope: R3_exact_isolated_lifecycle_requalification
+  qualification_implementation_scope: exact_isolated_desktop_renderer_coordinator_lifecycle
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
   activation_authorized: false
 
@@ -116,9 +150,9 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: none_r0_r6_closed
+  active_task: none_M2_closed_stop_before_M3
   successor_agents_are_stateless: true
-  next_prompt_requires_owner_decision: true
+  next_prompt_requires_owner_M3_authorization: true
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden

@@ -175,12 +175,14 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
         "name": "aether-mcp",
         "version": "0.22.0.dev0",
         "requires-python": ">=3.11",
-        "dependencies": ["mcp==1.28.1"],
+        "dependencies": ["cryptography==50.0.0", "mcp==1.28.1"],
         "scripts": {"aether-mcp": "aether_mcp.__main__:main"},
     }
     assert pyproject["tool"]["setuptools"]["packages"]["find"] == {"where": ["src"]}
+    assert pyproject["tool"]["setuptools"]["package-data"] == {
+        "aether_mcp": ["data/orca/*/*.json"]
+    }
     assert "aiosqlite" not in text
-    assert "cryptography" not in text
     assert "aether-agents" not in text
     assert "olympus" not in text
     assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.22.0"
@@ -238,8 +240,17 @@ def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
     expected_sources = (
         "src/aether_mcp/__init__.py",
         "src/aether_mcp/__main__.py",
+        "src/aether_mcp/adapter.py",
+        "src/aether_mcp/admission.py",
+        "src/aether_mcp/catalog.py",
+        "src/aether_mcp/content_store.py",
+        "src/aether_mcp/data/orca/1.4.167/catalog.json",
+        "src/aether_mcp/foundation.py",
+        "src/aether_mcp/journal.py",
+        "src/aether_mcp/manifest.py",
         "src/aether_mcp/protocol.py",
         "src/aether_mcp/server.py",
+        "src/aether_mcp/trace_store.py",
     )
 
     for path in workflows:

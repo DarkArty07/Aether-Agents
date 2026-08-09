@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** R0-R6 CLOSED WITH BLOCKED PRODUCT GATE; D1 FALSE; NOT ACTIVATED
-> **Date:** 2026-08-08
+> **Status:** M0-M2 COMPLETE; M3 NOT STARTED; DEFAULT-OFF; NOT ACTIVATED
+> **Date:** 2026-08-09
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
 > **Governing decisions:** PDR-0012, PDR-0013, ADR-0001, and M1.4-R1
-> **Closed implementation scope:** bounded R0-R6 default-off redesign/qualification in `../../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`
+> **Closed implementation scope:** M0-M2, including the bounded R0-R6 redesign and isolated desktop-backed coordinator qualification
 
 ## 1. Objective
 
@@ -31,17 +31,20 @@ plane, with:
 - The historical Aether native coordination core is retired from the candidate.
 - The current candidate has no accepted multi-agent execution runtime.
 - Orca is not running for this design work.
-- The accepted M2.1a candidate contains one default-off `aether_mcp` package and
-  real stdio MCP process with exactly zero tools. It is not registered or active.
+- The M2 candidate contains one default-off `aether_mcp` package, a real stdio
+  MCP process with exactly zero tools, trusted project admission, SQLite WAL
+  receipts/semantic trace, fail-closed protected content, deterministic manifest
+  validation and a version-pinned read-only Orca catalog. It is not registered or active.
 - The historical M2.2 tree exports 24 `v1alpha1` schemas and 50 stable errors.
   R2 accepted the exact 15-schema `aether.mcp/v1alpha2` successor. The stdio
   server still registers and exposes zero tools.
-- R4 adds a default-off exact-build planner, append-only operation journal and
-  injected read-only reconciler foundation. It has no live provider executor and
-  every current mutation remains unavailable.
-- R3 fixed AppImage extraction/runtime framing and proved structured cold
-  readiness, but full lifecycle is blocked because no trusted headless coordinator
-  terminal binding was qualified.
+- R4 added the restricted exact-build planner, append-only operation journal and
+  injected read-only reconciler foundation. M2.3-M2.6 complete the internal
+  default-off control/trace foundation without registering a provider executor.
+- The headless `serve` path remains unable to create a trusted coordinator terminal.
+  Two fresh desktop-renderer profiles independently qualified the public CLI path:
+  terminal -> Run -> Task -> restart -> recovery -> rebind -> completion -> reset,
+  with zero workers, models, credentials, surviving processes, terminals or roots.
 - Hermes currently performs bounded work directly. The owner authorized the
   ordered R0-R6 redesign/qualification task on 2026-08-08.
 - PDR-0012 defines the Hermes–Orca ownership boundary.
@@ -58,7 +61,7 @@ No target statement in this roadmap is a current-runtime claim.
 ```text
 User
   -> Hermes product contract, routing, supervision, synthesis
-  -> Aether MCP v1alpha1
+  -> Aether MCP v1alpha2
        -> typed product operations
        -> policy and contract validation
        -> version-pinned Orca provider adapter
@@ -1438,7 +1441,7 @@ No recurring capture, provider spend, dataset upload or fine-tuning is implied.
 v0.22.0 is complete only at M11 when one integrated and published exact tree has:
 
 - every required implementation artifact;
-- 24 real MCP tools with no placeholders or arbitrary shell;
+- 15 real MCP tools with no placeholders or arbitrary shell;
 - qualified one-worker, parallel-swarm and retained-roster behavior;
 - protected replayable episodes and reproducible local datasets;
 - all mandatory 16-case thresholds and aggregate gates;
@@ -1500,24 +1503,23 @@ applicable design/implementation boundary.
 
 ### NOW
 
-R0-R6 are closed with the provider product gate blocked. The next action is an
-owner decision between a public headless coordinator-admission primitive and a
-separately isolated desktop/UI-backed qualification. D1 remains false, MCP remains
-zero-tool/default-off, and Release/activation remain blocked.
+M0-M2 are complete. The owner authorized the isolated desktop-backed qualification
+and implementation through M2 on 2026-08-09. D1 is satisfied only for the exact
+Orca 1.4.167 desktop-renderer/public-CLI binding and its recorded degraded
+guarantees; the headless `serve` admission seam remains unavailable. MCP remains
+zero-tool/default-off, and M3, Release and activation remain blocked.
 
 ### STOP CONDITION
 
-Do not continue implementation or provider execution under the closed R0-R6 task.
-Preserve the local candidate and exact evidence. Any new qualification must have a
-separate authorized task, exact provider identity, public structured seams, honest
-`UNKNOWN`/failure states and zero owned survivors. Do not register/activate MCP,
-use models or credentials, push, merge, tag, Release, or deploy.
+Stop before M3. Preserve the M2 candidate and exact evidence. Do not create a
+lifecycle Run through Aether MCP, register/activate MCP, dispatch workers, use
+models or credentials, push, merge, tag, Release or deploy without the next
+explicit gate.
 
 ### LATER GATES
 
-Owner selects and authorizes coordinator-admission gate -> qualify the trusted
-binding -> execute R5-R1 two-worker synthetic slice -> review D1 and residual
-degraded guarantees -> separately authorize MCP registration and
-model/account/budget selection -> real model-backed swarm qualification -> M6
-roster -> separate M7 learning boundary -> M8 verifier/Ariadna decisions -> M9
-productization -> M10 controlled evaluation -> M11 Release -> M12 activation.
+Owner authorizes M3 -> lifecycle without workers -> M4 one deterministic synthetic
+worker -> M5 two-worker synthetic slice -> separately authorize provider/model/
+account/budget selection -> real model-backed swarm qualification -> M6 roster ->
+separate M7 learning boundary -> M8 verifier/Ariadna decisions -> M9 productization
+-> M10 controlled evaluation -> M11 Release -> M12 activation.

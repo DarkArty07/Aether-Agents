@@ -65,8 +65,17 @@ jobs:
           assert source_files == {
               'src/aether_mcp/__init__.py',
               'src/aether_mcp/__main__.py',
+              'src/aether_mcp/adapter.py',
+              'src/aether_mcp/admission.py',
+              'src/aether_mcp/catalog.py',
+              'src/aether_mcp/content_store.py',
+              'src/aether_mcp/data/orca/1.4.167/catalog.json',
+              'src/aether_mcp/foundation.py',
+              'src/aether_mcp/journal.py',
+              'src/aether_mcp/manifest.py',
               'src/aether_mcp/protocol.py',
               'src/aether_mcp/server.py',
+              'src/aether_mcp/trace_store.py',
           }
           assert not list((root / 'home/profiles').glob('*/plugins/aether'))
           print('product_assets=PASS')

@@ -702,28 +702,35 @@ Implementation planning must include deterministic tests for:
   improve and refine the system; auditability is secondary.
 - Orca remains operational authority.
 - Hermes remains product supervisor and final synthesizer.
-- The proposed design now includes tool/error/effect contracts, project
+- The accepted design includes tool/error/effect contracts, project
   admission, semantic trace, protected learning episodes/datasets,
   retention/deletion/lineage, privacy/integrity, closeout, deterministic failure
   cases, and concrete measurable use cases/thresholds.
 
-### Not implemented or accepted
+### Implemented through M2
 
 - The package and zero-tool stdio bootstrap exist; R2 implements the exact
   15-schema `v1alpha2` successor while preserving historical `v1alpha1` bytes.
-- No operational tool is registered/callable. R4 provides only a restricted local
-  operation-journal/planner/reconciler foundation; no accepted operational
-  provider executor or mutable adapter exists.
-- The exact Orca candidate is pinned for qualification, but all 55 adaptation
-  capabilities remain `UNQUALIFIED` under M1.4-R1.
-- R3 fixes AppImage framing and proves cold readiness, but trusted coordinator-
-  terminal binding remains unqualified; every mutation and R5 are blocked.
-- Model-backed workers, Release, and activation remain unauthorized.
+- M2.3-M2.6 implement trusted project admission, SQLite WAL operation receipts and
+  semantic decisions/evidence, fail-closed AES-256-GCM protected content,
+  deterministic manifest/DAG validation and a version-pinned read-only Orca
+  catalog. No production key provider is enabled.
+- Two independent fresh desktop-renderer profiles qualified public-CLI coordinator
+  admission, Run/Task recovery across restart, explicit generation-2 rebind,
+  completion and reset for Orca 1.4.167. Headless `serve` admission remains absent.
+- No operational MCP tool is registered/callable. No Aether lifecycle Run, worker,
+  model, credential, provider spend, registration or activation was introduced.
+
+### Still not implemented or authorized
+
+- M3 lifecycle control and every M4+ worker/swarm capability.
+- A production key-custody provider or full-episode capture activation.
+- Model-backed workers, Release, registration, deployment and activation.
 
 ### Final disposition
 
-Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08. R6
-accepts the successor protocol and restricted adapter/reconciliation foundation,
-but R3/R5 leave trusted coordinator admission and provider-backed orchestration
-blocked. The next gate is a separate owner decision; design prose and lower-level
-deterministic tests cannot grant D1 or activation.
+Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08, then
+authorized completion through M2 with a strict stop before M3 on 2026-08-09. The
+exact desktop-backed coordinator binding is technically qualified with its
+headless limitation recorded. M2 is complete and default-off; M3 requires a new
+owner gate and this milestone does not grant registration or activation.

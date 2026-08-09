@@ -10,7 +10,7 @@ Architecture documentation explains how approved product intent is realized tech
 |---|---|
 | `SYSTEM_CONTEXT.md` | Users, external systems, trust boundaries, and system responsibilities |
 | `SYSTEM_OVERVIEW.md` | Components and runtime topology |
-| [`AETHER_MCP.md`](./AETHER_MCP.md) | Proposed detailed design for MCP-first Hermes control, compact semantic trace, protected learning episodes/dataset lineage, explanation, measurement and the Orca-provider boundary; not implemented |
+| [`AETHER_MCP.md`](./AETHER_MCP.md) | Accepted detailed design for MCP-first Hermes control, compact semantic trace, protected learning episodes/dataset lineage, explanation, measurement and the Orca-provider boundary; the M2 foundation is implemented default-off with zero callable tools, while M3+ lifecycle execution remains unimplemented |
 | [`ORCHESTRATION.md`](./ORCHESTRATION.md) | Approved target flow from user intent through Hermes, Orca, workers, review, acceptance, and cleanup; not an active runtime claim |
 | [`DAIMONS.md`](./DAIMONS.md) | Approved target roster, archetypes, authority, lifecycle, participation policy, and non-goals |
 | `RUNTIME_SUBSTRATE.md` | Accepted execution substrate, lifecycle, isolation, recovery, and cleanup after PDR-0011 gates pass |

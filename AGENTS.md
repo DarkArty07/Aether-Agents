@@ -59,6 +59,18 @@ English commits are allowed. Model-backed workers, credentials/spend, push, merg
 rebase, amend, tag, Release, deployment, registration, persistent services and
 activation remain forbidden.
 
+Chris authorized completion through M2 on 2026-08-09 and required a strict stop
+before M3. Two fresh, desktop-renderer-backed Orca 1.4.167 profiles independently
+qualified public CLI coordinator admission, Run/Task persistence across restart,
+explicit generation-2 rebind, completion, reset and zero owned survivors; the
+headless `serve` admission seam remains unavailable. M2.3-M2.7 now provide trusted
+project admission, SQLite WAL operation/semantic trace authority, fail-closed
+AES-256-GCM protected content with no production key provider enabled,
+deterministic manifest validation and a version-pinned read-only Orca catalog.
+The stdio server still registers exactly zero tools. M3 lifecycle execution,
+workers, models, credentials/spend, push, merge, tag, Release, registration,
+persistent services and activation remain outside the completed scope.
+
 ## v0.19.0 experimental coordination closeout
 
 v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. At that historical boundary, `talk_to -> ACPManager` remained authoritative; that path has since been retired in the v0.22.0 candidate. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication were outside the v0.19 closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.

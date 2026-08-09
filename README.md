@@ -17,8 +17,10 @@ participation policy, skills, verification expectations, and release authority f
 an AI software team. The v0.22.0 candidate has physically retired Olympus/ACP and
 the disconnected Python core extracted from it. The target is a Hermes-led Orca
 swarm, but multi-agent execution and Ariadna curation remain intentionally
-unavailable until that path passes its separate isolation, lifecycle, cleanup,
-recovery, and rollback gates. No hidden fallback remains.
+unavailable. M2 now provides a default-off, zero-tool Aether MCP foundation for
+trusted project admission, durable receipts, protected content, manifest
+validation, semantic trace, and a version-pinned read-only Orca catalog. M3
+lifecycle execution has not started. No hidden fallback remains.
 
 </div>
 
@@ -43,7 +45,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🧠 | **6 Specialized Daimons** | Each a hermes-agent instance with its own model, persona (SOUL.md), and tools. Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. |
 | 🧭 | **Product Layer** | Hermes behavior, product decisions, specialist participation, verification policy, semantic acceptance, and release authority. |
 | 🐋 | **Orca Swarm Target** | Hermes will create one Run, dispatch independent Tasks before waiting, work alongside agents, and use Orca messaging instead of brokering every interaction. |
-| 🧹 | **No Native Runtime** | Olympus, ACP, the extracted Python core, continuity plugins, MCP facade, package distribution, and entry points are absent. |
+| 🔒 | **Default-Off MCP Foundation** | `aether-mcp` packages the accepted M2 control/trace foundation, but registers exactly zero tools and does not start Runs, Tasks, workers, services, or network listeners. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **95 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
@@ -62,7 +64,14 @@ User
 Hermes (hermes-agent)
   ├── interprets product intent and decomposes work
   ├── implements bounded work in parallel
-  └── creates and supervises one Orca Run
+  └── owns product routing and semantic acceptance
+                      │
+       Aether MCP v1alpha2 (default-off; 0 tools)
+       admission / receipts / protected trace / catalog
+                      │
+             future M3+ lifecycle control
+                      ▼
+                  Orca Run
                       │
             independent Tasks / Dispatches
              ┌────────┴────────┐
@@ -74,6 +83,7 @@ Hermes (hermes-agent)
 ```
 
 - **Aether** owns product meaning through Hermes, profiles, skills, decisions, and acceptance policy—not through a parallel coordination kernel.
+- **Aether MCP M2** implements the internal, typed control/trace foundation while remaining unregistered and non-operational; it does not own Run, Task, worker, terminal, worktree, or message state.
 - **Orca** is intended to own Run, Task, Dispatch, messages, workers, terminals, worktrees, recovery, and cleanup mechanics.
 - **One feature branch** is the integration line; potentially conflicting writers use Orca child worktrees, while strictly disjoint scopes may share the current checkout.
 - **Existing `.aether` stores** are preserved and untouched; this candidate has no continuity or self-improvement reader/writer.
@@ -111,6 +121,8 @@ Aether-Agents/
 │   ├── setup.sh           ← Install Hermes + generate configs/wrappers
 │   ├── update.sh          ← Git pull + Hermes/config update
 │   └── start-gateway.sh  ← Systemd gateway manager
+├── src/aether_mcp/       ← default-off M2 control/trace foundation
+├── schemas/              ← versioned Aether MCP and Orca catalog bundles
 ├── .aether/               ← protected local/historical state (gitignored)
 ├── docs/guides/           ← Installation, configuration, quickstart
 └── Makefile               ← setup, update, doctor, clean, test
