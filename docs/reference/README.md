@@ -8,7 +8,7 @@ Reference documentation is exact and lookup-oriented. It should mirror executabl
 
 | Document | Purpose |
 |---|---|
-| [`AETHER_MCP_CONTRACT.md`](./AETHER_MCP_CONTRACT.md) | Proposed `aether.mcp/v1alpha1` coordinator tools, common envelopes, effects, errors, and Orca dynamic-operation facade; not implemented |
+| [`AETHER_MCP_CONTRACT.md`](./AETHER_MCP_CONTRACT.md) | Approved `aether.mcp/v1alpha2` 15-tool successor contract; implemented schemas remain default-off with zero callable tools |
 | [`AETHER_TRACE_SCHEMA.md`](./AETHER_TRACE_SCHEMA.md) | Proposed compact append-only semantic event index, receipts, integrity, reconciliation, privacy and learning-content references; not implemented |
 | [`AETHER_LEARNING_EPISODE_SCHEMA.md`](./AETHER_LEARNING_EPISODE_SCHEMA.md) | Proposed protected replayable episodes, content fidelity/redaction, labels, dataset curation, lineage and local export contract for system refinement and future fine-tuning; not implemented |
 | `RUNTIME_CONTRACTS.md` | Public execution contracts, actions, outputs, and errors after a replacement runtime is accepted |

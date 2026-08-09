@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** ADAPTIVE ORCA REDESIGN R1 IN PROGRESS; D1 FALSE; NOT ACTIVATED
+> **Status:** ADAPTIVE ORCA REDESIGN R2 CLOSED; R3 NEXT; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -33,9 +33,9 @@ plane, with:
 - Orca is not running for this design work.
 - The accepted M2.1a candidate contains one default-off `aether_mcp` package and
   real stdio MCP process with exactly zero tools. It is not registered or active.
-- The historical M2.2 tree exports 24 schemas and 50 stable errors; the successor
-  operational target is exactly 15 schemas. The stdio server still registers and
-  exposes zero tools.
+- The historical M2.2 tree exports 24 `v1alpha1` schemas and 50 stable errors.
+  R2 accepted the exact 15-schema `aether.mcp/v1alpha2` successor. The stdio
+  server still registers and exposes zero tools.
 - The provider adapter, accepted semantic store, reconciler, learning boundary,
   and runtime composition do not yet exist.
 - Hermes currently performs bounded work directly. The owner authorized the
@@ -894,6 +894,12 @@ passed 81 with zero skips; see `M2_2_ACCEPTANCE.md`.
 The exact 24-schema result remains historical acceptance evidence. R2 of the
 adaptive task creates the successor 15-schema alpha snapshot under TDD while
 preserving zero registered/callable tools.
+
+**Adaptive R2 completion (2026-08-08):** `aether.mcp/v1alpha2` contains exactly
+15 successor schemas, preserves the historical alpha1 bundle byte-exactly, and
+keeps zero registered/callable tools. Focused tests passed 30; the full non-real
+suite passed 105 with one deliberately deselected R3 lifecycle fixture. See
+`R2_PROTOCOL_ACCEPTANCE.md`.
 
 #### M2.3 — Implement trusted principal and project admission
 

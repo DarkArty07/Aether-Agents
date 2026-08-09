@@ -244,11 +244,13 @@ runtime support; D1 rule is measurable and fail-closed.
 
 ### R2 — Successor alpha protocol contract
 
-- [ ] Write RED tests for the exact 15-tool set and rejected removed names.
-- [ ] Write RED tests for typed `swarm_trace` query/decision/evidence actions.
-- [ ] Implement the minimum schema/validator changes.
-- [ ] Regenerate deterministic schema snapshot.
-- [ ] Prove zero callable/registered tools and no side effects.
+- [x] Publish the successor as `aether.mcp/v1alpha2` without rewriting the
+      historical `v1alpha1` snapshot.
+- [x] Write RED tests for the exact 15-tool set and rejected removed names.
+- [x] Write RED tests for typed `swarm_trace` query/decision/evidence actions.
+- [x] Implement the minimum schema/validator changes.
+- [x] Regenerate deterministic schema snapshot.
+- [x] Prove zero callable/registered tools and no side effects.
 
 **Acceptance:** focused protocol tests, schema drift, stdio smoke, Ruff, and
 compileall pass; all removed names fail validation; registration remains zero.
@@ -327,7 +329,7 @@ changes, and no protected effect.
 |---|---|---|
 | R0 | `COMPLETED` | isolated worktree at base `b807c62`; frozen task; YAML/reference validation PASS |
 | R1 | `COMPLETED` | 15-tool contract, three-axis 55-capability matrix, six aggregate adaptations, debt ledger, revised D1 |
-| R2 | `PENDING` | — |
+| R2 | `COMPLETED` | `v1alpha2`; 15 schemas; 105 passed/1 deselected; Ruff/compileall/snapshot/zero-tool smoke PASS |
 | R3 | `PENDING` | — |
 | R4 | `PENDING` | — |
 | R5 | `PENDING` | — |

@@ -1,4 +1,4 @@
-"""Aether MCP v1alpha1 canonical protocol, schema, and safe error primitives."""
+"""Aether MCP v1alpha2 canonical protocol, schema, and safe error primitives."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from copy import deepcopy
 from types import MappingProxyType
 from typing import Any, NoReturn
 
-PROTOCOL_VERSION = "aether.mcp/v1alpha1"
+PROTOCOL_VERSION = "aether.mcp/v1alpha2"
 MAX_REQUEST_BYTES = 65_536
 MAX_CURSOR_BYTES = 1_024
 MAX_STRING_BYTES = 8_192
@@ -32,6 +32,9 @@ OUTCOMES = (
     "PARTIAL",
     "REJECTED",
     "FAILED",
+    "CANCELLED",
+    "CANCEL_FAILED",
+    "CLEANUP_FAILED",
     "UNKNOWN",
     "RECONCILIATION_REQUIRED",
     "CLOSED",
@@ -219,6 +222,46 @@ DECISION_KINDS = (
     "later_horizon_authorized",
 )
 
+TRACE_DECISION_SCHEMA = _object(
+    {
+        "kind": _string(maximum=64, enum=DECISION_KINDS),
+        "decision": _string(maximum=2048),
+        "rationale": _string(maximum=2048),
+        "authority_ref": _string(maximum=512),
+        "affected_ids": _array(SAFE_ID_SCHEMA, minimum=1, maximum=64, unique=True),
+        "prior_generation": _nullable({"type": "integer", "minimum": 1, "maximum": 2_147_483_647}),
+    },
+    required=("kind", "decision", "rationale", "authority_ref", "affected_ids", "prior_generation"),
+)
+TRACE_EVIDENCE_SCHEMA = _object(
+    {
+        "evidence_type": SAFE_ID_SCHEMA,
+        "reference": _string(maximum=2048),
+        "source": SAFE_ID_SCHEMA,
+        "producer": SAFE_ID_SCHEMA,
+        "artifact_digest": _nullable(DIGEST_SCHEMA),
+        "check_identity": _string(maximum=1024),
+        "observed_outcome": OUTCOME_SCHEMA,
+        "criteria": _array(_string(maximum=512), maximum=64),
+        "unknowns": _array(_string(maximum=512), maximum=64),
+        "limitations": _array(_string(maximum=512), maximum=64),
+        "verifier_id": _nullable(SAFE_ID_SCHEMA),
+    },
+    required=(
+        "evidence_type",
+        "reference",
+        "source",
+        "producer",
+        "artifact_digest",
+        "check_identity",
+        "observed_outcome",
+        "criteria",
+        "unknowns",
+        "limitations",
+        "verifier_id",
+    ),
+)
+
 TASK_SCHEMA = _object(
     {
         "task_key": SAFE_ID_SCHEMA,
@@ -372,37 +415,6 @@ def _build_tool_schemas() -> dict[str, dict[str, Any]]:
             },
             required=("operation", "run_id", "target_type", "target_id"),
         ),
-        "swarm_record_decision": _object(
-            {
-                "operation": operation,
-                "run_id": UUID_SCHEMA,
-                "kind": _string(maximum=64, enum=DECISION_KINDS),
-                "decision": _string(maximum=2048),
-                "rationale": _string(maximum=2048),
-                "authority_ref": _string(maximum=512),
-                "affected_ids": _array(SAFE_ID_SCHEMA, minimum=1, maximum=64, unique=True),
-                "prior_generation": _nullable({"type": "integer", "minimum": 1, "maximum": 2_147_483_647}),
-            },
-            required=("operation", "run_id", "kind", "decision", "rationale", "authority_ref", "affected_ids", "prior_generation"),
-        ),
-        "swarm_record_evidence": _object(
-            {
-                "operation": operation,
-                "run_id": UUID_SCHEMA,
-                "evidence_type": SAFE_ID_SCHEMA,
-                "reference": _string(maximum=2048),
-                "source": SAFE_ID_SCHEMA,
-                "producer": SAFE_ID_SCHEMA,
-                "artifact_digest": _nullable(DIGEST_SCHEMA),
-                "check_identity": _string(maximum=1024),
-                "observed_outcome": OUTCOME_SCHEMA,
-                "criteria": _array(_string(maximum=512), maximum=64),
-                "unknowns": _array(_string(maximum=512), maximum=64),
-                "limitations": _array(_string(maximum=512), maximum=64),
-                "verifier_id": _nullable(SAFE_ID_SCHEMA),
-            },
-            required=("operation", "run_id", "evidence_type", "reference", "source", "producer", "artifact_digest", "check_identity", "observed_outcome", "criteria", "unknowns", "limitations", "verifier_id"),
-        ),
         "swarm_close": _object(
             {
                 "operation": operation,
@@ -414,14 +426,18 @@ def _build_tool_schemas() -> dict[str, dict[str, Any]]:
         ),
         "swarm_trace": _object(
             {
+                "action": _string(maximum=32, enum=("query", "record_decision", "record_evidence")),
                 "project_id": UUID_SCHEMA,
                 "run_id": _nullable(UUID_SCHEMA),
-                "mode": _string(maximum=16, enum=("timeline", "explain", "operations", "decisions", "evidence", "retries", "resources", "metrics", "integrity", "export")),
-                "filters": JSON_OBJECT_SCHEMA,
+                "operation": _nullable(operation),
+                "mode": _nullable(_string(maximum=16, enum=("timeline", "explain", "operations", "decisions", "evidence", "retries", "resources", "metrics", "integrity", "export"))),
+                "filters": _nullable(JSON_OBJECT_SCHEMA),
                 "cursor": CURSOR_SCHEMA,
-                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                "limit": _nullable({"type": "integer", "minimum": 1, "maximum": 200}),
+                "decision": _nullable(TRACE_DECISION_SCHEMA),
+                "evidence": _nullable(TRACE_EVIDENCE_SCHEMA),
             },
-            required=("project_id", "run_id", "mode", "filters", "cursor", "limit"),
+            required=("action", "project_id", "run_id", "operation", "mode", "filters", "cursor", "limit", "decision", "evidence"),
         ),
         "orca_search": _object(
             {
@@ -448,86 +464,6 @@ def _build_tool_schemas() -> dict[str, dict[str, Any]]:
                 "operation": _nullable(operation),
             },
             required=("project_id", "command_id", "arguments", "catalog_digest", "schema_bundle_digest", "expected_effect", "reason", "operation"),
-        ),
-        "orca_batch": _object(
-            {
-                "operation": operation,
-                "catalog_digest": DIGEST_SCHEMA,
-                "calls": _array(
-                    _object(
-                        {"command_id": SAFE_ID_SCHEMA, "arguments": JSON_OBJECT_SCHEMA, "expected_effect": EFFECT_SCHEMA, "reason": reason},
-                        required=("command_id", "arguments", "expected_effect", "reason"),
-                    ),
-                    minimum=1,
-                    maximum=32,
-                ),
-            },
-            required=("operation", "catalog_digest", "calls"),
-        ),
-        "orca_events": _object(
-            {
-                "project_id": UUID_SCHEMA,
-                "run_id": _nullable(UUID_SCHEMA),
-                "provider_cursor": CURSOR_SCHEMA,
-                "wait_ms": {"type": "integer", "minimum": 0, "maximum": 30_000},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 200},
-            },
-            required=("project_id", "run_id", "provider_cursor", "wait_ms", "limit"),
-        ),
-        "learning_capture": _object(
-            {
-                "operation": operation,
-                "action": _string(maximum=16, enum=("inspect", "set", "reduce", "pause", "resume", "seal")),
-                "episode_id": _nullable(UUID_SCHEMA),
-                "capture_policy": _nullable(_string(maximum=32, enum=CAPTURE_POLICIES)),
-                "consent_authority_ref": _string(maximum=512),
-            },
-            required=("operation", "action", "episode_id", "capture_policy", "consent_authority_ref"),
-        ),
-        "learning_label": _object(
-            {
-                "operation": operation,
-                "episode_id": UUID_SCHEMA,
-                "target_ids": _array(UUID_SCHEMA, minimum=1, maximum=64, unique=True),
-                "label_type": _string(maximum=32, enum=("outcome", "correction", "preference", "failure", "quality", "eligibility", "contamination", "consent", "retraction")),
-                "label": JSON_OBJECT_SCHEMA,
-                "authority_ref": _string(maximum=512),
-                "evidence_refs": _array(_string(maximum=1024), maximum=64),
-                "superseded_label_ids": _array(UUID_SCHEMA, maximum=64, unique=True),
-            },
-            required=("operation", "episode_id", "target_ids", "label_type", "label", "authority_ref", "evidence_refs", "superseded_label_ids"),
-        ),
-        "learning_dataset": _object(
-            {
-                "operation": _nullable(operation),
-                "project_id": UUID_SCHEMA,
-                "action": _string(maximum=16, enum=("inspect", "build", "validate", "seal", "revoke")),
-                "purpose": _string(maximum=128),
-                "episode_ids": _array(UUID_SCHEMA, maximum=256, unique=True),
-                "selection_contract_digest": DIGEST_SCHEMA,
-            },
-            required=("operation", "project_id", "action", "purpose", "episode_ids", "selection_contract_digest"),
-        ),
-        "learning_export": _object(
-            {
-                "operation": operation,
-                "dataset_id": UUID_SCHEMA,
-                "dataset_digest": DIGEST_SCHEMA,
-                "destination": _string(maximum=4096),
-                "authority_ref": _string(maximum=512),
-            },
-            required=("operation", "dataset_id", "dataset_digest", "destination", "authority_ref"),
-        ),
-        "project_forget": _object(
-            {
-                "operation": operation,
-                "safe_alias_confirmation": _string(maximum=128),
-                "mode": _string(maximum=32, enum=("normal", "privacy_emergency")),
-                "reason": _string(maximum=1024),
-                "owner_authority_ref": _string(maximum=512),
-                "required_prior_export_digest": _nullable(DIGEST_SCHEMA),
-            },
-            required=("operation", "safe_alias_confirmation", "mode", "reason", "owner_authority_ref", "required_prior_export_digest"),
         ),
     }
     return schemas
@@ -560,23 +496,14 @@ _TOOL_PHASES = {
     "orca_search": "M2.6",
     "orca_describe": "M2.6",
     "orca_call": "M2.6",
-    "orca_events": "M2.6",
     "swarm_start": "M3.1",
     "swarm_status": "M3.2",
     "swarm_reconcile": "M3.3",
     "swarm_retry": "M3.3",
     "swarm_cancel": "M3.4",
     "swarm_close": "M3.4",
-    "swarm_record_decision": "M3.2",
-    "swarm_record_evidence": "M3.2",
     "swarm_dispatch": "M4.2",
     "swarm_message": "M4.2",
-    "orca_batch": "M4.2",
-    "learning_capture": "M5.1",
-    "learning_label": "M5.2",
-    "learning_dataset": "M5.3",
-    "learning_export": "M5.4",
-    "project_forget": "M5.6",
 }
 
 _FORBIDDEN_PRINCIPAL_KEYS = frozenset({"principal", "principal_id", "coordinator_principal", "actor_principal"})
@@ -707,6 +634,41 @@ def _scan_cursor_fields(value: Any) -> None:
             _scan_cursor_fields(item)
 
 
+def _validate_swarm_trace_action(arguments: Mapping[str, Any]) -> None:
+    action = arguments.get("action")
+    operation = arguments.get("operation")
+    decision = arguments.get("decision")
+    evidence = arguments.get("evidence")
+    mode = arguments.get("mode")
+    filters = arguments.get("filters")
+    cursor = arguments.get("cursor")
+    limit = arguments.get("limit")
+
+    if action == "query":
+        if operation is not None or decision is not None or evidence is not None:
+            _raise("INVALID_INPUT")
+        if mode is None or filters is None or limit is None:
+            _raise("INVALID_INPUT")
+        return
+
+    if action not in {"record_decision", "record_evidence"}:
+        _raise("INVALID_INPUT")
+    if arguments.get("run_id") is None or not isinstance(operation, dict):
+        _raise("INVALID_INPUT")
+    if operation.get("project_id") != arguments.get("project_id"):
+        _raise("INVALID_INPUT")
+    if operation.get("expected_effect") != "LOCAL_APPEND_ONLY":
+        _raise("INVALID_INPUT")
+    if mode is not None or filters is not None or cursor is not None or limit is not None:
+        _raise("INVALID_INPUT")
+    if action == "record_decision":
+        if not isinstance(decision, dict) or evidence is not None:
+            _raise("INVALID_INPUT")
+        return
+    if decision is not None or not isinstance(evidence, dict):
+        _raise("INVALID_INPUT")
+
+
 def canonical_request_bytes(tool_name: str, arguments: Mapping[str, Any]) -> bytes:
     """Return deterministic canonical bytes for one bounded request."""
     if tool_name not in TOOL_SCHEMAS or not isinstance(arguments, Mapping):
@@ -743,6 +705,8 @@ def validate_request(tool_name: str, arguments: Mapping[str, Any]) -> dict[str, 
         if isinstance(manifest, dict) and manifest.get("protocol") != PROTOCOL_VERSION:
             _raise("PROTOCOL_MISMATCH")
     _validate_schema(detached, TOOL_SCHEMAS[tool_name])
+    if tool_name == "swarm_trace":
+        _validate_swarm_trace_action(detached)
     return detached
 
 
@@ -834,7 +798,7 @@ def error_envelope(
 
 
 def export_schema_bundle() -> dict[str, Any]:
-    """Return a detached deterministic snapshot of the M2.2 contract."""
+    """Return a detached deterministic snapshot of the active alpha contract."""
     tools = [
         {
             "name": name,

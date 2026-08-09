@@ -1,5 +1,5 @@
 schema_version: 1
-status: adaptive_orca_redesign_r1_complete
+status: adaptive_orca_redesign_r2_complete
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -72,7 +72,7 @@ mcp_architecture:
   normal_hermes_orca_cli_access: forbidden
   provider_seam: version_matched_public_structured_orca_interface
   transport_target: local_stdio
-  protocol_target: aether.mcp/v1alpha1
+  protocol_target: aether.mcp/v1alpha2
   sampling: disabled
   operational_source_of_truth: orca
   aether_trace_owns:
@@ -116,7 +116,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: R1_complete_awaiting_R2_start
+  active_task: R2_complete_awaiting_R3_start
   successor_agents_are_stateless: true
   next_prompt_requires_owner_decision: false
   external_agent_git:
@@ -328,7 +328,7 @@ adaptive_orca_redesign:
     - R4_adapter_and_reconciler_foundation
     - R5_two_worker_synthetic_slice
     - R6_final_acceptance_audit_and_handoff
-  active_milestone: R1_complete_awaiting_R2_start
+  active_milestone: R2_complete_awaiting_R3_start
   operational_tool_target: 15
   callable_tools: 0
   registered_tools: 0
@@ -357,6 +357,25 @@ adaptive_orca_redesign:
       PROVEN: 0
       UNQUALIFIED: 55
       UNKNOWN: 0
+  r2:
+    status: complete
+    protocol: aether.mcp/v1alpha2
+    schema_snapshot: schemas/aether-mcp/v1alpha2/bundle.json
+    schema_snapshot_sha256: 336e141d56563da882ae7426ae2a0b8647aef501962a56357f11652265d05723
+    historical_v1alpha1_snapshot_preserved: true
+    callable_tools: 0
+    registered_tools: 0
+    acceptance: docs/releases/v0.22.0/R2_PROTOCOL_ACCEPTANCE.md
+    baseline_tests_passed: 100
+    baseline_tests_deselected: 1
+    red_tests_failed: 6
+    focused_tests_passed: 30
+    full_tests_passed: 105
+    full_tests_deselected: 1
+    ruff: pass
+    compileall: pass
+    schema_regeneration: pass
+    stdio_zero_tool_smoke: pass
 
 m2_1a_acceptance:
   accepted_on: "2026-08-07"
@@ -1159,11 +1178,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: R2_successor_alpha_protocol_contract
+  milestone: R3_exact_orca_lifecycle_adaptation
   executor: Hermes
   acceptance_owner: Hermes_for_deterministic_gate_Christopher_for_product_or_D1_decisions
   requirement: >-
-    Add failing tests for the exact 15-tool successor, trace action modes,
-    cancellation and cleanup outcomes, removed/deferred tools, and byte-exact
-    snapshot; then implement the minimum GREEN contract while preserving zero
-    registered/callable tools and no activation.
+    Add failing tests proving AppImage preparation output cannot enter runtime
+    framing; verify the exact candidate; extract into a fresh owned root as a
+    separate bounded step; execute staged AppRun twice with runtime stdout reserved
+    for structured output; record honest PASS/BLOCKED evidence and zero survivors.

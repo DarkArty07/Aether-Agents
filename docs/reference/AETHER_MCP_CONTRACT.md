@@ -1,8 +1,8 @@
 # Aether MCP Tool Contract
 
-> **Status:** APPROVED ADAPTIVE `v1alpha1` SUCCESSOR; IMPLEMENTATION IN PROGRESS; ZERO TOOLS CALLABLE
+> **Status:** APPROVED ADAPTIVE `v1alpha2` SUCCESSOR; IMPLEMENTATION IN PROGRESS; ZERO TOOLS CALLABLE
 > **Date:** 2026-08-08
-> **Protocol:** `aether.mcp/v1alpha1`
+> **Protocol:** `aether.mcp/v1alpha2`
 > **Server namespace:** `aether` (`mcp__aether__*` in Hermes)
 > **Authority:** ADR-0001 and `../architecture/AETHER_MCP.md`
 > **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
@@ -124,7 +124,7 @@ Valid freshness values: `fresh`, `stale`, `historical`, `unknown`.
 
 ```json
 {
-  "protocol": "aether.mcp/v1alpha1",
+  "protocol": "aether.mcp/v1alpha2",
   "ok": true,
   "request_id": "server-generated-id",
   "operation_id": "caller-operation-id-or-null",
@@ -145,7 +145,7 @@ mean a worker result or product outcome was accepted.
 
 ```json
 {
-  "protocol": "aether.mcp/v1alpha1",
+  "protocol": "aether.mcp/v1alpha2",
   "ok": false,
   "request_id": "server-generated-id",
   "operation_id": "caller-operation-id-or-null",
@@ -209,7 +209,7 @@ Required manifest fields:
 
 ```json
 {
-  "protocol": "aether.mcp/v1alpha1",
+  "protocol": "aether.mcp/v1alpha2",
   "project_id": "uuid",
   "contract": {
     "contract_id": "string",
@@ -651,7 +651,7 @@ actor, artifact, or evidence identity. Re-admission creates a new project ID.
 - R4 bounded redacted diagnostic attachments are disabled by default and, when
   explicitly enabled, expire within seven days with deletion verification.
 - Individual semantic events cannot be selectively edited/deleted in
-  `v1alpha1`; complete project forget preserves an honest boundary.
+  `v1alpha2`; complete project forget preserves an honest boundary.
 
 ## 7. Stable error codes
 
@@ -715,7 +715,7 @@ traceback in the public payload.
 
 ## 8. Protocol evolution
 
-- `v1alpha1` is allowed to change only through versioned documented revisions.
+- `v1alpha2` is allowed to change only through versioned documented revisions.
 - Required-field or semantic changes update the protocol identifier.
 - Unknown response fields must be tolerated; unknown request fields are rejected
   until explicitly admitted.
@@ -730,7 +730,7 @@ traceback in the public payload.
 Read-only resource templates:
 
 ```text
-aether://protocol/v1alpha1
+aether://protocol/v1alpha2
 aether://project/{project_id}/contract/{generation}
 aether://project/{project_id}/run/{run_id}/summary
 aether://project/{project_id}/run/{run_id}/timeline
@@ -743,7 +743,7 @@ non-enumerating. A missing/foreign resource returns the same safe class. Resourc
 content is a projection/reference and does not replace Orca operational
 authority.
 
-`v1alpha1` exposes no MCP prompts, requests no MCP sampling, and does not rely on
+`v1alpha2` exposes no MCP prompts, requests no MCP sampling, and does not rely on
 server-initiated progress/notification delivery for correctness. MCP roots may
 help locate a candidate project but are never authoritative; `project_admit` and
 `project_inspect` establish identity.

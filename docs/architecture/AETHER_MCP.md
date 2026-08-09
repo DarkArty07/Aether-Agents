@@ -3,7 +3,7 @@
 > **Status:** APPROVED ADAPTIVE TARGET; BOUNDED IMPLEMENTATION IN PROGRESS; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Authority:** ADR-0001, PDR-0012, and PDR-0013
-> **Protocol target:** `aether.mcp/v1alpha1`
+> **Protocol target:** `aether.mcp/v1alpha2`
 > **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
 
 ## 1. Purpose
@@ -81,7 +81,7 @@ flowchart TB
 
     U -->|"intent and authority"| H
     H -->|"simple bounded work"| D
-    H -->|"typed aether.mcp/v1alpha1 operations"| A
+    H -->|"typed aether.mcp/v1alpha2 operations"| A
     A -->|"public version-matched structured operations"| O
     O --> HF
     O --> DA
@@ -622,8 +622,9 @@ Historical `.aether` databases are not imported automatically.
 ## 11. Compatibility and evolution
 
 The Aether MCP protocol is versioned independently from Orca and Aether product
-SemVer. Initial schemas use `aether.mcp/v1alpha1` until executed compatibility
-and migration evidence justify a stable `v1`.
+SemVer. Historical `aether.mcp/v1alpha1` bytes remain preserved; the redesigned
+15-tool successor is `aether.mcp/v1alpha2` until executed compatibility and
+migration evidence justify a stable `v1`.
 
 Compatibility rules:
 

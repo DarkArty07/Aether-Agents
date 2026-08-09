@@ -18,6 +18,7 @@ from aether_mcp.protocol import (
     ERROR_MESSAGES,
     MAX_CURSOR_BYTES,
     MAX_REQUEST_BYTES,
+    OUTCOMES,
     PROTOCOL_VERSION,
     TOOL_SCHEMAS,
     ProtocolError,
@@ -33,7 +34,9 @@ from aether_mcp.protocol import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-SNAPSHOT = ROOT / "schemas/aether-mcp/v1alpha1/bundle.json"
+SNAPSHOT = ROOT / "schemas/aether-mcp/v1alpha2/bundle.json"
+HISTORICAL_SNAPSHOT = ROOT / "schemas/aether-mcp/v1alpha1/bundle.json"
+HISTORICAL_SNAPSHOT_SHA256 = "e7f39a76ac4795ade2ec0a15bf64b4cab2233b912cf2285b0ce76d2805a2e605"
 
 EXPECTED_TOOL_NAMES = {
     "project_admit",
@@ -46,13 +49,16 @@ EXPECTED_TOOL_NAMES = {
     "swarm_reconcile",
     "swarm_retry",
     "swarm_cancel",
-    "swarm_record_decision",
-    "swarm_record_evidence",
     "swarm_close",
     "swarm_trace",
     "orca_search",
     "orca_describe",
     "orca_call",
+}
+
+REMOVED_OPERATIONAL_TOOL_NAMES = {
+    "swarm_record_decision",
+    "swarm_record_evidence",
     "orca_batch",
     "orca_events",
     "learning_capture",
@@ -143,8 +149,78 @@ def _operation() -> dict[str, object]:
     }
 
 
+def _trace_operation() -> dict[str, object]:
+    operation = _operation()
+    operation["expected_effect"] = "LOCAL_APPEND_ONLY"
+    return operation
+
+
+def _trace_query() -> dict[str, object]:
+    return {
+        "action": "query",
+        "project_id": PROJECT_ID,
+        "run_id": RUN_ID,
+        "operation": None,
+        "mode": "timeline",
+        "filters": {},
+        "cursor": None,
+        "limit": 50,
+        "decision": None,
+        "evidence": None,
+    }
+
+
+def _trace_decision() -> dict[str, object]:
+    return {
+        "action": "record_decision",
+        "project_id": PROJECT_ID,
+        "run_id": RUN_ID,
+        "operation": _trace_operation(),
+        "mode": None,
+        "filters": None,
+        "cursor": None,
+        "limit": None,
+        "decision": {
+            "kind": "route_selected",
+            "decision": "use the bounded synthetic path",
+            "rationale": "proves the provider boundary without model spend",
+            "authority_ref": "decision:test",
+            "affected_ids": ["task:synthetic-a"],
+            "prior_generation": None,
+        },
+        "evidence": None,
+    }
+
+
+def _trace_evidence() -> dict[str, object]:
+    return {
+        "action": "record_evidence",
+        "project_id": PROJECT_ID,
+        "run_id": RUN_ID,
+        "operation": _trace_operation(),
+        "mode": None,
+        "filters": None,
+        "cursor": None,
+        "limit": None,
+        "decision": None,
+        "evidence": {
+            "evidence_type": "test_result",
+            "reference": "artifact:synthetic/result.json",
+            "source": "pytest",
+            "producer": "hermes",
+            "artifact_digest": DIGEST,
+            "check_identity": "pytest tests/aether_mcp/test_protocol.py",
+            "observed_outcome": "SUCCEEDED",
+            "criteria": ["successor protocol contract"],
+            "unknowns": [],
+            "limitations": [],
+            "verifier_id": None,
+        },
+    }
+
+
 def test_protocol_constants_match_frozen_contract() -> None:
-    assert PROTOCOL_VERSION == "aether.mcp/v1alpha1"
+    assert PROTOCOL_VERSION == "aether.mcp/v1alpha2"
     assert set(EFFECT_CLASSES) == {
         "READ_ONLY",
         "LOCAL_APPEND_ONLY",
@@ -159,14 +235,59 @@ def test_protocol_constants_match_frozen_contract() -> None:
     assert MAX_CURSOR_BYTES == 1_024
 
 
-def test_all_24_exact_tool_schemas_are_strict_and_none_callable_yet() -> None:
+def test_all_15_exact_tool_schemas_are_strict_and_none_callable_yet() -> None:
     assert set(TOOL_SCHEMAS) == EXPECTED_TOOL_NAMES
-    assert len(TOOL_SCHEMAS) == 24
+    assert len(TOOL_SCHEMAS) == 15
     assert CALLABLE_TOOL_NAMES == frozenset()
     for name, schema in TOOL_SCHEMAS.items():
         assert schema["type"] == "object", name
         assert schema["additionalProperties"] is False, name
         assert isinstance(schema["properties"], Mapping), name
+
+
+def test_removed_and_deferred_tool_names_are_not_exported_or_validated() -> None:
+    assert set(TOOL_SCHEMAS).isdisjoint(REMOVED_OPERATIONAL_TOOL_NAMES)
+    exported_names = {item["name"] for item in export_schema_bundle()["tools"]}
+    assert exported_names.isdisjoint(REMOVED_OPERATIONAL_TOOL_NAMES)
+    for name in REMOVED_OPERATIONAL_TOOL_NAMES:
+        _expect_error("INVALID_INPUT", name, {})
+
+
+def test_cancellation_and_cleanup_outcomes_are_explicit() -> None:
+    assert {"CANCELLED", "CANCEL_FAILED", "CLEANUP_FAILED"}.issubset(OUTCOMES)
+
+
+def test_swarm_trace_query_and_append_actions_validate_exactly() -> None:
+    assert validate_request("swarm_trace", _trace_query())["action"] == "query"
+    assert validate_request("swarm_trace", _trace_decision())["action"] == "record_decision"
+    assert validate_request("swarm_trace", _trace_evidence())["action"] == "record_evidence"
+
+
+def test_swarm_trace_action_modes_fail_closed() -> None:
+    query_with_operation = _trace_query()
+    query_with_operation["operation"] = _trace_operation()
+    _expect_error("INVALID_INPUT", "swarm_trace", query_with_operation)
+
+    decision_without_operation = _trace_decision()
+    decision_without_operation["operation"] = None
+    _expect_error("INVALID_INPUT", "swarm_trace", decision_without_operation)
+
+    decision_with_wrong_effect = _trace_decision()
+    decision_with_wrong_effect["operation"] = _operation()
+    _expect_error("INVALID_INPUT", "swarm_trace", decision_with_wrong_effect)
+
+    evidence_with_decision = _trace_evidence()
+    evidence_with_decision["decision"] = _trace_decision()["decision"]
+    _expect_error("INVALID_INPUT", "swarm_trace", evidence_with_decision)
+
+    decision_without_run = _trace_decision()
+    decision_without_run["run_id"] = None
+    _expect_error("INVALID_INPUT", "swarm_trace", decision_without_run)
+
+    decision_for_foreign_project = _trace_decision()
+    assert isinstance(decision_for_foreign_project["operation"], dict)
+    decision_for_foreign_project["operation"]["project_id"] = str(uuid.uuid4())
+    _expect_error("INVALID_INPUT", "swarm_trace", decision_for_foreign_project)
 
 
 def test_exported_registry_is_deeply_immutable() -> None:
@@ -183,6 +304,10 @@ def test_schema_bundle_snapshot_matches_generated_bytes_exactly() -> None:
     assert generated.endswith(b"\n")
 
 
+def test_historical_v1alpha1_snapshot_is_preserved_byte_exactly() -> None:
+    assert hashlib.sha256(HISTORICAL_SNAPSHOT.read_bytes()).hexdigest() == HISTORICAL_SNAPSHOT_SHA256
+
+
 def test_canonical_request_bytes_and_digest_are_deterministic() -> None:
     first = {"project_id": PROJECT_ID, "detail": "summary", "wait_ms": 0}
     second = {"wait_ms": 0, "detail": "summary", "project_id": PROJECT_ID}
@@ -191,7 +316,7 @@ def test_canonical_request_bytes_and_digest_are_deterministic() -> None:
     assert first_bytes == second_bytes
     assert first_bytes == (
         b'{"arguments":{"detail":"summary","project_id":"01989f1d-54a7-7a9e-9dc4-8206cad0f6e3",'
-        b'"wait_ms":0},"protocol":"aether.mcp/v1alpha1","tool":"swarm_status"}'
+        b'"wait_ms":0},"protocol":"aether.mcp/v1alpha2","tool":"swarm_status"}'
     )
     assert canonical_request_digest("swarm_status", first) == hashlib.sha256(first_bytes).hexdigest()
 

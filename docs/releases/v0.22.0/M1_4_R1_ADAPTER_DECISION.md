@@ -78,7 +78,9 @@ source remains `M1_ORCA_PROVIDER_SEAM_MATRIX.json`.
 
 ## 4. Revised Hermes operational catalog
 
-The first operational Aether MCP contract contains exactly 15 designed tools:
+The successor `aether.mcp/v1alpha2` operational contract contains exactly 15
+designed tools; the 24-tool `v1alpha1` bundle remains immutable historical
+evidence:
 
 ```text
 project_admit
