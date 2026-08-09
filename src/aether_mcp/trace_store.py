@@ -380,6 +380,84 @@ class TraceStore:
                 _fail("TRACE_STORE_BUSY", "Trace store is busy")
             _fail("TRACE_INTEGRITY_FAILURE", "Trace receipt could not be committed")
 
+    def append_reconcile_once(
+        self,
+        *,
+        operation_id: str,
+        project_id: str,
+        capability: str,
+        outcome: str,
+        request_digest: str,
+        response_digest: str | None = None,
+        provider_request_id: str | None = None,
+        resource_ids: tuple[str, ...] = (),
+        error_code: str | None = None,
+    ) -> tuple[bool, dict[str, Any]]:
+        """CAS one terminal reconciliation result under the journal transaction."""
+
+        self._validate_common(
+            operation_id=operation_id,
+            project_id=project_id,
+            capability=capability,
+            request_digest=request_digest,
+        )
+        if outcome not in _OUTCOMES or outcome == "PREPARED":
+            _fail("TRACE_INTEGRITY_FAILURE", "Reconciliation outcome is invalid")
+        if response_digest is not None and _DIGEST_RE.fullmatch(response_digest) is None:
+            _fail("TRACE_INTEGRITY_FAILURE", "Trace response digest is invalid")
+        if provider_request_id is not None and _TOKEN_RE.fullmatch(provider_request_id) is None:
+            _fail("TRACE_INTEGRITY_FAILURE", "Provider request identity is invalid")
+        if len(resource_ids) > 64 or any(_TOKEN_RE.fullmatch(value) is None for value in resource_ids):
+            _fail("TRACE_INTEGRITY_FAILURE", "Resource identity is invalid")
+        if error_code is not None and _TOKEN_RE.fullmatch(error_code) is None:
+            _fail("TRACE_INTEGRITY_FAILURE", "Trace error code is invalid")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                rows = connection.execute(
+                    "SELECT * FROM events WHERE operation_id=? ORDER BY sequence",
+                    (operation_id,),
+                ).fetchall()
+                if not rows:
+                    _fail("TRACE_INTEGRITY_FAILURE", "Reconciliation has no durable intent")
+                first = self._row(rows[0])
+                if (
+                    first["project_id"] != project_id
+                    or first["capability"] != capability
+                    or first["request_digest"] != request_digest
+                ):
+                    _fail("IDEMPOTENCY_CONFLICT", "Reconciliation does not match its intent")
+                latest = self._row(rows[-1])
+                if latest["outcome"] in {"SUCCEEDED", "FAILED", "NOT_APPLIED"}:
+                    connection.execute("COMMIT")
+                    return False, latest
+                tail = connection.execute(
+                    "SELECT sequence, record_hash FROM events ORDER BY sequence DESC LIMIT 1"
+                ).fetchone()
+                record = self._make_record(
+                    sequence=int(tail["sequence"]) + 1,
+                    previous_hash=str(tail["record_hash"]),
+                    operation_id=operation_id,
+                    project_id=project_id,
+                    capability=capability,
+                    phase="RECONCILE",
+                    outcome=outcome,
+                    request_digest=request_digest,
+                    response_digest=response_digest,
+                    provider_request_id=provider_request_id,
+                    resource_ids=resource_ids,
+                    error_code=error_code,
+                )
+                self._insert(connection, record)
+                connection.execute("COMMIT")
+                return True, record
+        except StoreError:
+            raise
+        except sqlite3.Error as exc:
+            if _is_busy(exc):
+                _fail("TRACE_STORE_BUSY", "Trace store is busy")
+            _fail("TRACE_INTEGRITY_FAILURE", "Trace reconciliation could not be committed")
+
     def records(self) -> list[dict[str, Any]]:
         try:
             with self._connect() as connection:

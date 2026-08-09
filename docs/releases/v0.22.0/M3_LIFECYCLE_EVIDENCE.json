@@ -1,0 +1,108 @@
+{
+  "binding": "desktop-renderer+public-cli",
+  "cancel": {
+    "outcome": "CANCELLED",
+    "replayed": false,
+    "resource_ids": [
+      "task_ede2ad011e34",
+      "task_610d7c2338c9"
+    ]
+  },
+  "catalog_digest": "00df83ec1686a56344c78a49d75ff8dec63d988e588642236172180742b23c25",
+  "cleanup": {
+    "display_survivors": [],
+    "mount_survivors": [],
+    "owned_process_survivors": [],
+    "owned_processes_after_renderer_stop": [],
+    "protected_global_state_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "close": {
+    "outcome": "CLOSED",
+    "replayed": false,
+    "survivors": []
+  },
+  "credentials": 0,
+  "first_status": {
+    "coordinator_generation": 1,
+    "live_resource_ids": [],
+    "next_cursor": null,
+    "project_id": "48c0a679-5ffb-45cd-8608-6084cd2d860f",
+    "run_id": "b2c28538-b9b6-5921-9b05-e6e1cf9277af",
+    "semantic_state": "OPEN",
+    "source": "orca-public-cli",
+    "status": "running",
+    "tasks": [
+      {
+        "provider_task_id": "task_ede2ad011e34",
+        "status": "ready",
+        "task_id": "efe77843-b763-56c9-8607-931cc018b4c4",
+        "task_key": "first"
+      },
+      {
+        "provider_task_id": "task_610d7c2338c9",
+        "status": "pending",
+        "task_id": "f3cf069c-4128-54dd-a79b-6d4d1ecf3b93",
+        "task_key": "second"
+      }
+    ]
+  },
+  "headless_claim": false,
+  "isolated_root_retained": false,
+  "manifest_digest": "2154b560e06e1e33c488e47402fee93965ed95a7d20718025311e5f1615f3ab5",
+  "models": 0,
+  "orca_version": "1.4.167",
+  "restart": {
+    "recovered": true,
+    "replacement_terminal": true
+  },
+  "run": {
+    "logical_id": "b2c28538-b9b6-5921-9b05-e6e1cf9277af",
+    "provider_id": "run_bd89c2de70e1"
+  },
+  "spend": 0,
+  "status": "PASS",
+  "tasks": [
+    {
+      "provider_task_id": "task_ede2ad011e34",
+      "task_id": "efe77843-b763-56c9-8607-931cc018b4c4",
+      "task_key": "first"
+    },
+    {
+      "provider_task_id": "task_610d7c2338c9",
+      "task_id": "f3cf069c-4128-54dd-a79b-6d4d1ecf3b93",
+      "task_key": "second"
+    }
+  ],
+  "terminal_cleanup": {
+    "closed_handles": [
+      "term_922cfee7-4d97-4bb9-8542-d8c3320993a5",
+      "term_e2001268-af5b-47af-b455-d773b618171a"
+    ]
+  },
+  "terminal_status": {
+    "coordinator_generation": 1,
+    "live_resource_ids": [],
+    "next_cursor": null,
+    "project_id": "48c0a679-5ffb-45cd-8608-6084cd2d860f",
+    "run_id": "b2c28538-b9b6-5921-9b05-e6e1cf9277af",
+    "semantic_state": "OPEN",
+    "source": "orca-public-cli",
+    "status": "terminal",
+    "tasks": [
+      {
+        "provider_task_id": "task_ede2ad011e34",
+        "status": "failed",
+        "task_id": "efe77843-b763-56c9-8607-931cc018b4c4",
+        "task_key": "first"
+      },
+      {
+        "provider_task_id": "task_610d7c2338c9",
+        "status": "failed",
+        "task_id": "f3cf069c-4128-54dd-a79b-6d4d1ecf3b93",
+        "task_key": "second"
+      }
+    ]
+  },
+  "trace_records": 6,
+  "workers": 0
+}
