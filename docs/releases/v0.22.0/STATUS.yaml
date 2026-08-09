@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_m3_complete_m4_authorized_default_off
+status: m0_m4_complete_m5_deterministic_authorized_default_off
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -15,9 +15,9 @@ candidate:
     stores and release authority; keep Olympus plus the disconnected native Python
     core retired; design one bounded Aether MCP control, semantic trace and
     protected learning-episode plane over Orca; and keep multi-agent execution
-    unavailable; M3 adds a default-off, zero-worker manifest-bound lifecycle over
-    the qualified desktop-renderer/public-CLI binding, while M4 deterministic
-    worker execution has not started.
+    unavailable; M4 adds one default-off deterministic no-model worker lifecycle
+    with retry, messaging, encrypted episode capture and cleanup over the qualified
+    desktop-renderer/public-CLI binding. M5 model-backed execution is unavailable.
   not_a_release_claim: true
   source_implementation_started: true
   native_runtime_source_present: false
@@ -48,6 +48,7 @@ candidate:
   m2_foundation_complete: true
   m3_started: true
   m3_complete: true
+  m4_complete: true
   callable_tools: 0
 
 m2_foundation_completion:
@@ -100,6 +101,28 @@ m3_lifecycle_completion:
   credentials_or_spend: false
   process_survivors: 0
   terminal_survivors: 0
+  temporary_root_survivors: 0
+  mcp_registered: false
+  mcp_callable_tools: 0
+
+m4_worker_completion:
+  completed_on: "2026-08-09"
+  owner_authority: user_requested_autonomous_completion_through_M5
+  technical_commit: 037b9ccf8698ab59c73275f3b4fb8d98a5e434af
+  technical_tree: ae52db382e26adacced379154ff816c9e2aeaa97
+  acceptance: docs/releases/v0.22.0/M4_WORKER_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M4_WORKER_EVIDENCE.json
+  deterministic_worker: pass
+  first_attempt_failed_after_artifact: pass
+  retry_new_dispatch_generation: pass
+  question_reply_restart_recovery: pass
+  encrypted_episode_seal_replay: pass
+  real_dispatch_and_run_cancellation: pass
+  external_models: 0
+  credentials_or_spend: false
+  process_survivors: 0
+  terminal_survivors: 0
+  worktree_survivors: 0
   temporary_root_survivors: 0
   mcp_registered: false
   mcp_callable_tools: 0
@@ -164,7 +187,7 @@ mcp_architecture:
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: true
   implementation_scope: M0_through_M5_owner_authorized_default_off
-  last_accepted_scope: M3_5_lifecycle_closure
+  last_accepted_scope: M4_5_one_worker_closure
   qualification_implementation_authorized: true
   qualification_implementation_scope: exact_isolated_desktop_renderer_coordinator_lifecycle
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
@@ -175,7 +198,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: M4_deterministic_worker_authorized_not_started
+  active_task: M5_deterministic_parallel_slice_authorized
   successor_agents_are_stateless: true
   next_prompt_requires_owner_M3_authorization: false
   external_agent_git:

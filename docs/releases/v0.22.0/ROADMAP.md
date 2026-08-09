@@ -1091,6 +1091,15 @@ Run success, question/reply, deterministic failure, cancellation, retry and
 restart variants. Validate the artifact independently and prove no worker,
 terminal, worktree or lease survives.
 
+**Closure (2026-08-09):** accepted at technical commit
+`037b9ccf8698ab59c73275f3b4fb8d98a5e434af`. The exact Orca 1.4.167
+desktop-renderer/public-CLI path passed failure-after-artifact, new retry
+generation/worktree, question/reply, renderer restart/rebind, success,
+encrypted episode seal/replay, active Dispatch cancellation and zero-survivor
+cleanup. See `M4_WORKER_ACCEPTANCE.md` and `M4_WORKER_EVIDENCE.json`. This is a
+deterministic no-model fixture qualification, not a supervised model-worker or
+MCP activation claim.
+
 **Proposed atomic commits:**
 
 1. `test: add deterministic Orca worker fixture`
