@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "milestone": "R3",
+  "date": "2026-08-08",
+  "status": "CLOSED_BLOCKED_COORDINATOR_BOOTSTRAP_UNQUALIFIED",
+  "candidate": {
+    "candidate_id": "orca-linux-appimage-1.4.167",
+    "product_version": "1.4.167",
+    "manifest_sha256": "186e7409a9d942319a802d2a6ac1b4cec95f0ab2c48c97907ec7729a3faa8cfe",
+    "catalog_sha256": "068e1d66737f19835536e4a1573a2f931bffe9821af9c1bdff855f902898944b",
+    "launcher_sha256": "89efbb54323f6eb2372aa59f32d0e0d330486ae6764b7dd5896705c638a90208",
+    "appimage_sha256": "813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33",
+    "appimage_size": 203385690
+  },
+  "support_fixture": {
+    "package": "xorg-server-xvfb-21.1.24-1-x86_64.pkg.tar.zst",
+    "package_sha256": "7f2116f869aedf51eb899dcfee4cf1f3bf6f9f42c71e089dcdbc0907d529e985",
+    "package_signature": "GOOD_AND_TRUSTED",
+    "xvfb_sha256": "567a9b39284e303522fdc178059fe60d0e9917b811bd5066fb63260fd198a97c",
+    "installed_globally": false
+  },
+  "tdd": {
+    "initial_red": {
+      "failed": 3,
+      "causes": [
+        "APPIMAGE_EXTRACT_AND_RUN remained in the runtime environment",
+        "serve parser still admitted extraction-path prose",
+        "no explicit preparation primitive existed"
+      ]
+    },
+    "coordinator_red": {
+      "failed": 2,
+      "causes": [
+        "operation plan lacked coordinator resource creation",
+        "lifecycle state machine did not pass a sender identity"
+      ]
+    },
+    "final_non_real_suite": {
+      "passed": 23,
+      "deselected": 1,
+      "ruff": "PASS",
+      "compileall": "PASS"
+    }
+  },
+  "appimage_preparation": {
+    "identity_verified_before_extraction": true,
+    "extraction_argv": [
+      "<exact_appimage>",
+      "--appimage-extract"
+    ],
+    "destination": "fresh task-owned root/prepared-appimage/squashfs-root",
+    "app_run_confined_to_app_dir": true,
+    "preparation_stdout_bytes": 213838,
+    "preparation_stdout_sha256": "469f3adc47b40f1a998b6b8947f24748ce948e6365cfe6639d5a4d9b28bff011",
+    "preparation_stderr_bytes": 0,
+    "preparation_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runtime_stdout_contains_preparation_output": false,
+    "APPIMAGE_EXTRACT_AND_RUN_in_runtime_environment": false
+  },
+  "runtime_observation": {
+    "prepared_app_run_executed": true,
+    "serve_ready_json_only": true,
+    "serve_ready_record_bytes": 389,
+    "cold_status_ready": true,
+    "listener_confined_to_fresh_network_namespace": true,
+    "framing_defect_from_M1_3_fixed": true,
+    "full_run_task_restart_lifecycle_accepted": false
+  },
+  "coordinator_bootstrap_findings": [
+    {
+      "path": "run-create without sender",
+      "provider_code": "no_active_sender_terminal",
+      "result": "BLOCKED",
+      "meaning": "Orca requires a live coordinator terminal handle for orchestration mutation"
+    },
+    {
+      "path": "terminal create without explicit worktree selector",
+      "provider_code": "runtime_error",
+      "result": "BLOCKED",
+      "meaning": "No renderer window was available"
+    },
+    {
+      "path": "terminal create with explicit isolated path selector",
+      "provider_code": "selector_not_found",
+      "result": "BLOCKED",
+      "meaning": "serve --project-root did not admit that path as an Orca worktree"
+    },
+    {
+      "path": "local synthetic repo plus public worktree create with no agent and setup skip",
+      "provider_code": null,
+      "normalized_harness_code": "ERR_COMMAND_NONZERO",
+      "normalized_output_bytes": 115,
+      "normalized_output_sha256": "b1a022b7a2f0f3a6a5c35080e12119cf6ac2f833dd1cf2565eb672b14103d613",
+      "result": "UNKNOWN_PROVIDER_REJECTION",
+      "meaning": "The third bounded sender-bootstrap approach still did not produce a structured lifecycle report; no fourth variant was attempted"
+    }
+  ],
+  "rollback": {
+    "task_process_survivors": 0,
+    "task_listener_survivors": 0,
+    "task_mount_survivors": 0,
+    "task_root_survivors": 0,
+    "xvfb_runtime_resource_survivors": 0,
+    "protected_state_metadata_comparison": "UNKNOWN_NOT_COMPLETED_AFTER_BLOCK",
+    "protected_home_mount": "READ_ONLY_STAGED_COPY_INSIDE_PRIVATE_MOUNT_NAMESPACE"
+  },
+  "acceptance": {
+    "historical_framing_defect_fixed": true,
+    "real_lifecycle_repeated_twice_to_acceptance": false,
+    "lifecycle_accepted": false,
+    "coordinator_binding_prerequisite_proven": false,
+    "D1_ready": false,
+    "D1_granted": false,
+    "next_scope": "R4 may implement only default-off provider binding, journal, correlation, reconciliation, and unavailable mutation gates; R5 provider-backed orchestration is blocked"
+  }
+}

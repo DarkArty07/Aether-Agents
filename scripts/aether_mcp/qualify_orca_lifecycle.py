@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import shutil
 import signal
 import socket
@@ -31,12 +32,22 @@ CANONICAL_MANIFEST = PROJECT_ROOT / "docs/releases/v0.22.0/ORCA_PROVIDER_MANIFES
 CANONICAL_MANIFEST_SHA256 = identity.CANONICAL_MANIFEST_SHA256
 ROOT_PREFIX = "aether-m1-3-"
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_PREPARATION_OUTPUT_BYTES = 16_777_216
 MAX_SCHEMA_DEPTH = 12
 COMMAND_TIMEOUT_SECONDS = 12.0
+PREPARATION_TIMEOUT_SECONDS = 90.0
 STARTUP_TIMEOUT_SECONDS = 35.0
 STOP_TIMEOUT_SECONDS = 10.0
 WORKER_UID = 1000
 WORKER_GID = 1000
+
+ORCA_CLI_BOOTSTRAP = (
+    '(async()=>{try{const path=require("path");const appDir=process.env.APPDIR;'
+    'if(!appDir){console.error("Orca AppImage runtime did not set APPDIR.");process.exit(1);}'
+    'const cli=path.join(appDir,"resources","app.asar.unpacked","out","cli","index.js");'
+    'await Promise.resolve(require(cli).main(process.argv.slice(1)));}'
+    'catch(error){console.error(error&&error.stack?error.stack:String(error));process.exit(1);}})();'
+)
 
 MISSING_SEAMS = (
     "events_read",
@@ -136,7 +147,6 @@ def build_child_environment(root: str | Path) -> dict[str, str]:
         **{key: str(value) for key, value in mapping.items()},
         "PATH": "/usr/bin:/bin:/usr/local/bin",
         "LANG": "C.UTF-8",
-        "APPIMAGE_EXTRACT_AND_RUN": "1",
     }
 
 
@@ -154,15 +164,13 @@ def parse_json_object(stdout: bytes, stderr: bytes) -> dict[str, Any]:
     return value
 
 
-def parse_serve_stream(payload: bytes, root: Path) -> dict[str, Any] | None:
+def parse_serve_stream(payload: bytes, _root: Path) -> dict[str, Any] | None:
     if len(payload) > MAX_OUTPUT_BYTES:
         _fail("ERR_COMMAND_OUTPUT_LIMIT", "Orca serve output exceeded its limit")
     complete_lines = payload.split(b"\n")
     if payload and not payload.endswith(b"\n"):
         complete_lines = complete_lines[:-1]
     ready: list[dict[str, Any]] = []
-    allowed_parent = root / "tmp"
-    hexadecimal = set("0123456789abcdefABCDEF")
     for raw_line in complete_lines:
         if not raw_line.strip():
             continue
@@ -173,25 +181,157 @@ def parse_serve_stream(payload: bytes, root: Path) -> dict[str, Any] | None:
         try:
             decoded = json.loads(line)
         except json.JSONDecodeError:
-            path = Path(line)
-            try:
-                relative = path.relative_to(allowed_parent)
-            except ValueError:
-                _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted an unexpected startup line")
-            if not relative.parts:
-                _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted an unexpected startup line")
-            directory = relative.parts[0]
-            prefix = "appimage_extracted_"
-            suffix = directory.removeprefix(prefix)
-            if not directory.startswith(prefix) or len(suffix) != 32 or any(char not in hexadecimal for char in suffix):
-                _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted an unexpected startup line")
-            continue
+            _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted an unexpected startup line")
         if not isinstance(decoded, dict) or decoded.get("type") != "orca_server_ready":
             _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted an unexpected startup object")
         ready.append(decoded)
     if len(ready) > 1:
         _fail("ERR_RUNTIME_START_SHAPE", "Orca serve emitted multiple readiness records")
     return ready[0] if ready else None
+
+
+def build_prepared_cli_argv(app_run: Path, argv: list[str]) -> list[str]:
+    """Build the exact version-pinned public CLI bootstrap without shell parsing."""
+    if not app_run.is_absolute() or not argv or any(not isinstance(item, str) or not item for item in argv):
+        _fail("ERR_PREPARED_RUNTIME_ARGV", "Prepared runtime arguments are invalid")
+    return [str(app_run), "-e", ORCA_CLI_BOOTSTRAP, "--", *argv]
+
+
+def build_prepared_runtime_environment(base: dict[str, str], app_dir: Path) -> dict[str, str]:
+    """Bind the extracted AppDir without inheriting Node or AppImage controls."""
+    env = dict(base)
+    env.pop("APPIMAGE_EXTRACT_AND_RUN", None)
+    env.pop("NODE_OPTIONS", None)
+    env.pop("NODE_REPL_EXTERNAL_MODULE", None)
+    env.update(
+        {
+            "APPDIR": str(app_dir),
+            "ELECTRON_RUN_AS_NODE": "1",
+            "ORCA_NODE_OPTIONS": "",
+            "ORCA_NODE_REPL_EXTERNAL_MODULE": "",
+        }
+    )
+    return env
+
+
+def prepare_appimage_runtime(
+    root: Path,
+    appimage: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> dict[str, Any]:
+    """Extract one exact AppImage into the owned root with separate bounded logs."""
+    owned_root = _require_owned_root(root)
+    try:
+        source = appimage.resolve(strict=True)
+        source_stat = source.stat()
+    except OSError:
+        _fail("ERR_APPIMAGE_PREPARATION_SOURCE", "AppImage preparation source is unavailable")
+    if appimage.is_symlink() or not source.is_file() or not os.access(source, os.X_OK):
+        _fail("ERR_APPIMAGE_PREPARATION_SOURCE", "AppImage preparation source is invalid")
+    if source_stat.st_size != expected_size or _sha256_file(source) != expected_sha256:
+        _fail("ERR_APPIMAGE_PREPARATION_IDENTITY", "AppImage preparation source identity differs")
+
+    preparation_root = owned_root / "prepared-appimage"
+    if preparation_root.exists() or preparation_root.is_symlink():
+        _fail("ERR_APPIMAGE_PREPARATION_SCOPE", "AppImage preparation destination already exists")
+    preparation_root.mkdir(mode=0o700)
+    stdout_path = owned_root / "appimage-prepare.stdout"
+    stderr_path = owned_root / "appimage-prepare.stderr"
+    with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
+        process = subprocess.Popen(
+            [str(source), "--appimage-extract"],
+            cwd=preparation_root,
+            env=build_child_environment(owned_root),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+            start_new_session=True,
+        )
+        try:
+            process.wait(timeout=PREPARATION_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            _terminate_group(process)
+            _fail("ERR_APPIMAGE_PREPARATION_TIMEOUT", "AppImage preparation exceeded its bound")
+    if process.returncode != 0:
+        _fail("ERR_APPIMAGE_PREPARATION_FAILED", "AppImage preparation returned a nonzero status")
+
+    stdout_bytes = stdout_path.stat().st_size
+    stderr_bytes = stderr_path.stat().st_size
+    if stdout_bytes > MAX_PREPARATION_OUTPUT_BYTES or stderr_bytes > MAX_PREPARATION_OUTPUT_BYTES:
+        _fail("ERR_APPIMAGE_PREPARATION_OUTPUT_LIMIT", "AppImage preparation output exceeded its bound")
+
+    app_dir = preparation_root / "squashfs-root"
+    app_run = app_dir / "AppRun"
+    try:
+        resolved_app_dir = app_dir.resolve(strict=True)
+        resolved_app_run = app_run.resolve(strict=True)
+    except OSError:
+        _fail("ERR_APPIMAGE_PREPARATION_SHAPE", "Prepared AppImage has no usable AppRun")
+    if app_dir.is_symlink() or not app_dir.is_dir() or not resolved_app_run.is_relative_to(resolved_app_dir):
+        _fail("ERR_APPIMAGE_PREPARATION_SCOPE", "Prepared AppRun escapes the owned AppDir")
+    if not resolved_app_run.is_file() or not os.access(resolved_app_run, os.X_OK):
+        _fail("ERR_APPIMAGE_PREPARATION_SHAPE", "Prepared AppRun is not executable")
+
+    return {
+        "app_dir": str(resolved_app_dir),
+        "app_run": str(app_run),
+        "stdout_bytes": stdout_bytes,
+        "stderr_bytes": stderr_bytes,
+        "stdout_sha256": _sha256_file(stdout_path),
+        "stderr_sha256": _sha256_file(stderr_path),
+    }
+
+
+def prepare_isolated_git_project(root: Path) -> dict[str, Any]:
+    """Create one deterministic local Git repository with no remote."""
+    owned_root = _require_owned_root(root)
+    project = owned_root / "project"
+    if project.exists() or project.is_symlink():
+        _fail("ERR_PROJECT_PREPARATION_SCOPE", "Isolated project destination already exists")
+    project.mkdir(mode=0o700)
+    (project / "README.md").write_text("# Aether M1.3 isolated fixture\n", encoding="utf-8")
+    env = build_child_environment(owned_root)
+
+    def git(*arguments: str) -> bytes:
+        try:
+            completed = subprocess.run(
+                ["/usr/bin/git", *arguments],
+                cwd=project,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=10,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            _fail("ERR_PROJECT_PREPARATION", "Isolated Git project command was unavailable")
+        if completed.returncode != 0 or len(completed.stdout) > MAX_OUTPUT_BYTES or len(completed.stderr) > MAX_OUTPUT_BYTES:
+            _fail("ERR_PROJECT_PREPARATION", "Isolated Git project command failed")
+        return completed.stdout
+
+    git("init", "--quiet")
+    git("add", "--", "README.md")
+    git(
+        "-c",
+        "user.name=Aether Qualification",
+        "-c",
+        "user.email=aether-qualification@invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--quiet",
+        "-m",
+        "Initialize isolated qualification fixture",
+    )
+    head = git("rev-parse", "HEAD").decode("ascii").strip()
+    clean = git("status", "--porcelain=v1") == b""
+    remotes = [line for line in git("remote").decode("utf-8").splitlines() if line]
+    if re.fullmatch(r"[0-9a-f]{40}", head) is None or not clean or remotes:
+        _fail("ERR_PROJECT_PREPARATION", "Isolated Git project invariants were not satisfied")
+    return {"project_root": str(project), "head": head, "remote_count": 0, "clean": True}
 
 
 def _schema_type(value: Any, *, depth: int) -> dict[str, Any]:
@@ -376,11 +516,42 @@ def required_public_operation_plan() -> list[dict[str, Any]]:
     return [
         {"argv": ["status", "--json"], "effect": "READ_ONLY"},
         {
-            "argv": ["orchestration", "run-create", "--objective", "aether-m1.3-isolated-fixture", "--json"],
+            "argv": [
+                "worktree",
+                "create",
+                "--repo",
+                "<isolated_repo_selector>",
+                "--name",
+                "aether-m1.3-coordinator",
+                "--no-parent",
+                "--setup",
+                "skip",
+                "--json",
+            ],
             "effect": "LOCAL_REVERSIBLE",
         },
         {
-            "argv": ["orchestration", "task-create", "--spec", "aether-m1.3-synthetic-task", "--json"],
+            "argv": [
+                "orchestration",
+                "run-create",
+                "--objective",
+                "aether-m1.3-isolated-fixture",
+                "--from",
+                "<coordinator_terminal_handle>",
+                "--json",
+            ],
+            "effect": "LOCAL_REVERSIBLE",
+        },
+        {
+            "argv": [
+                "orchestration",
+                "task-create",
+                "--spec",
+                "aether-m1.3-synthetic-task",
+                "--from",
+                "<coordinator_terminal_handle>",
+                "--json",
+            ],
             "effect": "LOCAL_REVERSIBLE",
         },
         {"argv": ["orchestration", "run-show", "--json"], "effect": "READ_ONLY"},
@@ -391,6 +562,14 @@ def required_public_operation_plan() -> list[dict[str, Any]]:
         {"argv": ["terminal", "list", "--json"], "effect": "READ_ONLY"},
         {"argv": ["worktree", "list", "--json"], "effect": "READ_ONLY"},
         {"argv": ["worktree", "ps", "--json"], "effect": "READ_ONLY"},
+        {
+            "argv": ["terminal", "close", "--terminal", "<coordinator_terminal_handle>", "--json"],
+            "effect": "LOCAL_DESTRUCTIVE",
+        },
+        {
+            "argv": ["worktree", "rm", "--worktree", "<coordinator_worktree_id>", "--force", "--json"],
+            "effect": "LOCAL_DESTRUCTIVE",
+        },
         {"argv": ["orchestration", "reset", "--tasks", "--json"], "effect": "LOCAL_REVERSIBLE"},
         {"argv": ["orchestration", "reset", "--messages", "--json"], "effect": "LOCAL_REVERSIBLE"},
         {"argv": ["orchestration", "reset", "--all", "--json"], "effect": "LOCAL_REVERSIBLE"},
@@ -500,24 +679,23 @@ def run_owned_json_command(
     if len(stdout) > MAX_OUTPUT_BYTES or len(stderr) > MAX_OUTPUT_BYTES:
         _fail("ERR_COMMAND_OUTPUT_LIMIT", "Command output exceeded its limit")
     if process.returncode != 0:
-        if not stderr:
-            try:
-                failure = json.loads(stdout.decode("utf-8"))
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                failure = None
-            if isinstance(failure, dict) and set(failure) == {"status", "code", "error"}:
-                code = failure.get("code")
-                message = failure.get("error")
-                if (
-                    failure.get("status") == "FAIL"
-                    and isinstance(code, str)
-                    and code.startswith("ERR_")
-                    and code.replace("_", "").isalnum()
-                    and code.upper() == code
-                    and isinstance(message, str)
-                    and 0 < len(message) <= 240
-                ):
-                    _fail(code, message)
+        try:
+            failure = json.loads(stdout.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            failure = None
+        if isinstance(failure, dict) and set(failure) == {"status", "code", "error"}:
+            code = failure.get("code")
+            message = failure.get("error")
+            if (
+                failure.get("status") == "FAIL"
+                and isinstance(code, str)
+                and code.startswith("ERR_")
+                and code.replace("_", "").isalnum()
+                and code.upper() == code
+                and isinstance(message, str)
+                and 0 < len(message) <= 240
+            ):
+                _fail(code, message)
         _fail("ERR_COMMAND_NONZERO", "Structured command returned a nonzero status")
     return parse_json_object(stdout, stderr)
 
@@ -570,6 +748,55 @@ def _find_entity_id(value: Any, *, entity: str) -> str:
     return found
 
 
+def _find_worktree_id(value: Any) -> str:
+    def walk(item: Any, parent: str | None = None) -> str | None:
+        if isinstance(item, dict):
+            identity_value = item.get("id")
+            if parent == "worktree" and isinstance(identity_value, str) and "::" in identity_value:
+                return identity_value
+            for key in sorted(item):
+                found = walk(item[key], key)
+                if found:
+                    return found
+        elif isinstance(item, list):
+            for child in item:
+                found = walk(child, parent)
+                if found:
+                    return found
+        return None
+
+    found = walk(value)
+    if not found:
+        _fail("ERR_PROVIDER_SCHEMA_DRIFT", "worktree response has no structured identity")
+    return found
+
+
+def _find_terminal_handle(value: Any) -> str:
+    def walk(item: Any, parent: str | None = None) -> str | None:
+        if isinstance(item, dict):
+            handle = item.get("handle")
+            if parent in {"terminal", "terminals", "startupTerminal"} and isinstance(handle, str) and handle:
+                return handle
+            agent_handle = item.get("agentTerminalHandle")
+            if isinstance(agent_handle, str) and agent_handle:
+                return agent_handle
+            for key in sorted(item):
+                found = walk(item[key], key)
+                if found:
+                    return found
+        elif isinstance(item, list):
+            for child in item:
+                found = walk(child, parent)
+                if found:
+                    return found
+        return None
+
+    found = walk(value)
+    if not found:
+        _fail("ERR_PROVIDER_SCHEMA_DRIFT", "terminal response has no structured handle")
+    return found
+
+
 def _contains_identity(value: Any, identity_value: str) -> bool:
     if isinstance(value, dict):
         return any(_contains_identity(item, identity_value) for item in value.values())
@@ -582,6 +809,8 @@ class LifecycleDriver(Protocol):
     def verify_identity(self) -> dict[str, Any]: ...
 
     def start(self) -> dict[str, Any]: ...
+
+    def coordinator_repo_selector(self) -> str: ...
 
     def command(self, argv: list[str]) -> dict[str, Any]: ...
 
@@ -612,9 +841,47 @@ def exercise_lifecycle(driver: LifecycleDriver) -> dict[str, Any]:
         if not status_is_ready(status, expected_version=candidate["product_version"]):
             _fail("ERR_RUNTIME_NOT_READY", "Cold-started runtime did not become ready")
 
+        repo_selector = driver.coordinator_repo_selector()
+        if not repo_selector.startswith("path:/"):
+            _fail("ERR_PROJECT_SELECTOR", "Coordinator repository selector is not an absolute path selector")
+        try:
+            worktree_create = invoke(
+                "coordinator_worktree_create",
+                [
+                    "worktree",
+                    "create",
+                    "--repo",
+                    repo_selector,
+                    "--name",
+                    "aether-m1.3-coordinator",
+                    "--no-parent",
+                    "--setup",
+                    "skip",
+                    "--json",
+                ],
+            )
+        except LifecycleError as exc:
+            if exc.code == "ERR_COMMAND_NONZERO":
+                _fail(
+                    "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED",
+                    "Provider could not establish a trusted coordinator resource",
+                )
+            raise
+        worktree_result = _envelope_ok(worktree_create, operation="coordinator-worktree-create")
+        coordinator_worktree_id = _find_worktree_id(worktree_result)
+        coordinator_handle = _find_terminal_handle(worktree_result)
+
         run_create = invoke(
             "run_create",
-            ["orchestration", "run-create", "--objective", "aether-m1.3-isolated-fixture", "--json"],
+            [
+                "orchestration",
+                "run-create",
+                "--objective",
+                "aether-m1.3-isolated-fixture",
+                "--from",
+                coordinator_handle,
+                "--json",
+            ],
         )
         run_id = _find_entity_id(_envelope_ok(run_create, operation="run-create"), entity="run")
         task_create = invoke(
@@ -626,6 +893,8 @@ def exercise_lifecycle(driver: LifecycleDriver) -> dict[str, Any]:
                 "aether-m1.3-synthetic-task",
                 "--run",
                 run_id,
+                "--from",
+                coordinator_handle,
                 "--json",
             ],
         )
@@ -643,6 +912,13 @@ def exercise_lifecycle(driver: LifecycleDriver) -> dict[str, Any]:
         }
         for name, argv in reads.items():
             _envelope_ok(invoke(name, argv), operation=name)
+        _envelope_ok(
+            invoke(
+                "coordinator_terminal_close",
+                ["terminal", "close", "--terminal", coordinator_handle, "--json"],
+            ),
+            operation="coordinator-terminal-close",
+        )
         first_stop = driver.stop()
         first_started = False
 
@@ -668,6 +944,13 @@ def exercise_lifecycle(driver: LifecycleDriver) -> dict[str, Any]:
             ("reset_all", ["orchestration", "reset", "--all", "--json"]),
         ):
             _envelope_ok(invoke(name, argv), operation=name)
+        _envelope_ok(
+            invoke(
+                "coordinator_worktree_remove",
+                ["worktree", "rm", "--worktree", f"id:{coordinator_worktree_id}", "--force", "--json"],
+            ),
+            operation="coordinator-worktree-remove",
+        )
         second_stop = driver.stop()
         second_started = False
     finally:
@@ -688,6 +971,7 @@ def exercise_lifecycle(driver: LifecycleDriver) -> dict[str, Any]:
         "candidate": candidate,
         "cold_start": {"ready": True, "runtime_identity_changed_on_restart": cold["runtime_id"] != restarted["runtime_id"]},
         "restart": {"run_recovered": True, "task_recovered": True},
+        "coordinator_resources": {"worktree_created": True, "terminal_closed": True, "worktree_removed": True},
         "stop": {"first": first_stop, "second": second_stop},
         "observed_schemas": schemas,
         "response_digests": command_digests,
@@ -703,11 +987,13 @@ class _RealDriver:
         self.manifest, self.manifest_digest = identity.load_manifest()
         self.launcher = Path(self.manifest["launcher"]["path"])
         self.appimage = Path(self.manifest["appimage"]["path"])
+        self.project = self.root / "project"
         self.runtime_process: subprocess.Popen[bytes] | None = None
         self.xvfb_process: subprocess.Popen[bytes] | None = None
         self.runtime_port: int | None = None
         self.display_number: int | None = None
         self.start_count = 0
+        self.prepared_runtime: dict[str, Any] | None = None
         self._start_xvfb()
 
     def verify_identity(self) -> dict[str, Any]:
@@ -720,14 +1006,34 @@ class _RealDriver:
             )
         except identity.QualificationError as exc:
             raise LifecycleError(exc.code, exc.message) from None
+        prepared = prepare_appimage_runtime(
+            self.root,
+            appimage,
+            expected_size=appimage_size,
+            expected_sha256=appimage_sha,
+        )
+        self.prepared_runtime = prepared
+        self.env = build_prepared_runtime_environment(self.env, Path(prepared["app_dir"]))
+        project = prepare_isolated_git_project(self.root)
         return {
             "candidate_id": self.manifest["candidate_id"],
             "product_version": self.manifest["product_version"]["value"],
             "manifest_sha256": self.manifest_digest,
             "launcher": {"path": str(launcher), "size": launcher_size, "sha256": launcher_sha},
             "appimage": {"path": str(appimage), "size": appimage_size, "sha256": appimage_sha},
+            "prepared_runtime": prepared,
+            "isolated_project": project,
             "catalog_sha256": self.manifest["catalog"]["sha256"],
         }
+
+    def _cli_argv(self, argv: list[str]) -> list[str]:
+        prepared = self.prepared_runtime
+        if prepared is None:
+            _fail("ERR_APPIMAGE_NOT_PREPARED", "Prepared AppImage runtime is unavailable")
+        return build_prepared_cli_argv(Path(prepared["app_run"]), argv)
+
+    def coordinator_repo_selector(self) -> str:
+        return f"path:{self.project}"
 
     def _start_xvfb(self) -> None:
         if self.xvfb_path.is_symlink() or not self.xvfb_path.is_file() or not os.access(self.xvfb_path, os.X_OK):
@@ -792,20 +1098,20 @@ class _RealDriver:
         stderr_path = self.root / f"serve-{self.start_count}.stderr"
         stdout = stdout_path.open("wb")
         stderr = stderr_path.open("wb")
-        project = self.root / "project"
-        project.mkdir(exist_ok=True)
+        self.project.mkdir(exist_ok=True)
         process = subprocess.Popen(
-            [
-                str(self.launcher),
-                "serve",
-                "--port",
-                str(port),
-                "--no-pairing",
-                "--project-root",
-                str(project),
-                "--json",
-            ],
-            cwd=self.root,
+            self._cli_argv(
+                [
+                    "serve",
+                    "--port",
+                    str(port),
+                    "--no-pairing",
+                    "--project-root",
+                    str(self.project),
+                    "--json",
+                ]
+            ),
+            cwd=self.project,
             env=self.env,
             stdin=subprocess.DEVNULL,
             stdout=stdout,
@@ -862,8 +1168,8 @@ class _RealDriver:
 
     def command(self, argv: list[str]) -> dict[str, Any]:
         return run_owned_json_command(
-            [str(self.launcher), *argv],
-            cwd=self.root,
+            self._cli_argv(argv),
+            cwd=self.project,
             env=self.env,
             timeout_seconds=COMMAND_TIMEOUT_SECONDS,
         )
@@ -1104,6 +1410,7 @@ def _run_worker(root: Path, xvfb_path: Path) -> dict[str, Any]:
     provider_error: Exception | None = None
     cleanup: dict[str, Any] | None = None
     admitted_provider_blocks = {
+        "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED",
         "ERR_LISTENER_SURVIVED",
         "ERR_RUNTIME_START_TIMEOUT",
         "ERR_RUNTIME_START_SHAPE",
@@ -1137,6 +1444,15 @@ def _run_worker(root: Path, xvfb_path: Path) -> dict[str, Any]:
                 finding["timeout_seconds"] = STARTUP_TIMEOUT_SECONDS
             else:
                 finding["startup_output_contract_violation"] = True
+        elif code == "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED":
+            stage = "coordinator_bootstrap"
+            finding = {
+                "code": code,
+                "stage": stage,
+                "start_attempt": attempt,
+                "provider_prerequisite": "trusted_live_coordinator_terminal",
+                "mutation_available": False,
+            }
         else:
             stage = "first_stop" if attempt <= 1 else "second_stop"
             finding = {
@@ -1148,7 +1464,9 @@ def _run_worker(root: Path, xvfb_path: Path) -> dict[str, Any]:
                 "timeout_seconds": STOP_TIMEOUT_SECONDS,
             }
         completed = ["candidate_identity"]
-        if code == "ERR_LISTENER_SURVIVED" or attempt > 1:
+        if code == "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED":
+            completed.extend(["appimage_preparation", "cold_start_ready", "status_ready"])
+        elif code == "ERR_LISTENER_SURVIVED" or attempt > 1:
             completed.extend(
                 [
                     "cold_start_ready",
@@ -1282,6 +1600,7 @@ def qualify_real_lifecycle(
         if evidence.get("status") == "BLOCKED":
             finding = evidence.get("blocking_finding")
             admitted = {
+                "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED",
                 "ERR_LISTENER_SURVIVED",
                 "ERR_RUNTIME_START_TIMEOUT",
                 "ERR_RUNTIME_START_SHAPE",

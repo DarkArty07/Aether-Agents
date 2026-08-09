@@ -133,6 +133,28 @@ mitigation, grant D1, or authorize activation.
   to satisfy the frozen latency/reliability thresholds without polling debt.
 - **Affected versions:** Orca `1.4.167`; reassess with measured candidates.
 
+## TD-ORCA-009 — No qualified headless coordinator bootstrap
+
+- **Capabilities:** every coordinator-side orchestration mutation
+- **Severity:** Critical
+- **Consequence:** `run-create` requires a live admitted Orca terminal sender, but
+  the isolated `serve` boundary has no proven public headless sequence for
+  registering the synthetic repo/worktree and minting that coordinator identity.
+  Read-only status can pass while every swarm mutation remains unavailable.
+- **Mitigation:** require a trusted live coordinator terminal binding from Orca
+  launch context; validate it with public `terminal show`; bind it to one principal,
+  project, provider build, and Run; reject stale/foreign/missing handles; never
+  invent or persist a handle as authority. Keep standalone headless mutations
+  disabled.
+- **Current acceptance:** R3 framing/cold readiness only. Mutation, full lifecycle,
+  D1, and R5 remain blocked. A desktop/UI-backed or externally pre-admitted
+  coordinator pilot requires a separate operation gate.
+- **Removal condition:** Orca exposes a versioned public headless coordinator-admit
+  operation, headless worktree/terminal creation returns a usable sender with
+  deterministic cleanup, or an explicitly authorized isolated desktop pilot proves
+  the trusted binding and restart semantics twice.
+- **Affected versions:** Orca `1.4.167`; reassess every provider upgrade.
+
 ## Acceptance summary
 
 The product owner accepts these entries as design/qualification debt, not as proof

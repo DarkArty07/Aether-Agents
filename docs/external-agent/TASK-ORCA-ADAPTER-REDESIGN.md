@@ -257,17 +257,22 @@ compileall pass; all removed names fail validation; registration remains zero.
 
 ### R3 — Exact Orca lifecycle adaptation
 
-- [ ] Write RED tests proving preparation output cannot enter runtime framing.
-- [ ] Verify exact AppImage identity, extract into the owned root as a distinct
+- [x] Write RED tests proving preparation output cannot enter runtime framing.
+- [x] Verify exact AppImage identity, extract into the owned root as a distinct
       bounded preparation step, and execute the staged `AppRun` afterward.
-- [ ] Reserve runtime stdout for one structured protocol stream.
-- [ ] Re-run focused harness tests.
+- [x] Reserve runtime stdout for one structured protocol stream.
+- [x] Re-run focused harness tests.
 - [ ] Execute the exact real lifecycle twice in fresh namespaces.
-- [ ] Record PASS/BLOCKED evidence and zero survivors without relaxing fail-closed
+- [x] Record `BLOCKED` evidence and zero survivors without relaxing fail-closed
       behavior.
 
-**Acceptance:** the historical extraction/framing defect is fixed by construction;
-real results are reproducible and cleanup is complete.
+The two accepted real repetitions remain unchecked because coordinator bootstrap
+blocked the lifecycle after cold readiness. R3 is closed `BLOCKED`, not silently
+treated as complete/PASS.
+
+**Acceptance target:** the historical extraction/framing defect is fixed by
+construction and execution; full real lifecycle requires two reproducible probes.
+R3 met the first clause and cleanup, but closed `BLOCKED` before the second.
 
 ### R4 — Adapter and reconciler foundation
 
@@ -330,7 +335,7 @@ changes, and no protected effect.
 | R0 | `COMPLETED` | isolated worktree at base `b807c62`; frozen task; YAML/reference validation PASS |
 | R1 | `COMPLETED` | 15-tool contract, three-axis 55-capability matrix, six aggregate adaptations, debt ledger, revised D1 |
 | R2 | `COMPLETED` | `v1alpha2`; 15 schemas; 105 passed/1 deselected; Ruff/compileall/snapshot/zero-tool smoke PASS |
-| R3 | `PENDING` | — |
+| R3 | `CLOSED_BLOCKED` | framing/cold status PASS; coordinator bootstrap unqualified; 23 passed/1 deselected; zero survivors; D1 false |
 | R4 | `PENDING` | — |
 | R5 | `PENDING` | — |
 | R6 | `PENDING` | — |

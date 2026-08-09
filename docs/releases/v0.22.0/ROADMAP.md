@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** ADAPTIVE ORCA REDESIGN R2 CLOSED; R3 NEXT; D1 FALSE; NOT ACTIVATED
+> **Status:** ADAPTIVE R3 CLOSED BLOCKED; RESTRICTED R4 NEXT; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -38,6 +38,9 @@ plane, with:
   server still registers and exposes zero tools.
 - The provider adapter, accepted semantic store, reconciler, learning boundary,
   and runtime composition do not yet exist.
+- R3 fixed AppImage extraction/runtime framing and proved structured cold
+  readiness, but full lifecycle is blocked because no trusted headless coordinator
+  terminal binding was qualified.
 - Hermes currently performs bounded work directly. The owner authorized the
   ordered R0-R6 redesign/qualification task on 2026-08-08.
 - PDR-0012 defines the Hermes–Orca ownership boundary.
@@ -900,6 +903,13 @@ preserving zero registered/callable tools.
 keeps zero registered/callable tools. Focused tests passed 30; the full non-real
 suite passed 105 with one deliberately deselected R3 lifecycle fixture. See
 `R2_PROTOCOL_ACCEPTANCE.md`.
+
+**Adaptive R3 closure (2026-08-08):** explicit AppImage preparation and JSON-only
+runtime framing pass on the exact candidate. Full Run/Task/restart qualification
+is `BLOCKED`: Orca requires a live sender terminal, and the standalone headless
+boundary did not prove a public coordinator bootstrap. R4 is restricted to
+default-off provider binding/journal/correlation/reconciliation and unavailable
+mutation gates; R5 is blocked. See `R3_LIFECYCLE_ACCEPTANCE.md`.
 
 #### M2.3 — Implement trusted principal and project admission
 

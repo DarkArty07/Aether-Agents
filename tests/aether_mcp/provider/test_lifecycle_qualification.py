@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -98,9 +99,8 @@ def test_child_environment_is_exact_and_rooted(lifecycle_root: Path, monkeypatch
         "TMPDIR",
         "PATH",
         "LANG",
-        "APPIMAGE_EXTRACT_AND_RUN",
     }
-    assert env["APPIMAGE_EXTRACT_AND_RUN"] == "1"
+    assert "APPIMAGE_EXTRACT_AND_RUN" not in env
     for key in (
         "HOME",
         "XDG_CACHE_HOME",
@@ -129,10 +129,12 @@ def test_parse_json_envelope_rejects_stderr_malformed_and_non_object() -> None:
         assert _error_code(exc) == code
 
 
-def test_serve_stream_allows_only_owned_extraction_paths_then_one_ready_object(lifecycle_root: Path) -> None:
+def test_serve_stream_accepts_only_one_structured_ready_object(lifecycle_root: Path) -> None:
     extracted = lifecycle_root / "tmp" / ("appimage_extracted_" + "a" * 32)
     line = str(extracted / "resources" / "app.asar")
-    assert lifecycle.parse_serve_stream((line + "\n").encode(), lifecycle_root) is None
+    with pytest.raises(LifecycleError) as exc:
+        lifecycle.parse_serve_stream((line + "\n").encode(), lifecycle_root)
+    assert _error_code(exc) == "ERR_RUNTIME_START_SHAPE"
 
     ready = {
         "type": "orca_server_ready",
@@ -144,7 +146,7 @@ def test_serve_stream_allows_only_owned_extraction_paths_then_one_ready_object(l
         "managedWslCliReconciliation": "settled",
         "pairing": {"available": False, "reason": "disabled_by_operator", "guidance": "fixture"},
     }
-    payload = (line + "\n" + json.dumps(ready) + "\n").encode()
+    payload = (json.dumps(ready) + "\n").encode()
     assert lifecycle.parse_serve_stream(payload, lifecycle_root) == ready
 
     with pytest.raises(LifecycleError) as exc:
@@ -154,6 +156,63 @@ def test_serve_stream_allows_only_owned_extraction_paths_then_one_ready_object(l
     with pytest.raises(LifecycleError) as exc:
         lifecycle.parse_serve_stream((json.dumps(ready) + "\n" + json.dumps(ready) + "\n").encode(), lifecycle_root)
     assert _error_code(exc) == "ERR_RUNTIME_START_SHAPE"
+
+
+def test_appimage_preparation_is_bounded_and_separate_from_runtime_stdout(
+    lifecycle_root: Path, tmp_path: Path
+) -> None:
+    appimage = tmp_path / "fake-orca.AppImage"
+    appimage.write_text(
+        "#!/usr/bin/python3\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "assert sys.argv[1:] == ['--appimage-extract']\n"
+        "root = Path.cwd() / 'squashfs-root'\n"
+        "root.mkdir()\n"
+        "app = root / 'AppRun'\n"
+        "app.write_text('#!/bin/sh\\nexit 0\\n', encoding='utf-8')\n"
+        "app.chmod(0o755)\n"
+        "print('synthetic extraction noise')\n"
+        "print('synthetic extraction warning', file=sys.stderr)\n",
+        encoding="utf-8",
+    )
+    appimage.chmod(0o755)
+    payload = appimage.read_bytes()
+
+    prepared = lifecycle.prepare_appimage_runtime(
+        lifecycle_root,
+        appimage,
+        expected_size=len(payload),
+        expected_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    app_dir = Path(prepared["app_dir"])
+    app_run = Path(prepared["app_run"])
+    assert app_dir.is_relative_to(lifecycle_root)
+    assert app_run.is_relative_to(app_dir)
+    assert app_run.is_file() and os.access(app_run, os.X_OK)
+    assert prepared["stdout_bytes"] > 0
+    assert prepared["stderr_bytes"] > 0
+    assert len(prepared["stdout_sha256"]) == 64
+    assert len(prepared["stderr_sha256"]) == 64
+    assert (lifecycle_root / "appimage-prepare.stdout").read_text().strip() == "synthetic extraction noise"
+    assert (lifecycle_root / "appimage-prepare.stderr").read_text().strip() == "synthetic extraction warning"
+
+    argv = lifecycle.build_prepared_cli_argv(app_run, ["status", "--json"])
+    assert argv[0] == str(app_run)
+    assert argv[-3:] == ["--", "status", "--json"]
+    assert "--appimage-extract" not in argv
+    assert lifecycle.ORCA_CLI_BOOTSTRAP in argv
+
+
+def test_isolated_git_project_is_local_clean_and_remote_free(lifecycle_root: Path) -> None:
+    metadata = lifecycle.prepare_isolated_git_project(lifecycle_root)
+    project = Path(metadata["project_root"])
+    assert project == lifecycle_root / "project"
+    assert (project / ".git").is_dir()
+    assert len(metadata["head"]) == 40
+    assert metadata["remote_count"] == 0
+    assert metadata["clean"] is True
 
 
 def test_status_exit_zero_is_not_readiness_and_version_is_pinned() -> None:
@@ -254,23 +313,23 @@ def test_required_operation_plan_has_no_forbidden_effects() -> None:
     assert ("status", "--json") in flattened
     assert ("orchestration", "run-create") in [item[:2] for item in flattened]
     assert ("orchestration", "task-create") in [item[:2] for item in flattened]
+    assert ("worktree", "create") in [item[:2] for item in flattened]
+    assert ("terminal", "close") in [item[:2] for item in flattened]
+    assert ("worktree", "rm") in [item[:2] for item in flattened]
     assert ("orchestration", "reset") in [item[:2] for item in flattened]
     assert ("terminal", "list", "--json") in flattened
     assert ("worktree", "list", "--json") in flattened
     assert ("worktree", "ps", "--json") in flattened
 
-    forbidden = {
-        "dispatch",
-        "worker-start",
-        "terminal-create",
-        "terminal-send",
-        "worktree-create",
-        "worktree-rm",
-        "account",
-        "environment",
-        "open",
+    forbidden_paths = {
+        ("orchestration", "dispatch"),
+        ("orchestration", "worker-start"),
+        ("terminal", "send"),
+        ("account",),
+        ("environment",),
+        ("open",),
     }
-    assert not any(token in forbidden for argv in flattened for token in argv)
+    assert not any(argv[: len(path)] == path for argv in flattened for path in forbidden_paths)
 
 
 def test_missing_seams_are_unsupported_without_complete_proof() -> None:
@@ -412,12 +471,36 @@ def test_structured_child_failure_preserves_stable_error_code(lifecycle_root: Pa
     assert _error_code(exc) == "ERR_SYNTHETIC"
 
 
+def test_structured_child_failure_preserves_stable_code_when_stderr_exists(
+    lifecycle_root: Path, tmp_path: Path
+) -> None:
+    executable = tmp_path / "fail-with-stderr.py"
+    executable.write_text(
+        "#!/usr/bin/python3\n"
+        "import json,sys\n"
+        "print('synthetic infrastructure diagnostic', file=sys.stderr)\n"
+        "print(json.dumps({'status':'FAIL','code':'ERR_SYNTHETIC_STDERR','error':'safe failure'}))\n"
+        "raise SystemExit(1)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+
+    with pytest.raises(LifecycleError) as exc:
+        lifecycle.run_owned_json_command(
+            [str(executable)],
+            cwd=lifecycle_root,
+            env=lifecycle.build_child_environment(lifecycle_root),
+        )
+    assert _error_code(exc) == "ERR_SYNTHETIC_STDERR"
+
+
 class _FakeDriver:
-    def __init__(self, *, recover: bool = True) -> None:
+    def __init__(self, *, recover: bool = True, coordinator_unavailable: bool = False) -> None:
         self.calls: list[tuple[str, ...]] = []
         self.starts = 0
         self.stops = 0
         self.recover = recover
+        self.coordinator_unavailable = coordinator_unavailable
 
     def verify_identity(self) -> dict[str, Any]:
         self.calls.append(("verify_identity",))
@@ -428,6 +511,9 @@ class _FakeDriver:
         self.calls.append(("start", str(self.starts)))
         return {"runtime_id": f"runtime-{self.starts}", "listener": "0.0.0.0", "isolated_network": True}
 
+    def coordinator_repo_selector(self) -> str:
+        return "path:/tmp/aether-m1-3-fake-project"
+
     def command(self, argv: list[str]) -> dict[str, Any]:
         self.calls.append(tuple(argv))
         command = tuple(argv)
@@ -436,6 +522,17 @@ class _FakeDriver:
             envelope["result"] = {"run": {"id": "run-1"}}
         elif command[:2] == ("orchestration", "task-create"):
             envelope["result"] = {"task": {"id": "task-1", "runId": "run-1"}}
+        elif command[:2] == ("worktree", "create"):
+            if self.coordinator_unavailable:
+                raise LifecycleError("ERR_COMMAND_NONZERO", "Structured command returned a nonzero status")
+            envelope["result"] = {
+                "worktree": {"id": "repo-1::/tmp/aether-m1-3-worker"},
+                "startupTerminal": {"handle": "term-coordinator"},
+            }
+        elif command[:2] == ("terminal", "close"):
+            envelope["result"] = {"close": {"handle": "term-coordinator", "ptyKilled": True}}
+        elif command[:2] == ("worktree", "rm"):
+            envelope["result"] = {"removed": {"id": "repo-1::/tmp/aether-m1-3-worker"}}
         elif command[:2] == ("orchestration", "run-show"):
             if self.starts > 1 and not self.recover:
                 return {"id": "fixture", "ok": False, "error": {"code": "not_found"}, "_meta": {"runtimeId": "r"}}
@@ -471,6 +568,47 @@ def test_lifecycle_state_machine_proves_restart_and_stops_twice() -> None:
     assert evidence["restart"]["task_recovered"] is True
     assert driver.starts == 2
     assert driver.stops == 2
+    assert (
+        "worktree",
+        "create",
+        "--repo",
+        "path:/tmp/aether-m1-3-fake-project",
+        "--name",
+        "aether-m1.3-coordinator",
+        "--no-parent",
+        "--setup",
+        "skip",
+        "--json",
+    ) in driver.calls
+    assert (
+        "orchestration",
+        "run-create",
+        "--objective",
+        "aether-m1.3-isolated-fixture",
+        "--from",
+        "term-coordinator",
+        "--json",
+    ) in driver.calls
+    assert (
+        "orchestration",
+        "task-create",
+        "--spec",
+        "aether-m1.3-synthetic-task",
+        "--run",
+        "run-1",
+        "--from",
+        "term-coordinator",
+        "--json",
+    ) in driver.calls
+    assert ("terminal", "close", "--terminal", "term-coordinator", "--json") in driver.calls
+    assert (
+        "worktree",
+        "rm",
+        "--worktree",
+        "id:repo-1::/tmp/aether-m1-3-worker",
+        "--force",
+        "--json",
+    ) in driver.calls
     assert ("orchestration", "reset", "--tasks", "--json") in driver.calls
     assert ("orchestration", "reset", "--messages", "--json") in driver.calls
 
@@ -481,6 +619,15 @@ def test_lifecycle_state_machine_fails_closed_when_restart_loses_run() -> None:
         lifecycle.exercise_lifecycle(driver)
     assert _error_code(exc) == "ERR_RESTART_STATE_LOST"
     assert driver.stops == 2
+
+
+def test_lifecycle_fails_closed_when_coordinator_bootstrap_is_unqualified() -> None:
+    driver = _FakeDriver(coordinator_unavailable=True)
+    with pytest.raises(LifecycleError) as exc:
+        lifecycle.exercise_lifecycle(driver)
+    assert _error_code(exc) == "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED"
+    assert driver.starts == 1
+    assert driver.stops == 1
 
 
 @pytest.mark.skipif(not REAL_FIXTURE_AVAILABLE, reason="canonical Orca candidate is not installed")
@@ -496,11 +643,15 @@ def test_real_candidate_lifecycle_executes_without_skip_and_cleans() -> None:
         if evidence["status"] == "BLOCKED":
             finding = evidence["blocking_finding"]
             assert finding["code"] in {
+                "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED",
                 "ERR_LISTENER_SURVIVED",
                 "ERR_RUNTIME_START_TIMEOUT",
                 "ERR_RUNTIME_START_SHAPE",
             }
-            if finding["code"] == "ERR_LISTENER_SURVIVED":
+            if finding["code"] == "ERR_COORDINATOR_BOOTSTRAP_UNQUALIFIED":
+                assert finding["stage"] == "coordinator_bootstrap"
+                assert finding["mutation_available"] is False
+            elif finding["code"] == "ERR_LISTENER_SURVIVED":
                 assert finding["stage"] in {"first_stop", "second_stop"}
                 assert finding["listener_survived"] is True
             elif finding["code"] == "ERR_RUNTIME_START_TIMEOUT":

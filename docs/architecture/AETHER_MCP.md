@@ -709,13 +709,14 @@ Implementation planning must include deterministic tests for:
 
 ### Not implemented or accepted
 
-- The package and zero-tool stdio bootstrap exist; the historical M2.2 tree
-  exported 24 schemas, but the 15-tool successor is not yet implemented.
+- The package and zero-tool stdio bootstrap exist; R2 implements the exact
+  15-schema `v1alpha2` successor while preserving historical `v1alpha1` bytes.
 - No operational tool is registered/callable and no accepted store/adapter exists.
 - The exact Orca candidate is pinned for qualification, but all 55 adaptation
   capabilities remain `UNQUALIFIED` under M1.4-R1.
-- One no-model synthetic pilot is authorized only after R2-R4 prerequisites;
-  model-backed workers, Release, and activation remain unauthorized.
+- R3 fixes AppImage framing and proves cold readiness, but trusted coordinator-
+  terminal binding remains unqualified; every mutation and R5 are blocked.
+- Model-backed workers, Release, and activation remain unauthorized.
 
 ### Final design gate
 

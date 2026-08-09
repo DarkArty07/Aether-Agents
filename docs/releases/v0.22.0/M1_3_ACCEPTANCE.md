@@ -7,6 +7,7 @@
 > **Technical commit:** `7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239`
 > **Technical tree:** `3974b33e096cde76c78f7427ca57b34fa9fff278`
 > **Evidence:** `M1_3_LIFECYCLE_EVIDENCE.json`
+> **Successor:** `R3_LIFECYCLE_ACCEPTANCE.md` fixes the historical framing defect but closes full lifecycle blocked on coordinator bootstrap
 
 ## 1. Scope completed
 

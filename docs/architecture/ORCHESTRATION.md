@@ -429,6 +429,8 @@ The following remain unproven:
 13. independent Verifier profile, benchmark, and execution;
 14. Ariadna's distinct utility and safe data contract;
 15. aggregate cleanup evidence under partial-start and failure cases.
+16. trusted coordinator-terminal admission; R3 proves cold headless readiness but
+    not a public standalone sender bootstrap.
 
 Therefore activation remains `NO-GO`.
 

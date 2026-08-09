@@ -43,15 +43,15 @@ granted and no adapter contract was frozen at that boundary.
 
 Chris then selected the bounded adaptive redesign path on 2026-08-08 and
 authorized the ordered R0-R6 sequence in
-`docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. That task may redesign the
-ownership/capability contract, reduce the operational MCP catalog to 15 designed
-tools, adapt the exact isolated AppImage lifecycle harness, implement the minimum
-default-off adapter/journal/reconciler foundation, and attempt one isolated
-provider-backed two-worker synthetic slice. It must preserve Orca as sole mutable
-runtime authority, keep zero MCP tools registered/callable, avoid model-backed
-workers/credentials/spend, and stop after R6. Local atomic English commits are
-allowed. Push, merge, rebase, amend, tag, Release, deployment, registration,
-persistent services and activation remain forbidden.
+`docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. R3 fixed AppImage
+extraction/runtime framing and proved cold readiness, but closed blocked because
+no trusted headless coordinator-terminal bootstrap was qualified. R4 is therefore
+restricted to default-off provider binding, journal, correlation, reconciliation,
+and explicit unavailable mutation gates; R5 remains blocked. Orca remains the
+sole mutable runtime authority, MCP remains zero-tool/default-off, and D1 remains
+false. Local atomic English commits are allowed. Model-backed workers,
+credentials/spend, push, merge, rebase, amend, tag, Release, deployment,
+registration, persistent services and activation remain forbidden.
 
 ## v0.19.0 experimental coordination closeout
 

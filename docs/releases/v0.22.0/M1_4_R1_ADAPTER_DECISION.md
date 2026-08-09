@@ -207,3 +207,20 @@ The redesigned architecture is potentially sufficient for agent orchestration:
 Hermes and Aether retain product semantics and safety while Orca provides runtime
 mechanics. That is a target hypothesis, not a current capability claim. R3-R5
 must still produce real executed evidence.
+
+## 10. R3 observed prerequisite
+
+R3 proved exact AppImage preparation, JSON-only cold readiness, and ready status,
+but exposed a critical cross-cutting prerequisite not counted in the historical
+55-capability matrix: every coordinator mutation requires a trusted live Orca
+terminal sender. The standalone headless `serve` boundary did not qualify a public
+way to mint or admit that identity.
+
+Until `R3_LIFECYCLE_ACCEPTANCE.md` is superseded by executed evidence:
+
+- coordinator-side mutation delivery is unavailable;
+- the adapter must require and publicly validate a terminal binding from trusted
+  launch context rather than inventing one;
+- R4 is restricted to default-off binding, journal, correlation, reconciliation,
+  and explicit unavailable gates;
+- R5 and D1 remain blocked.

@@ -60,6 +60,17 @@
     "learning_dataset": "future_separate_learning_boundary",
     "learning_export": "future_separate_learning_boundary"
   },
+  "prerequisite_findings": {
+    "coordinator_terminal_binding": {
+      "delivery": "UNSUPPORTED",
+      "guarantee": "DEGRADED",
+      "qualification": "UNQUALIFIED",
+      "scope": "cross_cutting_prerequisite_not_in_the_historical_55_capability_count",
+      "evidence": "docs/releases/v0.22.0/R3_LIFECYCLE_EVIDENCE.json",
+      "effect": "all coordinator-side orchestration mutations remain unavailable",
+      "required_mitigation": "trusted live Orca terminal binding from admitted launch context"
+    }
+  },
   "classification_rules": [
     {
       "match": {
