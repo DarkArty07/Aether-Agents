@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** RESTRICTED R4 CLOSED; R5 BLOCKED CLOSE NEXT; D1 FALSE; NOT ACTIVATED
+> **Status:** R5 CLOSED BLOCKED/NOT EXECUTED; R6 AUDIT NEXT; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -917,6 +917,11 @@ immutable argv, append-before-effect, atomic intent fencing, idempotent replay,
 `UNKNOWN`, hash-chain receipts and injected read-only reconciliation pass 16
 focused tests. No provider executor or mutation was activated and zero MCP tools
 remain registered/callable. See `R4_ADAPTER_FOUNDATION_ACCEPTANCE.md`.
+
+**R5 closure (2026-08-08):** the provider-backed two-worker fixture was not
+executed because trusted coordinator binding remains unqualified and R4 contains
+no provider executor. R5 closes `BLOCKED / NOT EXECUTED` with zero workers,
+models, tools and runtime survivors. See `R5_SYNTHETIC_SLICE_ACCEPTANCE.md`.
 
 #### M2.3 — Implement trusted principal and project admission
 

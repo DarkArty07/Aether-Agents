@@ -233,3 +233,10 @@ append-only operation journal, atomic intent fencing, receipts, idempotent repla
 qualified mutation and there is no live provider executor or MCP registration.
 This deterministic foundation satisfies only the safe subset allowed after R3;
 it does not change the R5 or D1 block.
+
+## 12. R5 closure
+
+R5 closed `BLOCKED / NOT EXECUTED`. No provider-backed worker, model, terminal,
+worktree, Run or Task was started. The block preserves R1-R4 lower-level evidence
+without treating deterministic adapter tests as agent-orchestration acceptance.
+D1 remains false.

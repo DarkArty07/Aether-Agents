@@ -299,6 +299,11 @@ provider effect.
 - [ ] Exercise cancellation or exact honest inability.
 - [ ] Integrate deterministic artifacts and run checks.
 - [ ] Close/reconcile and prove zero survivors.
+- [x] Close the milestone `BLOCKED / NOT EXECUTED` because the trusted coordinator
+      prerequisite failed before any runtime resource could be admitted.
+
+All runtime fixture items remain unchecked because R3 did not qualify the trusted
+coordinator binding and R4 deliberately contains no provider executor.
 
 **Acceptance:** actual isolated provider-backed orchestration mechanics pass with
 no model/provider-account call. If R3/R4 prerequisites fail, R5 closes `BLOCKED`
@@ -338,7 +343,7 @@ changes, and no protected effect.
 | R2 | `COMPLETED` | `v1alpha2`; 15 schemas; 105 passed/1 deselected; Ruff/compileall/snapshot/zero-tool smoke PASS |
 | R3 | `CLOSED_BLOCKED` | framing/cold status PASS; coordinator bootstrap unqualified; 23 passed/1 deselected; zero survivors; D1 false |
 | R4 | `COMPLETED_RESTRICTED` | exact binding, immutable argv, atomic journal, idempotency, UNKNOWN/reconciliation; 16 passed; mutations unavailable; 0 tools |
-| R5 | `PENDING` | — |
+| R5 | `CLOSED_BLOCKED_NOT_EXECUTED` | coordinator binding unqualified; 0 tools/executors/workers/models/resources; lower-level evidence preserved |
 | R6 | `PENDING` | — |
 
 ## 12. Final stop boundary
