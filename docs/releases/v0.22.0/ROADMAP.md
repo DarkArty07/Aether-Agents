@@ -1145,14 +1145,16 @@ desktop-renderer/public-CLI path proved two Dispatches before polling,
 barrier-backed overlap, provider-message-correlated peer handoff, two-component
 coordinator integration, partial failure/cancel and zero survivors.
 
-**M5.4 bounded closure (2026-08-09):** D3 admitted Orca/Codex with exact
-`gpt-5.6-terra`, two workers and a 600-second hard stop. UC-C05 passed before
-provider effects. Two corrected-run worker-start receipts returned before
-artifact polling, but neither required artifact existed at the deadline; real
-overlap and quality remain insufficient. No retry occurred and cleanup plus
-exact profile rollback passed. Verdict: `BLOCKED_MODEL_WORKER_TIMEOUT`; fixture
-evidence is not substituted. See `M5_4_MODEL_ACCEPTANCE.md` and
-`M5_MODEL_BACKED_EVIDENCE.json`.
+**M5.4 bounded closure (2026-08-09):** the original Orca/Codex attempt with exact
+`gpt-5.6-terra`, two workers and a 600-second hard stop ended at
+`BLOCKED_MODEL_WORKER_TIMEOUT` and remains preserved. The corrected isolated
+Orca 1.4.167/Codex CLI 0.147.0 candidate subsequently passed UC-C05 and UC-C03:
+two Dispatches before polling, task-scoped liveness, real execution overlap, both
+frozen verifiers, provider-correlated completion, two-component integration,
+semantic close and zero survivors with no retry or PAYG spend. Verdict:
+`PASS_MODEL_BACKED_M5_4`; fixture evidence is not substituted. See
+`M5_4_MODEL_ACCEPTANCE.md`, `M5_4_WORKER_LIVENESS_CORRECTION.md` and
+`M5_MODEL_LIVENESS_CORRECTED_EVIDENCE.json`.
 
 **Proposed atomic commits:**
 

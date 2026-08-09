@@ -69,11 +69,28 @@ class Transport:
                     "worker": {"worktreePath": f"/tmp/model-{self.dispatches}"},
                 },
             }
+        if command == ("orchestration", "worker-read"):
+            return {
+                "id": "req-model-worker-read",
+                "ok": True,
+                "result": {
+                    "source": "transcript",
+                    "transcript": {
+                        "messages": [
+                            {"role": "user", "blocks": [{"type": "text", "text": "SECRET_PROMPT"}]}
+                        ]
+                    },
+                },
+            }
         if command == ("orchestration", "task-update"):
             status = argv[argv.index("--status") + 1]
             return {"id": "req-task-update", "ok": True, "result": {"task": {"status": status}}}
         if command == ("terminal", "send"):
-            return {"id": "req-send-command", "ok": True, "result": {"sent": True}}
+            return {
+                "id": "req-send-command",
+                "ok": True,
+                "result": {"send": {"accepted": True, "bytesWritten": 1}},
+            }
         if command == ("terminal", "stop"):
             return {"id": "req-terminal-stop", "ok": True, "result": {"stopped": True}}
         if command == ("orchestration", "worker-stop"):
@@ -223,3 +240,32 @@ def test_public_model_worker_uses_supervised_codex_and_exact_stop() -> None:
         ("orchestration", "worker-stop"),
         ("worktree", "rm"),
     ]
+
+
+def test_model_worker_observation_reports_activity_without_retaining_transcript() -> None:
+    transport = Transport()
+    provider = _provider(transport)
+
+    observation = provider.observe_model_worker("dispatch_model_1")
+
+    assert observation.source == "transcript"
+    assert observation.activity_observed
+    assert observation.blocked_reason is None
+    assert observation.response_bytes > 0
+    assert len(observation.response_digest) == 64
+    assert "SECRET_PROMPT" not in repr(observation)
+    call = transport.calls[-1]
+    assert call[:2] == ("orchestration", "worker-read")
+    assert call[call.index("--dispatch") + 1] == "dispatch_model_1"
+    assert call[call.index("--source") + 1] == "auto"
+
+
+def test_model_worker_submit_recovery_sends_only_one_empty_enter() -> None:
+    transport = Transport()
+    provider = _provider(transport)
+
+    recovered = provider.submit_model_worker_enter("term_model_1")
+
+    assert recovered.outcome == "APPLIED"
+    call = transport.calls[-1]
+    assert call == ("terminal", "send", "--terminal", "term_model_1", "--enter", "--json")

@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -44,6 +45,8 @@ ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "schemas/orca/1.4.167/catalog.json"
 EXPECTED_MODEL = "gpt-5.6-terra"
 MAX_WORKER_SECONDS = 600
+MODEL_LIVENESS_SECONDS = 90
+MODEL_SUBMIT_RECOVERY_AFTER_SECONDS = 5
 
 
 class QualificationError(RuntimeError):
@@ -63,6 +66,12 @@ def canonical_digest(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     ).hexdigest()
+
+
+def baseline_runs_admitted(runs: list[dict[str, Any]]) -> bool:
+    return len(runs) <= 1 and all(
+        run.get("id") == "run_legacy_local" and run.get("legacy") == 1 for run in runs
+    )
 
 
 def operation(project_id: str, code: str, *, effect: str = "LOCAL_REVERSIBLE") -> dict[str, Any]:
@@ -91,6 +100,21 @@ def task_prompt(task: str) -> str:
         f"read-only verifier. Implement the required code under {task}/ using only installed standard tools. "
         f"Run `{verifier}`. LAST, update {task}/model-result.json with status='passed', finished_at_ns=time.time_ns(), "
         "the verifier command, and its zero exit code. Do not commit. Stop after the passing verifier."
+    )
+
+
+def worker_read_command(provider_dispatch_id: str, *, limit: int) -> tuple[str, ...]:
+    require(bool(provider_dispatch_id) and limit > 0, "worker-read command inputs are invalid")
+    return (
+        "orchestration",
+        "worker-read",
+        "--dispatch",
+        provider_dispatch_id,
+        "--source",
+        "auto",
+        "--limit",
+        str(limit),
+        "--json",
     )
 
 
@@ -348,6 +372,129 @@ def changed_paths(worktree: Path) -> list[str]:
     return sorted(set(tracked + untracked))
 
 
+@dataclass(frozen=True)
+class ModelWorkerTarget:
+    provider_dispatch_id: str
+    terminal_id: str
+    worktree: Path
+
+
+def _model_liveness_marker(task_key: str, target: ModelWorkerTarget) -> dict[str, Any] | None:
+    path = target.worktree / task_key / "model-result.json"
+    if not path.is_file():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if (
+        value.get("task") == task_key
+        and value.get("status") in {"working", "passed"}
+        and isinstance(value.get("started_at_ns"), int)
+        and value["started_at_ns"] > 0
+    ):
+        return {
+            "status": str(value["status"]),
+            "started_at_ns": value["started_at_ns"],
+        }
+    return None
+
+
+def wait_model_liveness(
+    provider: Any,
+    targets: dict[str, ModelWorkerTarget],
+    *,
+    timeout: float,
+    nudge_after: float,
+    poll_interval: float,
+) -> dict[str, dict[str, Any]]:
+    started = time.monotonic()
+    deadline = started + timeout
+    acknowledged: dict[str, dict[str, Any]] = {}
+    observations: dict[str, dict[str, Any]] = {}
+    submit_recoveries = {key: 0 for key in targets}
+    while time.monotonic() < deadline:
+        now = time.monotonic()
+        for key, target in targets.items():
+            if key in acknowledged:
+                continue
+            marker = _model_liveness_marker(key, target)
+            if marker is not None:
+                acknowledged[key] = {
+                    "acknowledged_by": "working_marker",
+                    "marker_status": marker["status"],
+                    "started_at_ns": marker["started_at_ns"],
+                    "submit_recovery_count": submit_recoveries[key],
+                }
+                continue
+            observation = provider.observe_model_worker(target.provider_dispatch_id)
+            observations[key] = {
+                "source": observation.source,
+                "activity_observed": observation.activity_observed,
+                "idle_hint": observation.idle_hint,
+                "blocked_reason": observation.blocked_reason,
+                "response_digest": observation.response_digest,
+                "response_bytes": observation.response_bytes,
+            }
+            if observation.blocked_reason is not None:
+                fail(f"ERR_MODEL_TERMINAL_BLOCKED:{key}:{observation.blocked_reason}")
+            if observation.activity_observed:
+                acknowledged[key] = {
+                    "acknowledged_by": "public_transcript",
+                    "marker_status": None,
+                    "submit_recovery_count": submit_recoveries[key],
+                    "observation": observations[key],
+                }
+                continue
+            if (
+                now - started >= nudge_after
+                and observation.idle_hint
+                and submit_recoveries[key] == 0
+            ):
+                provider.submit_model_worker_enter(target.terminal_id)
+                submit_recoveries[key] = 1
+        if len(acknowledged) == len(targets):
+            return acknowledged
+        time.sleep(poll_interval)
+    safe_summary = {
+        key: {
+            "observation": observations.get(key),
+            "submit_recovery_count": submit_recoveries[key],
+        }
+        for key in sorted(targets)
+        if key not in acknowledged
+    }
+    fail(
+        "ERR_MODEL_PROMPT_NOT_ACKNOWLEDGED:"
+        + json.dumps(safe_summary, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    )
+
+
+def resolve_model_interval(
+    task_key: str,
+    report: dict[str, Any],
+    liveness: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    witnessed_start = liveness.get("started_at_ns")
+    reported_start = report.get("started_at_ns")
+    finished_at = report.get("finished_at_ns")
+    if isinstance(witnessed_start, int):
+        if reported_start is not None and reported_start != witnessed_start:
+            fail(f"{task_key} timing report is invalid")
+        started_at = witnessed_start
+        source = "initial_working_marker"
+    else:
+        if not isinstance(reported_start, int):
+            fail(f"{task_key} timing report is invalid")
+        started_at = reported_start
+        source = "final_model_report"
+    if not isinstance(finished_at, int) or started_at >= finished_at:
+        fail(f"{task_key} timing report is invalid")
+    normalized = dict(report)
+    normalized["started_at_ns"] = started_at
+    return normalized, source
+
+
 def wait_model_results(worktrees: dict[str, Path], timeout: float) -> dict[str, dict[str, Any]]:
     deadline = time.monotonic() + timeout
     results: dict[str, dict[str, Any]] = {}
@@ -470,6 +617,22 @@ def exercise(
     transport: RecordingTransport | None = None
     account_before: dict[str, Any] | None = None
     try:
+        codex_version = subprocess.run(
+            ("codex", "--version"),
+            cwd=project,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15,
+        )
+        codex_version_text = codex_version.stdout.strip()
+        require(
+            codex_version.returncode == 0 and codex_version_text.startswith("codex-cli "),
+            "Codex CLI version is unavailable in the worker environment",
+        )
+        evidence["limits"]["codex_cli_version"] = codex_version_text.removeprefix("codex-cli ")
         if not existing_runtime:
             xvfb_process = start_xvfb(xvfb, root, env, display)
             orca_process = start_orca(root, env, app_run, 1)
@@ -488,14 +651,7 @@ def exercise(
         )
         baseline_runs = initial_runs.get("runs", [])
         require(not initial_terminals, "Orca baseline contains terminals")
-        if existing_runtime:
-            require(
-                len(baseline_runs) <= 1
-                and all(run.get("id") == "run_legacy_local" and run.get("legacy") == 1 for run in baseline_runs),
-                "Persistent Orca baseline contains non-legacy Runs",
-            )
-        else:
-            require(not baseline_runs, "Isolated Orca profile started with Runs")
+        require(baseline_runs_admitted(baseline_runs), "Orca baseline contains non-legacy Runs")
         evidence["preflight"] = {
             "account": account_before,
             "configured_model": model,
@@ -651,6 +807,7 @@ def exercise(
 
         dispatch_wall: dict[str, dict[str, int]] = {}
         dispatches: dict[str, dict[str, Any]] = {}
+        model_hard_stop_started = time.monotonic()
         for key in ("backend", "frontend"):
             began = time.time_ns()
             dispatch = service.swarm_dispatch(
@@ -667,7 +824,24 @@ def exercise(
         worktrees = {key: Path(attempt.worktree_id[5:]) for key, attempt in attempts.items()}
         require(all(path.is_dir() for path in worktrees.values()), "Model worktree is unavailable")
 
-        model_results = wait_model_results(worktrees, MAX_WORKER_SECONDS)
+        liveness = wait_model_liveness(
+            provider,
+            {
+                key: ModelWorkerTarget(
+                    provider_dispatch_id=attempt.provider_dispatch_id,
+                    terminal_id=attempt.terminal_id,
+                    worktree=worktrees[key],
+                )
+                for key, attempt in attempts.items()
+            },
+            timeout=MODEL_LIVENESS_SECONDS,
+            nudge_after=MODEL_SUBMIT_RECOVERY_AFTER_SECONDS,
+            poll_interval=1,
+        )
+        evidence["model_liveness"] = liveness
+        remaining_model_seconds = MAX_WORKER_SECONDS - (time.monotonic() - model_hard_stop_started)
+        require(remaining_model_seconds > 0, "Model worker liveness exhausted the hard stop")
+        model_results = wait_model_results(worktrees, remaining_model_seconds)
         verifications: dict[str, dict[str, Any]] = {}
         for key, worktree in worktrees.items():
             paths = changed_paths(worktree)
@@ -683,13 +857,13 @@ def exercise(
             frozen = run_acceptance(worktree, command)
             report = model_results[key]
             require(report.get("task") == key and report.get("model") == EXPECTED_MODEL, f"{key} model report is invalid")
-            require(
-                isinstance(report.get("started_at_ns"), int)
-                and isinstance(report.get("finished_at_ns"), int)
-                and report["started_at_ns"] < report["finished_at_ns"],
-                f"{key} timing report is invalid",
-            )
-            verifications[key] = {"changed_paths": paths, "frozen_verifier": frozen, "model_report": report}
+            normalized_report, timing_start_source = resolve_model_interval(key, report, liveness[key])
+            verifications[key] = {
+                "changed_paths": paths,
+                "frozen_verifier": frozen,
+                "model_report": normalized_report,
+                "timing_start_source": timing_start_source,
+            }
 
         overlap_started = max(value["model_report"]["started_at_ns"] for value in verifications.values())
         overlap_finished = min(value["model_report"]["finished_at_ns"] for value in verifications.values())
@@ -713,15 +887,7 @@ def exercise(
         transcript_evidence: dict[str, Any] = {}
         for key, dispatch in dispatches.items():
             raw = run_json(
-                (
-                    "orchestration",
-                    "worker-read",
-                    "--dispatch",
-                    dispatch["provider_dispatch_id"],
-                    "--chars",
-                    "20000",
-                    "--json",
-                ),
+                worker_read_command(dispatch["provider_dispatch_id"], limit=20_000),
                 app_run=app_run,
                 cwd=project,
                 env=env,
@@ -763,6 +929,7 @@ def exercise(
                         dispatches["frontend"]["dispatch_id"],
                     ],
                     "dispatch_receipts": dispatch_wall,
+                    "liveness": liveness,
                     "model_intervals": {
                         key: {
                             "started_at_ns": value["model_report"]["started_at_ns"],

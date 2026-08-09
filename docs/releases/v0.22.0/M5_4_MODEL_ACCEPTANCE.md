@@ -2,23 +2,34 @@
 
 ## Verdict
 
-`BLOCKED_MODEL_WORKER_TIMEOUT / UC_C05_PASS / UC_C03_INSUFFICIENT`
+`ACCEPTED_MODEL_BACKED_M5_4 / UC_C05_PASS / UC_C03_PASS`
 
-M5.4 is **not accepted**. The admitted Orca/Codex slice passed pre-effect
-authority denials, created two supervised worker receipts before artifact polling,
-and cleaned all task-owned resources, but neither worker produced its required
-artifact within the 600-second hard stop. Real overlap, implementation quality,
-peer handoff and coordinator integration therefore remain unproved.
+M5.4 is accepted for one bounded Orca/Codex slice. The corrected candidate passed
+pre-effect authority denials, issued two supervised Dispatch receipts before
+polling, established task-scoped model liveness, produced two independently
+verified artifacts with real execution overlap, completed provider-correlated
+worker messages, integrated both artifacts and closed with zero survivors.
 
 This verdict does not alter the accepted deterministic M5 boundary in
 `M5_PARALLEL_ACCEPTANCE.md`. Deterministic fixtures are not reported as model
-behavior.
+behavior, and the live pass does not imply pure headless support, MCP registration,
+persistent service activation or general deployment.
 
 Canonical evidence:
 
 - `M5_MODEL_BACKED_EVIDENCE.json` — final aggregate and cleanup;
 - `M5_MODEL_BACKED_ABORTED_EVIDENCE.json` — preserved pre-model receipt-drift
-  failure from the first framework-path attempt.
+  failure from the first framework-path attempt;
+- `M5_MODEL_LIVENESS_CORRECTED_EVIDENCE.json` — accepted isolated live aggregate;
+- `M5_MODEL_LIVENESS_UPDATE_BLOCK_EVIDENCE.json`,
+  `M5_MODEL_LIVENESS_TIMING_BLOCK_EVIDENCE.json`,
+  `M5_MODEL_LIVENESS_LAUNCH_BLOCK_EVIDENCE.json` and
+  `M5_MODEL_LIVENESS_READ_FLAG_BLOCK_EVIDENCE.json` — preserved correction-path
+  failures;
+- `M5_TWO_WORKER_READINESS_PROBE_EVIDENCE.json` — bounded no-model two-worker
+  readiness probe; and
+- `M5_4_WORKER_LIVENESS_CORRECTION.md` — retained-metadata investigation,
+  difficulty log, no-model probes and implemented corrections.
 
 ## Admitted slice
 
@@ -26,26 +37,28 @@ The product owner authorized all remaining local effects for this qualification.
 The bounded candidate used:
 
 - Orca `1.4.167` through its desktop renderer and public structured CLI;
-- Codex CLI `0.146.0` with system-default OAuth;
+- Codex CLI `0.147.0` with system-default OAuth;
 - exact configured model `gpt-5.6-terra`;
-- two independent workers, one corrected-run launch per worker and no model retry;
+- two independent workers, one launch per worker in the accepted candidate and no
+  model retry;
 - 600 seconds maximum per worker;
 - existing subscription quota only, no authorized PAYG charge;
 - no web use, deployment, remote mutation, MCP registration or activation.
 
-A new isolated Orca profile could not admit the existing system OAuth account
-without reauthentication. The owner authorized the fallback: isolated fixture
-worktrees and Aether state over the persistent Orca profile, with a protected
-post-reset metadata snapshot and exact hash-verified rollback. This is recorded
-as an isolation deviation and is not evidence of pure isolated-profile support.
+The accepted run used isolated XDG state and a temporary HOME that linked only the
+existing Codex runtime account directory. Orca orchestration state, fixture
+worktrees and Aether evidence state remained isolated; no reauthentication,
+credential copy or persistent Orca-profile rollback was required. This still does
+not establish a pure headless Orca admission surface because the exact binding
+uses the desktop renderer.
 
 ## Preflight
 
-Preflight established before the corrected run:
+Preflight established before the accepted run:
 
 - system-default Codex OAuth was available;
 - Orca's managed Codex baseline resolved exactly to `gpt-5.6-terra`;
-- weekly usage was reported as `0%` at integer-percent resolution;
+- Codex CLI resolved exactly to `0.147.0` in the worker environment;
 - zero terminals existed;
 - only Orca's regenerated `run_legacy_local` sentinel existed;
 - the candidate fixture repo had not yet been registered;
@@ -64,8 +77,8 @@ provider mutation:
 | Protected effect without authority | `EFFECT_NOT_AUTHORIZED` | 0 |
 | Free-text authority expansion | `EFFECT_NOT_AUTHORIZED` | 0 |
 
-The final focused catalog, coordination and public-provider contracts passed
-`18/18` after the receipt correction and no-fallback retry guard.
+The final focused coordination, public-provider and qualifier contracts passed
+`22/22`; the repository suite passed `198/198`.
 
 ## Preserved framework-path failure
 
@@ -84,56 +97,80 @@ fallback was introduced. Subscription usage still reported `0%` after the abort.
 
 ## UC-C03 — model-backed parallelism
 
-The corrected qualifier returned two worker-start receipts before entering its
-artifact wait loop. This proves ordering of provider admission, but it does not
-prove useful model execution or concurrency.
+The accepted qualifier returned two Dispatch receipts before liveness or artifact
+polling. Backend and frontend then independently wrote valid `working` markers;
+neither required the one-shot empty-Enter recovery.
 
-At the hard stop:
+The accepted evidence establishes:
 
-- backend artifact: absent;
-- frontend artifact: absent;
-- accepted model outputs: 0;
-- observable real overlap: unknown;
-- quality checks: not executable;
-- peer handoff: not executed;
-- coordinator integration: not executed;
-- automatic retries: 0.
+- backend and frontend model reports identify exact model `gpt-5.6-terra` and
+  status `passed`;
+- backend frozen verifier `python3 acceptance/verify_backend.py` exited 0;
+- frontend frozen verifier `node acceptance/verify_frontend.mjs` exited 0;
+- the witnessed model-execution intervals have a positive overlap;
+- both Dispatches completed as `TECHNICALLY_COMPLETED` with distinct artifact and
+  evidence digests;
+- coordinator integration contains exactly the two accepted component digests;
+- final public worker-read responses are retained only as byte counts and SHA-256
+  digests;
+- semantic close returned `CLOSED` with zero survivors; and
+- automatic model retries: 0.
 
-The task contract required cleanup and stop on timeout. No retry was performed.
-M5.4 therefore fails its UC-C03 acceptance condition.
+UC-C03 therefore passes for this exact bounded slice.
+
+## Post-timeout investigation
+
+The follow-up investigation established that Orca `worker-start` state `ready`
+acknowledges PTY prompt bytes, not a Codex provider session or first model
+activity. Exact-build no-model probes ruled out a general launch, OAuth, trust,
+bracketed-paste, Enter, hook or configured-model display failure. Retained
+metadata cannot distinguish a lost submit from a provider stall because the
+original run did not capture `worker-read` before cleanup.
+
+The repository correction now requires a task marker or non-empty exact public
+transcript within 90 seconds, records only sanitized classifications and digests,
+permits at most one empty Enter without resending prompt text, and shares the
+original 600-second hard stop. The initial timeout remains preserved historical
+evidence; the later corrected candidate passed every bounded gate. Detailed
+difficulties and resolutions, including the Codex update, timing witness and
+public `worker-read --limit` correction, are recorded in
+`M5_4_WORKER_LIVENESS_CORRECTION.md`.
 
 ## Usage and privacy
 
-Codex weekly usage reported `0%` before and after the bounded attempts. That
-coarse integer-percent result is **not** treated as proof of zero tokens. Exact
-tokens and cost remain unknown. PAYG spending was neither authorized nor
-configured.
+The accepted run's preflight did not expose a weekly percentage; its post-run
+account response reported `0%` at integer-percent resolution. That coarse value
+is **not** treated as proof of zero tokens. Exact tokens and subscription cost
+remain unknown. Recorded PAYG spending is USD 0; PAYG was not authorized.
 
-Orca's managed Codex runtime metadata changed during the launches. Protected
-SQLite and transcript content was not opened, exported or retained. No raw model
-conversation appears in release evidence.
+Orca's managed Codex runtime metadata changed during the launches. Raw transcript
+content was not retained; release evidence stores only public-response byte counts
+and SHA-256 digests. No secret, credential, production data or web content was
+sent to either worker.
 
 ## Cleanup and rollback
 
-Final deterministic checks established:
+Final live and deterministic checks established:
 
 - zero Orca terminals;
-- zero candidate Runs; the pre-existing legacy sentinel is preserved;
 - zero owned processes;
 - zero mounts;
 - zero X displays;
 - zero temporary qualification roots;
 - Orca runtime not running;
-- persistent Orca metadata restored exactly to SHA-256
-  `0762617bd57d80078af2be61499e339ee556c780c83176038d8a2a4a4446455f`;
-- the temporary fixture-repository registration removed by rollback.
+- semantic close returned `CLOSED` with no retained resources;
+- child worktrees and temporary fixture registration were removed; and
+- isolated XDG/Aether state was deleted without mutating persistent Orca
+  orchestration metadata.
 
 No push, PR, merge, tag, Release, deployment, persistent service, credential
 creation or MCP activation occurred.
 
 ## Stop condition
 
-The authorized run is closed at `BLOCKED_MODEL_WORKER_TIMEOUT`. Deterministic M5
-remains accepted, while model-backed multi-agent execution remains unavailable.
-A future attempt requires a new bounded gate with provider-start observability
-sufficient to explain worker readiness before spending another model attempt.
+The authorized correction sequence is closed at `ACCEPTED_MODEL_BACKED_M5_4` for
+the exact Orca 1.4.167 desktop-renderer plus public-CLI binding with Codex CLI
+0.147.0 and model `gpt-5.6-terra`. Deterministic M5 remains accepted. This does not
+establish pure headless admission, expose or register an MCP tool, activate a
+persistent runtime, authorize deployment, or generalize the result beyond the
+bounded synthetic two-worker slice.

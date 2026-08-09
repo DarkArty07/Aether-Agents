@@ -84,7 +84,8 @@ supports a model-free supervised worker.
 
 ## Gate
 
-M5 may begin with two independent deterministic fixture workers, proved overlap,
-bounded peer handoff, partial failure/cancel and zero survivors. M5.4 remains
-`UNKNOWN / NOT AUTHORIZED` until a separate owner decision admits provider,
-accounts, models, budget and stop limits.
+At the M4 boundary, M5 could begin with two independent deterministic fixture
+workers, proved overlap, bounded peer handoff, partial failure/cancel and zero
+survivors. M5.4 was then `UNKNOWN / NOT AUTHORIZED` pending a separate owner
+decision on provider, accounts, models, budget and stop limits; that later gate is
+now resolved in `M5_4_MODEL_ACCEPTANCE.md`.

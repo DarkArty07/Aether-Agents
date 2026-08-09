@@ -2,17 +2,18 @@
 
 ## Verdict
 
-`PASS_DETERMINISTIC_M5 / M5.4_BLOCKED_MODEL_WORKER_TIMEOUT`
+`PASS_DETERMINISTIC_M5 / PASS_MODEL_BACKED_M5_4`
 
 The deterministic M5 scope is accepted at technical commit
 `f356c21a65310d2d8c41112d407658e0a64f945a` and tree
 `5bbaba1ce672101f60ed223c3a5d101ca167a913`.
 
-M5.4 was subsequently admitted as one bounded Orca/Codex slice. UC-C05 passed,
-but UC-C03 produced no accepted artifacts before the 600-second hard stop and is
-`INSUFFICIENT_NOT_ACCEPTED`. See `M5_4_MODEL_ACCEPTANCE.md`. The deterministic
-fixture is not reported as a substitute for that gate. This verdict does not
-authorize M6, MCP registration, activation, push, merge, release or deployment.
+M5.4 was subsequently accepted as one bounded Orca/Codex slice after preserving
+the original 600-second timeout and correcting worker liveness, Codex readiness,
+timing evidence and exact public CLI drift. UC-C05 and UC-C03 pass in
+`M5_4_MODEL_ACCEPTANCE.md`. The deterministic fixture is not reported as a
+substitute for that gate. This verdict does not authorize M6, MCP registration,
+activation, push, merge, release or deployment.
 
 ## Accepted deterministic behavior
 
@@ -82,6 +83,17 @@ the durable user-local Xvfb inside every M1.3 lifecycle sandbox, removing the
 former `/tmp` toolchain dependency. After both corrections, the canonical
 complete repository command passed `183/183` tests from the candidate source
 tree with no retained temporary Xvfb root.
+
+## Model-backed M5.4 qualification
+
+The corrected isolated Orca 1.4.167/Codex CLI 0.147.0 candidate passed with exact
+model `gpt-5.6-terra`: two Dispatches before polling, two task-scoped liveness
+markers, positive execution overlap, both frozen verifiers at exit 0, two
+technically completed provider messages, two-component integration, semantic
+close and zero survivors. Submit recovery and model retries were both zero. The
+final corrected source passed Ruff, compileall, `22/22` focused tests and
+`198/198` repository tests. Canonical evidence is
+`M5_MODEL_LIVENESS_CORRECTED_EVIDENCE.json`.
 
 ## Orca debt retained
 

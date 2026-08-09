@@ -189,6 +189,16 @@ class ModelRuntimeConfig:
     timeout_ms: int
 
 
+@dataclass(frozen=True)
+class ModelWorkerObservation:
+    source: str
+    activity_observed: bool
+    idle_hint: bool
+    blocked_reason: str | None
+    response_digest: str
+    response_bytes: int
+
+
 class PublicOrcaLifecycleProvider:
     """Provider adapter restricted to public structured commands and exact argv."""
 
@@ -608,6 +618,73 @@ class PublicOrcaLifecycleProvider:
             worktree_id=f"path:{worktree_path}",
             response_digest=_digest((raw, show_raw)),
         )
+
+    def observe_model_worker(self, provider_dispatch_id: str) -> ModelWorkerObservation:
+        provider_dispatch_id = _token(provider_dispatch_id)
+        _request_id, result, raw = self._call(
+            (
+                "orchestration",
+                "worker-read",
+                "--dispatch",
+                provider_dispatch_id,
+                "--source",
+                "auto",
+                "--limit",
+                "200",
+                "--json",
+            )
+        )
+        encoded = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+        source = result.get("source", "terminal")
+        if source not in {"terminal", "transcript"}:
+            _fail("PROVIDER_SCHEMA_DRIFT", "Orca worker-read returned an unknown source")
+        transcript = result.get("transcript")
+        messages = transcript.get("messages") if isinstance(transcript, dict) else None
+        if messages is not None and not isinstance(messages, list):
+            _fail("PROVIDER_RESPONSE_INVALID", "Orca worker transcript is malformed")
+        activity_observed = source == "transcript" and bool(messages)
+        terminal = result.get("terminal")
+        tail = terminal.get("tail") if isinstance(terminal, dict) else None
+        if tail is not None and (not isinstance(tail, list) or any(not isinstance(line, str) for line in tail)):
+            _fail("PROVIDER_RESPONSE_INVALID", "Orca worker terminal tail is malformed")
+        terminal_text = "\n".join(tail or []).lower()
+        blocked_reason = None
+        for reason, patterns in (
+            ("auth", ("authentication required", "log in", "sign in", "unauthorized")),
+            ("model", ("unknown model", "invalid model", "model is not supported")),
+            ("quota", ("usage limit", "rate limit", "quota exceeded")),
+            ("hook", ("hooks need review",)),
+            ("launch", ("command not found", "no such file or directory")),
+            ("network", ("connection error", "network error")),
+        ):
+            if any(pattern in terminal_text for pattern in patterns):
+                blocked_reason = reason
+                break
+        idle_hint = (
+            source == "terminal"
+            and "openai codex" in terminal_text
+            and "model:" in terminal_text
+            and "directory:" in terminal_text
+            and blocked_reason is None
+        )
+        return ModelWorkerObservation(
+            source=source,
+            activity_observed=activity_observed,
+            idle_hint=idle_hint,
+            blocked_reason=blocked_reason,
+            response_digest=hashlib.sha256(encoded).hexdigest(),
+            response_bytes=len(encoded),
+        )
+
+    def submit_model_worker_enter(self, terminal_id: str) -> ProviderEffectResult:
+        terminal_id = _token(terminal_id)
+        request_id, result, raw = self._call(
+            ("terminal", "send", "--terminal", terminal_id, "--enter", "--json")
+        )
+        send = result.get("send")
+        if not isinstance(send, dict) or send.get("accepted") is not True:
+            _fail("PROVIDER_EFFECT_FAILED", "Orca did not accept the model worker submit recovery")
+        return ProviderEffectResult("APPLIED", request_id, (), _digest(raw), True)
 
     def send_worker_message(
         self,
