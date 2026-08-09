@@ -8,7 +8,7 @@
 > **Total duration:** 9 hours, 45 minutes, 5 seconds (35,105 seconds)
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Baseline:** `c5e359e589ce5661d665314e125443331c083eca`
-> **Status:** COMPLETE — deterministic M3-M5; M5.4 model gate UNKNOWN/not authorized
+> **Status:** COMPLETE — deterministic M3-M5; M5.4 attempted and blocked on model-worker timeout
 
 ## Authority and stop boundary
 
@@ -38,7 +38,7 @@ Not authorized by this task:
 |---|---|---|
 | M3 | COMPLETE | Lifecycle without workers: start/status/reconcile/cancel/close, restart recovery and zero survivors |
 | M4 | COMPLETE | One deterministic no-model worker: dispatch/message/retry/evidence/episode and zero survivors |
-| M5 | COMPLETE — BOUNDED | Two deterministic workers with proved overlap, peer handoff, coordinator integration, partial failure/cancel and zero survivors; M5.4 remains UNKNOWN/not authorized |
+| M5 | COMPLETE — BOUNDED | Deterministic scope accepted; M5.4 UC-C05 passed but UC-C03 timed out without artifacts and is not accepted |
 
 ## Orca technical-debt ledger
 
@@ -57,7 +57,8 @@ Not authorized by this task:
 | ORCA-DEBT-011 | `worker_done` rejects a tracking shell Dispatch | Fixture technical completion cannot use the agent-bound worker signal | Orca accepts exact-assignee completion for generic tracking Dispatches | OPEN; AETHER CAPTURES COMPLETION AND COMPOSES PUBLIC TASK UPDATE |
 | ORCA-DEBT-012 | `terminal list` to `terminal close --tab` can race to `tab_not_found` across renderer generations | Per-handle cleanup is non-convergent despite the terminal already being absent | Close returns idempotent already-absent success or a generation/fence token | OPEN; USE SCOPED `terminal stop --worktree` |
 | ORCA-DEBT-013 | Tracking shells reject direct `send --to dispatch:<id>` peer delivery | Generic worker-to-worker handoff cannot target a Dispatch directly | Orca admits direct peer delivery for generic tracking workers with exact sender/recipient authority | OPEN; QUALIFIED FLOW USES RUN-MAILBOX QUESTION + EXACT PROVIDER REPLY |
-| ORCA-DEBT-014 | No authorized model-backed provider/account/budget exists for M5.4 | Operational model-worker behavior remains unmeasured | Owner admits one bounded provider/model slice with credentials, spend and stop limits | UNKNOWN / NOT AUTHORIZED; FIXTURE NOT A SUBSTITUTE |
+| ORCA-DEBT-014 | Two supervised Codex workers returned start receipts but produced no artifacts within 600 seconds | Real overlap, quality and handoff remain unmeasured | Public worker readiness/output observability identifies the blocked stage before a new bounded attempt | OPEN; M5.4 BLOCKED_MODEL_WORKER_TIMEOUT |
+| ORCA-DEBT-015 | `worker-start` receipt omits terminal/worktree placement used by the initial adapter | First qualification path stopped before Aether Dispatch admission | Compose public `worker-start` identity with public `worker-show` placement | MITIGATED; 18 FOCUSED CONTRACTS PASS |
 
 ## Progress log
 
@@ -75,3 +76,6 @@ Not authorized by this task:
 - Repository gate correction — `make test` depended on an ambient editable installation and failed to import the `src/` package from a fresh checkout. Commit `7e8436aafc056a0a6b3f9476426f8a97ecdc8e2c` makes the target candidate-first with `PYTHONPATH=src`; the complete repository suite then passed `183/183`.
 - Final stop condition — Ruff, compileall, release governance, closeout schemas, full `make test` and task-owned process/root inventories passed; M6 was not entered.
 - Xvfb reproducibility correction — The M1.3 namespace previously required an external `/tmp` copy because its read-only `/home` staging hid the durable user-local Xvfb. Commit `1c641a1c297609009aba76c78fbf16325d644389` copies and hash-verifies Xvfb inside each isolated lifecycle root and admits its worker UID before execution; the temporary toolchain was removed and `make test` again passed `183/183`.
+- M5.4 admission — Owner authorized Orca 1.4.167, system-default Codex OAuth, exact `gpt-5.6-terra`, two workers, one corrected-run launch each, 600-second hard stop, no PAYG, no web and no automatic model retry.
+- M5.4 receipt correction — The first path stopped before Aether Dispatch admission because `worker-start` omitted placement identities. The provider now composes public `worker-start` with public `worker-show`; focused catalog/coordination/provider contracts pass `18/18`, including fail-closed rejection of model-to-fixture retry fallback. The failure remains preserved in `M5_MODEL_BACKED_ABORTED_EVIDENCE.json`.
+- M5.4 closed blocked — The corrected path returned both worker-start receipts before artifact polling, but neither backend nor frontend artifact existed at the hard stop. UC-C05 passed; UC-C03 is `INSUFFICIENT_NOT_ACCEPTED`. No retry occurred. Runtime reset, zero-survivor checks and exact persistent-profile metadata rollback passed. Canonical closeout: `M5_4_MODEL_ACCEPTANCE.md`.

@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_m5_deterministic_complete_model_gate_unknown_default_off
+status: m0_m5_deterministic_complete_m5_4_blocked_model_worker_timeout_default_off
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -17,7 +17,8 @@ candidate:
     protected learning-episode plane over Orca; and keep multi-agent execution
     unavailable; M4 adds one default-off deterministic no-model worker lifecycle
     with retry, messaging, encrypted episode capture and cleanup over the qualified
-    desktop-renderer/public-CLI binding. M5 model-backed execution is unavailable.
+    desktop-renderer/public-CLI binding. The admitted M5.4 model-backed slice timed
+    out without artifacts, so model-backed execution remains unavailable.
   not_a_release_claim: true
   source_implementation_started: true
   native_runtime_source_present: false
@@ -51,6 +52,8 @@ candidate:
   m4_complete: true
   m5_deterministic_complete: true
   m5_model_backed_complete: false
+  m5_model_backed_attempted: true
+  m5_model_backed_verdict: blocked_model_worker_timeout
   m5_closed_bounded: true
   callable_tools: 0
 
@@ -146,7 +149,7 @@ m5_parallel_completion:
   peer_question_and_evidence_handoff: pass
   coordinator_integration: pass
   partial_failure_and_aggregate_cancel: pass
-  model_backed_gate: unknown_not_authorized
+  model_backed_gate: blocked_model_worker_timeout
   fixture_substitutes_for_model_gate: false
   external_models: 0
   credentials_or_spend: false
@@ -154,6 +157,30 @@ m5_parallel_completion:
   terminal_survivors: 0
   worktree_survivors: 0
   temporary_root_survivors: 0
+  mcp_registered: false
+  mcp_callable_tools: 0
+
+m5_4_model_qualification:
+  closed_on: "2026-08-09"
+  owner_authority: all_remaining_local_m5_4_effects_authorized
+  acceptance: docs/releases/v0.22.0/M5_4_MODEL_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M5_MODEL_BACKED_EVIDENCE.json
+  preserved_abort_evidence: docs/releases/v0.22.0/M5_MODEL_BACKED_ABORTED_EVIDENCE.json
+  provider_binding: desktop_renderer_public_structured_cli
+  provider: codex_system_default_oauth
+  configured_model: gpt-5.6-terra
+  worker_start_receipts_before_polling: 2
+  uc_c05_pre_effect_denials: pass
+  uc_c03_real_overlap: insufficient
+  accepted_model_artifacts: 0
+  stop_reason: model_worker_completion_exceeded_600_seconds
+  automatic_model_retries: 0
+  exact_tokens: unknown
+  exact_cost: unknown
+  weekly_usage_percent_before: 0
+  weekly_usage_percent_after: 0
+  cleanup: pass_with_exact_persistent_profile_metadata_rollback
+  model_backed_execution_admitted: false
   mcp_registered: false
   mcp_callable_tools: 0
 

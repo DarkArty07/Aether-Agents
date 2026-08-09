@@ -70,14 +70,16 @@ coordinator integration, partial failure/cancel and zero survivors. The exact
 qualified binding remains desktop-renderer plus public structured CLI; this does
 not establish pure headless admission or native supervised model-free workers.
 
-M5.4 model-backed execution is `UNKNOWN_NOT_AUTHORIZED`: no provider, account,
-model, credential, budget or stop limit was admitted, and fixture evidence is
-not a substitute. The stdio server still registers exactly zero tools; all new
-behavior remains internal/default-off. Push, merge, tag, Release, registration,
-persistent services and activation remain outside the completed scope. Canonical
-closeouts are `M2_FOUNDATION_ACCEPTANCE.md`, `M3_LIFECYCLE_ACCEPTANCE.md`,
-`M4_WORKER_ACCEPTANCE.md` and `M5_PARALLEL_ACCEPTANCE.md` under
-`docs/releases/v0.22.0/`.
+M5.4 model-backed execution is `BLOCKED_MODEL_WORKER_TIMEOUT`. One bounded
+Orca/Codex `gpt-5.6-terra` slice passed UC-C05 pre-effect denials and returned two
+worker-start receipts before polling, but produced no accepted artifacts within
+600 seconds; UC-C03 overlap and quality remain insufficient and no retry was
+performed. Deterministic M5 remains accepted, but fixture evidence is not a
+substitute and model-backed multi-agent execution remains unavailable. The stdio
+server still registers exactly zero tools; all behavior remains internal/default-off.
+Push, merge, tag, Release, registration, persistent services and activation remain
+outside this scope. Canonical closeouts include `M5_PARALLEL_ACCEPTANCE.md` and
+`M5_4_MODEL_ACCEPTANCE.md` under `docs/releases/v0.22.0/`.
 
 ## v0.19.0 experimental coordination closeout
 

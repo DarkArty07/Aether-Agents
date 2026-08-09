@@ -1138,15 +1138,21 @@ the deterministic fixture baseline.
 authorized real provider run is unavailable, record `UNKNOWN`; do not substitute
 fixture evidence for model-backed behavior.
 
-**Bounded closure (2026-08-09):** deterministic M5.1-M5.3 and the cleanup
+**Deterministic bounded closure (2026-08-09):** deterministic M5.1-M5.3 and the cleanup
 portion of M5 passed at technical commit
 `f356c21a65310d2d8c41112d407658e0a64f945a`. The exact Orca 1.4.167
 desktop-renderer/public-CLI path proved two Dispatches before polling,
 barrier-backed overlap, provider-message-correlated peer handoff, two-component
-coordinator integration, partial failure/cancel and zero survivors. M5.4 is
-`UNKNOWN_NOT_AUTHORIZED`: no model-backed run occurred and fixture evidence was
-not substituted. See `M5_PARALLEL_ACCEPTANCE.md` and
-`M5_PARALLEL_EVIDENCE.json`.
+coordinator integration, partial failure/cancel and zero survivors.
+
+**M5.4 bounded closure (2026-08-09):** D3 admitted Orca/Codex with exact
+`gpt-5.6-terra`, two workers and a 600-second hard stop. UC-C05 passed before
+provider effects. Two corrected-run worker-start receipts returned before
+artifact polling, but neither required artifact existed at the deadline; real
+overlap and quality remain insufficient. No retry occurred and cleanup plus
+exact profile rollback passed. Verdict: `BLOCKED_MODEL_WORKER_TIMEOUT`; fixture
+evidence is not substituted. See `M5_4_MODEL_ACCEPTANCE.md` and
+`M5_MODEL_BACKED_EVIDENCE.json`.
 
 **Proposed atomic commits:**
 

@@ -2,17 +2,17 @@
 
 ## Verdict
 
-`PASS_DETERMINISTIC_M5 / M5.4_UNKNOWN_NOT_AUTHORIZED`
+`PASS_DETERMINISTIC_M5 / M5.4_BLOCKED_MODEL_WORKER_TIMEOUT`
 
 The deterministic M5 scope is accepted at technical commit
 `f356c21a65310d2d8c41112d407658e0a64f945a` and tree
 `5bbaba1ce672101f60ed223c3a5d101ca167a913`.
 
-M5.4 remains `UNKNOWN_NOT_AUTHORIZED`: no model provider, account, credentials,
-budget or explicit stop limits were admitted. The deterministic fixture is not
-reported as a substitute for that gate. This bounded verdict closes the currently
-authorized M5 work and does not authorize M6, MCP registration, activation,
-push, merge, release or deployment.
+M5.4 was subsequently admitted as one bounded Orca/Codex slice. UC-C05 passed,
+but UC-C03 produced no accepted artifacts before the 600-second hard stop and is
+`INSUFFICIENT_NOT_ACCEPTED`. See `M5_4_MODEL_ACCEPTANCE.md`. The deterministic
+fixture is not reported as a substitute for that gate. This verdict does not
+authorize M6, MCP registration, activation, push, merge, release or deployment.
 
 ## Accepted deterministic behavior
 
@@ -97,12 +97,11 @@ tree with no retained temporary Xvfb root.
   proposed production synchronization primitive.
 - Coordinator artifact integration is internal/default-off and not an active MCP
   tool.
-- M5.4 cannot be evaluated without a separately authorized model-backed provider
-  slice, bounded account, budget and stop limits.
+- The bounded M5.4 slice timed out without artifacts. Model-backed coordination
+  remains unavailable pending a new gate with provider-start observability.
 
 ## Stop condition
 
-The owner-authorized M3-M5 deterministic sequence is complete. The next material
-gate is an owner decision on M5.4 model-backed admission or an explicit decision
-to retain `UNKNOWN` and proceed later. No further implementation horizon is
-entered automatically.
+The owner-authorized M3-M5 deterministic sequence remains complete. M5.4 closed
+blocked after its one bounded attempt; no retry or later implementation horizon
+is entered automatically.
