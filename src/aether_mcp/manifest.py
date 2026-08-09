@@ -43,6 +43,11 @@ def validate_swarm_manifest(manifest: object) -> ValidatedManifest:
     if not isinstance(validated, dict):  # defensive boundary for type checkers
         _fail("MANIFEST_INVALID", "Swarm manifest is not an object")
     tasks = validated["tasks"]
+    if any(task["archetype"] not in {"fixture", "model"} for task in tasks):
+        _fail("PARTICIPANT_FORBIDDEN", "Manifest requests a participant unavailable in this candidate")
+    admitted_effects = {"READ_ONLY", "LOCAL_APPEND_ONLY", "LOCAL_REVERSIBLE"}
+    if not set(validated["contract"]["authorized_effects"]).issubset(admitted_effects):
+        _fail("EFFECT_NOT_AUTHORIZED", "Manifest requests an effect without exact authority")
     keys = [task["task_key"] for task in tasks]
     if len(set(keys)) != len(keys):
         _fail("MANIFEST_INVALID", "Task identities must be unique")

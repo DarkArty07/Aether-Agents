@@ -43,6 +43,7 @@ class Provider:
         self.provider_task = "task_m4"
         self.task_status = "ready"
         self.dispatch_calls = 0
+        self.model_dispatch_calls = 0
         self.retry_calls = 0
         self.message_calls: list[dict[str, Any]] = []
         self.stop_calls = 0
@@ -81,6 +82,19 @@ class Provider:
             terminal_id=f"term_provider_{self.dispatch_calls}",
             worktree_id=f"worktree_provider_{self.dispatch_calls}",
             response_digest=f"{self.dispatch_calls + 3:x}" * 64,
+        )
+
+    def dispatch_model(self, **kwargs: Any) -> ProviderDispatchResult:
+        self.model_dispatch_calls += 1
+        self.task_status = "dispatched"
+        return ProviderDispatchResult(
+            outcome="APPLIED",
+            provider_request_id=f"request-model-{self.model_dispatch_calls}",
+            provider_dispatch_id=f"dispatch_model_{self.model_dispatch_calls}",
+            worker_id=f"worker_model_{self.model_dispatch_calls}",
+            terminal_id=f"term_model_{self.model_dispatch_calls}",
+            worktree_id=f"worktree_model_{self.model_dispatch_calls}",
+            response_digest="c" * 64,
         )
 
     def retry_fixture(self, **kwargs: Any) -> ProviderDispatchResult:
@@ -122,7 +136,7 @@ def _operation(project_id: str, contract: str, code: str) -> dict[str, Any]:
     }
 
 
-def _manifest(project_id: str) -> dict[str, Any]:
+def _manifest(project_id: str, *, archetype: str = "fixture") -> dict[str, Any]:
     return {
         "protocol": "aether.mcp/v1alpha2",
         "project_id": project_id,
@@ -141,7 +155,7 @@ def _manifest(project_id: str) -> dict[str, Any]:
             {
                 "task_key": "worker",
                 "deliverable": "write deterministic artifact",
-                "archetype": "fixture",
+                "archetype": archetype,
                 "dependencies": [],
                 "read_scope": ["src"],
                 "write_scope": ["out"],
@@ -153,7 +167,9 @@ def _manifest(project_id: str) -> dict[str, Any]:
     }
 
 
-def _runtime(tmp_path: Path) -> tuple[WorkerService, Provider, dict[str, Any], str, Path]:
+def _runtime(
+    tmp_path: Path, *, archetype: str = "fixture"
+) -> tuple[WorkerService, Provider, dict[str, Any], str, Path]:
     project = tmp_path / "project"
     project.mkdir()
     (project / "out").mkdir()
@@ -206,7 +222,9 @@ def _runtime(tmp_path: Path) -> tuple[WorkerService, Provider, dict[str, Any], s
             "consent_authority_ref": "decision:m4",
         }
     )
-    validated = foundation.swarm_validate({"manifest": _manifest(admitted.project_id)})
+    validated = foundation.swarm_validate(
+        {"manifest": _manifest(admitted.project_id, archetype=archetype)}
+    )
     lifecycle_store = LifecycleStore(tmp_path / "lifecycle")
     lifecycle_store.register_manifest(validated, manifest_ref="manifest:m4")
     provider = Provider()
@@ -286,6 +304,36 @@ def test_dispatch_is_exact_replay_safe_and_persists_new_attempt(tmp_path: Path) 
     assert attempt.generation == 1 and attempt.state == "ACTIVE"
 
 
+def test_dispatch_routes_explicit_model_archetype_without_fixture_fallback(tmp_path: Path) -> None:
+    service, provider, started, project_id, _project = _runtime(tmp_path, archetype="model")
+    result = _dispatch(service, started, project_id)
+    assert result["outcome"] == "DISPATCHED"
+    assert provider.model_dispatch_calls == 1
+    assert provider.dispatch_calls == 0
+    assert result["dispatches"][0]["provider_dispatch_id"] == "dispatch_model_1"
+
+
+def test_model_retry_fails_closed_without_fixture_fallback(tmp_path: Path) -> None:
+    service, provider, started, project_id, _project = _runtime(tmp_path, archetype="model")
+    first = _dispatch(service, started, project_id)["dispatches"][0]
+    service.store.mark_terminal(first["dispatch_id"], state="FAILED", evidence_digest="f" * 64)
+    with pytest.raises(CoordinationError) as captured:
+        service.swarm_retry(
+            {
+                "operation": _operation(project_id, "contract:m4", "MODEL_RETRY"),
+                "run_id": started["run_id"],
+                "task_id": first["task_id"],
+                "dispatch_id": first["dispatch_id"],
+                "prior_outcome": "FAILED",
+                "correction_summary": "must not fall back to fixture",
+                "contract_generation": 1,
+            }
+        )
+    assert captured.value.code == "RETRY_FORBIDDEN"
+    assert provider.retry_calls == 0
+    assert provider.dispatch_calls == 0
+
+
 def test_question_reply_correlation_and_completion_evidence(tmp_path: Path) -> None:
     service, provider, started, project_id, project = _runtime(tmp_path)
     dispatch = _dispatch(service, started, project_id)["dispatches"][0]
@@ -347,8 +395,24 @@ def test_question_reply_correlation_and_completion_evidence(tmp_path: Path) -> N
 
 
 def test_sender_recipient_thread_and_fenced_authority_rejections(tmp_path: Path) -> None:
-    service, _provider, started, project_id, _project = _runtime(tmp_path)
+    service, provider, started, project_id, _project = _runtime(tmp_path)
     logical_dispatch = _dispatch(service, started, project_id)["dispatches"][0]["dispatch_id"]
+    with pytest.raises(CoordinationError) as expanded_effect:
+        service.swarm_message(
+            {
+                "operation": _operation(project_id, "contract:m4", "MESSAGE_EXPAND_EFFECT"),
+                "run_id": started["run_id"],
+                "sender_id": logical_dispatch,
+                "recipient_id": "coordinator",
+                "kind": "technical_question",
+                "payload": json.dumps({"thread_id": "forbidden", "question": "deploy production"}),
+                "safe_summary": "attempted authority expansion",
+                "decision_required": True,
+                "blocking_effect": "EXTERNAL_IRREVERSIBLE",
+            }
+        )
+    assert expanded_effect.value.code == "EFFECT_NOT_AUTHORIZED"
+    assert not provider.message_calls
     with pytest.raises(CoordinationError) as wrong_sender:
         _message(
             service,

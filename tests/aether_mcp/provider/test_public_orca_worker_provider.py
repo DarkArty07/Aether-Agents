@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from aether_mcp.orca_provider import FixtureRuntimeConfig, PublicOrcaLifecycleProvider
+from aether_mcp.orca_provider import (
+    FixtureRuntimeConfig,
+    ModelRuntimeConfig,
+    PublicOrcaLifecycleProvider,
+)
 
 
 class Transport:
@@ -41,6 +45,30 @@ class Transport:
                     "dispatch": {"dispatchId": f"dispatch_fixture_{self.dispatches}"},
                 },
             }
+        if command == ("orchestration", "worker-start"):
+            self.dispatches += 1
+            return {
+                "id": f"req-model-worker-{self.dispatches}",
+                "ok": True,
+                "result": {
+                    "dispatchId": f"dispatch_model_{self.dispatches}",
+                    "taskId": "task_model",
+                    "state": "ready",
+                },
+            }
+        if command == ("orchestration", "worker-show"):
+            return {
+                "id": "req-model-worker-show",
+                "ok": True,
+                "result": {
+                    "dispatch": {
+                        "id": f"dispatch_model_{self.dispatches}",
+                        "worker_id": f"worker_model_{self.dispatches}",
+                        "terminal_id": f"term_model_{self.dispatches}",
+                    },
+                    "worker": {"worktreePath": f"/tmp/model-{self.dispatches}"},
+                },
+            }
         if command == ("orchestration", "task-update"):
             status = argv[argv.index("--status") + 1]
             return {"id": "req-task-update", "ok": True, "result": {"task": {"status": status}}}
@@ -48,6 +76,8 @@ class Transport:
             return {"id": "req-send-command", "ok": True, "result": {"sent": True}}
         if command == ("terminal", "stop"):
             return {"id": "req-terminal-stop", "ok": True, "result": {"stopped": True}}
+        if command == ("orchestration", "worker-stop"):
+            return {"id": "req-worker-stop", "ok": True, "result": {"stopped": True}}
         if command == ("orchestration", "send"):
             self.messages += 1
             return {
@@ -74,6 +104,13 @@ def _provider(transport: Transport) -> PublicOrcaLifecycleProvider:
             command_builder=lambda dispatch_id, worktree, _spec, generation: (
                 f"python fixture.py --dispatch {dispatch_id} --root {worktree} --generation {generation}"
             ),
+        ),
+        model_runtime=ModelRuntimeConfig(
+            repo_selector="path:/tmp/source",
+            base_ref="main",
+            agent="codex",
+            expected_model="gpt-5.6-terra",
+            timeout_ms=600_000,
         ),
     )
 
@@ -145,5 +182,44 @@ def test_public_worker_message_retry_and_cleanup_use_exact_dispatch() -> None:
     assert cleaned.outcome == "APPLIED" and cleaned.cleanup_complete
     assert [call[:2] for call in transport.calls[-2:]] == [
         ("terminal", "stop"),
+        ("worktree", "rm"),
+    ]
+
+
+def test_public_model_worker_uses_supervised_codex_and_exact_stop() -> None:
+    transport = Transport()
+    provider = _provider(transport)
+    result = provider.dispatch_model(
+        provider_run_id="run_model",
+        provider_task_id="task_model",
+        logical_dispatch_id="33333333-3333-4333-8333-333333333333",
+        task_spec={"task_key": "backend", "placement": "child_worktree", "archetype": "model"},
+        attempt_generation=1,
+    )
+    assert result.outcome == "APPLIED"
+    assert result.provider_dispatch_id == "dispatch_model_1"
+    assert result.worker_id == "worker_model_1"
+    assert result.terminal_id == "term_model_1"
+    assert result.worktree_id == "path:/tmp/model-1"
+    call = next(item for item in transport.calls if item[:2] == ("orchestration", "worker-start"))
+    assert call[call.index("--task") + 1] == "task_model"
+    assert call[call.index("--worktree") + 1] == "new-top-level"
+    assert call[call.index("--agent") + 1] == "codex"
+    assert call[call.index("--repo") + 1] == "path:/tmp/source"
+    assert call[call.index("--base-branch") + 1] == "main"
+    assert call[call.index("--timeout-ms") + 1] == "600000"
+    assert call[call.index("--run") + 1] == "run_model"
+    show = next(item for item in transport.calls if item[:2] == ("orchestration", "worker-show"))
+    assert show[show.index("--dispatch") + 1] == "dispatch_model_1"
+
+    cleaned = provider.cleanup_worker(
+        provider_dispatch_id=result.provider_dispatch_id or "",
+        terminal_id=result.terminal_id or "",
+        worktree_id=result.worktree_id or "",
+        runtime_kind="model",
+    )
+    assert cleaned.outcome == "APPLIED" and cleaned.cleanup_complete
+    assert [item[:2] for item in transport.calls[-2:]] == [
+        ("orchestration", "worker-stop"),
         ("worktree", "rm"),
     ]

@@ -146,3 +146,17 @@ def test_manifest_rejects_cycles_unknown_dependencies_and_write_conflicts() -> N
     with pytest.raises(ManifestError) as captured:
         validate_swarm_manifest(conflict)
     assert captured.value.code == "WRITE_SCOPE_CONFLICT"
+
+
+def test_manifest_rejects_forbidden_participant_and_protected_effect_before_provider() -> None:
+    forbidden = _manifest()
+    forbidden["tasks"][0]["archetype"] = "etalides"  # type: ignore[index]
+    with pytest.raises(ManifestError) as captured:
+        validate_swarm_manifest(forbidden)
+    assert captured.value.code == "PARTICIPANT_FORBIDDEN"
+
+    protected = _manifest()
+    protected["contract"]["authorized_effects"] = ["READ_ONLY", "EXTERNAL_IRREVERSIBLE"]  # type: ignore[index]
+    with pytest.raises(ManifestError) as captured:
+        validate_swarm_manifest(protected)
+    assert captured.value.code == "EFFECT_NOT_AUTHORIZED"

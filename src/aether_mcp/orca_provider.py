@@ -180,6 +180,15 @@ class FixtureRuntimeConfig:
     command_builder: Callable[[str, str, dict[str, Any], int], str]
 
 
+@dataclass(frozen=True)
+class ModelRuntimeConfig:
+    repo_selector: str
+    base_ref: str
+    agent: str
+    expected_model: str
+    timeout_ms: int
+
+
 class PublicOrcaLifecycleProvider:
     """Provider adapter restricted to public structured commands and exact argv."""
 
@@ -190,6 +199,7 @@ class PublicOrcaLifecycleProvider:
         binding_digest: str,
         coordinator_handle: str,
         fixture_runtime: FixtureRuntimeConfig | None = None,
+        model_runtime: ModelRuntimeConfig | None = None,
     ) -> None:
         if not callable(transport):
             raise TypeError("Structured Orca transport is required")
@@ -204,6 +214,13 @@ class PublicOrcaLifecycleProvider:
             if not callable(fixture_runtime.command_builder):
                 _fail("PROVIDER_SCHEMA_DRIFT", "Fixture command builder is invalid")
         self.fixture_runtime = fixture_runtime
+        if model_runtime is not None:
+            _token(model_runtime.repo_selector)
+            _token(model_runtime.base_ref)
+            _token(model_runtime.expected_model)
+            if model_runtime.agent != "codex" or not 1_000 <= model_runtime.timeout_ms <= 600_000:
+                _fail("CAPABILITY_UNAVAILABLE", "Model worker runtime exceeds its admitted boundary")
+        self.model_runtime = model_runtime
 
     def _call(self, argv: tuple[str, ...]) -> tuple[str | None, dict[str, Any], dict[str, Any]]:
         if not argv or argv[-1] != "--json" or any(not isinstance(item, str) or "\x00" in item for item in argv):
@@ -511,6 +528,87 @@ class PublicOrcaLifecycleProvider:
         prior = kwargs.pop("prior_provider_dispatch_id")
         return self._fixture_start(prior_provider_dispatch_id=prior, **kwargs)
 
+    def dispatch_model(
+        self,
+        *,
+        provider_run_id: str,
+        provider_task_id: str,
+        logical_dispatch_id: str,
+        task_spec: dict[str, Any],
+        attempt_generation: int,
+    ) -> ProviderDispatchResult:
+        runtime = self.model_runtime
+        if (
+            runtime is None
+            or task_spec.get("placement") != "child_worktree"
+            or task_spec.get("archetype") != "model"
+            or attempt_generation != 1
+        ):
+            _fail("CAPABILITY_UNAVAILABLE", "Model worker runtime is not admitted")
+        provider_run_id = _token(provider_run_id)
+        provider_task_id = _token(provider_task_id)
+        logical_dispatch_id = _token(logical_dispatch_id)
+        request_id, result, raw = self._call(
+            (
+                "orchestration",
+                "worker-start",
+                "--task",
+                provider_task_id,
+                "--worktree",
+                "new-top-level",
+                "--agent",
+                runtime.agent,
+                "--name",
+                f"aether-model-{logical_dispatch_id[:8]}",
+                "--repo",
+                runtime.repo_selector,
+                "--base-branch",
+                runtime.base_ref,
+                "--display-name",
+                f"AETHER-MODEL-{task_spec['task_key']}",
+                "--comment",
+                f"aether-model:{runtime.expected_model}:{logical_dispatch_id}",
+                "--setup",
+                "skip",
+                "--timeout-ms",
+                str(runtime.timeout_ms),
+                "--run",
+                provider_run_id,
+                "--from",
+                self.coordinator_handle,
+                "--json",
+            )
+        )
+        provider_dispatch_id = _entity_id(result, entity="dispatch")
+        _show_request_id, show_result, show_raw = self._call(
+            (
+                "orchestration",
+                "worker-show",
+                "--dispatch",
+                provider_dispatch_id,
+                "--json",
+            )
+        )
+        identities = {"start": result, "show": show_result}
+        terminal_id = _find_string(
+            identities,
+            ("agentTerminalHandle", "terminalHandle", "terminalId", "terminal_id", "handle"),
+        )
+        try:
+            worker_id = _find_string(identities, ("workerId", "worker_id", "agentId"))
+        except LifecycleError:
+            worker_id = terminal_id
+        worktree_path = _find_path(identities, ("worktreePath", "worktree_path", "path"))
+        return ProviderDispatchResult(
+            outcome="APPLIED",
+            provider_request_id=request_id,
+            provider_dispatch_id=provider_dispatch_id,
+            worker_id=worker_id,
+            terminal_id=terminal_id,
+            worktree_id=f"path:{worktree_path}",
+            response_digest=_digest((raw, show_raw)),
+        )
+
     def send_worker_message(
         self,
         *,
@@ -597,6 +695,14 @@ class PublicOrcaLifecycleProvider:
 
     def stop_worker(self, *, provider_dispatch_id: str, **_kwargs: Any) -> ProviderEffectResult:
         provider_dispatch_id = _token(provider_dispatch_id)
+        runtime_kind = _kwargs.get("runtime_kind", "fixture")
+        if runtime_kind == "model":
+            request_id, _result, raw = self._call(
+                ("orchestration", "worker-stop", "--dispatch", provider_dispatch_id, "--json")
+            )
+            return ProviderEffectResult("APPLIED", request_id, (), _digest(raw), True)
+        if runtime_kind != "fixture":
+            _fail("CAPABILITY_UNAVAILABLE", "Worker runtime kind is unsupported")
         worktree_id = _token(_kwargs.get("worktree_id"))
         request_id, _result, raw = self._call(
             ("terminal", "stop", "--worktree", worktree_id, "--json")
@@ -609,14 +715,22 @@ class PublicOrcaLifecycleProvider:
         provider_dispatch_id: str,
         terminal_id: str,
         worktree_id: str,
+        runtime_kind: str = "fixture",
     ) -> ProviderEffectResult:
         resources = (_token(provider_dispatch_id), _token(terminal_id), _token(worktree_id))
         envelopes: list[dict[str, Any]] = []
         request_id: str | None = None
         try:
-            request_id, _result, raw = self._call(
-                ("terminal", "stop", "--worktree", resources[2], "--json")
-            )
+            if runtime_kind == "model":
+                request_id, _result, raw = self._call(
+                    ("orchestration", "worker-stop", "--dispatch", resources[0], "--json")
+                )
+            elif runtime_kind == "fixture":
+                request_id, _result, raw = self._call(
+                    ("terminal", "stop", "--worktree", resources[2], "--json")
+                )
+            else:
+                _fail("CAPABILITY_UNAVAILABLE", "Worker runtime kind is unsupported")
             envelopes.append(raw)
             _request, _result, raw = self._call(
                 ("worktree", "rm", "--worktree", resources[2], "--force", "--json")

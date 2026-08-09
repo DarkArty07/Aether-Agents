@@ -93,6 +93,16 @@ class WorkerProvider(Protocol):
 
     def dispatch_fixture(self, **kwargs: Any) -> ProviderDispatchResult: ...
 
+    def dispatch_model(
+        self,
+        *,
+        provider_run_id: str,
+        provider_task_id: str,
+        logical_dispatch_id: str,
+        task_spec: dict[str, Any],
+        attempt_generation: int,
+    ) -> ProviderDispatchResult: ...
+
     def retry_fixture(self, **kwargs: Any) -> ProviderDispatchResult: ...
 
     def send_worker_message(self, **kwargs: Any) -> ProviderMessageResult: ...
@@ -650,8 +660,8 @@ class WorkerService:
         for task_key in task_keys:
             task = self._task(binding, task_key)
             spec = self._task_spec(manifest, task_key)
-            if spec["archetype"] != "fixture" or status_by_key.get(task_key) != "ready":
-                _fail("TASK_NOT_READY", "Only a ready deterministic fixture Task may dispatch")
+            if spec["archetype"] not in {"fixture", "model"} or status_by_key.get(task_key) != "ready":
+                _fail("TASK_NOT_READY", "Only a ready admitted worker Task may dispatch")
             if self.store.active_for_task(binding.run_id, task.task_id) is not None:
                 _fail("TASK_NOT_READY", "Task already has an active attempt")
             selected.append((task, spec))
@@ -677,7 +687,8 @@ class WorkerService:
         provider_requests: list[str] = []
         for index, (task, spec) in enumerate(selected):
             logical_id = _dispatch_id(operation["operation_id"] if len(selected) == 1 else f"{operation['operation_id']}:{index}")
-            result = self.provider.dispatch_fixture(
+            dispatch = self.provider.dispatch_model if spec["archetype"] == "model" else self.provider.dispatch_fixture
+            result = dispatch(
                 provider_run_id=binding.provider_run_id,
                 provider_task_id=task.provider_task_id,
                 logical_dispatch_id=logical_id,
@@ -826,6 +837,11 @@ class WorkerService:
         binding, manifest = self._run_manifest(operation["project_id"], args["run_id"])
         if operation["contract_id"] != manifest.canonical["contract"]["contract_id"]:
             _fail("CONTRACT_STALE", "Message contract differs from the Run")
+        if (
+            args["blocking_effect"] is not None
+            and args["blocking_effect"] not in manifest.canonical["contract"]["authorized_effects"]
+        ):
+            _fail("EFFECT_NOT_AUTHORIZED", "Message cannot expand the Run's admitted authority")
         sender = self._participant(binding.run_id, args["sender_id"])
         recipient = self._participant(binding.run_id, args["recipient_id"])
         kind = args["kind"]
@@ -988,6 +1004,8 @@ class WorkerService:
         if expected_state is None or prior.state != expected_state:
             _fail("RETRY_FORBIDDEN", "Retry requires matching terminal evidence")
         spec = self._task_spec(manifest, prior.task_key)
+        if spec["archetype"] != "fixture":
+            _fail("RETRY_FORBIDDEN", "Model worker retries are not admitted by this candidate")
         attempts = [item for item in self.store.attempts_for_run(binding.run_id) if item.task_id == prior.task_id]
         if len(attempts) >= spec["attempt_budget"]:
             _fail("RETRY_BUDGET_EXHAUSTED", "Task attempt budget is exhausted")
@@ -1054,7 +1072,7 @@ class WorkerService:
         if args["target_type"] != "dispatch":
             return self.lifecycle.swarm_cancel(arguments)
         operation = self._operation(args)
-        binding, _manifest = self._run_manifest(operation["project_id"], args["run_id"])
+        binding, manifest = self._run_manifest(operation["project_id"], args["run_id"])
         attempt = self.store.attempt(args["target_id"])
         if attempt.run_id != binding.run_id:
             _fail("PRINCIPAL_UNAUTHORIZED", "Dispatch belongs to another Run")
@@ -1067,6 +1085,7 @@ class WorkerService:
             provider_dispatch_id=attempt.provider_dispatch_id,
             terminal_id=attempt.terminal_id,
             worktree_id=attempt.worktree_id,
+            runtime_kind=self._task_spec(manifest, attempt.task_key)["archetype"],
         )
         if result.outcome != "APPLIED" or result.response_digest is None:
             self.trace.append_event(
@@ -1229,6 +1248,7 @@ class WorkerService:
                 provider_dispatch_id=attempt.provider_dispatch_id,
                 terminal_id=attempt.terminal_id,
                 worktree_id=attempt.worktree_id,
+                runtime_kind=self._task_spec(_manifest, attempt.task_key)["archetype"],
             )
             if result.response_digest:
                 digests.append(result.response_digest)
