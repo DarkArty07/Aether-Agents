@@ -1138,6 +1138,16 @@ the deterministic fixture baseline.
 authorized real provider run is unavailable, record `UNKNOWN`; do not substitute
 fixture evidence for model-backed behavior.
 
+**Bounded closure (2026-08-09):** deterministic M5.1-M5.3 and the cleanup
+portion of M5 passed at technical commit
+`f356c21a65310d2d8c41112d407658e0a64f945a`. The exact Orca 1.4.167
+desktop-renderer/public-CLI path proved two Dispatches before polling,
+barrier-backed overlap, provider-message-correlated peer handoff, two-component
+coordinator integration, partial failure/cancel and zero survivors. M5.4 is
+`UNKNOWN_NOT_AUTHORIZED`: no model-backed run occurred and fixture evidence was
+not substituted. See `M5_PARALLEL_ACCEPTANCE.md` and
+`M5_PARALLEL_EVIDENCE.json`.
+
 **Proposed atomic commits:**
 
 1. `test: prove deterministic two-worker overlap and fencing`

@@ -3,9 +3,12 @@
 > **Authorized horizon:** M3, M4 and M5 only
 > **Started:** 2026-08-09T03:32:17-06:00 (CST)
 > **Start epoch:** 1786267937
+> **Finished:** 2026-08-09T13:09:04-06:00 (CST)
+> **Finish epoch:** 1786302544
+> **Total duration:** 9 hours, 36 minutes, 47 seconds (34,607 seconds)
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Baseline:** `c5e359e589ce5661d665314e125443331c083eca`
-> **Status:** IN PROGRESS — M5 deterministic slice
+> **Status:** COMPLETE — deterministic M3-M5; M5.4 model gate UNKNOWN/not authorized
 
 ## Authority and stop boundary
 
@@ -35,7 +38,7 @@ Not authorized by this task:
 |---|---|---|
 | M3 | COMPLETE | Lifecycle without workers: start/status/reconcile/cancel/close, restart recovery and zero survivors |
 | M4 | COMPLETE | One deterministic no-model worker: dispatch/message/retry/evidence/episode and zero survivors |
-| M5 | IN PROGRESS | Two deterministic workers with proved overlap, bounded peer handoff, partial failure/cancel and zero survivors; model-backed gate remains UNKNOWN/not authorized |
+| M5 | COMPLETE — BOUNDED | Two deterministic workers with proved overlap, peer handoff, coordinator integration, partial failure/cancel and zero survivors; M5.4 remains UNKNOWN/not authorized |
 
 ## Orca technical-debt ledger
 
@@ -53,6 +56,8 @@ Not authorized by this task:
 | ORCA-DEBT-010 | Public tracking `dispatch --to` has no `retry-of` relation | Orca cannot natively preserve fixture retry lineage | Tracking Dispatch supports immutable predecessor identity or generic worker-start accepts the fixture | OPEN; AETHER RECORDS LINEAGE AND CREATES A NEW ORCA DISPATCH |
 | ORCA-DEBT-011 | `worker_done` rejects a tracking shell Dispatch | Fixture technical completion cannot use the agent-bound worker signal | Orca accepts exact-assignee completion for generic tracking Dispatches | OPEN; AETHER CAPTURES COMPLETION AND COMPOSES PUBLIC TASK UPDATE |
 | ORCA-DEBT-012 | `terminal list` to `terminal close --tab` can race to `tab_not_found` across renderer generations | Per-handle cleanup is non-convergent despite the terminal already being absent | Close returns idempotent already-absent success or a generation/fence token | OPEN; USE SCOPED `terminal stop --worktree` |
+| ORCA-DEBT-013 | Tracking shells reject direct `send --to dispatch:<id>` peer delivery | Generic worker-to-worker handoff cannot target a Dispatch directly | Orca admits direct peer delivery for generic tracking workers with exact sender/recipient authority | OPEN; QUALIFIED FLOW USES RUN-MAILBOX QUESTION + EXACT PROVIDER REPLY |
+| ORCA-DEBT-014 | No authorized model-backed provider/account/budget exists for M5.4 | Operational model-worker behavior remains unmeasured | Owner admits one bounded provider/model slice with credentials, spend and stop limits | UNKNOWN / NOT AUTHORIZED; FIXTURE NOT A SUBSTITUTE |
 
 ## Progress log
 
@@ -65,3 +70,7 @@ Not authorized by this task:
 - M4 fixture — Deterministic success/question/failure/cancel/barrier fixture committed at `ba49f4c25d0599625a0056cbfca97396e3fd34d8`.
 - M4 compatibility findings — `worker-start --terminal` and `worker_done` are agent-bound in Orca 1.4.167; the accepted no-model route uses public tracking Dispatch, Aether-owned retry lineage/completion content and public Task updates without impersonating an agent.
 - M4 COMPLETE — Real failed first attempt, new retry generation/worktree, question, renderer restart/rebind, dedicated reply, successful artifact, encrypted six-item episode replay, aggregate cleanup and a second active-worker cancellation Run all passed with zero models, credentials, spend or survivors. Technical commit `037b9ccf8698ab59c73275f3b4fb8d98a5e434af`; detached verification: 153 tests, Ruff, compileall and evidence invariants PASS.
+- M5 peer-routing finding — Direct shell-to-shell `send --to dispatch:` is rejected for tracking Dispatches. The qualified public flow is beta question in the Run mailbox followed by alpha reply to the exact provider message ID, with Aether enforcing inverse sender/recipient and immutable predecessor evidence.
+- M5 COMPLETE — BOUNDED — Two Dispatches were issued before polling, both workers reached a persisted barrier before either proceeded, alpha→beta handoff and two-component coordinator integration passed, and a second Run proved partial failure plus aggregate cancel. Technical commit `f356c21a65310d2d8c41112d407658e0a64f945a`; detached verification: 156 tests, Ruff, compileall and evidence invariants PASS. M5.4 is `UNKNOWN_NOT_AUTHORIZED` and was not replaced by fixture evidence.
+- Repository gate correction — `make test` depended on an ambient editable installation and failed to import the `src/` package from a fresh checkout. Commit `7e8436aafc056a0a6b3f9476426f8a97ecdc8e2c` makes the target candidate-first with `PYTHONPATH=src`; the complete repository suite then passed `183/183`.
+- Final stop condition — Ruff, compileall, release governance, closeout schemas, full `make test` and task-owned process/root inventories passed; M6 was not entered.

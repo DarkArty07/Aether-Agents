@@ -59,20 +59,25 @@ English commits are allowed. Model-backed workers, credentials/spend, push, merg
 rebase, amend, tag, Release, deployment, registration, persistent services and
 activation remain forbidden.
 
-Chris authorized completion through M2 on 2026-08-09 and required a strict stop
-before M3. Two fresh, desktop-renderer-backed Orca 1.4.167 profiles independently
-qualified public CLI coordinator admission, Run/Task persistence across restart,
-explicit generation-2 rebind, completion, reset and zero owned survivors; the
-headless `serve` admission seam remains unavailable. M2.3-M2.7 now provide trusted
-project admission, SQLite WAL operation/semantic trace authority, fail-closed
-AES-256-GCM protected content with no production key provider enabled,
-deterministic manifest validation and a version-pinned read-only Orca catalog.
-The stdio server still registers exactly zero tools. M3 lifecycle execution,
-workers, models, credentials/spend, push, merge, tag, Release, registration,
-persistent services and activation remain outside the completed scope.
-Canonical closeout is in
-`docs/releases/v0.22.0/M2_FOUNDATION_ACCEPTANCE.md` and
-`docs/releases/v0.22.0/M2_FOUNDATION_EVIDENCE.json`.
+Chris first authorized completion through M2 on 2026-08-09, then separately
+authorized autonomous M3-M5 implementation. M3 accepted manifest-bound
+Run/Task lifecycle, restart/rebind/reconciliation, cancel and close without
+workers. M4 accepted one deterministic model-free tracking worker, exact
+Dispatch/message/retry/fencing, child-worktree artifact validation, encrypted
+episode replay and cancellation. Deterministic M5 accepted two Dispatches before
+polling, barrier-proved overlap, provider-message-correlated peer handoff,
+coordinator integration, partial failure/cancel and zero survivors. The exact
+qualified binding remains desktop-renderer plus public structured CLI; this does
+not establish pure headless admission or native supervised model-free workers.
+
+M5.4 model-backed execution is `UNKNOWN_NOT_AUTHORIZED`: no provider, account,
+model, credential, budget or stop limit was admitted, and fixture evidence is
+not a substitute. The stdio server still registers exactly zero tools; all new
+behavior remains internal/default-off. Push, merge, tag, Release, registration,
+persistent services and activation remain outside the completed scope. Canonical
+closeouts are `M2_FOUNDATION_ACCEPTANCE.md`, `M3_LIFECYCLE_ACCEPTANCE.md`,
+`M4_WORKER_ACCEPTANCE.md` and `M5_PARALLEL_ACCEPTANCE.md` under
+`docs/releases/v0.22.0/`.
 
 ## v0.19.0 experimental coordination closeout
 
