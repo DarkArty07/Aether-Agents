@@ -1529,6 +1529,13 @@ def _run_inner(root: Path, xvfb_path: Path) -> dict[str, Any]:
     _network_interfaces()
     os.chown(root, 0, WORKER_GID)
     os.chmod(root, 0o770)
+    try:
+        os.chown(xvfb_path.parent, WORKER_UID, WORKER_GID)
+        os.chmod(xvfb_path.parent, 0o700)
+        os.chown(xvfb_path, WORKER_UID, WORKER_GID)
+        os.chmod(xvfb_path, 0o500)
+    except OSError:
+        _fail("ERR_XVFB_STAGE_PERMISSIONS", "Staged Xvfb could not be admitted to the worker identity")
     mounted = False
     result: dict[str, Any] | None = None
     try:
@@ -1582,11 +1589,19 @@ def qualify_real_lifecycle(
     """Run M1.3 in a fresh loopback-only namespace and remove its root."""
     root = validate_lifecycle_root(isolated_root)
     xvfb = Path(xvfb_path).resolve(strict=True)
+    if xvfb.is_symlink() or not xvfb.is_file() or not os.access(xvfb, os.X_OK):
+        _fail("ERR_XVFB_UNAVAILABLE", "Admitted Xvfb source is not an executable regular file")
+    staged_xvfb = root / "runtime-dependencies" / "Xvfb"
+    staged_xvfb.parent.mkdir(mode=0o700)
+    shutil.copyfile(xvfb, staged_xvfb)
+    os.chmod(staged_xvfb, 0o755)
+    if _sha256_file(staged_xvfb) != _sha256_file(xvfb):
+        _fail("ERR_XVFB_STAGE_MISMATCH", "Staged Xvfb identity differs from admitted source")
     protected = protected_paths if protected_paths is not None else _default_protected_paths()
     before = fingerprint_paths(protected)
     candidate = _verify_real_identity()
     child_env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "LANG": "C.UTF-8"}
-    argv = build_namespace_argv(root, xvfb)
+    argv = build_namespace_argv(root, staged_xvfb)
     evidence: dict[str, Any] | None = None
     try:
         evidence = run_owned_json_command(

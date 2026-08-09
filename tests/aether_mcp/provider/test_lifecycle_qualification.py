@@ -26,7 +26,7 @@ import qualify_orca_lifecycle as lifecycle  # type: ignore[import-not-found]  # 
 LifecycleError = lifecycle.LifecycleError
 REAL_LAUNCHER = Path("/home/darkarty/.local/bin/orca")
 REAL_ARTIFACT = Path("/home/darkarty/.local/opt/orca/orca-linux.AppImage")
-REAL_XVFB = Path("/tmp/aether-m13-xvfb-toolchain/root/usr/bin/Xvfb")
+REAL_XVFB = Path("/home/darkarty/.local/opt/aether-xvfb/root/usr/bin/Xvfb")
 REAL_FIXTURE_AVAILABLE = (
     REAL_LAUNCHER.is_file()
     and os.access(REAL_LAUNCHER, os.X_OK)
