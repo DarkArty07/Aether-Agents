@@ -100,27 +100,31 @@ def test_barrier_proves_two_workers_overlap(tmp_path: Path) -> None:
     barrier.mkdir()
     commands = []
     for worker in ("alpha", "beta"):
+        worker_root = tmp_path / f"{worker}-root"
+        worker_root.mkdir()
         commands.append(
             subprocess.Popen(
                 [
                     sys.executable,
                     str(FIXTURE),
                     "--root",
-                    str(tmp_path),
+                    str(worker_root),
                     "--artifact",
-                    f"{worker}.json",
+                    "result.json",
                     "--worker",
                     worker,
                     "--mode",
                     "barrier",
                     "--barrier-dir",
-                    "barrier",
+                    str(barrier),
+                    "--shared-root",
+                    str(tmp_path),
                     "--peers",
                     "2",
                     "--timeout",
                     "3",
                 ],
-                cwd=tmp_path,
+                cwd=worker_root,
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -128,5 +132,5 @@ def test_barrier_proves_two_workers_overlap(tmp_path: Path) -> None:
         )
     results = [process.communicate(timeout=5) for process in commands]
     assert [process.returncode for process in commands] == [0, 0], results
-    assert json.loads((tmp_path / "alpha.json").read_text())["overlap"] == ["alpha", "beta"]
-    assert json.loads((tmp_path / "beta.json").read_text())["overlap"] == ["alpha", "beta"]
+    assert json.loads((tmp_path / "alpha-root/result.json").read_text())["overlap"] == ["alpha", "beta"]
+    assert json.loads((tmp_path / "beta-root/result.json").read_text())["overlap"] == ["alpha", "beta"]

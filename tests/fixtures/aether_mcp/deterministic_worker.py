@@ -66,6 +66,7 @@ def main() -> int:
     parser.add_argument("--cancel-file", type=Path)
     parser.add_argument("--release-file", type=Path)
     parser.add_argument("--barrier-dir", type=Path)
+    parser.add_argument("--shared-root", type=Path)
     parser.add_argument("--peers", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=10.0)
     args = parser.parse_args()
@@ -97,7 +98,8 @@ def main() -> int:
     if args.mode == "barrier":
         if args.barrier_dir is None or args.peers < 2:
             raise ValueError("barrier mode requires a barrier directory and peers")
-        barrier = bounded(root, args.barrier_dir / "placeholder").parent
+        barrier_root = args.shared_root.resolve(strict=True) if args.shared_root is not None else root
+        barrier = bounded(barrier_root, args.barrier_dir / "placeholder").parent
         ready = barrier / f"{args.worker}.ready"
         atomic_json(ready, {"worker": args.worker})
         deadline = time.monotonic() + args.timeout
@@ -112,6 +114,7 @@ def main() -> int:
         if len(overlap) < args.peers:
             emit("timeout", awaited="barrier")
             return 24
+        atomic_json(barrier / f"{args.worker}.overlap", {"peers": overlap, "worker": args.worker})
         emit("barrier_released", peers=overlap)
 
     artifact_digest = atomic_json(

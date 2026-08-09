@@ -656,6 +656,11 @@ class WorkerService:
                 _fail("TASK_NOT_READY", "Task already has an active attempt")
             selected.append((task, spec))
         scopes: list[str] = []
+        for active in self.store.attempts_for_run(binding.run_id):
+            if active.state != "ACTIVE":
+                continue
+            active_spec = self._task_spec(manifest, active.task_key)
+            scopes.extend(active_spec["write_scope"])
         for _task, spec in selected:
             for scope in spec["write_scope"]:
                 if any(scope == prior or scope.startswith(prior + "/") or prior.startswith(scope + "/") for prior in scopes):
@@ -827,7 +832,12 @@ class WorkerService:
         payload = self._payload(args["payload"])
         provider_reply_to: str | None = None
         if kind == "technical_question":
-            if sender is None or recipient is not None or not args["decision_required"] or args["blocking_effect"] is None:
+            if (
+                sender is None
+                or (recipient is not None and recipient.dispatch_id == sender.dispatch_id)
+                or not args["decision_required"]
+                or args["blocking_effect"] is None
+            ):
                 _fail("MESSAGE_CORRELATION_INVALID", "Technical question direction or gate is invalid")
         elif kind == "reply":
             if sender is not None or recipient is None:
@@ -839,6 +849,30 @@ class WorkerService:
             question = self.store.message(reply_to)
             if question["kind"] != "technical_question" or question["thread_id"] != thread_id or question["sender_id"] != recipient.dispatch_id:
                 _fail("MESSAGE_CORRELATION_INVALID", "Reply does not match its question")
+            provider_reply_to = question["provider_message_id"]
+        elif kind == "dependency_handoff":
+            if sender is None or recipient is None or sender.dispatch_id == recipient.dispatch_id:
+                _fail("MESSAGE_CORRELATION_INVALID", "Dependency handoff requires two distinct admitted Dispatches")
+            artifact_digest = payload.get("artifact_digest")
+            evidence_digest = payload.get("evidence_digest")
+            if (
+                sender.state != "TECHNICAL_COMPLETE"
+                or sender.artifact_digest is None
+                or sender.evidence_digest is None
+                or artifact_digest != sender.artifact_digest
+                or evidence_digest != sender.evidence_digest
+            ):
+                _fail("EVIDENCE_REQUIRED", "Dependency handoff lacks immutable predecessor evidence")
+            reply_to = payload.get("reply_to")
+            if reply_to is None:
+                _fail("MESSAGE_CORRELATION_INVALID", "Dependency handoff requires a peer question correlation")
+            question = self.store.message(reply_to)
+            if (
+                question["kind"] != "technical_question"
+                or question["sender_id"] != recipient.dispatch_id
+                or question["recipient_id"] != sender.dispatch_id
+            ):
+                _fail("MESSAGE_CORRELATION_INVALID", "Handoff does not answer the peer's question")
             provider_reply_to = question["provider_message_id"]
         elif sender is None and recipient is None:
             _fail("PRINCIPAL_UNAUTHORIZED", "Coordinator cannot message itself through worker routing")
@@ -1055,6 +1089,106 @@ class WorkerService:
             resources=(attempt.provider_dispatch_id,),
         )
         return {"outcome": "CANCELLED", "replayed": False, "resource_ids": list(result.resource_ids)}
+
+    def integrate_artifacts(
+        self,
+        *,
+        run_id: str,
+        output_path: str,
+        component_dispatch_ids: tuple[str, ...],
+    ) -> dict[str, Any]:
+        """Integrate verified worker JSON artifacts in coordinator-owned scope."""
+
+        _uuid(run_id)
+        if (
+            not isinstance(output_path, str)
+            or not output_path.startswith("integration/")
+            or output_path.startswith("/")
+            or ".." in Path(output_path).parts
+            or len(component_dispatch_ids) < 2
+            or len(set(component_dispatch_ids)) != len(component_dispatch_ids)
+        ):
+            _fail("INVALID_INPUT", "Coordinator integration request is invalid")
+        attempts = tuple(self.store.attempt(value) for value in component_dispatch_ids)
+        if any(attempt.run_id != run_id for attempt in attempts):
+            _fail("PRINCIPAL_UNAUTHORIZED", "Integration component belongs to another Run")
+        if any(
+            attempt.state != "TECHNICAL_COMPLETE"
+            or attempt.artifact_path is None
+            or attempt.artifact_digest is None
+            or attempt.evidence_digest is None
+            for attempt in attempts
+        ):
+            _fail("EVIDENCE_REQUIRED", "Every integrated component requires successful immutable evidence")
+        project_id = attempts[0].project_id
+        _binding, manifest = self._run_manifest(project_id, run_id)
+        for task in manifest.canonical["tasks"]:
+            for scope in task["write_scope"]:
+                if output_path == scope or output_path.startswith(scope.rstrip("/") + "/"):
+                    _fail("WRITE_SCOPE_CONFLICT", "Coordinator integration overlaps worker write authority")
+        project = self.lifecycle.foundation.project_inspect({"project_id": project_id})
+        components: list[dict[str, Any]] = []
+        for attempt in sorted(attempts, key=lambda value: value.task_key):
+            artifact_path = attempt.artifact_path
+            if artifact_path is None:
+                _fail("EVIDENCE_REQUIRED", "Integration component lacks an artifact path")
+            root = project.project_root
+            if attempt.worktree_id.startswith("path:"):
+                matches = [
+                    placement.project_root
+                    for placement in project.placements
+                    if str(placement.project_root) == attempt.worktree_id[5:]
+                ]
+                if len(matches) != 1:
+                    _fail("PROJECT_IDENTITY_MISMATCH", "Integration placement is unavailable")
+                root = matches[0]
+            target = root / artifact_path
+            try:
+                resolved = target.resolve(strict=True)
+                body = resolved.read_bytes()
+                decoded = json.loads(body)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                _fail("EVIDENCE_REQUIRED", "Integration component is unavailable or malformed")
+            if target.is_symlink() or not resolved.is_relative_to(root):
+                _fail("WRITE_SCOPE_VIOLATION", "Integration component path is unsafe")
+            if hashlib.sha256(body).hexdigest() != attempt.artifact_digest:
+                _fail("EVIDENCE_REQUIRED", "Integration component changed after validation")
+            components.append(
+                {
+                    "artifact_digest": attempt.artifact_digest,
+                    "dispatch_id": attempt.dispatch_id,
+                    "evidence_digest": attempt.evidence_digest,
+                    "output": decoded,
+                    "task_key": attempt.task_key,
+                }
+            )
+        envelope = {
+            "schema_version": "aether.integration/v1alpha1",
+            "run_id": run_id,
+            "components": components,
+        }
+        body = (json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n").encode()
+        destination = project.project_root / output_path
+        destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if destination.is_symlink():
+            _fail("WRITE_SCOPE_VIOLATION", "Integration destination is unsafe")
+        temporary = destination.with_name(f".{destination.name}.{uuid.uuid4()}.tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(body)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+        return {
+            "artifact_path": output_path,
+            "artifact_digest": hashlib.sha256(body).hexdigest(),
+            "component_digests": sorted(attempt.artifact_digest for attempt in attempts if attempt.artifact_digest),
+            "component_count": len(components),
+        }
 
     def swarm_close(self, arguments: dict[str, Any]) -> dict[str, Any]:
         try:

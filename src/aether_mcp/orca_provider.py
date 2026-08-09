@@ -550,9 +550,9 @@ class PublicOrcaLifecycleProvider:
             if request_id is None:
                 _fail("PROVIDER_RESPONSE_INVALID", "Orca task update omitted its request identity")
             return ProviderMessageResult("APPLIED", request_id, _digest(raw))
-        if kind == "reply":
+        if kind == "reply" or (kind == "dependency_handoff" and provider_reply_to is not None):
             if provider_reply_to is None:
-                _fail("PROVIDER_RESPONSE_INVALID", "Orca reply target is unavailable")
+                _fail("MESSAGE_CORRELATION_INVALID", "Reply lacks the provider message identity")
             _request, result, raw = self._call(
                 (
                     "orchestration",
