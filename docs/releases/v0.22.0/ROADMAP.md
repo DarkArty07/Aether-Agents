@@ -1041,6 +1041,14 @@ live resource, repeated close, provider restart and cleanup failure.
 Execute UC-C01, C02, C04, C06, C08 and C09 variants that do not require a worker.
 Evidence must prove one receipt per effect, explicit unknowns and zero survivors.
 
+**Closure (2026-08-09):** accepted at technical commit
+`7e3f1049ee78ec12fe29e8b4326f34000e1f95e1`. The exact Orca 1.4.167
+desktop-renderer/public-CLI path passed metadata-only Run/Task start, restart,
+coordinator rebind, recovery, cancellation, semantic close and zero-survivor
+cleanup with no worker, model, credential or spend. See
+`M3_LIFECYCLE_ACCEPTANCE.md` and `M3_LIFECYCLE_EVIDENCE.json`. This is not a
+Headless, MCP registration or activation claim.
+
 **Proposed atomic commits:**
 
 1. `feat: add manifest-bound Orca lifecycle control`

@@ -1,5 +1,5 @@
 schema_version: 1
-status: m0_m2_complete_m3_not_started_default_off
+status: m0_m3_complete_m4_authorized_default_off
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -15,8 +15,9 @@ candidate:
     stores and release authority; keep Olympus plus the disconnected native Python
     core retired; design one bounded Aether MCP control, semantic trace and
     protected learning-episode plane over Orca; and keep multi-agent execution
-    unavailable; M2 implements only the default-off zero-tool control, trace,
-    privacy and read-only catalog foundation, while M3 lifecycle has not started.
+    unavailable; M3 adds a default-off, zero-worker manifest-bound lifecycle over
+    the qualified desktop-renderer/public-CLI binding, while M4 deterministic
+    worker execution has not started.
   not_a_release_claim: true
   source_implementation_started: true
   native_runtime_source_present: false
@@ -45,7 +46,8 @@ candidate:
   isolated_orca_runtime_started_during_diagnostics: true
   isolated_orca_runtime_currently_running: false
   m2_foundation_complete: true
-  m3_started: false
+  m3_started: true
+  m3_complete: true
   callable_tools: 0
 
 m2_foundation_completion:
@@ -82,6 +84,25 @@ m2_foundation_completion:
     manifest_validation: deterministic_dag_and_write_scope
     mcp_registered: false
     mcp_callable_tools: 0
+
+m3_lifecycle_completion:
+  completed_on: "2026-08-09"
+  owner_authority: user_requested_autonomous_completion_through_M5
+  technical_commit: 7e3f1049ee78ec12fe29e8b4326f34000e1f95e1
+  technical_tree: 623b7a530358ff67ef1950839119cfa78a729978
+  acceptance: docs/releases/v0.22.0/M3_LIFECYCLE_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M3_LIFECYCLE_EVIDENCE.json
+  provider_binding: isolated_desktop_renderer_public_cli
+  headless_claim: false
+  run_tasks_restart_recovery_cancel_close: pass
+  workers: 0
+  models: 0
+  credentials_or_spend: false
+  process_survivors: 0
+  terminal_survivors: 0
+  temporary_root_survivors: 0
+  mcp_registered: false
+  mcp_callable_tools: 0
 
 architecture_correction:
   approved_on: "2026-08-05"
@@ -142,8 +163,8 @@ mcp_architecture:
   learning_episode_schema: docs/reference/AETHER_LEARNING_EPISODE_SCHEMA.md
   measurement_contract: docs/releases/v0.22.0/MEASUREMENT_CONTRACT.md
   implementation_authorized: true
-  implementation_scope: M0_through_M2_default_off_foundation
-  last_accepted_scope: M2_7_foundation_closure
+  implementation_scope: M0_through_M5_owner_authorized_default_off
+  last_accepted_scope: M3_5_lifecycle_closure
   qualification_implementation_authorized: true
   qualification_implementation_scope: exact_isolated_desktop_renderer_coordinator_lifecycle
   m0_acceptance_record: docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md
@@ -154,9 +175,9 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: none_M2_closed_stop_before_M3
+  active_task: M4_deterministic_worker_authorized_not_started
   successor_agents_are_stateless: true
-  next_prompt_requires_owner_M3_authorization: true
+  next_prompt_requires_owner_M3_authorization: false
   external_agent_git:
     local_atomic_commits: allowed
     push: forbidden
