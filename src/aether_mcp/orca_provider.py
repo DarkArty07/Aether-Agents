@@ -6,8 +6,11 @@ import hashlib
 import json
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, NoReturn
 
+from .coordination import ProviderDispatchResult, ProviderMessageResult
 from .lifecycle import (
     LifecycleError,
     ProviderEffectResult,
@@ -107,11 +110,74 @@ def _objects_under(value: Any, key: str) -> list[dict[str, Any]]:
     return found
 
 
+def _terminal_handles(value: Any) -> set[str]:
+    handles: set[str] = set()
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in {"agentTerminalHandle", "terminalHandle", "handle"} and isinstance(child, str):
+                handles.add(_token(child))
+            handles.update(_terminal_handles(child))
+    elif isinstance(value, list):
+        for child in value:
+            handles.update(_terminal_handles(child))
+    return handles
+
+
 def _field(record: dict[str, Any], *names: str) -> Any:
     for name in names:
         if name in record:
             return record[name]
     return None
+
+
+def _find_string(value: Any, names: tuple[str, ...]) -> str:
+    if isinstance(value, dict):
+        for name in names:
+            candidate = value.get(name)
+            if isinstance(candidate, str):
+                return _token(candidate)
+        for child in value.values():
+            try:
+                return _find_string(child, names)
+            except LifecycleError:
+                continue
+    elif isinstance(value, list):
+        for child in value:
+            try:
+                return _find_string(child, names)
+            except LifecycleError:
+                continue
+    _fail("PROVIDER_SCHEMA_DRIFT", "Orca response omitted a required identity")
+
+
+def _find_path(value: Any, names: tuple[str, ...]) -> str:
+    if isinstance(value, dict):
+        for name in names:
+            candidate = value.get(name)
+            if isinstance(candidate, str):
+                path = Path(candidate)
+                if path.is_absolute() and ".." not in path.parts and "\x00" not in candidate and len(candidate) <= 4096:
+                    return candidate
+                _fail("PROVIDER_RESPONSE_INVALID", "Orca worktree path is invalid")
+        for child in value.values():
+            try:
+                return _find_path(child, names)
+            except LifecycleError:
+                continue
+    elif isinstance(value, list):
+        for child in value:
+            try:
+                return _find_path(child, names)
+            except LifecycleError:
+                continue
+    _fail("PROVIDER_SCHEMA_DRIFT", "Orca response omitted a required worktree path")
+
+
+@dataclass(frozen=True)
+class FixtureRuntimeConfig:
+    repo_selector: str
+    base_ref: str
+    command_builder: Callable[[str, str, dict[str, Any], int], str]
 
 
 class PublicOrcaLifecycleProvider:
@@ -123,6 +189,7 @@ class PublicOrcaLifecycleProvider:
         transport: Callable[[tuple[str, ...]], dict[str, Any]],
         binding_digest: str,
         coordinator_handle: str,
+        fixture_runtime: FixtureRuntimeConfig | None = None,
     ) -> None:
         if not callable(transport):
             raise TypeError("Structured Orca transport is required")
@@ -131,6 +198,12 @@ class PublicOrcaLifecycleProvider:
         self.transport = transport
         self.binding_digest = binding_digest
         self.coordinator_handle = _token(coordinator_handle)
+        if fixture_runtime is not None:
+            _token(fixture_runtime.repo_selector)
+            _token(fixture_runtime.base_ref)
+            if not callable(fixture_runtime.command_builder):
+                _fail("PROVIDER_SCHEMA_DRIFT", "Fixture command builder is invalid")
+        self.fixture_runtime = fixture_runtime
 
     def _call(self, argv: tuple[str, ...]) -> tuple[str | None, dict[str, Any], dict[str, Any]]:
         if not argv or argv[-1] != "--json" or any(not isinstance(item, str) or "\x00" in item for item in argv):
@@ -311,6 +384,247 @@ class PublicOrcaLifecycleProvider:
             response_digest=_digest(envelopes),
             cleanup_complete=True,
         )
+
+    def _fixture_start(
+        self,
+        *,
+        provider_run_id: str,
+        provider_task_id: str,
+        logical_dispatch_id: str,
+        task_spec: dict[str, Any],
+        attempt_generation: int,
+        prior_provider_dispatch_id: str | None,
+    ) -> ProviderDispatchResult:
+        fixture = self.fixture_runtime
+        if fixture is None or task_spec.get("placement") != "child_worktree" or attempt_generation < 1:
+            _fail("CAPABILITY_UNAVAILABLE", "Deterministic fixture runtime is not admitted")
+        provider_run_id = _token(provider_run_id)
+        provider_task_id = _token(provider_task_id)
+        logical_dispatch_id = _token(logical_dispatch_id)
+        envelopes: list[dict[str, Any]] = []
+        worktree_path: str | None = None
+        terminal_id: str | None = None
+        provider_dispatch_id: str | None = None
+        worker_id: str | None = None
+        provider_request_id: str | None = None
+        try:
+            _request, worktree_result, raw = self._call(
+                (
+                    "worktree",
+                    "create",
+                    "--name",
+                    f"aether-fixture-{logical_dispatch_id[:8]}-g{attempt_generation}",
+                    "--repo",
+                    fixture.repo_selector,
+                    "--base-branch",
+                    fixture.base_ref,
+                    "--no-parent",
+                    "--setup",
+                    "skip",
+                    "--json",
+                )
+            )
+            envelopes.append(raw)
+            worktree_path = _find_path(worktree_result, ("worktreePath", "path"))
+            _request, terminal_result, raw = self._call(
+                (
+                    "terminal",
+                    "create",
+                    "--worktree",
+                    f"path:{worktree_path}",
+                    "--title",
+                    f"AETHER-FIXTURE-G{attempt_generation}",
+                    "--command",
+                    "bash",
+                    "--json",
+                )
+            )
+            envelopes.append(raw)
+            terminal_id = _find_string(terminal_result, ("agentTerminalHandle", "terminalHandle", "handle"))
+            if prior_provider_dispatch_id is not None:
+                _request, _result, raw = self._call(
+                    (
+                        "orchestration",
+                        "task-update",
+                        "--id",
+                        provider_task_id,
+                        "--status",
+                        "ready",
+                        "--run",
+                        provider_run_id,
+                        "--from",
+                        self.coordinator_handle,
+                        "--json",
+                    )
+                )
+                envelopes.append(raw)
+            dispatch_argv: list[str] = [
+                "orchestration",
+                "dispatch",
+                "--task",
+                provider_task_id,
+                "--to",
+                terminal_id,
+                "--run",
+                provider_run_id,
+                "--from",
+                self.coordinator_handle,
+            ]
+            dispatch_argv.append("--json")
+            provider_request_id, worker_result, raw = self._call(tuple(dispatch_argv))
+            envelopes.append(raw)
+            provider_dispatch_id = _entity_id(worker_result, entity="dispatch")
+            worker_id = terminal_id
+            command = fixture.command_builder(logical_dispatch_id, worktree_path, task_spec, attempt_generation)
+            if not isinstance(command, str) or not command or len(command.encode()) > 16_384 or "\x00" in command:
+                _fail("PROVIDER_SCHEMA_DRIFT", "Fixture command is invalid")
+            _request, _send_result, raw = self._call(
+                ("terminal", "send", "--terminal", terminal_id, "--text", command, "--enter", "--json")
+            )
+            envelopes.append(raw)
+        except LifecycleError:
+            if worktree_path is None:
+                raise
+            return ProviderDispatchResult(
+                outcome="PARTIAL",
+                provider_request_id=provider_request_id,
+                provider_dispatch_id=provider_dispatch_id,
+                worker_id=worker_id,
+                terminal_id=terminal_id,
+                worktree_id=f"path:{worktree_path}",
+                response_digest=_digest(envelopes),
+            )
+        return ProviderDispatchResult(
+            outcome="APPLIED",
+            provider_request_id=provider_request_id,
+            provider_dispatch_id=provider_dispatch_id,
+            worker_id=worker_id,
+            terminal_id=terminal_id,
+            worktree_id=f"path:{worktree_path}",
+            response_digest=_digest(envelopes),
+        )
+
+    def dispatch_fixture(self, **kwargs: Any) -> ProviderDispatchResult:
+        return self._fixture_start(prior_provider_dispatch_id=None, **kwargs)
+
+    def retry_fixture(self, **kwargs: Any) -> ProviderDispatchResult:
+        prior = kwargs.pop("prior_provider_dispatch_id")
+        return self._fixture_start(prior_provider_dispatch_id=prior, **kwargs)
+
+    def send_worker_message(
+        self,
+        *,
+        provider_run_id: str,
+        provider_task_id: str,
+        provider_dispatch_id: str,
+        terminal_id: str,
+        from_coordinator: bool,
+        kind: str,
+        payload: dict[str, Any],
+        outcome: str | None,
+        provider_reply_to: str | None = None,
+    ) -> ProviderMessageResult:
+        provider_run_id = _token(provider_run_id)
+        provider_task_id = _token(provider_task_id)
+        provider_dispatch_id = _token(provider_dispatch_id)
+        terminal_id = _token(terminal_id)
+        body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        if kind == "completion_reference":
+            if outcome not in {"SUCCEEDED", "FAILED"}:
+                _fail("PROVIDER_RESPONSE_INVALID", "Worker completion outcome is invalid")
+            request_id, _result, raw = self._call(
+                (
+                    "orchestration",
+                    "task-update",
+                    "--id",
+                    provider_task_id,
+                    "--status",
+                    "completed" if outcome == "SUCCEEDED" else "failed",
+                    "--run",
+                    provider_run_id,
+                    "--from",
+                    self.coordinator_handle,
+                    "--json",
+                )
+            )
+            if request_id is None:
+                _fail("PROVIDER_RESPONSE_INVALID", "Orca task update omitted its request identity")
+            return ProviderMessageResult("APPLIED", request_id, _digest(raw))
+        if kind == "reply":
+            if provider_reply_to is None:
+                _fail("PROVIDER_RESPONSE_INVALID", "Orca reply target is unavailable")
+            _request, result, raw = self._call(
+                (
+                    "orchestration",
+                    "reply",
+                    "--id",
+                    _token(provider_reply_to),
+                    "--body",
+                    body,
+                    "--run",
+                    provider_run_id,
+                    "--from",
+                    self.coordinator_handle,
+                    "--json",
+                )
+            )
+            return ProviderMessageResult(
+                "APPLIED",
+                _find_string(result, ("messageId", "deliveryId", "id")),
+                _digest(raw),
+            )
+        argv: list[str] = [
+            "orchestration",
+            "send",
+            "--subject",
+            f"Aether {kind}",
+            "--run",
+            provider_run_id,
+            "--from",
+            self.coordinator_handle if from_coordinator else terminal_id,
+        ]
+        if from_coordinator:
+            argv.extend(("--to", f"dispatch:{provider_dispatch_id}"))
+        message_type = {"technical_question": "question", "reply": "guidance"}.get(kind, kind)
+        argv.extend(("--body", body, "--type", message_type))
+        argv.append("--json")
+        _request, result, raw = self._call(tuple(argv))
+        return ProviderMessageResult(
+            outcome="APPLIED",
+            provider_message_id=_find_string(result, ("messageId", "deliveryId", "id")),
+            response_digest=_digest(raw),
+        )
+
+    def stop_worker(self, *, provider_dispatch_id: str, **_kwargs: Any) -> ProviderEffectResult:
+        provider_dispatch_id = _token(provider_dispatch_id)
+        worktree_id = _token(_kwargs.get("worktree_id"))
+        request_id, _result, raw = self._call(
+            ("terminal", "stop", "--worktree", worktree_id, "--json")
+        )
+        return ProviderEffectResult("APPLIED", request_id, (), _digest(raw), True)
+
+    def cleanup_worker(
+        self,
+        *,
+        provider_dispatch_id: str,
+        terminal_id: str,
+        worktree_id: str,
+    ) -> ProviderEffectResult:
+        resources = (_token(provider_dispatch_id), _token(terminal_id), _token(worktree_id))
+        envelopes: list[dict[str, Any]] = []
+        request_id: str | None = None
+        try:
+            request_id, _result, raw = self._call(
+                ("terminal", "stop", "--worktree", resources[2], "--json")
+            )
+            envelopes.append(raw)
+            _request, _result, raw = self._call(
+                ("worktree", "rm", "--worktree", resources[2], "--force", "--json")
+            )
+            envelopes.append(raw)
+        except LifecycleError:
+            return ProviderEffectResult("FAILED", request_id, resources, _digest(envelopes), False)
+        return ProviderEffectResult("APPLIED", request_id, (), _digest(envelopes), True)
 
     def close(self, *, provider_run_id: str, effect_plan: tuple[str, ...]) -> ProviderEffectResult:
         projection = self.inspect_run(provider_run_id=provider_run_id)

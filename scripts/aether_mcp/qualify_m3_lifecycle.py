@@ -127,7 +127,8 @@ def run_json(
     except (UnicodeDecodeError, json.JSONDecodeError):
         fail("ERR_ORCA_RESPONSE_SHAPE", "Orca CLI returned non-JSON output")
     if process.returncode != 0:
-        diagnostic = stderr.decode("utf-8", errors="replace").strip().replace("\n", " ")[:240]
+        diagnostic_source = stderr if stderr.strip() else stdout
+        diagnostic = diagnostic_source.decode("utf-8", errors="replace").strip().replace("\n", " ")[:500]
         command = " ".join(argv[:2])
         fail("ERR_ORCA_COMMAND_NONZERO", f"Orca CLI command {command} returned nonzero: {diagnostic}")
     if not isinstance(value, dict):

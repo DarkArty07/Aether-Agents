@@ -313,3 +313,34 @@ class ProjectAdmissionRegistry:
             consent_authority_ref=row["consent_authority_ref"],
             placements=tuple(admitted_placements),
         )
+
+    def remove_placement(
+        self,
+        *,
+        context: TrustedLaunchContext,
+        project_id: str,
+        project_root: Path,
+    ) -> None:
+        """Remove one still-existing non-final placement before provider cleanup."""
+
+        admitted = self.inspect(context=context, project_id=project_id)
+        root = _canonical_existing_directory(project_root, code="PROJECT_IDENTITY_MISMATCH")
+        matches = [placement for placement in admitted.placements if placement.project_root == root]
+        if len(matches) != 1:
+            _fail("PROJECT_IDENTITY_MISMATCH", "Placement is not admitted exactly once")
+        if len(admitted.placements) <= 1:
+            _fail("PROJECT_HAS_OPEN_RUNS", "The final project placement cannot be removed")
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                deleted = connection.execute(
+                    "DELETE FROM placements WHERE project_id=? AND placement_id=?",
+                    (project_id, matches[0].placement_id),
+                ).rowcount
+                if deleted != 1:
+                    _fail("PROJECT_IDENTITY_MISMATCH", "Placement removal did not converge")
+                connection.commit()
+        except AdmissionError:
+            raise
+        except sqlite3.Error:
+            _fail("PROJECT_IDENTITY_MISMATCH", "Placement removal could not be committed")
