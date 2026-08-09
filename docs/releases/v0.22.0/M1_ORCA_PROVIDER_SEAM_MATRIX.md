@@ -5,6 +5,8 @@
 > **Target Candidate:** Orca v1.4.167
 > **Implementation Owner:** Repository-local external coding agent
 > **Acceptance Owner:** Hermes
+> **Historical boundary:** evaluates the then-frozen 24-tool contract
+> **Successor classification:** `M1_ORCA_ADAPTATION_MATRIX.json`
 
 ## 1. Executive Summary and Source Identity
 

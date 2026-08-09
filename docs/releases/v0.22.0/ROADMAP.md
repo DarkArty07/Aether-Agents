@@ -1,12 +1,12 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** M1.4 CLOSED; D1 BLOCKED; OWNER DECISION REQUIRED; NOT ACTIVATED
+> **Status:** ADAPTIVE ORCA REDESIGN R1 IN PROGRESS; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
 > **Candidate workspace:** `feature/v0.22.0-orca-transition`
-> **Governing decisions:** PDR-0012, PDR-0013, and ADR-0001
-> **Implementation authorization:** none after M1.4 closeout; next sequence requires an owner decision and a new frozen task
+> **Governing decisions:** PDR-0012, PDR-0013, ADR-0001, and M1.4-R1
+> **Implementation authorization:** bounded R0-R6 default-off redesign/qualification in `../../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`
 
 ## 1. Objective
 
@@ -33,10 +33,13 @@ plane, with:
 - Orca is not running for this design work.
 - The accepted M2.1a candidate contains one default-off `aether_mcp` package and
   real stdio MCP process with exactly zero tools. It is not registered or active.
-- Aether MCP tools, provider adapter, semantic/learning stores and runtime
-  composition do not exist.
-- Hermes currently performs bounded work directly; no next implementation task
-  is authorized after the M2.1a session closeout.
+- The historical M2.2 tree exports 24 schemas and 50 stable errors; the successor
+  operational target is exactly 15 schemas. The stdio server still registers and
+  exposes zero tools.
+- The provider adapter, accepted semantic store, reconciler, learning boundary,
+  and runtime composition do not yet exist.
+- Hermes currently performs bounded work directly. The owner authorized the
+  ordered R0-R6 redesign/qualification task on 2026-08-08.
 - PDR-0012 defines the Hermes–Orca ownership boundary.
 - PDR-0013 defines the target roster and personality model.
 - ADR-0001 approves MCP-first control and partially supersedes the prior
@@ -224,8 +227,9 @@ M2.1a's default-off bootstrap is accepted at corrected code head
 at `59989d63f01930485715499156000d9fedfff037`. M1.3 then closed BLOCKED at
 `7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239` after two exact-candidate cold-start
 probes failed with `ERR_RUNTIME_START_SHAPE`. M1.4 records
-`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`. No later implementation gate is
-authorized until the product owner decides the provider path.
+`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT` at that exact boundary. The product owner
+then selected the adaptive path in `M1_4_R1_ADAPTER_DECISION.md` and authorized
+R0-R6. D1 remains false until the revised executed gates pass.
 
 ### M0 — Final design and traceable use cases
 
@@ -707,12 +711,12 @@ adapter, provider or lifecycle operation remains blocked.
 
 ### 10.4 Tool-to-milestone coverage
 
-| Milestone | Tools first made GREEN |
+| Milestone | Successor operational contract coverage |
 |---|---|
-| M2 | `project_admit`, `project_inspect`, `swarm_validate`, `swarm_trace`, `orca_search`, `orca_describe`, read-only `orca_call`, `orca_events` |
-| M3 | `swarm_start` without dispatch, `swarm_status`, `swarm_reconcile`, `swarm_cancel`, `swarm_record_decision`, `swarm_record_evidence`, `swarm_close` |
-| M4 | `swarm_dispatch`, `swarm_message`, `swarm_retry`, mutating allowlisted `orca_call`/`orca_batch` |
-| M7 | `learning_capture`, `learning_label`, `learning_dataset`, `learning_export`, `project_forget` |
+| M2 | `project_admit`, `project_inspect`, `swarm_validate`, `swarm_trace` query, `orca_search`, `orca_describe`, read-only `orca_call` |
+| M3 | `swarm_start` without dispatch, `swarm_status`, `swarm_reconcile`, `swarm_cancel`, `swarm_close`, `swarm_trace` decision/evidence append |
+| M4 | `swarm_dispatch`, `swarm_message`, `swarm_retry`, mutating allowlisted `orca_call` |
+| M7 | separate default-off learning boundary; no addition to the 15-tool operational MCP |
 
 Every earlier tool remains in regression scope when a later milestone adds
 behavior. No milestone may register a placeholder tool that returns fabricated
@@ -737,7 +741,7 @@ between Aether and Orca runtime authority blocks M1.
 `../../reference/AETHER_LEARNING_EPISODE_SCHEMA.md`,
 `MEASUREMENT_CONTRACT.md` and `USE_CASE_CATALOG.md`.
 
-**Gate:** 24 tools, 16 cases, explicit source/authority for every measurement,
+**Historical gate at the M0 tree:** 24 tools, 16 cases, explicit source/authority for every measurement,
 replay exactness classes, redaction/quarantine rules, lineage-isolated splits and
 no automatic training eligibility.
 
@@ -828,6 +832,11 @@ granted; no adapter contract is frozen. The product owner must decide whether to
 require official Orca seam additions, re-scope the product contract or qualify a
 different provider boundary. See `M1_4_PROVIDER_DECISION.md`.
 
+**Successor decision (2026-08-08):** the owner selected a bounded adaptive
+re-scope. `M1_4_R1_ADAPTER_DECISION.md` replaces the 55/55-native assumption with
+separate delivery/guarantee/qualification fields, reduces the operational catalog
+to 15 tools, and authorizes R0-R6. It does not retroactively grant D1.
+
 **Proposed atomic commits:**
 
 1. `test: add deterministic Orca qualification contract`
@@ -882,6 +891,10 @@ snapshot. M2.2 registers zero callable tools rather than stubs; registration of
 the M2 subset remains with M2.3/M2.6. Focused tests passed 22 and the full suite
 passed 81 with zero skips; see `M2_2_ACCEPTANCE.md`.
 
+The exact 24-schema result remains historical acceptance evidence. R2 of the
+adaptive task creates the successor 15-schema alpha snapshot under TDD while
+preserving zero registered/callable tools.
+
 #### M2.3 — Implement trusted principal and project admission
 
 Derive coordinator identity from launch/session context. Resolve canonical project
@@ -926,7 +939,8 @@ on disk.
 #### M2.6 — Implement read-only Orca catalog and projections
 
 Implement pinned `orca_search`, `orca_describe`, read-only `orca_call`,
-`orca_events`, `swarm_validate`, and safe `swarm_trace`/status projections.
+`swarm_validate`, and safe `swarm_trace`/status projections. Eventual observation
+is an internal source for status/reconcile/trace, not a separate public tool.
 
 **Pass:** output is source-labelled and freshness-aware; unsupported or drifted
 provider schemas fail closed; Aether stores correlations, not copied runtime
@@ -962,9 +976,9 @@ creation and provider timeout.
 
 #### M3.2 — Status, decision and evidence append
 
-Implement `swarm_status`, `swarm_record_decision` and
-`swarm_record_evidence` as source-labelled projections/semantic facts. Reject
-caller-asserted acceptance and evidence outside the admitted contract.
+Implement `swarm_status` plus `swarm_trace` decision/evidence append actions as
+source-labelled projections/semantic facts. Reject caller-asserted acceptance and
+evidence outside the admitted contract.
 
 #### M3.3 — Reconcile uncertain effects before retry
 
@@ -1451,21 +1465,23 @@ applicable design/implementation boundary.
 
 ### NOW
 
-M1.3 and M1.4 are closed. The current state is
-`D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 remains false. Await the product
-owner's provider decision. No implementation milestone is authorized.
+M1.3 and M1.4 remain closed historical gates. M1.4-R1 records the owner's adaptive
+provider decision, and the bounded R0-R6 successor task is active. D1 remains
+false, MCP remains zero-tool/default-off, and Release/activation remain blocked.
 
 ### STOP CONDITION
 
-The mandatory post-M1.4 stop boundary is active. Preserve the evidence, complete
-only exact-commit/Draft-PR verification and cleanup, then stop. Do not start
-M2.3, the provider adapter, M3, registration or activation.
+Execute only the ordered R0-R6 successor task. Stop immediately if exact provider
+identity drifts, structured qualification cannot be made reliable, a composition
+requires a private/undocumented seam, owned-resource cleanup cannot be proven, or
+the same approach fails three times. In every case preserve `UNKNOWN`/failure
+evidence and zero owned survivors. Do not register/activate MCP, use models or
+credentials, push, merge, tag, Release, or deploy.
 
 ### LATER GATES
 
-Owner decision after M1.4 -> require a newly qualified provider boundary or amend
-the product contract -> only after a future D1 grant, separately authorize M2.3
-and a version-pinned adapter -> M3 lifecycle -> M4 one worker -> M5 real
-two-worker swarm -> M6 roster -> M7 learning-data qualification -> M8
-verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation ->
-M11 Release -> M12 activation.
+Finish R0-R6 -> owner reviews D1 proposal and residual degraded guarantees ->
+separately authorize MCP registration and model/account/budget selection -> real
+model-backed swarm qualification -> M6 roster -> separate M7 learning boundary ->
+M8 verifier/Ariadna decisions -> M9 productization -> M10 controlled evaluation
+-> M11 Release -> M12 activation.

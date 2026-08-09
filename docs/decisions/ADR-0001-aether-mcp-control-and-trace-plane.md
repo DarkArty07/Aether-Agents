@@ -1,12 +1,12 @@
 # ADR-0001: Aether MCP control and trace plane
 
-- **Status:** APPROVED
+- **Status:** APPROVED; ADAPTIVE PROVIDER AMENDMENT ACTIVE
 - **Date:** 2026-08-06
 - **Owner:** Christopher (DarkArty07)
 - **Partially supersedes:** PDR-0012 section 6's demand-driven-adapter condition and the v0.22.0 CLI-first/no-Aether-MCP roadmap assumption
 - **Preserves:** PDR-0012's Hermes–Orca ownership boundary, retirement of Olympus and the disconnected native core, no hidden fallback, no duplicated Orca operational state, and separate activation/release gates
-- **Refined by:** Detailed contracts under `../architecture/AETHER_MCP.md` and `../reference/`
-- **Implementation boundary:** M0 accepted; M1.1 repository qualification only; no MCP package, Orca process, worker, registration, or activation is authorized
+- **Refined by:** Detailed contracts under `../architecture/AETHER_MCP.md`, `../reference/`, and `../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`
+- **Implementation boundary:** bounded R0-R6 redesign/qualification authorized; no MCP registration, model-backed worker, Release, or activation
 
 ## Context
 
@@ -56,25 +56,27 @@ provider seam below the MCP. This is not CLI-first product architecture: the
 Aether MCP contract is stable for Hermes while the admitted Orca provider driver
 is replaceable and version-pinned.
 
-### 2. One MCP server exposes two typed levels
+### 2. One MCP server exposes a bounded operational surface
 
 The Aether MCP exposes:
 
 1. **Project identity operations** to admit and freshly inspect one exact
    project/repository/worktree/profile binding before swarm work.
 2. **Product operations** for normal Hermes supervision: validate, start,
-   dispatch, inspect, communicate, retry, cancel, record decisions/evidence,
-   close, and query trace.
-3. **Dynamic Orca operations** for complete admitted coverage and diagnosis:
-   search the installed catalog, describe an operation, call one operation,
-   submit an independent batch, and read events.
-4. **Learning operations** to control episode capture, append outcome/correction
-   labels, build local dataset candidates and export an explicitly authorized
-   redacted dataset without training or upload.
+   dispatch, inspect, communicate, reconcile, retry, cancel, close, and use typed
+   trace actions to query or append bounded decisions/evidence.
+3. **Dynamic Orca operations** for admitted coverage and diagnosis: search the
+   pinned catalog, describe an operation, and call one described operation.
 
-The dynamic surface avoids injecting one static MCP tool per Orca command while
-preserving complete typed access. It accepts command identifiers and structured
-arguments, never free-form shell strings.
+The operational contract contains exactly 15 designed tools. Independent batching
+and eventual observation are internal adapter capabilities, not separate Hermes
+tools. `project_forget` belongs to a future owner/admin boundary. Learning capture,
+label, dataset, and export operations belong to a separate default-off learning
+boundary and later M7 gate.
+
+The dynamic surface avoids injecting one static MCP tool per Orca command. It
+accepts command identifiers and structured arguments, never free-form shell
+strings, and cannot bypass the higher-level authority/effect policy.
 
 ### 3. Orca remains the only operational source of truth
 
@@ -168,6 +170,26 @@ Run.
 The MCP uses version-matched public contracts only. Private Orca databases,
 undocumented IPC, UI automation, and terminal-output scraping are not accepted
 control seams.
+
+### 8.1 Provider delivery, guarantee, and qualification are separate
+
+The adaptive boundary classifies every required capability by three independent
+fields:
+
+- delivery: `NATIVE`, `COMPOSED`, `AETHER_OWNED`, `DEFERRED`, or `UNSUPPORTED`;
+- guarantee: `FULL` or `DEGRADED`;
+- qualification: `PROVEN`, `UNQUALIFIED`, or `UNKNOWN`.
+
+A public Orca command is native delivery even when its result/effect/timeout/
+recovery schema must be version-pinned by Aether. A composed operation is never
+provider-native. A degraded design is not proven merely because its limitation is
+documented.
+
+Orca 1.4.167's missing event, inventory, cleanup, Run cancel/close, and Task
+cancel aggregates are adapted only as declared in
+`../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`. Every composition remains
+unavailable until its exact fixture passes. Debt and removal conditions are
+canonical in `../releases/v0.22.0/ORCA_ADAPTER_DEBT.md`.
 
 ### 9. Use cases are bound to traceable measurement contracts
 
@@ -280,14 +302,15 @@ model, use-case catalog and roadmap on 2026-08-06. The exact acceptance and
 stepwise external-agent workflow are recorded in
 `../releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`.
 
-Only M1.1 repository qualification is authorized now. It may create the declared
-qualification script, deterministic tests and evidence, inspect Orca executable/
-version/digest/public-catalog metadata read-only, and form branch-local atomic
-commits. It may not create the MCP package or store, install dependencies, start
-Orca, launch workers, change profiles/configuration, collect live traces, mutate
-historical `.aether` data, use providers, push, merge, release, activate, deploy,
-change credentials or spend. M1.2 and every later package require acceptance of
-the preceding task and a new exact authorization.
+The owner selected the adaptive provider path on 2026-08-08 and authorized the
+ordered R0-R6 task in
+`../external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. It may amend the default-off
+contract, requalify the exact candidate in fresh isolation, implement the minimum
+adapter/journal/reconciler foundation, and attempt one no-model two-worker
+synthetic slice. It may form local atomic English commits. It may not register or
+activate MCP, use private provider state, launch model-backed workers, use
+credentials or spend, push, merge, rebase, amend, tag, Release, deploy, or start a
+persistent service.
 
 ## References
 
@@ -302,3 +325,5 @@ the preceding task and a new exact authorization.
 - Use-case catalog: `../releases/v0.22.0/USE_CASE_CATALOG.md`
 - v0.22.0 roadmap: `../releases/v0.22.0/ROADMAP.md`
 - M0 acceptance: `../releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`
+- Adaptive provider decision: `../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`
+- Adapter debt ledger: `../releases/v0.22.0/ORCA_ADAPTER_DEBT.md`

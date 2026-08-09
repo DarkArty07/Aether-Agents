@@ -6,6 +6,8 @@
 > **Decision owner:** Christopher (DarkArty07)
 > **Owner decision:** REQUIRED
 > **Adapter authorized:** No
+> **Historical boundary:** exact `b807c62` decision; preserved unchanged
+> **Successor:** `M1_4_R1_ADAPTER_DECISION.md` records the later owner-selected adaptive path; D1 remains false
 
 ## 1. Decision rule
 

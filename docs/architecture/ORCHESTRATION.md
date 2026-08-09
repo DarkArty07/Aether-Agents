@@ -1,6 +1,6 @@
 # Hermes–Orca Swarm Operating Model
 
-> **Status:** APPROVED OPERATING MODEL AND MCP DETAILS; NOT IMPLEMENTED OR ACTIVATED
+> **Status:** APPROVED ADAPTIVE OPERATING MODEL; IMPLEMENTATION IN PROGRESS; NOT ACTIVATED
 > **Date:** 2026-08-06
 > **Authority:** PDR-0012, PDR-0013, and ADR-0001
 > **Current truth:** Hermes performs bounded work directly; no accepted Aether multi-agent execution path exists.
@@ -158,18 +158,18 @@ swarm_validate
   -> swarm_message for admitted communication
   -> swarm_reconcile for ambiguous or incomplete effects
   -> swarm_retry only after classified failure and fencing
-  -> swarm_record_evidence / swarm_record_decision
+  -> swarm_trace(action=record_evidence|record_decision)
   -> swarm_close
-  -> swarm_trace for timeline, explanation, metrics, and integrity
-  -> learning_capture / learning_label for rich episode fidelity and outcomes
-  -> learning_dataset / learning_export only under separate local curation gates
+  -> swarm_trace(action=query) for timeline, explanation, metrics, and integrity
 ```
 
 The MCP translates those stable Aether operations into the exact
 version-matched public Orca Run/Task/Dispatch/worker/message/recovery/cleanup
-operations. Complete advanced coverage is available through the typed dynamic
-`orca_search`, `orca_describe`, `orca_call`, `orca_batch`, and `orca_events`
-surface; no tool accepts free-form shell strings.
+operations. Bounded diagnostic coverage is available through `orca_search`,
+`orca_describe`, and `orca_call`. Independent batching and eventual observation
+are internal adapter capabilities rather than separate Hermes tools. The four
+learning operations remain a later separate default-off boundary. No tool accepts
+free-form shell strings.
 
 The exact schemas are proposed in `../reference/AETHER_MCP_CONTRACT.md`. They are
 not an active integration and this document does not authorize execution.
@@ -231,8 +231,8 @@ Ictinus running -----/
 Hermes continues product/integration work in parallel
 ```
 
-Supervision through `swarm_status`/`orca_events` is pull-based in the initial
-target:
+Supervision through `swarm_status`, `swarm_reconcile`, and `swarm_trace` is
+pull-based in the initial target:
 
 - worker start returns after Dispatch acceptance;
 - Hermes remains usable in the primary conversation;
@@ -390,6 +390,12 @@ disposition:
 
 Zero survivors must be demonstrated or each retained resource must have an explicit authorized reason. Stop, failure, and cancellation all enter cleanup.
 
+For Orca 1.4.167 this is a composed, non-atomic cleanup plus an Aether-owned
+semantic closeout. The returned projection must report the actual Orca Run status
+separately and may not claim an Orca-native Run-close transition. Any partial or
+unknown resource disposition returns `BLOCKED`, `CLEANUP_FAILED`, or `UNKNOWN`,
+never `CLOSED`.
+
 ## Failure semantics
 
 | Observation | Meaning |
@@ -407,8 +413,7 @@ Zero survivors must be demonstrated or each retained resource must have an expli
 
 The following remain unproven:
 
-1. accepted Aether MCP control, semantic-trace, protected learning-episode,
-   privacy, retention/lineage, and use-case contracts;
+1. implemented and accepted successor Aether MCP operational contract;
 2. implemented local MCP principal/project isolation and trace integrity;
 3. reproducible isolated Orca cold start, restart, stop, and zero survivors;
 4. version-pinned structured Aether-MCP-to-Orca provider translation;
@@ -418,7 +423,8 @@ The following remain unproven:
 8. participant-policy enforcement for required/allowed/disabled/forbidden;
 9. privacy-safe lifecycle observation;
 10. cold resume for terminated Hermes conversations;
-11. spontaneous delivery into the primary Hermes TUI/session;
+11. spontaneous delivery into the primary Hermes TUI/session (not required for
+    the polling-based initial contract);
 12. cost/token/model accounting sufficient for Aether product reporting;
 13. independent Verifier profile, benchmark, and execution;
 14. Ariadna's distinct utility and safe data contract;
@@ -426,9 +432,11 @@ The following remain unproven:
 
 Therefore activation remains `NO-GO`.
 
-## Pilot sequence after separate authorization
+## Authorized synthetic qualification sequence
 
-A future implementation/operation gate should validate through Aether MCP:
+The bounded R0-R6 task may validate the mechanics below without model credentials
+or spending. MCP remains unregistered/default-off; the harness invokes the
+implementation directly.
 
 ### Pilot A — one synthetic worker
 
@@ -450,8 +458,9 @@ A future implementation/operation gate should validate through Aether MCP:
 - cleanup after success, failure, and cancellation;
 - zero survivors.
 
-Only after the MCP lifecycle and these pilots pass may Aether claim a working
-Hermes-led Orca swarm.
+Only after the MCP lifecycle and these pilots pass may Aether claim qualified
+synthetic orchestration mechanics. A real model-backed Daimon claim still requires
+the separate provider/account/model/budget gate and its own executed evidence.
 
 ## Non-goals
 
@@ -466,4 +475,5 @@ This design does not authorize or require:
 - dynamic personality creation;
 - universal multi-agent participation;
 - direct user management of Orca;
-- runtime activation, profile launch, deployment, credentials, migration, spending, merge, tag, or release.
+- runtime activation, profile launch, deployment, credentials, migration,
+  spending, push, merge, rebase, amend, tag, or Release.

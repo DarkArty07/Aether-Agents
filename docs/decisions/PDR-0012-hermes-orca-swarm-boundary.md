@@ -5,7 +5,7 @@
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** PDR-0011's requirement to retain a pre-emptive Python decision-plane implementation under `src/aether_agents`; v0.22.0 M1 native-core retention
 - **Preserves:** PDR-0011's Olympus source retirement, capability-gap honesty, historical evidence, local-store non-destruction, and runtime-activation gates
-- **Refined by:** PDR-0013 for the target roster, personality model, and profile dispositions
+- **Refined by:** PDR-0013 for the target roster/personality model and M1.4-R1 for the adaptive provider boundary
 - **Partially superseded by:** ADR-0001 for MCP-first Hermes control, semantic traceability, and the bounded Aether-owned provider facade; the ownership boundary and native-core retirement remain authoritative
 
 ## Context
@@ -102,6 +102,22 @@ A future Orca adapter is permitted only after an observed public Orca seam requi
 
 No deleted `aether_agents` module is presumed to be the starting point.
 
+The M1.2-M1.4 evidence subsequently demonstrated the concrete need: Orca 1.4.167
+exposes 49 required public commands without complete catalog-level assurance
+schemas and lacks six aggregate commands. The owner therefore authorized the
+bounded adapter redesign in
+`../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`.
+
+That adapter remains compliant with this PDR only when:
+
+- Orca remains the sole mutable runtime owner;
+- Aether stores contract generations, correlations, requests/receipts, evidence,
+  and semantic closeout—not an independent scheduler;
+- compositions use only typed version-pinned public Orca operations;
+- degraded and unqualified behavior is labelled separately;
+- unknown effects block unsafe retry and close;
+- the adapter remains removable when Orca supplies the missing native contract.
+
 ## Consequences
 
 ### Positive
@@ -150,7 +166,14 @@ The correction is complete when:
 
 ## Implementation authorization
 
-On 2026-08-05 the owner clarified the Hermes-led Orca swarm target and directed removal of code that no longer serves it. This authorizes the bounded repository retirement described above, its tests, documentation, commits, feature-branch push, and issue reconciliation. It does not authorize Orca activation, a live multi-agent pilot, destructive data changes, merge, tag, release, deployment, credentials, or spending.
+On 2026-08-05 the owner clarified the Hermes-led Orca swarm target and directed
+the bounded repository retirement described above. On 2026-08-08 the owner then
+authorized the ordered default-off R0-R6 adaptive adapter task after the public
+provider gaps were observed. The successor scope permits isolated qualification,
+minimum adapter/journal/reconciler implementation, and a no-model two-worker
+synthetic slice. It does not authorize MCP registration, persistent activation,
+model credentials/spend, push, merge, rebase, amend, tag, Release, deployment, or
+changes to historical/local data outside the owned fixture.
 
 ## References
 
@@ -159,5 +182,7 @@ On 2026-08-05 the owner clarified the Hermes-led Orca swarm target and directed 
 - Canonical archetypes: `../architecture/DAIMONS.md`
 - Target operating model: `../architecture/ORCHESTRATION.md`
 - Prior retirement decision: `PDR-0011-orca-substrate-and-olympus-retirement.md`
-- v0.22.0 roadmap: `docs/releases/v0.22.0/ROADMAP.md`
+- v0.22.0 roadmap: `../releases/v0.22.0/ROADMAP.md`
+- Adaptive provider decision: `../releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md`
+- Adapter debt ledger: `../releases/v0.22.0/ORCA_ADAPTER_DEBT.md`
 - Installed Orca guides: `orca-ide skills get orchestration` and `orca-ide skills get orca-cli`

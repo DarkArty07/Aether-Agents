@@ -107,7 +107,7 @@ independently schedule mutable Orca Run/Task/Dispatch state.
 
 ## 5. Capability classification model
 
-One overloaded label is insufficient. Each capability therefore has two axes.
+One overloaded label is insufficient. Each capability therefore has three axes.
 
 ### Delivery class
 
@@ -118,17 +118,22 @@ One overloaded label is insufficient. Each capability therefore has two axes.
 - `DEFERRED`: intentionally unavailable in the current operational surface;
 - `UNSUPPORTED`: no safe admitted implementation exists.
 
-### Assurance state
+### Guarantee
 
-- `PROVEN`: deterministic contract and executed evidence cover the required
+- `FULL`: the intended contract has no known semantic reduction;
+- `DEGRADED`: atomicity, immediacy, completeness, or provider-native semantics
+  are explicitly lower.
+
+### Qualification
+
+- `PROVEN`: deterministic contract and executed evidence cover the declared
   guarantee;
-- `DEGRADED`: useful behavior exists with explicitly lower guarantees;
 - `UNQUALIFIED`: a candidate path exists but has not passed its fixture;
 - `UNKNOWN`: available evidence cannot classify the actual effect.
 
 `NATIVE` never means its schema, timeout, or recovery metadata came from Orca's
-catalog; provider delivery and Aether-owned assurance schemas are recorded
-separately.
+catalog, and `DEGRADED` never means implemented or proven. Delivery, guarantee,
+qualification, and schema authority are recorded separately.
 
 ## 6. Revised operational MCP catalog
 
@@ -178,14 +183,14 @@ creates a successor alpha contract.
 
 ## 7. Six missing Orca aggregates
 
-| Capability | Target delivery | Initial assurance | Honest limitation |
-|---|---|---|---|
-| `events_read` | `AETHER_OWNED` polling/journal projection | `DEGRADED` | eventual observation; no native event stream claim |
-| `resource_inventory` | `COMPOSED` from correlation receipts plus public list/show/status | `UNQUALIFIED` | covers admitted/created resources; external drift may remain unknown |
-| `resource_cleanup` | `COMPOSED` compensation plan | `UNQUALIFIED` | non-atomic; partial cleanup remains explicit |
-| `run_cancel` | `COMPOSED` dispatch/worker/terminal stop plus reconciliation | `UNQUALIFIED` | cancellation request is not aggregate atomic cancellation |
-| `run_close` | `AETHER_OWNED` semantic closeout after verified cleanup | `UNQUALIFIED` | does not claim an Orca-native Run-close transition |
-| `task_cancel` | `COMPOSED` worker/dispatch/terminal stop plus reconciliation | `UNQUALIFIED` | `task-update failed` is never relabeled as cancellation |
+| Capability | Delivery | Guarantee | Qualification | Honest limitation |
+|---|---|---|---|---|
+| `events_read` | `AETHER_OWNED` polling/journal projection | `DEGRADED` | `UNQUALIFIED` | eventual observation; no native event stream claim |
+| `resource_inventory` | `COMPOSED` from correlation receipts plus public list/show/status | `DEGRADED` | `UNQUALIFIED` | covers admitted/created resources; external drift may remain unknown |
+| `resource_cleanup` | `COMPOSED` compensation plan | `DEGRADED` | `UNQUALIFIED` | non-atomic; partial cleanup remains explicit |
+| `run_cancel` | `COMPOSED` dispatch/worker/terminal stop plus reconciliation | `DEGRADED` | `UNQUALIFIED` | cancellation request is not aggregate atomic cancellation |
+| `run_close` | `AETHER_OWNED` semantic closeout after verified cleanup | `DEGRADED` | `UNQUALIFIED` | does not claim an Orca-native Run-close transition |
+| `task_cancel` | `COMPOSED` worker/dispatch/terminal stop plus reconciliation | `DEGRADED` | `UNQUALIFIED` | `task-update failed` is never relabeled as cancellation |
 
 No `UNQUALIFIED` composition becomes callable or satisfies D1 until its exact
 fixture passes.
@@ -226,13 +231,13 @@ state, no product/provider/runtime effect.
 
 ### R1 — Ownership, catalog, and debt redesign
 
-- [ ] Amend canonical architecture, MCP contract, orchestration, roadmap, and
+- [x] Amend canonical architecture, MCP contract, orchestration, roadmap, and
       provider-decision documents.
-- [ ] Replace the 24-tool operational claim with the 15-tool catalog.
-- [ ] Record the two-axis capability model and six aggregate adaptations.
-- [ ] Add a debt ledger with consequence, severity, mitigation, acceptance,
+- [x] Replace the 24-tool operational claim with the 15-tool catalog.
+- [x] Record the three-axis capability model and six aggregate adaptations.
+- [x] Add a debt ledger with consequence, severity, mitigation, acceptance,
       removal condition, and affected Orca version.
-- [ ] Cross-check every canonical reference and structured status projection.
+- [x] Cross-check every canonical reference and structured status projection.
 
 **Acceptance:** one coherent owner per fact/effect; no document claims current
 runtime support; D1 rule is measurable and fail-closed.
@@ -321,7 +326,7 @@ changes, and no protected effect.
 | Milestone | State | Evidence |
 |---|---|---|
 | R0 | `COMPLETED` | isolated worktree at base `b807c62`; frozen task; YAML/reference validation PASS |
-| R1 | `PENDING` | — |
+| R1 | `COMPLETED` | 15-tool contract, three-axis 55-capability matrix, six aggregate adaptations, debt ledger, revised D1 |
 | R2 | `PENDING` | — |
 | R3 | `PENDING` | — |
 | R4 | `PENDING` | — |

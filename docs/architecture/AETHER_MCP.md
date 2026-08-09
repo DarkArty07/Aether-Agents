@@ -1,10 +1,10 @@
 # Aether MCP Control and Trace Plane
 
-> **Status:** ACCEPTED DETAILED TARGET DESIGN; NOT IMPLEMENTED OR ACTIVATED
-> **Date:** 2026-08-06
+> **Status:** APPROVED ADAPTIVE TARGET; BOUNDED IMPLEMENTATION IN PROGRESS; NOT ACTIVATED
+> **Date:** 2026-08-08
 > **Authority:** ADR-0001, PDR-0012, and PDR-0013
 > **Protocol target:** `aether.mcp/v1alpha1`
-> **Implementation authorization:** M1.1 repository qualification only
+> **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
 
 ## 1. Purpose
 
@@ -16,9 +16,9 @@ Hermes supervises an Orca-backed swarm. It provides:
 - version-matched Orca operation translation;
 - durable correlation across product and runtime identities;
 - append-only trace of what, who, why, when, effect, result, and evidence;
-- full secret-redacted learning episodes that preserve model-visible context,
-  messages, tool trajectories, corrections, artifacts and outcomes;
-- privacy-safe query, explanation, measurement and dataset projections.
+- a future separate default-off learning boundary for secret-redacted episodes,
+  labels, datasets, and local export;
+- privacy-safe query, explanation, and measurement projections.
 
 The MCP exists because direct CLI control cannot by itself provide one stable
 Aether semantic and measurement boundary. It does not replace Orca or revive the
@@ -35,8 +35,8 @@ retired Olympus architecture.
    worktree correlation.
 5. Keep Orca authoritative for operational state.
 6. Preserve unknown outcomes and reconcile before retry.
-7. Supply replayable data for controlled evaluation, prompt/policy/skill
-   refinement, routing and future fine-tuning.
+7. Preserve a later separately gated learning boundary for controlled evaluation,
+   prompt/policy/skill refinement, routing and future fine-tuning.
 8. Keep the user-facing product experience in Hermes rather than Orca CLI.
 
 ## 3. Non-goals
@@ -151,7 +151,11 @@ Registers one server namespace, expected to appear to Hermes as
 `mcp__aether__*`. It validates protocol version, principal, project binding,
 input schema, effect class, and output envelope.
 
-The full tool set is defined in `../reference/AETHER_MCP_CONTRACT.md`.
+The exact operational set is the 15-tool successor defined in
+`../reference/AETHER_MCP_CONTRACT.md`. Decision/evidence append are typed
+`swarm_trace` actions; batching and eventual observation are internal; learning
+and project forget are separate future boundaries. No tool is currently
+registered or callable.
 
 The server also exposes project-bound read-only MCP resources for protocol,
 validated contract generation, Run summary/timeline, and closeout. Resources
@@ -258,10 +262,10 @@ Every Run pins:
 A material schema mismatch blocks mutation. Read-only diagnosis may continue
 when it can report the mismatch honestly.
 
-Dynamic `orca_call`/`orca_batch` operations pass through the same principal,
-project, contract, participant, effect, idempotency, version, privacy, and trace
-checks as high-level tools. They are diagnostic/coverage escape hatches, not a
-way to bypass product invariants.
+Dynamic `orca_call` operations pass through the same principal, project,
+contract, participant, effect, idempotency, version, privacy, and trace checks as
+high-level tools. Internal independent batching retains one result per member.
+Neither path can bypass product invariants.
 
 ### 6.6 Operation journal and idempotency
 
@@ -479,15 +483,19 @@ unknown resource reconciliation remain separate.
 
 ### 7.6 Evidence and semantic decisions
 
-`swarm_record_evidence` records bounded evidence references, digest, executed
-command/tool identity, outcome, coverage, and unknowns. It does not turn test
-success into acceptance.
+`swarm_trace(action=record_evidence)` records bounded evidence references, digest,
+executed command/tool identity, outcome, coverage, and unknowns. It does not turn
+test success into acceptance.
 
-`swarm_record_decision` records contract amendments, participant changes, user
-answers, waivers, semantic acceptance/rejection, and later-horizon gates with
-explicit authority.
+`swarm_trace(action=record_decision)` records contract amendments, participant
+changes, user answers, waivers, semantic acceptance/rejection, and later-horizon
+gates with explicit authority.
 
 ### 7.7 Learning capture, labels, and curation
+
+This section preserves the separately gated learning-boundary design. None of its
+conceptual operations belongs to or is callable through the 15-tool operational
+MCP.
 
 Before the first model/provider effect, the admitted capture policy initializes
 an episode envelope. Every participant turn and model-visible tool exchange is
@@ -584,16 +592,12 @@ the project/Run policy is `FULL_EPISODE`. Every export reapplies redaction,
 consent, sensitivity, lineage and contamination checks. Missing telemetry is
 `null`/`UNKNOWN`, never inferred.
 
-Normalized semantic data and sealed learning episodes/datasets have no silent
-expiry; they remain local until an authorized lineage-aware prune, revoke or
-`project_forget`. Quota exhaustion pauses capture visibly rather than deleting
-learning evidence. Credentials and hidden chain-of-thought are never stored.
-Explicit bounded redacted diagnostic attachments are disabled by default and
-expire within seven days. `project_forget` deletes MCP-held identity, trace,
-episodes and local derivatives—never project files or Orca resources; normal
-mode requires all Runs and dataset/export lineage reconciled, while an
-owner-authorized privacy emergency reports live operational and external
-derivative disposition as unknown. Exact classes and tombstone limits are in
+Normalized semantic data has no silent expiry. Future learning retention,
+prune/revoke/export, and owner-only project forget remain design contracts for
+separate default-off boundaries; they are not exposed by the operational MCP.
+Credentials and hidden chain-of-thought are never stored. Explicit bounded
+redacted diagnostic attachments are disabled by default and expire within seven
+days. Exact classes and future tombstone limits are in
 `../reference/AETHER_TRACE_SCHEMA.md`.
 
 Historical `.aether` databases are not imported automatically.
@@ -606,7 +610,7 @@ Historical `.aether` databases are not imported automatically.
 - Exact coordinator principal and project binding.
 - Participant-policy enforcement at every dispatch/retry.
 - Effect classes: `READ_ONLY`, `LOCAL_APPEND_ONLY`, `LOCAL_REVERSIBLE`,
-  `LOCAL_DESTRUCTIVE`, `EXTERNAL_REVERSIBLE`, `EXTERNAL_PROTECTED`, `UNKNOWN`.
+  `LOCAL_DESTRUCTIVE`, `EXTERNAL_REVERSIBLE`, `EXTERNAL_IRREVERSIBLE`, `UNKNOWN`.
 - Protected and unknown effects require separate authority or are denied.
 - Foreign/nonexistent project identities use non-enumerating safe failures.
 - Workers never receive coordinator tools.
@@ -704,15 +708,17 @@ Implementation planning must include deterministic tests for:
 
 ### Not implemented or accepted
 
-- The detailed design and case thresholds still require product-owner acceptance.
-- The MCP package, transport process, store, config, or tools do not exist.
-- No Orca provider schema has been pinned for implementation.
-- No worker, pilot, runtime, release, or activation is authorized.
+- The package and zero-tool stdio bootstrap exist; the historical M2.2 tree
+  exported 24 schemas, but the 15-tool successor is not yet implemented.
+- No operational tool is registered/callable and no accepted store/adapter exists.
+- The exact Orca candidate is pinned for qualification, but all 55 adaptation
+  capabilities remain `UNQUALIFIED` under M1.4-R1.
+- One no-model synthetic pilot is authorized only after R2-R4 prerequisites;
+  model-backed workers, Release, and activation remain unauthorized.
 
 ### Final design gate
 
-Christopher reviews and accepts or revises this architecture, the exact control,
-semantic-trace and learning-episode contracts, retention/lineage policy,
-measurement contract, and use-case catalog.
-That acceptance closes design only. An implementation plan and implementation
-effects remain a later separately authorized horizon.
+Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08. The
+next acceptance gate is executed evidence: exact lifecycle, successor protocol,
+adapter/reconciliation behavior, and the bounded synthetic slice. Design prose
+alone cannot grant D1 or activation.

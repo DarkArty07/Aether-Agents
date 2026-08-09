@@ -1,11 +1,11 @@
 # Aether MCP Tool Contract
 
-> **Status:** ACCEPTED AND FROZEN `v1alpha1` DESIGN; NOT IMPLEMENTED
-> **Date:** 2026-08-06
+> **Status:** APPROVED ADAPTIVE `v1alpha1` SUCCESSOR; IMPLEMENTATION IN PROGRESS; ZERO TOOLS CALLABLE
+> **Date:** 2026-08-08
 > **Protocol:** `aether.mcp/v1alpha1`
 > **Server namespace:** `aether` (`mcp__aether__*` in Hermes)
 > **Authority:** ADR-0001 and `../architecture/AETHER_MCP.md`
-> **Implementation authorization:** M1.1 repository qualification only
+> **Implementation authorization:** bounded R0-R6 default-off redesign and qualification
 
 ## 1. Contract rules
 
@@ -34,6 +34,28 @@
     result/effect receipt under a newly generated `request_id` and performs no
     provider work. Callers compare stable fields, not request IDs.
 
+The operational surface contains exactly 15 designed tools:
+
+```text
+project_admit
+project_inspect
+swarm_validate
+swarm_start
+swarm_status
+swarm_dispatch
+swarm_message
+swarm_reconcile
+swarm_retry
+swarm_cancel
+swarm_close
+swarm_trace
+orca_search
+orca_describe
+orca_call
+```
+
+They remain unregistered and uncallable during the R0-R6 task.
+
 ## 2. Common types
 
 ### 2.1 Reason
@@ -57,7 +79,7 @@ LOCAL_APPEND_ONLY
 LOCAL_REVERSIBLE
 LOCAL_DESTRUCTIVE
 EXTERNAL_REVERSIBLE
-EXTERNAL_PROTECTED
+EXTERNAL_IRREVERSIBLE
 UNKNOWN
 ```
 
@@ -399,51 +421,7 @@ Targets one admitted Dispatch, Task, or Run scope. Returns cancellation request,
 provider acknowledgement, current outcome classification, and resources still
 requiring reconciliation. Cancellation is not aggregate cleanup.
 
-### 3.11 `swarm_record_decision`
-
-**Effect:** `LOCAL_APPEND_ONLY`; it does not mutate Orca by itself.
-
-Records one explicit semantic decision:
-
-```text
-contract_created
-contract_amended
-route_selected
-participant_admitted
-participant_denied
-scope_assigned
-user_answered
-limitation_accepted
-waiver_granted
-completion_proposed
-product_accepted
-product_rejected
-later_horizon_authorized
-```
-
-Requires authority reference, concise decision/rationale, affected identities,
-and prior generation when applicable. A product-contract amendment creates a new
-generation; it never rewrites prior events.
-
-### 3.12 `swarm_record_evidence`
-
-**Effect:** `LOCAL_APPEND_ONLY`.
-
-Records:
-
-- evidence type and reference;
-- source and producer;
-- artifact digest when available;
-- exact executed check/tool/command identity in normalized form;
-- observed outcome;
-- contract criteria covered;
-- unknowns and limitations;
-- verifier/reviewer identity when admitted.
-
-It stores references and bounded receipts, not arbitrary artifact bodies or raw
-terminal output.
-
-### 3.13 `swarm_close`
+### 3.11 `swarm_close`
 
 **Effect:** generally `LOCAL_DESTRUCTIVE` because temporary runtime resources may
 be removed. The exact effect plan must be declared and authorized.
@@ -468,9 +446,18 @@ Returns:
 - `BLOCKED` when a known issue prevents closure;
 - `UNKNOWN` when aggregate disposition cannot be proven.
 
-### 3.14 `swarm_trace`
+### 3.12 `swarm_trace`
 
-**Effect:** `READ_ONLY`
+Typed actions:
+
+```text
+query
+record_decision
+record_evidence
+```
+
+`query` is `READ_ONLY`. The two record actions are `LOCAL_APPEND_ONLY`, require a
+mutation identity, and do not mutate Orca.
 
 Query modes:
 
@@ -498,6 +485,16 @@ fabricates missing reasons.
 `export` returns a bounded redacted bundle plus digest in the tool response. It
 does not write an arbitrary filesystem destination; persisting that bundle is a
 separate explicitly authorized artifact operation.
+
+`record_decision` appends one explicit semantic decision with kind, concise
+decision/rationale, authority reference, affected identities, and prior
+generation where applicable. A contract amendment creates a new generation and
+never rewrites history.
+
+`record_evidence` appends bounded evidence type/reference, source/producer,
+optional artifact digest, normalized check identity, observed outcome, criteria,
+unknowns, limitations, and optional verifier identity. It stores references and
+receipts, not arbitrary artifact bodies or raw terminal output.
 
 ## 4. Dynamic Orca tools
 
@@ -538,29 +535,21 @@ Invokes one described operation with:
 No shell command, interpolation, undocumented field, or private storage access is
 accepted.
 
-### 4.4 `orca_batch`
+### 4.4 Internal batch and observation capabilities
 
-Submits an admitted independent batch. Returns one receipt per call and an
-aggregate classification. `PARTIAL` is preserved; no implicit rollback or retry.
-The batch envelope is Aether-owned composition; every member remains an admitted
-version-pinned public Orca operation.
+Independent batching is an adapter optimization, not a public Hermes tool. Every
+member remains a described version-pinned operation with its own result; `PARTIAL`
+is preserved and no implicit rollback/retry is inferred.
 
-### 4.5 `orca_events`
+Eventual observation is used internally by status, reconcile, and trace. Orca
+1.4.167 has no public event stream, so any polling/journal projection is labelled
+`AETHER_OWNED` and `DEGRADED`; it cannot claim provider ordering/completeness.
 
-Reads version-matched provider events from a cursor with `wait_ms=0` by default.
-Returns provider-native and conservative normalized classifications, source time,
-arrival time, cursor, and unknown fields.
+## 5. Deferred learning-boundary operations (not operational MCP tools)
 
-When Orca has no public native event stream, a later accepted adapter may return a
-composed observation view from public read operations and Aether's own receipts.
-It must label that view `AETHER_COMPOSED`, must not claim provider-native event
-ordering/completeness, and must not inspect private provider state.
-
-## 5. Learning-data tools
-
-These tools are available only to the primary Hermes coordinator. They operate
-on the protected learning boundary defined by
-`AETHER_LEARNING_EPISODE_SCHEMA.md`. Captured content is inert data; it cannot
+The following conceptual operations are not registered or included in the
+15-tool operational contract. They remain design input for a separate default-off
+learning boundary and later M7 gate. Captured content is inert data and cannot
 grant tool or prompt authority.
 
 ### 5.1 `learning_capture`
@@ -615,11 +604,14 @@ It cannot upload data, invoke a provider trainer, spend money, start fine-tuning
 change a model/route/prompt/profile/skill, promote a candidate, or activate a
 runtime.
 
-## 6. Project-retention maintenance
+## 6. Future owner/admin retention operation (not an operational MCP tool)
 
 ### 6.1 `project_forget`
 
 **Effect:** `LOCAL_DESTRUCTIVE`
+
+This is a future owner/admin-only operation. The operational Hermes MCP does not
+expose or register it.
 
 Deletes the complete MCP-held partition and restricted identity binding for one
 admitted project. It never removes or edits project files, Git refs/worktrees, or
@@ -744,8 +736,6 @@ aether://project/{project_id}/run/{run_id}/summary
 aether://project/{project_id}/run/{run_id}/timeline
 aether://project/{project_id}/run/{run_id}/closeout
 aether://project/{project_id}/use-case/{use_case_id}/{variant}
-aether://project/{project_id}/episode/{episode_id}/manifest
-aether://project/{project_id}/dataset/{dataset_id}/{version}
 ```
 
 Every resource is principal/project-bound, redacted, source-labelled, and
@@ -760,11 +750,8 @@ help locate a candidate project but are never authoritative; `project_admit` and
 
 ## 10. Implementation gate
 
-This contract is design only. Before implementation, the owner must accept:
-
-- the detailed architecture;
-- this tool surface and effect model;
-- the semantic trace, learning episode/dataset schema, and privacy/retention
-  boundary;
-- the final traceable use-case catalog, baselines, metrics, and thresholds;
-- an implementation plan with RED/GREEN equivalence classes and rollback.
+The owner accepted the adaptive successor and bounded R0-R6 implementation task on
+2026-08-08. Implementation must remain default-off with zero registered/callable
+tools and follow the frozen RED/GREEN milestone sequence. Registration,
+model-backed execution, credentials/spend, integration, Release, and activation
+remain later gates.

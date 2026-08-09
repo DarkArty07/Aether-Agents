@@ -1,5 +1,5 @@
 schema_version: 1
-status: adaptive_orca_redesign_r0_complete
+status: adaptive_orca_redesign_r1_complete
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -116,7 +116,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: R0_complete_awaiting_R1_start
+  active_task: R1_complete_awaiting_R2_start
   successor_agents_are_stateless: true
   next_prompt_requires_owner_decision: false
   external_agent_git:
@@ -328,15 +328,35 @@ adaptive_orca_redesign:
     - R4_adapter_and_reconciler_foundation
     - R5_two_worker_synthetic_slice
     - R6_final_acceptance_audit_and_handoff
-  active_milestone: R0_complete_awaiting_R1_start
+  active_milestone: R1_complete_awaiting_R2_start
   operational_tool_target: 15
   callable_tools: 0
   registered_tools: 0
   D1_granted: false
+  adapter_implementation_authorized: true_in_order_for_R4_after_R2_R3
   real_model_workers_authorized: false
+  synthetic_no_model_workers_authorized: true_for_R5_after_R4
   credentials_or_spend_authorized: false
   activation_authorized: false
   integration_authorized: false
+  r1:
+    status: complete
+    decision: docs/releases/v0.22.0/M1_4_R1_ADAPTER_DECISION.md
+    adaptation_matrix: docs/releases/v0.22.0/M1_ORCA_ADAPTATION_MATRIX.json
+    debt_ledger: docs/releases/v0.22.0/ORCA_ADAPTER_DEBT.md
+    delivery_counts:
+      NATIVE: 49
+      COMPOSED: 4
+      AETHER_OWNED: 2
+      DEFERRED: 0
+      UNSUPPORTED: 0
+    guarantee_counts:
+      FULL: 49
+      DEGRADED: 6
+    qualification_counts:
+      PROVEN: 0
+      UNQUALIFIED: 55
+      UNKNOWN: 0
 
 m2_1a_acceptance:
   accepted_on: "2026-08-07"
@@ -1101,7 +1121,7 @@ milestones:
     M1_2_structured_provider_seam_matrix: accepted_provider_seam_insufficient
     M1_3_isolated_lifecycle_and_rollback: closed_blocked_ERR_RUNTIME_START_SHAPE
     M1_4_provider_decision: closed_D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT
-  M2_aether_mcp_foundation: M2_1a_and_M2_2_accepted_M2_3_not_authorized
+  M2_aether_mcp_foundation: M2_1a_and_historical_M2_2_accepted_successor_R2_authorized
   M3_lifecycle_through_aether_mcp: blocked_pending_future_D1_and_M2
   M4_one_synthetic_worker: blocked_pending_M3
   M5_two_worker_real_swarm: blocked_pending_M4_and_D3_for_model_run
@@ -1121,11 +1141,12 @@ authorization:
   M1_3_orca_runtime_operation: complete_no_further_operation_authorized
   M1_4_provider_decision: complete_D1_blocked
   D1: not_granted
-  M2_aether_mcp_source_implementation: no_new_scope_authorized
-  external_agent_branch_local_atomic_commit_for_active_task: no_active_task
+  adaptive_R0_R6_default_off_redesign: authorized_2026_08_08
+  M2_aether_mcp_source_implementation: successor_R2_and_bounded_R4_authorized_in_order
+  external_agent_branch_local_atomic_commit_for_active_task: authorized
   external_agent_push_merge_rebase_amend_tag_release: forbidden
-  orca_runtime_start: not_authorized_after_M1_3_closure
-  worker_or_model_execution: not_authorized
+  orca_runtime_start: exact_isolated_candidate_authorized_for_R3_and_R5_only
+  worker_or_model_execution: no_model_synthetic_workers_authorized_after_R4_real_models_forbidden
   dependency_installation: not_authorized
   mcp_registration_or_activation: not_authorized
   profile_or_participant_mutation: not_authorized
@@ -1138,11 +1159,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: owner_provider_decision_after_M1_4
-  executor: Christopher_DarkArty07
-  acceptance_owner: Christopher_DarkArty07
+  milestone: R2_successor_alpha_protocol_contract
+  executor: Hermes
+  acceptance_owner: Hermes_for_deterministic_gate_Christopher_for_product_or_D1_decisions
   requirement: >-
-    Decide whether to require official Orca structured contract additions,
-    re-scope the product contract, or qualify a different provider boundary.
-    No implementation milestone, adapter, M2.3, M3, registration, activation,
-    merge, tag or Release is authorized while this decision is pending.
+    Add failing tests for the exact 15-tool successor, trace action modes,
+    cancellation and cleanup outcomes, removed/deferred tools, and byte-exact
+    snapshot; then implement the minimum GREEN contract while preserving zero
+    registered/callable tools and no activation.
