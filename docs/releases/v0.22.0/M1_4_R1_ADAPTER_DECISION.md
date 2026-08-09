@@ -224,3 +224,12 @@ Until `R3_LIFECYCLE_ACCEPTANCE.md` is superseded by executed evidence:
 - R4 is restricted to default-off binding, journal, correlation, reconciliation,
   and explicit unavailable gates;
 - R5 and D1 remain blocked.
+
+## 11. R4 restricted foundation
+
+R4 implements exact-build/coordinator data binding, immutable argv, a local
+append-only operation journal, atomic intent fencing, receipts, idempotent replay,
+`UNKNOWN` and injected read-only reconciliation. The current policy constructs no
+qualified mutation and there is no live provider executor or MCP registration.
+This deterministic foundation satisfies only the safe subset allowed after R3;
+it does not change the R5 or D1 block.

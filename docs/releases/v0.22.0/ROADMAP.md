@@ -1,6 +1,6 @@
 # Aether Agents v0.22.0 MCP-First Swarm Roadmap
 
-> **Status:** ADAPTIVE R3 CLOSED BLOCKED; RESTRICTED R4 NEXT; D1 FALSE; NOT ACTIVATED
+> **Status:** RESTRICTED R4 CLOSED; R5 BLOCKED CLOSE NEXT; D1 FALSE; NOT ACTIVATED
 > **Date:** 2026-08-08
 > **Owner:** Christopher (DarkArty07)
 > **Current released baseline:** `v0.20.0`
@@ -36,8 +36,9 @@ plane, with:
 - The historical M2.2 tree exports 24 `v1alpha1` schemas and 50 stable errors.
   R2 accepted the exact 15-schema `aether.mcp/v1alpha2` successor. The stdio
   server still registers and exposes zero tools.
-- The provider adapter, accepted semantic store, reconciler, learning boundary,
-  and runtime composition do not yet exist.
+- R4 adds a default-off exact-build planner, append-only operation journal and
+  injected read-only reconciler foundation. It has no live provider executor and
+  every current mutation remains unavailable.
 - R3 fixed AppImage extraction/runtime framing and proved structured cold
   readiness, but full lifecycle is blocked because no trusted headless coordinator
   terminal binding was qualified.
@@ -910,6 +911,12 @@ is `BLOCKED`: Orca requires a live sender terminal, and the standalone headless
 boundary did not prove a public coordinator bootstrap. R4 is restricted to
 default-off provider binding/journal/correlation/reconciliation and unavailable
 mutation gates; R5 is blocked. See `R3_LIFECYCLE_ACCEPTANCE.md`.
+
+**Restricted R4 closure (2026-08-08):** exact provider/coordinator binding,
+immutable argv, append-before-effect, atomic intent fencing, idempotent replay,
+`UNKNOWN`, hash-chain receipts and injected read-only reconciliation pass 16
+focused tests. No provider executor or mutation was activated and zero MCP tools
+remain registered/callable. See `R4_ADAPTER_FOUNDATION_ACCEPTANCE.md`.
 
 #### M2.3 — Implement trusted principal and project admission
 

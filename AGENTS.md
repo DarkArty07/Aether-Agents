@@ -45,13 +45,15 @@ Chris then selected the bounded adaptive redesign path on 2026-08-08 and
 authorized the ordered R0-R6 sequence in
 `docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. R3 fixed AppImage
 extraction/runtime framing and proved cold readiness, but closed blocked because
-no trusted headless coordinator-terminal bootstrap was qualified. R4 is therefore
-restricted to default-off provider binding, journal, correlation, reconciliation,
-and explicit unavailable mutation gates; R5 remains blocked. Orca remains the
-sole mutable runtime authority, MCP remains zero-tool/default-off, and D1 remains
-false. Local atomic English commits are allowed. Model-backed workers,
-credentials/spend, push, merge, rebase, amend, tag, Release, deployment,
-registration, persistent services and activation remain forbidden.
+no trusted headless coordinator-terminal bootstrap was qualified. R4 implements a
+restricted default-off exact-build planner, atomic append-only operation journal,
+idempotency, `UNKNOWN` and injected read-only reconciliation; it contains no live
+provider executor and every current mutation remains unavailable. R5 remains
+blocked. Orca remains the sole mutable runtime authority, MCP remains
+zero-tool/default-off, and D1 remains false. Local atomic English commits are
+allowed. Model-backed workers, credentials/spend, push, merge, rebase, amend, tag,
+Release, deployment, registration, persistent services and activation remain
+forbidden.
 
 ## v0.19.0 experimental coordination closeout
 

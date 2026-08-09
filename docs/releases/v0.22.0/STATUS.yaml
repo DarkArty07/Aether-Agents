@@ -1,5 +1,5 @@
 schema_version: 1
-status: adaptive_orca_redesign_r3_closed_blocked
+status: adaptive_orca_redesign_r4_complete_r5_blocked
 approved_on: "2026-08-07"
 owner: Christopher (DarkArty07)
 
@@ -116,7 +116,7 @@ implementation_workflow:
   product_owner: Christopher (DarkArty07)
   orchestrator_and_acceptance_owner: Hermes
   one_active_task_at_a_time: true
-  active_task: R3_closed_blocked_awaiting_restricted_R4_start
+  active_task: R4_complete_awaiting_R5_blocked_close
   successor_agents_are_stateless: true
   next_prompt_requires_owner_decision: false
   external_agent_git:
@@ -328,7 +328,7 @@ adaptive_orca_redesign:
     - R4_adapter_and_reconciler_foundation
     - R5_two_worker_synthetic_slice
     - R6_final_acceptance_audit_and_handoff
-  active_milestone: R3_closed_blocked_awaiting_restricted_R4_start
+  active_milestone: R4_complete_awaiting_R5_blocked_close
   operational_tool_target: 15
   callable_tools: 0
   registered_tools: 0
@@ -396,6 +396,27 @@ adaptive_orca_redesign:
     mount_survivors: 0
     root_survivors: 0
     protected_state_metadata_comparison: UNKNOWN_NOT_COMPLETED_AFTER_BLOCK
+    D1_granted: false
+  r4:
+    status: completed_restricted_mutations_unavailable
+    acceptance: docs/releases/v0.22.0/R4_ADAPTER_FOUNDATION_ACCEPTANCE.md
+    provider_build_binding: implemented
+    coordinator_binding: required_but_unqualified
+    current_mutations_available: 0
+    structured_argv: pass
+    append_before_effect_journal: pass
+    atomic_intent_fencing: pass
+    hash_chain_and_fsync: pass
+    raw_objective_or_terminal_handle_persisted: false
+    idempotent_replay: pass
+    timeout_outcome: UNKNOWN
+    reconciliation: implemented_with_injected_read_only_probe
+    live_provider_executor: absent
+    focused_tests_passed: 16
+    ruff: pass
+    compileall: pass
+    callable_tools: 0
+    registered_tools: 0
     D1_granted: false
 
 m2_1a_acceptance:
@@ -1199,12 +1220,11 @@ authorization:
   force_push: forbidden
 
 next_action:
-  milestone: R4_restricted_adapter_and_reconciler_foundation
+  milestone: R5_close_blocked_without_provider_execution
   executor: Hermes
   acceptance_owner: Hermes_for_deterministic_gate_Christopher_for_product_or_D1_decisions
   requirement: >-
-    Implement only default-off exact provider/build binding, structured argv,
-    append-before-effect journal, correlation, idempotency, UNKNOWN and
-    reconciliation primitives. All coordinator-side mutations must fail closed as
-    unavailable until a trusted live Orca terminal binding is proven. R5 remains
-    blocked under current evidence.
+    Do not execute a provider-backed two-worker slice. Record R5 as blocked by the
+    unqualified trusted coordinator binding established in R3; verify that R4 did
+    not add a provider executor, tools, services, credentials or runtime resources;
+    then proceed to the final R6 audit.

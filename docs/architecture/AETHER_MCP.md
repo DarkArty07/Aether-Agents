@@ -711,7 +711,9 @@ Implementation planning must include deterministic tests for:
 
 - The package and zero-tool stdio bootstrap exist; R2 implements the exact
   15-schema `v1alpha2` successor while preserving historical `v1alpha1` bytes.
-- No operational tool is registered/callable and no accepted store/adapter exists.
+- No operational tool is registered/callable. R4 provides only a restricted local
+  operation-journal/planner/reconciler foundation; no accepted operational
+  provider executor or mutable adapter exists.
 - The exact Orca candidate is pinned for qualification, but all 55 adaptation
   capabilities remain `UNQUALIFIED` under M1.4-R1.
 - R3 fixes AppImage framing and proves cold readiness, but trusted coordinator-

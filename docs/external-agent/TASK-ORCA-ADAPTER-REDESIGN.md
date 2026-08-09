@@ -276,14 +276,15 @@ R3 met the first clause and cleanup, but closed `BLOCKED` before the second.
 
 ### R4 — Adapter and reconciler foundation
 
-- [ ] Write RED tests for pinned command descriptions and structured argv.
-- [ ] Implement version/capability binding without free-form shell.
-- [ ] Write RED tests for durable operation receipts, idempotent replay/conflict,
+- [x] Write RED tests for pinned command descriptions and structured argv.
+- [x] Implement version/capability binding without free-form shell.
+- [x] Write RED tests for durable operation receipts, idempotent replay/conflict,
       possible delivery, and reconciliation.
-- [ ] Implement the minimum journal/correlation/reconciler services.
-- [ ] Implement qualified inventory/cleanup/cancel/close composition plans only
-      for seams proven by R3 fixtures; leave the rest unavailable.
-- [ ] Prove provider schema/version drift fails closed.
+- [x] Implement the minimum journal/correlation/reconciler services.
+- [x] Leave inventory/cleanup/cancel/close and every provider mutation unavailable;
+      R3 proved no trusted coordinator binding.
+- [x] Prove provider schema/build drift, stale/foreign binding, malformed receipts,
+      symlink escape and operation conflicts fail closed.
 
 **Acceptance:** deterministic adapter tests cover positive, negative, timeout,
 partial, restart, and reconciliation paths; no tool registration or ambient
@@ -336,7 +337,7 @@ changes, and no protected effect.
 | R1 | `COMPLETED` | 15-tool contract, three-axis 55-capability matrix, six aggregate adaptations, debt ledger, revised D1 |
 | R2 | `COMPLETED` | `v1alpha2`; 15 schemas; 105 passed/1 deselected; Ruff/compileall/snapshot/zero-tool smoke PASS |
 | R3 | `CLOSED_BLOCKED` | framing/cold status PASS; coordinator bootstrap unqualified; 23 passed/1 deselected; zero survivors; D1 false |
-| R4 | `PENDING` | — |
+| R4 | `COMPLETED_RESTRICTED` | exact binding, immutable argv, atomic journal, idempotency, UNKNOWN/reconciliation; 16 passed; mutations unavailable; 0 tools |
 | R5 | `PENDING` | — |
 | R6 | `PENDING` | — |
 
