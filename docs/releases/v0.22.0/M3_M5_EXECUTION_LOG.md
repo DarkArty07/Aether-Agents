@@ -3,9 +3,9 @@
 > **Authorized horizon:** M3, M4 and M5 only
 > **Started:** 2026-08-09T03:32:17-06:00 (CST)
 > **Start epoch:** 1786267937
-> **Finished:** 2026-08-09T13:09:04-06:00 (CST)
-> **Finish epoch:** 1786302544
-> **Total duration:** 9 hours, 36 minutes, 47 seconds (34,607 seconds)
+> **Finished:** 2026-08-09T13:17:22-06:00 (CST)
+> **Finish epoch:** 1786303042
+> **Total duration:** 9 hours, 45 minutes, 5 seconds (35,105 seconds)
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Baseline:** `c5e359e589ce5661d665314e125443331c083eca`
 > **Status:** COMPLETE — deterministic M3-M5; M5.4 model gate UNKNOWN/not authorized
@@ -74,3 +74,4 @@ Not authorized by this task:
 - M5 COMPLETE — BOUNDED — Two Dispatches were issued before polling, both workers reached a persisted barrier before either proceeded, alpha→beta handoff and two-component coordinator integration passed, and a second Run proved partial failure plus aggregate cancel. Technical commit `f356c21a65310d2d8c41112d407658e0a64f945a`; detached verification: 156 tests, Ruff, compileall and evidence invariants PASS. M5.4 is `UNKNOWN_NOT_AUTHORIZED` and was not replaced by fixture evidence.
 - Repository gate correction — `make test` depended on an ambient editable installation and failed to import the `src/` package from a fresh checkout. Commit `7e8436aafc056a0a6b3f9476426f8a97ecdc8e2c` makes the target candidate-first with `PYTHONPATH=src`; the complete repository suite then passed `183/183`.
 - Final stop condition — Ruff, compileall, release governance, closeout schemas, full `make test` and task-owned process/root inventories passed; M6 was not entered.
+- Xvfb reproducibility correction — The M1.3 namespace previously required an external `/tmp` copy because its read-only `/home` staging hid the durable user-local Xvfb. Commit `1c641a1c297609009aba76c78fbf16325d644389` copies and hash-verifies Xvfb inside each isolated lifecycle root and admits its worker UID before execution; the temporary toolchain was removed and `make test` again passed `183/183`.

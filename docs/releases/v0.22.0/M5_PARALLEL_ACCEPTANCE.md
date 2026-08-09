@@ -77,8 +77,11 @@ A detached clean worktree at the accepted commit produced:
 
 The final branch additionally fixes the previously ambient-install-dependent
 `make test` target at commit `7e8436aafc056a0a6b3f9476426f8a97ecdc8e2c`.
-After the correction, the canonical complete repository command passed
-`183/183` tests from the candidate source tree.
+Commit `1c641a1c297609009aba76c78fbf16325d644389` also stages and hash-verifies
+the durable user-local Xvfb inside every M1.3 lifecycle sandbox, removing the
+former `/tmp` toolchain dependency. After both corrections, the canonical
+complete repository command passed `183/183` tests from the candidate source
+tree with no retained temporary Xvfb root.
 
 ## Orca debt retained
 
