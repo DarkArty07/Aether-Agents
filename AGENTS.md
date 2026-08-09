@@ -70,6 +70,9 @@ deterministic manifest validation and a version-pinned read-only Orca catalog.
 The stdio server still registers exactly zero tools. M3 lifecycle execution,
 workers, models, credentials/spend, push, merge, tag, Release, registration,
 persistent services and activation remain outside the completed scope.
+Canonical closeout is in
+`docs/releases/v0.22.0/M2_FOUNDATION_ACCEPTANCE.md` and
+`docs/releases/v0.22.0/M2_FOUNDATION_EVIDENCE.json`.
 
 ## v0.19.0 experimental coordination closeout
 

@@ -992,13 +992,11 @@ Update retirement tests intentionally: allow only `src/aether_mcp`; continue to
 reject `src/aether_agents`, `olympus_v3`, old plugins/entry points and legacy
 dependencies.
 
-**Proposed atomic commits:**
-
-1. `feat: add bounded Aether MCP protocol package`
-2. `feat: add project-isolated operation and trace store`
-3. `feat: add protected learning content foundation`
-4. `feat: add read-only Orca provider catalog`
-5. `test: preserve retired runtime boundaries for Aether MCP`
+**Closure (2026-08-09):** accepted at technical commit
+`3ffd4be15236f4efb50ce3008a176b107a2b006e`. The exact detached tree passed 158
+tests, Ruff, compileall, governance policy, dependency audit, sdist/wheel build and
+clean wheel installation. Canonical acceptance and evidence are
+`M2_FOUNDATION_ACCEPTANCE.md` and `M2_FOUNDATION_EVIDENCE.json`. Stop before M3.
 
 ### 10.8 M3 work packages — own lifecycle semantics without workers
 

@@ -51,6 +51,10 @@ candidate:
 m2_foundation_completion:
   completed_on: "2026-08-09"
   owner_authority: user_requested_completion_through_M2_with_strict_stop_before_M3
+  technical_commit: 3ffd4be15236f4efb50ce3008a176b107a2b006e
+  technical_tree: d27127e89c25557693a9aa3591da1c73bb269d3c
+  acceptance: docs/releases/v0.22.0/M2_FOUNDATION_ACCEPTANCE.md
+  evidence: docs/releases/v0.22.0/M2_FOUNDATION_EVIDENCE.json
   exact_orca_candidate: orca-linux-appimage-1.4.167
   appimage_sha256: 813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33
   coordinator_qualification:
