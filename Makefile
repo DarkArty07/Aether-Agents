@@ -65,7 +65,7 @@ clean: ## Remove venv and __pycache__ directories
 .PHONY: test
 test: ## Run test suite (if tests/ exists)
 	@if [ -d tests ]; then \
-		$(PYTHON) -m pytest tests/ -v; \
+		PYTHONPATH=src $(PYTHON) -m pytest tests/ -v; \
 	else \
 		echo "No tests/ directory found — skipping"; \
 	fi
