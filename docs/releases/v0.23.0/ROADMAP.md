@@ -1,6 +1,6 @@
 # Aether Agents v0.23.0 Roadmap — Orca Production Dogfood
 
-> **Status:** APPROVED PLAN — NOT IMPLEMENTED OR ACTIVATED
+> **Status:** IN PROGRESS — M1.2 ACTIVE; M1.3 NOT STARTED
 > **Date:** 2026-08-09
 > **Product owner:** Christopher (DarkArty07)
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
@@ -26,7 +26,7 @@ Production is the named local Aether installation and the sessions Christopher u
 - a synthetic harness may reproduce an incident but cannot replace the required real-path retry;
 - unavailable evidence remains `UNKNOWN` or `BLOCKED`, never PASS.
 
-The v0.22.0 package is currently default-off, unregistered, and zero-tool. Production begins only after M1 below passes.
+The named local v0.23.0 candidate is installed and active with the approved 15-tool Aether MCP surface, and Olympus is retired from that runtime. M1.3 and the M1.4 production-entry decision remain incomplete; production begins only after all of M1 below passes.
 
 ## 3. Invariants
 
@@ -86,6 +86,9 @@ No arbitrary shell, placeholder, fabricated receipt, caller-selected authority, 
 
 #### M1.2 — Setup, status, doctor, cleanup, and rollback
 
+**Status:** PASS in the named active runtime. Canonical evidence:
+`M1_2_ACCEPTANCE.md` and `M1_2_ACTIVE_RUNTIME_CUTOVER.md`.
+
 - idempotent installation and registration;
 - exact version/catalog/profile/model/toolset reporting;
 - secret-safe diagnostics;
@@ -95,6 +98,8 @@ No arbitrary shell, placeholder, fabricated receipt, caller-selected authority, 
 - proof that rollback leaves no stale MCP registration, worker, terminal, worktree, lease, listener, or process owned by the attempt.
 
 #### M1.3 — First bounded production Task
+
+**Status:** NOT STARTED.
 
 Execute one low-risk, reversible, real repository Task through the installed path:
 

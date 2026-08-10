@@ -113,6 +113,12 @@ Observed:
 
 ## Boundary
 
+> **Post-acceptance update (2026-08-10):** this isolated boundary was later
+> crossed under explicit product-owner authorization. The active-runtime
+> installation, Olympus retirement, activation, rollback/retry and verification
+> evidence are recorded in `M1_2_ACTIVE_RUNTIME_CUTOVER.md`. The isolated
+> evidence below remains the exact boundary at the time this report was accepted.
+
 M1.2 accepts the exact source candidate's isolated operational installation and
 rollback. Aether MCP remains absent from the active runtime configuration. No
 active registration, runtime restart/reload, persistent activation, M1.3 task,
