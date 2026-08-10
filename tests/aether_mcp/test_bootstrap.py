@@ -1,4 +1,4 @@
-"""Behavior contract for the default-off, zero-tool Aether MCP bootstrap."""
+"""Behavior contract for the operational Aether MCP bootstrap."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ def test_static_package_metadata_imports_without_side_effects(tmp_path: Path) ->
 
 
 @pytest.mark.anyio
-async def test_real_stdio_handshake_exposes_metadata_and_zero_tools() -> None:
+async def test_real_stdio_handshake_exposes_metadata_and_operational_tools() -> None:
     parameters = StdioServerParameters(
         command=str(PYTHON),
         args=["-m", "aether_mcp"],
@@ -94,11 +94,14 @@ async def test_real_stdio_handshake_exposes_metadata_and_zero_tools() -> None:
     for marker in (
         "aether.mcp/v1alpha2",
         "0.22.0",
-        "default-off",
-        "no tools registered",
+        "approved operational tool surface",
     ):
         assert marker in initialized.instructions
-    assert tools.tools == []
+    assert {tool.name for tool in tools.tools} == {
+        "project_admit", "project_inspect", "swarm_validate", "swarm_start", "swarm_status",
+        "swarm_dispatch", "swarm_message", "swarm_reconcile", "swarm_retry", "swarm_cancel",
+        "swarm_close", "swarm_trace", "orca_search", "orca_describe", "orca_call",
+    }
 
 
 def test_eof_is_clean_and_leaves_no_child(tmp_path: Path) -> None:

@@ -1,8 +1,4 @@
-"""Integrated, internal-only M2 foundation services.
-
-The MCP server intentionally registers zero tools. These services provide the
-verified implementation behind the frozen schemas without beginning M3.
-"""
+"""Integrated M2 foundation services used by the operational MCP facade."""
 
 from __future__ import annotations
 

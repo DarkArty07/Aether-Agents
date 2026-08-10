@@ -486,7 +486,7 @@ def _thaw(value: Any) -> Any:
 
 
 TOOL_SCHEMAS: Mapping[str, Mapping[str, Any]] = _deep_freeze(_build_tool_schemas())
-CALLABLE_TOOL_NAMES = frozenset()
+CALLABLE_TOOL_NAMES = frozenset(TOOL_SCHEMAS)
 
 _TOOL_PHASES = {
     "project_admit": "M2.3",

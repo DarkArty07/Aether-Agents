@@ -1,8 +1,9 @@
-"""Zero-tool stdio MCP server factory."""
+"""Operational stdio MCP server factory."""
 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import queue
 import sys
 import threading
@@ -22,17 +23,59 @@ from mcp.server.fastmcp import FastMCP  # noqa: E402
 from mcp.shared.message import SessionMessage  # noqa: E402
 
 from aether_mcp import PROTOCOL_ID, SERVER_NAME, __version__  # noqa: E402
+from aether_mcp.protocol import TOOL_SCHEMAS, export_schema_bundle  # noqa: E402
+from aether_mcp.runtime import OperationalRuntime  # noqa: E402
 
-INSTRUCTIONS = f"{PROTOCOL_ID}; Aether package {__version__}; default-off; no tools registered."
+INSTRUCTIONS = f"{PROTOCOL_ID}; Aether package {__version__}; approved operational tool surface."
+
+_TOOLS = (
+    "project_admit", "project_inspect", "swarm_validate", "swarm_start", "swarm_status",
+    "swarm_dispatch", "swarm_message", "swarm_reconcile", "swarm_retry", "swarm_cancel",
+    "swarm_close", "swarm_trace", "orca_search", "orca_describe", "orca_call",
+)
 
 
-def create_server() -> FastMCP:
-    """Create the bounded M2.1a server without registering capabilities."""
-    return FastMCP(
+def create_server(runtime: OperationalRuntime | None = None) -> FastMCP:
+    """Create the 15-tool facade without opening state or contacting Orca."""
+    server = FastMCP(
         SERVER_NAME,
         instructions=INSTRUCTIONS,
         log_level="ERROR",
     )
+    active_runtime = runtime or OperationalRuntime()
+
+    def register(name: str) -> None:
+        schema = TOOL_SCHEMAS[name]
+
+        def operation(**arguments: object) -> dict:
+            return active_runtime.invoke(name, dict(arguments))
+
+        operation.__name__ = name
+        operation.__annotations__ = {key: object for key in schema["properties"]}
+        operation.__annotations__["return"] = dict
+        operation.__signature__ = inspect.Signature(
+            [
+                inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY, annotation=object)
+                for key in schema["properties"]
+            ]
+        )
+
+        def registered_operation(**arguments: object) -> dict:
+            return operation(**arguments)
+
+        registered_operation.__signature__ = operation.__signature__
+        registered_operation.__annotations__ = operation.__annotations__
+        server.add_tool(registered_operation, name=name, description=f"Aether operational capability: {name}")
+        tool = server._tool_manager.get_tool(name)
+        assert tool is not None
+        bundle = export_schema_bundle()
+        tool.parameters = next(item["inputSchema"] for item in bundle["tools"] if item["name"] == name)
+        tool.fn_metadata.arg_model.model_config["extra"] = "allow"
+        tool.fn_metadata.arg_model.model_rebuild(force=True)
+
+    for name in _TOOLS:
+        register(name)
+    return server
 
 
 async def run_stdio(server: FastMCP) -> None:
