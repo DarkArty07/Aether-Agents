@@ -86,36 +86,70 @@ def _run_owned(
     command: tuple[str, ...], *, timeout: int, env: dict[str, str] | None = None, cwd: Path | None = None
 ) -> subprocess.CompletedProcess[bytes]:
     """Run an installer child in a new session and reap its entire group on failure."""
-    child = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, env=env, cwd=cwd
-    )
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        child = subprocess.Popen(
+            command, stdout=stdout_file, stderr=stderr_file, start_new_session=True, env=env, cwd=cwd
+        )
+        try:
+            child.wait(timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            _terminate_group(child.pid, child)
+            raise InstallError("INSTALLER_TIMEOUT") from exc
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read(MAX_ORCA_OUTPUT_BYTES + 1)
+        stderr = stderr_file.read(MAX_ORCA_OUTPUT_BYTES + 1)
+        if len(stdout) > MAX_ORCA_OUTPUT_BYTES or len(stderr) > MAX_ORCA_OUTPUT_BYTES:
+            _terminate_group(child.pid)
+            raise InstallError("INSTALLER_OUTPUT_TOO_LARGE")
+        if child.returncode:
+            _terminate_group(child.pid)
+            raise subprocess.CalledProcessError(child.returncode, command, stdout, stderr)
+        if not _wait_group_exit(child.pid, 0.5):
+            _terminate_group(child.pid)
+            raise InstallError("INSTALLER_CHILD_SURVIVOR")
+        return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
+def _group_exists(pgid: int) -> bool:
     try:
-        stdout, stderr = child.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
-        _terminate_group(child.pid)
-        raise InstallError("INSTALLER_TIMEOUT") from exc
-    if child.returncode:
-        _terminate_group(child.pid)
-        raise subprocess.CalledProcessError(child.returncode, command, stdout, stderr)
-    return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
-def _terminate_group(pid: int) -> None:
+def _wait_group_exit(pgid: int, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _group_exists(pgid):
+            return True
+        time.sleep(0.05)
+    return not _group_exists(pgid)
+
+
+def _terminate_group(pid: int, leader: subprocess.Popen[bytes] | None = None) -> None:
     try:
         os.killpg(pid, signal.SIGTERM)
     except ProcessLookupError:
         return
-    deadline = time.monotonic() + 2
-    while time.monotonic() < deadline:
+    if leader is not None:
         try:
-            os.killpg(pid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.05)
+            leader.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            pass
+    if _wait_group_exit(pid, 2):
+        return
     try:
         os.killpg(pid, signal.SIGKILL)
     except ProcessLookupError:
-        pass
+        return
+    if leader is not None:
+        try:
+            leader.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            pass
+    _wait_group_exit(pid, 2)
 
 
 def digest(path: Path) -> str:
@@ -564,68 +598,210 @@ def _parse_orca_status(completed: subprocess.CompletedProcess[bytes]) -> bool:
         return False
 
 
+@dataclass(frozen=True)
+class ProcessRecord:
+    pid: int
+    ppid: int
+    pgid: int
+    session_id: int
+    start_time: int
+    argv: tuple[str, ...]
+    executable: str | None
+    command_name: str = ""
+    inspectable: bool = True
+    state: str = "S"
+
+
+def _process_stat_fields(pid: int) -> list[str] | None:
+    try:
+        raw = Path("/proc", str(pid), "stat").read_text()
+    except OSError:
+        return None
+    closing = raw.rfind(")")
+    if closing < 0:
+        return None
+    fields = raw[closing + 2 :].split()
+    return fields if len(fields) > 19 else None
+
+
 def _ancestor_pids() -> set[int]:
     result: set[int] = set()
     current = os.getpid()
     while current and current not in result:
         result.add(current)
+        fields = _process_stat_fields(current)
+        if fields is None:
+            break
         try:
-            current = int((Path("/proc") / str(current) / "stat").read_text().split()[3])
-        except (OSError, ValueError, IndexError):
+            current = int(fields[1])
+        except ValueError:
             break
     return result
 
 
-def _process_snapshot() -> list[tuple[int, int, str]] | None:
+def _process_snapshot() -> list[ProcessRecord] | None:
     """Same-user bounded proc snapshot; never return raw command lines to callers."""
     try:
         owner = os.getuid()
-        records: list[tuple[int, int, str]] = []
+        records: list[ProcessRecord] = []
         for entry in Path("/proc").iterdir():
             if not entry.name.isdigit():
                 continue
             try:
-                stat_data = (entry / "stat").read_text().split()
-                if (entry / "status").read_text().split("Uid:", 1)[1].split()[0] != str(owner):
+                status = (entry / "status").read_text()
+                uid_line = next(line for line in status.splitlines() if line.startswith("Uid:"))
+                if int(uid_line.split()[1]) != owner:
                     continue
-                raw = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
-                records.append((int(entry.name), int(stat_data[3]), raw[:8192]))
-            except (OSError, ValueError, IndexError):
+                command_name = next(line for line in status.splitlines() if line.startswith("Name:")).split(maxsplit=1)[1]
+                fields = _process_stat_fields(int(entry.name))
+                if fields is None:
+                    if entry.exists():
+                        return None
+                    continue
+                try:
+                    raw = (entry / "cmdline").read_bytes()
+                except PermissionError:
+                    raw = b""
+                if len(raw) > 65_536:
+                    return None
+                argv = tuple(part.decode("utf-8", "replace") for part in raw.split(b"\0") if part)
+                try:
+                    executable = os.readlink(entry / "exe")
+                except (FileNotFoundError, PermissionError):
+                    executable = None
+                records.append(
+                    ProcessRecord(
+                        pid=int(entry.name),
+                        ppid=int(fields[1]),
+                        pgid=int(fields[2]),
+                        session_id=int(fields[3]),
+                        start_time=int(fields[19]),
+                        argv=argv,
+                        executable=executable,
+                        command_name=command_name,
+                        inspectable=bool(argv or executable),
+                        state=fields[0],
+                    )
+                )
+            except FileNotFoundError:
                 continue
+            except PermissionError:
+                if entry.exists():
+                    return None
+            except (OSError, StopIteration, ValueError, IndexError):
+                if entry.exists():
+                    return None
         return records
-    except (OSError, ValueError, IndexError):
+    except (OSError, ValueError):
         return None
+
+
+def _record_is_exactly_owned(record: ProcessRecord, installation: Installation) -> bool:
+    files = (installation.launcher, installation.wrapper)
+    directories = (installation.venv, installation.extraction)
+    values = (*record.argv, *((record.executable,) if record.executable else ()))
+    return any(value in files or any(value == root or value.startswith(root + os.sep) for root in directories) for value in values)
+
+
+def _classify_owned(records: list[ProcessRecord], installation: Installation) -> list[dict[str, int]]:
+    ancestors = _ancestor_pids()
+    owned_pids = {record.pid for record in records if record.pid not in ancestors and _record_is_exactly_owned(record, installation)}
+    changed = True
+    while changed:
+        changed = False
+        for record in records:
+            if record.pid not in ancestors and record.pid not in owned_pids and record.ppid in owned_pids:
+                owned_pids.add(record.pid)
+                changed = True
+    return [
+        {"pid": record.pid, "ppid": record.ppid, "start_time": record.start_time}
+        for record in records
+        if record.pid in owned_pids
+    ]
+
+
+def _plausible_opaque_records(
+    records: list[ProcessRecord], installation: Installation, owned: list[dict[str, int]]
+) -> list[ProcessRecord]:
+    owned_pids = {record["pid"] for record in owned}
+    ancestors = _ancestor_pids()
+    plausible_names = {"aether-mcp", "python", "python3", "node", "electron", "apprun", "sh", "dash", "bash"}
+    return [
+        record
+        for record in records
+        if record.pid not in ancestors
+        and record.pid not in owned_pids
+        and not record.inspectable
+        and record.state != "Z"
+        and (record.command_name.lower() in plausible_names or record.command_name.lower().startswith("python"))
+    ]
 
 
 def _owned_processes(installation: Installation) -> list[dict[str, int]] | None:
     records = _process_snapshot()
     if records is None:
         return None
-    ancestors = _ancestor_pids()
-    roots = (installation.launcher, installation.venv, installation.wrapper, installation.extraction)
-    return [
-        {"pid": pid, "ppid": ppid}
-        for pid, ppid, command in records
-        if pid not in ancestors and any(value in command for value in roots)
-    ]
+    owned = _classify_owned(records, installation)
+    if _plausible_opaque_records(records, installation, owned):
+        return None
+    return owned
+
+
+def _process_start_time(pid: int) -> int | None:
+    fields = _process_stat_fields(pid)
+    if fields is None:
+        return None
+    try:
+        return int(fields[19])
+    except ValueError:
+        return None
+
+
+def _process_identity_alive(process: dict[str, int]) -> bool:
+    expected = process.get("start_time")
+    if expected is None:
+        return Path("/proc", str(process["pid"])).exists()
+    return _process_start_time(process["pid"]) == expected
 
 
 def _terminate_owned_processes(owned: list[dict[str, int]]) -> None:
     for process in owned:
+        if not _process_identity_alive(process):
+            continue
         try:
             os.kill(process["pid"], signal.SIGTERM)
         except ProcessLookupError:
             pass
     deadline = time.monotonic() + 2
     while time.monotonic() < deadline:
-        if not any(Path("/proc", str(item["pid"])).exists() for item in owned):
+        if not any(_process_identity_alive(item) for item in owned):
             return
         time.sleep(0.05)
     for process in owned:
+        if not _process_identity_alive(process):
+            continue
         try:
             os.kill(process["pid"], signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+
+def _parse_orca_worktree_ps(completed: subprocess.CompletedProcess[bytes]) -> bool:
+    if completed.returncode != 0 or completed.stderr or len(completed.stdout) > MAX_ORCA_OUTPUT_BYTES:
+        return False
+    try:
+        envelope = json.loads(completed.stdout.decode("utf-8"))
+        result = envelope["result"]
+        worktrees = result["worktrees"]
+        return (
+            envelope["ok"] is True
+            and isinstance(worktrees, list)
+            and isinstance(result["totalCount"], int)
+            and result["totalCount"] >= len(worktrees)
+            and isinstance(result["truncated"], bool)
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return False
 
 
 def _resource_inventory(installation: Installation) -> list[dict[str, Any]]:
@@ -635,28 +811,28 @@ def _resource_inventory(installation: Installation) -> list[dict[str, Any]]:
         completed = subprocess.run(
             (installation.wrapper, "worktree", "ps", "--json"), capture_output=True, check=False, timeout=30
         )
-        entries.append({"source": "orca_worktree_ps", "performed": True, "ok": completed.returncode == 0})
+        entries.append({"source": "orca_worktree_ps", "performed": True, "ok": _parse_orca_worktree_ps(completed)})
     except (OSError, subprocess.SubprocessError):
         entries.append({"source": "orca_worktree_ps", "performed": True, "ok": False})
     snapshot = _process_snapshot()
     if snapshot is None:
         entries.append({"source": "processes", "performed": False, "state": "UNKNOWN"})
     else:
-        ancestors = _ancestor_pids()
-        roots = (installation.launcher, installation.venv, installation.wrapper, installation.extraction)
-        owned = [
-            {"pid": pid, "ppid": ppid, "classification": "installed_mcp"}
-            for pid, ppid, command in snapshot
-            if pid not in ancestors and any(path in command for path in roots)
-        ]
+        classified_owned = _classify_owned(snapshot, installation)
+        owned = [dict(record, classification="installed_mcp") for record in classified_owned]
         shared = [
-            {"pid": pid, "ppid": ppid, "classification": "shared_orca_provider"}
-            for pid, ppid, command in snapshot
-            if installation.profile_root in command
-            and "orca" in command.lower()
-            and not any(path in command for path in roots)
+            {"pid": record.pid, "ppid": record.ppid, "classification": "shared_orca_provider"}
+            for record in snapshot
+            if any(installation.profile_root in value for value in (*record.argv, *((record.executable,) if record.executable else ())))
+            and any("orca" in value.lower() for value in (*record.argv, *((record.executable,) if record.executable else ())))
+            and not _record_is_exactly_owned(record, installation)
         ]
         entries.append({"source": "processes", "performed": True, "owned": owned, "provider": shared})
+        opaque = _plausible_opaque_records(snapshot, installation, classified_owned)
+        if opaque:
+            entries.append(
+                {"source": "processes", "performed": False, "state": "UNKNOWN", "unattributed_count": len(opaque)}
+            )
     return entries
 
 
@@ -702,9 +878,10 @@ def doctor(home: str, *, timeout_seconds: float = 15.0) -> dict[str, Any]:
     )
     inventory = _resource_inventory(installation)
     inventory_unknown = any(entry.get("state") == "UNKNOWN" for entry in inventory)
+    inventory_failed = any(entry.get("source") == "orca_worktree_ps" and entry.get("ok") is False for entry in inventory)
     stale_resources = [entry for entry in inventory if entry.get("owned")]
     return {
-        "ok": orca_ready and permissions_ok and not stale_resources and not inventory_unknown,
+        "ok": orca_ready and permissions_ok and not stale_resources and not inventory_unknown and not inventory_failed,
         "tool_count": tool_count,
         "orca_ready": orca_ready,
         "state_permissions_ok": permissions_ok,
