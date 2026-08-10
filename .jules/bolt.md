@@ -1,0 +1,3 @@
+## 2024-05-15 - [Optimize `records_for` in TraceStore]
+**Learning:** Found a performance bottleneck where `TraceStore.records_for` would query all items in the database table into memory (`SELECT * FROM events`) via `.records()` and perform application-level filtering, which has $O(N)$ complexity based on the total table size and scales poorly as the trace store grows.
+**Action:** When filtering dataset from SQLite or equivalent database tables, prefer utilizing precise query clauses (e.g., `WHERE operation_id=?`) directly over loading the entire dataset into application memory and doing filtering in Python, even if it requires duplicating the database execution boilerplate.
