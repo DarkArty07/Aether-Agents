@@ -8,6 +8,10 @@
 
 **Tech Stack:** Python 3.11, pytest 9.1.1, Ruff 0.16.1, `uv`, MCP 1.28.1 stdio, Orca AppImage 1.4.167, Linux `/proc`, Git worktree isolation, Orca orchestration.
 
+**Execution result:** Completed and independently accepted at
+`0debf07db3601a14c88262d741727e5a527f3444`. Canonical evidence is in
+`M1_2_ACCEPTANCE.md`; active registration and activation remain later gates.
+
 ---
 
 ## 1. Frozen context

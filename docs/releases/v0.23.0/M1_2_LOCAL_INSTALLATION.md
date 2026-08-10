@@ -34,3 +34,13 @@ an inventory failure as `UNKNOWN` and does not return an OK result in that case.
 
 Active Aether registration, activation, reload, and production worker execution
 remain outside this local installation procedure.
+
+## Acceptance evidence
+
+`M1_2_ACCEPTANCE.md` accepts exact technical candidate
+`0debf07db3601a14c88262d741727e5a527f3444`. The detached, non-editable
+candidate passed 204 subsystem tests, Ruff, compileall and the complete isolated
+sequence against Orca `1.4.167`. The active Aether runtime configuration remained
+byte-for-byte unchanged, the active parser found no `aether_mcp` registration,
+and exact-path inventory found no residual installation-owned process or
+payload.
