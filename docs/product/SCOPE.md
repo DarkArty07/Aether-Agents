@@ -116,7 +116,7 @@ Their classification must be justified by the observed failure they address and 
 
 ## Experimental
 
-Historical release documents contain the retired default-off kernel and Harmonia migration. That evidence remains preserved, but the v0.22.0 candidate has no active multi-agent execution runtime.
+Historical release documents contain the retired default-off kernel and Harmonia migration. That evidence remains preserved. The v0.22.0 candidate has bounded Orca integration evidence but no active registered multi-agent runtime; PDR-0014 moves real production dogfooding to v0.23.0 and process-specific migration to v0.24.0.
 
 An experiment does not redefine the product merely because it is newer or technically ambitious.
 

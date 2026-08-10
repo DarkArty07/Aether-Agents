@@ -14,13 +14,13 @@
 
 **Aether Agents** defines the product vision, Hermes behavior, specialist roles,
 participation policy, skills, verification expectations, and release authority for
-an AI software team. The v0.22.0 candidate has physically retired Olympus/ACP and
-the disconnected Python core extracted from it. The target is a Hermes-led Orca
-swarm, but multi-agent execution and Ariadna curation remain intentionally
-unavailable. M2 now provides a default-off, zero-tool Aether MCP foundation for
-trusted project admission, durable receipts, protected content, manifest
-validation, semantic trace, and a version-pinned read-only Orca catalog. M3
-lifecycle execution has not started. No hidden fallback remains.
+an AI software team. The v0.22.0 candidate physically retires Olympus/ACP and the
+disconnected Python core, provides a default-off zero-tool Aether MCP foundation,
+and qualifies the exact Orca 1.4.167 desktop-renderer/public-CLI binding through
+deterministic M3-M5 and one bounded two-worker model-backed M5.4 pass. It remains
+unregistered and inactive. PDR-0014 closes v0.22.0 at that integration boundary,
+makes real repair-first Orca operation the goal of v0.23.0, and defers gradual
+process-specific migration to v0.24.0. No hidden fallback remains.
 
 </div>
 
@@ -42,10 +42,10 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 
 | | Feature | Description |
 |---|---------|-------------|
-| 🧠 | **6 Specialized Daimons** | Each a hermes-agent instance with its own model, persona (SOUL.md), and tools. Hefesto builds, Etalides researches, Ariadna curates, Athena audits, Daedalus designs, Ictinus architects. |
+| 🧠 | **Stable Generic Roster** | Hefesto, Daedalus, and Ictinus are retained generic archetypes; Ariadna is conditional/disabled, while Athena and Etalides are retired/forbidden. Production qualification belongs to v0.23.0. |
 | 🧭 | **Product Layer** | Hermes behavior, product decisions, specialist participation, verification policy, semantic acceptance, and release authority. |
-| 🐋 | **Orca Swarm Target** | Hermes will create one Run, dispatch independent Tasks before waiting, work alongside agents, and use Orca messaging instead of brokering every interaction. |
-| 🔒 | **Default-Off MCP Foundation** | `aether-mcp` packages the accepted M2 control/trace foundation, but registers exactly zero tools and does not start Runs, Tasks, workers, services, or network listeners. |
+| 🐋 | **Qualified Orca Integration** | v0.22.0 proves bounded lifecycle, one/two-worker execution, overlap, messaging, integration, recovery, and cleanup on the exact qualified binding; v0.23.0 turns it into the normal real-work path. |
+| 🔒 | **Default-Off MCP Foundation** | `aether-mcp` contains the accepted control/trace and Orca adapter foundation but still registers exactly zero tools; real registration, status, doctor, rollback, and production entry are v0.23.0 gates. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **95 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
@@ -69,7 +69,8 @@ Hermes (hermes-agent)
        Aether MCP v1alpha2 (default-off; 0 tools)
        admission / receipts / protected trace / catalog
                       │
-             future M3+ lifecycle control
+       qualified internally through M5.4
+       v0.23.0 production registration pending
                       ▼
                   Orca Run
                       │
@@ -83,8 +84,8 @@ Hermes (hermes-agent)
 ```
 
 - **Aether** owns product meaning through Hermes, profiles, skills, decisions, and acceptance policy—not through a parallel coordination kernel.
-- **Aether MCP M2** implements the internal, typed control/trace foundation while remaining unregistered and non-operational; it does not own Run, Task, worker, terminal, worktree, or message state.
-- **Orca** is intended to own Run, Task, Dispatch, messages, workers, terminals, worktrees, recovery, and cleanup mechanics.
+- **Aether MCP through M5.4** implements the internal typed control/trace and qualified adapter foundation while remaining unregistered and non-operational; it does not own Run, Task, worker, terminal, worktree, or message state.
+- **Orca** owns Run, Task, Dispatch, messages, workers, terminals, worktrees, recovery, and cleanup mechanics on the exact qualified binding. Pure Headless support remains unqualified.
 - **One feature branch** is the integration line; potentially conflicting writers use Orca child worktrees, while strictly disjoint scopes may share the current checkout.
 - **Existing `.aether` stores** are preserved and untouched; this candidate has no continuity or self-improvement reader/writer.
 - **Specialist profiles** remain versioned, but no accepted runtime in this candidate invokes them yet.
@@ -97,14 +98,16 @@ Hermes (hermes-agent)
 | Daimon | Role | Level | Description |
 |--------|------|-------|-------------|
 | **Hefesto** | Senior Developer | 2 | Builds, fixes, implements. Your senior developer. |
-| **Etalides** | Researcher | 2 | Finds facts. Never opinions, only verifiable data. |
-| **Ariadna** | Context Curator | 2 | Curates project context. Keeps everyone on the right page. |
-| **Athena** | Security Engineer | 2 | Audits security. Finds vulnerabilities before they ship. |
+| **Etalides** | Retired research profile | — | Forbidden; no new workflow may depend on it. |
+| **Ariadna** | Conditional context curator | — | Disabled until distinct value is proved in v0.23.0. |
+| **Athena** | Retired security profile | — | Forbidden under the approved roster policy. |
 | **Daedalus** | UX/UI Designer | 2 | Designs experiences, not just mockups. |
 | **Ictinus** | Backend Architect | 1 | Scales databases, APIs, infrastructure. Consultant on demand. |
 
-These profiles preserve the approved specialist roles and contracts. The v0.22.0
-candidate does not currently provide a runtime that invokes them.
+These tracked profiles preserve current and historical contracts; physical
+presence does not grant participation. The v0.22.0 candidate does not currently
+provide a registered runtime that invokes them. v0.23.0 will qualify only the
+retained generic roster through the repair-first Orca production path.
 
 ---
 

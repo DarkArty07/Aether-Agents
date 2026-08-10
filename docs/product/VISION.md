@@ -76,11 +76,11 @@ The product owner may classify any Daimon as required, allowed, disabled, or for
 
 Hermes remains responsible for understanding intent, preparing the contract, product synthesis, material amendments, and escalation. It should not relay every routine message or handoff.
 
-Authorized Daimons may eventually collaborate laterally within an approved contract. Stable archetypes may have multiple temporary workers when independent Tasks justify them; Aether does not need a new personality per technology or subtask. A future accepted Orca path may own task state, dependencies, evidence, budgets, and recovery without acquiring product authority. The v0.22.0 candidate intentionally has no such execution runtime.
+Authorized Daimons may collaborate laterally within an approved contract. Stable archetypes may have multiple temporary workers when independent Tasks justify them; Aether does not need a new personality per technology or subtask. Orca owns task state, dependencies, messages, workers, worktrees and recovery without acquiring product authority. The v0.22.0 candidate has bounded M5.4 integration evidence but intentionally has no registered execution runtime; PDR-0014 assigns production dogfooding to v0.23.0 and gradual process migration to v0.24.0.
 
 Specialist disagreements are resolved through current user intent, approved decisions, contract, artifacts, reproducible evidence, quality doctrine, and domain authority—not majority vote.
 
-The v0.19.0 design was aligned with this target, but its release closeout did not prove replacement of the live Hermes hub-and-spoke path. The later v0.19.x migration closed at v0.19.5 with a `VIABLE — BOUNDED` verdict for its fixed historical topology. PDR-0011 subsequently retired that runtime from the v0.22.0 candidate; broader topology and replacement execution remain unimplemented.
+The v0.19.0 design was aligned with this target, but its release closeout did not prove replacement of the live Hermes hub-and-spoke path. The later v0.19.x migration closed at v0.19.5 with a `VIABLE — BOUNDED` verdict for its fixed historical topology. PDR-0011 retired that runtime from the v0.22.0 candidate; the successor Orca integration is bounded and accepted through M5.4, while registration, generic production operation and workflow migration remain later gates.
 
 ## Learning and user-model doctrine
 

@@ -15,7 +15,9 @@
 ### Changed
 - **Hermes-led Orca boundary**: PDR-0012 defines Aether as product vision, Hermes policy, specialist profiles, skills, routing judgment, verification, semantic acceptance, and release authority. Orca is the intended owner of Run, Task, Dispatch, worker, message, terminal, worktree, recovery, and cleanup mechanics.
 - **Swarm topology**: The target creates all independent Tasks before waiting, permits direct/group worker messaging, keeps one feature integration branch, and requires child worktrees for potentially conflicting writers. Hermes remains product supervisor and may work in parallel without relaying every routine message.
-- **Explicit capability gap**: Specialist profiles remain product contracts, but multi-agent execution and Ariadna curation are intentionally unavailable until the Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery, and rollback gates.
+- **Qualified integration boundary**: The exact Orca 1.4.167 desktop-renderer/public-CLI binding now passes deterministic M3-M5 and one bounded two-worker Codex 0.147.0 model-backed M5.4 execution with real overlap, verified artifacts, integration, semantic close, no retry, and zero survivors. Pure Headless support remains unqualified.
+- **Versioned production adoption**: PDR-0014 closes v0.22.0 at M5.4, moves repair-first real Orca operation and generic-agent refinement to v0.23.0, and moves gradual process-specific workflow migration to v0.24.0. The former M0-M12 plan is preserved as historical evidence.
+- **Explicit current capability gap**: The installed Aether MCP surface remains default-off, unregistered, and zero-tool. Production use begins only after the separately authorized v0.23.0 entry and rollback gate; no legacy fallback may hide a failed Orca Task.
 - **Current-facing truth**: Updated Hermes/profile policies, orchestration skill, README, contributor guidance, quickstart, installation, product/knowledge documents, website, roadmap, inventory, and PDR-0012. The v0.19 model and the pre-emptive PDR-0011 adapter/core design are explicitly historical or superseded.
 
 ### Fixed
@@ -26,6 +28,7 @@
 ### Testing
 - **Zero-runtime candidate**: The removal contract was observed RED with 5 failures and reached GREEN; all 25 retained repository tests pass together with Ruff, compileall, shell/YAML parsing, governance, active-surface scanning, and current Markdown links.
 - **Clean installation**: Two isolated setup passes generated seven resolved configs with zero placeholders and zero profile plugins. The wrapper, candidate-local doctor, and explicit absence of both `src/` and the `aether_agents` import passed.
+- **M5.4 corrected candidate**: Historical closeout reports 22 focused tests and 198 repository tests plus Ruff and compileall on the bounded model-backed candidate. Final v0.22.0 publication still requires a fresh exact-release-tree gate.
 
 ### Operational status
 - **No activation or data migration**: Orca was not activated, no specialist workers were created, and no live configuration or historical continuity/session store was migrated, truncated, or deleted.

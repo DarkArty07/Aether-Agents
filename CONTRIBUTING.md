@@ -96,9 +96,9 @@ The v0.22.0 candidate contains three product boundaries:
 
 1. **Hermes Agent** — user-facing agent framework, memory, skills, tools, and gateways.
 2. **Aether product layer** — Hermes behavior, decisions, profiles, skills, participation policy, verification, semantic acceptance, and release authority.
-3. **Orca execution target** — intended owner of Runs, Tasks, Dispatches, workers, messages, terminals, worktrees, recovery, and cleanup after separate acceptance.
+3. **Orca execution substrate** — accepted bounded owner of Runs, Tasks, Dispatches, workers, messages, terminals, worktrees, recovery, and cleanup on the exact qualified binding; production registration remains a separate v0.23.0 gate.
 
-The Olympus runtime, extracted native Python core, continuity plugins, package distribution, and MCP facade are absent. Do not restore a compatibility shim, hidden fallback, or pre-emptive policy kernel; replacement execution remains gated by PDR-0012 and the v0.22 roadmap.
+The Olympus runtime, extracted native Python core, continuity plugins, package distribution, and legacy MCP facade are absent from the candidate source. Do not restore a compatibility shim, hidden fallback, or pre-emptive policy kernel. PDR-0014 closes v0.22.0 at bounded integration, governs production dogfooding through v0.23.0, and defers process-specific migration to v0.24.0.
 
 ### Protected `.aether` history
 

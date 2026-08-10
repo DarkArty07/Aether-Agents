@@ -8,7 +8,7 @@
 > **Total duration:** 9 hours, 45 minutes, 5 seconds (35,105 seconds)
 > **Branch:** `feature/v0.22.0-orca-transition`
 > **Baseline:** `c5e359e589ce5661d665314e125443331c083eca`
-> **Status:** COMPLETE — deterministic M3-M5; M5.4 attempted and blocked on model-worker timeout
+> **Status:** COMPLETE — deterministic M3-M5; the original M5.4 timeout was later corrected and the bounded model-backed path accepted
 
 ## Authority and stop boundary
 

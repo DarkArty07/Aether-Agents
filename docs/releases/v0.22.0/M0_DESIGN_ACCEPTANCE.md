@@ -1,6 +1,6 @@
 # v0.22.0 M0 MCP-First Design Acceptance
 
-> **Status:** ACCEPTED
+> **Status:** ACCEPTED HISTORICAL DESIGN BASELINE — VERSION PLACEMENT PARTIALLY SUPERSEDED BY PDR-0014
 > **Accepted:** 2026-08-06
 > **Owner:** Christopher (DarkArty07)
 > **Candidate branch:** `feature/v0.22.0-orca-transition`
@@ -10,6 +10,8 @@
 
 The product owner accepted the detailed MCP-first architecture, contracts,
 measurement model, frozen use-case catalog and M1–M12 roadmap on 2026-08-06.
+PDR-0014 later preserves the architecture and accepted M0-M5.4 evidence while
+superseding the placement of former M6-M12 inside v0.22.0.
 
 The accepted topology is:
 
@@ -46,13 +48,23 @@ This acceptance preserves the following boundaries:
 - `../../reference/AETHER_LEARNING_EPISODE_SCHEMA.md`
 - `MEASUREMENT_CONTRACT.md`
 - `USE_CASE_CATALOG.md`
-- `ROADMAP.md`
-- `STATUS.yaml`
+- `HISTORICAL_M0_M12_ROADMAP.md`
+- `HISTORICAL_M0_M12_STATUS.yaml`
 
 The accepted design freezes 24 MCP tools, 16 use cases, seven authority gates
 (`D0`–`D6`), the M0–M11 source/Release path and separately gated M12 activation.
-Acceptance does not claim that any MCP package, fixture, store, tool, worker or
-runtime currently exists.
+At this M0 boundary, acceptance did not claim that any MCP package, fixture,
+store, tool, worker or runtime existed. Later evidence through M5.4 is governed by
+the current `ROADMAP.md` and `RELEASE_BOUNDARY.md` rather than by this historical
+implementation authorization.
+
+## 2026-08-09 scope amendment
+
+The product owner closed v0.22.0 capability scope at the accepted M5.4 Orca
+integration boundary. Former M6-M12 work moved or split across v0.23.0, v0.24.0
+and a separately deferred learning-dataset program. See PDR-0014. The remaining
+v0.22.0 work is exact source acceptance and publication only; this historical M0
+record does not authorize current implementation.
 
 ## Stepwise external-agent implementation protocol
 

@@ -1,9 +1,9 @@
 # Daimon Archetypes and Swarm Roster
 
-> **Status:** APPROVED TARGET DESIGN; NOT IMPLEMENTED OR ACTIVATED
+> **Status:** APPROVED TARGET DESIGN; v0.23.0 PRODUCTION QUALIFICATION PLANNED; NOT ACTIVATED
 > **Date:** 2026-08-06
-> **Authority:** PDR-0013
-> **Runtime boundary:** The v0.22.0 candidate has no accepted specialist execution path.
+> **Authority:** PDR-0013 and PDR-0014
+> **Runtime boundary:** v0.22.0 accepted a bounded Orca integration path through M5.4, but no specialist path is registered or active in the installed runtime.
 
 ## Purpose
 
@@ -44,7 +44,7 @@ An archetype can have zero, one, or several workers. A worker cannot expand its 
 
 ### Runtime availability
 
-Availability is independent from lifecycle and policy. In the current v0.22.0 candidate every specialist is operationally unavailable because the Hermes-led Orca path is not accepted.
+Availability is independent from lifecycle and policy. In the current v0.22.0 candidate every specialist is operationally unavailable because the accepted Hermes-led Orca path remains default-off, zero-tool and unregistered. v0.23.0 qualifies only the retained generic roster after its production-entry gate.
 
 ## Target roster
 
@@ -422,8 +422,8 @@ worker reports terminal outcome
 ### Current v0.22.0 candidate
 
 - six tracked specialist profile directories;
-- no accepted multi-agent runtime;
-- no Orca worker launched for Aether;
+- accepted bounded M5.4 integration evidence but no registered multi-agent runtime;
+- no Orca worker available through the installed Aether MCP surface;
 - no Verifier profile;
 - no Ariadna curation surface;
 - Athena and Etalides files still present;
@@ -438,5 +438,9 @@ worker reports terminal outcome
 - Athena and Etalides retired/forbidden;
 - multiple instances of stable archetypes instead of personality proliferation;
 - independent operational completion, verification, semantic synthesis, and user acceptance states.
+
+PDR-0014 sequences this target: v0.23.0 qualifies real generic-agent operation
+and repairs integration incidents; v0.24.0 composes process-specific workflows
+without multiplying personalities.
 
 No target statement in this document authorizes activation or repository mutation.

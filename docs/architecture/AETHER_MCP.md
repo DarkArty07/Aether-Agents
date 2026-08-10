@@ -1,10 +1,10 @@
 # Aether MCP Control and Trace Plane
 
-> **Status:** ADAPTIVE SCHEMAS/RESTRICTED FOUNDATION IMPLEMENTED; PROVIDER ORCHESTRATION BLOCKED; NOT ACTIVATED
+> **Status:** INTEGRATION IMPLEMENTED THROUGH M5.4; ZERO-TOOL/DEFAULT-OFF; NOT ACTIVATED
 > **Date:** 2026-08-08
-> **Authority:** ADR-0001, PDR-0012, and PDR-0013
+> **Authority:** ADR-0001, PDR-0012, PDR-0013, and PDR-0014
 > **Protocol target:** `aether.mcp/v1alpha2`
-> **Closed implementation scope:** bounded R0-R6 default-off redesign and qualification
+> **Closed implementation scope:** v0.22.0 integration foundation through accepted M5.4
 
 ## 1. Purpose
 
@@ -707,7 +707,7 @@ Implementation planning must include deterministic tests for:
   retention/deletion/lineage, privacy/integrity, closeout, deterministic failure
   cases, and concrete measurable use cases/thresholds.
 
-### Implemented through M2
+### Implemented through M5.4
 
 - The package and zero-tool stdio bootstrap exist; R2 implements the exact
   15-schema `v1alpha2` successor while preserving historical `v1alpha1` bytes.
@@ -719,18 +719,25 @@ Implementation planning must include deterministic tests for:
   admission, Run/Task recovery across restart, explicit generation-2 rebind,
   completion and reset for Orca 1.4.167. Headless `serve` admission remains absent.
 - No operational MCP tool is registered/callable. No Aether lifecycle Run, worker,
-  model, credential, provider spend, registration or activation was introduced.
+  registration or activation was introduced into the installed runtime.
+- M3-M5 added bounded deterministic lifecycle, one-worker, retry, messaging,
+  recovery, parallel overlap, handoff, integration and cleanup behavior.
+- M5.4 accepted one bounded two-worker model-backed execution on Orca 1.4.167,
+  Codex CLI 0.147.0 and `gpt-5.6-terra`, with zero retries, USD 0 PAYG and zero
+  survivors. This does not qualify pure Headless operation.
 
-### Still not implemented or authorized
+### Still not implemented or activated
 
-- M3 lifecycle control and every M4+ worker/swarm capability.
 - A production key-custody provider or full-episode capture activation.
-- Model-backed workers, Release, registration, deployment and activation.
+- Registration of the approved operational tools in the installed Hermes runtime.
+- Stable generic-roster production qualification and process-specific workflows.
+- v0.22.0 source Release, installed-runtime cutover, deployment and activation.
 
 ### Final disposition
 
-Christopher accepted the adaptive direction and R0-R6 task on 2026-08-08, then
-authorized completion through M2 with a strict stop before M3 on 2026-08-09. The
-exact desktop-backed coordinator binding is technically qualified with its
-headless limitation recorded. M2 is complete and default-off; M3 requires a new
-owner gate and this milestone does not grant registration or activation.
+Christopher accepted the adaptive direction and subsequent bounded M3-M5/M5.4
+qualification. PDR-0014 closes v0.22.0 at that integration boundary. The package
+remains zero-tool/default-off and the exact desktop-backed binding retains its
+Headless limitation. v0.23.0 separately governs registration, production entry,
+repair-first operation and generic-agent refinement; this document does not grant
+runtime activation.

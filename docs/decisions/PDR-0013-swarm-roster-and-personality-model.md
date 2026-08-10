@@ -69,7 +69,7 @@ Two distinct dimensions are recorded:
 - **lifecycle:** `retained`, `conditional`, `proposed`, or `retired`;
 - **participation policy:** `required`, `allowed`, `disabled`, or `forbidden` at the applicable user/project/run/task scope.
 
-Runtime availability is separate. The entire target swarm is unavailable until the Orca path passes its gates.
+Runtime availability is separate. The v0.22.0 candidate has accepted bounded M5.4 integration evidence but remains default-off, zero-tool and unregistered. The retained roster is operationally unavailable until the v0.23.0 production-entry and qualification gates pass.
 
 | Identity | Target function | Lifecycle | Default target policy | v0.22.0 implementation state |
 |---|---|---|---|---|

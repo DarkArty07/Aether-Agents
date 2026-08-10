@@ -2,7 +2,7 @@
 
 > **Status:** APPROVED PRODUCT BASELINE — future UI not implemented
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`, `../decisions/ADR-0001-aether-mcp-control-and-trace-plane.md`
+> **Governing decisions:** `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`, `../decisions/PDR-0014-versioned-orca-production-adoption.md`, `../decisions/ADR-0001-aether-mcp-control-and-trace-plane.md`
 > **Implementation authorization:** Documentation and design only
 
 ## Experience statement

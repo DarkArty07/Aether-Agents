@@ -48,7 +48,7 @@ Verify Hermes, the root template, all six profile templates, and the absence of 
 make doctor
 ```
 
-The v0.22.0 candidate does not expose a multi-agent execution runtime. Specialist profiles are installed as product contracts, but no process discovers or spawns them until the Hermes-led Orca path is accepted.
+The v0.22.0 candidate does not expose a registered multi-agent execution runtime. Its exact Hermes-led Orca binding is accepted through bounded M5.4 evidence, but Aether MCP remains default-off and zero-tool. Specialist profiles are installed as product contracts; production discovery and spawning begin only after the v0.23.0 entry gate.
 
 ## 5. Current execution boundary
 
@@ -56,7 +56,9 @@ Hermes performs bounded work directly. Do not use `talk_to`, `delegate_task`, a
 profile wrapper, or a restored compatibility shim to simulate specialist
 execution. The target is one Hermes-supervised Orca Run with independent Tasks,
 worker-to-worker messages, and child worktrees for potentially conflicting
-writers; that target is not activated in this candidate.
+writers. That topology is technically qualified in a bounded candidate but is not
+registered or activated. See `../releases/v0.23.0/ROADMAP.md` before any runtime
+change; do not add a direct CLI or legacy fallback to simulate production entry.
 
 ## 6. Gateway (Optional)
 

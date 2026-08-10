@@ -1,9 +1,9 @@
 # Hermes–Orca Swarm Operating Model
 
-> **Status:** APPROVED ADAPTIVE MODEL; PROVIDER-BACKED EXECUTION BLOCKED; NOT ACTIVATED
+> **Status:** APPROVED MODEL; BOUNDED PROVIDER EXECUTION QUALIFIED; PRODUCTION NOT ACTIVATED
 > **Date:** 2026-08-06
-> **Authority:** PDR-0012, PDR-0013, and ADR-0001
-> **Current truth:** Hermes performs bounded work directly; no accepted Aether multi-agent execution path exists.
+> **Authority:** PDR-0012, PDR-0013, PDR-0014, and ADR-0001
+> **Current truth:** The exact Orca path is accepted through bounded M5.4 evidence, but Aether MCP remains zero-tool/unregistered; Hermes performs real work directly until the v0.23.0 production-entry gate passes.
 
 ## Product experience
 

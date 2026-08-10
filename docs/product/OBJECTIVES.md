@@ -125,9 +125,9 @@ Objectives describe user or product outcomes, not features such as adding a tool
 - **Outcome:** Authorized Daimons can exchange bounded work, artifacts, evidence, review requests, and dependency handoffs directly after contract admission, while Hermes remains responsible for intent, amendments, escalation, and final synthesis.
 - **Beneficiary:** Users, specialist agents, and operators paying the context, latency, and inference cost.
 - **Why it matters:** Using the strongest model as the message bus for every handoff wastes capacity and constrains specialist autonomy, but unrestricted self-organization would endanger vision and authority.
-- **Evidence:** A future accepted runtime must prove a fixed two-agent handoff with zero routine Hermes relay, durable traceability, no duplicate semantic authority, representative fault tests, and no hidden fallback.
+- **Evidence:** v0.22.0 M5/M5.4 proves one bounded two-agent handoff with durable correlations, real overlap, verified artifacts, integration, cleanup and no hidden fallback on the exact qualified binding. v0.23.0 must prove repeated installed production use and repair-driven recovery.
 - **Failure condition:** Hermes still relays routine results, selects every next agent, or dispatches every retry; the runtime becomes a second product authority; lateral work escapes contract or participant bounds.
-- **Horizon:** Approved target direction. v0.19.5 remains historical bounded evidence; PDR-0011 retired its runtime; PDR-0012 assigns future operational mechanics to Orca; and v0.22.0 still provides no accepted replacement execution path.
+- **Horizon:** Bounded integration accepted in v0.22.0; production dogfooding and generic roster qualification planned for v0.23.0; process-specific migration planned for v0.24.0 under PDR-0014. The installed v0.22.0 surface remains inactive.
 
 ### Objective 14: Build a coherent user model through Hermes
 

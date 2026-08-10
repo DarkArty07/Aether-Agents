@@ -139,13 +139,7 @@ Setting `personality: none` returns an empty string, so only the `SOUL.md` ident
 
 ## MCP Servers
 
-The current v0.22.0 candidate does not yet register or implement the approved
-target Aether MCP. ADR-0001 makes that MCP the future Hermes control/trace
-surface for an Orca-backed swarm, but configuration remains blocked until its
-proposed architecture, exact contract, semantic-trace/protected-learning/privacy/
-retention policy, and final use cases are accepted and implemented. Do not add a
-compatibility command, direct
-CLI-first delegation path, or unverified legacy fallback.
+The current v0.22.0 candidate implements the accepted Aether MCP integration foundation through bounded M5.4 evidence but deliberately registers zero tools. ADR-0001 defines the coordinator control/trace surface and PDR-0014 moves real registration, status/doctor, rollback, and production entry to the separately gated v0.23.0 roadmap. Configuration must not be added before that exact implementation and activation contract passes. Do not add a compatibility command, direct CLI-first delegation path, or unverified legacy fallback.
 
 Additional MCP servers can be added per-profile (e.g., Context7 for documentation lookup):
 
