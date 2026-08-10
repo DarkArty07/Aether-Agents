@@ -9,10 +9,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
+import signal
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -26,12 +29,13 @@ INSTALL_VERSION = "0.23.0.dev0"
 INSTALL_NAME = "aether-mcp"
 ORCA_PRODUCT_VERSION = "1.4.167"
 MAX_ORCA_OUTPUT_BYTES = 1_048_576
+PROFILE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 ORCA_CLI_BOOTSTRAP = (
     '(async()=>{try{const path=require("path");const appDir=process.env.APPDIR;'
     'if(!appDir){throw new Error("missing APPDIR");}'
     'const cli=path.join(appDir,"resources","app.asar.unpacked","out","cli","index.js");'
-    'await Promise.resolve(require(cli).main(process.argv.slice(1)));}'
-    'catch(error){console.error(error&&error.stack?error.stack:String(error));process.exit(1);}})();'
+    "await Promise.resolve(require(cli).main(process.argv.slice(1)));}"
+    "catch(error){console.error(error&&error.stack?error.stack:String(error));process.exit(1);}})();"
 )
 
 
@@ -41,6 +45,77 @@ class InstallError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+@dataclass(frozen=True)
+class OrcaProfileLayout:
+    root: Path
+
+    @property
+    def hermes_home(self) -> Path:
+        return self.root / "hermes-home"
+
+    @property
+    def xdg_config_home(self) -> Path:
+        return self.root / "xdg" / "config"
+
+    @property
+    def xdg_cache_home(self) -> Path:
+        return self.root / "xdg" / "cache"
+
+    @property
+    def xdg_data_home(self) -> Path:
+        return self.root / "xdg" / "data"
+
+    @property
+    def xdg_state_home(self) -> Path:
+        return self.root / "xdg" / "state"
+
+    def directories(self) -> tuple[Path, ...]:
+        return (
+            self.root,
+            self.hermes_home,
+            self.xdg_config_home,
+            self.xdg_cache_home,
+            self.xdg_data_home,
+            self.xdg_state_home,
+        )
+
+
+def _run_owned(
+    command: tuple[str, ...], *, timeout: int, env: dict[str, str] | None = None, cwd: Path | None = None
+) -> subprocess.CompletedProcess[bytes]:
+    """Run an installer child in a new session and reap its entire group on failure."""
+    child = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, env=env, cwd=cwd
+    )
+    try:
+        stdout, stderr = child.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_group(child.pid)
+        raise InstallError("INSTALLER_TIMEOUT") from exc
+    if child.returncode:
+        _terminate_group(child.pid)
+        raise subprocess.CalledProcessError(child.returncode, command, stdout, stderr)
+    return subprocess.CompletedProcess(command, child.returncode, stdout, stderr)
+
+
+def _terminate_group(pid: int) -> None:
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.05)
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
 
 
 def digest(path: Path) -> str:
@@ -90,7 +165,9 @@ def _registration(config: str) -> tuple[bool, bool]:
     item = next((i for i in range(start + 1, end) if lines[i].startswith("  aether_mcp:")), None)
     if item is None:
         return False, False
-    item_end = next((i for i in range(item + 1, end) if lines[i].startswith("  ") and not lines[i].startswith("    ")), end)
+    item_end = next(
+        (i for i in range(item + 1, end) if lines[i].startswith("  ") and not lines[i].startswith("    ")), end
+    )
     enabled = any(line.strip() == "enabled: true" for line in lines[item + 1 : item_end])
     return True, enabled
 
@@ -105,7 +182,9 @@ def set_registration_enabled(config: str, enabled: bool) -> str:
     item = next((i for i in range(start + 1, end) if lines[i].startswith("  aether_mcp:")), None)
     if item is None:
         raise InstallError("REGISTRATION_NOT_FOUND")
-    item_end = next((i for i in range(item + 1, end) if lines[i].startswith("  ") and not lines[i].startswith("    ")), end)
+    item_end = next(
+        (i for i in range(item + 1, end) if lines[i].startswith("  ") and not lines[i].startswith("    ")), end
+    )
     flag = f"    enabled: {str(enabled).lower()}\n"
     existing = next((i for i in range(item + 1, item_end) if lines[i].lstrip().startswith("enabled:")), None)
     if existing is None:
@@ -165,6 +244,12 @@ class Installation:
     appimage: str
     appimage_sha256: str
     profile_root: str
+    profile_id: str
+    orca_hermes_home: str
+    orca_xdg_config_home: str
+    orca_xdg_cache_home: str
+    orca_xdg_data_home: str
+    orca_xdg_state_home: str
     extraction: str
     wrapper: str
     venv: str
@@ -202,6 +287,7 @@ def setup(
     hermes_home: str,
     appimage: str,
     profile_root: str,
+    profile_id: str,
     repo_selector: str,
     base_ref: str,
     coordinator_handle: str,
@@ -216,6 +302,9 @@ def setup(
     )
     if not root.is_dir() or not home.is_dir() or not image.is_file() or not profile.is_dir():
         raise InstallError("INVALID_PATH")
+    if not PROFILE_ID.fullmatch(profile_id):
+        raise InstallError("INVALID_PROFILE_ID")
+    layout = OrcaProfileLayout(profile)
     observed = digest(image)
     if observed != EXPECTED_APPIMAGE_SHA256:
         raise InstallError("APPIMAGE_DIGEST_MISMATCH")
@@ -226,10 +315,24 @@ def setup(
     if existing_path.exists():
         existing = Installation.load(home)
         expected = {
-            "project_root": str(root), "hermes_home": str(home), "config_path": str(home / "config.yaml"),
-            "appimage": str(image), "appimage_sha256": observed, "profile_root": str(profile),
-            "repo_selector": repo_selector, "base_ref": base_ref, "coordinator_handle": coordinator_handle,
-            "catalog_digest": catalog.digest, "tool_count": len(CALLABLE_TOOL_NAMES), "version": INSTALL_VERSION,
+            "project_root": str(root),
+            "hermes_home": str(home),
+            "config_path": str(home / "config.yaml"),
+            "appimage": str(image),
+            "appimage_sha256": observed,
+            "profile_root": str(profile),
+            "profile_id": profile_id,
+            "orca_hermes_home": str(layout.hermes_home),
+            "orca_xdg_config_home": str(layout.xdg_config_home),
+            "orca_xdg_cache_home": str(layout.xdg_cache_home),
+            "orca_xdg_data_home": str(layout.xdg_data_home),
+            "orca_xdg_state_home": str(layout.xdg_state_home),
+            "repo_selector": repo_selector,
+            "base_ref": base_ref,
+            "coordinator_handle": coordinator_handle,
+            "catalog_digest": catalog.digest,
+            "tool_count": len(CALLABLE_TOOL_NAMES),
+            "version": INSTALL_VERSION,
         }
         if all(getattr(existing, key) == value for key, value in expected.items()):
             return existing
@@ -254,9 +357,9 @@ def setup(
         if not extraction.exists():
             temporary = Path(tempfile.mkdtemp(prefix="aether-mcp-extract-", dir=extraction.parent))
             try:
-                subprocess.run(
-                    (str(image), "--appimage-extract"), cwd=temporary, check=True, timeout=120, capture_output=True
-                )
+                extraction_env = dict(os.environ)
+                extraction_env.pop("APPIMAGE_EXTRACT_AND_RUN", None)
+                _run_owned((str(image), "--appimage-extract"), timeout=120, env=extraction_env, cwd=temporary)
                 extracted = temporary / "squashfs-root"
                 if not extracted.is_dir():
                     raise InstallError("APPIMAGE_EXTRACTION_FAILED")
@@ -270,29 +373,22 @@ def setup(
         _atomic_write(
             wrapper,
             "#!/bin/sh\nset -eu\nunset APPIMAGE_EXTRACT_AND_RUN NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE\n"
+            f"export HOME={json.dumps(str(profile))}\nexport HERMES_HOME={json.dumps(str(layout.hermes_home))}\n"
+            f"export XDG_CONFIG_HOME={json.dumps(str(layout.xdg_config_home))}\nexport XDG_CACHE_HOME={json.dumps(str(layout.xdg_cache_home))}\n"
+            f"export XDG_DATA_HOME={json.dumps(str(layout.xdg_data_home))}\nexport XDG_STATE_HOME={json.dumps(str(layout.xdg_state_home))}\n"
+            "export ORCA_TELEMETRY_DISABLED=1\n"
             f"export APPDIR={json.dumps(str(extraction))}\nexport ELECTRON_RUN_AS_NODE=1\n"
-            f"exec {json.dumps(str(app_run))} -e {json.dumps(ORCA_CLI_BOOTSTRAP)} -- \"$@\"\n",
+            f'exec {json.dumps(str(app_run))} -e {json.dumps(ORCA_CLI_BOOTSTRAP)} -- "$@"\n',
             0o700,
         )
-        subprocess.run((uv, "venv", "--clear", str(venv)), check=True, timeout=120, capture_output=True)
-        subprocess.run(
-            (uv, "pip", "install", "--python", str(venv / "bin" / "python"), str(root)),
-            check=True,
-            timeout=300,
-            capture_output=True,
-        )
+        _run_owned((uv, "venv", "--clear", str(venv)), timeout=120)
+        _run_owned((uv, "pip", "install", "--python", str(venv / "bin" / "python"), str(root)), timeout=300)
         environment = {
             "AETHER_STATE_ROOT": str(state_root),
             "AETHER_COORDINATOR_PRINCIPAL": str(uuid.uuid4()),
             "HERMES_HOME": str(home),
-            "HOME": str(profile),
-            "XDG_CONFIG_HOME": str(profile / "config"),
-            "XDG_CACHE_HOME": str(profile / "cache"),
-            "XDG_DATA_HOME": str(profile / "data"),
-            "XDG_STATE_HOME": str(profile / "state"),
-            "XDG_RUNTIME_DIR": str(profile / "runtime"),
             "AETHER_PROFILE_ROOT": str(profile),
-            "AETHER_PROFILE": profile.name,
+            "AETHER_PROFILE": profile_id,
             "AETHER_TELEMETRY_DISABLED": "1",
             "DO_NOT_TRACK": "1",
             "AETHER_SESSION_ID": "${AETHER_SESSION_ID}",
@@ -303,7 +399,7 @@ def setup(
             "AETHER_ORCA_BINDING_DIGEST": catalog.digest,
             "AETHER_ORCA_TIMEOUT_MS": str(timeout_ms),
         }
-        for path in (profile, *(Path(environment[key]) for key in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"))):
+        for path in layout.directories():
             path.mkdir(parents=True, exist_ok=True, mode=0o700)
             os.chmod(path, 0o700)
         for key in ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY"):
@@ -323,25 +419,31 @@ def setup(
         updated = add_registration(original, launcher)
         _atomic_write(config, updated, stat.S_IMODE(config.stat().st_mode))
         installation = Installation(
-            str(root),
-            str(home),
-            str(config),
-            str(image),
-            observed,
-            str(profile),
-            str(extraction),
-            str(wrapper),
-            str(venv),
-            str(launcher),
-            str(state_root),
-            str(backup),
-            hashlib.sha256(original.encode()).hexdigest(),
-            hashlib.sha256(updated.encode()).hexdigest(),
-            repo_selector,
-            base_ref,
-            coordinator_handle,
-            catalog.digest,
-            len(CALLABLE_TOOL_NAMES),
+            project_root=str(root),
+            hermes_home=str(home),
+            config_path=str(config),
+            appimage=str(image),
+            appimage_sha256=observed,
+            profile_root=str(profile),
+            profile_id=profile_id,
+            orca_hermes_home=str(layout.hermes_home),
+            orca_xdg_config_home=str(layout.xdg_config_home),
+            orca_xdg_cache_home=str(layout.xdg_cache_home),
+            orca_xdg_data_home=str(layout.xdg_data_home),
+            orca_xdg_state_home=str(layout.xdg_state_home),
+            extraction=str(extraction),
+            wrapper=str(wrapper),
+            venv=str(venv),
+            launcher=str(launcher),
+            state_root=str(state_root),
+            backup=str(backup),
+            original_config_sha256=hashlib.sha256(original.encode()).hexdigest(),
+            registered_config_sha256=hashlib.sha256(updated.encode()).hexdigest(),
+            repo_selector=repo_selector,
+            base_ref=base_ref,
+            coordinator_handle=coordinator_handle,
+            catalog_digest=catalog.digest,
+            tool_count=len(CALLABLE_TOOL_NAMES),
         )
         _chmod_owned_directories(base)
         _chmod_owned_directories(state_root)
@@ -363,12 +465,32 @@ def status(home: str) -> dict[str, Any]:
         "registration": dict(zip(("present", "enabled"), _registration(config), strict=True)),
         "paths": {
             key: getattr(installation, key)
-            for key in ("config_path", "appimage", "venv", "launcher", "state_root", "wrapper", "extraction", "profile_root")
+            for key in (
+                "config_path",
+                "appimage",
+                "venv",
+                "launcher",
+                "state_root",
+                "wrapper",
+                "extraction",
+                "profile_root",
+                "orca_hermes_home",
+                "orca_xdg_config_home",
+                "orca_xdg_cache_home",
+                "orca_xdg_data_home",
+                "orca_xdg_state_home",
+            )
         },
         "hashes": {"appimage": installation.appimage_sha256, "catalog": installation.catalog_digest},
         "tool_count": installation.tool_count,
         "tool_names": sorted(CALLABLE_TOOL_NAMES),
-        "orca": {"profile_root": installation.profile_root, "extraction": installation.extraction, "product_version": ORCA_PRODUCT_VERSION, "ready": Path(installation.wrapper).is_file()},
+        "orca": {
+            "profile_root": installation.profile_root,
+            "profile_id": installation.profile_id,
+            "extraction": installation.extraction,
+            "product_version": ORCA_PRODUCT_VERSION,
+            "ready": Path(installation.wrapper).is_file(),
+        },
         "state_permissions": _permissions_ok(Path(installation.state_root)),
     }
 
@@ -385,6 +507,13 @@ def rollback(home: str) -> dict[str, Any]:
     backup = Path(installation.backup).read_text(encoding="utf-8")
     restored = backup if registered_hash == installation.registered_config_sha256 else remove_registration(current)
     _atomic_write(config, restored, stat.S_IMODE(config.stat().st_mode))
+    owned = _owned_processes(installation)
+    if owned is None:
+        raise InstallError("PROCESS_INVENTORY_UNKNOWN")
+    _terminate_owned_processes(owned)
+    survivors = _owned_processes(installation)
+    if survivors is None or survivors:
+        raise InstallError("OWNED_PROCESS_CLEANUP_FAILED")
     shutil.rmtree(home_path / ".aether-mcp", ignore_errors=True)
     return {
         "ok": True,
@@ -425,31 +554,109 @@ def _parse_orca_status(completed: subprocess.CompletedProcess[bytes]) -> bool:
         envelope = json.loads(completed.stdout.decode("utf-8"))
         result = envelope["result"]
         runtime = result["runtime"]
-        return bool(envelope["ok"]) and runtime["appVersion"] == ORCA_PRODUCT_VERSION and runtime["state"] == "ready" and bool(runtime["reachable"])
+        return (
+            bool(envelope["ok"])
+            and runtime["appVersion"] == ORCA_PRODUCT_VERSION
+            and runtime["state"] == "ready"
+            and bool(runtime["reachable"])
+        )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
         return False
 
 
+def _ancestor_pids() -> set[int]:
+    result: set[int] = set()
+    current = os.getpid()
+    while current and current not in result:
+        result.add(current)
+        try:
+            current = int((Path("/proc") / str(current) / "stat").read_text().split()[3])
+        except (OSError, ValueError, IndexError):
+            break
+    return result
+
+
+def _process_snapshot() -> list[tuple[int, int, str]] | None:
+    """Same-user bounded proc snapshot; never return raw command lines to callers."""
+    try:
+        owner = os.getuid()
+        records: list[tuple[int, int, str]] = []
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat_data = (entry / "stat").read_text().split()
+                if (entry / "status").read_text().split("Uid:", 1)[1].split()[0] != str(owner):
+                    continue
+                raw = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+                records.append((int(entry.name), int(stat_data[3]), raw[:8192]))
+            except (OSError, ValueError, IndexError):
+                continue
+        return records
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _owned_processes(installation: Installation) -> list[dict[str, int]] | None:
+    records = _process_snapshot()
+    if records is None:
+        return None
+    ancestors = _ancestor_pids()
+    roots = (installation.launcher, installation.venv, installation.wrapper, installation.extraction)
+    return [
+        {"pid": pid, "ppid": ppid}
+        for pid, ppid, command in records
+        if pid not in ancestors and any(value in command for value in roots)
+    ]
+
+
+def _terminate_owned_processes(owned: list[dict[str, int]]) -> None:
+    for process in owned:
+        try:
+            os.kill(process["pid"], signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        if not any(Path("/proc", str(item["pid"])).exists() for item in owned):
+            return
+        time.sleep(0.05)
+    for process in owned:
+        try:
+            os.kill(process["pid"], signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
 def _resource_inventory(installation: Installation) -> list[dict[str, Any]]:
-    """Always query public worktree inventory and local attempt processes."""
+    """Classify exact installation processes and shared provider state truthfully."""
     entries: list[dict[str, Any]] = []
     try:
-        completed = subprocess.run((installation.wrapper, "worktree", "ps", "--json"), capture_output=True, check=False, timeout=30)
+        completed = subprocess.run(
+            (installation.wrapper, "worktree", "ps", "--json"), capture_output=True, check=False, timeout=30
+        )
         entries.append({"source": "orca_worktree_ps", "performed": True, "ok": completed.returncode == 0})
     except (OSError, subprocess.SubprocessError):
         entries.append({"source": "orca_worktree_ps", "performed": True, "ok": False})
-    try:
-        completed = subprocess.run(("ps", "-eo", "pid=,args="), capture_output=True, check=False, timeout=10)
-        owned = []
-        for line in completed.stdout.decode("utf-8", "replace").splitlines():
-            columns = line.strip().split(maxsplit=1)
-            if len(columns) != 2 or not columns[0].isdigit() or int(columns[0]) == os.getpid():
-                continue
-            if installation.hermes_home in columns[1] or installation.extraction in columns[1]:
-                owned.append(line.strip())
-        entries.append({"source": "processes", "performed": True, "survivors": owned})
-    except (OSError, subprocess.SubprocessError):
-        entries.append({"source": "processes", "performed": True, "survivors": ["UNKNOWN"]})
+    snapshot = _process_snapshot()
+    if snapshot is None:
+        entries.append({"source": "processes", "performed": False, "state": "UNKNOWN"})
+    else:
+        ancestors = _ancestor_pids()
+        roots = (installation.launcher, installation.venv, installation.wrapper, installation.extraction)
+        owned = [
+            {"pid": pid, "ppid": ppid, "classification": "installed_mcp"}
+            for pid, ppid, command in snapshot
+            if pid not in ancestors and any(path in command for path in roots)
+        ]
+        shared = [
+            {"pid": pid, "ppid": ppid, "classification": "shared_orca_provider"}
+            for pid, ppid, command in snapshot
+            if installation.profile_root in command
+            and "orca" in command.lower()
+            and not any(path in command for path in roots)
+        ]
+        entries.append({"source": "processes", "performed": True, "owned": owned, "provider": shared})
     return entries
 
 
@@ -490,11 +697,14 @@ def doctor(home: str, *, timeout_seconds: float = 15.0) -> dict[str, Any]:
     except (OSError, subprocess.SubprocessError):
         orca_ready = False
     owned_root = Path(installation.hermes_home) / ".aether-mcp"
-    permissions_ok = all(_permissions_ok(path) for path in (owned_root, Path(installation.state_root))) and not (Path(installation.launcher).stat().st_mode & 0o077)
+    permissions_ok = all(_permissions_ok(path) for path in (owned_root, Path(installation.state_root))) and not (
+        Path(installation.launcher).stat().st_mode & 0o077
+    )
     inventory = _resource_inventory(installation)
-    stale_resources = [entry for entry in inventory if entry.get("survivors")]
+    inventory_unknown = any(entry.get("state") == "UNKNOWN" for entry in inventory)
+    stale_resources = [entry for entry in inventory if entry.get("owned")]
     return {
-        "ok": orca_ready and permissions_ok and not stale_resources,
+        "ok": orca_ready and permissions_ok and not stale_resources and not inventory_unknown,
         "tool_count": tool_count,
         "orca_ready": orca_ready,
         "state_permissions_ok": permissions_ok,

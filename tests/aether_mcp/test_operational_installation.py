@@ -23,10 +23,18 @@ def _fake_appimage(tmp_path: Path) -> Path:
         "#!/bin/sh\n"
         "mkdir -p squashfs-root/resources/app.asar.unpacked/out/cli\n"
         "touch squashfs-root/resources/app.asar.unpacked/out/cli/index.js\n"
-        "printf '#!/bin/sh\\necho '\\''{\"ok\":true,\"result\":{\"runtime\":{\"appVersion\":\"1.4.167\",\"state\":\"ready\",\"reachable\":true}}}'\\''\\n' > squashfs-root/AppRun\nchmod +x squashfs-root/AppRun\n"
+        'printf \'#!/bin/sh\\necho \'\\\'\'{"ok":true,"result":{"runtime":{"appVersion":"1.4.167","state":"ready","reachable":true}}}\'\\\'\'\\n\' > squashfs-root/AppRun\nchmod +x squashfs-root/AppRun\n'
     )
     image.chmod(0o700)
     return image
+
+
+def _qualified_profile(root: Path) -> Path:
+    profile = root / "profile"
+    (profile / "hermes-home").mkdir(parents=True)
+    for name in ("config", "cache", "data", "state"):
+        (profile / "xdg" / name).mkdir(parents=True)
+    return profile
 
 
 def _fake_uv(tmp_path: Path) -> Path:
@@ -60,6 +68,7 @@ def test_setup_status_and_rollback_are_idempotent_and_preserve_config(
         hermes_home=str(home),
         appimage=str(image),
         profile_root=str(profile),
+        profile_id="default",
         repo_selector="path:/project",
         base_ref="main",
         coordinator_handle="term-test",
@@ -75,6 +84,7 @@ def test_setup_status_and_rollback_are_idempotent_and_preserve_config(
             hermes_home=str(home),
             appimage=str(image),
             profile_root=str(profile),
+            profile_id="default",
             repo_selector="path:/project",
             base_ref="main",
             coordinator_handle="term-test",
@@ -111,11 +121,101 @@ def test_setup_rejects_unqualified_appimage_before_config_mutation(tmp_path: Pat
             hermes_home=str(home),
             appimage=str(_fake_appimage(tmp_path)),
             profile_root=str(profile),
+            profile_id="default",
             repo_selector="path:/project",
             base_ref="main",
             coordinator_handle="term-test",
         )
     assert (home / "config.yaml").read_text() == "x: y\n"
+
+
+def test_setup_persists_explicit_profile_id_and_qualified_layout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home, project = tmp_path / "hermes", tmp_path / "project"
+    home.mkdir()
+    project.mkdir()
+    (home / "config.yaml").write_text("x: y\n")
+    profile = _qualified_profile(tmp_path)
+    image = _fake_appimage(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    monkeypatch.setattr(
+        installation,
+        "OrcaCatalog",
+        type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "d" * 64})())}),
+    )
+    result = installation.setup(
+        project_root=str(project),
+        hermes_home=str(home),
+        appimage=str(image),
+        profile_root=str(profile),
+        profile_id="default",
+        repo_selector="path:/project",
+        base_ref="main",
+        coordinator_handle="term-test",
+        uv=str(_fake_uv(tmp_path)),
+    )
+    manifest = __import__("json").loads(result.manifest_path.read_text())
+    assert manifest["profile_id"] == "default"
+    assert manifest["orca_hermes_home"] == str(profile / "hermes-home")
+    assert manifest["orca_xdg_config_home"] == str(profile / "xdg" / "config")
+    launcher = Path(result.launcher).read_text()
+    assert 'AETHER_PROFILE="default"' in launcher
+
+
+@pytest.mark.parametrize("profile_id", ["", " ", "a/b", "../x", "bad alias"])
+def test_setup_rejects_invalid_profile_id_before_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, profile_id: str
+) -> None:
+    home, project = tmp_path / "home", tmp_path / "project"
+    home.mkdir()
+    project.mkdir()
+    original = "x: y\n"
+    (home / "config.yaml").write_text(original)
+    image = _fake_appimage(tmp_path)
+    profile = _qualified_profile(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    with pytest.raises(installation.InstallError, match="INVALID_PROFILE_ID"):
+        installation.setup(
+            project_root=str(project),
+            hermes_home=str(home),
+            appimage=str(image),
+            profile_root=str(profile),
+            profile_id=profile_id,
+            repo_selector="path:/project",
+            base_ref="main",
+            coordinator_handle="term-test",
+            uv=str(_fake_uv(tmp_path)),
+        )
+    assert (home / "config.yaml").read_text() == original
+
+
+def test_setup_conflicts_when_profile_id_changes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home, project = tmp_path / "home", tmp_path / "project"
+    home.mkdir()
+    project.mkdir()
+    (home / "config.yaml").write_text("x: y\n")
+    image = _fake_appimage(tmp_path)
+    profile = _qualified_profile(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    monkeypatch.setattr(
+        installation,
+        "OrcaCatalog",
+        type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "e" * 64})())}),
+    )
+    kwargs = dict(
+        project_root=str(project),
+        hermes_home=str(home),
+        appimage=str(image),
+        profile_root=str(profile),
+        repo_selector="path:/project",
+        base_ref="main",
+        coordinator_handle="term-test",
+        uv=str(_fake_uv(tmp_path)),
+    )
+    installation.setup(**kwargs, profile_id="default")
+    with pytest.raises(installation.InstallError, match="INSTALLATION_CONFLICT"):
+        installation.setup(**kwargs, profile_id="other")
 
 
 @pytest.mark.anyio
@@ -137,6 +237,7 @@ async def test_real_noneditable_install_handshake_does_not_touch_active_config(
         hermes_home=str(home),
         appimage=str(image),
         profile_root=str(profile),
+        profile_id="default",
         repo_selector=f"path:{ROOT}",
         base_ref="main",
         coordinator_handle="term-test",
@@ -152,7 +253,9 @@ async def test_real_noneditable_install_handshake_does_not_touch_active_config(
     assert "olympus" in active.read_text() and "enabled: false" in active.read_text()
 
 
-def test_activation_changes_only_owned_flag_and_keeps_atomic_backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_activation_changes_only_owned_flag_and_keeps_atomic_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     home, project, profile = tmp_path / "home", tmp_path / "project", tmp_path / "profile"
     for path in (home, project, profile):
         path.mkdir()
@@ -160,8 +263,22 @@ def test_activation_changes_only_owned_flag_and_keeps_atomic_backup(tmp_path: Pa
     (home / "config.yaml").write_text(original)
     image = _fake_appimage(tmp_path)
     monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
-    monkeypatch.setattr(installation, "OrcaCatalog", type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "b" * 64})())}))
-    result = installation.setup(project_root=str(project), hermes_home=str(home), appimage=str(image), profile_root=str(profile), repo_selector="path:/project", base_ref="main", coordinator_handle="term-test", uv=str(_fake_uv(tmp_path)))
+    monkeypatch.setattr(
+        installation,
+        "OrcaCatalog",
+        type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "b" * 64})())}),
+    )
+    result = installation.setup(
+        project_root=str(project),
+        hermes_home=str(home),
+        appimage=str(image),
+        profile_root=str(profile),
+        profile_id="default",
+        repo_selector="path:/project",
+        base_ref="main",
+        coordinator_handle="term-test",
+        uv=str(_fake_uv(tmp_path)),
+    )
     before = (home / "config.yaml").read_text()
     activated = installation.activate(str(home))
     after = (home / "config.yaml").read_text()
@@ -180,8 +297,22 @@ def test_doctor_rejects_false_positive_orca_json(tmp_path: Path, monkeypatch: py
     (home / "config.yaml").write_text("x: y\n")
     image = _fake_appimage(tmp_path)
     monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
-    monkeypatch.setattr(installation, "OrcaCatalog", type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "c" * 64})())}))
-    result = installation.setup(project_root=str(project), hermes_home=str(home), appimage=str(image), profile_root=str(profile), repo_selector="path:/project", base_ref="main", coordinator_handle="term-test", uv=str(_fake_uv(tmp_path)))
+    monkeypatch.setattr(
+        installation,
+        "OrcaCatalog",
+        type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "c" * 64})())}),
+    )
+    result = installation.setup(
+        project_root=str(project),
+        hermes_home=str(home),
+        appimage=str(image),
+        profile_root=str(profile),
+        profile_id="default",
+        repo_selector="path:/project",
+        base_ref="main",
+        coordinator_handle="term-test",
+        uv=str(_fake_uv(tmp_path)),
+    )
     completed = __import__("subprocess").CompletedProcess([], 0, b'{"ok": true, "result": {}}', b"")
     monkeypatch.setattr(installation.subprocess, "run", lambda *args, **kwargs: completed)
     assert installation._parse_orca_status(completed) is False

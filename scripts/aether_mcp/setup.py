@@ -20,6 +20,7 @@ def main() -> int:
         "coordinator-handle",
     ):
         parser.add_argument(f"--{name}", required=True)
+    parser.add_argument("--profile-id", required=True)
     parser.add_argument("--uv", default="uv")
     parser.add_argument("--timeout-ms", type=int, default=600000)
     args = parser.parse_args()
