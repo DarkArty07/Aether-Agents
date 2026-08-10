@@ -14,7 +14,7 @@ This area will explain how to change Aether Agents while preserving product inte
 | `DOCUMENTATION.md` | Documentation taxonomy, status vocabulary, style, and link checks |
 | `ARCHITECTURE_CHANGES.md` | Design and decision requirements for structural changes |
 | `ADDING_OR_CHANGING_A_DAIMON.md` | Role, authority, SOUL, config, toolset, and evaluation workflow |
-| `OLYMPUS_DEVELOPMENT.md` | MCP/ACP development and compatibility verification |
+| `RUNTIME_ADAPTER_DEVELOPMENT.md` | Replacement-runtime adapter, isolation, lifecycle, cleanup, and compatibility verification |
 | `RELEASES.md` | Versioning, metadata synchronization, tags, and closeout evidence |
 
 ## Active workflow

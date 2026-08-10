@@ -1,55 +1,21 @@
-[project]
-name = "olympus-mcp"
-version = "0.20.0"
-description = "Olympus MCP Server — Aether Agents orchestrator. Manages Daimon lifecycle and inter-agent communication via ACP."
-license = "MIT"
-requires-python = ">=3.11"
-authors = [
-    { name = "Christopher (DarkArty07)" },
-]
-readme = "README.md"
-keywords = ["multi-agent", "mcp", "ai", "orchestration", "daimons", "aether"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
 
-    "Topic :: Software Development :: Libraries :: Application Frameworks",
-    "Intended Audience :: Developers",
-]
-dependencies = [
-    "mcp>=1.0.0,<2.0.0",
-    "agent-client-protocol>=0.1.0",
-    "langgraph>=0.3.0",
-    "langgraph-checkpoint-sqlite>=2.0.0",
-    "langchain-core>=0.3.0",
-    "pyyaml>=6.0",
-    "graphifyy>=0.8.0",
-]
-[project.optional-dependencies]
-dev = ["pytest>=7.0", "ruff>=0.4", "hermes-agent>=0.19.0"]
+[project]
+name = "aether-mcp"
+version = "0.22.0"
+requires-python = ">=3.11"
+dependencies = ["cryptography==50.0.0", "mcp==1.28.1"]
 
 [project.scripts]
-aether-setup = "olympus_v3.cli.setup:main"
-olympus = "olympus.server:main"
-olympus-v3 = "olympus_v3.server:main"
-
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
+aether-mcp = "aether_mcp.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-olympus = ["py.typed"]
-
-[project.urls]
-Homepage = "https://github.com/DarkArty07/Aether-Agents"
-Documentation = "https://github.com/DarkArty07/Aether-Agents#readme"
-Repository = "https://github.com/DarkArty07/Aether-Agents"
-Changelog = "https://github.com/DarkArty07/Aether-Agents/blob/main/CHANGELOG.md"
+aether_mcp = ["data/orca/*/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

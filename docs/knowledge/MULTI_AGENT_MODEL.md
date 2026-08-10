@@ -1,9 +1,19 @@
 # Multi-Agent Operating Model
 
-> **Status:** APPROVED TARGET — current runtime parity not yet verified
+> **Status:** HISTORICAL — v0.19 operating model; runtime retired in v0.22.0
 > **Owner:** Christopher (DarkArty07)
-> **Governing decisions:** `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
+> **Governing decisions at the historical boundary:** `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`, `../decisions/PDR-0011-orca-substrate-and-olympus-retirement.md`
 > **Implementation authorization:** None
+
+> **v0.22.0 amendment:** This document preserves the approved v0.19 conceptual
+> and experimental model. PDR-0012 retired Harmonia, the kernel, Olympus, ACPManager,
+> the pre-emptively extracted native core, and their executable surfaces. It is not
+> a current runtime design and must not be used to restore a compatibility path.
+> Current product authority is defined in `AUTHORITY.md`; PDR-0013 and
+> `../architecture/DAIMONS.md` define the target roster; ADR-0001 and
+> `../architecture/AETHER_MCP.md` define the proposed MCP-first control/trace
+> plane; and `../architecture/ORCHESTRATION.md` defines the gated Hermes-led Orca
+> target.
 
 ## Purpose
 
@@ -41,9 +51,9 @@ Every Daimon has one effective participation state in the applicable scope:
 
 A lower layer cannot re-enable a Daimon disabled by a higher layer.
 
-### Athena precedent
+### Historical Athena precedent
 
-Athena is currently suspended until explicit user reactivation. This is not merely a one-off operational exception; it demonstrates the product requirement that user/project policy must be able to disable any specialist.
+At this historical boundary Athena was suspended until explicit user reactivation. That precedent demonstrated the product requirement that user/project policy must be able to disable any specialist. PDR-0013 now gives Athena target retirement and forbidden status.
 
 Skipping a Daimon does not automatically waive its quality concern. Aether must choose an honest alternative or escalate the residual consequence.
 

@@ -9,7 +9,7 @@ git clone https://github.com/DarkArty07/Aether-Agents.git
 cd Aether-Agents
 python3 -m venv venv
 source venv/bin/activate
-pip install -e ".[dev]"
+pip install pytest ruff pyyaml
 ```
 
 ## Development Setup
@@ -18,7 +18,7 @@ pip install -e ".[dev]"
 2. Create one bounded feature branch from `main`.
 3. Make your changes.
 4. Run tests: `pytest`.
-5. Run linter: `ruff check src/`.
+5. Run linter: `ruff check tests/ scripts/check_release_governance.py`.
 6. Push and open a PR directly to `main`.
 
 Before starting a new SemVer candidate, run:
@@ -92,20 +92,23 @@ Never commit:
 
 ## Architecture Overview
 
-Aether Agents uses a 3-layer orchestrator pattern:
+The v0.22.0 candidate contains three product boundaries:
 
-1. **Hermes** — Orchestrator (MCP tools, memory, skills, delegation)
-2. **Olympus v3** — MCP server bridging Hermes to Daimons (ACP + Plugin + SQLite)
-3. **Daimons** — Specialized sub-agents (Hefesto, Etalides, Ariadna, Athena, Daedalus, Ictinus)
+1. **Hermes Agent** — user-facing agent framework, memory, skills, tools, and gateways.
+2. **Aether product layer** — Hermes behavior, decisions, profiles, skills, participation policy, verification, semantic acceptance, and release authority.
+3. **Orca execution substrate** — accepted bounded owner of Runs, Tasks, Dispatches, workers, messages, terminals, worktrees, recovery, and cleanup on the exact qualified binding; production registration remains a separate v0.23.0 gate.
 
-### .aether Continuity System
+The Olympus runtime, extracted native Python core, continuity plugins, package distribution, and legacy MCP facade are absent from the candidate source. Do not restore a compatibility shim, hidden fallback, or pre-emptive policy kernel. PDR-0014 closes v0.22.0 at bounded integration, governs production dogfooding through v0.23.0, and defers process-specific migration to v0.24.0.
 
-Daimons receive project context via the `.aether` plugin:
-- **Capture:** Hooks write session data to `aether.db`
-- **Curation:** Ariadna synthesizes `CONTEXT.md` (5 sections, 1500 chars max)
-- **Injection:** `pre_llm_call` hook injects `[.aether Context]` on first turn
+### Protected `.aether` history
 
-Hermes interacts with `.aether` via MCP tools: `aether_status`, `aether_update`, `aether_curate`.
+Existing `.aether` databases and `CONTEXT.md` files are preserved local/historical
+state. This candidate has no profile plugin, hook, reader, writer, or migration path
+for them. Never edit `.aether/CONTEXT.md` or its databases manually as a substitute.
+
+Potentially conflicting parallel writers must use Orca child worktrees under one
+feature integration branch. Sharing the current checkout is permitted only for
+explicitly disjoint file scopes. Orca does not infer conflicts or file ownership.
 
 ## Questions?
 

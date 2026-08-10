@@ -3,7 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`, `../decisions/ADR-0001-aether-mcp-control-and-trace-plane.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Scope model
 
@@ -24,6 +25,15 @@ The approved core identity includes:
 - project completion defined by the user obtaining and accepting the intended result;
 - project-appropriate testing and evidence;
 - comparative validation against strong general-purpose coding agents.
+
+For an Orca-backed swarm, the Aether MCP control and trace plane is a core
+product boundary: it gives Hermes one typed interface and preserves the
+contract, rationale, authority, correlation, evidence, and measurement history
+that Orca's operational state does not own. Its primary trace purpose is to
+preserve faithful, secret-redacted learning episodes, corrections, outcomes and
+lineage from which Aether can improve prompts, policies, skills, routing,
+coordination and—under later separate gates—fine-tuning datasets. Auditability is
+secondary. Orca remains the sole operational source of truth.
 
 The detailed project lifecycle and formal benchmark implementation remain open design questions. The semantic completion contract is approved in `COMPLETION.md`.
 
@@ -47,6 +57,8 @@ The Daimon team is not permanently limited to its current members. New Daimons m
 
 A new Daimon is not justified by mythology, novelty, or role naming alone. Its contribution must be distinct, reusable, and valuable enough to exceed the coordination cost it introduces.
 
+PDR-0013 adopts stable reusable archetypes rather than one personality per technology or Task. Hermes may start multiple workers from the same admitted archetype when independent scopes justify parallelism. The approved target retains Hefesto, Daedalus, and Ictinus; keeps Ariadna conditional and disabled; proposes an Independent Verifier without implementing it; and retires Athena and Etalides from future routing.
+
 ## Daimon participation policy
 
 The product owner may classify each Daimon as `required`, `allowed`, `disabled`, or `forbidden` in the applicable global, project, run, or task scope.
@@ -65,12 +77,12 @@ Approved placement:
 - `MEMORY.md` for stable environment facts and durable conventions;
 - Hermes skills for reusable procedures;
 - version-controlled project documents for vision, scope, requirements, architecture, and durable decisions;
-- `.aether` for hot project continuity;
+- version-controlled project documents for hot project continuity; existing `.aether` stores are protected historical/local state without a candidate reader or writer;
 - session history for historical conversation recall.
 
 Hermes is the global user-profile custodian. Daimons may report observations, but they do not own independent global profiles.
 
-Honcho is outside the target product. The current provider configuration and historical integration artifacts require a later bounded retirement task.
+Honcho is outside the target product. The v0.22.0 candidate has removed its provider configuration, submodule, container stack, setup commands, and active operational documentation while retaining historical decisions and release evidence.
 
 The exact review, correction, export, reset, deletion, shared-skill ownership, and optional private-skill experience remain later design decisions.
 
@@ -93,13 +105,18 @@ Models, providers, specialist assignments, toolsets, thresholds, and workflows m
 
 ## Optional modules and integrations
 
-An integration is optional when Aether remains recognizably useful without it. Memories, MCP servers, skills, external services, and specialist modules must not be classified as core merely because they are available.
+An integration is optional when Aether remains recognizably useful without it.
+Generic MCP servers, memories, skills, external services, and specialist modules
+must not be classified as core merely because they are available. ADR-0001 is a
+specific exception justified by the approved Orca-swarm product requirement:
+the Aether MCP is core to that swarm path, while direct Hermes work remains
+useful without activating the swarm.
 
 Their classification must be justified by the observed failure they address and the measurable value they provide.
 
 ## Experimental
 
-Current release documents contain experimental coordination work, including the default-off kernel and Harmonia migration. Experimental capability must remain clearly separated from current verified product behavior.
+Historical release documents contain the retired default-off kernel and Harmonia migration. That evidence remains preserved. The v0.22.0 candidate has bounded Orca integration evidence but no active registered multi-agent runtime; PDR-0014 moves real production dogfooding to v0.23.0 and process-specific migration to v0.24.0.
 
 An experiment does not redefine the product merely because it is newer or technically ambitious.
 
@@ -111,14 +128,18 @@ The following remain future or unresolved rather than silently assumed:
 - primary UI platform and relationship among chat, desktop, web, and TUI surfaces;
 - project overview, decision inbox, studio activity, evidence, resource, continuity, and diagnostic interaction design;
 - progress representation without false precision;
-- privacy and access boundaries for memory, prompts, evidence, and diagnostics;
+- privacy and access boundaries for memory, protected model-visible learning
+  episodes, evidence, datasets and diagnostics;
+- rich-episode consent, retention/quota, labeling, curation, export, revocation
+  and project-forget experience;
 - user-facing review, correction, export, reset, and deletion of Hermes-managed memory;
 - shared-skill write ownership and optional private per-user skills;
-- safe retirement of Honcho configuration and historical integration artifacts;
 - the comparative benchmark corpus and evaluators;
 - runtime enforcement of participant policy and lateral authority;
 - production migration, activation, and broader participant-policy enforcement beyond the validated bounded v0.19.5 no-relay topology;
-- which additional software-specialist Daimons become justified by evidence.
+- whether the proposed Independent Verifier passes its role-specific design and benchmark gates;
+- whether Ariadna demonstrates value beyond Hermes-native continuity or should be retired;
+- whether a future research archetype becomes justified by evidence.
 
 ## Out of scope
 

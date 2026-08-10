@@ -1,0 +1,86 @@
+{
+  "authorized_at": "2026-08-09",
+  "cleanup": {
+    "display_survivors": [],
+    "mount_survivors": [],
+    "owned_process_survivors": [],
+    "owned_processes_seen": [
+      419008
+    ],
+    "worktree_metadata_survivors_before_root_removal": [
+      "/tmp/aether-m54-model-_v2fr777/fixture/.git/worktrees"
+    ]
+  },
+  "error": {
+    "message": "Orca response omitted a required identity",
+    "type": "LifecycleError"
+  },
+  "isolated_root": "/tmp/aether-m54-model-_v2fr777",
+  "isolated_root_retained": false,
+  "limits": {
+    "agent": "codex-cli",
+    "attempts_per_worker": 1,
+    "expected_model": "gpt-5.6-terra",
+    "max_seconds_per_worker": 600,
+    "payg_spend_authorized": false,
+    "provider": "codex",
+    "web_access": false,
+    "workers": 2
+  },
+  "preflight": {
+    "account": {
+      "account_ref": "system-default-codex-oauth",
+      "auth_source": "oauth",
+      "has_auth": true,
+      "is_system_default": true,
+      "limits": {
+        "weekly": {
+          "usedPercent": 0,
+          "windowMinutes": 10080
+        }
+      },
+      "provider": "codex"
+    },
+    "baseline_run_ids": [
+      "run_legacy_local"
+    ],
+    "configured_model": "gpt-5.6-terra",
+    "home_usage": "existing system OAuth and Orca profile",
+    "profile_state": "persistent-with-post-run-metadata-rollback",
+    "run_count": 1,
+    "shared_state_boundary": "persistent Orca metadata is restored from the post-reset baseline after the live run",
+    "terminal_count": 0
+  },
+  "schema_version": "aether.m5.4-model-evidence/v1alpha1",
+  "status": "FAIL_PRE_MODEL_RECEIPT_DRIFT",
+  "usage_after_abort": {
+    "weekly_used_percent": 0
+  },
+  "uc_c05_denials": [
+    {
+      "case": "overlapping_write_scope",
+      "code": "WRITE_SCOPE_CONFLICT",
+      "provider_effects": 0
+    },
+    {
+      "case": "forbidden_participant",
+      "code": "PARTICIPANT_FORBIDDEN",
+      "provider_effects": 0
+    },
+    {
+      "case": "dependency_cycle",
+      "code": "DEPENDENCY_CYCLE",
+      "provider_effects": 0
+    },
+    {
+      "case": "protected_effect_without_authority",
+      "code": "EFFECT_NOT_AUTHORIZED",
+      "provider_effects": 0
+    },
+    {
+      "case": "free_text_authority_expansion",
+      "code": "EFFECT_NOT_AUTHORIZED",
+      "provider_effects": 0
+    }
+  ]
+}

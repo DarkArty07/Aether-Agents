@@ -16,6 +16,15 @@ This directory is the canonical map of Aether Agents documentation. It separates
 | Contributing code or documentation | [Contributing](./contributing/README.md) | [Decisions](./decisions/README.md) |
 | Investigating a release | [Release evidence](./releases/) | The specific release closeout or evidence document |
 
+## Active Orca transition
+
+- [v0.22.0 — Orca Integration Foundation](./releases/v0.22.0/ROADMAP.md): scope closed at accepted M5.4; source Release pending; no activation.
+- [v0.23.0 — Orca Production Dogfood](./releases/v0.23.0/ROADMAP.md): approved plan for real repair-first Aether MCP + Orca use and generic-agent refinement; not yet implemented or activated.
+- [v0.24.0 — Gradual Workflow Migration](./releases/v0.24.0/ROADMAP.md): approved evidence-driven direction; process order intentionally not frozen.
+- [Governing product decision](./decisions/PDR-0014-versioned-orca-production-adoption.md) and [cross-version plan](./plans/2026-08-09-orca-production-adoption.md).
+
+Current runtime truth remains distinct from approved direction: the v0.22.0 Aether MCP is default-off, unregistered, and zero-tool until the v0.23.0 production-entry gate passes.
+
 ## Documentation hierarchy
 
 When documents disagree, use this order:
@@ -62,13 +71,13 @@ Technical system explanation:
 - system context and components;
 - orchestration and session lifecycle;
 - Daimon roles and authority;
-- Olympus v3;
-- `.aether` continuity;
+- the retired Olympus and disconnected native runtimes;
+- the Hermes product layer, protected `.aether` history, and target Orca boundary;
 - configuration, runtime, data, and trust boundaries.
 
 ### Guides — `docs/guides/`
 
-Task-oriented instructions for installation, configuration, first use, delegation, continuity, and gateway use. Existing guides remain in place but require a factual refresh.
+Task-oriented instructions for installation, configuration, first use, the current specialist capability gap, protected historical state, and gateway use.
 
 ### Reference — `docs/reference/`
 

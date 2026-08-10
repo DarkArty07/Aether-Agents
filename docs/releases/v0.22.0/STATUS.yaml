@@ -1,0 +1,102 @@
+schema_version: 2
+release: v0.22.0
+title: Orca Integration Foundation
+status: released_source_default_off
+last_updated: '2026-08-09'
+product_owner: Christopher (DarkArty07)
+governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.md
+canonical_roadmap: docs/releases/v0.22.0/ROADMAP.md
+release_boundary: docs/releases/v0.22.0/RELEASE_BOUNDARY.md
+release_notes: docs/releases/v0.22.0/RELEASE_NOTES.md
+historical_roadmap: docs/releases/v0.22.0/HISTORICAL_M0_M12_ROADMAP.md
+historical_status: docs/releases/v0.22.0/HISTORICAL_M0_M12_STATUS.yaml
+branch: main
+release_pr: 163
+release_issue: 166
+resolved_ci_blocker_issues:
+  - 169
+  - 170
+github_milestone: v0.22.0 — Orca Integration Foundation
+strongest_technical_baseline: bb0723188bddb9da0807653763347f759be0c64e
+documentation_rebaseline_commit: 51e7aa6f277551ed31753eef7d6999c353752721
+ci_contract_correction_commit: 13a916a38d6b580a3e71a710fe5d218a7eba34a1
+build_context_correction_commit: recorded_in_pull_request_and_github_release
+final_release_identity:
+  tag: v0.22.0
+  commit: recorded_in_annotated_tag_and_github_release
+  annotated_tag_object: recorded_in_github_release
+source_publication:
+  merged: true
+  tag_created: true
+  github_release_published: true
+  runtime_activated: false
+release_acceptance:
+  local_python: '3.11'
+  local_tests: 199 passed
+  clean_install_provenance: disposable_venv_site_packages
+  ruff: passed
+  compileall: passed
+  bounded_distribution_build: passed
+  shell_and_yaml: passed
+  release_governance: passed
+  product_assets: passed
+  product_asset_files: 16
+  github_python_311: passed
+  github_python_312: passed
+  github_build: passed
+  final_ci_run_ids: recorded_in_github_release
+resolved_blockers:
+  product_assets:
+    issue: 169
+    code_or_area: .github/workflows/test.yml and .github/workflows/release.yml source inventory
+    stale_expected_files: 13
+    accepted_files: 16
+    restored_paths:
+      - src/aether_mcp/coordination.py
+      - src/aether_mcp/lifecycle.py
+      - src/aether_mcp/orca_provider.py
+    accepted_source_removed: false
+  required_build_context:
+    issue: 170
+    code_or_area: protected main branch and .github/workflows release contracts
+    protection_weakened_or_bypassed: false
+    built_distribution: aether-mcp==0.22.0
+    wheel_imported_outside_checkout: true
+    legacy_distribution_restored: false
+runtime:
+  aether_mcp_default_off: true
+  registered_tools: 0
+  installed_activation_performed: false
+  live_olympus_retired: false
+  qualified_orca_binding: desktop renderer plus public structured CLI
+accepted_boundary:
+  completed:
+    - M0
+    - M1
+    - M2
+    - M3
+    - M4
+    - M5
+    - M5.4
+  terminal_capability: bounded two-worker model-backed Orca integration
+  canonical_model_acceptance: docs/releases/v0.22.0/M5_4_MODEL_ACCEPTANCE.md
+moved_not_completed:
+  M6: v0.23.0 generic roster qualification
+  M7: minimal diagnostic trace in v0.23.0; full dataset program separately deferred
+  M8: v0.23.0 optional-role decision
+  M9: v0.23.0 production entry and operability; further workflow packaging in v0.24.0
+  M10: per-version evaluation in v0.23.0 and v0.24.0
+  M11: independent release gates for later versions
+  M12: v0.23.0 controlled production entry and v0.24.0 process cutover
+exclusions:
+  - source_capability_expansion_beyond_m5_4
+  - mcp_registration_or_activation
+  - profile_or_configuration_changes
+  - persistent_services_or_restart
+  - credentials_or_spend
+  - process_specific_workflow_migration
+  - full_learning_dataset_or_training
+next_version:
+  release: v0.23.0
+  roadmap: docs/releases/v0.23.0/ROADMAP.md
+  first_gate: separately authorized operational Aether MCP plus Orca production entry and rollback

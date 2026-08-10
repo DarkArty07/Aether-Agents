@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.22.0] - 2026-08-09
+
+### Removed
+- **Olympus runtime**: Removed `src/olympus_v3`, ACPManager, its lifecycle database, MCP server, CLI, hooks, six profile plugins, global configuration, templates, entry points, and retired runtime dependencies.
+- **Public legacy tools**: Removed `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` without a compatibility shim or hidden fallback.
+- **v0.20 instrumentation bootstrap**: Removed the `aether-self-improvement` plugin, session hooks, strict v0.20 manifest reader, and manifest-bound release-evidence projector. Historical v0.20 evidence remains versioned.
+- **Disconnected native core**: Removed the 15-module, 5,500-line `aether_agents` package extracted from Olympus, all six two-file continuity plugins, 18 implementation-only test files, and the final `src/requirements.txt` residue. The extracted core had no Hermes→Orca consumer.
+- **Legacy Python distribution**: Removed the `aether-agents` wheel/sdist build, editable setup/update installation, import-based doctor check, `aiosqlite`, and legacy release artifact uploads. `pyproject.toml` now declares only the bounded `aether-mcp` distribution; `VERSION` remains the product SemVer source.
+- **Retired dependencies and procedures**: Removed MCP/ACP, LangGraph, LangChain, Graphify, and the now-unconsumed PyYAML runtime dependency plus active skills/references that instructed installations to use the retired path.
+- **Honcho installation surface**: Removed the Honcho submodule, Compose stack, setup script, Make targets, provider configuration, active setup guide, and Aether-specific operational skill reference. Hermes-native memory remains enabled and no local service or data store is touched.
+- **Graphify configuration residue**: Removed the enabled MCP template block, unresolved `__PYTHON_BIN__` command, and tracked provider file after the package and runtime dependency had already been retired.
+
+### Changed
+- **Hermes-led Orca boundary**: PDR-0012 defines Aether as product vision, Hermes policy, specialist profiles, skills, routing judgment, verification, semantic acceptance, and release authority. Orca is the intended owner of Run, Task, Dispatch, worker, message, terminal, worktree, recovery, and cleanup mechanics.
+- **Swarm topology**: The target creates all independent Tasks before waiting, permits direct/group worker messaging, keeps one feature integration branch, and requires child worktrees for potentially conflicting writers. Hermes remains product supervisor and may work in parallel without relaying every routine message.
+- **Qualified integration boundary**: The exact Orca 1.4.167 desktop-renderer/public-CLI binding now passes deterministic M3-M5 and one bounded two-worker Codex 0.147.0 model-backed M5.4 execution with real overlap, verified artifacts, integration, semantic close, no retry, and zero survivors. Pure Headless support remains unqualified.
+- **Versioned production adoption**: PDR-0014 closes v0.22.0 at M5.4, moves repair-first real Orca operation and generic-agent refinement to v0.23.0, and moves gradual process-specific workflow migration to v0.24.0. The former M0-M12 plan is preserved as historical evidence.
+- **Explicit current capability gap**: The installed Aether MCP surface remains default-off, unregistered, and zero-tool. Production use begins only after the separately authorized v0.23.0 entry and rollback gate; no legacy fallback may hide a failed Orca Task.
+- **Current-facing truth**: Updated Hermes/profile policies, orchestration skill, README, contributor guidance, quickstart, installation, product/knowledge documents, website, roadmap, inventory, and PDR-0012. The v0.19 model and the pre-emptive PDR-0011 adapter/core design are explicitly historical or superseded.
+
+### Fixed
+- **Reproducible isolated setup**: Setup ignores ambient global Hermes source overrides, produces valid isolated wrappers, and now generates the root `home/config.yaml` as well as all six profile configs while preserving configured files on rerun.
+- **Truthful doctor gate**: Doctor verifies Python, candidate-local Hermes, one root plus six profile templates, and zero native runtime plugins rather than requiring a removed Aether import.
+- **Protected continuity history**: Active profiles, SOULs, guides, and website no longer claim they read or write `.aether`; existing databases and `CONTEXT.md` remain untouched historical/local state without a candidate consumer.
+- **Complete product-asset contract**: Test and Release workflows now admit the exact 16-file accepted source tree, including `coordination.py`, `lifecycle.py`, and `orca_provider.py`, with a local regression that fails if either workflow omits them.
+- **Protected build context**: Restored the required `build` check with a real bounded `aether-mcp==0.22.0` wheel build/import and added the same verification before tag publication, without restoring the retired Olympus or `aether-agents` distribution.
+
+### Testing
+- **Zero-runtime candidate**: The removal contract was observed RED with 5 failures and reached GREEN; all 25 retained repository tests pass together with Ruff, compileall, shell/YAML parsing, governance, active-surface scanning, and current Markdown links.
+- **Clean installation**: Two isolated setup passes generated seven resolved configs with zero placeholders and zero profile plugins. The wrapper, candidate-local doctor, and explicit absence of both `src/` and the `aether_agents` import passed.
+- **M5.4 corrected candidate**: Historical closeout reports 22 focused tests and 198 repository tests plus Ruff and compileall on the bounded model-backed candidate; the final exact-release-tree gate is reported separately below.
+- **Final source candidate**: 199 repository tests, Ruff, compileall, bounded wheel/sdist build, shell/YAML parsing, governance, exact 16-file assets, current links, release-delta secret review, and all protected GitHub contexts pass on the exact committed tree.
+
+### Operational status
+- **No activation or data migration**: Orca was not activated, no specialist workers were created, and no live configuration or historical continuity/session store was migrated, truncated, or deleted.
+
 ## [0.20.0] - 2026-07-28
 
 ### Added
@@ -665,6 +701,7 @@ Hermes' SOUL.md received 4 surgical patches establishing orchestrator identity:
 [0.5.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.4.0...v0.5.0
 [0.17.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.15.0...v0.16.0
+[0.22.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.20.0...v0.22.0
 [0.20.0]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.2...v0.20.0
 [0.18.2]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/DarkArty07/Aether-Agents/compare/v0.18.0...v0.18.1

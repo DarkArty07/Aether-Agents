@@ -1,0 +1,2323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "callable_tool_names": [],
+  "effect_classes": [
+    "READ_ONLY",
+    "LOCAL_APPEND_ONLY",
+    "LOCAL_REVERSIBLE",
+    "LOCAL_DESTRUCTIVE",
+    "EXTERNAL_REVERSIBLE",
+    "EXTERNAL_IRREVERSIBLE",
+    "UNKNOWN"
+  ],
+  "limits": {
+    "array_items": 256,
+    "cursor_bytes": 1024,
+    "nesting_depth": 16,
+    "request_bytes": 65536,
+    "string_bytes": 8192
+  },
+  "outcomes": [
+    "SUCCEEDED",
+    "PARTIAL",
+    "REJECTED",
+    "FAILED",
+    "CANCELLED",
+    "CANCEL_FAILED",
+    "CLEANUP_FAILED",
+    "UNKNOWN",
+    "RECONCILIATION_REQUIRED",
+    "CLOSED",
+    "BLOCKED"
+  ],
+  "protocol": "aether.mcp/v1alpha2",
+  "stable_errors": [
+    {
+      "code": "INVALID_INPUT",
+      "message": "The request does not match the admitted input contract."
+    },
+    {
+      "code": "INVALID_CURSOR",
+      "message": "The supplied cursor is invalid or exceeds its bound."
+    },
+    {
+      "code": "PROTOCOL_MISMATCH",
+      "message": "The request uses an unsupported protocol version."
+    },
+    {
+      "code": "PRINCIPAL_UNAUTHENTICATED",
+      "message": "Coordinator identity must be derived from trusted launch context."
+    },
+    {
+      "code": "PRINCIPAL_UNAUTHORIZED",
+      "message": "The authenticated coordinator is not authorized for this operation."
+    },
+    {
+      "code": "PROJECT_NOT_ADMITTED",
+      "message": "The requested project is not admitted for this coordinator."
+    },
+    {
+      "code": "PROJECT_IDENTITY_MISMATCH",
+      "message": "The admitted project identity no longer matches current evidence."
+    },
+    {
+      "code": "PROJECT_HAS_OPEN_RUNS",
+      "message": "The project still has open or unknown Runs."
+    },
+    {
+      "code": "PROJECT_FORGET_CONFIRMATION_MISMATCH",
+      "message": "The project-forget confirmation does not match."
+    },
+    {
+      "code": "CONTRACT_STALE",
+      "message": "The referenced contract generation is stale."
+    },
+    {
+      "code": "MANIFEST_INVALID",
+      "message": "The supplied manifest is invalid."
+    },
+    {
+      "code": "DEPENDENCY_CYCLE",
+      "message": "The task dependency graph contains a cycle."
+    },
+    {
+      "code": "TASK_NOT_READY",
+      "message": "The requested Task is not ready for dispatch."
+    },
+    {
+      "code": "WRITE_SCOPE_CONFLICT",
+      "message": "The requested write scope conflicts with another admitted writer."
+    },
+    {
+      "code": "PARTICIPANT_REQUIRED_MISSING",
+      "message": "A required participant is missing."
+    },
+    {
+      "code": "PARTICIPANT_DISABLED",
+      "message": "The requested participant is disabled."
+    },
+    {
+      "code": "PARTICIPANT_FORBIDDEN",
+      "message": "The requested participant is not admitted for this task."
+    },
+    {
+      "code": "PARTICIPANT_RETIRED",
+      "message": "The requested participant is retired."
+    },
+    {
+      "code": "PARTICIPANT_UNAVAILABLE",
+      "message": "The requested participant is unavailable."
+    },
+    {
+      "code": "CAPABILITY_UNAVAILABLE",
+      "message": "The requested capability is unavailable."
+    },
+    {
+      "code": "PROVIDER_UNAVAILABLE",
+      "message": "The admitted provider is unavailable."
+    },
+    {
+      "code": "PROVIDER_SCHEMA_DRIFT",
+      "message": "The provider schema differs from the admitted version."
+    },
+    {
+      "code": "PROVIDER_RESPONSE_INVALID",
+      "message": "The provider response does not match the admitted schema."
+    },
+    {
+      "code": "EFFECT_NOT_AUTHORIZED",
+      "message": "The requested effect is not authorized."
+    },
+    {
+      "code": "EFFECT_UNKNOWN",
+      "message": "The operation effect cannot be classified safely."
+    },
+    {
+      "code": "IDEMPOTENCY_CONFLICT",
+      "message": "The operation identity was reused with different canonical input."
+    },
+    {
+      "code": "OPERATION_IN_PROGRESS",
+      "message": "The requested operation is already in progress."
+    },
+    {
+      "code": "DELIVERY_UNKNOWN",
+      "message": "Delivery may have occurred and requires reconciliation."
+    },
+    {
+      "code": "TRACE_STORE_BUSY",
+      "message": "The trace store is busy and could not accept this operation."
+    },
+    {
+      "code": "RECONCILIATION_REQUIRED",
+      "message": "The operation requires reconciliation before further mutation."
+    },
+    {
+      "code": "STALE_DISPATCH",
+      "message": "The referenced Dispatch is stale."
+    },
+    {
+      "code": "ATTEMPT_NOT_FENCED",
+      "message": "The prior attempt is not terminal or safely fenced."
+    },
+    {
+      "code": "ATTEMPT_BUDGET_EXHAUSTED",
+      "message": "The admitted attempt budget is exhausted."
+    },
+    {
+      "code": "EVIDENCE_INSUFFICIENT",
+      "message": "The available evidence is insufficient for the requested conclusion."
+    },
+    {
+      "code": "CLEANUP_INCOMPLETE",
+      "message": "Cleanup is incomplete."
+    },
+    {
+      "code": "SURVIVOR_UNKNOWN",
+      "message": "One or more resource survivors have unknown disposition."
+    },
+    {
+      "code": "TRACE_INTEGRITY_FAILURE",
+      "message": "Trace integrity verification failed."
+    },
+    {
+      "code": "PRIVACY_POLICY_VIOLATION",
+      "message": "The request violates the admitted privacy policy."
+    },
+    {
+      "code": "RETENTION_POLICY_VIOLATION",
+      "message": "The request violates the admitted retention policy."
+    },
+    {
+      "code": "CAPTURE_DISABLED",
+      "message": "Learning capture is disabled."
+    },
+    {
+      "code": "CAPTURE_POLICY_ESCALATION",
+      "message": "The request would escalate capture without sufficient authority."
+    },
+    {
+      "code": "CAPTURE_INCOMPLETE",
+      "message": "The learning capture is incomplete."
+    },
+    {
+      "code": "CAPTURE_QUOTA_EXCEEDED",
+      "message": "The learning capture quota is exhausted."
+    },
+    {
+      "code": "EPISODE_NOT_SEALED",
+      "message": "The requested episode is not sealed."
+    },
+    {
+      "code": "SENSITIVE_CONTENT_QUARANTINED",
+      "message": "Sensitive content remains quarantined."
+    },
+    {
+      "code": "LABEL_AUTHORITY_INSUFFICIENT",
+      "message": "The label authority is insufficient."
+    },
+    {
+      "code": "DATASET_CONTAMINATION",
+      "message": "The dataset violates the frozen contamination contract."
+    },
+    {
+      "code": "DATASET_LINEAGE_INCOMPLETE",
+      "message": "Dataset lineage is incomplete."
+    },
+    {
+      "code": "EXPORT_NOT_AUTHORIZED",
+      "message": "The requested export is not authorized."
+    },
+    {
+      "code": "INTERNAL_ERROR",
+      "message": "The request could not be completed safely."
+    }
+  ],
+  "tools": [
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "arguments": {
+            "additionalProperties": {},
+            "properties": {},
+            "required": [],
+            "type": "object"
+          },
+          "catalog_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "command_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "type": "string"
+          },
+          "expected_effect": {
+            "enum": [
+              "READ_ONLY",
+              "LOCAL_APPEND_ONLY",
+              "LOCAL_REVERSIBLE",
+              "LOCAL_DESTRUCTIVE",
+              "EXTERNAL_REVERSIBLE",
+              "EXTERNAL_IRREVERSIBLE",
+              "UNKNOWN"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "reason": {
+            "additionalProperties": false,
+            "properties": {
+              "authority_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "code": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[A-Z][A-Z0-9_]*$",
+                "type": "string"
+              },
+              "summary": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "summary",
+              "authority_ref"
+            ],
+            "type": "object"
+          },
+          "schema_bundle_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "project_id",
+          "command_id",
+          "arguments",
+          "catalog_digest",
+          "schema_bundle_digest",
+          "expected_effect",
+          "reason",
+          "operation"
+        ],
+        "type": "object"
+      },
+      "name": "orca_call",
+      "owner_milestone": "M2.6"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "command_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "command_id",
+          "catalog_digest"
+        ],
+        "type": "object"
+      },
+      "name": "orca_describe",
+      "owner_milestone": "M2.6"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "effect": {
+            "enum": [
+              "READ_ONLY",
+              "LOCAL_APPEND_ONLY",
+              "LOCAL_REVERSIBLE",
+              "LOCAL_DESTRUCTIVE",
+              "EXTERNAL_REVERSIBLE",
+              "EXTERNAL_IRREVERSIBLE",
+              "UNKNOWN"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "query",
+          "effect",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "name": "orca_search",
+      "owner_milestone": "M2.6"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_policy": {
+            "enum": [
+              "DISABLED",
+              "STRUCTURED_ONLY",
+              "FULL_EPISODE"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "consent_authority_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "project_root": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "safe_alias": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "project_root",
+          "safe_alias",
+          "capture_policy",
+          "consent_authority_ref"
+        ],
+        "type": "object"
+      },
+      "name": "project_admit",
+      "owner_milestone": "M2.3"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "type": "object"
+      },
+      "name": "project_inspect",
+      "owner_milestone": "M2.3"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "dispatch",
+              "task",
+              "run"
+            ],
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_cancel",
+      "owner_milestone": "M3.4"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "effect_plan": {
+            "items": {
+              "enum": [
+                "READ_ONLY",
+                "LOCAL_APPEND_ONLY",
+                "LOCAL_REVERSIBLE",
+                "LOCAL_DESTRUCTIVE",
+                "EXTERNAL_REVERSIBLE",
+                "EXTERNAL_IRREVERSIBLE",
+                "UNKNOWN"
+              ],
+              "maxLength": 32,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "retained_resource_ids": {
+            "items": {
+              "format": "uuid",
+              "maxLength": 36,
+              "minLength": 36,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 0,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "effect_plan",
+          "retained_resource_ids"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_close",
+      "owner_milestone": "M3.4"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "task_keys": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "task_keys"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_dispatch",
+      "owner_milestone": "M4.2"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "blocking_effect": {
+            "enum": [
+              "READ_ONLY",
+              "LOCAL_APPEND_ONLY",
+              "LOCAL_REVERSIBLE",
+              "LOCAL_DESTRUCTIVE",
+              "EXTERNAL_REVERSIBLE",
+              "EXTERNAL_IRREVERSIBLE",
+              "UNKNOWN"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision_required": {
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "progress",
+              "artifact_reference",
+              "dependency_handoff",
+              "technical_question",
+              "reply",
+              "review_request",
+              "finding",
+              "blocker",
+              "completion_reference",
+              "steering"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "payload": {
+            "maxLength": 8192,
+            "minLength": 0,
+            "type": "string"
+          },
+          "recipient_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "safe_summary": {
+            "maxLength": 512,
+            "minLength": 1,
+            "type": "string"
+          },
+          "sender_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "sender_id",
+          "recipient_id",
+          "kind",
+          "payload",
+          "safe_summary",
+          "decision_required",
+          "blocking_effect"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_message",
+      "owner_milestone": "M4.2"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_sources": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "mode": {
+            "enum": [
+              "observe",
+              "fence"
+            ],
+            "maxLength": 8,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "operation",
+              "task",
+              "dispatch"
+            ],
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "target_type",
+          "target_id",
+          "mode",
+          "evidence_sources"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_reconcile",
+      "owner_milestone": "M3.3"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "contract_generation": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "correction_summary": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "dispatch_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "prior_outcome": {
+            "enum": [
+              "SUCCEEDED",
+              "PARTIAL",
+              "REJECTED",
+              "FAILED",
+              "CANCELLED",
+              "CANCEL_FAILED",
+              "CLEANUP_FAILED",
+              "UNKNOWN",
+              "RECONCILIATION_REQUIRED",
+              "CLOSED",
+              "BLOCKED"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "run_id",
+          "task_id",
+          "dispatch_id",
+          "prior_outcome",
+          "correction_summary",
+          "contract_generation"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_retry",
+      "owner_milestone": "M3.3"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dispatch_ready": {
+            "type": "boolean"
+          },
+          "manifest_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "manifest_ref": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": "object"
+          },
+          "provider_binding_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "manifest_digest",
+          "manifest_ref",
+          "provider_binding_digest",
+          "dispatch_ready"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_start",
+      "owner_milestone": "M3.1"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "enum": [
+              "summary",
+              "tasks",
+              "questions",
+              "evidence",
+              "resources",
+              "diagnostic"
+            ],
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "wait_ms": {
+            "maximum": 30000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "run_id",
+          "cursor",
+          "wait_ms",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_status",
+      "owner_milestone": "M3.2"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "query",
+              "record_decision",
+              "record_evidence"
+            ],
+            "maxLength": 32,
+            "minLength": 1,
+            "type": "string"
+          },
+          "cursor": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision": {
+            "additionalProperties": false,
+            "properties": {
+              "affected_ids": {
+                "items": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "authority_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "decision": {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "contract_created",
+                  "contract_amended",
+                  "route_selected",
+                  "participant_admitted",
+                  "participant_denied",
+                  "scope_assigned",
+                  "user_answered",
+                  "limitation_accepted",
+                  "waiver_granted",
+                  "completion_proposed",
+                  "product_accepted",
+                  "product_rejected",
+                  "later_horizon_authorized"
+                ],
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              "prior_generation": {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "rationale": {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "decision",
+              "rationale",
+              "authority_ref",
+              "affected_ids",
+              "prior_generation"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_digest": {
+                "maxLength": 64,
+                "minLength": 64,
+                "pattern": "^[0-9a-f]{64}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "check_identity": {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              "criteria": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 0,
+                "type": "array"
+              },
+              "evidence_type": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "limitations": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 0,
+                "type": "array"
+              },
+              "observed_outcome": {
+                "enum": [
+                  "SUCCEEDED",
+                  "PARTIAL",
+                  "REJECTED",
+                  "FAILED",
+                  "CANCELLED",
+                  "CANCEL_FAILED",
+                  "CLEANUP_FAILED",
+                  "UNKNOWN",
+                  "RECONCILIATION_REQUIRED",
+                  "CLOSED",
+                  "BLOCKED"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "producer": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "reference": {
+                "maxLength": 2048,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "unknowns": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 0,
+                "type": "array"
+              },
+              "verifier_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "evidence_type",
+              "reference",
+              "source",
+              "producer",
+              "artifact_digest",
+              "check_identity",
+              "observed_outcome",
+              "criteria",
+              "unknowns",
+              "limitations",
+              "verifier_id"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "filters": {
+            "additionalProperties": {},
+            "properties": {},
+            "required": [],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "limit": {
+            "maximum": 200,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "timeline",
+              "explain",
+              "operations",
+              "decisions",
+              "evidence",
+              "retries",
+              "resources",
+              "metrics",
+              "integrity",
+              "export"
+            ],
+            "maxLength": 16,
+            "minLength": 1,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operation": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": "string"
+              },
+              "expected_effect": {
+                "enum": [
+                  "READ_ONLY",
+                  "LOCAL_APPEND_ONLY",
+                  "LOCAL_REVERSIBLE",
+                  "LOCAL_DESTRUCTIVE",
+                  "EXTERNAL_REVERSIBLE",
+                  "EXTERNAL_IRREVERSIBLE",
+                  "UNKNOWN"
+                ],
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "reason": {
+                "additionalProperties": false,
+                "properties": {
+                  "authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "code": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "pattern": "^[A-Z][A-Z0-9_]*$",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "summary",
+                  "authority_ref"
+                ],
+                "type": "object"
+              },
+              "use_case_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "operation_id",
+              "project_id",
+              "contract_id",
+              "use_case_id",
+              "reason",
+              "expected_effect"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "project_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "maxLength": 36,
+            "minLength": 36,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action",
+          "project_id",
+          "run_id",
+          "operation",
+          "mode",
+          "filters",
+          "cursor",
+          "limit",
+          "decision",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_trace",
+      "owner_milestone": "M2.6"
+    },
+    {
+      "callable": false,
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "manifest": {
+            "additionalProperties": false,
+            "properties": {
+              "contract": {
+                "additionalProperties": false,
+                "properties": {
+                  "acceptance": {
+                    "items": {
+                      "maxLength": 1024,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 64,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "authorized_effects": {
+                    "items": {
+                      "enum": [
+                        "READ_ONLY",
+                        "LOCAL_APPEND_ONLY",
+                        "LOCAL_REVERSIBLE",
+                        "LOCAL_DESTRUCTIVE",
+                        "EXTERNAL_REVERSIBLE",
+                        "EXTERNAL_IRREVERSIBLE",
+                        "UNKNOWN"
+                      ],
+                      "maxLength": 32,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "minItems": 1,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "contract_id": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                    "type": "string"
+                  },
+                  "generation": {
+                    "maximum": 2147483647,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "non_goals": {
+                    "items": {
+                      "maxLength": 1024,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 64,
+                    "minItems": 0,
+                    "type": "array"
+                  },
+                  "objective": {
+                    "maxLength": 2048,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "stop_condition": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "contract_id",
+                  "generation",
+                  "objective",
+                  "acceptance",
+                  "non_goals",
+                  "authorized_effects",
+                  "stop_condition"
+                ],
+                "type": "object"
+              },
+              "evaluation": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "measurement_contract": {
+                    "maxLength": 1024,
+                    "minLength": 1,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "use_case_id": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "variant": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "use_case_id",
+                  "variant",
+                  "measurement_contract"
+                ],
+                "type": "object"
+              },
+              "learning": {
+                "additionalProperties": false,
+                "properties": {
+                  "capture_policy": {
+                    "enum": [
+                      "DISABLED",
+                      "STRUCTURED_ONLY",
+                      "FULL_EPISODE"
+                    ],
+                    "maxLength": 32,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "consent_authority_ref": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "items": {
+                      "enum": [
+                        "dogfood",
+                        "evaluation",
+                        "learning_candidate"
+                      ],
+                      "maxLength": 32,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 3,
+                    "minItems": 0,
+                    "type": "array",
+                    "uniqueItems": true
+                  }
+                },
+                "required": [
+                  "capture_policy",
+                  "purpose",
+                  "consent_authority_ref"
+                ],
+                "type": "object"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "protocol": {
+                "const": "aether.mcp/v1alpha2",
+                "maxLength": 19,
+                "minLength": 19,
+                "type": "string"
+              },
+              "tasks": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "archetype": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                      "type": "string"
+                    },
+                    "attempt_budget": {
+                      "maximum": 16,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "deliverable": {
+                      "maxLength": 1024,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "dependencies": {
+                      "items": {
+                        "maxLength": 128,
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 0,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "evidence_requirements": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 0,
+                      "type": "array"
+                    },
+                    "placement": {
+                      "enum": [
+                        "current",
+                        "child_worktree",
+                        "read_only"
+                      ],
+                      "maxLength": 32,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "read_scope": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 0,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "task_key": {
+                      "maxLength": 128,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+                      "type": "string"
+                    },
+                    "write_scope": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 64,
+                      "minItems": 0,
+                      "type": "array",
+                      "uniqueItems": true
+                    }
+                  },
+                  "required": [
+                    "task_key",
+                    "deliverable",
+                    "archetype",
+                    "dependencies",
+                    "read_scope",
+                    "write_scope",
+                    "evidence_requirements",
+                    "attempt_budget",
+                    "placement"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              }
+            },
+            "required": [
+              "protocol",
+              "project_id",
+              "contract",
+              "evaluation",
+              "learning",
+              "tasks"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "manifest"
+        ],
+        "type": "object"
+      },
+      "name": "swarm_validate",
+      "owner_milestone": "M2.6"
+    }
+  ]
+}

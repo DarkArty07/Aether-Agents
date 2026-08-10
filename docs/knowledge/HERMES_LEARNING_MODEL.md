@@ -1,9 +1,8 @@
 # Hermes Agent Learning Model Used by Aether
 
-> **Status:** CURRENT IMPLEMENTATION + APPROVED TARGET GOVERNANCE
-> **Verified:** 2026-07-26
-> **Hermes Agent source:** `/home/arty/.hermes/hermes-agent`, package `0.19.0`, source HEAD `6fbb4cea00f8`
-> **Aether configuration:** `home/config.yaml`
+> **Status:** CURRENT PRODUCT GOVERNANCE + VERIFIED HERMES MECHANICS
+> **Mechanics verified:** 2026-07-26 against Hermes Agent 0.19.0
+> **Aether configuration:** `home/config.yaml.template`
 > **Governing decision:** `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`
 
 ## Purpose
@@ -22,9 +21,13 @@ Hermes Agent already provides the core self-improvement loop Aether needs:
 - skill usage and provenance tracking;
 - periodic skill lifecycle maintenance through Curator.
 
-Aether should reuse these mechanisms. Its own responsibility is to define authority, scope, project isolation, write ownership, and quality rules around them.
+Aether should reuse these mechanisms. Its own responsibility is to define
+authority, scope, project isolation, write ownership and quality rules around
+them, plus a separate evidence corpus for evaluation and future fine-tuning.
+Hermes memory/skills are active product learning surfaces; they are not a
+replacement for replayable Run episodes or curated datasets.
 
-## Current Aether configuration
+## Tracked Aether configuration
 
 The active Aether Hermes home is the repository's `home/` directory. Relevant configuration:
 
@@ -34,7 +37,6 @@ memory:
   user_profile_enabled: true
   memory_char_limit: 4000
   user_char_limit: 3000
-  provider: honcho
 
 skills:
   external_dirs:
@@ -55,9 +57,7 @@ curator:
   consolidate: false
 ```
 
-The auxiliary Curator model is currently configured as `gpt-5.6-luna` through the main provider.
-
-The `provider: honcho` line is a current configuration discrepancy. Product doctrine now excludes Honcho; the runtime configuration has not yet been changed because this documentation pass does not authorize implementation or service migration.
+The v0.22.0 tracked template uses Hermes-native memory directly. It declares no external semantic-memory provider or service dependency.
 
 ## Built-in memory
 
@@ -95,7 +95,7 @@ This custodianship is a core part of Hermes' product value.
 
 Aether's approved target memory topology uses Hermes-native `USER.md` and `MEMORY.md` without Honcho or another external semantic memory provider.
 
-Honcho remains present in current configuration and historical documentation, but it is retired from the product direction because it caused operational problems and adds a second memory service and authority surface.
+Honcho was retired from tracked configuration, setup, distribution, and active operational documentation in v0.22.0 because it caused operational problems and added a second memory service and authority surface. Historical decision and release evidence remains preserved.
 
 Hermes is the global user-profile custodian. It detects durable preferences, separates them from one-off requests, organizes and deduplicates the profile, corrects stale entries, and decides which relevant user context should accompany delegated work.
 
@@ -166,13 +166,13 @@ Existing writable skills in configured external directories can be patched in pl
 
 ## Evidence that Aether already uses the loop
 
-`home/skills/.usage.json` currently contains:
+The 2026-07-26 `home/skills/.usage.json` inspection recorded:
 
 - **137** tracked skill records;
 - **42** records with agent-created or curator-managed provenance;
 - all 137 currently marked `active`.
 
-Examples marked `created_by: agent` include:
+Examples then marked `created_by: agent` included:
 
 - `aether-framework-quality-governance`;
 - `api-contract-delivery`;
@@ -180,7 +180,7 @@ Examples marked `created_by: agent` include:
 - `autonomous-pilot-governance`;
 - `execution-monitoring`;
 - `external-model-relay`;
-- `graphify`.
+- the since-retired Graphify integration skill.
 
 The usage ledger also records views, uses, patch counts, timestamps, pin state, and lifecycle state. This is direct evidence that skill creation and iterative patching are active parts of Aether's current workflow.
 
@@ -231,7 +231,7 @@ Hermes provides learning mechanics, but Aether still needs product rules for:
 - User preferences and personal facts belong in Hermes-managed `USER.md`.
 - Stable environment facts and compact operational lessons belong in Hermes-managed `MEMORY.md`.
 - Reusable procedures belong in Hermes skills.
-- Project vision, scope, requirements, architecture decisions, and current milestone authority belong in version-controlled project documentation and `.aether` continuity—not only in memory or skills.
+- Project vision, scope, requirements, architecture decisions, and current milestone authority belong in version-controlled project documentation—not only in memory or skills. Existing `.aether` stores are protected historical/local state, not an active candidate continuity API.
 - Source, tests, artifacts, and executed evidence remain authoritative for actual behavior.
 
 ### 2. Scope and promotion
@@ -283,4 +283,11 @@ Phase 6 approved the following:
 5. Daimons may report observations but do not independently own the global user model.
 6. Shared skills should remain reusable and user-neutral; current user preferences normally belong in `USER.md`.
 
-Remaining implementation and design work includes retiring the Honcho configuration safely, defining shared-skill write governance, deciding whether private per-user skills are needed, and governing how MCP-derived observations become evidence or durable learning.
+The proposed MCP-derived learning boundary is now specified in
+`../reference/AETHER_LEARNING_EPISODE_SCHEMA.md`: compact semantic events index
+protected replayable episodes, and versioned labels/lineage create local dataset
+candidates without automatic training or promotion. Owner acceptance and every
+implementation/activation/export/training gate remain pending. Remaining design
+work outside that schema includes shared-skill write governance and whether
+private per-user skills are needed. The Honcho source/config retirement is
+complete in the v0.22.0 candidate.

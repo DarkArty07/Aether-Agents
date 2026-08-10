@@ -1,23 +1,43 @@
 # Architecture Documentation
 
-> **Status:** STRUCTURE CURRENT; experimental coordination maintenance boundary documented
+> **Status:** TARGET SWARM DESIGN CURRENT; EXECUTION NOT IMPLEMENTED OR ACTIVATED
 
 Architecture documentation explains how approved product intent is realized technically. It must distinguish the active system from experimental or target designs.
 
-## Planned architecture set
+## Architecture set
 
 | Document | Purpose |
 |---|---|
 | `SYSTEM_CONTEXT.md` | Users, external systems, trust boundaries, and system responsibilities |
 | `SYSTEM_OVERVIEW.md` | Components and runtime topology |
-| `ORCHESTRATION.md` | Hermes routing, decomposition, delegation, monitoring, and synthesis |
-| `DAIMONS.md` | Specialist roles, authority, lifecycle, and non-goals |
-| `OLYMPUS_V3.md` | MCP surface, ACP management, sessions, plugins, and persistence |
+| [`AETHER_MCP.md`](./AETHER_MCP.md) | Accepted detailed design for MCP-first Hermes control, compact semantic trace, protected learning episodes/dataset lineage, explanation, measurement and the Orca-provider boundary; bounded integration is implemented through M5.4 while the installed surface remains default-off with zero callable tools |
+| [`ORCHESTRATION.md`](./ORCHESTRATION.md) | Approved target flow from user intent through Hermes, Orca, workers, review, acceptance, and cleanup; not an active runtime claim |
+| [`DAIMONS.md`](./DAIMONS.md) | Approved target roster, archetypes, authority, lifecycle, participation policy, and non-goals |
+| `RUNTIME_SUBSTRATE.md` | Accepted execution substrate, lifecycle, isolation, recovery, and cleanup after PDR-0011 gates pass |
 | `CONTINUITY.md` | `.aether` capture, intentional state, curation, and injection |
 | `CONFIGURATION_MODEL.md` | Project/profile isolation, templates, environment, and resolution |
 | `DATA_MODEL.md` | Durable stores, ownership, retention, and consistency |
 | `SECURITY_MODEL.md` | Permissions, credentials, trust boundaries, and threat assumptions |
-| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Maintained default-off kernel/Harmonia code, retired experiments, evidence, and remaining debt |
+| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Historical coordination-maintenance baseline; current retirement evidence lives under v0.22.0 |
+
+## Current boundary
+
+The v0.22.0 repository still tracks six specialist profile directories, but no
+registered runtime invokes any of them. PDR-0013 defines a smaller target roster:
+Hefesto, Daedalus, and Ictinus are retained; Ariadna is conditional and disabled;
+an Independent Verifier is proposed but unimplemented; Athena and Etalides have
+target retirement disposition. The physical profile inventory will not change
+until a separately authorized implementation cut.
+
+PDR-0012 governs the preserved Hermes–Orca ownership boundary. PDR-0013 governs
+the swarm roster and personality model. PDR-0014 places bounded integration in
+v0.22.0, production dogfooding in v0.23.0, and gradual workflow migration in
+v0.24.0. ADR-0001 supersedes the prior CLI-first
+assumption and approves an Aether MCP control and trace plane between Hermes and
+Orca. The trace primarily supports system learning/refinement and future
+fine-tuning evidence; audit is secondary. The detailed MCP/learning contracts
+remain proposed and none of these decisions
+implements, registers, or activates a runtime.
 
 ## Architecture rules
 

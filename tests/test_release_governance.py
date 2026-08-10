@@ -100,10 +100,7 @@ def test_next_version_preflight_blocks_open_semver_candidate(
 
 def test_release_boundary_requires_annotated_tag_on_current_main(tmp_path: Path) -> None:
     _init_repo(tmp_path)
-    (tmp_path / "pyproject.toml").write_text(
-        '[project]\nname = "fixture"\nversion = "0.20.0"\ndependencies = ["mcp>=1,<2"]\n',
-        encoding="utf-8",
-    )
+    (tmp_path / "VERSION").write_text("0.20.0\n", encoding="utf-8")
     (tmp_path / "README.md").write_text(
         "![Version](https://img.shields.io/badge/version-0.20.0-blue)\n",
         encoding="utf-8",
@@ -112,7 +109,7 @@ def test_release_boundary_requires_annotated_tag_on_current_main(tmp_path: Path)
     notes = tmp_path / "docs" / "releases" / "v0.20.0" / "RELEASE_NOTES.md"
     notes.parent.mkdir(parents=True)
     notes.write_text("# v0.20.0\n", encoding="utf-8")
-    _git(tmp_path, "add", "pyproject.toml", "README.md", "CHANGELOG.md", "docs")
+    _git(tmp_path, "add", "VERSION", "README.md", "CHANGELOG.md", "docs")
     _git(tmp_path, "commit", "-m", "release: prepare v0.20.0")
     _git(tmp_path, "update-ref", "refs/remotes/origin/main", "HEAD")
     _git(tmp_path, "tag", "-a", "v0.20.0", "-m", "v0.20.0")

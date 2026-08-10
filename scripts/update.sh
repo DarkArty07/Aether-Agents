@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.18.2 — Update Script
+# Aether Agents v0.22.0 — Update Script
 # https://github.com/DarkArty07/Aether-Agents
 #
-# Updates the repo and dependencies: git pull, pip upgrades, config regeneration.
+# Updates the repo and Hermes Agent, then checks config generation.
 # Idempotent — safe to re-run. Preserves local config changes and .env files.
 #
 # Usage:  bash scripts/update.sh
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.18.2"
+SCRIPT_VERSION="0.22.0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
@@ -50,8 +50,8 @@ sed_inplace() {
 
 # ── Pre-flight checks ─────────────────────────────────────────────────────────
 preflight() {
-    if [ ! -f "$PROJECT_ROOT/pyproject.toml" ]; then
-        fail "pyproject.toml not found at $PROJECT_ROOT"
+    if [ ! -f "$PROJECT_ROOT/VERSION" ]; then
+        fail "VERSION not found at $PROJECT_ROOT"
         fail "Run this script from the Aether-Agents repo root: bash scripts/update.sh"
         exit 1
     fi
@@ -123,27 +123,36 @@ upgrade_hermes_agent() {
     ok "hermes-agent ${new_version}"
 }
 
-# ── Step 3: Reinstall olympus-mcp ────────────────────────────────────────────
-reinstall_olympus_mcp() {
-    step 3 "Reinstalling olympus-mcp (editable mode)"
-
-    info "Installing olympus-mcp from ${PROJECT_ROOT}..."
-    "$VENV_DIR/bin/pip" install -e "$PROJECT_ROOT" --quiet 2>/dev/null
-    ok "olympus-mcp reinstalled"
-
-    if "$HERMES_PYTHON" -c "import olympus_v3.server" 2>/dev/null; then
-        ok "olympus_v3.server import verified"
-    else
-        warn "olympus_v3.server import check failed"
-    fi
-}
-
-# ── Step 4: Regenerate config.yaml if needed ──────────────────────────────────
+# ── Step 3: Regenerate config.yaml if needed ──────────────────────────────────
 regenerate_configs() {
-    step 4 "Checking config.yaml files"
+    step 3 "Checking config.yaml files"
 
     local regenerated=0
     local skipped=0
+
+    local root_template="$PROJECT_ROOT/home/config.yaml.template"
+    local root_config="$PROJECT_ROOT/home/config.yaml"
+    if [ -f "$root_template" ]; then
+        if [ -f "$root_config" ]; then
+            if grep -q "__AETHER_ROOT__\|__HERMES_PYTHON__" "$root_config" 2>/dev/null; then
+                warn "home/config.yaml has unresolved placeholders — regenerating"
+                cp "$root_template" "$root_config"
+                sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+                sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+                ok "home/config.yaml regenerated"
+                regenerated=$((regenerated + 1))
+            else
+                ok "home/config.yaml already configured — skipping"
+                skipped=$((skipped + 1))
+            fi
+        else
+            cp "$root_template" "$root_config"
+            sed_inplace "__AETHER_ROOT__" "$PROJECT_ROOT" "$root_config"
+            sed_inplace "__HERMES_PYTHON__" "$HERMES_PYTHON" "$root_config"
+            ok "home/config.yaml generated from template"
+            regenerated=$((regenerated + 1))
+        fi
+    fi
 
     for profile_dir in "$PROJECT_ROOT/home/profiles"/*/; do
         [ -d "$profile_dir" ] || continue
@@ -207,7 +216,6 @@ main() {
     preflight
     git_pull
     upgrade_hermes_agent
-    reinstall_olympus_mcp
     regenerate_configs
     print_summary
 }

@@ -3,7 +3,8 @@
 > **Status:** APPROVED PRODUCT BASELINE — discovery complete
 > **Owner:** Christopher (DarkArty07)
 > **Governing decisions:** `../decisions/PDR-0002-generic-adaptive-software-product.md`, `../decisions/PDR-0003-quality-doctrine-and-model-economics.md`, `../decisions/PDR-0004-product-owner-authority-and-bounded-autonomy.md`, `../decisions/PDR-0005-multi-agent-participation-and-coordination.md`, `../decisions/PDR-0006-hermes-native-user-memory-without-honcho.md`, `../decisions/PDR-0007-studio-experience-progressive-visibility-and-ui.md`, `../decisions/PDR-0008-canonical-definition-and-project-completion.md`
-> **Implementation authorization:** None
+> **v0.22.0 runtime decisions:** `../decisions/PDR-0012-hermes-orca-swarm-boundary.md`, `../decisions/PDR-0013-swarm-roster-and-personality-model.md`
+> **Implementation authorization:** Documentation and design only
 
 ## Canonical definition
 
@@ -71,15 +72,15 @@ Multi-agent architecture is a means. Preserved intent, adaptive assistance, soft
 
 Aether centralizes product vision but decentralizes routine coordination.
 
-The product owner may classify any Daimon as required, allowed, disabled, or forbidden. Aether must respect that policy across direct selection, peer proposals, fallback routing, and recovery. The current suspension of Athena is the empirical precedent for this general rule.
+The product owner may classify any Daimon as required, allowed, disabled, or forbidden. Aether must respect that policy across direct selection, peer proposals, fallback routing, and recovery. PDR-0013 records the current target roster: Athena and Etalides are retired and forbidden, Ariadna is conditional and disabled, and no hidden equivalent may bypass those dispositions.
 
 Hermes remains responsible for understanding intent, preparing the contract, product synthesis, material amendments, and escalation. It should not relay every routine message or handoff.
 
-Authorized Daimons may collaborate laterally within an approved contract. Harmonia and the kernel coordinate task state, dependencies, evidence, budgets, and recovery without acquiring product authority or Olympus ACP lifecycle ownership.
+Authorized Daimons may collaborate laterally within an approved contract. Stable archetypes may have multiple temporary workers when independent Tasks justify them; Aether does not need a new personality per technology or subtask. Orca owns task state, dependencies, messages, workers, worktrees and recovery without acquiring product authority. The v0.22.0 candidate has bounded M5.4 integration evidence but intentionally has no registered execution runtime; PDR-0014 assigns production dogfooding to v0.23.0 and gradual process migration to v0.24.0.
 
 Specialist disagreements are resolved through current user intent, approved decisions, contract, artifacts, reproducible evidence, quality doctrine, and domain authority—not majority vote.
 
-The v0.19.0 design is aligned with this target, but its release closeout did not prove replacement of the live Hermes hub-and-spoke path. The later v0.19.x migration closed at v0.19.5 with a `VIABLE — BOUNDED` verdict: fixed no-relay handoff, revision-bound Harmonia selection, trusted evidence, fail-closed behavior, and real semantic successor consumption were demonstrated for the approved bounded topology. Harmonia remains default-off; production activation, broader topology, and global replacement were not authorized or demonstrated.
+The v0.19.0 design was aligned with this target, but its release closeout did not prove replacement of the live Hermes hub-and-spoke path. The later v0.19.x migration closed at v0.19.5 with a `VIABLE — BOUNDED` verdict for its fixed historical topology. PDR-0011 retired that runtime from the v0.22.0 candidate; the successor Orca integration is bounded and accepted through M5.4, while registration, generic production operation and workflow migration remain later gates.
 
 ## Learning and user-model doctrine
 
@@ -89,7 +90,7 @@ Hermes is the custodian of the global user model. As the primary agent, it detec
 
 Honcho is excluded from the target product. Aether should operate without an external semantic memory service and without depending on Honcho for installation, personalization, continuity, or authority.
 
-Daimons may contribute observations, but they do not independently own the user profile. Project-specific knowledge remains in project documentation and `.aether`; user preferences remain in Hermes-managed profile and memory; reusable procedures remain in skills.
+Daimons may contribute observations, but they do not independently own the user profile. Current project-specific knowledge remains in version-controlled project documentation; existing `.aether` stores are protected historical/local state. User preferences remain in Hermes-managed profile and memory; reusable procedures remain in skills.
 
 ## Product experience and ambition
 
@@ -162,12 +163,12 @@ Aether does not seek to become:
 | Authorized Daimons may coordinate laterally inside an approved contract | Explicit owner approval and v0.19.0 alignment analysis, Phase 5 | APPROVED TARGET |
 | Daimon disagreements resolve through authority and evidence rather than voting | Explicit owner approval, Phase 5 | APPROVED |
 | v0.19.0 replaced the live hub-and-spoke path | v0.19.0 release closeout | NOT DEMONSTRATED |
-| Bounded no-relay coordination with deterministic Harmonia selection | v0.19.5 Gate C and roadmap closeout | VALIDATED — VIABLE, BOUNDED, DEFAULT-OFF |
+| Bounded no-relay coordination in the historical v0.19.5 topology | v0.19.5 Gate C and roadmap closeout | HISTORICAL — VALIDATED, THEN RETIRED BY PDR-0011 |
 | Global participant-policy enforcement, broader topology, and production activation | Later design, implementation, and validation | OPEN |
 | Hermes Agent native learning is Aether's canonical learning framework | Explicit owner approval and installed-source verification, Phase 6 | APPROVED |
 | Honcho is excluded from Aether's target product | Explicit owner approval, Phase 6 | APPROVED |
 | Hermes owns global user-profile and memory curation | Explicit owner approval, Phase 6 | APPROVED |
-| Current `memory.provider: honcho` configuration matches product doctrine | Current configuration inspection | NO — MIGRATION PENDING |
+| Tracked configuration and setup require an external semantic-memory service | v0.22.0 post-retirement cleanup | NO — RETIREMENT COMPLETE |
 | Shared-skill write enforcement and optional private user skills | Later operating-model design | OPEN |
 | Aether should feel like directing an intelligent software studio | Explicit owner approval, Phase 7 | APPROVED |
 | Visibility should be progressive rather than raw or opaque | Explicit owner approval, Phase 7 | APPROVED |

@@ -2,9 +2,138 @@
 
 This file is the canonical project context. It is read automatically by hermes-agent, Cursor, and Claude Code.
 
+## Current Orca adoption boundary
+
+PDR-0014 rebaselines the transition into three product versions:
+
+- **v0.22.0 — Orca Integration Foundation:** scope ends at the accepted M5.4
+  boundary. The exact binding is Orca 1.4.167 desktop renderer plus public
+  structured CLI, Codex CLI 0.147.0 and the bounded `gpt-5.6-terra` acceptance.
+  Aether MCP remains default-off, unregistered and exactly zero-tool. The source
+  release is official; activation is not part of v0.22.0.
+- **v0.23.0 — Orca Production Dogfood:** after v0.22.0 publication, the first
+  milestone must implement, register, validate and separately activate the real
+  Aether MCP + Orca path with rollback. Once that gate passes, all real
+  multi-agent Tasks use Orca; inability to use it opens an
+  `ORCA_INTEGRATION_INCIDENT`, blocks the original Task, and requires repair plus
+  same-path retry. Olympus, `talk_to`, Harmonia, ACPManager, aliases, dual-write
+  and silent fallback are forbidden for completing that Task.
+- **v0.24.0 — Gradual Workflow Migration:** process-specific workflows migrate
+  one at a time from v0.23.0 evidence. Generic archetypes remain stable; workflow
+  behavior belongs in versioned contracts/skills, with per-process activation,
+  rollback and legacy retirement.
+
+Hermes may still work directly when one accountable owner is the deliberate
+product choice. If Orca itself is unavailable, Hermes may act directly only as a
+break-glass maintainer of the Aether-Orca path; direct completion of the blocked
+multi-agent deliverable is not an Orca PASS.
+
+Canonical authority:
+
+- `docs/decisions/PDR-0014-versioned-orca-production-adoption.md`;
+- `docs/releases/v0.22.0/ROADMAP.md` and `RELEASE_BOUNDARY.md`;
+- `docs/releases/v0.23.0/ROADMAP.md` and `PRODUCTION_OPERATING_POLICY.md`;
+- `docs/releases/v0.24.0/ROADMAP.md`;
+- GitHub ledgers #166, #167 and #168; release PR #163.
+
+The v0.22.0 source publication does not authorize installation, registration,
+restart, runtime activation, credentials, workers, model calls, spend or live
+Olympus retirement. The next material boundary is a separately frozen v0.23.0
+implementation and activation Task with rollback.
+
+## Historical v0.22.0 implementation chronology
+
+The following chronology preserves how the candidate reached M5.4. Interim
+blockers and authorizations are historical evidence; they do not override the
+current PDR-0014 roadmaps.
+
+### v0.22.0 Olympus retirement candidate
+
+The candidate contains no `src/olympus_v3`, `src/aether_agents`, ACPManager, lifecycle database, Olympus or Aether continuity hooks, legacy MCP facade, CLI or profile plugins. M2.1a adds only the bounded `aether-mcp` Python distribution and entry point under `src/aether_mcp`, pinned to `mcp==1.28.1`, default-off, stdio-only and with exactly zero tools. `talk_to`, `discover`, `aether_status`, `aether_update`, and `aether_curate` are not provided by the candidate. PDR-0012 supersedes the pre-emptive native-core extraction: Aether remains the Hermes product layer—vision, profiles, policies, skills, routing judgment and semantic acceptance—while Orca is the intended owner of Run, Task, Dispatch, worker, message, worktree, recovery and cleanup mechanics. Multi-agent execution remains unavailable until that Hermes-led Orca path passes isolation, lifecycle, cleanup, recovery and rollback gates. Do not create a compatibility shim, hidden fallback or disconnected policy kernel.
+
+### Historical v0.22.0 MCP-first implementation gate
+
+M0 was accepted by the product owner on 2026-08-06. The detailed Aether MCP
+architecture, 24-tool contract, trace/learning schemas, measurement contract,
+16-case catalog and M0–M12 roadmap are frozen in
+`docs/releases/v0.22.0/M0_DESIGN_ACCEPTANCE.md`.
+
+M1.1a exact installed identity and catalog are accepted as the bounded read-only
+basis for M1.2. M1.2 is independently accepted with verdict `INSUFFICIENT`: the
+catalog maps 49 capabilities only partially and lacks 6 required public seams.
+The owner accepted the M0 fast path: version-pinned Aether schema bundles and
+composition of public commands only. M2.1a was initially accepted at
+`cdd8c77dfc9e38bb18351c546a7b9ed0f5ec628d`; its clean-runner and Release
+boundary corrections culminate in `f31c6b610f9cbd0de38a617187d5497c194f9105`.
+The repository now contains one
+provider-independent, default-off, zero-tool stdio MCP bootstrap. Canonical
+closeout and resume instructions are in
+`docs/releases/v0.22.0/M2_1A_SESSION_HANDOFF.md` and Draft PR #163.
+
+Chris authorized one bounded long-horizon sequence on 2026-08-08:
+M2.1a-R1 closeout correction, then M1.1b canonical-candidate qualification, then
+provider-independent M2.2 protocol/errors. M1.1b is accepted at
+`eb7a23baaeb969ef388268786d187d6f4c8bef7d`; its exact-candidate blocker is
+closed. M2.2 is accepted at `59989d63f01930485715499156000d9fedfff037` with
+24 exported schemas, 50 stable errors and zero callable tools.
+
+Chris separately authorized M1.3 and M1.4 on 2026-08-08. Both milestones are
+closed. M1.3 technical implementation is `7dd413b86c1d4c0a44f1f39b1f9b86089f4c2239`;
+two final exact-candidate probes both stopped fail-closed at cold start with
+`ERR_RUNTIME_START_SHAPE`, while namespace rollback left zero process, listener,
+mount or root survivors and protected global state remained unchanged. All six
+missing M1.2 aggregate seams remained `UNSUPPORTED` under that frozen decision.
+M1.4 therefore recorded `D1_BLOCKED_PROVIDER_SEAM_INSUFFICIENT`; D1 was not
+granted and no adapter contract was frozen at that boundary.
+
+Chris then selected the bounded adaptive redesign path on 2026-08-08 and
+authorized the ordered R0-R6 sequence in
+`docs/external-agent/TASK-ORCA-ADAPTER-REDESIGN.md`. R3 fixed AppImage
+extraction/runtime framing and proved cold readiness, but closed blocked because
+no trusted headless coordinator-terminal bootstrap was qualified. R4 implements a
+restricted default-off exact-build planner, atomic append-only operation journal,
+idempotency, `UNKNOWN` and injected read-only reconciliation; it contains no live
+provider executor and every current mutation remains unavailable. R5 closed
+`BLOCKED / NOT EXECUTED` with zero workers, tools, models or runtime resources.
+R6 closes the local candidate with architecture/protocol/restricted-foundation
+evidence accepted and the provider-backed product gate blocked. Orca remains the
+sole mutable runtime authority, MCP remains zero-tool/default-off, and D1 remains
+false. The next action requires an owner decision on public headless coordinator
+admission or a separately isolated desktop/UI-backed qualification. Local atomic
+English commits are allowed. Model-backed workers, credentials/spend, push, merge,
+rebase, amend, tag, Release, deployment, registration, persistent services and
+activation remain forbidden.
+
+Chris first authorized completion through M2 on 2026-08-09, then separately
+authorized autonomous M3-M5 implementation. M3 accepted manifest-bound
+Run/Task lifecycle, restart/rebind/reconciliation, cancel and close without
+workers. M4 accepted one deterministic model-free tracking worker, exact
+Dispatch/message/retry/fencing, child-worktree artifact validation, encrypted
+episode replay and cancellation. Deterministic M5 accepted two Dispatches before
+polling, barrier-proved overlap, provider-message-correlated peer handoff,
+coordinator integration, partial failure/cancel and zero survivors. The exact
+qualified binding remains desktop-renderer plus public structured CLI; this does
+not establish pure headless admission or native supervised model-free workers.
+
+Bounded M5.4 model-backed execution is accepted for the exact Orca 1.4.167
+desktop-renderer plus public-CLI binding with Codex CLI 0.147.0 and
+`gpt-5.6-terra`. The corrected isolated candidate passed UC-C05 pre-effect
+denials, issued two Dispatches before polling, proved task-scoped model liveness
+and real interval overlap, passed both frozen verifiers, completed two
+provider-correlated worker messages, integrated both artifacts, closed
+semantically and left zero survivors with no retries or PAYG spend. The original
+600-second timeout and all correction-path failures remain preserved. This
+bounded pass does not establish pure headless admission, general operational
+availability, MCP registration or persistent activation. The stdio server still
+registers exactly zero tools; all behavior remains internal/default-off. Push,
+merge, tag, Release, registration, persistent services and activation remain
+outside this scope. Canonical closeouts include `M5_PARALLEL_ACCEPTANCE.md`,
+`M5_4_MODEL_ACCEPTANCE.md` and `M5_4_WORKER_LIVENESS_CORRECTION.md` under
+`docs/releases/v0.22.0/`.
+
 ## v0.19.0 experimental coordination closeout
 
-v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. The live `talk_to -> ACPManager` path remains authoritative, so this version does not replace Hermes hub-and-spoke. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication are outside this closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
+v0.19.0 is frozen at R11 as an experimental, default-off baseline and is not operationally validated. R7 shadow is observational; R8 is legacy-blocked; R9–R11 have deterministic evidence. At that historical boundary, `talk_to -> ACPManager` remained authoritative; that path has since been retired in the v0.22.0 candidate. R12–R14, active kernel composition, a kernel-backed pilot, production migration/rollback, activation, merge, tag and publication were outside the v0.19 closeout. Canonical truth: `docs/releases/v0.19.0-autonomous-coordination/RELEASE_CLOSEOUT.md`.
 
 ## v0.19.x incremental kernel migration
 
@@ -12,13 +141,21 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 ## Aether self-improvement cycle
 
-**Operating policy** — when working inside Aether Agents: use Harmonia when specialist work applies, never use a hidden `talk_to` fallback, preserve and classify failures, verify cleanup before direct takeover, repair Aether directly only for framework defects inside this project, verify the correction, and retry the intended Harmonia path. Accumulate evidence for the next minor without presuming its architecture or approving it automatically. Other projects must never mutate Aether incidentally. Read `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md` and the active manifest `docs/releases/v0.20.0/CYCLE.yaml`.
+**Current runtime policy** — no specialist execution runtime is registered in the v0.22.0 candidate. Hermes may perform bounded work directly; work that materially requires an unavailable specialist remains an explicit capability gap until the v0.23.0 production-entry gate passes. After that gate, every multi-agent Task must use Aether MCP + Orca and any failure must follow the repair-and-same-path-retry policy; never introduce a hidden `talk_to`, Harmonia, ACP, Olympus, or renamed fallback. Other projects must never mutate Aether incidentally. Read `docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md` and `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md`; `docs/releases/v0.20.0/CYCLE.yaml` is historical evidence, not an active candidate manifest.
 
-**What is enforced by code, and what is not.** The above is policy an agent must follow; it is not a mechanism. The v0.20.0 increment implements a default-off *measurement substrate*: project-identity verification, a redacted project-local ledger, admission-phase classification of Harmonia results, interruption recording, and a deterministic evidence projection that cannot approve a version. It does **not** implement takeover gating, failure-class classification, repair verification, retry correlation, an evaluator, before/after comparison, or rollback. No causal claim that Aether improved can currently be derived from it.
+**What is enforced by code, and what is not.** The candidate contains no self-improvement runtime, ledger implementation, hook, active manifest, evaluator, causality engine, promotion implementation, or release-evidence projector. Existing schema-v5 databases and v0.20 evidence are preserved as historical/local data but have no candidate reader or writer. PDR-0009 remains product policy only. No causal claim that Aether improved can currently be derived from the candidate.
 
-The plugin is absent from `plugins.enabled` in the versioned template and plugins are opt-in, so **no installation participates automatically**; an operator must enable `aether-self-improvement` explicitly. The template also excludes `talk_to` while Harmonia is default-off, so a template-based install has no general delegation path — that template is scoped to this project's own dogfooding, not to general installation.
+**Accepted v0.22 learning-data design.** The owner clarified that Aether MCP trace
+data is primarily for evaluating, improving and eventually fine-tuning the
+system; audit is secondary. The M0 design separates a compact semantic event
+index from protected secret-redacted model-visible learning episodes, labels and
+versioned dataset lineage. The design is accepted, but no capture store, dataset
+builder, exporter, trainer, upload, prompt/model mutation or promotion path exists
+or is authorized by M1.1a or M1.2.
 
-PDR-0009 governs the self-improvement policy. Phase 1 truthful-instrumentation corrections are independently accepted in `docs/releases/v0.20.0/INDEPENDENT_PHASE1_REVIEW.md`; causal self-improvement remains unimplemented. Harmonia activation, keys, runtime restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
+The `aether-self-improvement` plugin itself is absent, not merely disabled. A clean installation has no supported self-improvement activation path, general delegation path, or Aether MCP facade.
+
+PDR-0009 governs the self-improvement policy. Phase 1 truthful-instrumentation corrections are independently accepted in `docs/releases/v0.20.0/INDEPENDENT_PHASE1_REVIEW.md`; causal self-improvement remains unimplemented. Replacement-runtime activation, credentials, restart, live pilot, deployment and production publication remain separately gated. Git commits, pushes, pull requests, merge to `main`, annotated tags and GitHub Releases follow the standing automation authority and deterministic gates in `docs/decisions/ODR-0001-main-integration-and-release-automation.md`. Findings, severities and the remediation plan: `docs/releases/v0.20.0/EXTERNAL_LOGIC_AUDIT.md`.
 
 ## Git Conventions
 
@@ -67,6 +204,14 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
 **Approved experimental exception:** the default-off v0.19.x kernel migration uses micro-patches v0.19.1–v0.19.6 so each authority hypothesis can freeze or stop independently. These patches do not imply production readiness and retain separate implementation and live-execution gates. Their integrated outcome is published through v0.20.0 rather than as separate public v0.19.x tags.
+
+### v0.22.0 (2026-08-09)
+
+- **release**: Official source metadata, `main`, annotated tag, and GitHub Release identify v0.22.0.
+- **foundation**: The exact Orca 1.4.167 desktop-renderer/public-CLI binding passes deterministic M3-M5 and one bounded two-worker Codex 0.147.0 model-backed M5.4 execution.
+- **runtime boundary**: Aether MCP remains default-off, unregistered and exactly zero-tool; source publication does not install or activate Orca.
+- **retirement boundary**: Candidate source removes Olympus/ACP and the disconnected native core without changing the currently installed runtime or historical `.aether` stores.
+- **verification**: The exact release candidate passes 199 repository tests, Ruff, compileall, bounded wheel build, policy, 16-file product-assets validation, and GitHub CI on Python 3.11/3.12.
 
 ### v0.20.0 (2026-07-28)
 
@@ -235,7 +380,7 @@ chore: merge dev into main
 
 - **Feature → main:** Merge through a PR after the committed candidate passes required gates. Preserve audited atomic history with a merge commit when traceability matters; squash only when the branch history is intentionally disposable.
 - **After merge:** Verify local and remote `main`, close or update linked issues, delete the merged branch, and remove obsolete stacked PRs or worktrees.
-- **Release:** Create an annotated `vX.Y.Z` tag only on the exact integrated `main` commit after version metadata and release evidence agree. Pushing the tag triggers `.github/workflows/release.yml`, which verifies the boundary, builds artifacts and creates or reconciles the GitHub Release automatically.
+- **Release:** Create an annotated `vX.Y.Z` tag only on the exact integrated `main` commit after version metadata and release evidence agree. Pushing the tag triggers `.github/workflows/release.yml`, which verifies the boundary, builds and imports the bounded distribution, and creates or reconciles the GitHub Release automatically.
 - **No conflation:** A merge can integrate default-off or unreleased work. A tag publishes a version. Runtime activation and deployment are separate operational decisions.
 
 ### README and Website
@@ -258,52 +403,20 @@ Never commit:
 - `home/profiles/hermes/.env` — Secrets (gitignored)
 - Any `.venv/`, `node_modules/`, `dist/`, `__pycache__/` directory
 
-## .aether — Project Continuity
+## .aether — Preserved project state
 
-`.aether/` is the project state database that provides hot start context to Daimons.
-Lives at `PROJECT_ROOT/.aether/` (gitignored).
+Existing `PROJECT_ROOT/.aether/` data is gitignored and protected historical/local
+state. The v0.22.0 candidate has no plugin, hook, MCP facade, or Python reader/writer
+for `aether.db`, `self_improvement.db`, or `CONTEXT.md`. Source retirement does not
+authorize opening, rewriting, migrating, truncating, or deleting those stores.
 
-### How it works
+The historical database schema may contain `hot_state`, `sessions`, `file_changes`,
+`decisions`, and `issues`; that schema is evidence about prior releases, not an
+active candidate API. Durable candidate findings must be recorded in versioned
+status/evidence or the project issue tracker until a separately accepted continuity
+surface exists. Never edit `.aether/CONTEXT.md` or its databases manually as a
+shortcut.
 
-When a Daimon is spawned, the aether plugin hooks inject project context automatically:
-- `pre_llm_call` (first turn): reads hot_state + recent sessions, injects as [.aether Hot Start] context
-- `on_session_start`: creates a session row in aether.db
-- `post_tool_call`: detects write_file/patch/git commit, records file_changes
-- `on_post_llm_call` (first turn): updates hot_state.last_request
-- `on_session_end`: updates session status and hot_state
-
-Hermes interacts with .aether via MCP tools (aether_status, aether_update), NOT via plugin.
-
-### Database tables
-
-- `hot_state` — single-row project snapshot (phase, task, last session, blockers, etc.)
-- `sessions` — per-Daimon session history (agent, request, result, files modified)
-- `file_changes` — file write/patch/commit tracking (session, agent, path, action)
-- `decisions` — architectural decisions (title, rationale, alternatives, status)
-- `issues` — blockers and errors (description, resolution, status)
-
-### Observations and Issues
-
-Hermes (the orchestrator) must log important findings to the `.aether` continuity database, not just store them in memory. This ensures observations are tracked in project state and visible across sessions.
-
-Use `aether_update(action="add_issue")` for:
-
-- **Observations** — architectural insights, codebase patterns discovered during work
-- **Discomforts** — inconsistencies, smells, or potential problems noticed
-- **Debug findings** — root causes identified during systematic debugging
-- **Preferences** — user-stated or inferred preferences that should persist
-
-Parameters:
-- `description` (required) — clear summary of the finding
-- `error_type` (optional) — `"observation"` for non-error findings, `"bug"` / `"deployment"` / `"config"` for actual errors
-- `session_id` (optional) — links the issue to the current session
-
-**Rule:** If a finding would be valuable to a *future session*, it belongs in `.aether` as an issue, not just in ephemeral memory.
-
-### Plugin vs MCP
-
-- **Plugin (aether_hooks)**: installed in ALL Daimons (hefesto, etalides, ariadna, daedalus, athena, ictinus). NOT in Hermes.
-- **MCP tools (aether_status, aether_update)**: available to Hermes via the olympus-v3 server.
-- **Ariadna** (future): periodic cron that synthesizes aether.db data into DESIGN.md.
-
-All Daimon configs include `aether` in `plugins.enabled` alongside `olympus_v3`.
+All six specialist templates have no Aether or Olympus plugin activation. Ariadna
+curation and general specialist invocation remain unavailable until the Hermes-led
+Orca path is independently accepted.

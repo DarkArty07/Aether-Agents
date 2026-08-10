@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "candidate_id": "orca-linux-appimage-1.4.167",
+  "qualification_policy": "candidate_specific_exact_bytes_v1",
+  "launcher": {
+    "path": "/home/darkarty/.local/bin/orca",
+    "size_bytes": 1015,
+    "sha256": "89efbb54323f6eb2372aa59f32d0e0d330486ae6764b7dd5896705c638a90208",
+    "kind": "bash_wrapper",
+    "executable_required": true
+  },
+  "appimage": {
+    "path": "/home/darkarty/.local/opt/orca/orca-linux.AppImage",
+    "size_bytes": 203385690,
+    "sha256": "813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33",
+    "executable_required": true
+  },
+  "binding_review": {
+    "method": "manual_static_review_of_exact_launcher_bytes",
+    "launcher_sha256": "89efbb54323f6eb2372aa59f32d0e0d330486ae6764b7dd5896705c638a90208",
+    "expected_appimage_path": "/home/darkarty/.local/opt/orca/orca-linux.AppImage",
+    "acceptance_record": "docs/releases/v0.22.0/M1_1A_IDENTITY_CATALOG_ACCEPTANCE.md"
+  },
+  "product_version": {
+    "value": "1.4.167",
+    "source": "orca-ide.desktop / X-AppImage-Version",
+    "extract_member": "orca-ide.desktop"
+  },
+  "catalog": {
+    "command": [
+      "agent-context",
+      "--json"
+    ],
+    "schema_version": 1,
+    "declared_command_count": 220,
+    "actual_command_count": 220,
+    "bytes": 153496,
+    "sha256": "068e1d66737f19835536e4a1573a2f931bffe9821af9c1bdff855f902898944b",
+    "required_command_keys": [
+      "aliases",
+      "argumentMode",
+      "command",
+      "examples",
+      "flags",
+      "notes",
+      "path",
+      "positionalArgs",
+      "summary",
+      "usage"
+    ]
+  },
+  "isolation": {
+    "root_parent": "/tmp",
+    "root_prefix": "aether-m1-1b-",
+    "required_directories": [
+      "cache",
+      "config",
+      "data",
+      "home",
+      "runtime",
+      "squashfs-root",
+      "state",
+      "tmp"
+    ],
+    "required_files": [
+      "squashfs-root/orca-ide.desktop"
+    ],
+    "process_timeout_seconds": 10,
+    "cleanup_timeout_ms": 2000,
+    "cleanup_poll_interval_ms": 20,
+    "transient_fuse_name_regex": "^\\.mount_orca-[A-Za-z0-9]+$",
+    "transient_fuse_condition": "direct_tmp_child_real_directory_scandir_errno_ENOTCONN_then_must_disappear",
+    "final_inventory_exceptions": []
+  },
+  "authorized_child_operations": [
+    {
+      "executable": "appimage",
+      "arguments": [
+        "--appimage-extract",
+        "orca-ide.desktop"
+      ]
+    },
+    {
+      "executable": "launcher",
+      "arguments": [
+        "agent-context",
+        "--json"
+      ],
+      "exact_calls": 2
+    }
+  ]
+}

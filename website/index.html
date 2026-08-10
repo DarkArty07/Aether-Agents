@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aether Agents — Multi-Agent System built on hermes-agent</title>
-    <meta name="description" content="Provider-agnostic multi-agent system built on hermes-agent. Orchestrates 6 specialized Daimons for collaborative software development via Olympus MCP and ACP protocol.">
+    <title>Aether Agents — Hermes-led AI software team</title>
+    <meta name="description" content="Aether product vision, Hermes policy, specialist profiles, skills, verification, and acceptance built on hermes-agent.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
@@ -37,13 +37,13 @@
             <div class="hero-badge">Built on hermes-agent · Open Source · MIT</div>
             <h1>Aether Agents</h1>
             <p class="hero-subtitle">
-                A provider-agnostic multi-agent system. Orchestrates 6 specialized Daimons for collaborative software development through <strong>Olympus MCP</strong> and the <strong>ACP protocol</strong>.
+                Product vision, Hermes policy, specialist profiles, skills, verification, and acceptance built on <strong>hermes-agent</strong>.
             </p>
             <div class="hero-install">
-                <pre><code><span class="c-dim">$</span> git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git
+                <pre><code><span class="c-dim">$</span> git clone https://github.com/DarkArty07/Aether-Agents.git
 <span class="c-dim">$</span> cd Aether-Agents
 <span class="c-dim">$</span> bash scripts/setup.sh</code></pre>
-                <button class="copy-btn" data-copy="git clone --recurse-submodules https://github.com/DarkArty07/Aether-Agents.git&#10;cd Aether-Agents&#10;bash scripts/setup.sh">Copy</button>
+                <button class="copy-btn" data-copy="git clone https://github.com/DarkArty07/Aether-Agents.git&#10;cd Aether-Agents&#10;bash scripts/setup.sh">Copy</button>
             </div>
         </div>
     </section>
@@ -54,7 +54,7 @@
             <div class="section-label">Overview</div>
             <h2>What is Aether Agents?</h2>
             <p class="section-desc">
-                Aether Agents is not a chatbot wrapper nor a simple IDE plugin. It is an agent ecosystem where each Daimon runs as a persistent process, gets spawned on first call, stays alive between sessions, and handles a single well-defined domain. All routing goes through <strong>Hermes</strong> via Olympus MCP. Hermes coordinates explicit Daimon sessions and project continuity; public behavior is defined by the registered MCP tools, not legacy workflow claims.
+                Aether Agents is not a chatbot wrapper nor a second coordination kernel. It defines product intent, Hermes behavior, specialist roles, participation, verification, semantic acceptance, and release authority. The v0.22.0 candidate intentionally contains no multi-agent execution runtime while its Hermes-led Orca replacement remains gated.
             </p>
 
             <div class="callout">
@@ -64,15 +64,15 @@
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
-                    Daimons don't talk to each other. All routing goes through Hermes.
+                    Specialist profiles are versioned, but this candidate does not spawn or route to them.
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
-                    Every project tracked by Aether gets a <code>.aether/</code> directory at its root — shared state across the team.
+                    Existing <code>.aether/</code> stores are protected historical/local state; this candidate does not open, rewrite, migrate, or delete them.
                 </div>
                 <div class="callout-line">
                     <span class="callout-icon">→</span>
-                    Olympus v3 exposes explicit session and continuity operations; Hermes composes multi-step work through delegation.
+                    The legacy runtime was physically removed. No compatibility layer or silent fallback remains.
                 </div>
             </div>
         </div>
@@ -84,7 +84,7 @@
             <div class="section-label">Architecture</div>
             <h2>How it works</h2>
             <p class="section-desc">
-                Hermes connects to the <strong>Olympus v3 MCP server</strong> via stdio. Olympus exposes five public tools: <code>talk_to()</code>, <code>discover()</code>, <code>aether_status()</code>, <code>aether_update()</code>, and <code>aether_curate()</code>. Under the hood, Olympus uses <strong>ACP (Agent Client Protocol)</strong> to manage Daimon sessions.
+                Hermes runs on hermes-agent and applies Aether's versioned product decisions, profiles, skills, verification policy, and acceptance doctrine. Orca is the intended owner of Runs, Tasks, Dispatches, workers, messages, worktrees, recovery, and cleanup after separate acceptance.
             </p>
 
             <div class="arch-diagram">
@@ -98,64 +98,24 @@
                     <span>Hermes</span>
                     <span class="node-sub">Orchestrator</span>
                 </div>
-                <div class="arch-arrow">→ MCP stdio →</div>
-                <div class="arch-node olympus-node">
+                <div class="arch-arrow">→ product policy →</div>
+                <div class="arch-node core-node">
                     <span class="node-icon">⚙</span>
-                    <span>Olympus</span>
-                    <span class="node-sub">MCP Server</span>
-                </div>
-                <div class="arch-arrow">→ ACP →</div>
-                <div class="arch-node daimons-node">
-                    <span class="node-icon">◈</span>
-                    <span>Daimons</span>
-                    <span class="node-sub">Persistent processes</span>
+                    <span>Aether Product Layer</span>
+                    <span class="node-sub">Profiles · Skills · Acceptance</span>
                 </div>
             </div>
 
-            <h3 class="subsection-title">talk_to() lifecycle</h3>
-            <p class="section-desc">The <code>talk_to()</code> tool exposes 7 actions. Daimons are keep-alive — spawned on first <code>open</code>, they stay alive between sessions.</p>
+            <h3 class="subsection-title">Execution status</h3>
+            <p class="section-desc">The target is one Hermes-supervised Orca Run with independent Tasks dispatched before waiting, direct/group worker messaging, and one feature integration branch with child worktrees for potentially conflicting writers. Multi-agent execution remains unavailable until the path demonstrates project/profile isolation, durable recovery, cleanup, and rollback.</p>
 
-            <div class="lifecycle-table">
-                <div class="lifecycle-row header">
-                    <div>Action</div>
-                    <div>Description</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>open</code></div>
-                    <div>Spawns a Daimon session through ACP</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>message</code></div>
-                    <div>Sends a prompt asynchronously — returns immediately with a session ID</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>poll</code></div>
-                    <div>Non-blocking status check — returns current thoughts, messages, tool calls</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>delegate</code></div>
-                    <div>Opens, messages, and polls a Daimon session until completion or timeout</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>steer</code></div>
-                    <div>Injects a prioritized directive into an active Daimon session</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>cancel</code></div>
-                    <div>Aborts a running session</div>
-                </div>
-                <div class="lifecycle-row">
-                    <div><code>close</code></div>
-                    <div>Closes the session. Agent process stays alive for next call.</div>
-                </div>
-            </div>
-
-            <h3 class="subsection-title">.aether/ — Shared Project State</h3>
-            <p class="section-desc">Every project tracked by Aether gets this directory structure at its root. Each Daimon owns a subdirectory.</p>
+            <h3 class="subsection-title">.aether/ — Protected Historical State</h3>
+            <p class="section-desc">Existing local stores may preserve state from prior releases. The candidate has no continuity plugin, reader, writer, or curation facade; the files remain untouched until a separately accepted continuity design exists.</p>
 
             <pre class="code-block"><code>PROJECT/.aether/
-├── aether.db    ← continuity state and session records
-└── CONTEXT.md   ← curated project context injected into Daimon sessions</code></pre>
+├── aether.db              ← preserved prior-release state
+├── self_improvement.db    ← preserved historical instrumentation state
+└── CONTEXT.md             ← preserved prior curated context</code></pre>
         </div>
     </section>
 
@@ -163,9 +123,9 @@
     <section id="workflows" class="section workflows-section">
         <div class="container">
             <div class="section-label">Workflows</div>
-            <h2>Automated multi-phase tasks</h2>
+            <h2>Reference workflow patterns</h2>
             <p class="section-desc">
-                Six canonical workflows orchestrate Daimons in sequence, with <strong>human-in-the-loop</strong> approval gates at critical points. Each workflow type is purpose-built — you don't start from scratch.
+                These cards preserve product intent and human approval gates. They are not executable workflows in the v0.22.0 candidate.
             </p>
 
             <div class="workflows-grid">
@@ -289,7 +249,7 @@
                 </div>
             </div>
 
-            <p class="workflows-note">Use <code>talk_to()</code> for single-Daimon work; Hermes coordinates multi-step tasks through explicit delegation. <code>run_workflow()</code> is not a registered Olympus v3 tool.</p>
+            <p class="workflows-note">Execution remains disabled until a replacement runtime is implemented and accepted. Do not infer callable tools from these reference patterns.</p>
         </div>
     </section>
 
