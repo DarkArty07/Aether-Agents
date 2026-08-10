@@ -19,21 +19,21 @@ from .content_store import ProtectedContentStore, StaticKeyProvider
 from .coordination import WorkerService, WorkerStore
 from .foundation import M2Foundation
 from .lifecycle import LifecycleService, LifecycleStore
-from .orca_provider import PublicOrcaLifecycleProvider
-from .protocol import ERROR_MESSAGES, ProtocolError, error_envelope, success_envelope, validate_request
+from .orca_provider import ModelRuntimeConfig, PublicOrcaLifecycleProvider
+from .protocol import ERROR_MESSAGES, OUTCOMES, ProtocolError, error_envelope, success_envelope, validate_request
 from .trace_store import TraceStore
 
 _MAX_PROVIDER_OUTPUT_BYTES = 4 * 1024 * 1024
 _PUBLIC_TIMEOUT_SECONDS = 30
-_QUALIFIED_BINDING_DIGEST = "813b11e99f7caa4bf8e4fc47200dd6c465f34a04d61e855adbd8822190592e33"
 
 
 class PublicOrcaTransport:
     """Bounded structured transport; provider adapters own all command selection."""
 
     def __init__(self, executable: str) -> None:
-        if not executable or "\x00" in executable:
-            raise ValueError("invalid Orca executable")
+        path = Path(executable)
+        if not executable or "\x00" in executable or not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+            raise ProtocolError("CAPABILITY_UNAVAILABLE")
         self.executable = executable
 
     def __call__(self, argv: tuple[str, ...]) -> dict[str, Any]:
@@ -44,16 +44,22 @@ class PublicOrcaTransport:
                 (self.executable, *argv), capture_output=True, check=False,
                 timeout=_PUBLIC_TIMEOUT_SECONDS,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise ProtocolError("DELIVERY_UNKNOWN") from exc
         except (OSError, subprocess.SubprocessError) as exc:
-            raise RuntimeError("public Orca transport unavailable") from exc
-        if len(completed.stdout) > _MAX_PROVIDER_OUTPUT_BYTES or completed.returncode != 0:
-            raise RuntimeError("public Orca transport failed")
+            raise ProtocolError("PROVIDER_UNAVAILABLE") from exc
+        if (
+            len(completed.stdout) > _MAX_PROVIDER_OUTPUT_BYTES
+            or len(completed.stderr) > _MAX_PROVIDER_OUTPUT_BYTES
+            or completed.returncode != 0
+        ):
+            raise ProtocolError("PROVIDER_RESPONSE_INVALID")
         try:
             payload = json.loads(completed.stdout)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RuntimeError("public Orca transport returned malformed JSON") from exc
+            raise ProtocolError("PROVIDER_RESPONSE_INVALID") from exc
         if not isinstance(payload, dict):
-            raise RuntimeError("public Orca transport returned malformed JSON")
+            raise ProtocolError("PROVIDER_RESPONSE_INVALID")
         return payload
 
 
@@ -62,7 +68,9 @@ def _state_root(environment: Mapping[str, str]) -> Path:
     if not raw:
         raise ProtocolError("CAPABILITY_UNAVAILABLE")
     root = Path(raw)
-    if not root.is_absolute() or root.is_symlink():
+    if not root.is_absolute() or root.is_symlink() or any(parent.is_symlink() for parent in root.parents):
+        raise ProtocolError("PRINCIPAL_UNAUTHENTICATED")
+    if root.exists() and (not root.is_dir() or root.stat().st_uid != os.getuid() or root.stat().st_mode & 0o077):
         raise ProtocolError("PRINCIPAL_UNAUTHENTICATED")
     return root
 
@@ -93,20 +101,37 @@ class OperationalRuntime:
             return self._services
         context = TrustedLaunchContext.from_environment(self.environment)
         root = _state_root(self.environment)
-        transport = PublicOrcaTransport(self.environment.get("AETHER_ORCA_CLI", "orca"))
+        executable = self.environment.get("AETHER_ORCA_CLI")
+        if not executable:
+            raise ProtocolError("CAPABILITY_UNAVAILABLE")
+        transport = PublicOrcaTransport(executable)
         handle = self.environment.get("AETHER_ORCA_COORDINATOR_HANDLE")
         if not handle:
             raise ProtocolError("PRINCIPAL_UNAUTHENTICATED")
+        catalog = OrcaCatalog.bundled()
+        binding_digest = catalog.digest
+        supplied_digest = self.environment.get("AETHER_ORCA_BINDING_DIGEST")
+        if supplied_digest is not None and supplied_digest != binding_digest:
+            raise ProtocolError("PROVIDER_SCHEMA_DRIFT")
+        model_runtime = ModelRuntimeConfig(
+            repo_selector=self._required_environment("AETHER_ORCA_REPO_SELECTOR"),
+            base_ref=self._required_environment("AETHER_ORCA_BASE_REF"),
+            agent="codex",
+            expected_model="gpt-5.6-terra",
+            timeout_ms=self._timeout_ms(),
+        )
         provider = PublicOrcaLifecycleProvider(
             transport=transport,
-            binding_digest=self.environment.get("AETHER_ORCA_BINDING_DIGEST", _QUALIFIED_BINDING_DIGEST),
+            binding_digest=binding_digest,
             coordinator_handle=handle,
+            model_runtime=model_runtime,
         )
         foundation = M2Foundation(
             context=context,
-            admissions=ProjectAdmissionRegistry(root / "admissions"),
+            admissions=ProjectAdmissionRegistry(root / "admissions", full_episode_enabled=False),
             trace=TraceStore(root / "trace"),
-            catalog=OrcaCatalog.bundled(),
+            catalog=catalog,
+            provider_binding_digest=binding_digest,
         )
         lifecycle = LifecycleService(
             foundation=foundation,
@@ -121,6 +146,21 @@ class OperationalRuntime:
         )
         self._services = foundation, lifecycle, worker
         return self._services
+
+    def _required_environment(self, name: str) -> str:
+        value = self.environment.get(name)
+        if not value:
+            raise ProtocolError("CAPABILITY_UNAVAILABLE")
+        return value
+
+    def _timeout_ms(self) -> int:
+        try:
+            value = int(self._required_environment("AETHER_ORCA_TIMEOUT_MS"))
+        except ValueError as exc:
+            raise ProtocolError("CAPABILITY_UNAVAILABLE") from exc
+        if not 1_000 <= value <= 600_000:
+            raise ProtocolError("CAPABILITY_UNAVAILABLE")
+        return value
 
     def invoke(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         request_id = str(uuid.uuid4())
@@ -150,12 +190,14 @@ class OperationalRuntime:
             }
             result = routes[name](admitted)
             if name == "swarm_validate":
-                lifecycle.store.register_manifest(result, manifest_ref=f"manifest:{result.digest}")
-            effect = "READ_ONLY" if name in {"project_inspect", "swarm_validate", "swarm_status", "orca_search", "orca_describe", "orca_call"} else "LOCAL_REVERSIBLE"
+                lifecycle.store.register_manifest(result, manifest_ref=result.manifest_ref)
+            effect = operation.get("expected_effect") if isinstance(operation, dict) else None
+            if effect is None:
+                effect = "READ_ONLY" if name in {"project_inspect", "swarm_validate", "swarm_status", "orca_search", "orca_describe", "orca_call"} else "LOCAL_REVERSIBLE"
             outcome = "SUCCEEDED"
             if isinstance(result, dict) and isinstance(result.get("outcome"), str):
                 candidate = result["outcome"]
-                outcome = candidate if candidate in {"SUCCEEDED", "PARTIAL", "UNKNOWN", "CANCELLED", "CLOSED", "BLOCKED"} else "SUCCEEDED"
+                outcome = candidate if candidate in set(OUTCOMES) else "SUCCEEDED"
             return success_envelope(
                 request_id=request_id, operation_id=operation_id, trace_event_ids=(), effect=effect,
                 outcome=outcome, result=_json_value(result),

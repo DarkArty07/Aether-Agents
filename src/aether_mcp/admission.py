@@ -142,13 +142,14 @@ class ProjectAdmission:
 class ProjectAdmissionRegistry:
     """SQLite admission registry stored outside admitted project roots."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, *, full_episode_enabled: bool = True) -> None:
         if root.is_symlink():
             _fail("PROJECT_IDENTITY_MISMATCH", "Admission state root cannot be a symlink")
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(root, 0o700)
         self.root = root.resolve(strict=True)
         self.path = self.root / "admissions.sqlite3"
+        self.full_episode_enabled = full_episode_enabled
         self._migrate()
 
     def _connect(self) -> sqlite3.Connection:
@@ -219,6 +220,10 @@ class ProjectAdmissionRegistry:
         if not isinstance(context, TrustedLaunchContext):
             _fail("PRINCIPAL_UNAUTHENTICATED", "Coordinator trusted launch context is required")
         self._validate_inputs(safe_alias, capture_policy, consent_authority_ref)
+        # This candidate deliberately has no authorized persistent key provider.
+        # Reject before resolving or inspecting caller-selected project paths.
+        if capture_policy == "FULL_EPISODE" and not self.full_episode_enabled:
+            _fail("CAPTURE_DISABLED", "Full episode capture has no authorized key provider")
         root = _canonical_existing_directory(project_root, code="PROJECT_NOT_ADMITTED")
         top, common, root_info, common_info = _git_identity(root)
         try:

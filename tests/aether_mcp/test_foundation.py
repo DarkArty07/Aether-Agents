@@ -99,6 +99,8 @@ def test_integrated_m2_services_admit_validate_trace_and_plan_read_only(tmp_path
     }
     validated = foundation.swarm_validate({"manifest": manifest})
     assert validated.project_id == project.project_id
+    assert validated.manifest_ref == f"manifest:{validated.digest}"
+    assert validated.provider_binding_digest == foundation.catalog.digest
 
     run_id = str(uuid.uuid4())
     decision_request = {
