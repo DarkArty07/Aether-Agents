@@ -39,7 +39,8 @@ Canonical authority:
 The current task boundary is documentation/GitHub only. It does not authorize
 source, tests, scripts, schemas, profiles, SOULs, configuration, installation,
 registration, restart, activation, credentials, workers, model calls, spend,
-merge, tag or Release. The next material gate is v0.22.0 exact-tree source
+merge, tag or Release. The next material gate is the separately frozen v0.22.0
+CI-contract correction in GitHub issue #169, followed by exact-tree source
 acceptance/publication; only then may an exact v0.23.0 implementation and
 activation Task be frozen.
 

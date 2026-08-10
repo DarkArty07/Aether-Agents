@@ -12,13 +12,35 @@ historical_status: docs/releases/v0.22.0/HISTORICAL_M0_M12_STATUS.yaml
 branch: feature/v0.22.0-orca-transition
 draft_pr: 163
 release_issue: 166
+ci_blocker_issue: 169
 github_milestone: v0.22.0 — Orca Integration Foundation
 strongest_technical_baseline: bb0723188bddb9da0807653763347f759be0c64e
+documentation_rebaseline_commit: 51e7aa6f277551ed31753eef7d6999c353752721
 final_release_commit: null
 source_publication:
   merged: false
   tag_created: false
   github_release_published: false
+documentation_and_github_rebaseline:
+  completed: true
+  pull_request_head_verified: 51e7aa6f277551ed31753eef7d6999c353752721
+  local_tests: 198 passed
+  github_python_311: passed
+  github_python_312: passed
+  github_policy: passed
+  github_product_assets: failed
+current_blocker:
+  issue: 169
+  code_or_area: .github/workflows/test.yml product-assets source inventory
+  observed_expected_files: 13
+  observed_candidate_files: 16
+  stale_contract: M2-era inventory rejects accepted M3-M5 modules
+  rejected_paths:
+    - src/aether_mcp/coordination.py
+    - src/aether_mcp/lifecycle.py
+    - src/aether_mcp/orca_provider.py
+  introduced_by_documentation_rebaseline: false
+  correction_authorized_by_documentation_task: false
 runtime:
   aether_mcp_default_off: true
   registered_tools: 0
@@ -45,7 +67,7 @@ moved_not_completed:
   M11: v0.22.0 release-only closeout and independent release gates for later versions
   M12: v0.23.0 controlled production entry and v0.24.0 process cutover
 remaining_gates:
-  - documentation_and_github_rebaseline
+  - reconcile_product_assets_ci_contract_issue_169
   - exact_committed_candidate_validation
   - product_owner_candidate_acceptance
   - pull_request_integration

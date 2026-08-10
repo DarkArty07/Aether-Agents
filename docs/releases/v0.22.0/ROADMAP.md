@@ -66,7 +66,7 @@ Moved work is neither implemented nor accepted by v0.22.0.
 
 ## 6. Remaining v0.22.0 source closeout
 
-### R0 — Documentation and GitHub rebaseline
+### R0 — Documentation and GitHub rebaseline — COMPLETE
 
 - preserve the former roadmap/status as historical;
 - approve PDR-0014 and current version roadmaps;
@@ -75,9 +75,23 @@ Moved work is neither implemented nor accepted by v0.22.0.
 
 **Pass:** documentation-only diff, valid links/YAML, no secrets, and no source/runtime/config/profile changes.
 
-### R1 — Exact source candidate acceptance
+**Evidence:** commit `51e7aa6f277551ed31753eef7d6999c353752721`, GitHub milestones/issues #166-#168, Draft PR #163, 198/198 local tests, release-governance PASS, zero staged secret findings, four valid status YAML mappings, and 76 changed local links with zero missing targets.
+
+### R1 — Exact source candidate acceptance — BLOCKED BY #169
+
+The required GitHub `product-assets` job currently fails because
+`.github/workflows/test.yml` still asserts the exact 13-file M2 source inventory,
+while the accepted M3-M5 candidate correctly tracks 16 files. The rejected files
+are `coordination.py`, `lifecycle.py`, and `orca_provider.py`. The documentation
+rebaseline changed none of those paths.
+
+Issue #169 must reconcile the restrictive product-asset contract with the exact
+accepted v0.22.0 boundary. Removing accepted M3-M5 source to satisfy the stale
+assertion is forbidden. This documentation task does not authorize editing the
+workflow, source, tests, scripts, configuration, profiles, or runtime.
 
 - reconcile package/version/changelog/release identity without adding capabilities;
+- reconcile the stale product-assets inventory under separately frozen authority;
 - run the exact release gate in an isolated committed checkout;
 - verify focused/full tests, lint, compile, schemas, docs/links, setup/default-off behavior, forbidden-runtime scans, secret review, and clean-tree invariants;
 - present exact SHA/tree, scope, limitations, compatibility, evidence, and rollback.
