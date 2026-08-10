@@ -211,7 +211,7 @@ Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 - **foundation**: The exact Orca 1.4.167 desktop-renderer/public-CLI binding passes deterministic M3-M5 and one bounded two-worker Codex 0.147.0 model-backed M5.4 execution.
 - **runtime boundary**: Aether MCP remains default-off, unregistered and exactly zero-tool; source publication does not install or activate Orca.
 - **retirement boundary**: Candidate source removes Olympus/ACP and the disconnected native core without changing the currently installed runtime or historical `.aether` stores.
-- **verification**: The exact release candidate passes 198 repository tests, Ruff, compileall, policy, 16-file product-assets validation, and GitHub CI on Python 3.11/3.12.
+- **verification**: The exact release candidate passes 199 repository tests, Ruff, compileall, bounded wheel build, policy, 16-file product-assets validation, and GitHub CI on Python 3.11/3.12.
 
 ### v0.20.0 (2026-07-28)
 
@@ -380,7 +380,7 @@ chore: merge dev into main
 
 - **Feature → main:** Merge through a PR after the committed candidate passes required gates. Preserve audited atomic history with a merge commit when traceability matters; squash only when the branch history is intentionally disposable.
 - **After merge:** Verify local and remote `main`, close or update linked issues, delete the merged branch, and remove obsolete stacked PRs or worktrees.
-- **Release:** Create an annotated `vX.Y.Z` tag only on the exact integrated `main` commit after version metadata and release evidence agree. Pushing the tag triggers `.github/workflows/release.yml`, which verifies the boundary, builds artifacts and creates or reconciles the GitHub Release automatically.
+- **Release:** Create an annotated `vX.Y.Z` tag only on the exact integrated `main` commit after version metadata and release evidence agree. Pushing the tag triggers `.github/workflows/release.yml`, which verifies the boundary, builds and imports the bounded distribution, and creates or reconciles the GitHub Release automatically.
 - **No conflation:** A merge can integrate default-off or unreleased work. A tag publishes a version. Runtime activation and deployment are separate operational decisions.
 
 ### README and Website

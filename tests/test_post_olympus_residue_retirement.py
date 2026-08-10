@@ -232,6 +232,18 @@ def test_ci_installs_declared_aether_mcp_distribution_dependencies() -> None:
     assert missing_project_install == []
 
 
+def test_required_build_context_builds_bounded_aether_mcp_distribution() -> None:
+    test_workflow = (ROOT / ".github" / "workflows" / "test.yml").read_text(encoding="utf-8")
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "\n  build:\n" in test_workflow
+    assert "needs: test" in test_workflow
+    for workflow in (test_workflow, release_workflow):
+        assert "python -m pip wheel --no-deps --wheel-dir dist ." in workflow
+        assert "dist/aether_mcp-0.22.0-py3-none-any.whl" in workflow
+        assert "assert aether_mcp.__version__ == '0.22.0'" in workflow
+
+
 def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
     workflows = (
         ROOT / ".github" / "workflows" / "test.yml",

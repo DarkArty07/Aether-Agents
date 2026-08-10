@@ -25,11 +25,13 @@
 - **Truthful doctor gate**: Doctor verifies Python, candidate-local Hermes, one root plus six profile templates, and zero native runtime plugins rather than requiring a removed Aether import.
 - **Protected continuity history**: Active profiles, SOULs, guides, and website no longer claim they read or write `.aether`; existing databases and `CONTEXT.md` remain untouched historical/local state without a candidate consumer.
 - **Complete product-asset contract**: Test and Release workflows now admit the exact 16-file accepted source tree, including `coordination.py`, `lifecycle.py`, and `orca_provider.py`, with a local regression that fails if either workflow omits them.
+- **Protected build context**: Restored the required `build` check with a real bounded `aether-mcp==0.22.0` wheel build/import and added the same verification before tag publication, without restoring the retired Olympus or `aether-agents` distribution.
 
 ### Testing
 - **Zero-runtime candidate**: The removal contract was observed RED with 5 failures and reached GREEN; all 25 retained repository tests pass together with Ruff, compileall, shell/YAML parsing, governance, active-surface scanning, and current Markdown links.
 - **Clean installation**: Two isolated setup passes generated seven resolved configs with zero placeholders and zero profile plugins. The wrapper, candidate-local doctor, and explicit absence of both `src/` and the `aether_agents` import passed.
-- **M5.4 corrected candidate**: Historical closeout reports 22 focused tests and 198 repository tests plus Ruff and compileall on the bounded model-backed candidate. Final v0.22.0 publication still requires a fresh exact-release-tree gate.
+- **M5.4 corrected candidate**: Historical closeout reports 22 focused tests and 198 repository tests plus Ruff and compileall on the bounded model-backed candidate; the final exact-release-tree gate is reported separately below.
+- **Final source candidate**: 199 repository tests, Ruff, compileall, bounded wheel/sdist build, shell/YAML parsing, governance, exact 16-file assets, current links, release-delta secret review, and all protected GitHub contexts pass on the exact committed tree.
 
 ### Operational status
 - **No activation or data migration**: Orca was not activated, no specialist workers were created, and no live configuration or historical continuity/session store was migrated, truncated, or deleted.

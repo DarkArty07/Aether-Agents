@@ -13,11 +13,14 @@ historical_status: docs/releases/v0.22.0/HISTORICAL_M0_M12_STATUS.yaml
 branch: main
 release_pr: 163
 release_issue: 166
-resolved_ci_blocker_issue: 169
+resolved_ci_blocker_issues:
+  - 169
+  - 170
 github_milestone: v0.22.0 — Orca Integration Foundation
 strongest_technical_baseline: bb0723188bddb9da0807653763347f759be0c64e
 documentation_rebaseline_commit: 51e7aa6f277551ed31753eef7d6999c353752721
 ci_contract_correction_commit: 13a916a38d6b580a3e71a710fe5d218a7eba34a1
+build_context_correction_commit: recorded_in_pull_request_and_github_release
 final_release_identity:
   tag: v0.22.0
   commit: recorded_in_annotated_tag_and_github_release
@@ -29,27 +32,37 @@ source_publication:
   runtime_activated: false
 release_acceptance:
   local_python: '3.11'
-  local_tests: 198 passed
+  local_tests: 199 passed
   clean_install_provenance: disposable_venv_site_packages
   ruff: passed
   compileall: passed
+  bounded_distribution_build: passed
   shell_and_yaml: passed
   release_governance: passed
   product_assets: passed
   product_asset_files: 16
   github_python_311: passed
   github_python_312: passed
+  github_build: passed
   final_ci_run_ids: recorded_in_github_release
-resolved_blocker:
-  issue: 169
-  code_or_area: .github/workflows/test.yml and .github/workflows/release.yml source inventory
-  stale_expected_files: 13
-  accepted_files: 16
-  restored_paths:
-    - src/aether_mcp/coordination.py
-    - src/aether_mcp/lifecycle.py
-    - src/aether_mcp/orca_provider.py
-  accepted_source_removed: false
+resolved_blockers:
+  product_assets:
+    issue: 169
+    code_or_area: .github/workflows/test.yml and .github/workflows/release.yml source inventory
+    stale_expected_files: 13
+    accepted_files: 16
+    restored_paths:
+      - src/aether_mcp/coordination.py
+      - src/aether_mcp/lifecycle.py
+      - src/aether_mcp/orca_provider.py
+    accepted_source_removed: false
+  required_build_context:
+    issue: 170
+    code_or_area: protected main branch and .github/workflows release contracts
+    protection_weakened_or_bypassed: false
+    built_distribution: aether-mcp==0.22.0
+    wheel_imported_outside_checkout: true
+    legacy_distribution_restored: false
 runtime:
   aether_mcp_default_off: true
   registered_tools: 0

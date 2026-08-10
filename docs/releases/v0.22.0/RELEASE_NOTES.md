@@ -39,14 +39,15 @@ This Release is **default-off**. It does not install, register, restart or activ
 
 The final source candidate passed:
 
-- `198 passed` in a disposable Python 3.11 environment with non-editable package provenance under `site-packages`;
+- `199 passed` in a disposable Python 3.11 environment with non-editable package provenance under `site-packages`;
 - Ruff and compileall;
+- bounded `aether-mcp==0.22.0` wheel/sdist build and import outside the source checkout;
 - shell and YAML validation;
 - release-governance policy;
 - exact 16-file product-asset validation;
 - default-off and zero-tool bootstrap checks;
 - current-link, residue, secret and clean-tree checks;
-- GitHub CI on Python 3.11 and 3.12 before integration.
+- GitHub CI on Python 3.11 and 3.12, including the protected `build` context, before integration.
 
 The exact stable commit, annotated tag object, peeled tag commit, stable/tag CI run identifiers and formal completion timestamps are appended below as post-publication metadata.
 

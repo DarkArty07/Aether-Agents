@@ -85,11 +85,17 @@ Issue #169 identified that the required `product-assets` job still asserted the
 `coordination.py`, `lifecycle.py`, and `orca_provider.py` to both Test and Release
 contracts and to a local regression test. No accepted source was removed.
 
+Issue #170 identified that protected `main` still required a `build` context
+after the legacy Olympus distribution job had been removed. The candidate
+restores a real bounded `aether-mcp==0.22.0` wheel build/import in PR CI and
+requires the same verification before tag publication. Branch protection was
+not bypassed, disabled, or weakened.
+
 The final candidate reconciled package, changelog and Release identity without
 adding capability. A fresh detached checkout with a non-editable installation
-passed the full 198-test suite, Ruff, compileall, shell/YAML validation,
-release-governance policy, the exact 16-file inventory, current-link checks,
-secret review and clean-tree invariants.
+passed the full 199-test suite, Ruff, compileall, bounded wheel/sdist build,
+shell/YAML validation, release-governance policy, the exact 16-file inventory,
+current-link checks, secret review and clean-tree invariants.
 
 **Pass:** one exact candidate was accepted for source integration. Its immutable
 SHA/tree and final CI evidence are recorded on PR #163 and in the GitHub Release.
