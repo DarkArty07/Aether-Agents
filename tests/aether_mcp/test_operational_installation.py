@@ -23,7 +23,7 @@ def _fake_appimage(tmp_path: Path) -> Path:
         "#!/bin/sh\n"
         "mkdir -p squashfs-root/resources/app.asar.unpacked/out/cli\n"
         "touch squashfs-root/resources/app.asar.unpacked/out/cli/index.js\n"
-        "printf '#!/bin/sh\\necho {}\\n' > squashfs-root/orca-ide\nchmod +x squashfs-root/orca-ide\n"
+        "printf '#!/bin/sh\\necho '\\''{\"ok\":true,\"result\":{\"runtime\":{\"appVersion\":\"1.4.167\",\"state\":\"ready\",\"reachable\":true}}}'\\''\\n' > squashfs-root/AppRun\nchmod +x squashfs-root/AppRun\n"
     )
     image.chmod(0o700)
     return image
@@ -66,6 +66,7 @@ def test_setup_status_and_rollback_are_idempotent_and_preserve_config(
         uv=str(_fake_uv(tmp_path)),
     )
     assert result.tool_count == 15
+    assert result.profile_root == str(profile)
     configured = (home / "config.yaml").read_text()
     assert "olympus" in configured and "aether_mcp" in configured and "enabled: false" in configured
     assert (
@@ -83,9 +84,17 @@ def test_setup_status_and_rollback_are_idempotent_and_preserve_config(
     )
     observed = installation.status(str(home))
     assert observed["registration"] == {"present": True, "enabled": False}
+    assert observed["orca"]["profile_root"] == str(profile)
+    wrapper = Path(result.wrapper).read_text()
+    assert "ELECTRON_RUN_AS_NODE=1" in wrapper and "AppRun" in wrapper and "node" not in wrapper.split("exec", 1)[1]
+    launcher = Path(result.launcher).read_text()
+    assert str(result.venv + "/bin/python") in launcher
+    assert "unset APPIMAGE_EXTRACT_AND_RUN" in wrapper
     assert "secret-value" not in str(observed)
     assert installation.rollback(str(home))["config_restored"] is True
     assert (home / "config.yaml").read_text() == original
+    assert Path(result.state_root).is_dir()
+    assert installation.rollback(str(home))["already_rolled_back"] is True
 
 
 def test_setup_rejects_unqualified_appimage_before_config_mutation(tmp_path: Path) -> None:
@@ -138,8 +147,45 @@ async def test_real_noneditable_install_handshake_does_not_touch_active_config(
             await session.initialize()
             listed = await session.list_tools()
     assert len(listed.tools) == 15
-    assert (await __import__("asyncio").to_thread(installation.doctor, str(home)))["tool_count"] == 15
+    checked = await __import__("asyncio").to_thread(installation.doctor, str(home))
+    assert checked["tool_count"] == 15 and checked["orca_ready"] is True and checked["ok"] is True
     assert "olympus" in active.read_text() and "enabled: false" in active.read_text()
+
+
+def test_activation_changes_only_owned_flag_and_keeps_atomic_backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home, project, profile = tmp_path / "home", tmp_path / "project", tmp_path / "profile"
+    for path in (home, project, profile):
+        path.mkdir()
+    original = "model: x\nmcp_servers:\n  other:\n    enabled: true\n"
+    (home / "config.yaml").write_text(original)
+    image = _fake_appimage(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    monkeypatch.setattr(installation, "OrcaCatalog", type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "b" * 64})())}))
+    result = installation.setup(project_root=str(project), hermes_home=str(home), appimage=str(image), profile_root=str(profile), repo_selector="path:/project", base_ref="main", coordinator_handle="term-test", uv=str(_fake_uv(tmp_path)))
+    before = (home / "config.yaml").read_text()
+    activated = installation.activate(str(home))
+    after = (home / "config.yaml").read_text()
+    assert activated["changed"] is True and "other:\n    enabled: true" in after
+    assert installation.status(str(home))["registration"] == {"present": True, "enabled": True}
+    assert Path(activated["backup"]).read_text() == before
+    assert installation.activate(str(home))["changed"] is False
+    assert installation.activate(str(home), enabled=False)["changed"] is True
+    assert installation.rollback(str(home))["preserved_state_root"] == result.state_root
+
+
+def test_doctor_rejects_false_positive_orca_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home, project, profile = tmp_path / "home", tmp_path / "project", tmp_path / "profile"
+    for path in (home, project, profile):
+        path.mkdir()
+    (home / "config.yaml").write_text("x: y\n")
+    image = _fake_appimage(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    monkeypatch.setattr(installation, "OrcaCatalog", type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "c" * 64})())}))
+    result = installation.setup(project_root=str(project), hermes_home=str(home), appimage=str(image), profile_root=str(profile), repo_selector="path:/project", base_ref="main", coordinator_handle="term-test", uv=str(_fake_uv(tmp_path)))
+    completed = __import__("subprocess").CompletedProcess([], 0, b'{"ok": true, "result": {}}', b"")
+    monkeypatch.setattr(installation.subprocess, "run", lambda *args, **kwargs: completed)
+    assert installation._parse_orca_status(completed) is False
+    assert result.profile_root == str(profile)
 
 
 @pytest.fixture
