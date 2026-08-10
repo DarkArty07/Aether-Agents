@@ -1,10 +1,10 @@
 # Aether Agents v0.22.0 Roadmap — Orca Integration Foundation
 
-> **Status:** SCOPE CLOSED AT M5.4 — SOURCE RELEASE PENDING
-> **Date rebaselined:** 2026-08-09
+> **Status:** RELEASED — SOURCE DEFAULT-OFF; RUNTIME NOT ACTIVATED
+> **Date published:** 2026-08-09
 > **Product owner:** Christopher (DarkArty07)
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
-> **Draft PR:** https://github.com/DarkArty07/Aether-Agents/pull/163
+> **Release PR:** https://github.com/DarkArty07/Aether-Agents/pull/163
 > **Release ledger:** https://github.com/DarkArty07/Aether-Agents/issues/166
 
 ## 1. Release claim
@@ -25,7 +25,7 @@ The former M0-M12 roadmap was accepted as a design on 2026-08-06. The product ow
 | M5 | Deterministic two-worker overlap, handoff, integration, partial failure, aggregate cancellation, and cleanup accepted | `M5_PARALLEL_ACCEPTANCE.md` |
 | M5.4 | Bounded two-worker model-backed Orca/Codex execution accepted after liveness correction | `M5_4_MODEL_ACCEPTANCE.md` and `M5_4_WORKER_LIVENESS_CORRECTION.md` |
 
-The strongest committed technical baseline before this documentation rebaseline is `bb0723188bddb9da0807653763347f759be0c64e`. The final release commit remains unknown until the release tree is reconciled, committed, independently verified, integrated, tagged, and published.
+The strongest committed technical baseline before the documentation rebaseline is `bb0723188bddb9da0807653763347f759be0c64e`. The exact final merge commit, annotated tag object, peeled tag commit, CI runs, and formal completion time are recorded in immutable Git/GitHub release metadata rather than self-referentially inside the tagged tree.
 
 ## 3. Included scope
 
@@ -77,40 +77,34 @@ Moved work is neither implemented nor accepted by v0.22.0.
 
 **Evidence:** commit `51e7aa6f277551ed31753eef7d6999c353752721`, GitHub milestones/issues #166-#168, Draft PR #163, 198/198 local tests, release-governance PASS, zero staged secret findings, four valid status YAML mappings, and 76 changed local links with zero missing targets.
 
-### R1 — Exact source candidate acceptance — BLOCKED BY #169
+### R1 — Exact source candidate acceptance — COMPLETE
 
-The required GitHub `product-assets` job currently fails because
-`.github/workflows/test.yml` still asserts the exact 13-file M2 source inventory,
-while the accepted M3-M5 candidate correctly tracks 16 files. The rejected files
-are `coordination.py`, `lifecycle.py`, and `orca_provider.py`. The documentation
-rebaseline changed none of those paths.
+Issue #169 identified that the required `product-assets` job still asserted the
+13-file M2 source inventory while the accepted M3-M5 candidate correctly tracked
+16 files. Commit `13a916a38d6b580a3e71a710fe5d218a7eba34a1` added
+`coordination.py`, `lifecycle.py`, and `orca_provider.py` to both Test and Release
+contracts and to a local regression test. No accepted source was removed.
 
-Issue #169 must reconcile the restrictive product-asset contract with the exact
-accepted v0.22.0 boundary. Removing accepted M3-M5 source to satisfy the stale
-assertion is forbidden. This documentation task does not authorize editing the
-workflow, source, tests, scripts, configuration, profiles, or runtime.
+The final candidate reconciled package, changelog and Release identity without
+adding capability. A fresh detached checkout with a non-editable installation
+passed the full 198-test suite, Ruff, compileall, shell/YAML validation,
+release-governance policy, the exact 16-file inventory, current-link checks,
+secret review and clean-tree invariants.
 
-- reconcile package/version/changelog/release identity without adding capabilities;
-- reconcile the stale product-assets inventory under separately frozen authority;
-- run the exact release gate in an isolated committed checkout;
-- verify focused/full tests, lint, compile, schemas, docs/links, setup/default-off behavior, forbidden-runtime scans, secret review, and clean-tree invariants;
-- present exact SHA/tree, scope, limitations, compatibility, evidence, and rollback.
+**Pass:** one exact candidate was accepted for source integration. Its immutable
+SHA/tree and final CI evidence are recorded on PR #163 and in the GitHub Release.
 
-**Pass:** one exact candidate is approved for source integration. Historical test counts remain evidence; they do not replace the final exact-tree gate.
+### R2 — GitHub integration and publication — COMPLETE
 
-### R2 — GitHub integration and publication
+- PR #163 was made ready only after exact-candidate acceptance;
+- atomic history was preserved through normal merge into `main`;
+- integrated tree identity was verified;
+- annotated tag `v0.22.0` was created on integrated `main`;
+- the GitHub Release was published and read back;
+- issue, milestone, branch, and remote convergence were reconciled.
 
-When R1 is green and source publication authority applies:
-
-- push/update Draft PR #163;
-- make it ready only when candidate acceptance is complete;
-- preserve atomic history through normal merge unless repository policy changes;
-- verify integrated `main` tree equivalence;
-- create annotated `v0.22.0` on integrated `main`;
-- publish and read back the GitHub Release;
-- reconcile issues, milestone, branch, and remote convergence.
-
-**Stop:** source publication does not install, register, restart, activate, spend, or begin v0.23.0 runtime work.
+**Boundary:** source publication did not install, register, restart, activate,
+spend, retire the live Olympus runtime, or begin v0.23.0 runtime work.
 
 ## 7. Completion definition
 

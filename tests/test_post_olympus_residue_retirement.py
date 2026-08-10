@@ -173,7 +173,7 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     }
     assert pyproject["project"] == {
         "name": "aether-mcp",
-        "version": "0.22.0.dev0",
+        "version": "0.22.0",
         "requires-python": ">=3.11",
         "dependencies": ["cryptography==50.0.0", "mcp==1.28.1"],
         "scripts": {"aether-mcp": "aether_mcp.__main__:main"},

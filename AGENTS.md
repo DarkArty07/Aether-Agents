@@ -9,8 +9,8 @@ PDR-0014 rebaselines the transition into three product versions:
 - **v0.22.0 — Orca Integration Foundation:** scope ends at the accepted M5.4
   boundary. The exact binding is Orca 1.4.167 desktop renderer plus public
   structured CLI, Codex CLI 0.147.0 and the bounded `gpt-5.6-terra` acceptance.
-  Aether MCP remains default-off, unregistered and exactly zero-tool. Source
-  release is pending; activation is not part of v0.22.0.
+  Aether MCP remains default-off, unregistered and exactly zero-tool. The source
+  release is official; activation is not part of v0.22.0.
 - **v0.23.0 — Orca Production Dogfood:** after v0.22.0 publication, the first
   milestone must implement, register, validate and separately activate the real
   Aether MCP + Orca path with rollback. Once that gate passes, all real
@@ -34,15 +34,12 @@ Canonical authority:
 - `docs/releases/v0.22.0/ROADMAP.md` and `RELEASE_BOUNDARY.md`;
 - `docs/releases/v0.23.0/ROADMAP.md` and `PRODUCTION_OPERATING_POLICY.md`;
 - `docs/releases/v0.24.0/ROADMAP.md`;
-- GitHub ledgers #166, #167 and #168; Draft PR #163.
+- GitHub ledgers #166, #167 and #168; release PR #163.
 
-The current task boundary is documentation/GitHub only. It does not authorize
-source, tests, scripts, schemas, profiles, SOULs, configuration, installation,
-registration, restart, activation, credentials, workers, model calls, spend,
-merge, tag or Release. The next material gate is the separately frozen v0.22.0
-CI-contract correction in GitHub issue #169, followed by exact-tree source
-acceptance/publication; only then may an exact v0.23.0 implementation and
-activation Task be frozen.
+The v0.22.0 source publication does not authorize installation, registration,
+restart, runtime activation, credentials, workers, model calls, spend or live
+Olympus retirement. The next material boundary is a separately frozen v0.23.0
+implementation and activation Task with rollback.
 
 ## Historical v0.22.0 implementation chronology
 
@@ -207,6 +204,14 @@ Semantic versioning: `MAJOR.MINOR.PATCH`
 Tag format: `v{version}` (e.g., `v0.5.1`, `v0.6.0`)
 
 **Approved experimental exception:** the default-off v0.19.x kernel migration uses micro-patches v0.19.1–v0.19.6 so each authority hypothesis can freeze or stop independently. These patches do not imply production readiness and retain separate implementation and live-execution gates. Their integrated outcome is published through v0.20.0 rather than as separate public v0.19.x tags.
+
+### v0.22.0 (2026-08-09)
+
+- **release**: Official source metadata, `main`, annotated tag, and GitHub Release identify v0.22.0.
+- **foundation**: The exact Orca 1.4.167 desktop-renderer/public-CLI binding passes deterministic M3-M5 and one bounded two-worker Codex 0.147.0 model-backed M5.4 execution.
+- **runtime boundary**: Aether MCP remains default-off, unregistered and exactly zero-tool; source publication does not install or activate Orca.
+- **retirement boundary**: Candidate source removes Olympus/ACP and the disconnected native core without changing the currently installed runtime or historical `.aether` stores.
+- **verification**: The exact release candidate passes 198 repository tests, Ruff, compileall, policy, 16-file product-assets validation, and GitHub CI on Python 3.11/3.12.
 
 ### v0.20.0 (2026-07-28)
 

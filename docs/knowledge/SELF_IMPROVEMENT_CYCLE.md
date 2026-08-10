@@ -21,10 +21,10 @@ evidence candidates, not proof of improvement.
 
 ### Current verified state
 
-- The latest official tag and GitHub Release are v0.20.0.
+- The latest official tag and GitHub Release are v0.22.0. v0.20.0 remains the historical source for the retired instrumentation implementation and its accepted evidence.
 - The v0.19.x technical roadmap closed at v0.19.5 with a `VIABLE — BOUNDED` verdict and is integrated into v0.20.0 without separate public v0.19.x tags.
 - The active Hermes profile uses `custom:aether-router` with `gpt-5.6-sol`.
-- The v0.22.0 candidate contains no multi-agent execution runtime or Aether MCP facade.
+- The v0.22.0 release contains a default-off internal integration foundation but no registered or callable multi-agent Aether MCP surface.
 - `talk_to`, `discover`, and ACP-backed curation are absent rather than disabled.
 - Persistent Hermes memory contains the compact dogfooding policy.
 - The `aether-self-improvement` plugin, strict manifest reader, session hooks, and deterministic evidence projector are absent.

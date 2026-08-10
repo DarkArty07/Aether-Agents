@@ -1,46 +1,55 @@
 schema_version: 2
 release: v0.22.0
 title: Orca Integration Foundation
-status: scope_closed_source_release_pending
+status: released_source_default_off
 last_updated: '2026-08-09'
 product_owner: Christopher (DarkArty07)
 governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.md
 canonical_roadmap: docs/releases/v0.22.0/ROADMAP.md
 release_boundary: docs/releases/v0.22.0/RELEASE_BOUNDARY.md
+release_notes: docs/releases/v0.22.0/RELEASE_NOTES.md
 historical_roadmap: docs/releases/v0.22.0/HISTORICAL_M0_M12_ROADMAP.md
 historical_status: docs/releases/v0.22.0/HISTORICAL_M0_M12_STATUS.yaml
-branch: feature/v0.22.0-orca-transition
-draft_pr: 163
+branch: main
+release_pr: 163
 release_issue: 166
-ci_blocker_issue: 169
+resolved_ci_blocker_issue: 169
 github_milestone: v0.22.0 — Orca Integration Foundation
 strongest_technical_baseline: bb0723188bddb9da0807653763347f759be0c64e
 documentation_rebaseline_commit: 51e7aa6f277551ed31753eef7d6999c353752721
-final_release_commit: null
+ci_contract_correction_commit: 13a916a38d6b580a3e71a710fe5d218a7eba34a1
+final_release_identity:
+  tag: v0.22.0
+  commit: recorded_in_annotated_tag_and_github_release
+  annotated_tag_object: recorded_in_github_release
 source_publication:
-  merged: false
-  tag_created: false
-  github_release_published: false
-documentation_and_github_rebaseline:
-  completed: true
-  pull_request_head_verified: 51e7aa6f277551ed31753eef7d6999c353752721
+  merged: true
+  tag_created: true
+  github_release_published: true
+  runtime_activated: false
+release_acceptance:
+  local_python: '3.11'
   local_tests: 198 passed
+  clean_install_provenance: disposable_venv_site_packages
+  ruff: passed
+  compileall: passed
+  shell_and_yaml: passed
+  release_governance: passed
+  product_assets: passed
+  product_asset_files: 16
   github_python_311: passed
   github_python_312: passed
-  github_policy: passed
-  github_product_assets: failed
-current_blocker:
+  final_ci_run_ids: recorded_in_github_release
+resolved_blocker:
   issue: 169
-  code_or_area: .github/workflows/test.yml product-assets source inventory
-  observed_expected_files: 13
-  observed_candidate_files: 16
-  stale_contract: M2-era inventory rejects accepted M3-M5 modules
-  rejected_paths:
+  code_or_area: .github/workflows/test.yml and .github/workflows/release.yml source inventory
+  stale_expected_files: 13
+  accepted_files: 16
+  restored_paths:
     - src/aether_mcp/coordination.py
     - src/aether_mcp/lifecycle.py
     - src/aether_mcp/orca_provider.py
-  introduced_by_documentation_rebaseline: false
-  correction_authorized_by_documentation_task: false
+  accepted_source_removed: false
 runtime:
   aether_mcp_default_off: true
   registered_tools: 0
@@ -64,16 +73,10 @@ moved_not_completed:
   M8: v0.23.0 optional-role decision
   M9: v0.23.0 production entry and operability; further workflow packaging in v0.24.0
   M10: per-version evaluation in v0.23.0 and v0.24.0
-  M11: v0.22.0 release-only closeout and independent release gates for later versions
+  M11: independent release gates for later versions
   M12: v0.23.0 controlled production entry and v0.24.0 process cutover
-remaining_gates:
-  - reconcile_product_assets_ci_contract_issue_169
-  - exact_committed_candidate_validation
-  - product_owner_candidate_acceptance
-  - pull_request_integration
-  - annotated_tag_and_github_release
 exclusions:
-  - source_capability_expansion
+  - source_capability_expansion_beyond_m5_4
   - mcp_registration_or_activation
   - profile_or_configuration_changes
   - persistent_services_or_restart
@@ -83,4 +86,4 @@ exclusions:
 next_version:
   release: v0.23.0
   roadmap: docs/releases/v0.23.0/ROADMAP.md
-  first_gate: operational Aether MCP plus Orca production entry and rollback
+  first_gate: separately authorized operational Aether MCP plus Orca production entry and rollback

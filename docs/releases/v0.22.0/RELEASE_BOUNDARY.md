@@ -1,6 +1,6 @@
 # v0.22.0 Release Boundary — Orca Integration Foundation
 
-> **Status:** APPROVED BOUNDARY — SOURCE RELEASE PENDING
+> **Status:** RELEASED SOURCE BOUNDARY — DEFAULT-OFF; RUNTIME NOT ACTIVATED
 > **Date:** 2026-08-09
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
 
@@ -70,16 +70,19 @@ Before runtime activation, source rollback is repository-level: return to the pr
 
 The first v0.23.0 activation Task must inventory the named installation and prove a separate configuration/runtime rollback.
 
-## Publication gate
+## Publication result
 
-The final v0.22.0 candidate must:
+The final v0.22.0 source candidate:
 
-1. contain only the bounded release scope and documentary rebaseline;
-2. pass exact committed-tree validation in isolation;
-3. preserve the no-runtime/no-activation boundary;
-4. pass secret and residue scans;
-5. be accepted by the product owner;
-6. converge across integrated `main`, annotated tag, and GitHub Release.
+1. contains only the bounded release scope and documentary rebaseline;
+2. passed exact committed-tree validation in isolation;
+3. preserves the no-runtime/no-activation boundary;
+4. passed secret and residue scans;
+5. was accepted by the product owner;
+6. converges across integrated `main`, annotated tag, and GitHub Release.
+
+The final merge SHA, annotated tag object, peeled commit, stable/tag CI runs and
+formal completion timestamp are recorded in immutable GitHub Release metadata.
 
 ## Successor
 

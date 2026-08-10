@@ -54,7 +54,7 @@ def test_static_package_metadata_imports_without_side_effects(tmp_path: Path) ->
             "-c",
             (
                 "import aether_mcp; "
-                "assert aether_mcp.__version__ == '0.22.0.dev0'; "
+                "assert aether_mcp.__version__ == '0.22.0'; "
                 "assert aether_mcp.PROTOCOL_ID == 'aether.mcp/v1alpha2'; "
                 "assert aether_mcp.SERVER_NAME == 'aether-mcp'"
             ),
@@ -93,7 +93,7 @@ async def test_real_stdio_handshake_exposes_metadata_and_zero_tools() -> None:
     assert initialized.instructions is not None
     for marker in (
         "aether.mcp/v1alpha2",
-        "0.22.0.dev0",
+        "0.22.0",
         "default-off",
         "no tools registered",
     ):
