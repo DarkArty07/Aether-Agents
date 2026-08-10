@@ -173,7 +173,7 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     }
     assert pyproject["project"] == {
         "name": "aether-mcp",
-        "version": "0.22.0",
+        "version": "0.23.0.dev0",
         "requires-python": ">=3.11",
         "dependencies": ["cryptography==50.0.0", "mcp==1.28.1"],
         "scripts": {"aether-mcp": "aether_mcp.__main__:main"},
@@ -185,7 +185,7 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     assert "aiosqlite" not in text
     assert "aether-agents" not in text
     assert "olympus" not in text
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.22.0"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.23.0.dev0"
 
 
 def test_operations_and_ci_do_not_install_import_or_build_removed_runtime() -> None:
@@ -240,8 +240,8 @@ def test_required_build_context_builds_bounded_aether_mcp_distribution() -> None
     assert "needs: test" in test_workflow
     for workflow in (test_workflow, release_workflow):
         assert "python -m pip wheel --no-deps --wheel-dir dist ." in workflow
-        assert "dist/aether_mcp-0.22.0-py3-none-any.whl" in workflow
-        assert "assert aether_mcp.__version__ == '0.22.0'" in workflow
+        assert "aether_mcp-0.23.0.dev0-py3-none-any.whl" in workflow
+        assert "assert aether_mcp.__version__ == '0.23.0.dev0'" in workflow
 
 
 def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:

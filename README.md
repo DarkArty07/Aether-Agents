@@ -45,7 +45,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🧠 | **Stable Generic Roster** | Hefesto, Daedalus, and Ictinus are retained generic archetypes; Ariadna is conditional/disabled, while Athena and Etalides are retired/forbidden. Production qualification belongs to v0.23.0. |
 | 🧭 | **Product Layer** | Hermes behavior, product decisions, specialist participation, verification policy, semantic acceptance, and release authority. |
 | 🐋 | **Qualified Orca Integration** | v0.22.0 proves bounded lifecycle, one/two-worker execution, overlap, messaging, integration, recovery, and cleanup on the exact qualified binding; v0.23.0 turns it into the normal real-work path. |
-| 🔒 | **Unregistered MCP Operational Facade** | `aether-mcp` exposes the approved 15-tool control/trace and Orca adapter surface with explicit state-root and trusted-launch requirements; registration, status, doctor, rollback, and live production entry remain v0.23.0 gates. |
+| 🔒 | **Disabled MCP Operational Facade** | `aether-mcp` exposes the approved 15-tool control/trace and Orca adapter surface with explicit state-root and trusted-launch requirements. The v0.23.0 local installer registers only a disabled entry and supplies status, doctor, and rollback; live production entry remains separately gated. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **95 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |

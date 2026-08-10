@@ -45,16 +45,16 @@ jobs:
       - name: Build and verify bounded distribution
         run: |
           python -m pip wheel --no-deps --wheel-dir dist .
-          WHEEL="$GITHUB_WORKSPACE/dist/aether_mcp-0.22.0-py3-none-any.whl"
+          WHEEL="$GITHUB_WORKSPACE/dist/aether_mcp-0.23.0.dev0-py3-none-any.whl"
           test -f "$WHEEL"
           python -m pip install --force-reinstall "$WHEEL"
           cd /tmp
           python - <<'PY'
           import aether_mcp
 
-          assert aether_mcp.__version__ == '0.22.0'
+          assert aether_mcp.__version__ == '0.23.0.dev0'
           assert aether_mcp.PROTOCOL_ID == 'aether.mcp/v1alpha2'
-          print('release_build=PASS package=aether-mcp version=0.22.0')
+          print('release_build=PASS package=aether-mcp version=0.23.0.dev0')
           PY
           cd "$GITHUB_WORKSPACE"
 
