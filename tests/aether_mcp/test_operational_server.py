@@ -112,6 +112,46 @@ def test_runtime_preserves_cleanup_failed_protocol_outcome(monkeypatch: pytest.M
     assert response["outcome"] == "CLEANUP_FAILED"
 
 
+def test_runtime_swarm_trace_effect_matches_action(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = OperationalRuntime({})
+    foundation, lifecycle, worker = MagicMock(), MagicMock(), MagicMock()
+    foundation.swarm_trace.return_value = {}
+    monkeypatch.setattr(runtime, "_build", lambda: (foundation, lifecycle, worker))
+    project_id, run_id, operation_id = (str(uuid.uuid4()) for _ in range(3))
+    query = {
+        "action": "query", "project_id": project_id, "run_id": run_id,
+        "operation": None, "mode": "timeline", "filters": {}, "cursor": None,
+        "limit": 1, "decision": None, "evidence": None,
+    }
+    operation = {
+        "operation_id": operation_id, "project_id": project_id,
+        "contract_id": "contract:test/1", "use_case_id": None,
+        "reason": {"code": "TEST", "summary": "test", "authority_ref": "decision:test"},
+        "expected_effect": "LOCAL_APPEND_ONLY",
+    }
+    decision = {
+        **query, "action": "record_decision", "operation": operation,
+        "mode": None, "filters": None, "limit": None,
+        "decision": {
+            "kind": "route_selected", "decision": "test", "rationale": "test",
+            "authority_ref": "decision:test", "affected_ids": ["task:synthetic-a"], "prior_generation": None,
+        },
+    }
+    evidence = {
+        **decision, "action": "record_evidence", "decision": None,
+        "evidence": {
+            "evidence_type": "test_result", "reference": "artifact:test",
+            "source": "pytest", "producer": "hermes", "artifact_digest": "a" * 64,
+            "check_identity": "pytest", "observed_outcome": "SUCCEEDED",
+            "criteria": [], "unknowns": [], "limitations": [], "verifier_id": None,
+        },
+    }
+
+    assert runtime.invoke("swarm_trace", query)["effect"] == "READ_ONLY"
+    assert runtime.invoke("swarm_trace", decision)["effect"] == "LOCAL_APPEND_ONLY"
+    assert runtime.invoke("swarm_trace", evidence)["effect"] == "LOCAL_APPEND_ONLY"
+
+
 @pytest.mark.anyio
 async def test_facade_returns_a_stable_secret_safe_error_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AETHER_STATE_ROOT", str(tmp_path / "state"))

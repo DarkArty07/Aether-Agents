@@ -193,7 +193,7 @@ class OperationalRuntime:
                 lifecycle.store.register_manifest(result, manifest_ref=result.manifest_ref)
             effect = operation.get("expected_effect") if isinstance(operation, dict) else None
             if effect is None:
-                effect = "READ_ONLY" if name in {"project_inspect", "swarm_validate", "swarm_status", "orca_search", "orca_describe", "orca_call"} else "LOCAL_REVERSIBLE"
+                effect = "READ_ONLY" if name in {"project_inspect", "swarm_validate", "swarm_status", "swarm_trace", "orca_search", "orca_describe", "orca_call"} else "LOCAL_REVERSIBLE"
             outcome = "SUCCEEDED"
             if isinstance(result, dict) and isinstance(result.get("outcome"), str):
                 candidate = result["outcome"]
