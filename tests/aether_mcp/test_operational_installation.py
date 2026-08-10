@@ -134,6 +134,40 @@ def _setup_fake_install(
     return result, home
 
 
+def test_setup_stores_config_backup_with_private_permissions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    config = home / "config.yaml"
+    config.write_text("model: isolated\n")
+    config.chmod(0o644)
+    project = tmp_path / "project"
+    project.mkdir()
+    profile = _qualified_profile(tmp_path)
+    image = _fake_appimage(tmp_path)
+    monkeypatch.setattr(installation, "EXPECTED_APPIMAGE_SHA256", hashlib.sha256(image.read_bytes()).hexdigest())
+    monkeypatch.setattr(
+        installation,
+        "OrcaCatalog",
+        type("Catalog", (), {"bundled": staticmethod(lambda: type("C", (), {"digest": "f" * 64})())}),
+    )
+
+    result = installation.setup(
+        project_root=str(project),
+        hermes_home=str(home),
+        appimage=str(image),
+        profile_root=str(profile),
+        profile_id="default",
+        repo_selector="path:/project",
+        base_ref="main",
+        coordinator_handle="term-test",
+        uv=str(_fake_uv(tmp_path)),
+    )
+
+    assert Path(result.backup).stat().st_mode & 0o777 == 0o600
+
+
 def test_setup_status_and_rollback_are_idempotent_and_preserve_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -371,6 +405,7 @@ def test_activation_changes_only_owned_flag_and_keeps_atomic_backup(
     assert activated["changed"] is True and "other:\n    enabled: true" in after
     assert installation.status(str(home))["registration"] == {"present": True, "enabled": True}
     assert Path(activated["backup"]).read_text() == before
+    assert Path(activated["backup"]).stat().st_mode & 0o777 == 0o600
     assert installation.activate(str(home))["changed"] is False
     assert installation.activate(str(home), enabled=False)["changed"] is True
     assert installation.rollback(str(home))["preserved_state_root"] == result.state_root

@@ -383,7 +383,7 @@ def setup(
     state_root = home / ".aether-mcp-state"
     backup = base / "backups" / "config.yaml.pre-aether-mcp"
     original = config.read_text(encoding="utf-8")
-    _atomic_write(backup, original, stat.S_IMODE(config.stat().st_mode))
+    _atomic_write(backup, original)
     try:
         for owned in (base, extraction.parent, wrapper.parent, state_root, backup.parent):
             owned.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -569,7 +569,7 @@ def activate(home: str, *, enabled: bool = True) -> dict[str, Any]:
         return {"ok": True, "enabled": enabled, "changed": False}
     backup = Path(installation.hermes_home) / ".aether-mcp" / "backups" / "config.yaml.pre-activation"
     if not backup.exists():
-        _atomic_write(backup, original, stat.S_IMODE(config.stat().st_mode))
+        _atomic_write(backup, original)
     _atomic_write(config, set_registration_enabled(original, enabled), stat.S_IMODE(config.stat().st_mode))
     return {"ok": True, "enabled": enabled, "changed": True, "backup": str(backup)}
 
