@@ -97,13 +97,11 @@ def validate_policy(root: Path) -> list[str]:
     errors: list[str] = []
     agents = (root / "AGENTS.md").read_text(encoding="utf-8")
     contributing = (root / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    contributor_index = (root / "docs/contributing/README.md").read_text(encoding="utf-8")
     test_workflow = (root / ".github/workflows/test.yml").read_text(encoding="utf-8")
 
     policy_texts = {
         "AGENTS.md": agents,
         "CONTRIBUTING.md": contributing,
-        "docs/contributing/README.md": contributor_index,
     }
     forbidden = {
         "Feature → dev": "obsolete dev branching model remains",
@@ -116,14 +114,14 @@ def validate_policy(root: Path) -> list[str]:
             if needle in text:
                 errors.append(f"{relative}: {message}")
 
-    required = {
-        "Latest integrated, tested repository state": "main integration identity missing",
-        "Standing GitHub Automation Authority": "standing GitHub authority missing",
-        "Merge to `main` does not imply activation": "integration/publication split missing",
-        "ODR-0001-main-integration-and-release-automation.md": "governing ODR reference missing",
-    }
-    for needle, message in required.items():
-        if needle not in agents:
+    required = (
+        (agents, "single checkout", "single-checkout repository identity missing"),
+        (agents, "Local implementation does not authorize push", "local/external effect split missing"),
+        (contributing, "one local checkout", "contributor single-checkout policy missing"),
+        (contributing, "Publication remains a separate", "integration/publication split missing"),
+    )
+    for text, needle, message in required:
+        if needle not in text:
             errors.append(message)
 
     if "branches: [main, dev]" in test_workflow:
@@ -131,6 +129,7 @@ def validate_policy(root: Path) -> list[str]:
 
     for relative in (
         "docs/decisions/ODR-0001-main-integration-and-release-automation.md",
+        "docs/README.md",
         ".github/workflows/release-governance.yml",
         ".github/workflows/release.yml",
     ):

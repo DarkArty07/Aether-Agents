@@ -22,6 +22,35 @@ TOOLS = (
     "orca_search", "orca_describe", "orca_call",
 )
 
+EXPECTED_FIRST_SENTENCES = {
+    "project_admit": "Admit one exact local project root without starting a Run, Task, or worker.",
+    "project_inspect": "Read and freshly verify one trusted project admission by exact project_id.",
+    "swarm_validate": "Validate a complete manifest, DAG, authority, and provider binding without starting a Run.",
+    "swarm_start": "Create the admitted Orca Run and Tasks from a validated manifest without dispatching workers.",
+    "swarm_status": "Read current Run, Task, question, evidence, or resource state; bounded wait is read-only.",
+    "swarm_dispatch": "Dispatch ready admitted Tasks; this may start fixture or model workers and use the admitted provider.",
+    "swarm_message": "Send structured messages only between the coordinator and participants admitted by successful Dispatches.",
+    "swarm_reconcile": "Observe or fence the uncertain effect of a prior swarm_start; this is not generic reconciliation.",
+    "swarm_retry": "Retry one exactly evidenced terminal fixture Dispatch; model-worker retry is unavailable.",
+    "swarm_cancel": "Cancel an admitted Dispatch, Task, or Run, then require status and cleanup verification.",
+    "swarm_close": "Close a terminal Run and clean attempt-owned resources; fail if work or survivors remain.",
+    "swarm_trace": "Query trace or append an authorized decision or evidence event for an admitted project or Run.",
+    "orca_search": "Search admitted read-only Orca public commands by intent without executing them.",
+    "orca_describe": "Load one exact Orca command contract from the current catalog digest without executing it.",
+    "orca_call": "Validate and plan one admitted read-only Orca CLI call; return a plan and do not execute it.",
+}
+
+DESCRIPTION_SECTIONS = (
+    "WHEN:",
+    "REQUIRES:",
+    "ACCEPTS:",
+    "EFFECT:",
+    "RETURNS:",
+    "NEXT:",
+    "DO NOT USE FOR:",
+    "RETRY / RECONCILE:",
+)
+
 
 def test_operational_server_registers_only_the_approved_tools_without_bootstrapping(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AETHER_STATE_ROOT", str(tmp_path / "state"))
@@ -32,6 +61,35 @@ def test_operational_server_registers_only_the_approved_tools_without_bootstrapp
     assert tuple(tool.name for tool in operational._tool_manager.list_tools()) == TOOLS
     assert protocol.CALLABLE_TOOL_NAMES == frozenset(TOOLS)
     assert set(tmp_path.iterdir()) == before
+
+
+@pytest.mark.anyio
+async def test_operational_server_teaches_the_approved_cold_start_contract_through_tools_list() -> None:
+    operational = server.create_server()
+    listed = await operational.list_tools()
+    tools = {tool.name: tool for tool in listed}
+
+    assert tuple(tools) == TOOLS
+    assert set(EXPECTED_FIRST_SENTENCES) == set(tools)
+    for name, expected_first_sentence in EXPECTED_FIRST_SENTENCES.items():
+        description = tools[name].description
+        assert description is not None
+        assert description.startswith(expected_first_sentence + "\n")
+        assert len(expected_first_sentence) <= 180
+        assert len(description) <= 1_200
+        assert description != f"Aether operational capability: {name}"
+        positions = [description.index(section) for section in DESCRIPTION_SECTIONS]
+        assert positions == sorted(positions)
+        lowered = description.lower()
+        assert "ignore previous" not in lowered
+        assert "system prompt" not in lowered
+        assert "api key" not in lowered
+        assert "token=" not in lowered
+
+    assert "does not start a worker" in (tools["swarm_start"].description or "")
+    assert "invoke the admitted provider/model" in (tools["swarm_dispatch"].description or "")
+    assert "does not execute" in (tools["orca_call"].description or "")
+    assert "prior swarm_start operation_id" in (tools["swarm_reconcile"].description or "")
 
 
 def _runtime_environment(tmp_path: Path) -> dict[str, str]:

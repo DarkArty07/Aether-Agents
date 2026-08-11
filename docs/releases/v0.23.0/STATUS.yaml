@@ -1,94 +1,45 @@
-schema_version: 1
+schema_version: 2
 release: v0.23.0
-title: Orca Production Dogfood and MCP Optimization
-status: in_progress_m1_3_tool_learning
+source_version: 0.23.0.dev0
+title: Aether MCP local runtime
+status: in_progress_m1_3_model_backed_entry
 last_updated: '2026-08-11'
 product_owner: Christopher (DarkArty07)
-governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.md
-canonical_roadmap: docs/releases/v0.23.0/ROADMAP.md
-production_policy: docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md
-tool_surface_plan: docs/releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md
-cold_start_guidance_design: docs/releases/v0.23.0/MCP_COLD_START_GUIDANCE_DESIGN.md
-cold_start_implementation_plan: docs/releases/v0.23.0/MCP_COLD_START_IMPLEMENTATION_PLAN.md
-cold_start_handoff: docs/releases/v0.23.0/MCP_COLD_START_HANDOFF.md
-release_issue: 167
-github_milestone: v0.23.0 — Orca Production Dogfood and MCP Optimization
-predecessor:
-  release: v0.22.0
-  required_state: integrated_and_published_or_exact_owner_approved_exception
-implementation:
-  started: true
-  branch: v0.23.0-orca-production-cutover
-  commit: null
-activation:
-  operational_direction_approved: true
-  authorized_by_current_documentation_task: false
-  executed: true
+source:
+  branch: main
+  persistent_worktrees: 1
+  published: false
+runtime:
+  hermes_home: /home/darkarty/Desktop/agentes/aether/home
+  installed: true
+  registration_enabled: true
+  package_version: 0.23.0.dev0
+  protocol: aether.mcp/v1alpha2
+  tool_count: 15
+  provider_ready: true
   production_entry_accepted: false
-  accepted_installation: named_local_aether_home_m1_2_pass
-current_runtime_truth:
-  aether_mcp_default_off: false
-  registered_tools: 15
-  orca_normal_multi_agent_path: false
-  live_olympus_retired: true
-  m1_3_fixture_first_qualification: partial
-  m1_3_cold_start_guidance_design: approved_implementation_not_authorized
-  m1_3_model_backed_task: pending_separate_gate
-milestones:
-  M0:
-    title: released predecessor and first Task contract
-    status: pass
-  M1:
-    title: operational and reversible Aether MCP plus Orca entry
-    status: in_progress_m1_3_tool_learning
-  M2:
-    title: stable generic roster qualification
-    status: not_started
-  M3:
-    title: real-session dogfooding and integration repair
-    status: not_started
-  M4:
-    title: evidence-backed Aether MCP tool-surface optimization
-    status: not_started
-  M5:
-    title: evidence-backed generic personality refinement
-    status: not_started
-  M6:
-    title: optional-role decision
-    status: not_started
-  M7:
-    title: hardening and controlled evaluation
-    status: not_started
-  M8:
-    title: exact candidate acceptance and release
-    status: not_started
-post_cutover_policy:
-  multi_agent_path: Aether MCP plus Orca
-  failure_disposition: ORCA_INTEGRATION_INCIDENT
-  hidden_legacy_fallback: forbidden
-  original_task_retry_through_orca: required
-  hermes_break_glass: repair_path_only
-  direct_hermes_work: allowed_when_deliberately_single_owner
-retained_generic_roster:
+prompt:
+  active: 3.0.0-hot.3
+  stable_promotion: false
+roster:
   allowed:
     - Hefesto
     - Daedalus
     - Ictinus
-  disabled:
+  retired:
     - Ariadna
-  forbidden:
     - Athena
     - Etalides
-  proposed_unimplemented:
-    - Independent Verifier
-non_goals:
-  - process_specific_workflow_migration
-  - automatic_v0_24_progression_without_explicit_owner_decision
-  - full_learning_dataset_export_or_training
-  - automatic_prompt_or_model_promotion
-  - hidden_olympus_or_acp_fallback
-  - public_multitenant_service
-next_action:
-  current: obtain_explicit_p0_cold_start_implementation_authorization
-  then: preregister_baseline_before_candidate_changes
-  later_gate: separately_authorize_model_backed_m1_3_prompt_promotion_and_runtime_activation
+retired_runtime_paths:
+  - Olympus
+  - ACPManager
+  - Harmonia
+  - talk_to
+  - Honcho
+milestones:
+  installation_and_rollback: pass
+  fifteen_tool_fixture_qualification: partial
+  cold_start_tool_guidance: pass
+  model_backed_production_entry: pending_explicit_gate
+  generic_roster_qualification: not_started
+next_gate: freeze_and_authorize_one_low_risk_model_backed_entry_case

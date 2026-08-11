@@ -1,197 +1,137 @@
-# ===========================
-# Aether Agents — .gitignore
-# ===========================
-
-# --- Secrets (NEVER commit) ---
+# Secrets and machine-local configuration
 .env
 *.env
 !.env.example
-honcho-server/.env
-
-# --- Hermes orchestrator config (user-specific: model, provider, paths) ---
-# Use config.yaml.template as base, copy to config.yaml and customize
-home/config.yaml
-
-# --- Runtime (auto-generated) ---
-home/sessions/
-home/logs/
-home/plugins/*
-!home/plugins/aether-self-improvement/
-!home/plugins/aether-self-improvement/__init__.py
-!home/plugins/aether-self-improvement/plugin.yaml
-home/.cache/
-home/.olympus/
-home/active_profile
-home/bin/
-**/sessions/
-**/request_dump*
-**/logs/
-
-# --- Auth and model caches ---
-**/auth.json
-**/models_dev_cache.json
-
-# --- Hermes runtime files ---
-**/state.db
-**/auth.lock
-**/.skills_prompt_snapshot.json
-**/.hermes_history
-**/checkpoints/
-**/interrupt_debug.log
-home/skills/.hub/
-
-# --- Profile skills directories (skills loaded via external_dirs from home/skills/) ---
-home/profiles/*/skills/*
-!home/profiles/*/skills/.gitkeep
-
-# --- Per-profile bundled manifests (auto-generated) ---
-**/.bundled_manifest
-
-# --- Per-profile live config (generated from templates) ---
-home/profiles/ariadna/config.yaml
-home/profiles/hefesto/config.yaml
-home/profiles/etalides/config.yaml
-home/profiles/athena/config.yaml
-home/profiles/daedalus/config.yaml
-home/profiles/ictinus/config.yaml
-
-# --- Per-profile agent hooks (local for security) ---
-home/profiles/*/agent-hooks/
-
-# --- Per-profile runtime state ---
-home/profiles/*/memories/
-home/profiles/*/research/
-home/profiles/*/.update_check
-home/profiles/*/channel_directory.json
-home/profiles/*/gateway.lock
-home/profiles/*/gateway.pid
-home/profiles/*/gateway_state.json
-home/profiles/*/ollama_cloud_models_cache.json
-
-# --- Per-profile runtime dirs ---
-home/profiles/*/bin/
-home/profiles/*/sandboxes/
-home/profiles/*/cron/
-home/profiles/*/lsp/
-home/profiles/*/pastes/
-home/profiles/*/spawn-trees/
-home/profiles/*/processes.json
-home/profiles/*/skins
-home/profiles/*/cache/
-home/profiles/*/hindsight/
-home/profiles/*/.restart_last_processed.json
-home/profiles/*/.usage.json
-home/profiles/*/.usage.json.lock
-home/kanban.db
-home/profiles/*/kanban.db
-home/profiles/*/honcho.json
-home/honcho.json
-home/profiles/*/.env.bak*
-
-# --- Home-level runtime (not per-profile) ---
 home/config.yaml
 home/config.yaml.bak*
-home/config.yaml.corrupt.*.bak
+home/profiles/*/config.yaml
+home/profiles/*/config.yaml.bak*
+
+# Installed Aether/Hermes runtime
+home/.aether-mcp/
+home/.aether-mcp-state/
+home/.aether/
+home/.venv-hermes/
+home/.mcp-discovery.lock
+home/backups/
+home/bin/
+home/plugins/
+home/state/
+home/sessions/
+home/logs/
+home/checkpoints/
+home/cache/
+home/lsp/
 home/memories/
 home/hindsight/
-home/agent-hooks/
 home/pastes/
 home/cron/
 home/sandboxes/
-home/cache/
-home/lsp/
+home/agent-hooks/
+home/audio_cache/
+home/image_cache/
+home/images/
 home/kanban/
+home/pending_messages/
+home/pairing/
+home/platforms/
+home/desktop/
+home/*.db
+home/*.db-*
+home/*.lock
+home/auth.json
+home/*_cache.json
+home/*_state.json
+home/*.log
+home/.hermes_history
+home/.usage.json*
+home/.codex_*
 home/.update_check
-home/.usage.json
-home/.usage.json.lock
+home/active_profile
+home/channel_directory.json
 home/context_length_cache.yaml
-home/ollama_cloud_models_cache.json
-home/provider_models_cache.json
+home/gateway.lock
+home/gateway.pid
+home/gateway_state.json
+home/honcho.json
 home/processes.json
-home/projects.db
-home/verification_evidence.db
-home/kanban.db.*.lock
 home/shell-hooks-allowlist.json
-home/shell-hooks-allowlist.json.lock
+home/tui-theme-boot.json
+
+# Per-profile runtime; SOUL.md and config.yaml.template remain tracked
+home/profiles/.env
+home/profiles/*/bin/
+home/profiles/*/cache/
+home/profiles/*/checkpoints/
+home/profiles/*/cron/
+home/profiles/*/hindsight/
+home/profiles/*/logs/
+home/profiles/*/lsp/
+home/profiles/*/memories/
+home/profiles/*/pastes/
+home/profiles/*/research/
+home/profiles/*/sandboxes/
+home/profiles/*/sessions/
+home/profiles/*/skills/
+home/profiles/*/spawn-trees/
+home/profiles/*/.olympus/
+home/profiles/*/.codex_*
+home/profiles/*/.aether_home*
+home/profiles/*/.olympus_db_path*
+home/profiles/*/.olympus_session*
+home/profiles/*/.skills_prompt_snapshot.json
+home/profiles/*/.hermes_history
+home/profiles/*/.provider_models_cache_*.tmp
+home/profiles/*/auth.json
+home/profiles/*/context_length_cache.yaml
+home/profiles/*/channel_directory.json
+home/profiles/*/gateway_state.json
+home/profiles/*/honcho.json
+home/profiles/*/processes.json
+home/profiles/*/*_cache.json
+home/profiles/*/*.db
+home/profiles/*/*.db-*
+home/profiles/*/*.lock
+home/profiles/*/*.pid
+home/profiles/*/.usage.json*
+home/profiles/*/.update_check
+home/profiles/prometeo/
+
+# Project-local state and tool output
+.aether/
+.claude/
+.hermes/
+.graphify/
+graphify-out/
+src/graphify-out/
+
+# Hermes skill registry/usage state
+home/skills/.hub/
+home/skills/.usage.json*
 home/skills/.curator_state
 home/skills/.curator_backups/
+home/skills/.bundled_manifest
 
-# --- Per-profile generated config backups and caches ---
-home/profiles/*/config.yaml.bak*
-home/profiles/*/context_length_cache.yaml
-home/profiles/*/verification_evidence.db
-
-# --- Python ---
+# Python and test/build artifacts
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 *.egg-info/
-dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 build/
+dist/
+/uv.lock
 .eggs/
-venv/
 .venv/
+venv/
 
-# --- Hermes venv (pip install target) ---
-home/.venv-hermes/
-
-# --- OS ---
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# --- IDE ---
+# Editors and operating systems
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-
-# --- Prometeo (personal assistant — private) ---
-home/profiles/prometeo/
-
-# --- Project state (local only) ---
-.eter/
-.hermes/
-**/.olympus_checkpoints.db*
-**/state.db-shm
-**/state.db-wal
-
-# --- Research (local findings, not shared) ---
-home/research/
-
-# --- Claude Code (dev tool) ---
-.claude/
-
-# --- Development artifacts ---
-PROMPT_OPUS.md
-CLAUDE.md
-docs/sesiones/
-docs/setup/
-
-# Auto-generated observations
-.aether/
-
-# --- Pi Agent PID-suffixed session files (concurrent Daimon isolation) ---
-**/.olympus_session
-**/.olympus_session.*
-**/.olympus_db_path
-**/.olympus_db_path.*
-**/.aether_home
-**/.aether_home.*
-**/.clean_shutdown
-
-# --- Subagent-driven-development runtime ---
-home/skills/software-development/subagent-driven-development/references/
-
-# --- Skills usage tracking (local only) ---
-home/skills/.usage.json
-home/skills/.usage.json.lock
-home/.olympus_v3.db
-home/channel_directory.json
-home/gateway.lock
-home/gateway.pid
-home/gateway_state.json
-
-# --- Graphify output (generated graphs, reports, caches) ---
-graphify-out/
+.DS_Store
+Thumbs.db

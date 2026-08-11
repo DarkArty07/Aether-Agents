@@ -23,6 +23,7 @@ from mcp.server.fastmcp import FastMCP  # noqa: E402
 from mcp.shared.message import SessionMessage  # noqa: E402
 
 from aether_mcp import PROTOCOL_ID, SERVER_NAME, __version__  # noqa: E402
+from aether_mcp.guidance import TOOL_DESCRIPTIONS  # noqa: E402
 from aether_mcp.protocol import TOOL_SCHEMAS, export_schema_bundle  # noqa: E402
 from aether_mcp.runtime import OperationalRuntime  # noqa: E402
 
@@ -33,6 +34,8 @@ _TOOLS = (
     "swarm_dispatch", "swarm_message", "swarm_reconcile", "swarm_retry", "swarm_cancel",
     "swarm_close", "swarm_trace", "orca_search", "orca_describe", "orca_call",
 )
+
+assert tuple(TOOL_DESCRIPTIONS) == _TOOLS
 
 
 def _argument_annotation(schema: dict[str, object]) -> object:
@@ -82,7 +85,7 @@ def create_server(runtime: OperationalRuntime | None = None) -> FastMCP:
 
         registered_operation.__signature__ = operation.__signature__
         registered_operation.__annotations__ = operation.__annotations__
-        server.add_tool(registered_operation, name=name, description=f"Aether operational capability: {name}")
+        server.add_tool(registered_operation, name=name, description=TOOL_DESCRIPTIONS[name])
         tool = server._tool_manager.get_tool(name)
         assert tool is not None
         bundle = export_schema_bundle()

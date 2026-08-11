@@ -4,6 +4,7 @@ description: "Clone/create/fork repos; manage remotes, releases."
 version: 1.1.0
 author: Hermes Agent
 license: MIT
+platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [GitHub, Repositories, Git, Releases, Secrets, Configuration]
@@ -26,10 +27,10 @@ if command -v gh &>/dev/null && gh auth status &>/dev/null; then
 else
   AUTH="git"
   if [ -z "$GITHUB_TOKEN" ]; then
-    if [ -f ~/.hermes/.env ] && grep -q "^GITHUB_TOKEN=" ~/.hermes/.env; then
-      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" ~/.hermes/.env | head -1 | cut -d= -f2 | tr -d '\n\r')
+    if _hermes_env="${HERMES_HOME:-$HOME/.hermes}/.env"; [ -f "$_hermes_env" ] && grep -q "^GITHUB_TOKEN=" "$_hermes_env"; then
+      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" "$_hermes_env" | head -1 | cut -d= -f2 | tr -d '\n\r')
     elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
-      GITHUB_TOKEN=$(grep "github.com" ~/.git-credentials 2>/dev/null | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
+      GITHUB_TOKEN=$(uv run python3 "${HERMES_HOME:-$HOME/.hermes}/skills/github/github-auth/scripts/git-credential-token.py")
     fi
   fi
 fi
@@ -79,30 +80,6 @@ git clone git@github.com:owner/repo-name.git
 ```bash
 gh repo clone owner/repo-name
 gh repo clone owner/repo-name -- --depth 1
-```
-
-### When Target Directory Already Exists
-
-If `git clone` fails because the target directory already exists, don't default to "delete and re-clone." Check the existing directory first:
-
-```bash
-# 1. Check if it's already a git repo pointing to the same remote
-cd "/path/to/existing/dir" && git remote -v
-
-# 2. If same remote → just pull to update
-cd "/path/to/existing/dir" && git pull origin main
-
-# 3. If different remote or not a git repo → ask the user:
-#    - Overwrite? (ONLY with explicit per-item permission — never delete without asking)
-#    - Clone to a different path?
-#    - Keep as-is?
-```
-
-**CRITICAL:** Never delete or overwrite a directory without explicit per-item user permission. A "duplicate" folder may be the MORE advanced version. Always present options and WAIT for approval.
-
-**Paths with spaces** (common on Windows/WSL): Always quote the target path in `git clone`:
-```bash
-git clone https://github.com/owner/repo-name.git "/mnt/c/Users/name/Desktop/My Project"
 ```
 
 ## 2. Creating Repositories
