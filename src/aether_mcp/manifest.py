@@ -9,6 +9,8 @@ from typing import Any, NoReturn
 
 from .protocol import ProtocolError, validate_request
 
+_BUNDLED_CATALOG_DIGEST = "00df83ec1686a56344c78a49d75ff8dec63d988e588642236172180742b23c25"
+
 
 class ManifestError(ValueError):
     """Stable swarm-manifest validation failure."""
@@ -26,6 +28,8 @@ def _fail(code: str, message: str) -> NoReturn:
 class ValidatedManifest:
     project_id: str
     digest: str
+    manifest_ref: str
+    provider_binding_digest: str
     topological_order: tuple[str, ...]
     canonical: dict[str, Any]
 
@@ -34,7 +38,7 @@ def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
-def validate_swarm_manifest(manifest: object) -> ValidatedManifest:
+def validate_swarm_manifest(manifest: object, *, provider_binding_digest: str | None = None) -> ValidatedManifest:
     """Validate schema, DAG, and independent write scopes without starting M3."""
     try:
         validated = validate_request("swarm_validate", {"manifest": manifest})["manifest"]
@@ -91,9 +95,14 @@ def validate_swarm_manifest(manifest: object) -> ValidatedManifest:
                 _fail("WRITE_SCOPE_CONFLICT", "Independent tasks have overlapping write scope")
 
     digest = hashlib.sha256(_canonical(validated)).hexdigest()
+    binding = provider_binding_digest or _BUNDLED_CATALOG_DIGEST
+    if not isinstance(binding, str) or len(binding) != 64 or any(char not in "0123456789abcdef" for char in binding):
+        _fail("PROVIDER_SCHEMA_DRIFT", "Provider binding digest is invalid")
     return ValidatedManifest(
         project_id=validated["project_id"],
         digest=digest,
+        manifest_ref=f"manifest:{digest}",
+        provider_binding_digest=binding,
         topological_order=tuple(order),
         canonical=validated,
     )

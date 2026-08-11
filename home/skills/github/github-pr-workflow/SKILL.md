@@ -1,9 +1,10 @@
 ---
 name: github-pr-workflow
 description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
-version: 1.5.0
+version: 1.1.0
 author: Hermes Agent
 license: MIT
+platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [GitHub, Pull-Requests, CI/CD, Git, Automation, Merge]
@@ -29,10 +30,10 @@ else
   AUTH="git"
   # Ensure we have a token for API calls
   if [ -z "$GITHUB_TOKEN" ]; then
-    if [ -f ~/.hermes/.env ] && grep -q "^GITHUB_TOKEN=" ~/.hermes/.env; then
-      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" ~/.hermes/.env | head -1 | cut -d= -f2 | tr -d '\n\r')
+    if _hermes_env="${HERMES_HOME:-$HOME/.hermes}/.env"; [ -f "$_hermes_env" ] && grep -q "^GITHUB_TOKEN=" "$_hermes_env"; then
+      GITHUB_TOKEN=$(grep "^GITHUB_TOKEN=" "$_hermes_env" | head -1 | cut -d= -f2 | tr -d '\n\r')
     elif grep -q "github.com" ~/.git-credentials 2>/dev/null; then
-      GITHUB_TOKEN=$(grep "github.com" ~/.git-credentials 2>/dev/null | head -1 | sed 's|https://[^:]*:\([^@]*\)@.*|\1|')
+      GITHUB_TOKEN=$(uv run python3 "${HERMES_HOME:-$HOME/.hermes}/skills/github/github-auth/scripts/git-credential-token.py")
     fi
   fi
 fi
@@ -67,8 +68,6 @@ git checkout main && git pull origin main
 git checkout -b feat/add-user-authentication
 ```
 
-**Branching model note:** This workflow assumes `feature → main` direct (no integration branch). If your team uses `feature → dev → main`, branch from `dev` instead. See `references/branching-models.md` for both models, migration guide, and when to use each.
-
 Branch naming conventions:
 - `feat/description` — new features
 - `fix/description` — bug fixes
@@ -78,65 +77,10 @@ Branch naming conventions:
 
 ## 2. Making Commits
 
-### Pitfall 1: Files Ignored by .gitignore (can't stage)
-
-Some config files (e.g., `home/config.yaml`) are in `.gitignore` because they contain API keys or are machine-specific. If you need to commit a **structural configuration change** (like toolset definitions) that is not a secret, `git add` will silently skip it — no error, no warning, and the file won't appear in `git status`.
-
-**Detect:** If `git diff <file>` and `git status <file>` show nothing but you know the file was modified, check `.gitignore`:
-```bash
-git ls-files <file>     # empty = not tracked, possibly ignored
-git check-ignore -v <file>  # shows which rule ignores it
-```
-
-**Fix:** Force-track with `-f`:
-```bash
-git add -f path/to/ignored-file.yaml
-```
-
-**Caution:** Only force-track files whose content you've reviewed. Never force-add files that contain real secrets (hardcoded passwords, API keys as literal values). Files using `${ENV_VAR}` references for secrets are safe to track.
-
-### Pitfall 2: Already-tracked files still staged despite .gitignore
-
-Adding a file to `.gitignore` does **NOT** stop git from tracking changes to it if it was already committed. `git add -A` will happily stage modifications to a tracked file that matches `.gitignore` rules. This is a common source of accidentally committed secrets or runtime configs.
-
-**Detect:** After staging, check for files that should be gitignored but appear in the diff:
-```bash
-# Show all staged files — scan for anything that should be local
-git diff --cached --name-only
-
-# Specifically check if a gitignored file is still tracked
-git ls-files path/to/file.yaml   # non-empty = still tracked
-```
-
-**Fix:** Remove from the index (keeps the local file):
-```bash
-git rm --cached path/to/local-config.yaml
-git commit -m "chore: stop tracking local config (already in .gitignore)"
-```
-
-After `git rm --cached`, future `git add -A` will correctly skip the file.
-
-### Pitfall 3: Untracked runtime files staged by git add -A
-
-When a project has accumulated runtime artifacts (SQLite databases, caches, session state, JSON dumps) that aren't in `.gitignore`, `git add -A` stages everything indiscriminately. Before committing any bulk staging:
-
-1. **Audit untracked files before staging** — run `git status --short` and review `??` entries for runtime state
-2. **Update `.gitignore` first** — add patterns for any runtime files/dirs discovered (e.g., `*.db`, `cache/`, `hindsight/`, `state-snapshots/`, `.curator_state`)
-3. **Then `git add -A`** — newly gitignored files won't appear
-
-Common runtime artifacts to exclude:
-- `kanban.db`, `*.db-shm`, `*.db-wal` — local databases
-- `cache/`, `state-snapshots/` — derived/cached data
-- `hindsight/`, `*.lock` — session/temp state
-- `*.restart_*.json`, `.curator_state` — daemon/runtime metadata
-- Per-profile configs with API keys or machine-specific settings
-
 Use the agent's file tools (`write_file`, `patch`) to make changes, then commit:
 
-**Before `git add -A`:** audit untracked files for runtime state (see Pitfall 3). Update `.gitignore` first if needed, and `git rm --cached` any tracked files that should be gitignored (see Pitfall 2).
-
 ```bash
-# Stage specific files (use -f for gitignored files you intentionally want to track)
+# Stage specific files
 git add src/auth.py src/models/user.py tests/test_auth.py
 
 # Commit with a conventional commit message
@@ -265,34 +209,6 @@ for i in $(seq 1 20); do
 done
 ```
 
-### Detecting Pre-existing CI Failures (Not Introduced by the PR)
-
-When reviewing multiple PRs and all show the same CI failure pattern, verify whether the failure already exists on `main` before writing the PR off:
-
-```bash
-# Check if main branch CI also fails with the same check
-gh run list --branch main --limit 1 --json conclusion,workflowName
-
-# View the failed log from main for comparison
-gh run view <RUN_ID> --log-failed | grep -E "error|failure|exit code" | head -10
-
-# Cross-reference the same check name on the PR branch
-gh pr checks <PR_NUMBER> --json name,description,state
-```
-
-**Decision logic for pre-existing failures:**
-
-| Main CI | PR CI | Assessment |
-|---------|-------|------------|
-| ✅ passing | ❌ failing | Likely introduced by PR — do NOT merge until fixed |
-| ❌ failing | ❌ failing (same error) | **Pre-existing** — failure existed before the PR. Safe to merge if PR changes are orthogonal to the failing checks |
-| ❌ failing | ✅ passing | PR fixed or bypassed a broken check — unusual, verify manually |
-| ❌ failing | ❌ failing (different error) | Mixed — verify PR didn't add new failures on top of pre-existing ones |
-
-**Confirming orthogonality:** If the PR touches only docs, config templates, setup scripts, or skill files — and the CI failure is a lint error in `src/` or a unit test in a module the PR never touched — the failure is orthogonal and pre-existing.
-
-**Pitfall — don't merge when in doubt:** If you can't tell whether the CI failure is pre-existing or introduced, treat it as blocking. Run the failing CI step on the PR branch directly (`gh run view --log-failed`) and compare the error to a fresh run on main.
-
 ## 5. Auto-Fixing CI Failures
 
 When CI fails, diagnose and fix. This loop works with either auth method.
@@ -403,75 +319,12 @@ Merge methods: `"merge"` (merge commit), `"squash"`, `"rebase"`
 PR_NODE_ID=$(curl -s \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/repos/$OWNER/$REPO/pulls/$PR_NUMBER \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['node_id'])")\n
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['node_id'])")
+
 curl -s -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/graphql \
   -d "{\"query\": \"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { clientMutationId } }\"}"
-```
-
-### Pitfalls
-
-#### Cannot approve your own pull request
-
-`gh pr review --approve` fails with: `GraphQL: Review Can not approve your own pull request`. This happens when the authenticated GitHub user is also the PR author.
-
-**Solution:** If you have merge permissions on the repo and no external review is required by branch protection rules, skip the approval step entirely and proceed directly to merge:
-
-```bash
-# Instead of: gh pr review N --approve && gh pr merge N --squash --delete-branch
-# Just merge directly:
-gh pr merge N --squash --delete-branch
-```
-
-**Detection:** Before attempting approve, check if the PR author matches the authenticated user:
-```bash
-PR_AUTHOR=$(gh pr view N --json author --jq .author.login)
-GH_USER=$(gh api user --jq .login)
-if [ "$PR_AUTHOR" = "$GH_USER" ]; then
-  echo "Self-PR detected: skipping approval, merging directly"
-  gh pr merge N --squash --delete-branch
-else
-  gh pr review N --approve
-  gh pr merge N --squash --delete-branch
-fi
-```
-
-#### gh pr merge with local working tree changes
-
-When there are local uncommitted modifications, `gh pr merge` may produce a confusing partial result:
-
-1. ✅ **The remote merge succeeds via the GitHub API** — the PR is merged on GitHub
-2. ❌ **The local git operations fail** — `git checkout`, branch deletion, and `git pull` all abort
-3. The remote branch is **NOT deleted** (--delete-branch never executed)
-4. The PR state shows `MERGED` but the local repo is on the old branch with dirty state
-
-**Fix — before merging:** Always check and stash local changes first:
-```bash
-if [ -n "$(git status --porcelain)" ]; then
-  git stash push -m "pre-merge-autostash"
-  gh pr merge N --squash --delete-branch
-  git stash pop
-else
-  gh pr merge N --squash --delete-branch
-fi
-```
-
-**Recovery if you already merged and the local step failed:**
-```bash
-# Delete the remote branch manually (the API merge already happened)
-git push origin --delete <feature-branch>
-
-# Switch to main and sync
-git stash  # or commit local changes
-git checkout main
-git pull origin main
-
-# Restore local changes
-git stash pop
-
-# Verify the remote branch was deleted
-git fetch --prune origin
 ```
 
 ## 7. Complete Workflow Example
@@ -502,324 +355,6 @@ git push -u origin HEAD
 # 8. Merge when green (see Section 6)
 ```
 
-## 8. Release Workflow
-
-Complete versioned release pipeline: branch → changes → commit → tag → PR → merge → release.
-
-### Branch and Version Bump
-
-```bash
-# Start from clean main
-git checkout main && git pull origin main
-
-# Create release branch
-git checkout -b release/v0.8.0
-
-# Bump version in pyproject.toml, CHANGELOG.md, AGENTS.md, etc.
-# (Delegate to Hefesto or make changes directly)
-
-# Stage ONLY intended files — never git add -A in repos with runtime data
-git add pyproject.toml CHANGELOG.md AGENTS.md README.md scripts/ Makefile
-git commit -m "release: v0.8.0 — automated setup scripts, docs overhaul"
-```
-
-### Tag and Push
-
-```bash
-# Create annotated tag
-git tag v0.8.0
-
-# Push branch + tag
-git push origin release/v0.8.0 --tags
-```
-
-### Create PR and Merge
-
-```bash
-# Create PR targeting main
-gh pr create \
-  --base main \
-  --head release/v0.8.0 \
-  --title "release: v0.8.0 — description" \
-  --body "## v0.8.0 — Title
-
-### What's New
-- feat: new feature description
-
-### Breaking Changes
-- None (or description)
-
-### Migration from v0.7.x
-- Run bash scripts/setup.sh"
-
-# Squash merge + delete branch (cleanest for releases)
-gh pr merge 25 --squash --delete-branch
-```
-
-### Create GitHub Release
-
-```bash
-gh release create v0.8.0 \
-  --title "v0.8.0 — Title" \
-  --notes "## v0.8.0 — Title
-
-### Quick Start
-\`\`\`bash
-git clone https://github.com/OWNER/REPO.git
-cd REPO
-bash scripts/setup.sh
-\`\`\`
-
-### What's New
-- bullet points
-
-### Upgrade from v0.7.x
-- Migration instructions"
-```
-
-### Post-Release Cleanup
-
-```bash
-# Switch back to main and pull the merge
-git checkout main
-git pull origin main
-
-# Delete local branch (remote already deleted by --delete-branch)
-git branch -d release/v0.8.0
-```
-
-### Pre-Release Documentation Audit
-
-After any release that removes files, changes installation method, moves paths, or deprecates commands, run a tracked-content string audit BEFORE tagging.
-
-**Quick audit — version consistency and dangling references:**
-
-```bash
-# 1. Find references to deleted/moved files in tracked content
-git ls-files | xargs grep -l 'configure\.sh\|start\.sh\|\.pi-daimons\|~/.hermes/' 2>/dev/null
-
-# 2. Find paths that should be placeholders
-grep -rn '/home/[^/]\+/Aether-Agents' --include='*.md' --include='*.yaml' --include='*.html' 2>/dev/null | grep -v '.template'
-
-# 3. Check version badge matches across ALL version-carrying files
-grep 'version' pyproject.toml | head -1
-grep 'version-' README.md | head -1
-grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' CHANGELOG.md | head -1
-grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' Makefile scripts/setup.sh | sort | uniq -c  # easy to miss
-
-# 4. Check CI action versions aren't outdated
-grep -rn 'uses:.*@v[0-9]' .github/workflows/
-
-# 5. Check website references (if applicable)
-grep -rn 'pip install -e \.\|configure\.sh\|start\.sh\|~/.hermes/' website/ 2>/dev/null
-```
-
-**Full migration audit — after path changes, convention shifts, or module renames:**
-
-For major refactoring (`.eter/` → `.aether/`, profile restructuring, script renaming), catalog old conventions, search every tracked occurrence, classify by priority (functional code > agent configs > docs > CHANGELOG), fix in order, migrate authorized on-disk state, and verify a clean residual scan.
-
-Fix all findings, commit, then proceed with tagging.
-
-### Pitfalls
-
-- **Never `git add -A`**: Stage specific files only. Repos with runtime data (databases, sessions, caches, local configs) will stage everything. Use `git add <file1> <file2> ...` or `git diff --cached --stat` to review before committing.
-- **Version must match everywhere**: pyproject.toml, CHANGELOG.md, AGENTS.md (versioning section), README.md (badge). Miss any one and the release is inconsistent.
-- **Tag after commit**: Create the tag AFTER the commit is made, not before. The tag points to the commit hash.
-- **Squash merge for releases**: Use `--squash --delete-branch` for release PRs. This keeps main history clean with a single commit per release. Feature branches can use regular merge if needed.
-- **Dangling references after cleanup**: When removing deprecated files (scripts, code dirs, docs), always audit for references in README, website, and remaining docs. Deleted code leaves ghost references that confuse new users.
-- **Merging with uncommitted local changes**: `git checkout` or `git merge` will abort if local modifications would be overwritten. Always `git status --short` before branch operations. Stash (`git stash push`), commit, or discard changes first. See `references/branching-models.md` for the full pattern.
-|- **Backup recovery with wrong directory structure**: When cherry-picking from an old backup branch, the directory structure may have changed (e.g., `home/skills/` in backup vs `skills/` in current HEAD). Extract content to the CURRENT structure, not the backup's structure. Verify destination paths before writing. See `references/branching-models.md`.
-
-### Pitfall #N — GitHub Self-Approve Not Possible for Same-Author PRs
-
-**Síntoma:** Ejecutas `gh pr review <N> --approve` en un PR abierto por ti mismo (DarkArty07). GitHub rechaza con error `gh: Cannot approve your own pull request`. El merge con `gh pr merge --squash` SÍ funciona sin aprobación, pero queda sin audit trail de review.
-
-**Por qué:** Regla de GitHub — un usuario no puede aprobar su propio PR. `gh pr review --approve` falla con 422 si el revisor es el autor.
-
-**Opciones para batch self-merge:**
-
-1. **Aceptar el merge sin aprobación** (lo que hicimos en sesión 06-04 con 5 PRs):
-   ```bash
-   gh pr merge <N> --squash --delete-branch
-   ```
-   Funciona si el PR es MERGEABLE y la branch protection no requiere review. Si requiere review, este comando falla con "Reviews required".
-
-2. **Configurar branch protection para permitir merge sin review** (recomendado para repo personal):
-   - Settings → Branches → main → Edit → "Require pull request reviews before merging" → OFF
-   - Permite merge directo sin approvals
-
-3. **Habilitar auto-approve con ruleset + GitHub Actions** (más limpio):
-   - Crear `.github/workflows/auto-approve.yml` que aprueba PRs del owner
-   - Útil si trabajas con colaboradores externos que necesiten review humano
-
-**Para repos personales de un solo owner (caso de Aether):** Opción 2 es la más limpia. Un solo toggle, sin CI, sin reglas.
-
-**Cuándo SÍ requerir review humano:** Repo con colaboradores externos, código de producción sensible, cambios en CI/CD.
-
-**Audit trail alternativo:** Si quieres saber que "alguien revisó" sin aprobación humana, usa `gh pr view <N> --json reviews,comments` post-merge para extraer el diff y los comentarios dejados. Pero sin `gh pr review --approve`, no hay línea formal de aprobación.
-
-### Pitfall #N — Pre-Existing CI Failures Don't Block Merge of Unrelated PRs
-
-**Síntoma:** Tu repo tiene CI rojo en main (por ejemplo, errores Ruff preexistentes en `src/legacy/server.py`). Quieres mergear PRs que no tocan ese subsistema. La tentación es no mergear ninguna hasta arreglar el lint.
-
-**Decisión correcta:** Mergear las PRs que no tocan `src/` y arreglar el lint en una PR separada de cleanup.
-
-**Por qué:**
-- El CI rojo pre-existente en main no fue introducido por tus PRs. Mergearlas no empeora nada.
-- Bloquear features/docs/fixes legítimos por tech debt de lint es contraproducente.
-- Una PR de cleanup dedicada (e.g. `feature/fix-ruff-lint-server`) es más fácil de revisar que un mega-PR que mezcla features con refactors de lint.
-
-**Cómo identificar si el CI failure es pre-existente:**
-```bash
-# En main, antes de mergear
-git checkout main
-gh pr checks <PR_NUMBER> 2>&1 | head -20
-
-# Si el check fallido es del estilo "ruff lint failed on src/X.py" y main también tiene ese error:
-git checkout main
-.venv-hermes/bin/python -m ruff check src/X.py
-# Si el error aparece aquí también → es pre-existente
-```
-
-**Política recomendada para repo personal:**
-- CI rojo pre-existente en main: OK mergear PRs que no tocan el código en rojo
-- CI rojo en una PR: NO mergear, fix en la misma PR
-- CI amarillo (warnings, no errors): OK mergear
-
-**Naming convention para la PR de cleanup:** `feature/fix-ruff-lint-<module>` o `chore/fix-pre-existing-lint` para que sea buscable después.
-
-## 9. Merge Conflict Resolution
-
-When `git merge` (or `git pull` which runs merge) encounters conflicting changes, git pauses and marks files as **unmerged**. The merge is incomplete — you must resolve before committing.
-
-### 9.1 Detecting Conflicts
-
-After a merge attempt:
-
-```bash
-git status
-```
-
-Look for these indicators:
-
-| Status | Meaning |
-|--------|---------|
-| `both modified: <file>` | modify/modify — same file changed in both branches |
-| `both added: <file>` | add/add — same file created in both branches |
-| `deleted by us: <file>` | deleted on current branch, modified on theirs |
-| `deleted by them: <file>` | modified on current branch, deleted on theirs |
-| `Unmerged paths:` section | Summary of files needing resolution |
-| `All conflicts fixed but you are still merging.` | All marked resolved, ready to commit |
-
-### 9.2 Ours vs Theirs Semantics
-
-During `git merge <other>` while on `current-branch`:
-
-- **Ours** = `current-branch` (the branch you're merging INTO)
-- **Theirs** = `<other>` (the branch being merged FROM)
-
-```bash
-# Keep current branch's version
-git checkout --ours path/to/file
-
-# Keep the other branch's version
-git checkout --theirs path/to/file
-```
-
-**CRITICAL:** These flags only work for files listed under `Unmerged paths`. For files listed under `Changes not staged for commit` (unstaged modifications that aren't part of the conflict), use `git checkout origin/main -- path/to/file` to reset to the remote's version.
-
-### 9.3 Add/Add Conflicts (Both Added)
-
-This happens when the same file was created independently in both branches. **Neither side may have the full content.** Always inspect both versions:
-
-```bash
-git checkout --ours path/to/file   # inspect current branch's version
-git checkout --theirs path/to/file # inspect the other branch's version
-```
-
-**Manual union strategy:** When neither side alone has the complete desired content (e.g., each PR added different tests in the same file), you must manually construct the union:
-
-1. Start with one version (`--theirs` or `--ours`) as the base
-2. Use `patch`/`write_file` to add the missing content from the other side
-3. Verify the result (e.g., `grep -c "def test_"` to confirm total test count)
-4. Stage with `git add`
-
-### 9.4 Modify/Modify Conflicts
-
-Same file changed differently in both branches. The file on disk contains merge conflict markers:
-
-```
-<<<<<<< HEAD
-// our version (current branch)
-=======
-// their version (branch being merged)
->>>>>>> branch-name
-```
-
-Resolution options:
-
-```bash
-# Accept one side entirely
-git checkout --ours path/to/file   # keep current branch's version
-git checkout --theirs path/to/file # keep other branch's version
-
-# Or edit the file manually to pick specific changes from both sides
-# (remove the <<<<<<<, =======, >>>>>>> markers and keep the desired content)
-```
-
-### 9.5 Verification After Resolution
-
-**Always verify** the resolved file has correct content before staging:
-
-```bash
-# For test files: count test functions
-grep -c "^def test_" tests/test_file.py
-
-# Check for remaining conflict markers (bad!)
-grep -rn "<<<<<<< \|=======\|>>>>>>>" path/to/file
-
-# For modify/modify: ensure expected content is present
-grep "specific_function_or_import" path/to/file
-
-# Show the resolved diff
-git diff path/to/file
-```
-
-### 9.6 Staging and Committing
-
-```bash
-# Stage resolved files — only the ones you resolved
-git add path/to/file1 path/to/file2
-
-# Verify staging
-git status
-git diff --cached --name-status
-
-# Complete the merge (auto-generates a merge commit message)
-git commit --no-edit
-
-# Or write a custom message
-git commit -m "Merge branch 'main' into feature/my-feature"
-```
-
-### Pitfall: Task descriptions may be wrong about ours/theirs
-
-Always verify the actual state on disk rather than blindly trusting instructions. The task may say `--theirs` but the context may contradict it. Cross-check:
-
-1. Check actual conflict type from `git status`
-2. Inspect both versions (`--ours` then `--theirs`)
-3. Verify the resolved content has what you expect before staging
-
-### Pitfall: Add/add conflicts may require manual union
-
-Neither side may be "correct" — both branches may have added different subsets of the same logical file. The guardrail "if checkout resolves to wrong version, stop" is useful, but the better response is to manually merge both versions rather than reporting failure.
-
-### Pitfall: "Changes not staged for commit" vs "Unmerged paths"
-
-A file showing as `modified` under "Changes not staged for commit" during a merge is NOT part of the conflict — it's an unrelated working-tree change. Do NOT use `git checkout --ours/--theirs` on it. Use `git checkout origin/main -- <file>` to reset it.
-
----
-
 ## Useful PR Commands Reference
 
 | Action | gh | git + curl |
@@ -830,12 +365,3 @@ A file showing as `modified` under "Changes not staged for commit" during a merg
 | Request review | `gh pr edit N --add-reviewer user` | `curl -X POST .../pulls/N/requested_reviewers -d '{"reviewers":["user"]}'` |
 | Close PR | `gh pr close N` | `curl -X PATCH .../pulls/N -d '{"state":"closed"}'` |
 | Check out someone's PR | `gh pr checkout N` | `git fetch origin pull/N/head:pr-N && git checkout pr-N` |
-
-## References
-
-- `references/conventional-commits.md` — Commit message format and type reference
-- `references/ci-troubleshooting.md` — Common CI failure patterns and fixes
-- `references/branching-models.md` — When to use `feature → dev → main` vs `feature → main`, migration guide, stash patterns, and backup recovery pitfalls
-- `references/smoke-testing-setup-scripts.md` — Single-PR fresh-clone smoke test for setup script changes
-- `references/multi-pr-smoke-test-remote.md` — Multi-PR consolidated smoke test on a remote machine via SSH; `check()` function pattern, submodule cloning pitfalls, `eval` + `cd` side effects, `exec > >(tee)` buffering over SSH, and broad grep false positives
-- `references/batch-pr-cleanup.md` — Multi-PR autonomous sweep checklist: discovery, classification, self-approval bypass, pre-existing CI detection, batch execution, post-merge sync, and anti-patterns

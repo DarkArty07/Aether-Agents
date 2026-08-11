@@ -1,49 +1,26 @@
-# Security Model — Aether Agents
+# Security policy
 
-## Permission Auto-Approve (MVP)
+## Supported line
 
-Olympus currently **auto-approves all permission requests** from Daimons. This means:
+Security fixes target the current `0.23.x` source line. Older tags and retired Olympus/Honcho paths are unsupported.
 
-- Any Daimon can execute any terminal command, write to any file, or access any network resource that hermes-agent grants
-- There is no human-in-the-loop for permission decisions
-- All auto-approvals are logged with WARNING level: agent name, permission type, description, and session ID
+## Runtime boundary
 
-### Risk Assessment
+Aether MCP is a local stdio service. It does not grant authority merely because a tool is visible. Every mutable request must carry admitted project identity, explicit operation metadata, the expected effect and an authority reference. Provider, model, budget, publication and external side effects require their own authority.
 
-| Permission Type | Risk Level | Current Mitigation |
-|----------------|------------|-------------------|
-| Terminal commands | High | Logged only |
-| File writes | Medium | Logged only |
-| Network requests | Medium | Logged only |
-| Environment access | Low | Logged only |
+The local runtime must preserve these controls:
 
-### Production Recommendations
+- credentials remain in ignored `.env` or machine-local config files;
+- `home/.aether-mcp-state` is owner-only and never committed;
+- project, Run, Task, Dispatch and operation identities are not interchangeable;
+- unknown mutable outcomes are inspected or reconciled before retry;
+- cancellation is followed by status and survivor verification;
+- closure may remove only resources proven to belong to the admitted attempt;
+- trace records are secret-safe references, not raw prompts, tokens or transcripts;
+- no retired Olympus/ACP/Harmonia command may serve as fallback.
 
-Before deploying Aether Agents in production:
+`scripts/aether_mcp/doctor.py` inventories owned and provider resources. A failed stale-resource check must be investigated; it must not be hidden by deleting state or weakening the check.
 
-1. **Replace auto-approve with allowlist:** Define which permissions each Daimon role can receive without approval (e.g., Hefesto can write to project directories but not ~/.bashrc)
-2. **Add HITL for dangerous permissions:** Terminal commands, file writes outside project root, and network requests to unknown domains should require explicit approval
-3. **Rate-limit permissions:** Prevent Daimons from flooding the permission system
-4. **Audit log:** Store all permission decisions (approved/denied) in a persistent log file
+## Reporting
 
-### Architecture Note
-
-Permission requests flow through the ACP protocol. When a Daimon (running as a hermes-agent process) encounters an action requiring permission, it sends a request through the ACP connection. Olympus (the MCP server) receives this request and currently responds with "approved" automatically.
-
-The permission system is designed to be extended with:
-- Per-Daimon permission policies
-- Allowlist/denylist configurations
-- Human approval workflows (similar to workflow HITL)
-
-## Daimon Process Isolation
-
-Daimons run as separate hermes-agent processes. Each Daimon:
-- Has its own HERMES_HOME pointing to its profile directory
-- Has its own .env file with API keys
-- Has its own set of toolsets (defined in config.yaml)
-- Cannot access other Daimons' environments
-
-However, all Daimons share the same:
-- System Python and pip packages
-- Network access
-- Filesystem access (within HERMES_HOME boundaries)
+Report a vulnerability privately to the repository owner with reproduction steps, affected version, impact and any known mitigation. Do not include real credentials, private prompts or user data in an issue, test fixture or commit.

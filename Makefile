@@ -1,5 +1,5 @@
 # ==============================================================================
-# Aether Agents v0.22.0 — Makefile
+# Aether Agents v0.23.0.dev0 — Makefile
 # Common development targets
 # ==============================================================================
 
@@ -42,23 +42,24 @@ CLEAN_PYTHON_ENV := env -u PYTHONPATH -u HERMES_PYTHON_SRC_ROOT
 # ── Health Check ───────────────────────────────────────────────────────────────
 
 .PHONY: doctor
-doctor: ## Verify Hermes and Aether product assets
+doctor: ## Verify Hermes, current roster, and the 15-tool source surface
 	@echo "═══ Aether Agents — Doctor ═══"
 	@echo ""
 	@echo "  Python interpreter: $(PYTHON)"
 	@echo -n "  Python 3.11+:       "; $(CLEAN_PYTHON_ENV) $(PYTHON) -c 'import sys; v=sys.version_info; assert v >= (3, 11); print(f"{v.major}.{v.minor}.{v.micro}")' 2>/dev/null || { echo "✗ FAILED"; exit 1; }
 	@echo -n "  Hermes binary:      "; $(CLEAN_PYTHON_ENV) $(HERMES) --version 2>/dev/null || { echo "✗ FAILED"; exit 1; }
-	@echo -n "  Product assets:     "; $(CLEAN_PYTHON_ENV) $(PYTHON) -c "from pathlib import Path; root=Path('.'); profiles=list((root/'home/profiles').glob('*/config.yaml.template')); assert (root/'VERSION').is_file(); assert (root/'home/config.yaml.template').is_file(); assert len(profiles) == 6; assert not list((root/'home/profiles').glob('*/plugins/aether')); print('✓ root config + 6 profiles; no native runtime plugin')" 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  Product assets:     "; $(CLEAN_PYTHON_ENV) $(PYTHON) -c "from pathlib import Path; root=Path('.'); profiles={p.parent.name for p in (root/'home/profiles').glob('*/config.yaml.template')}; assert (root/'VERSION').read_text().strip() == '0.23.0.dev0'; assert (root/'home/config.yaml.template').is_file(); assert profiles == {'hefesto', 'daedalus', 'ictinus'}; assert not any((root/'home/profiles'/name).exists() for name in ('ariadna', 'athena', 'etalides')); print('✓ root config + 3 allowed profiles')" 2>/dev/null || { echo "✗ FAILED"; exit 1; }
+	@echo -n "  MCP source surface: "; PYTHONPATH=src $(CLEAN_PYTHON_ENV) $(PYTHON) -c "from aether_mcp import __version__; from aether_mcp.server import create_server; tools=tuple(t.name for t in create_server()._tool_manager.list_tools()); assert __version__ == '0.23.0.dev0'; assert len(tools) == 15; print('✓ 0.23.0.dev0 / 15 tools')" 2>/dev/null || { echo "✗ FAILED"; exit 1; }
 	@echo -n "  NVIDIA GPU:         "; gpu="$$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)"; if [ -n "$$gpu" ]; then echo "$$gpu"; else echo "NOT AVAILABLE"; fi
 	@echo ""
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 
 .PHONY: clean
-clean: ## Remove venv and __pycache__ directories
-	rm -rf home/.venv-hermes/
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	@echo "✓ Cleaned home/.venv-hermes/ and __pycache__"
+clean: ## Remove repository build and Python cache artifacts; preserve live runtime
+	find src scripts tests -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+	rm -rf build/ dist/ .pytest_cache/ .ruff_cache/
+	@echo "✓ Cleaned source/test caches; live runtime preserved"
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -71,8 +72,16 @@ test: ## Run test suite (if tests/ exists)
 	fi
 
 .PHONY: mcp-smoke
-mcp-smoke: ## Run the default-off Aether MCP stdio process through clean EOF
+mcp-smoke: ## Run the current Aether MCP stdio process through clean EOF
 	PYTHONPATH=src $(PYTHON) -m aether_mcp </dev/null
+
+.PHONY: runtime-status
+runtime-status: ## Read the named local Aether MCP installation status
+	$(PYTHON) scripts/aether_mcp/status.py --hermes-home "$(CURDIR)/home"
+
+.PHONY: runtime-doctor
+runtime-doctor: ## Check the installed runtime and report stale owned resources
+	$(PYTHON) scripts/aether_mcp/doctor.py --hermes-home "$(CURDIR)/home"
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 

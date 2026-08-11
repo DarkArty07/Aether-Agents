@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.22.0 — Update Script
+# Aether Agents v0.23.0.dev0 — Update Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Updates the repo and Hermes Agent, then checks config generation.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.22.0"
+SCRIPT_VERSION="0.23.0.dev0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────

@@ -304,7 +304,7 @@ memory:
   memory_enabled: true
   user_profile_enabled: true
   memory_char_limit: 4000
-  user_char_limit: 3000
+  user_char_limit: 4000
 delegation:
   model: deepseek-v4-flash
   provider: llmgateway

@@ -1,201 +1,30 @@
-# Configuration Reference
+# Configuration
 
-Complete reference for configuring Aether Agents profiles, model providers, and agent behavior.
+## Tracked and live files
 
----
+| Tracked | Machine-local |
+|---|---|
+| `home/config.yaml.template` | `home/config.yaml` |
+| `home/profiles/*/config.yaml.template` | `home/profiles/*/config.yaml` |
+| `.env.example` files | `.env` files |
+| `home/SOUL.md` | sessions, databases, caches and installed binaries |
 
-## Configuration Layers
+`scripts/setup.sh` replaces `__AETHER_ROOT__`, `__HERMES_PYTHON__` and legacy-compatible Python placeholders only in generated live config. Existing configured files are preserved.
 
-Aether Agents uses three layers of configuration, resolved in order of specificity:
+## Models and profiles
 
-| Layer | File | Scope | Priority |
-|-------|------|-------|----------|
-| **Root** | `home/config.yaml` | All Daimons (fallback) | Lowest |
-| **Profile** | `home/profiles/<name>/config.yaml` | Single Daimon | Overrides root |
-| **User** | `~/.hermes/config.yaml` | User's global CLI config (not a project file) | Highest |
+The root template routes Hermes through `openai-codex/gpt-5.6-sol`. The three allowed profile templates use `openai-codex/gpt-5.6-luna` with role-specific fallback providers. A model setting does not authorize a provider call or spend.
 
-When a Daimon starts, it merges: profile config → root config → user config. The most specific value wins.
+Configured auxiliary tasks use `gpt-5.6-luna` where the template names that route. Automatic skill review and curation retain the standard Hermes values: no Aether override of `skills.creation_nudge_interval`, free writes unless Hermes configuration says otherwise, the standard content guard setting, and the curator enabled on its normal schedule.
 
----
+Supported profile templates are:
 
-## Profile Structure
+- `home/profiles/hefesto/config.yaml.template`;
+- `home/profiles/daedalus/config.yaml.template`;
+- `home/profiles/ictinus/config.yaml.template`.
 
-Each Daimon profile directory contains:
+## Aether MCP registration
 
-```
-home/profiles/<daimon>/
-├── config.yaml          # Profile-specific settings (gitignored for secrets)
-├── config.yaml.template # Template with placeholders (tracked by git)
-├── .env.example         # API key template (tracked)
-├── .env                 # Actual keys (gitignored)
-├── SOUL.md              # Agent identity, rules, and behavior
-└── skills/              # Skill definitions (gitignored, generated)
-```
+The installer manages the live `aether_mcp` entry and binds these values in its generated launcher: state root, coordinator principal/session, provider CLI, coordinator handle, repository selector, base ref, provider catalog digest and timeout. Do not commit or duplicate the generated absolute paths.
 
-### config.yaml vs config.yaml.template
-
-- `config.yaml.template` — Tracked in git. Contains placeholders like `__AETHER_ROOT__` and `__HERMES_PYTHON__`. Safe to share.
-- `config.yaml` — **Gitignored**. Generated from the template by `setup.sh`. Contains actual paths and may include API keys. Never commit this file.
-
-After cloning, run:
-
-```bash
-bash scripts/setup.sh
-```
-
-This generates `config.yaml` from each profile's template, substituting machine-specific paths.
-
----
-
-## Key Configuration Sections
-
-### Model and Provider
-
-```yaml
-model:
-  default: "anthropic/claude-sonnet-4"   # Model identifier
-  provider: "openrouter"                   # Provider: openrouter, anthropic, zai, etc.
-  base_url: "https://openrouter.ai/api/v1"  # Optional override
-```
-
-### Agent Identity
-
-```yaml
-agent:
-  name: hermes
-  role: orchestrator
-  description: "Technical Lead and architect. Investigates, designs, orchestrates, and decides."
-  capabilities:
-    - delegate_task
-    - all
-  launch_command: "hermes acp"
-  keep_alive: true
-  max_turns: 150
-  gateway_timeout: 1800
-```
-
-### Terminal Environment
-
-```yaml
-terminal:
-  shell: /bin/bash
-  workdir: /tmp
-  background: true
-```
-
----
-
-## ⚠️ Personality Overlay
-
-> **Important for Aether Agents:** The hermes-agent CLI ships with a personality system that appends a style overlay to the system prompt. The default personality is `"kawaii"`, which tells the agent to use cute expressions, sparkles, and enthusiastic tone.
->
-> **This conflicts with Daimon identities.** Each Aether Agent's personality is already defined in their `SOUL.md` — a carefully crafted document specifying their role, rules, delegation gates, and communication style. The personality overlay rewrites identity statements (e.g., "You are a kawaii assistant" overrides "You are Hermes, messenger of the gods"), which breaks:
->
-> - **Delegation gates** — Requires direct, structured communication
-> - **Role clarity** — Daimons need clear, professional identity
-> - **Decision flow** — The orchestrated delegation process depends on factual, unambiguous communication
->
-> **Always set `display.personality: none` in Aether Agent profiles:**
-
-```yaml
-display:
-  personality: none    # Disable overlay — use SOUL.md identity instead
-```
-
-This applies to all Daimons (Hermes, Ariadna, Hefesto, Etalides, Daedalus, Athena). The `SOUL.md` file in each profile already defines the agent's personality, rules, and communication style.
-
-### Available Personalities
-
-For reference, these are the built-in personalities in hermes-agent:
-
-| Name | Style | Recommended for Aether Agents? |
-|------|-------|-------------------------------|
-| `none` / `default` / `neutral` | No overlay | ✅ **Yes — use this** |
-| `helpful` | Friendly, generic | ❌ Overwrites identity |
-| `concise` | Brief, to the point | ❌ Overwrites identity |
-| `technical` | Detailed, accurate | ❌ Overwrites identity |
-| `creative` | Innovative, out-of-box | ❌ Overwrites identity |
-| `teacher` | Patient, examples | ❌ Overwrites identity |
-| `kawaii` | Cute, sparkles | ❌ **Breaks delegation** |
-| `catgirl` | Anime catgirl | ❌ |
-| `pirate` | Nautical, arrr | ❌ |
-| `shakespeare` | Flowery prose | ❌ |
-| `surfer` | Chill, dude | ❌ |
-| `noir` | Detective, moody | ❌ |
-| `uwu` | Uwu speech | ❌ |
-| `philosopher` | Deep, contemplative | ❌ |
-| `hype` | Extremely energetic | ❌ |
-
-### How the Personality System Works
-
-1. `display.personality` in `config.yaml` selects a personality name (default: `"kawaii"`)
-2. The name resolves against `agent.personalities` — a dict of one-line system prompt strings
-3. The resolved string is injected as `agent.system_prompt` — appended to the end of the full system prompt
-4. Since it appears last, it has high interpretive weight and can override earlier identity instructions
-
-Setting `personality: none` returns an empty string, so only the `SOUL.md` identity is used.
-
----
-
-## MCP Servers
-
-The current v0.22.0 candidate implements the accepted Aether MCP integration foundation through bounded M5.4 evidence but deliberately registers zero tools. ADR-0001 defines the coordinator control/trace surface and PDR-0014 moves real registration, status/doctor, rollback, and production entry to the separately gated v0.23.0 roadmap. Configuration must not be added before that exact implementation and activation contract passes. Do not add a compatibility command, direct CLI-first delegation path, or unverified legacy fallback.
-
-Additional MCP servers can be added per-profile (e.g., Context7 for documentation lookup):
-
-```yaml
-mcp_servers:
-  context7:
-    command: npx
-    args:
-      - -y
-      - "@upstash/context7-mcp"
-    enabled: true
-```
-
----
-
-## Skills
-
-Skills are loaded from:
-
-```yaml
-skills:
-  external_dirs:
-    - /path/to/Aether-Agents/home/skills
-```
-
-Skills are gitignored at the profile level (they're generated during setup). The shared `home/skills/` directory is the canonical source.
-
----
-
-## SOUL.md — Agent Identity
-
-Each Daimon's `SOUL.md` defines:
-
-- **Identity** — Who the agent is (name, eponym, role)
-- **Anti-bias rule** — Don't reveal model/provider
-- **Core responsibilities** — What the agent does
-- **Delegation gates** — Mandatory checks before execution
-- **Limits** — What the agent must not do
-- **Communication style** — How the agent speaks
-- **Decision flow** — Processing steps
-
-**Do not use personality overlays with custom SOUL.md files.** The personality system is designed for the base hermes-agent CLI where no SOUL.md exists. In Aether Agents, SOUL.md already provides comprehensive identity and behavior instructions.
-
----
-
-## Quick Reference
-
-| Setting | File | Key | Default | Aether Agents Value |
-|---------|------|-----|---------|-------------------|
-| Personality overlay | Profile config | `display.personality` | `kawaii` | `none` |
-| Agent identity | `SOUL.md` | — | — | Per-Daimon |
-| Model | Profile config | `model.default` | — | Per-profile |
-| Provider | Profile config | `model.provider` | — | Per-profile |
-| Max turns | Profile config | `agent.max_turns` | 60 | 150 (Hermes) |
-| MCP integrations | Profile config | `mcp_servers` | `{}` | Optional |
-
----
-
-**Next:** [USER_PROFILE.md](./USER_PROFILE.md) · [INSTALLATION.md](./INSTALLATION.md) · [QUICKSTART.md](./QUICKSTART.md)
+Use `make runtime-status` to inspect registration without printing credentials. Use the installer/activate/rollback scripts for changes rather than editing the generated launcher.

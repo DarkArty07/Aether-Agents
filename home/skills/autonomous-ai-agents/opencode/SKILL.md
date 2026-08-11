@@ -4,6 +4,7 @@ description: "Delegate coding to OpenCode CLI (features, PR review)."
 version: 1.2.0
 author: Hermes Agent
 license: MIT
+platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [Coding-Agent, OpenCode, Autonomous, Refactoring, Code-Review]
@@ -207,10 +208,6 @@ Success criteria:
 - Output includes `OPENCODE_SMOKE_OK`
 - Command exits without provider/model errors
 - For code tasks: expected files changed and tests pass
-
-## Reference Files
-
-- `references/testing-anthopic-proxies.md` — How to verify custom Anthropic API proxy endpoints (custom baseURL, model IDs, thinking support).
 
 ## Rules
 

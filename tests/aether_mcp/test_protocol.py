@@ -235,10 +235,10 @@ def test_protocol_constants_match_frozen_contract() -> None:
     assert MAX_CURSOR_BYTES == 1_024
 
 
-def test_all_15_exact_tool_schemas_are_strict_and_none_callable_yet() -> None:
+def test_all_15_exact_tool_schemas_are_strict_and_callable() -> None:
     assert set(TOOL_SCHEMAS) == EXPECTED_TOOL_NAMES
     assert len(TOOL_SCHEMAS) == 15
-    assert CALLABLE_TOOL_NAMES == frozenset()
+    assert CALLABLE_TOOL_NAMES == frozenset(EXPECTED_TOOL_NAMES)
     for name, schema in TOOL_SCHEMAS.items():
         assert schema["type"] == "object", name
         assert schema["additionalProperties"] is False, name
@@ -492,5 +492,5 @@ def test_request_validation_returns_detached_canonical_value() -> None:
 
 
 @pytest.mark.filterwarnings("ignore:Field 'lifespan' has an incomplete definition:UserWarning")
-def test_stdio_server_remains_default_off_and_zero_tool() -> None:
-    assert tuple(server.create_server()._tool_manager.list_tools()) == ()
+def test_stdio_server_registers_the_operational_15_tool_surface() -> None:
+    assert {tool.name for tool in server.create_server()._tool_manager.list_tools()} == EXPECTED_TOOL_NAMES

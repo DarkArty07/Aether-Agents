@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Aether Agents v0.22.0 — Setup Script
+# Aether Agents v0.23.0.dev0 — Setup Script
 # https://github.com/DarkArty07/Aether-Agents
 #
 # Automated installation: Hermes venv, config generation, and wrappers.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="0.22.0"
+SCRIPT_VERSION="0.23.0.dev0"
 SCRIPT_DATE="$(date +%Y-%m-%d)"
 
 # ── Colors ─────────────────────────────────────────────────────────────────────
@@ -442,7 +442,7 @@ print_summary() {
     echo -e "${YELLOW}Next steps:${NC}"
     echo ""
     echo "  1. ${BOLD}Edit API keys${NC} in profile .env files:"
-    echo "     ${DIM}${PROJECT_ROOT}/home/profiles/*/ .env${NC}"
+    echo "     ${DIM}${PROJECT_ROOT}/home/.env and ${PROJECT_ROOT}/home/profiles/*/.env${NC}"
     echo ""
     echo "     → Recommended first key: OPENAI_API_KEY in home/.env and per-profile .env files"
     echo "     → ictinus has no .env (Level 1 Consultant — config-only)"
@@ -453,7 +453,8 @@ print_summary() {
     echo "  3. ${BOLD}Start Hermes with Aether profiles and skills:${NC}"
     echo "     aether"
     echo ""
-    echo "     ${DIM}The v0.22.0 candidate does not enable specialist execution or curation.${NC}"
+    echo "     ${DIM}Allowed profile contracts: Hefesto, Daedalus, and Ictinus.${NC}"
+    echo "     ${DIM}Aether MCP installation/activation is explicit; setup.sh does not change it.${NC}"
     echo ""
     echo -e "${BLUE}Installation details:${NC}"
     echo "     Project root:   ${PROJECT_ROOT}"

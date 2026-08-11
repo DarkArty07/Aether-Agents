@@ -51,12 +51,15 @@ def refresh_token(token_data: dict) -> dict:
 
     req = urllib.request.Request(token_data["token_uri"], data=params)
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         print(f"ERROR: Token refresh failed (HTTP {e.code}): {body}", file=sys.stderr)
         print("Re-run setup.py to re-authenticate.", file=sys.stderr)
+        sys.exit(1)
+    except (urllib.error.URLError, TimeoutError) as e:
+        print(f"ERROR: Token refresh failed (network): {e}", file=sys.stderr)
         sys.exit(1)
 
     token_data["token"] = result["access_token"]
@@ -66,7 +69,7 @@ def refresh_token(token_data: dict) -> dict:
     ).isoformat()
 
     get_token_path().write_text(
-        json.dumps(_normalize_authorized_user_payload(token_data), indent=2)
+        json.dumps(_normalize_authorized_user_payload(token_data), indent=2), encoding="utf-8"
     )
     return token_data
 
@@ -78,7 +81,7 @@ def get_valid_token() -> str:
         print("ERROR: No Google token found. Run setup.py --auth-url first.", file=sys.stderr)
         sys.exit(1)
 
-    token_data = json.loads(token_path.read_text())
+    token_data = json.loads(token_path.read_text(encoding="utf-8"))
 
     expiry = token_data.get("expiry", "")
     if expiry:

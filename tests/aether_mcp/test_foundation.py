@@ -9,7 +9,7 @@ from pathlib import Path
 from aether_mcp.admission import ProjectAdmissionRegistry, TrustedLaunchContext
 from aether_mcp.catalog import OrcaCatalog
 from aether_mcp.foundation import M2Foundation
-from aether_mcp.protocol import CALLABLE_TOOL_NAMES
+from aether_mcp.protocol import CALLABLE_TOOL_NAMES, TOOL_SCHEMAS
 from aether_mcp.trace_store import TraceStore
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -99,6 +99,8 @@ def test_integrated_m2_services_admit_validate_trace_and_plan_read_only(tmp_path
     }
     validated = foundation.swarm_validate({"manifest": manifest})
     assert validated.project_id == project.project_id
+    assert validated.manifest_ref == f"manifest:{validated.digest}"
+    assert validated.provider_binding_digest == foundation.catalog.digest
 
     run_id = str(uuid.uuid4())
     decision_request = {
@@ -141,4 +143,4 @@ def test_integrated_m2_services_admit_validate_trace_and_plan_read_only(tmp_path
         }
     )
     assert plan.argv[-1] == "--json"
-    assert CALLABLE_TOOL_NAMES == frozenset()
+    assert CALLABLE_TOOL_NAMES == frozenset(TOOL_SCHEMAS)

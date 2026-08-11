@@ -58,7 +58,7 @@ def test_launch_context_requires_server_environment_and_canonical_home(tmp_path:
 def test_admission_generates_immutable_id_without_writing_project(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "repo")
     before = _git("status", "--porcelain=v1", cwd=repo)
-    registry = ProjectAdmissionRegistry(tmp_path / "state")
+    registry = ProjectAdmissionRegistry(tmp_path / "state", full_episode_enabled=False)
     context = _context(tmp_path / "home")
 
     admitted = registry.admit(
@@ -157,3 +157,19 @@ def test_registry_rejects_capture_escalation_and_future_schema(tmp_path: Path) -
     with pytest.raises(AdmissionError) as captured:
         ProjectAdmissionRegistry(state)
     assert captured.value.code == "PROJECT_IDENTITY_MISMATCH"
+
+
+def test_full_episode_is_rejected_before_project_admission_without_a_key_provider(tmp_path: Path) -> None:
+    registry = ProjectAdmissionRegistry(tmp_path / "state", full_episode_enabled=False)
+    context = _context(tmp_path / "home")
+
+    with pytest.raises(AdmissionError) as captured:
+        registry.admit(
+            context=context,
+            project_root=tmp_path / "not-an-admitted-project",
+            safe_alias=None,
+            capture_policy="FULL_EPISODE",
+            consent_authority_ref="decision:test",
+        )
+
+    assert captured.value.code == "CAPTURE_DISABLED"

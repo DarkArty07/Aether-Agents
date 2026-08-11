@@ -1,12 +1,12 @@
 # PDR-0014: Versioned Orca production adoption
 
-- **Status:** APPROVED
-- **Date:** 2026-08-09
+- **Status:** APPROVED — AMENDED 2026-08-11
+- **Date:** 2026-08-09; amended 2026-08-11
 - **Owner:** Christopher (DarkArty07)
 - **Supersedes:** The placement of former v0.22.0 M6-M12 inside one release
 - **Preserves:** PDR-0012 Hermes-Orca authority, PDR-0013 roster policy, ADR-0001 Aether MCP boundary, and all accepted M0-M5.4 evidence
 - **Superseded by:** None
-- **Current authorization:** Documentation and GitHub planning only; no source, profile, configuration, installation, registration, restart, activation, credential, model, or spending effect
+- **Current authorization**: Documentation planning and authority alignment only; no source, test, schema, profile, configuration, runtime, model, or spending effect
 
 ## Context
 
@@ -18,7 +18,14 @@ The former roadmap kept roster qualification, learning datasets, optional-role e
 2. Can Aether use Orca repeatedly for real work with stable generic agents and repair integration failures?
 3. Can Aether migrate its process-specific workflows to Orca without a big-bang cutover?
 
-The product owner has separated those questions into v0.22.0, v0.23.0, and v0.24.0. The owner also requires real Orca use to begin after the production-entry gate rather than waiting for every future workflow and learning capability to be implemented.
+The product owner initially separated those questions into v0.22.0, v0.23.0,
+and a proposed v0.24.0. On 2026-08-11 the owner clarified that v0.23.0 is the
+active learning, debugging, and optimization release for Aether MCP itself and
+that no v0.24.0 work begins without a later explicit decision. The existence of
+a proposed successor roadmap, v0.23.0 acceptance, or v0.23.0 release is not that
+decision. The owner also requires real Orca use to begin after the
+production-entry gate rather than waiting for every future workflow and learning
+capability to be implemented.
 
 ## Decision
 
@@ -66,11 +73,38 @@ After that cutover gate passes:
 
 Hermes remains allowed to answer or implement directly when one accountable owner is the correct product choice. Direct work is not a hidden Orca fallback. When Orca itself is unavailable, Hermes may act in break-glass mode only to repair the Aether-Orca path; it must not count direct completion of the blocked multi-agent Task as Orca success.
 
-v0.23.0 also qualifies the retained generic roster—Hefesto, Daedalus, and Ictinus—and refines personalities and contracts from real observed behavior. A prompt or SOUL change requires a stated behavioral hypothesis, baseline-relative evidence, and regression coverage where applicable; prose preference alone is insufficient.
+v0.23.0 also qualifies the retained generic roster—Hefesto, Daedalus, and
+Ictinus—and refines personalities and contracts from real observed behavior. A
+prompt or SOUL change requires a stated behavioral hypothesis, baseline-relative
+evidence, and regression coverage where applicable; prose preference alone is
+insufficient.
 
-### 3. v0.24.0 migrates process-specific workflows gradually
+v0.23.0 additionally owns the Aether MCP learning and optimization cycle. Real
+and controlled use must improve tool descriptions, progressive disclosure,
+precondition and identity guidance, error/recovery semantics, context cost, and
+the ordinary Hermes tool surface when evidence justifies it. The current 15-tool
+contract remains the compatibility baseline. An intent-level surface with the
+low-level operations retained for diagnostics is a proposal for comparison, not
+an approved replacement. No tool is removed, hidden, renamed, grouped, or
+deprecated without frozen comparative evidence and an explicit product-owner
+decision inside v0.23.0.
 
-v0.24.0 is **Gradual Workflow Migration**.
+On 2026-08-11 UTC the product owner approved the skill-independent cold-start
+guidance architecture as design only. The accepted placement is an isolated
+Aether SOUL prompt candidate for mandatory lifecycle invariants, intent-oriented
+tool descriptions, JSON Schema identity provenance, typed state-dependent
+result/error guidance, and repeated cold-session evaluation. Canonical design,
+implementation plan, and handoff are
+`../releases/v0.23.0/MCP_COLD_START_GUIDANCE_DESIGN.md`,
+`../releases/v0.23.0/MCP_COLD_START_IMPLEMENTATION_PLAN.md`, and
+`../releases/v0.23.0/MCP_COLD_START_HANDOFF.md`. This decision does not authorize
+source/schema/prompt implementation, active SOUL or runtime mutation, model use,
+spending, tool removal, integration, release, or v0.24.0 work.
+
+### 3. v0.24.0 remains a preserved, separately gated proposal
+
+The preserved v0.24.0 direction is **Gradual Workflow Migration**, but it is not
+an active next version and has no automatic entry from v0.23.0.
 
 Stable archetypes remain generic. Process behavior is composed from versioned Task contracts, skills, tool policy, acceptance criteria, and evidence. Aether does not create a new personality for every framework, file type, or workflow.
 
@@ -87,7 +121,16 @@ inventory legacy behavior
 -> retire only its legacy path
 ```
 
-The process order is selected from v0.23.0 production evidence rather than frozen speculatively. Olympus or another legacy runtime may be retired only after the required-consumer inventory is empty, every replacement path is explicit, no hidden fallback remains, and full rollback is verified.
+If the product owner later opens v0.24.0, the process order is selected from
+v0.23.0 production evidence rather than frozen speculatively. Olympus or another
+legacy runtime may be retired only after the required-consumer inventory is
+empty, every replacement path is explicit, no hidden fallback remains, and full
+rollback is verified.
+
+v0.23.0 acceptance, source publication, accumulated evidence, issue closure, or
+the presence of `docs/releases/v0.24.0/ROADMAP.md` does not authorize opening a
+v0.24.0 branch, implementing a workflow migration, activating a process, or
+retiring a legacy path. Those actions require a later explicit owner decision.
 
 ### 4. Former M6-M12 disposition
 
@@ -96,10 +139,10 @@ The process order is selected from v0.23.0 production evidence rather than froze
 | M6 stable roster | v0.23.0 generic-agent qualification |
 | M7 learning episodes/datasets | minimum privacy-safe diagnostic trace in v0.23.0; full dataset/export program deferred to a separately scoped later version |
 | M8 Verifier/Ariadna decision | v0.23.0 evidence-backed optional-role decision |
-| M9 productization | v0.23.0 production entry, status, doctor, cleanup, and rollback; further workflow packaging evolves with v0.24.0 |
-| M10 evaluation | generic-operation evaluation in v0.23.0 and per-process evaluation in v0.24.0 |
-| M11 publication | a release gate repeated independently for v0.22.0, v0.23.0, and v0.24.0 |
-| M12 activation | controlled production entry at the beginning of v0.23.0; broader process cutover during v0.24.0 |
+| M9 productization | v0.23.0 production entry, status, doctor, cleanup, and rollback; further workflow packaging belongs to v0.24.0 only if that proposal is separately opened |
+| M10 evaluation | generic-operation evaluation in v0.23.0; per-process evaluation remains in the separately gated v0.24.0 proposal |
+| M11 publication | independent release gates for v0.22.0 and v0.23.0; a v0.24.0 release gate exists only if that version is explicitly opened |
+| M12 activation | controlled production entry in v0.23.0; broader process cutover remains in the separately gated v0.24.0 proposal |
 
 Full SFT/preference/tool-policy dataset construction, training, fine-tuning, external upload, or model promotion is not silently absorbed by v0.23.0 or v0.24.0.
 
@@ -130,14 +173,24 @@ The sequence is:
 3. implement and verify the operational control surface offline;
 4. separately authorize and execute the named local cutover;
 5. use Orca for real multi-agent sessions and repair incidents;
-6. release v0.23.0 only after the generic operating contract is accepted;
-7. begin v0.24.0 process migrations from that released baseline.
+6. learn, compare, and explicitly decide the v0.23.0 MCP guidance and tool
+   surface without treating fewer tools as automatic improvement;
+7. release v0.23.0 only after the generic operating and MCP learning contract is
+   accepted;
+8. present any successor evidence to the product owner and wait for a separate
+   explicit decision before beginning v0.24.0.
 
 A GitHub tag or Release does not activate the installed runtime. A local activation does not by itself make a source candidate released.
 
 ## Rationale
 
-This split gives each minor version one falsifiable product claim, reduces the time before real feedback, preserves an exact rollback baseline, and prevents v0.22.0 from remaining open while Aether attempts every future capability. Production dogfooding exposes liveness, profile, tool, recovery, cleanup, and integration defects that controlled fixtures cannot reveal.
+This split gives each active minor version a falsifiable product claim, reduces
+the time before real feedback, preserves an exact rollback baseline, and
+prevents v0.22.0 from remaining open while Aether attempts every future
+capability. Production dogfooding exposes liveness, profile, tool selection,
+context, recovery, cleanup, and integration defects that controlled fixtures
+cannot reveal. Keeping MCP optimization in v0.23.0 avoids declaring the control
+surface finished before Hermes can use it reliably.
 
 The fail-closed repair policy ensures that failures improve the intended architecture instead of silently restoring Olympus under another name.
 
@@ -149,7 +202,7 @@ Rejected. It conflates integration, operation, learning-data infrastructure, wor
 
 ### Activate the v0.22.0 zero-tool package and call it production
 
-Rejected. The current candidate is unregistered and intentionally exposes zero callable tools. Production entry requires a real, reversible v0.23.0 control surface.
+Rejected. The v0.22.0 source candidate is unregistered and intentionally exposes zero callable tools. Production entry requires a real, reversible v0.23.0 control surface.
 
 ### Keep Olympus as an automatic fallback while learning Orca
 
@@ -169,8 +222,10 @@ Rejected. Stable generic archetypes plus versioned process contracts preserve au
 
 - Real Orca use starts as soon as the production-entry gate passes.
 - v0.22.0 remains a bounded, honest, reproducible integration foundation.
-- v0.23.0 turns defects and unmet needs into explicit product work.
-- v0.24.0 can prioritize migrations using observed evidence.
+- v0.23.0 turns defects, tool-use friction, context cost, and unmet needs into
+  explicit product work.
+- A future v0.24.0 decision can use observed evidence without being implied by
+  that evidence.
 - Legacy fallback cannot disguise a broken Orca path.
 - Full dataset/training work no longer blocks operational learning.
 
@@ -180,21 +235,30 @@ Rejected. Stable generic archetypes plus versioned process contracts preserve au
 - Some real Tasks will stop visibly while Orca incidents are repaired.
 - Olympus may remain physically present for a bounded interval even though it cannot be a hidden fallback.
 - v0.23.0 scope must remain disciplined so incident-driven learning does not become unlimited unrelated cleanup.
+- v0.23.0 may remain open for additional controlled MCP optimization cycles, so
+  evidence and explicit stop conditions must prevent endless cosmetic tuning.
 
 ## Validation or review gate
 
 This decision is correctly reflected when:
 
 1. v0.22.0 current roadmap and status end at M5.4 and preserve the old M0-M12 plan as historical;
-2. v0.23.0 has a production-entry, generic-roster, incident-repair, personality-refinement, hardening, evaluation, and release plan;
-3. v0.24.0 has a per-process migration and rollback plan whose order remains evidence-driven;
+2. v0.23.0 has a production-entry, MCP learning/tool-surface optimization,
+   generic-roster, incident-repair, personality-refinement, hardening,
+   evaluation, and release plan;
+3. v0.24.0 is marked as a preserved, inactive per-process migration proposal
+   requiring a new explicit owner decision;
 4. GitHub has separate milestones and tracking issues for all three versions;
 5. Draft PR #163 states the new v0.22.0 boundary and does not claim activation;
 6. no source, tests, scripts, profiles, configuration, runtime registration, credentials, or services changed under this documentation-only task.
 
 ## Implementation authorization
 
-The product owner authorized this decision, the versioned roadmaps, GitHub milestones/issues, and updates to the existing Draft PR on 2026-08-09.
+The product owner authorized the original decision, versioned roadmaps, GitHub
+milestones/issues, and updates to the existing Draft PR on 2026-08-09. On
+2026-08-11 the owner authorized documentation of the expanded v0.23.0 MCP
+learning/optimization boundary and the explicit block on automatic v0.24.0
+progression.
 
 This decision does **not** authorize this documentation task to:
 
@@ -202,7 +266,7 @@ This decision does **not** authorize this documentation task to:
 - register or activate Aether MCP or Orca;
 - restart services or mutate the installed Hermes/Aether runtime;
 - use provider credentials, spend, or execute a worker;
-- merge, tag, publish a Release, deploy, or retire the live Olympus installation.
+- merge, tag, publish a Release, deploy, or perform another runtime retirement.
 
 Those effects remain gated by the relevant v0.22.0 release or v0.23.0 implementation/activation Task.
 

@@ -1,80 +1,47 @@
-schema_version: 1
+schema_version: 2
 release: v0.23.0
-title: Orca Production Dogfood
-status: approved_plan_not_started
-last_updated: '2026-08-09'
+source_version: 0.23.0.dev0
+title: Aether MCP local runtime
+status: in_progress_m1_3_model_backed_entry
+last_updated: '2026-08-11'
 product_owner: Christopher (DarkArty07)
-governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.md
-canonical_roadmap: docs/releases/v0.23.0/ROADMAP.md
-production_policy: docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md
-release_issue: 167
-github_milestone: v0.23.0 — Orca Production Dogfood
-predecessor:
-  release: v0.22.0
-  required_state: integrated_and_published_or_exact_owner_approved_exception
-implementation:
-  started: false
-  branch: null
-  commit: null
-activation:
-  operational_direction_approved: true
-  authorized_by_current_documentation_task: false
-  executed: false
-  accepted_installation: null
-current_runtime_truth:
-  aether_mcp_default_off: true
-  registered_tools: 0
-  orca_normal_multi_agent_path: false
-  live_olympus_retired: false
-milestones:
-  M0:
-    title: released predecessor and first Task contract
-    status: blocked_on_v0.22.0_release
-  M1:
-    title: operational and reversible Aether MCP plus Orca entry
-    status: not_started
-  M2:
-    title: stable generic roster qualification
-    status: not_started
-  M3:
-    title: real-session dogfooding and integration repair
-    status: not_started
-  M4:
-    title: evidence-backed generic personality refinement
-    status: not_started
-  M5:
-    title: optional-role decision
-    status: not_started
-  M6:
-    title: hardening and controlled evaluation
-    status: not_started
-  M7:
-    title: exact candidate acceptance and release
-    status: not_started
-post_cutover_policy:
-  multi_agent_path: Aether MCP plus Orca
-  failure_disposition: ORCA_INTEGRATION_INCIDENT
-  hidden_legacy_fallback: forbidden
-  original_task_retry_through_orca: required
-  hermes_break_glass: repair_path_only
-  direct_hermes_work: allowed_when_deliberately_single_owner
-retained_generic_roster:
+source:
+  branch: main
+  persistent_worktrees: 1
+  published: false
+runtime:
+  hermes_home: /home/darkarty/Desktop/agentes/aether/home
+  installed: true
+  registration_enabled: true
+  package_version: 0.23.0.dev0
+  protocol: aether.mcp/v1alpha2
+  tool_count: 15
+  provider_ready: true
+  production_entry_accepted: false
+prompt:
+  active: 0.4.0
+  predecessor: 3.0.0-hot.3
+  rollout: active_local_fresh_sessions_only
+  stable_promotion: false
+roster:
   allowed:
     - Hefesto
     - Daedalus
     - Ictinus
-  disabled:
+  retired:
     - Ariadna
-  forbidden:
     - Athena
     - Etalides
-  proposed_unimplemented:
-    - Independent Verifier
-non_goals:
-  - process_specific_workflow_migration
-  - full_learning_dataset_export_or_training
-  - automatic_prompt_or_model_promotion
-  - hidden_olympus_or_acp_fallback
-  - public_multitenant_service
-next_action:
-  after_v0.22_release: freeze exact M1 implementation and activation contract
+retired_runtime_paths:
+  - Olympus
+  - ACPManager
+  - Harmonia
+  - talk_to
+  - Honcho
+milestones:
+  installation_and_rollback: pass
+  fifteen_tool_fixture_qualification: partial
+  cold_start_tool_guidance: pass
+  model_backed_production_entry: pending_typed_routing_and_qualification
+  generic_roster_qualification: not_started
+next_gate: implement_typed_model_cost_routing_then_qualify_one_low_risk_case

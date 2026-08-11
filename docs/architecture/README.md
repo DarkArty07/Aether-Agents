@@ -1,49 +1,11 @@
-# Architecture Documentation
+# Architecture
 
-> **Status:** TARGET SWARM DESIGN CURRENT; EXECUTION NOT IMPLEMENTED OR ACTIVATED
+The current architecture has three authorities:
 
-Architecture documentation explains how approved product intent is realized technically. It must distinguish the active system from experimental or target designs.
+1. **Hermes product layer** — intent, scope, routing, direct work and semantic acceptance.
+2. **Aether MCP** — project admission, typed control operations, protocol validation and trace.
+3. **Qualified provider** — Run/Task/Dispatch execution resources and cleanup.
 
-## Architecture set
+Read [Aether MCP](AETHER_MCP.md), [Orchestration](ORCHESTRATION.md) and [Profiles](DAIMONS.md). Exact request schemas live in `schemas/aether-mcp/v1alpha2/bundle.json`; executable behavior lives in `src/aether_mcp`.
 
-| Document | Purpose |
-|---|---|
-| `SYSTEM_CONTEXT.md` | Users, external systems, trust boundaries, and system responsibilities |
-| `SYSTEM_OVERVIEW.md` | Components and runtime topology |
-| [`AETHER_MCP.md`](./AETHER_MCP.md) | Accepted detailed design for MCP-first Hermes control, compact semantic trace, protected learning episodes/dataset lineage, explanation, measurement and the Orca-provider boundary; bounded integration is implemented through M5.4 while the installed surface remains default-off with zero callable tools |
-| [`ORCHESTRATION.md`](./ORCHESTRATION.md) | Approved target flow from user intent through Hermes, Orca, workers, review, acceptance, and cleanup; not an active runtime claim |
-| [`DAIMONS.md`](./DAIMONS.md) | Approved target roster, archetypes, authority, lifecycle, participation policy, and non-goals |
-| `RUNTIME_SUBSTRATE.md` | Accepted execution substrate, lifecycle, isolation, recovery, and cleanup after PDR-0011 gates pass |
-| `CONTINUITY.md` | `.aether` capture, intentional state, curation, and injection |
-| `CONFIGURATION_MODEL.md` | Project/profile isolation, templates, environment, and resolution |
-| `DATA_MODEL.md` | Durable stores, ownership, retention, and consistency |
-| `SECURITY_MODEL.md` | Permissions, credentials, trust boundaries, and threat assumptions |
-| [`EXPERIMENTAL_COORDINATION.md`](./EXPERIMENTAL_COORDINATION.md) | Historical coordination-maintenance baseline; current retirement evidence lives under v0.22.0 |
-
-## Current boundary
-
-The v0.22.0 repository still tracks six specialist profile directories, but no
-registered runtime invokes any of them. PDR-0013 defines a smaller target roster:
-Hefesto, Daedalus, and Ictinus are retained; Ariadna is conditional and disabled;
-an Independent Verifier is proposed but unimplemented; Athena and Etalides have
-target retirement disposition. The physical profile inventory will not change
-until a separately authorized implementation cut.
-
-PDR-0012 governs the preserved Hermes–Orca ownership boundary. PDR-0013 governs
-the swarm roster and personality model. PDR-0014 places bounded integration in
-v0.22.0, production dogfooding in v0.23.0, and gradual workflow migration in
-v0.24.0. ADR-0001 supersedes the prior CLI-first
-assumption and approves an Aether MCP control and trace plane between Hermes and
-Orca. The trace primarily supports system learning/refinement and future
-fine-tuning evidence; audit is secondary. The detailed MCP/learning contracts
-remain proposed and none of these decisions
-implements, registers, or activates a runtime.
-
-## Architecture rules
-
-1. Product documents define why; architecture defines how.
-2. Current and target diagrams must never be combined without labels.
-3. Every authority boundary names its owner and failure behavior.
-4. Public contracts and internal implementation details are documented separately.
-5. Major changes require a durable decision record and explicit supersession.
-6. Experimental architecture must remain visibly default-off until validated and activated.
+The named local runtime is installed and registered with 15 tools. Model-backed production entry remains a separate acceptance gate. The repository itself has one persistent checkout; provider-owned temporary isolation is a runtime resource, not another source-of-truth tree.

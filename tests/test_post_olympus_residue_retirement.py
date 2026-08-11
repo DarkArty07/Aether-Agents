@@ -43,7 +43,6 @@ CURRENT_NATIVE_CORE_SURFACES = (
     ROOT / "README.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "docs" / "guides" / "INSTALLATION.md",
-    ROOT / "website" / "index.html",
 )
 
 
@@ -117,20 +116,23 @@ def test_current_entry_docs_do_not_advertise_removed_tools_or_services() -> None
     assert "Current configuration and historical setup material still require" not in guide
 
 
-def test_v019_multi_agent_model_is_explicitly_historical() -> None:
-    model = (ROOT / "docs" / "knowledge" / "MULTI_AGENT_MODEL.md").read_text(encoding="utf-8")
-    knowledge_index = (ROOT / "docs" / "knowledge" / "README.md").read_text(encoding="utf-8")
+def test_superseded_narrative_and_retired_profiles_are_physically_absent() -> None:
+    retired = (
+        ROOT / "docs" / "knowledge" / "MULTI_AGENT_MODEL.md",
+        ROOT / "docs" / "knowledge" / "SELF_IMPROVEMENT_CYCLE.md",
+        ROOT / "website",
+        ROOT / "home" / "profiles" / "ariadna",
+        ROOT / "home" / "profiles" / "athena",
+        ROOT / "home" / "profiles" / "etalides",
+    )
 
-    assert "**Status:** HISTORICAL" in model
-    assert "PDR-0011" in model
-    assert "Historical v0.19" in knowledge_index
+    assert [str(path.relative_to(ROOT)) for path in retired if path.exists()] == []
 
 
 def test_current_documentation_indexes_do_not_plan_olympus_docs() -> None:
     index_paths = (
         ROOT / "docs" / "architecture" / "README.md",
         ROOT / "docs" / "reference" / "README.md",
-        ROOT / "docs" / "contributing" / "README.md",
     )
     hits = [
         str(path.relative_to(ROOT))
@@ -152,7 +154,7 @@ def test_disconnected_aether_native_runtime_and_profile_plugins_are_absent() -> 
 
 
 def test_profile_templates_do_not_enable_aether_continuity_plugin() -> None:
-    assert len(PROFILE_TEMPLATES) == 6
+    assert {path.parent.name for path in PROFILE_TEMPLATES} == {"hefesto", "daedalus", "ictinus"}
     enabled = [
         str(path.relative_to(ROOT))
         for path in PROFILE_TEMPLATES
@@ -173,7 +175,7 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     }
     assert pyproject["project"] == {
         "name": "aether-mcp",
-        "version": "0.22.0",
+        "version": "0.23.0.dev0",
         "requires-python": ">=3.11",
         "dependencies": ["cryptography==50.0.0", "mcp==1.28.1"],
         "scripts": {"aether-mcp": "aether_mcp.__main__:main"},
@@ -185,7 +187,7 @@ def test_repository_contains_only_bounded_aether_mcp_distribution() -> None:
     assert "aiosqlite" not in text
     assert "aether-agents" not in text
     assert "olympus" not in text
-    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.22.0"
+    assert (ROOT / "VERSION").read_text(encoding="utf-8").strip() == "0.23.0.dev0"
 
 
 def test_operations_and_ci_do_not_install_import_or_build_removed_runtime() -> None:
@@ -240,8 +242,8 @@ def test_required_build_context_builds_bounded_aether_mcp_distribution() -> None
     assert "needs: test" in test_workflow
     for workflow in (test_workflow, release_workflow):
         assert "python -m pip wheel --no-deps --wheel-dir dist ." in workflow
-        assert "dist/aether_mcp-0.22.0-py3-none-any.whl" in workflow
-        assert "assert aether_mcp.__version__ == '0.22.0'" in workflow
+        assert "aether_mcp-0.23.0.dev0-py3-none-any.whl" in workflow
+        assert "assert aether_mcp.__version__ == '0.23.0.dev0'" in workflow
 
 
 def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
@@ -259,6 +261,7 @@ def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
         "src/aether_mcp/coordination.py",
         "src/aether_mcp/data/orca/1.4.167/catalog.json",
         "src/aether_mcp/foundation.py",
+        "src/aether_mcp/guidance.py",
         "src/aether_mcp/journal.py",
         "src/aether_mcp/lifecycle.py",
         "src/aether_mcp/manifest.py",

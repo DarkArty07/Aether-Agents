@@ -1,127 +1,36 @@
-# Aether Agents Documentation
+# Aether documentation
 
-> **Status:** Documentation map — current
-> **Audience:** Users, operators, contributors, maintainers, and incoming agents
+Last audited: 2026-08-11. These documents describe the current `0.23.0.dev0` source and named local runtime.
 
-This directory is the canonical map of Aether Agents documentation. It separates product intent, verified system knowledge, technical architecture, operational guidance, and historical evidence so that no agent has to infer the project's purpose from release artifacts.
+## Current facts
 
-## Read this first
+- one persistent repository checkout on local `main`;
+- lean Hermes prompt `0.4.0` with `3.0.0-hot.3` preserved for rollback;
+- installed and registered Aether MCP with 15 tools;
+- three allowed profiles: Hefesto, Daedalus and Ictinus;
+- no supported Olympus, ACPManager, Harmonia, `talk_to` or Honcho path;
+- model-backed multi-agent production entry is not yet accepted.
 
-| If you are… | Start here | Then read |
-|---|---|---|
-| An incoming agent | [Agent onboarding](./AGENT_ONBOARDING.md) | Product → Knowledge → relevant architecture |
-| Evaluating the project | [Product documentation](./product/README.md) | [Architecture](./architecture/README.md) |
-| Installing or using Aether | [Guides](./guides/) | [Reference](./reference/README.md) |
-| Operating a live installation | [Operations](./operations/README.md) | [Knowledge](./knowledge/README.md) |
-| Contributing code or documentation | [Contributing](./contributing/README.md) | [Decisions](./decisions/README.md) |
-| Investigating a release | [Release evidence](./releases/) | The specific release closeout or evidence document |
+## Reading map
 
-## Active Orca transition
+| Need | Canonical document |
+|---|---|
+| Product purpose and boundaries | [Product](product/README.md) |
+| Current runtime components | [Architecture](architecture/README.md) |
+| Installation and first checks | [Quickstart](guides/QUICKSTART.md) |
+| Machine-local configuration | [Configuration](guides/CONFIGURATION.md) |
+| Status, doctor, rollback and incidents | [Operations](operations/README.md) |
+| Tools, effects and schemas | [Reference](reference/README.md) |
+| Authority boundaries | [Authority](knowledge/AUTHORITY.md) |
+| Hermes 0.4.0 behavior decision | [PDR-0015](decisions/PDR-0015-hermes-prompt-0.4.0-autonomous-routing.md) |
+| Durable user memory and skills | [Hermes learning model](knowledge/HERMES_LEARNING_MODEL.md) |
+| Durable decisions | [Decision index](decisions/README.md) |
+| Current release state | [v0.23 status](releases/v0.23.0/STATUS.yaml) |
+| Prompt migration and runtime gap | [Hermes Prompt 0.4.0 migration](releases/v0.23.0/HERMES_PROMPT_0_4_0_MIGRATION.md) |
+| Contributor workflow | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 
-- [v0.22.0 — Orca Integration Foundation](./releases/v0.22.0/ROADMAP.md): scope closed at accepted M5.4; source Release pending; no activation.
-- [v0.23.0 — Orca Production Dogfood](./releases/v0.23.0/ROADMAP.md): approved plan for real repair-first Aether MCP + Orca use and generic-agent refinement; not yet implemented or activated.
-- [v0.24.0 — Gradual Workflow Migration](./releases/v0.24.0/ROADMAP.md): approved evidence-driven direction; process order intentionally not frozen.
-- [Governing product decision](./decisions/PDR-0014-versioned-orca-production-adoption.md) and [cross-version plan](./plans/2026-08-09-orca-production-adoption.md).
+## Truth hierarchy
 
-Current runtime truth remains distinct from approved direction: the v0.22.0 Aether MCP is default-off, unregistered, and zero-tool until the v0.23.0 production-entry gate passes.
+Observed runtime status and executable source/tests outrank narrative documents. Current canonical docs outrank release evidence. Decision records preserve why a boundary exists, but a superseded or historical record does not reactivate removed behavior.
 
-## Documentation hierarchy
-
-When documents disagree, use this order:
-
-1. **Approved product documentation** in `docs/product/` — definition, vision, mission, objectives, scope, principles, experience, and completion contract.
-2. **Approved architecture decisions** in `docs/decisions/` and current architecture in `docs/architecture/`.
-3. **Verified current-system knowledge** in `docs/knowledge/`.
-4. **Current guides, reference, and operations documentation**.
-5. **Implementation plans and active release designs**.
-6. **Historical evidence, handoffs, benchmarks, and test drives**.
-7. **Conversation summaries or inferred intent**.
-
-Source code and executable tests remain authoritative for current mechanical behavior. They do not define product purpose by themselves.
-
-## Documentation families
-
-### Product — `docs/product/`
-
-Normative answers to:
-
-- Why does Aether Agents exist?
-- For whom is it built?
-- What problem does it solve?
-- What future does it pursue?
-- What belongs inside or outside the product?
-- How should the product feel and expose internal work?
-- When is a software project actually complete?
-- Which principles constrain technical decisions?
-
-### Knowledge — `docs/knowledge/`
-
-Shared project knowledge needed to reason correctly:
-
-- stable concepts and terminology;
-- current versus target system distinctions;
-- constraints, assumptions, and invariants;
-- ownership and authority boundaries;
-- verified capabilities and known limitations.
-
-### Architecture — `docs/architecture/`
-
-Technical system explanation:
-
-- system context and components;
-- orchestration and session lifecycle;
-- Daimon roles and authority;
-- the retired Olympus and disconnected native runtimes;
-- the Hermes product layer, protected `.aether` history, and target Orca boundary;
-- configuration, runtime, data, and trust boundaries.
-
-### Guides — `docs/guides/`
-
-Task-oriented instructions for installation, configuration, first use, the current specialist capability gap, protected historical state, and gateway use.
-
-### Reference — `docs/reference/`
-
-Exact, lookup-oriented contracts: tools, actions, schemas, configuration keys, environment variables, file layout, commands, and compatibility notes.
-
-### Operations — `docs/operations/`
-
-Runbooks for health checks, updates, backups, gateway operation, troubleshooting, recovery, incident handling, and retirement of legacy services such as Honcho.
-
-### Contributing — `docs/contributing/`
-
-Developer setup, repository conventions, testing, documentation standards, architecture-change workflow, and release process.
-
-### Decisions — `docs/decisions/`
-
-Durable product and architecture decisions, including rationale, alternatives, consequences, status, and supersession. Decisions must not live only in chat or `.aether`.
-
-### Plans, releases, and evidence
-
-- `docs/plans/` — proposed or approved implementation plans.
-- `docs/releases/` — version-specific designs, evidence, closeouts, and migration records.
-- `docs/test-drives/` — exploratory evaluations and observed behavior.
-
-These are evidence and execution artifacts. They are not substitutes for product vision.
-
-## Document status vocabulary
-
-Every normative document should declare one status:
-
-- **DISCOVERY** — incomplete; questions remain and content is not approved.
-- **PROPOSED** — coherent proposal awaiting owner approval.
-- **APPROVED** — owner-approved direction; implementation may still be unauthorized.
-- **CURRENT** — describes verified behavior or an active operational contract.
-- **SUPERSEDED** — replaced by a named newer document or decision.
-- **HISTORICAL** — retained as evidence, not active direction.
-
-Approval of documentation does not authorize implementation, deployment, spending, credentials, publication, or other external effects.
-
-## Maintenance rules
-
-1. Do not infer product purpose from code or release chronology.
-2. Do not present target architecture as current behavior.
-3. Link facts to their canonical source instead of copying them across many files.
-4. Update cross-references when a canonical section or document changes.
-5. Mark superseded decisions explicitly; never leave contradictory decisions active.
-6. Keep secrets, credentials, personal data, and runtime databases out of documentation.
-7. Validate links, commands, file paths, and examples before marking a guide current.
+Only two v0.22 JSON files remain because provider qualification code/tests consume them. They are fixtures, not current operating instructions.

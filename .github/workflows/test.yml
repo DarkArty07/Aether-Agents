@@ -50,16 +50,16 @@ jobs:
           python -m pip wheel --no-deps --wheel-dir dist .
       - name: Verify built distribution
         run: |
-          WHEEL="$GITHUB_WORKSPACE/dist/aether_mcp-0.22.0-py3-none-any.whl"
+          WHEEL="$GITHUB_WORKSPACE/dist/aether_mcp-0.23.0.dev0-py3-none-any.whl"
           test -f "$WHEEL"
           python -m pip install --force-reinstall "$WHEEL"
           cd /tmp
           python - <<'PY'
           import aether_mcp
 
-          assert aether_mcp.__version__ == '0.22.0'
+          assert aether_mcp.__version__ == '0.23.0.dev0'
           assert aether_mcp.PROTOCOL_ID == 'aether.mcp/v1alpha2'
-          print('build=PASS package=aether-mcp version=0.22.0')
+          print('build=PASS package=aether-mcp version=0.23.0.dev0')
           PY
 
   product-assets:
@@ -85,7 +85,7 @@ jobs:
 
           root = Path('.')
           templates = [root / 'home/config.yaml.template', *sorted((root / 'home/profiles').glob('*/config.yaml.template'))]
-          assert len(templates) == 7
+          assert len(templates) == 4
           for path in templates:
               yaml.safe_load(path.read_text())
           source_files = set(subprocess.check_output(['git', 'ls-files', 'src'], text=True).splitlines())
@@ -99,6 +99,7 @@ jobs:
               'src/aether_mcp/coordination.py',
               'src/aether_mcp/data/orca/1.4.167/catalog.json',
               'src/aether_mcp/foundation.py',
+              'src/aether_mcp/guidance.py',
               'src/aether_mcp/journal.py',
               'src/aether_mcp/lifecycle.py',
               'src/aether_mcp/manifest.py',

@@ -1,8 +1,4 @@
-"""Integrated, internal-only M2 foundation services.
-
-The MCP server intentionally registers zero tools. These services provide the
-verified implementation behind the frozen schemas without beginning M3.
-"""
+"""Integrated M2 foundation services used by the operational MCP facade."""
 
 from __future__ import annotations
 
@@ -25,6 +21,7 @@ class M2Foundation:
         admissions: ProjectAdmissionRegistry,
         trace: TraceStore,
         catalog: OrcaCatalog,
+        provider_binding_digest: str | None = None,
     ) -> None:
         if not isinstance(context, TrustedLaunchContext):
             raise TypeError("trusted launch context is required")
@@ -32,6 +29,7 @@ class M2Foundation:
         self.admissions = admissions
         self.trace = trace
         self.catalog = catalog
+        self.provider_binding_digest = provider_binding_digest or catalog.digest
 
     def _project(self, project_id: str) -> ProjectAdmission:
         return self.admissions.inspect(context=self.context, project_id=project_id)
@@ -52,7 +50,9 @@ class M2Foundation:
 
     def swarm_validate(self, arguments: dict[str, Any]) -> ValidatedManifest:
         admitted = validate_request("swarm_validate", arguments)
-        validated = validate_swarm_manifest(admitted["manifest"])
+        validated = validate_swarm_manifest(
+            admitted["manifest"], provider_binding_digest=self.provider_binding_digest
+        )
         self._project(validated.project_id)
         return validated
 

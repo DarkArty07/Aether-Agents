@@ -17,7 +17,7 @@ from aether_mcp.adapter import (
     ReconciliationObservation,
 )
 from aether_mcp.journal import JournalError, OperationJournal
-from aether_mcp.protocol import CALLABLE_TOOL_NAMES
+from aether_mcp.protocol import CALLABLE_TOOL_NAMES, TOOL_SCHEMAS
 
 PROJECT_ID = "11111111-1111-4111-8111-111111111111"
 FOREIGN_PROJECT_ID = "22222222-2222-4222-8222-222222222222"
@@ -402,5 +402,5 @@ def test_journal_rejects_symlink_root(tmp_path: Path) -> None:
     assert _error_code(exc) == "ERR_JOURNAL_SCOPE"
 
 
-def test_adapter_foundation_does_not_register_mcp_tools() -> None:
-    assert CALLABLE_TOOL_NAMES == frozenset()
+def test_adapter_foundation_exposes_only_the_approved_mcp_tools() -> None:
+    assert CALLABLE_TOOL_NAMES == frozenset(TOOL_SCHEMAS)
