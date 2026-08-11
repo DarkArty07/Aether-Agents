@@ -99,7 +99,18 @@ No arbitrary shell, placeholder, fabricated receipt, caller-selected authority, 
 
 #### M1.3 — First bounded production Task
 
-**Status:** NOT STARTED.
+**Status:** IN PROGRESS — fixture-first 15-tool qualification completed; the
+model-backed Task remains pending. Canonical checkpoint:
+`M1_3_TOOL_QUALIFICATION_CHECKPOINT.md`.
+
+The first live pass invoked all 15 tools, closed its bounded Run with zero
+survivors, and found one MCP facade defect: FastMCP coerced JSON-shaped string
+arguments before protocol validation. Candidate `0542cdc` corrects that defect;
+206 Aether MCP tests, Ruff and compileall pass, and a fresh installed process
+discovers exactly 15 tools while preserving the string payload. The Hermes
+session that predates installation still requires restart convergence. Fixture
+dispatch is unavailable in the production binding, so this evidence is
+`PARTIAL`, not the real-Task PASS required below.
 
 Execute one low-risk, reversible, real repository Task through the installed path:
 
