@@ -267,6 +267,7 @@ def test_product_asset_workflows_accept_exact_bounded_mcp_source() -> None:
         "src/aether_mcp/manifest.py",
         "src/aether_mcp/orca_provider.py",
         "src/aether_mcp/protocol.py",
+        "src/aether_mcp/runtime.py",
         "src/aether_mcp/server.py",
         "src/aether_mcp/trace_store.py",
     )
