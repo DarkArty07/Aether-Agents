@@ -5,7 +5,7 @@ Last audited: 2026-08-11. These documents describe the current `0.23.0.dev0` sou
 ## Current facts
 
 - one persistent repository checkout on local `main`;
-- Hermes prompt `3.0.0-hot.3`;
+- lean Hermes prompt `0.4.0` with `3.0.0-hot.3` preserved for rollback;
 - installed and registered Aether MCP with 15 tools;
 - three allowed profiles: Hefesto, Daedalus and Ictinus;
 - no supported Olympus, ACPManager, Harmonia, `talk_to` or Honcho path;
@@ -22,9 +22,11 @@ Last audited: 2026-08-11. These documents describe the current `0.23.0.dev0` sou
 | Status, doctor, rollback and incidents | [Operations](operations/README.md) |
 | Tools, effects and schemas | [Reference](reference/README.md) |
 | Authority boundaries | [Authority](knowledge/AUTHORITY.md) |
+| Hermes 0.4.0 behavior decision | [PDR-0015](decisions/PDR-0015-hermes-prompt-0.4.0-autonomous-routing.md) |
 | Durable user memory and skills | [Hermes learning model](knowledge/HERMES_LEARNING_MODEL.md) |
 | Durable decisions | [Decision index](decisions/README.md) |
 | Current release state | [v0.23 status](releases/v0.23.0/STATUS.yaml) |
+| Prompt migration and runtime gap | [Hermes Prompt 0.4.0 migration](releases/v0.23.0/HERMES_PROMPT_0_4_0_MIGRATION.md) |
 | Contributor workflow | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 
 ## Truth hierarchy

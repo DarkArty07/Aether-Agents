@@ -15,6 +15,8 @@
 
 The root template routes Hermes through `openai-codex/gpt-5.6-sol`. The three allowed profile templates use `openai-codex/gpt-5.6-luna` with role-specific fallback providers. A model setting does not authorize a provider call or spend.
 
+Configured auxiliary tasks use `gpt-5.6-luna` where the template names that route. Automatic skill review and curation retain the standard Hermes values: no Aether override of `skills.creation_nudge_interval`, free writes unless Hermes configuration says otherwise, the standard content guard setting, and the curator enabled on its normal schedule.
+
 Supported profile templates are:
 
 - `home/profiles/hefesto/config.yaml.template`;

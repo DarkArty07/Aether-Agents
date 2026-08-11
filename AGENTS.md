@@ -17,7 +17,7 @@ Never describe a planned, historical or merely installed capability as active wi
 ## Current runtime
 
 - Product source: `0.23.0.dev0` on local `main`.
-- Active prompt: `home/SOUL.md`, Hermes Prompt SemVer `3.0.0-hot.3`.
+- Active prompt: `home/SOUL.md`, lean Hermes Prompt `0.4.0`; `3.0.0-hot.3` remains the rollback predecessor.
 - MCP surface: 15 tools, registered in the named local Hermes runtime.
 - Allowed profiles: Hefesto, Daedalus and Ictinus.
 - Retired paths: Olympus, ACPManager, Harmonia, `talk_to`, Honcho, `aether_status`, `aether_update` and `aether_curate`.

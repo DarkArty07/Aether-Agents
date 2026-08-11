@@ -6,6 +6,7 @@ Decision records explain durable product and architecture choices. They do not o
 
 | Record | Current role |
 |---|---|
+| [PDR-0015](PDR-0015-hermes-prompt-0.4.0-autonomous-routing.md) | lean Hermes behavior, autonomous routing and information-layer boundary |
 | [PDR-0014](PDR-0014-versioned-orca-production-adoption.md) | separates released foundation, current 0.23 work and future gated adoption |
 | [PDR-0013](PDR-0013-swarm-roster-and-personality-model.md) | stable roster policy; current physical roster is Hefesto, Daedalus and Ictinus |
 | [PDR-0012](PDR-0012-hermes-orca-swarm-boundary.md) | Hermes product authority and provider execution boundary |

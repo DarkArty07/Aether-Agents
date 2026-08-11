@@ -14,4 +14,6 @@ Aether uses Hermes-native knowledge layers:
 
 Do not store secrets, temporary observations, raw prompts, provider tokens or speculative conclusions as durable knowledge. A project-specific workaround becomes a skill only after its trigger, limits, safe procedure and verification are generalized.
 
-Aether has no automatic prompt/model promotion or causal self-improvement service. Prompt experiments require a preserved rollback version, a frozen comparison, equivalent conditions and explicit promotion authority. Activity volume or self-reported confidence is not proof of improvement.
+For the Aether Hermes home, automatic skill review and curation use Hermes' standard values. Skills remain reusable procedure packages, while memory is user/environment context and project truth remains in source, tests or current documentation. Automatic creation does not make a skill product authority.
+
+Aether has no automatic prompt/model promotion or causal self-improvement service. Prompt experiments require a preserved rollback version, a frozen comparison, equivalent conditions and owner promotion authority. Activity volume or self-reported confidence is not proof of improvement. The owner-directed `0.4.0` lean-line reset and its rollback boundary are recorded in PDR-0015 and the v0.23 migration report.

@@ -19,7 +19,9 @@ runtime:
   provider_ready: true
   production_entry_accepted: false
 prompt:
-  active: 3.0.0-hot.3
+  active: 0.4.0
+  predecessor: 3.0.0-hot.3
+  rollout: active_local_fresh_sessions_only
   stable_promotion: false
 roster:
   allowed:
@@ -40,6 +42,6 @@ milestones:
   installation_and_rollback: pass
   fifteen_tool_fixture_qualification: partial
   cold_start_tool_guidance: pass
-  model_backed_production_entry: pending_explicit_gate
+  model_backed_production_entry: pending_typed_routing_and_qualification
   generic_roster_qualification: not_started
-next_gate: freeze_and_authorize_one_low_risk_model_backed_entry_case
+next_gate: implement_typed_model_cost_routing_then_qualify_one_low_risk_case

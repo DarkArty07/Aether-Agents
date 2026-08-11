@@ -13,6 +13,7 @@ home/.aether-mcp-state/
 home/.aether/
 home/.venv-hermes/
 home/.mcp-discovery.lock
+home/.skills_prompt_snapshot.json
 home/backups/
 home/bin/
 home/plugins/

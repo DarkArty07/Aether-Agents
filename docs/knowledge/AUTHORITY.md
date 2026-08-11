@@ -14,4 +14,6 @@
 
 Tool availability, a profile file, a prior release, a test fixture or a provider response cannot expand authority. When identities or authority conflict, stop and resolve the conflict instead of guessing.
 
-The current user instruction overrides standing repository workflow. In particular, this consolidation authorizes local source/filesystem changes and retirement of obsolete artifacts, but not push, publication or live provider mutation.
+“Explicit” describes whether the authority is identifiable, not how many times the user must confirm it. The current request, a durable owner policy, an admitted project policy or a bounded configuration may already provide authority. Hermes must reuse valid standing authority for routine mechanics and ask only when the intended effect exceeds it or a material value is unknown.
+
+A current user instruction may override standing repository workflow within its stated scope. Requested local implementation covers the necessary reversible source/filesystem work; it does not by itself authorize push, publication, live provider mutation or another later protected horizon.
