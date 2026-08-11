@@ -35,6 +35,16 @@ _TOOLS = (
 )
 
 
+def _argument_annotation(schema: dict[str, object]) -> object:
+    """Preserve string payloads that FastMCP would otherwise JSON-coerce."""
+    schema_type = schema.get("type")
+    if schema_type == "string":
+        return str
+    if isinstance(schema_type, list) and "string" in schema_type and "null" in schema_type:
+        return str | None
+    return object
+
+
 def create_server(runtime: OperationalRuntime | None = None) -> FastMCP:
     """Create the 15-tool facade without opening state or contacting Orca."""
     server = FastMCP(
@@ -51,12 +61,19 @@ def create_server(runtime: OperationalRuntime | None = None) -> FastMCP:
             return active_runtime.invoke(name, dict(arguments))
 
         operation.__name__ = name
-        operation.__annotations__ = {key: object for key in schema["properties"]}
+        operation.__annotations__ = {
+            key: _argument_annotation(property_schema)
+            for key, property_schema in schema["properties"].items()
+        }
         operation.__annotations__["return"] = dict
         operation.__signature__ = inspect.Signature(
             [
-                inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY, annotation=object)
-                for key in schema["properties"]
+                inspect.Parameter(
+                    key,
+                    inspect.Parameter.KEYWORD_ONLY,
+                    annotation=_argument_annotation(property_schema),
+                )
+                for key, property_schema in schema["properties"].items()
             ]
         )
 

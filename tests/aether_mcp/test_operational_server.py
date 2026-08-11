@@ -165,6 +165,38 @@ async def test_facade_returns_a_stable_secret_safe_error_envelope(tmp_path: Path
     assert "SYNTHETIC-SECRET-DO-NOT-ECHO" not in json.dumps(response)
 
 
+@pytest.mark.anyio
+async def test_facade_preserves_json_shaped_string_arguments() -> None:
+    runtime = MagicMock()
+    runtime.invoke.return_value = {"ok": True}
+    operational = server.create_server(runtime)
+    payload = '{"thread_id":"thread-1","answer":"approved"}'
+
+    await operational._tool_manager.call_tool(
+        "swarm_message",
+        {
+            "operation": {
+                "operation_id": str(uuid.uuid4()),
+                "project_id": str(uuid.uuid4()),
+                "contract_id": "contract:test/1",
+                "use_case_id": "UC-M1-3",
+                "reason": {"code": "TEST", "summary": "test", "authority_ref": "decision:test"},
+                "expected_effect": "LOCAL_REVERSIBLE",
+            },
+            "run_id": str(uuid.uuid4()),
+            "sender_id": "coordinator",
+            "recipient_id": "worker-1",
+            "kind": "steering",
+            "payload": payload,
+            "safe_summary": "bounded test",
+            "decision_required": False,
+            "blocking_effect": None,
+        },
+    )
+
+    assert runtime.invoke.call_args.args[1]["payload"] == payload
+
+
 @pytest.fixture
 def anyio_backend() -> str:
     return "asyncio"
