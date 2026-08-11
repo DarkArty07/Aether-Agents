@@ -18,12 +18,15 @@ This directory is the canonical map of Aether Agents documentation. It separates
 
 ## Active Orca transition
 
-- [v0.22.0 — Orca Integration Foundation](./releases/v0.22.0/ROADMAP.md): scope closed at accepted M5.4; source Release pending; no activation.
-- [v0.23.0 — Orca Production Dogfood](./releases/v0.23.0/ROADMAP.md): approved plan for real repair-first Aether MCP + Orca use and generic-agent refinement; not yet implemented or activated.
-- [v0.24.0 — Gradual Workflow Migration](./releases/v0.24.0/ROADMAP.md): approved evidence-driven direction; process order intentionally not frozen.
+- [v0.22.0 — Orca Integration Foundation](./releases/v0.22.0/ROADMAP.md): official source Release closed at accepted M5.4; no runtime activation claim.
+- [v0.23.0 — Orca Production Dogfood and MCP Optimization](./releases/v0.23.0/ROADMAP.md): active candidate; the named local installation exposes 15 tools and M1.2 passes, while M1.3 tool learning and model-backed production entry remain incomplete. See the [tool-surface learning plan](./releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md).
+- [v0.24.0 — Gradual Workflow Migration](./releases/v0.24.0/ROADMAP.md): preserved inactive proposal; it requires a future explicit product-owner decision and is not the automatic successor to v0.23.0.
 - [Governing product decision](./decisions/PDR-0014-versioned-orca-production-adoption.md) and [cross-version plan](./plans/2026-08-09-orca-production-adoption.md).
 
-Current runtime truth remains distinct from approved direction: the v0.22.0 Aether MCP is default-off, unregistered, and zero-tool until the v0.23.0 production-entry gate passes.
+Current runtime truth remains distinct from source-release and production-entry
+state: v0.22.0 was published default-off and zero-tool; the named local v0.23.0
+candidate is installed and active with 15 tools, but its model-backed M1.3 and
+M1.4 production-entry acceptance remain pending.
 
 ## Documentation hierarchy
 

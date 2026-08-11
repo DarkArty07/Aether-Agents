@@ -24,7 +24,7 @@ Sequences are independent by decision type.
 
 | Record | Status | Governing decision |
 |---|---|---|
-| [PDR-0014](./PDR-0014-versioned-orca-production-adoption.md) | APPROVED | v0.22.0 closes at the accepted Orca integration/M5.4 boundary; v0.23.0 begins repair-first production dogfooding with generic agents; v0.24.0 migrates process-specific workflows incrementally. |
+| [PDR-0014](./PDR-0014-versioned-orca-production-adoption.md) | APPROVED — AMENDED | v0.22.0 closes at the accepted Orca integration/M5.4 boundary; v0.23.0 owns repair-first production dogfooding plus MCP learning and tool-surface optimization; v0.24.0 is a preserved inactive proposal requiring a new explicit owner decision. |
 | [PDR-0013](./PDR-0013-swarm-roster-and-personality-model.md) | APPROVED | Aether uses a small stable roster of reusable archetypes, permits multiple workers per archetype, retires Athena and Etalides from the target, keeps Ariadna conditional, and designs an Independent Verifier before implementation. |
 | [PDR-0012](./PDR-0012-hermes-orca-swarm-boundary.md) | PARTIALLY SUPERSEDED | Its Hermes–Orca authority boundary, direct/swarm choice, and retirement of the disconnected native coordination core remain; ADR-0001 supersedes its demand-driven-adapter/CLI-first assumption. |
 | [PDR-0011](./PDR-0011-orca-substrate-and-olympus-retirement.md) | PARTIALLY SUPERSEDED | Its Olympus source retirement, capability-gap honesty, historical evidence, and non-destructive store policy remain; PDR-0012 supersedes pre-emptive `aether_agents` core retention. |

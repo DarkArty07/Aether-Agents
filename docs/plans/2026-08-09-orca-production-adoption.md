@@ -1,14 +1,17 @@
 # Orca Production Adoption Plan
 
-> **Status:** APPROVED CROSS-VERSION PLAN
-> **Date:** 2026-08-09
+> **Status:** APPROVED CROSS-VERSION PLAN — AMENDED 2026-08-11
+> **Date:** 2026-08-09; amended 2026-08-11
 > **Product owner:** Christopher (DarkArty07)
 > **Current horizon:** Documentation and GitHub rebaseline only
 > **Governing decision:** `../decisions/PDR-0014-versioned-orca-production-adoption.md`
 
 ## Goal
 
-Close v0.22.0 at the accepted Orca integration boundary, enter real Orca-backed production work in v0.23.0, repair integration failures instead of bypassing them, and defer process-specific migration to evidence-driven v0.24.0 increments.
+Close v0.22.0 at the accepted Orca integration boundary; enter real Orca-backed
+production work in v0.23.0; learn, debug, and optimize the Aether MCP surface
+instead of bypassing its failures; and preserve process-specific migration as a
+future proposal that requires a new explicit product-owner decision.
 
 ## Acceptance for this planning task
 
@@ -32,15 +35,16 @@ source release; no activation
         |
         v
 v0.23.0
-Orca Production Dogfood
+Orca Production Dogfood and MCP Optimization
 real Aether MCP + Orca entry
+tool guidance, context and surface learning
 stable generic roster
 incident repair and same-path retry
 personality refinement from evidence
         |
-        v
+        v explicit owner decision required
 v0.24.0
-Gradual Workflow Migration
+Preserved Gradual Workflow Migration proposal
 one process contract at a time
 comparison, activation, rollback, legacy retirement
 ```
@@ -156,7 +160,25 @@ Hermes may repair the runtime directly in break-glass mode. Hermes must not fini
 
 Each material incident receives a GitHub issue or links to an existing equivalent. The issue records cause, evidence, correction, retry result, residual risk, and Release disposition without secrets.
 
-## Phase F — Qualify and refine generic agents
+## Phase F — Learn and optimize the Aether MCP surface
+
+- preserve the current 15 tools as the compatibility baseline;
+- freeze concise catalog and full-schema guidance contracts;
+- measure wrong selection, wrong order, invalid input, context/tokens, calls,
+  latency, cost, correction, recovery, diagnostics, and cleanup;
+- implement compatible metadata improvements only after a separate design and
+  implementation gate;
+- complete the model-backed M1.3 path under an exact provider/account/model/budget
+  contract;
+- design any smaller intent-level normal surface only from observed evidence;
+- compare candidates under equivalent conditions;
+- require explicit product-owner acceptance before tool removal, hiding, rename,
+  grouping, deprecation, or default-visibility change.
+
+Canonical detail:
+`../releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md`.
+
+## Phase G — Qualify and refine generic agents
 
 - bind Hefesto, Daedalus, and Ictinus exactly;
 - prove participant policy, isolation, distinct contribution, and cleanup;
@@ -167,7 +189,7 @@ Each material incident receives a GitHub issue or links to an existing equivalen
 
 Do not encode process-specific workflows into stable personalities during this phase.
 
-## Phase G — Harden, evaluate, and release v0.23.0
+## Phase H — Harden, evaluate, and release v0.23.0
 
 - make setup/update/status/doctor/recovery/rollback reliable;
 - preserve minimum privacy-safe operational trace;
@@ -177,7 +199,13 @@ Do not encode process-specific workflows into stable personalities during this p
 - validate and publish one exact candidate;
 - record source Release and installed activation as separate identities.
 
-## Phase H — Begin v0.24.0 from evidence
+## Phase I — Present the separately gated v0.24.0 decision
+
+This phase does not begin a version or authorize implementation. After v0.23.0
+is accepted, Hermes may present the evidence and the preserved proposal to the
+product owner. Only a new explicit decision may open v0.24.0.
+
+If opened later:
 
 1. inventory real process-specific workflows and consumers;
 2. rank them from v0.23.0 use, failures, frequency, value, reversibility, and dependencies;
@@ -210,5 +238,6 @@ Legacy coordinator retirement is last and requires zero consumers, zero fallback
 - destructive migration or data removal;
 - legacy runtime retirement;
 - any exception to the no-hidden-fallback policy.
+- opening v0.24.0 or selecting its first process.
 
 Routine documentation, deterministic verification, issue/PR maintenance, and source Git lifecycle follow repository policy and existing authority, but a failed gate is never waived silently.

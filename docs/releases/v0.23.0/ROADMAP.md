@@ -1,7 +1,7 @@
-# Aether Agents v0.23.0 Roadmap — Orca Production Dogfood
+# Aether Agents v0.23.0 Roadmap — Orca Production Dogfood and MCP Optimization
 
-> **Status:** IN PROGRESS — M1.2 ACTIVE; M1.3 NOT STARTED
-> **Date:** 2026-08-09
+> **Status:** IN PROGRESS — M1.2 PASS; M1.3 TOOL LEARNING ACTIVE
+> **Date:** 2026-08-11
 > **Product owner:** Christopher (DarkArty07)
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
 > **Production policy:** `PRODUCTION_OPERATING_POLICY.md`
@@ -10,11 +10,11 @@
 
 ## 1. Product goal
 
-Make Aether MCP + Orca the normal execution path for real Aether multi-agent work, qualify the retained generic roster, and improve the integration and personalities from observed production incidents and user corrections.
+Make Aether MCP + Orca the normal execution path for real Aether multi-agent work, learn how Hermes uses the MCP under real conditions, reduce avoidable tool/context complexity, qualify the retained generic roster, and improve the integration and personalities from observed incidents and user corrections.
 
 v0.23.0 answers:
 
-> Can Aether use Orca repeatedly for real project work, fail visibly, repair the correct layer, retry through the same path, and remain understandable and reversible?
+> Can Aether use Orca repeatedly for real project work, select and sequence its MCP operations with proportionate context, fail visibly, repair the correct layer, retry through the same path, and remain understandable and reversible?
 
 ## 2. Meaning of production
 
@@ -26,7 +26,7 @@ Production is the named local Aether installation and the sessions Christopher u
 - a synthetic harness may reproduce an incident but cannot replace the required real-path retry;
 - unavailable evidence remains `UNKNOWN` or `BLOCKED`, never PASS.
 
-The named local v0.23.0 candidate is installed and active with the approved 15-tool Aether MCP surface, and Olympus is retired from that runtime. M1.3 and the M1.4 production-entry decision remain incomplete; production begins only after all of M1 below passes.
+The named local v0.23.0 candidate is installed and active with the current 15-tool Aether MCP compatibility surface, and Olympus is retired from that runtime. M1.3 and the M1.4 production-entry decision remain incomplete; production begins only after all of M1 below passes. The tool surface may be improved inside v0.23.0, but no removal, hiding, rename, or replacement is accepted until a frozen comparison and explicit product-owner decision.
 
 ## 3. Invariants
 
@@ -42,6 +42,10 @@ The named local v0.23.0 candidate is installed and active with the approved 15-t
 10. Ariadna remains disabled and the Independent Verifier remains unimplemented until their evidence gates decide otherwise.
 11. No worker may create another worker, change participant policy, redefine acceptance, or authorize protected effects.
 12. No secret, private chain-of-thought, credential value, or foreign-project content may enter committed evidence.
+13. Tool descriptions and progressive disclosure guide Hermes just in time; a large always-injected protocol manual is not the default solution.
+14. Fewer visible tools are accepted only when measured evidence shows lower cognitive/context cost without hiding effects, weakening diagnostics, or moving authority.
+15. The current 15-tool surface remains the compatibility baseline until a separate v0.23.0 tool-surface decision changes it.
+16. v0.24.0 does not begin from schedule, roadmap existence, v0.23.0 acceptance, or v0.23.0 release alone; it requires an explicit product-owner decision.
 
 ## 4. Entry prerequisites
 
@@ -51,7 +55,7 @@ The named local v0.23.0 candidate is installed and active with the approved 15-t
 - offline/deterministic implementation is accepted before any live activation;
 - runtime activation receives a separate explicit authorization.
 
-This roadmap does not itself authorize source changes or activation.
+This roadmap does not itself authorize source changes, tool removal, runtime mutation, model use, activation, or transition to v0.24.0.
 
 ## 5. Milestones
 
@@ -101,7 +105,8 @@ No arbitrary shell, placeholder, fabricated receipt, caller-selected authority, 
 
 **Status:** IN PROGRESS — fixture-first 15-tool qualification completed; the
 model-backed Task remains pending. Canonical checkpoint:
-`M1_3_TOOL_QUALIFICATION_CHECKPOINT.md`.
+`M1_3_TOOL_QUALIFICATION_CHECKPOINT.md`. The v0.23.0 learning and optimization
+program is defined in `MCP_TOOL_SURFACE_LEARNING_PLAN.md`.
 
 The first live pass invoked all 15 tools, closed its bounded Run with zero
 survivors, and found one MCP facade defect: FastMCP coerced JSON-shaped string
@@ -111,6 +116,22 @@ discovers exactly 15 tools while preserving the string payload. The Hermes
 session that predates installation still requires restart convergence. Fixture
 dispatch is unavailable in the production binding, so this evidence is
 `PARTIAL`, not the real-Task PASS required below.
+
+M1.3 now proceeds through four explicit sub-gates:
+
+1. **M1.3a — Fixture-first learning baseline: COMPLETE / PARTIAL EVIDENCE.**
+   Invoke all 15 operations, preserve typed success/denial behavior, repair
+   deterministic facade defects, and prove close/cleanup without model use.
+2. **M1.3b — Guidance-contract decision: IN DISCUSSION.** Freeze concise catalog
+   descriptions, full preconditions, identity provenance, effect/cost warnings,
+   field descriptions, and typed next-action semantics. The approximate
+   five-tool intent surface remains a candidate, not an approved contract.
+3. **M1.3c — Compatible metadata correction: NOT AUTHORIZED.** After the design
+   gate, improve the current 15-tool descriptions and schemas through RED/GREEN,
+   isolated wheel/install discovery, and exact loaded-runtime convergence.
+4. **M1.3d — Model-backed path: PENDING SEPARATE MODEL GATE.** Execute and verify
+   the real `dispatch -> message -> retry -> artifact -> close` path under a
+   frozen provider/account/model/budget contract.
 
 Execute one low-risk, reversible, real repository Task through the installed path:
 
@@ -125,7 +146,10 @@ Hermes
 -> cleanup
 ```
 
-Record exact source, model/profile/tool identities; liveness; timing; receipts; artifact verification; closure; cleanup; and unknowns without secrets.
+Record exact source, model/profile/tool identities; descriptions visible to
+Hermes; liveness; timing; calls; avoidable invalid/precondition failures;
+receipts; artifact verification; closure; cleanup; context/cost measurements;
+and unknowns without secrets.
 
 #### M1.4 — Production-entry decision
 
@@ -179,9 +203,51 @@ For every incident:
 
 Do not repeat the same failed repair approach more than three times. Stop honestly with an incident blocker when repair cannot be proved.
 
-**Pass:** incidents are visible and traceable, no task falls through silently, and accepted repairs have same-path retry evidence.
+Tool-selection mistakes, missing preconditions, ambiguous IDs, excessive
+always-visible context, non-actionable errors, misleading result semantics, and
+loaded-versus-installed catalog drift are first-class Aether MCP integration
+incidents when they cause wrong execution or user correction.
 
-### M4 — Refine generic personalities from evidence
+**Pass:** incidents are visible and traceable, no task falls through silently,
+accepted repairs have same-path retry evidence, and durable tool-use learning is
+stored in descriptions, schemas, tests, reference, trace, or the release plan as
+appropriate.
+
+### M4 — Optimize the Aether MCP tool surface from evidence
+
+Follow `MCP_TOOL_SURFACE_LEARNING_PLAN.md`:
+
+1. freeze a progressive context contract for catalog summaries, full tool and
+   field descriptions, effects, preconditions, identity provenance, errors,
+   reconciliation, retry, and next-action guidance;
+2. preregister equivalent cases, model/provider/account class, evaluator,
+   thresholds, token/context measurement, timeout, cost ceiling, cleanup, and
+   rollback before changing the surface;
+3. implement and qualify the compatible 15-tool metadata candidate first;
+4. complete repeated fixture and bounded real-path runs, including a model-backed
+   artifact-producing Task under separate model authority;
+5. only from that evidence, design any intent-level normal surface while
+   preserving low-level diagnostics and one operational authority;
+6. compare the baseline, enriched 15-tool candidate, and any separately approved
+   intent-level candidate under equivalent initial conditions;
+7. obtain an explicit product-owner disposition before removing, hiding,
+   renaming, grouping, or deprecating any current operation.
+
+Measure scope fidelity, correct tool selection, wrong-order calls,
+`INVALID_INPUT` and precondition failures, calls/tokens/time to first useful
+action, total latency/cost, user correction, hidden effects, recovery,
+diagnostic sufficiency, and cleanup. Fewer tools or calls are not automatically
+better.
+
+Possible dispositions are `KEEP_15_ENRICHED`,
+`ADOPT_INTENT_PLUS_DIAGNOSTIC`, `ADOPT_SELECTIVE_GROUPING`,
+`INSUFFICIENT_CONTINUE_V0_23`, or `REJECT_AND_ROLL_BACK`.
+
+**Pass:** the selected v0.23.0 surface has frozen comparative evidence, no
+authority or diagnostic regression, exact installed/runtime convergence,
+complete cleanup, rollback, and explicit product-owner acceptance.
+
+### M5 — Refine generic personalities from evidence
 
 For each personality change:
 
@@ -197,7 +263,7 @@ Expected problem classes include overreach, passivity, weak evidence, tool misus
 
 **Pass:** each accepted change has linked evidence and no material regression. Personality prose is not self-certifying.
 
-### M5 — Decide optional roles from production evidence
+### M6 — Decide optional roles from production evidence
 
 - compare Ariadna against Hermes-native memory, session history, skills, Curator, and versioned documentation;
 - compare a proposed Independent Verifier contribution against deterministic verification and Hermes review;
@@ -207,7 +273,7 @@ Expected problem classes include overreach, passivity, weak evidence, tool misus
 
 **Pass:** optional roles no longer survive as ambiguous future dependencies.
 
-### M6 — Harden, measure, and prepare the exact v0.23.0 candidate
+### M7 — Harden, measure, and prepare the exact v0.23.0 candidate
 
 - stabilize setup/update/status/doctor/restart/cleanup/rollback;
 - verify project and profile isolation;
@@ -221,7 +287,7 @@ Minimum v0.23 trace contains structured context visible to the model, tool/Orca 
 
 **Pass:** the production path is observably usable, reversible, privacy-safe, and no worse than the accepted baseline on mandatory cases.
 
-### M7 — Accept and publish v0.23.0
+### M8 — Accept and publish v0.23.0
 
 - freeze exact scope and exclusions;
 - reconcile version, changelog, docs, GitHub issues, incident dispositions, and rollback;
@@ -238,6 +304,7 @@ Minimum v0.23 trace contains structured context visible to the model, tool/Orca 
 v0.23.0 does not include:
 
 - migration of every process-specific workflow;
+- beginning v0.24.0 workflow migration without a separate explicit owner decision;
 - a new personality for every process or technology;
 - full SFT/preference/routing dataset construction or export;
 - training, fine-tuning, external upload, or model promotion;
@@ -252,14 +319,23 @@ v0.23.0 is complete when:
 1. Aether MCP + Orca is the normal real multi-agent path in the named installation;
 2. retained generic profiles are qualified and forbidden profiles are unreachable;
 3. real integration incidents follow repair-and-retry rather than fallback;
-4. accepted personality refinements have baseline-relative evidence;
-5. status, doctor, restart/rebind, cleanup, privacy, and rollback are verified;
-6. representative controlled cases meet frozen acceptance thresholds;
-7. one exact candidate is released and its installed activation state is recorded separately;
-8. v0.24.0 receives evidence identifying the first process-specific migration candidate.
+4. the Aether MCP tool surface has evidence-backed descriptions, progressive
+   disclosure, recovery guidance, and an explicit accepted disposition;
+5. accepted personality refinements have baseline-relative evidence;
+6. status, doctor, restart/rebind, cleanup, privacy, and rollback are verified;
+7. representative controlled cases meet frozen acceptance thresholds;
+8. one exact candidate is released and its installed activation state is
+   recorded separately;
+9. remaining incidents and design alternatives are accepted, explicitly
+   deferred inside v0.23.0 evidence, or honestly blocked.
 
 ## 8. Stop condition and successor gate
 
-Stop v0.23.0 scope expansion when the generic operating contract above is satisfied. Do not absorb broad process-specific migration or full dataset/training infrastructure merely because production sessions expose future opportunities.
+Stop unrelated v0.23.0 scope expansion when the generic operating and MCP
+learning contract above is satisfied. Do not absorb process-specific migration
+or full dataset/training infrastructure merely because production sessions
+expose future opportunities.
 
-v0.24.0 begins only after v0.23.0 acceptance and selects its first workflow from the observed evidence in `../v0.24.0/ROADMAP.md`.
+v0.23.0 acceptance or release does not start v0.24.0. It may produce evidence
+for a later discussion, but `../v0.24.0/ROADMAP.md` remains a preserved proposal
+until the product owner explicitly decides whether and when to open that version.

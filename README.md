@@ -14,13 +14,15 @@
 
 **Aether Agents** defines the product vision, Hermes behavior, specialist roles,
 participation policy, skills, verification expectations, and release authority for
-an AI software team. The v0.22.0 candidate physically retires Olympus/ACP and the
-disconnected Python core, provides the unregistered 15-tool Aether MCP operational facade,
-and qualifies the exact Orca 1.4.167 desktop-renderer/public-CLI binding through
-deterministic M3-M5 and one bounded two-worker model-backed M5.4 pass. It remains
-unregistered and inactive. PDR-0014 closes v0.22.0 at that integration boundary,
-makes real repair-first Orca operation the goal of v0.23.0, and defers gradual
-process-specific migration to v0.24.0. No hidden fallback remains.
+an AI software team. v0.22.0 physically retires Olympus/ACP and the disconnected
+Python core, preserves the default-off zero-tool Aether MCP source boundary, and
+qualifies the exact Orca 1.4.167 desktop-renderer/public-CLI binding through
+deterministic M3-M5 and one bounded two-worker model-backed M5.4 pass. The active
+v0.23.0 candidate installs the real 15-tool surface in the named local runtime;
+M1.2 passes, while M1.3 tool learning and model-backed production entry remain
+incomplete. v0.23.0 continues MCP testing, debugging, and tool/context
+optimization. v0.24.0 is only a preserved proposal until Christopher explicitly
+opens it. No hidden fallback remains.
 
 </div>
 
@@ -45,7 +47,7 @@ Run `aether` after setup, then configure the generated `home/config.yaml` and pr
 | 🧠 | **Stable Generic Roster** | Hefesto, Daedalus, and Ictinus are retained generic archetypes; Ariadna is conditional/disabled, while Athena and Etalides are retired/forbidden. Production qualification belongs to v0.23.0. |
 | 🧭 | **Product Layer** | Hermes behavior, product decisions, specialist participation, verification policy, semantic acceptance, and release authority. |
 | 🐋 | **Qualified Orca Integration** | v0.22.0 proves bounded lifecycle, one/two-worker execution, overlap, messaging, integration, recovery, and cleanup on the exact qualified binding; v0.23.0 turns it into the normal real-work path. |
-| 🔒 | **Disabled MCP Operational Facade** | `aether-mcp` exposes the approved 15-tool control/trace and Orca adapter surface with explicit state-root and trusted-launch requirements. The v0.23.0 local installer registers only a disabled entry and supplies status, doctor, and rollback; live production entry remains separately gated. |
+| 🧪 | **Active MCP Optimization Candidate** | The named local v0.23.0 installation exposes the current 15-tool control/trace and Orca adapter surface with explicit state-root and trusted-launch requirements. M1.2 installation/rollback passes; M1.3 tool learning, model-backed execution, guidance, and surface optimization remain gated and measurable. |
 | 🔌 | **Any Provider** | OpenAI, Anthropic, Google, DeepSeek, Qwen, Ollama, OpenRouter. Each Daimon can use a different model. |
 | 🛠️ | **95 Skills** | Pre-built procedural memory for coding, research, DevOps, creative work, and more. |
 | ✅ | **Reliability Contracts** | Six Daimon profiles use role-specific evidence and verification contracts, checked by a 19-case isolated benchmark. |
@@ -66,11 +68,11 @@ Hermes (hermes-agent)
   ├── implements bounded work in parallel
   └── owns product routing and semantic acceptance
                       │
-       Aether MCP v1alpha2 (unregistered; 15 approved tools)
+       Aether MCP v1alpha2 (active candidate; 15 current tools)
        admission / receipts / protected trace / catalog
                       │
-       qualified internally through M5.4
-       v0.23.0 production registration pending
+       M1.2 installed/rollback accepted
+       M1.3 production-entry and surface learning active
                       ▼
                   Orca Run
                       │
@@ -84,7 +86,7 @@ Hermes (hermes-agent)
 ```
 
 - **Aether** owns product meaning through Hermes, profiles, skills, decisions, and acceptance policy—not through a parallel coordination kernel.
-- **Aether MCP operational entry** composes the typed control/trace and qualified public Orca adapter services into the approved 15-tool surface while remaining unregistered; it does not own Run, Task, worker, terminal, worktree, or message state.
+- **Aether MCP operational entry** composes the typed control/trace and qualified public Orca adapter services into the current 15-tool compatibility surface in the named local candidate; it does not own Run, Task, worker, terminal, worktree, or message state. v0.23.0 is measuring whether richer metadata or a smaller intent-level normal surface improves use without weakening diagnostics or authority.
 - **Orca** owns Run, Task, Dispatch, messages, workers, terminals, worktrees, recovery, and cleanup mechanics on the exact qualified binding. Pure Headless support remains unqualified.
 - **One feature branch** is the integration line; potentially conflicting writers use Orca child worktrees, while strictly disjoint scopes may share the current checkout.
 - **Existing `.aether` stores** are preserved and untouched; this candidate has no continuity or self-improvement reader/writer.
@@ -104,10 +106,9 @@ Hermes (hermes-agent)
 | **Daedalus** | UX/UI Designer | 2 | Designs experiences, not just mockups. |
 | **Ictinus** | Backend Architect | 1 | Scales databases, APIs, infrastructure. Consultant on demand. |
 
-These tracked profiles preserve current and historical contracts; physical
-presence does not grant participation. The v0.22.0 candidate does not currently
-provide a registered runtime that invokes them. v0.23.0 will qualify only the
-retained generic roster through the repair-first Orca production path.
+These tracked profiles preserve current and historical contracts; physical presence does not grant participation. The active v0.23.0 MCP candidate
+does not yet have accepted model-backed production entry. It will qualify only
+the retained generic roster through the repair-first Orca path after M1 passes.
 
 ---
 
@@ -124,7 +125,7 @@ Aether-Agents/
 │   ├── setup.sh           ← Install Hermes + generate configs/wrappers
 │   ├── update.sh          ← Git pull + Hermes/config update
 │   └── start-gateway.sh  ← Systemd gateway manager
-├── src/aether_mcp/       ← unregistered M1 operational MCP facade
+├── src/aether_mcp/       ← active v0.23 MCP candidate and Orca facade
 ├── schemas/              ← versioned Aether MCP and Orca catalog bundles
 ├── .aether/               ← protected local/historical state (gitignored)
 ├── docs/guides/           ← Installation, configuration, quickstart

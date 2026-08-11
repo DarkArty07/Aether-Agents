@@ -69,7 +69,7 @@ The user acts primarily as product owner and is not expected to provide advanced
 - The **user** owns vision, visible behavior, material scope, priorities, accepted compromises, consequential external effects, and final acceptance.
 - **Hermes** translates product intent into a bounded work contract and synthesizes material escalations in product language.
 - **Aether product decisions and Hermes policy** define participation, verification, protected effects, review, and semantic acceptance without granting product authority to an execution substrate.
-- **No multi-agent execution runtime is active** in the v0.22.0 candidate. The Hermes-led Orca path has bounded M5.4 integration evidence but remains zero-tool and unregistered; PDR-0014 makes its separately gated production entry the first v0.23.0 capability.
+- **The named local v0.23.0 MCP candidate is active but not yet accepted as the normal multi-agent path.** It exposes 15 tools and M1.2 passes; model-backed M1.3 and the M1.4 production-entry decision remain incomplete. v0.22.0 remains the official default-off, zero-tool source boundary.
 - **Daimons** exercise specialist judgment inside explicit task and authority boundaries.
 - **Deterministic policy and tools** enforce permissions, budgets, evidence gates, and irreversible-effect boundaries.
 
@@ -88,7 +88,7 @@ Aether decides routine, reversible technical mechanics autonomously. It escalate
 - Aether uses a small set of stable specialist archetypes and may create several workers from one archetype for independent Tasks; it does not create a new personality per technology or subtask.
 - The target roster retains Hefesto, Daedalus, and Ictinus; keeps Ariadna conditional and disabled; proposes an unimplemented Independent Verifier; and retires Athena and Etalides from future routing.
 
-The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md). PDR-0012 and [`docs/architecture/ORCHESTRATION.md`](../architecture/ORCHESTRATION.md) govern the Hermes-led Orca replacement; PDR-0013 and [`docs/architecture/DAIMONS.md`](../architecture/DAIMONS.md) govern the target roster; PDR-0014 governs the v0.22.0 integration, v0.23.0 production-dogfooding, and v0.24.0 workflow-migration sequence.
+The historical v0.19 operating model is retained in [`docs/knowledge/MULTI_AGENT_MODEL.md`](../knowledge/MULTI_AGENT_MODEL.md). PDR-0012 and [`docs/architecture/ORCHESTRATION.md`](../architecture/ORCHESTRATION.md) govern the Hermes-led Orca replacement; PDR-0013 and [`docs/architecture/DAIMONS.md`](../architecture/DAIMONS.md) govern the target roster; amended PDR-0014 governs v0.22.0 integration, active v0.23.0 production dogfooding/MCP optimization, and the explicit owner gate before any proposed v0.24.0 workflow migration.
 
 ## Approved learning and memory doctrine
 

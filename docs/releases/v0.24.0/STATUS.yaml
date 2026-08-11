@@ -1,8 +1,8 @@
 schema_version: 1
 release: v0.24.0
 title: Gradual Workflow Migration
-status: approved_direction_process_order_not_frozen
-last_updated: '2026-08-09'
+status: preserved_proposal_inactive_requires_explicit_owner_decision
+last_updated: '2026-08-11'
 product_owner: Christopher (DarkArty07)
 governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.md
 canonical_roadmap: docs/releases/v0.24.0/ROADMAP.md
@@ -10,12 +10,17 @@ release_issue: 168
 github_milestone: v0.24.0 — Gradual Workflow Migration
 predecessor:
   release: v0.23.0
-  required_state: generic_orca_production_operation_accepted_and_released
+  required_state: generic_orca_production_operation_accepted_and_released_plus_explicit_owner_open_decision
 implementation:
   started: false
   branch: null
   commit: null
+activation:
+  authorized: false
+  explicit_owner_open_decision: required
+  automatic_after_v0_23: forbidden
 entry_evidence_required:
+  - explicit product-owner decision opening v0.24.0
   - v0.23.0 production incidents and measurements
   - process and consumer inventory
   - first process value and risk ranking
@@ -23,7 +28,7 @@ entry_evidence_required:
 milestones:
   M0:
     title: inventory and first process selection
-    status: blocked_on_v0.23.0_evidence
+    status: blocked_on_explicit_owner_decision_and_v0.23.0_evidence
   M1:
     title: reusable process contract pattern
     status: not_started
@@ -65,4 +70,4 @@ non_goals:
   - rebuild_orca_inside_aether
   - full_learning_dataset_or_training_without_new_scope
 next_action:
-  after_v0.23_acceptance: inventory processes and freeze exactly one first migration
+  current: preserve_only_no_action_until_explicit_owner_decision

@@ -1,7 +1,7 @@
 # v0.23.0 Orca Production Operating Policy
 
 > **Status:** APPROVED POLICY — EFFECTIVE ONLY AFTER THE M1 PRODUCTION-ENTRY GATE
-> **Date:** 2026-08-09
+> **Date:** 2026-08-09; amended 2026-08-11
 > **Owner:** Christopher (DarkArty07)
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
 
@@ -9,7 +9,12 @@
 
 This policy governs real Aether multi-agent work after Aether MCP + Orca has been installed, registered, validated, and accepted through v0.23.0 M1. It prevents production dogfooding from hiding defects through a legacy fallback.
 
-Until M1 passes, the current runtime truth remains: Aether MCP is default-off and zero-tool, Orca is not the installed normal path, and this policy describes the approved target rather than an active state.
+Until M1 passes, Aether MCP may be installed and active as a bounded v0.23.0
+candidate, but Orca is not yet the accepted normal multi-agent path. The current
+named installation exposes 15 tools and has passed M1.2; M1.3 model-backed
+qualification and the M1.4 production-entry decision remain pending. This policy
+therefore describes the post-entry routing contract while current candidate use
+remains controlled qualification and repair.
 
 ## Routing rule
 
@@ -130,6 +135,35 @@ Operational evidence may contain only the minimum needed to diagnose and compare
 Never persist credentials, tokens, passwords, connection strings, private chain-of-thought, unrestricted terminal history, foreign-project content, or unreviewed raw provider payloads. Sensitive values are replaced with `[REDACTED]`; a redaction failure quarantines the evidence.
 
 Operational traces are not automatically training-eligible. Dataset construction, export, training, fine-tuning, and promotion require separate scope and authority.
+
+## MCP learning and tool-surface optimization
+
+v0.23.0 treats the usability of the Aether MCP contract as product behavior, not
+cosmetic documentation. An incident may include:
+
+- a generic or misleading tool description;
+- a missing precondition or identity provenance rule;
+- an avoidable wrong-order or wrong-target call;
+- an error that does not distinguish retry, reconcile, user decision, or hard
+  blocker;
+- excessive always-visible context or repeated mechanical correlation work;
+- a result that implies execution when it only validates or plans;
+- source, wheel, installed package, live process, discovered catalog, or prompt
+  cache drift.
+
+Accepted repairs should place learning in the narrowest durable layer:
+descriptions and field schemas for selection context, typed results/errors for
+state transitions, tests for mechanical regressions, reference for exact lookup,
+trace/evidence for observed runs, and decisions for product authority.
+
+The current 15 tools remain the compatibility baseline. A smaller intent-level
+normal surface with retained diagnostic operations is a proposal under
+`MCP_TOOL_SURFACE_LEARNING_PLAN.md`, not an accepted replacement. Tool count,
+call count, or token reduction cannot compensate for hidden effects, weaker
+diagnostics, authority drift, lower correctness, or incomplete cleanup.
+
+No v0.23.0 acceptance, incident evidence, or source Release automatically starts
+v0.24.0. Version progression requires a later explicit product-owner decision.
 
 ## Session closeout
 

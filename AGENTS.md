@@ -4,24 +4,30 @@ This file is the canonical project context. It is read automatically by hermes-a
 
 ## Current Orca adoption boundary
 
-PDR-0014 rebaselines the transition into three product versions:
+PDR-0014 distinguishes one released boundary, one active candidate, and one
+preserved future proposal:
 
 - **v0.22.0 — Orca Integration Foundation:** scope ends at the accepted M5.4
   boundary. The exact binding is Orca 1.4.167 desktop renderer plus public
   structured CLI, Codex CLI 0.147.0 and the bounded `gpt-5.6-terra` acceptance.
   Aether MCP remains default-off, unregistered and exactly zero-tool. The source
   release is official; activation is not part of v0.22.0.
-- **v0.23.0 — Orca Production Dogfood:** after v0.22.0 publication, the first
-  milestone must implement, register, validate and separately activate the real
-  Aether MCP + Orca path with rollback. Once that gate passes, all real
-  multi-agent Tasks use Orca; inability to use it opens an
+- **v0.23.0 — Orca Production Dogfood and MCP Optimization:** the real 15-tool
+  Aether MCP + Orca path is installed and active in the named local runtime;
+  M1.2 passes, while M1.3 tool learning and the model-backed production-entry
+  gate remain incomplete. This release owns continued MCP testing, debugging,
+  descriptions, progressive disclosure, recovery guidance, context/tool-surface
+  optimization, real-task repair, generic-roster qualification and measured
+  refinement. The 15 tools remain the compatibility baseline until a frozen
+  comparison and explicit product-owner decision accepts another surface. Once
+  production entry passes, inability to use Orca opens an
   `ORCA_INTEGRATION_INCIDENT`, blocks the original Task, and requires repair plus
   same-path retry. Olympus, `talk_to`, Harmonia, ACPManager, aliases, dual-write
   and silent fallback are forbidden for completing that Task.
-- **v0.24.0 — Gradual Workflow Migration:** process-specific workflows migrate
-  one at a time from v0.23.0 evidence. Generic archetypes remain stable; workflow
-  behavior belongs in versioned contracts/skills, with per-process activation,
-  rollback and legacy retirement.
+- **v0.24.0 — Preserved Gradual Workflow Migration proposal:** not active and
+  not the automatic successor to v0.23.0. Its roadmap preserves a possible
+  process-by-process direction, but no branch, migration, activation or legacy
+  retirement begins without a new explicit product-owner decision.
 
 Hermes may still work directly when one accountable owner is the deliberate
 product choice. If Orca itself is unavailable, Hermes may act directly only as a
@@ -33,13 +39,16 @@ Canonical authority:
 - `docs/decisions/PDR-0014-versioned-orca-production-adoption.md`;
 - `docs/releases/v0.22.0/ROADMAP.md` and `RELEASE_BOUNDARY.md`;
 - `docs/releases/v0.23.0/ROADMAP.md` and `PRODUCTION_OPERATING_POLICY.md`;
+- `docs/releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md`;
 - `docs/releases/v0.24.0/ROADMAP.md`;
 - GitHub ledgers #166, #167 and #168; release PR #163.
 
-The v0.22.0 source publication does not authorize installation, registration,
-restart, runtime activation, credentials, workers, model calls, spend or live
-Olympus retirement. The next material boundary is a separately frozen v0.23.0
-implementation and activation Task with rollback.
+The v0.22.0 source publication did not authorize installation or activation;
+those later v0.23.0 effects are recorded separately. The next material boundary
+is the v0.23.0 M1.3 guidance-contract discussion followed by separately
+authorized compatible metadata implementation and a bounded model-backed Task.
+No current planning work authorizes tool removal, runtime mutation, model use,
+spend, release, or transition to v0.24.0.
 
 ## Historical v0.22.0 implementation chronology
 
@@ -141,7 +150,19 @@ The v0.19.x roadmap is closed at v0.19.5 with verdict `VIABLE — BOUNDED`. The 
 
 ## Aether self-improvement cycle
 
-**Current runtime policy** — no specialist execution runtime is registered in the v0.22.0 candidate. Hermes may perform bounded work directly; work that materially requires an unavailable specialist remains an explicit capability gap until the v0.23.0 production-entry gate passes. After that gate, every multi-agent Task must use Aether MCP + Orca and any failure must follow the repair-and-same-path-retry policy; never introduce a hidden `talk_to`, Harmonia, ACP, Olympus, or renamed fallback. Other projects must never mutate Aether incidentally. Read `docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md` and `docs/knowledge/SELF_IMPROVEMENT_CYCLE.md`; `docs/releases/v0.20.0/CYCLE.yaml` is historical evidence, not an active candidate manifest.
+**Current runtime policy** — the named local v0.23.0 candidate exposes 15 Aether
+MCP tools and has passed M1.2, but model-backed M1.3 and the production-entry
+decision remain incomplete. Hermes may perform bounded work directly; work that
+materially requires an unavailable specialist remains an explicit capability
+gap until production entry passes. After that gate, every multi-agent Task must
+use Aether MCP + Orca and any failure must follow the repair-and-same-path-retry
+policy; never introduce a hidden `talk_to`, Harmonia, ACP, Olympus, or renamed
+fallback. Other projects must never mutate Aether incidentally. Read
+`docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md`,
+`docs/releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md`, and
+`docs/knowledge/SELF_IMPROVEMENT_CYCLE.md`;
+`docs/releases/v0.20.0/CYCLE.yaml` is historical evidence, not an active
+candidate manifest.
 
 **What is enforced by code, and what is not.** The candidate contains no self-improvement runtime, ledger implementation, hook, active manifest, evaluator, causality engine, promotion implementation, or release-evidence projector. Existing schema-v5 databases and v0.20 evidence are preserved as historical/local data but have no candidate reader or writer. PDR-0009 remains product policy only. No causal claim that Aether improved can currently be derived from the candidate.
 

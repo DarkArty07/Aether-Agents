@@ -1,11 +1,16 @@
 # Aether Agents v0.24.0 Roadmap — Gradual Workflow Migration
 
-> **Status:** APPROVED DIRECTION — PROCESS ORDER NOT YET FROZEN
-> **Date:** 2026-08-09
+> **Status:** PRESERVED PROPOSAL — INACTIVE; EXPLICIT OWNER DECISION REQUIRED
+> **Date:** 2026-08-09; gate amended 2026-08-11
 > **Product owner:** Christopher (DarkArty07)
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
 > **GitHub ledger:** https://github.com/DarkArty07/Aether-Agents/issues/168
-> **Predecessor:** accepted v0.23.0 generic production operation
+> **Potential predecessor:** accepted v0.23.0 generic production operation
+
+This document preserves a possible future direction. It is not an active
+release roadmap, implementation plan, reserved next version, or authorization
+to create a branch, migrate a workflow, activate a process, or retire a legacy
+path. Christopher must explicitly decide whether and when v0.24.0 begins.
 
 ## 1. Product goal
 
@@ -17,8 +22,10 @@ v0.24.0 answers:
 
 ## 2. Entry gate
 
-v0.24.0 does not begin merely because its roadmap exists. It requires:
+v0.24.0 does not begin merely because its roadmap exists or because v0.23.0 is
+accepted or released. It requires:
 
+- a new explicit product-owner decision opening v0.24.0;
 - v0.23.0 generic Orca operation accepted and released;
 - real-session incident and measurement evidence;
 - an inventory of current process-specific workflows and consumers;
@@ -26,7 +33,9 @@ v0.24.0 does not begin merely because its roadmap exists. It requires:
 - exact baseline, Task contract, owner, inputs, outputs, tools, evidence, acceptance, activation, rollback, and retirement boundary;
 - no unresolved v0.23.0 incident that invalidates the selected process foundation.
 
-The process order intentionally remains unfrozen until this evidence exists.
+The process order intentionally remains unfrozen until this evidence exists and
+the owner explicitly opens the version. Evidence is an input to that decision,
+not implicit authorization.
 
 ## 3. Design rules
 
@@ -54,7 +63,10 @@ The following are candidates, not a frozen sequence:
 
 Etalides is retired and no v0.24.0 workflow may depend on it. Research gaps are handled directly by Hermes or remain explicit until a separately approved replacement exists. Athena remains forbidden; security evidence is proportional and tool/evidence based, with any independent authority separately approved.
 
-## 5. Milestones
+## 5. Preserved milestone proposal
+
+Every milestone below is `NOT STARTED / BLOCKED ON EXPLICIT OWNER DECISION`.
+Their presence preserves design work only.
 
 ### M0 — Inventory and choose the first migration
 
@@ -172,4 +184,6 @@ v0.24.0 is complete when:
 5. any legacy runtime retirement has zero-consumer and rollback proof;
 6. one exact source candidate and its separate installed-state claims are accepted and published.
 
-A full learning-dataset or model-improvement release remains separately scoped unless the product owner later places it explicitly inside v0.24.0.
+A full learning-dataset or model-improvement release remains separately scoped
+unless the product owner later places it explicitly inside v0.24.0. Completion
+of v0.23.0 does not change this roadmap's inactive status.

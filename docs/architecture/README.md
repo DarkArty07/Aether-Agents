@@ -30,14 +30,17 @@ target retirement disposition. The physical profile inventory will not change
 until a separately authorized implementation cut.
 
 PDR-0012 governs the preserved Hermes–Orca ownership boundary. PDR-0013 governs
-the swarm roster and personality model. PDR-0014 places bounded integration in
-v0.22.0, production dogfooding in v0.23.0, and gradual workflow migration in
-v0.24.0. ADR-0001 supersedes the prior CLI-first
-assumption and approves an Aether MCP control and trace plane between Hermes and
-Orca. The trace primarily supports system learning/refinement and future
+the swarm roster and personality model. Amended PDR-0014 places bounded
+integration in v0.22.0; production dogfooding, MCP learning, and tool-surface
+optimization in v0.23.0; and preserves gradual workflow migration as an
+inactive proposal requiring a later explicit owner decision. ADR-0001
+supersedes the prior CLI-first assumption and approves an Aether MCP control and
+trace plane between Hermes and Orca. The trace primarily supports system
+learning/refinement and future
 fine-tuning evidence; audit is secondary. The detailed MCP/learning contracts
-remain proposed and none of these decisions
-implements, registers, or activates a runtime.
+remain separately gated. Decision approval alone does not implement, register,
+or activate a runtime; the executed v0.23.0 installation and its incomplete
+production-entry state are recorded in release evidence and status.
 
 ## Architecture rules
 
