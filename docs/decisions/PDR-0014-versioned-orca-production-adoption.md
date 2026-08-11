@@ -89,6 +89,18 @@ an approved replacement. No tool is removed, hidden, renamed, grouped, or
 deprecated without frozen comparative evidence and an explicit product-owner
 decision inside v0.23.0.
 
+On 2026-08-11 UTC the product owner approved the skill-independent cold-start
+guidance architecture as design only. The accepted placement is an isolated
+Aether SOUL prompt candidate for mandatory lifecycle invariants, intent-oriented
+tool descriptions, JSON Schema identity provenance, typed state-dependent
+result/error guidance, and repeated cold-session evaluation. Canonical design,
+implementation plan, and handoff are
+`../releases/v0.23.0/MCP_COLD_START_GUIDANCE_DESIGN.md`,
+`../releases/v0.23.0/MCP_COLD_START_IMPLEMENTATION_PLAN.md`, and
+`../releases/v0.23.0/MCP_COLD_START_HANDOFF.md`. This decision does not authorize
+source/schema/prompt implementation, active SOUL or runtime mutation, model use,
+spending, tool removal, integration, release, or v0.24.0 work.
+
 ### 3. v0.24.0 remains a preserved, separately gated proposal
 
 The preserved v0.24.0 direction is **Gradual Workflow Migration**, but it is not

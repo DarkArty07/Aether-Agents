@@ -44,11 +44,15 @@ Canonical authority:
 - GitHub ledgers #166, #167 and #168; release PR #163.
 
 The v0.22.0 source publication did not authorize installation or activation;
-those later v0.23.0 effects are recorded separately. The next material boundary
-is the v0.23.0 M1.3 guidance-contract discussion followed by separately
-authorized compatible metadata implementation and a bounded model-backed Task.
-No current planning work authorizes tool removal, runtime mutation, model use,
-spend, release, or transition to v0.24.0.
+those later v0.23.0 effects are recorded separately. The v0.23.0 M1.3
+skill-independent cold-start guidance contract is approved as design in
+`docs/releases/v0.23.0/MCP_COLD_START_GUIDANCE_DESIGN.md`; its implementation
+plan and resume boundary are preserved separately. The next material boundary is
+an explicit P0 authorization to preregister the cold-session baseline and
+implement the compatible metadata plus isolated prompt candidate. Model-backed
+execution remains a later separate gate. No current planning work authorizes tool
+removal, active SOUL or runtime mutation, model use, spend, release, or transition
+to v0.24.0.
 
 ## Historical v0.22.0 implementation chronology
 

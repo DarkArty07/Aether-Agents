@@ -122,10 +122,15 @@ M1.3 now proceeds through four explicit sub-gates:
 1. **M1.3a — Fixture-first learning baseline: COMPLETE / PARTIAL EVIDENCE.**
    Invoke all 15 operations, preserve typed success/denial behavior, repair
    deterministic facade defects, and prove close/cleanup without model use.
-2. **M1.3b — Guidance-contract decision: IN DISCUSSION.** Freeze concise catalog
-   descriptions, full preconditions, identity provenance, effect/cost warnings,
-   field descriptions, and typed next-action semantics. The approximate
-   five-tool intent surface remains a candidate, not an approved contract.
+2. **M1.3b — Cold-start guidance contract: DESIGN PASS / IMPLEMENTATION GATED.**
+   `MCP_COLD_START_GUIDANCE_DESIGN.md` freezes the division between the isolated
+   SOUL prompt candidate, concise catalog summaries, full tool/precondition
+   descriptions, identity provenance, effect/model/cost warnings, typed
+   state-dependent guidance, and repeated skill-independent cold-session
+   evaluation. `MCP_COLD_START_IMPLEMENTATION_PLAN.md` and
+   `MCP_COLD_START_HANDOFF.md` preserve execution and resume gates. The
+   approximate five-tool intent surface remains a later candidate, not an
+   approved contract.
 3. **M1.3c — Compatible metadata correction: NOT AUTHORIZED.** After the design
    gate, improve the current 15-tool descriptions and schemas through RED/GREEN,
    isolated wheel/install discovery, and exact loaded-runtime convergence.
@@ -219,7 +224,8 @@ Follow `MCP_TOOL_SURFACE_LEARNING_PLAN.md`:
 
 1. freeze a progressive context contract for catalog summaries, full tool and
    field descriptions, effects, preconditions, identity provenance, errors,
-   reconciliation, retry, and next-action guidance;
+   reconciliation, retry, next-action guidance and an isolated mandatory SOUL
+   boot contract — **complete as design; implementation not authorized**;
 2. preregister equivalent cases, model/provider/account class, evaluator,
    thresholds, token/context measurement, timeout, cost ceiling, cleanup, and
    rollback before changing the surface;

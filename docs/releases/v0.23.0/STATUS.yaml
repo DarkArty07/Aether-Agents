@@ -8,6 +8,9 @@ governing_decision: docs/decisions/PDR-0014-versioned-orca-production-adoption.m
 canonical_roadmap: docs/releases/v0.23.0/ROADMAP.md
 production_policy: docs/releases/v0.23.0/PRODUCTION_OPERATING_POLICY.md
 tool_surface_plan: docs/releases/v0.23.0/MCP_TOOL_SURFACE_LEARNING_PLAN.md
+cold_start_guidance_design: docs/releases/v0.23.0/MCP_COLD_START_GUIDANCE_DESIGN.md
+cold_start_implementation_plan: docs/releases/v0.23.0/MCP_COLD_START_IMPLEMENTATION_PLAN.md
+cold_start_handoff: docs/releases/v0.23.0/MCP_COLD_START_HANDOFF.md
 release_issue: 167
 github_milestone: v0.23.0 — Orca Production Dogfood and MCP Optimization
 predecessor:
@@ -29,6 +32,7 @@ current_runtime_truth:
   orca_normal_multi_agent_path: false
   live_olympus_retired: true
   m1_3_fixture_first_qualification: partial
+  m1_3_cold_start_guidance_design: approved_implementation_not_authorized
   m1_3_model_backed_task: pending_separate_gate
 milestones:
   M0:
@@ -85,5 +89,6 @@ non_goals:
   - hidden_olympus_or_acp_fallback
   - public_multitenant_service
 next_action:
-  current: discuss_and_freeze_m1_3b_progressive_guidance_contract
-  then: separately_authorize_compatible_metadata_implementation_and_model_backed_m1_3
+  current: obtain_explicit_p0_cold_start_implementation_authorization
+  then: preregister_baseline_before_candidate_changes
+  later_gate: separately_authorize_model_backed_m1_3_prompt_promotion_and_runtime_activation

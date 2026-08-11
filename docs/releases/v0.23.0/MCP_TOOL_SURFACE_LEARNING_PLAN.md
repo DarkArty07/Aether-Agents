@@ -1,12 +1,15 @@
 # v0.23.0 Aether MCP Tool-Surface Learning and Optimization Plan
 
-> **Status:** PROPOSED DESIGN — DISCUSSION IN PROGRESS; IMPLEMENTATION NOT AUTHORIZED
+> **Status:** COLD-START GUIDANCE DESIGN APPROVED; IMPLEMENTATION AND SURFACE REPLACEMENT NOT AUTHORIZED
 > **Date:** 2026-08-11
 > **Product owner:** Christopher (DarkArty07)
 > **Current release:** v0.23.0 Orca Production Dogfood and MCP Optimization
 > **Governing decision:** `../../decisions/PDR-0014-versioned-orca-production-adoption.md`
 > **Roadmap:** `ROADMAP.md`
 > **Current evidence:** `M1_3_TOOL_QUALIFICATION_CHECKPOINT.md`
+> **Approved cold-start design:** `MCP_COLD_START_GUIDANCE_DESIGN.md`
+> **Implementation plan:** `MCP_COLD_START_IMPLEMENTATION_PLAN.md`
+> **Resume record:** `MCP_COLD_START_HANDOFF.md`
 
 ## 1. Approved product boundary
 
@@ -18,11 +21,23 @@ The following decisions are approved:
 4. The current 15 tools remain the operative compatibility baseline until a later evidence-backed tool-surface decision explicitly changes that contract.
 5. v0.24.0 does not start automatically after v0.23.0 acceptance or release. It requires a new explicit product-owner decision.
 6. Process-specific workflow migration remains outside v0.23.0 unless the product owner explicitly changes that boundary.
+7. Cold-session guidance is distributed across an isolated Aether SOUL candidate,
+   the current 15 MCP tool descriptions, property descriptions, typed
+   state-dependent results/errors, and controlled cold-session evaluation.
+8. Cold-session acceptance must not depend on Hermes choosing to load an Aether
+   skill, memory, prior conversation, or project-local MCP instructions.
 
-The following are proposals, not approved architecture:
+The following cold-start elements are approved design but remain unimplemented
+and separately gated:
 
 - enriching all 15 MCP tool and field descriptions;
 - returning machine-readable next-action guidance;
+- evaluating an isolated Hermes Prompt `3.0.0-coldstart.1` candidate without
+  modifying active Prompt 2.0.0;
+- proving the combined surface in repeated skill-independent cold sessions.
+
+The following surface alternatives remain proposals, not approved architecture:
+
 - exposing approximately five intent-level tools for ordinary Hermes use;
 - retaining the existing 15 operations as a diagnostic or advanced toolset;
 - hiding low-level Orca catalog/planning operations from the normal surface;
@@ -203,19 +218,30 @@ Canonical record: `M1_3_TOOL_QUALIFICATION_CHECKPOINT.md`.
 
 ### O1 — Freeze the guidance contract
 
-**Status:** PROPOSED; DISCUSSION REQUIRED.
+**Status:** COMPLETE — PRODUCT-OWNER-APPROVED DESIGN; IMPLEMENTATION NOT AUTHORIZED.
 
 Deliverables:
 
-- exact description template and length budget;
-- property-description convention;
-- error and next-action guidance schema;
-- effect/cost wording rules;
-- list of information that remains always visible versus loaded on demand;
-- compatibility and schema-digest impact assessment;
-- explicit cases where the server must not recommend a next action.
+- exact description template and length budget: frozen;
+- property-description and identity-provenance convention: frozen;
+- additive `aether.guidance/v1alpha1` result/error design: frozen subject to
+  known-consumer compatibility proof;
+- effect/model/cost wording rules: frozen;
+- always-visible SOUL versus Tool Search/tool-describe/result placement: frozen;
+- compatibility and schema-digest impact assessment: recorded;
+- explicit cases where the server must not recommend a next action: frozen;
+- cold-session definition, hard thresholds and prompt-candidate isolation:
+  frozen at design level.
 
-**Gate:** product owner approves or corrects the guidance contract. Approval of O1 authorizes design only unless implementation is separately authorized.
+Canonical artifacts:
+
+- `MCP_COLD_START_GUIDANCE_DESIGN.md`;
+- `MCP_COLD_START_IMPLEMENTATION_PLAN.md`;
+- `MCP_COLD_START_HANDOFF.md`.
+
+**Gate result:** satisfied for design on 2026-08-11 UTC. This approval does not
+authorize source, test, schema, prompt, configuration, runtime, model or spending
+effects.
 
 ### O2 — Pre-register the comparison
 
@@ -251,7 +277,7 @@ Mandatory safety thresholds are zero hidden protected effects, zero silent fallb
 
 ### O3 — Implement compatible metadata improvements
 
-**Status:** BLOCKED ON O1 APPROVAL AND IMPLEMENTATION AUTHORIZATION.
+**Status:** BLOCKED ON P0 IMPLEMENTATION AUTHORIZATION AND O2 PREREGISTRATION.
 
 Expected files:
 
@@ -364,9 +390,11 @@ The following decisions remain open for later discussion:
 2. which mechanical identities Aether MCP may carry automatically without hiding authority;
 3. the exact normal-use tool count and names;
 4. whether diagnostic tools remain discoverable by default or load only on demand;
-5. whether next-action guidance belongs in every result or only typed errors and transitional states;
-6. compatibility and deprecation policy if a smaller surface is accepted;
-7. benchmark cases and comparative thresholds after the first baseline distribution is measured.
+5. compatibility and deprecation policy if a smaller surface is accepted;
+6. repeated-run count, comparative soft thresholds, provider/account/model and
+   cost ceiling before the frozen cold-session experiment executes;
+7. whether observed evidence later justifies carrying additional mechanical
+   correlations without hiding authority.
 
 These are not user homework required to finish this documentation task. They define the next design discussion.
 
