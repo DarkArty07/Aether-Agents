@@ -1,0 +1,3 @@
+## 2025-02-12 - Explicit WHERE queries vs fetch-all-and-filter
+**Learning:** In trace_store.py, `records_for(self, operation_id: str)` fetches all rows into memory via `self.records()` and filters them in Python (`[record for record in self.records() if record["operation_id"] == operation_id]`). This is an O(N) memory and time bottleneck as the store grows, whereas an explicitly indexed query (`SELECT * FROM events WHERE operation_id = ? ORDER BY sequence`) pushes the work to SQLite.
+**Action:** Always replace Python-side list comprehensions filtering full table results with explicit SQL `WHERE` queries to prevent O(N) table scans.
