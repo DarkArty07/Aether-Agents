@@ -91,6 +91,7 @@ jobs:
               'src/aether_mcp/manifest.py',
               'src/aether_mcp/orca_provider.py',
               'src/aether_mcp/protocol.py',
+              'src/aether_mcp/runtime.py',
               'src/aether_mcp/server.py',
               'src/aether_mcp/trace_store.py',
           }
