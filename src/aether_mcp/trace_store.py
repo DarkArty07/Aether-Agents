@@ -472,7 +472,18 @@ class TraceStore:
 
     def records_for(self, operation_id: str) -> list[dict[str, Any]]:
         _validate_uuid(operation_id)
-        return [record for record in self.records() if record["operation_id"] == operation_id]
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT * FROM events WHERE operation_id=? ORDER BY sequence", (operation_id,)
+                ).fetchall()
+            return [self._row(row) for row in rows]
+        except StoreError:
+            raise
+        except sqlite3.Error as exc:
+            if _is_busy(exc):
+                _fail("TRACE_STORE_BUSY", "Trace store is busy")
+            _fail("TRACE_INTEGRITY_FAILURE", "Trace records cannot be read")
 
     def verify_integrity(self) -> dict[str, Any]:
         previous = _ZERO_DIGEST
