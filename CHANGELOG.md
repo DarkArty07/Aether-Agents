@@ -1,19 +1,17 @@
 # Changelog
 
-## 0.23.0.dev0 — unreleased local runtime
+## 0.23.0 — 2026-08-16
 
-- Activated the named local `aether-mcp` installation with 15 admitted tools.
-- Added skill-independent cold-start guidance to every tool description.
-- Replaced the active `3.0.0-hot.3` hot prompt with the owner-directed lean `0.4.0` behavior contract and retained the predecessor byte-for-byte for rollback.
-- Moved volatile orchestration, roster, runtime, learning and release details out of `SOUL.md` into their canonical documentation and executable contracts.
-- Reconciled autonomous routing policy so existing task authority does not trigger repeated worker/model/swarm confirmation.
-- Consolidated the v0.23 runtime history into local `main` and removed the auxiliary worktree.
-- Reduced the supported roster to Hefesto, Daedalus and Ictinus.
-- Removed residual Olympus, ACPManager, Harmonia, Honcho, retired profile, stale website and superseded narrative documentation trees.
-- Replaced version-bound documentation with a compact current-runtime map.
+### Hermes-only design reset
 
-Production entry for model-backed multi-agent work remains a separate acceptance boundary. This local source state has not been pushed, tagged or published.
+- Reset Aether Agents to a single Hermes Agent profile with reproducible configuration and GitHub governance.
+- Removed the retired multi-agent product runtime, secondary profiles, custom MCP implementation, orchestration stack, product documentation, tests, schemas, scripts, and repository-owned skill catalog.
+- Kept credentials, sessions, memories, databases, and runtime skills private and outside Git.
+- Preserved Aether Router and Orca as independent external projects; this release does not modify or retire them.
+- Replaced code-oriented CI with policy validation for the canonical 17-file manifest and simplified SemVer release automation.
 
-## 0.22.0 — 2026-08-09
+### Breaking impact
 
-Established the bounded Aether MCP and qualified provider foundation while retiring the Olympus source runtime. The tag remains available in Git history; its release evidence does not describe the active 0.23 runtime.
+- Previous multi-agent control, worker, coordination, installation, and qualification interfaces are no longer shipped.
+- Pull requests and issues targeting the removed architecture are superseded by this reset.
+- To roll back the versioned repository, use the `v0.22.0` tag or another earlier release.
