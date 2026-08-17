@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Validate canonical manifest
+      - name: Validate canonical base manifest
         shell: bash
         run: |
           set -euo pipefail
@@ -33,7 +33,9 @@ jobs:
           CHANGELOG.md
           CODE_OF_CONDUCT.md
           CONTRIBUTING.md
+          DESIGN.md
           LICENSE
+          ROADMAP.md
           SECURITY.md
           VERSION
           home/.env.example
@@ -42,11 +44,59 @@ jobs:
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
-          git ls-files | sort >"$actual"
+          git ls-files | grep -v '^specs/' | sort >"$actual"
           diff -u "$expected" "$actual"
+          test -n "$(git ls-files 'specs/**')"
+          ! git ls-files -s specs | grep -Eq '^120000 '
           grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
           ! git ls-files | grep -Eq '^(docs|src|schemas|scripts|tests|home/(profiles|skills|plugins|prompts))/'
           ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
+
+      - name: Validate accepted R0 design baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f DESIGN.md
+          test -f ROADMAP.md
+          test -f specs/r0-design-governance/spec.md
+          test -f specs/r0-design-governance/research.md
+          test -f specs/r0-design-governance/checklists/requirements.md
+          grep -Eq '^\*\*Stage status\*\*: done' specs/r0-design-governance/spec.md
+          grep -Eq '^\*\*Depends on\*\*:' specs/r0-design-governance/spec.md
+          grep -Eq '^\*\*May affect\*\*:' specs/r0-design-governance/spec.md
+          ! grep -Fq -- '- [ ]' specs/r0-design-governance/checklists/requirements.md
+          ! grep -Eq 'BORRADOR|REABIERTA|REQUIERE REVISIÓN|SUPERSEDIDA|DESCARTADA|\bPENDIENTE\b|`B0`|`B1`|`B2`' ROADMAP.md
+          test "$(git ls-files -s DESIGN.md | awk '{print $1}')" = 100644
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+          spec = Path('specs/r0-design-governance/spec.md').read_text()
+          research = Path('specs/r0-design-governance/research.md').read_text()
+          roadmap = Path('ROADMAP.md').read_text()
+
+          fr = re.findall(r'^- \*\*FR-(\d{3})\*\*:', spec, re.M)
+          sc = re.findall(r'^- \*\*SC-(\d{3})\*\*:', spec, re.M)
+          decisions = re.findall(r'^## R0-D(\d{2}) —', research, re.M)
+          assert fr == [f'{i:03d}' for i in range(1, len(fr) + 1)]
+          assert sc == [f'{i:03d}' for i in range(1, len(sc) + 1)]
+          assert decisions == [f'{i:02d}' for i in range(1, len(decisions) + 1)]
+          assert len(re.findall(r'^\| \*\*R\d+\*\* \|', roadmap, re.M)) == 14
+          assert '001-r0-design-governance' not in '\n'.join(
+              p.read_text(errors='ignore') for p in root.rglob('*.md')
+          )
+
+          for path in root.rglob('*.md'):
+              text = path.read_text()
+              assert text.count('```') % 2 == 0, f'unbalanced fence: {path}'
+              for target in re.findall(r'(?<!!)\[[^]]+\]\(([^)]+)\)', text):
+                  target = target.split('#', 1)[0]
+                  if not target or target.startswith(('http://', 'https://', 'mailto:')):
+                      continue
+                  resolved = (path.parent / target).resolve()
+                  assert resolved.exists(), f'broken link in {path}: {target}'
+          PY
 
   pull-request-target:
     if: github.event_name == 'pull_request'
