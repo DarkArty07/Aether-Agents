@@ -1,0 +1,56 @@
+name: Repository Policy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=$(mktemp)
+          actual=$(mktemp)
+          trap 'rm -f "$expected" "$actual"' EXIT
+          cat >"$expected" <<'EOF'
+          .github/ISSUE_TEMPLATE/bug_report.md
+          .github/ISSUE_TEMPLATE/feature_request.md
+          .github/PULL_REQUEST_TEMPLATE.md
+          .github/dependabot.yml
+          .github/workflows/policy.yml
+          .github/workflows/release.yml
+          .gitignore
+          AGENTS.md
+          CHANGELOG.md
+          CODE_OF_CONDUCT.md
+          CONTRIBUTING.md
+          LICENSE
+          SECURITY.md
+          VERSION
+          home/.env.example
+          home/SOUL.md
+          home/config.yaml.template
+          EOF
+          sed -i 's/^          //' "$expected"
+          sort -o "$expected" "$expected"
+          git ls-files | sort >"$actual"
+          diff -u "$expected" "$actual"
+          grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
+          ! git ls-files | grep -Eq '^(docs|src|schemas|scripts|tests|home/(profiles|skills|plugins|prompts))/'
+          ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
+
+  pull-request-target:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require main as the pull-request target
+        run: test "${{ github.base_ref }}" = main

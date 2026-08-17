@@ -1,28 +1,15 @@
 ## Description
-Brief description of what this PR does and why.
 
-## Type of Change
-- [ ] `feat:` New feature (MINOR bump)
-- [ ] `fix:` Bug fix (PATCH bump)
-- [ ] `refactor:` Code restructure without behavior change
-- [ ] `docs:` Documentation update
-- [ ] `test:` Adding or fixing tests
-- [ ] `chore:` Maintenance, config, dependencies
+Describe the policy or configuration change and its user-visible effect.
 
-## Related Issues
-Fixes #<!-- issue number -->
+## Validation
 
-## Testing
-- [ ] All existing tests pass (`pytest`)
-- [ ] New tests added for new functionality
-- [ ] Linter passes (`ruff check tests/ scripts/check_release_governance.py`)
+- [ ] The tracked manifest matches policy.
+- [ ] Workflow YAML is valid.
+- [ ] No local runtime state or secrets are included.
 
 ## Checklist
-- [ ] One logical change per commit
-- [ ] Commit messages follow convention (`type: concise subject`)
-- [ ] README updated if user-facing change
-- [ ] CHANGELOG.md updated with entry under `[Unreleased]`
 
-## Breaking Changes
-- [ ] This PR includes breaking changes
-- If yes, describe what breaks and how to migrate:
+- [ ] One logical change per commit
+- [ ] Commit message follows Conventional Commits
+- [ ] SemVer impact considered

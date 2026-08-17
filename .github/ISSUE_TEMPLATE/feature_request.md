@@ -1,19 +1,15 @@
 ---
-name: Feature Request
-about: Suggest a feature for Aether Agents
+name: Feature request
+about: Suggest a Hermes profile or policy improvement
 title: "[FEATURE] "
 labels: enhancement
 assignees: ''
 ---
 
 ## Problem
-What problem does this feature solve? What are you trying to do that isn't working?
 
-## Proposed Solution
-Describe the solution you'd like.
+## Proposed change
 
-## Alternatives Considered
-What other approaches have you considered?
+## Alternatives considered
 
-## Additional Context
-Any other context, screenshots, or references.
+## Additional context
