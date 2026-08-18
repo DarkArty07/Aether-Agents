@@ -219,3 +219,50 @@ constitution is not a runtime default.
 satisfied, not superseded. R3 is unchanged; FR-1310a/b restate R3-FR-306/307/309/312 rather than
 adding intent. `CLAUDE.md` was reconciled downward, since it stated the template was still unfilled
 and read as forbidding what R0 §155 authorizes.
+
+## 8. Cross-artifact coverage pass
+
+**Need**: Spec Kit's `analyze` phase cannot run against this repository — it requires `spec.md`,
+`plan.md` and `tasks.md` for one feature, and no plan or task artifact exists or should exist before
+build. Its detection passes were therefore applied directly to the fourteen stage specifications.
+
+**Method**: Requirement inventory (475 FR, 101 SC); cross-reference resolution for every
+`RN-FR-nnn`, `RN-SC-nnn`, `PD-nn` and `RN-Dnn` citation; placeholder and vague-adjective scans over
+576 requirement bodies; stage-status consistency between each `spec.md` and `ROADMAP.md`; and
+coverage of the 76 requirements declared in the `Requirements Inherited by Later Stages` tables
+against the stage each names as owner. Keyword overlap only nominated candidates; every finding was
+then confirmed or discarded by reading the named stage.
+
+**Clean**: no unresolved or mis-stage-prefixed cross-reference; no requirement number defined in two
+stages; no placeholder; no vague adjective in any requirement body; no status mismatch. Three
+nominated gaps were discarded as false positives — R2→R5 is satisfied by R5-FR-523, R3→R7 by
+R7-FR-738/738a/738b, and R9→R10 by R10 §5.
+
+**Findings and disposition**: six inherited requirements were declared by an upstream stage and never
+landed in the stage named as their owner. None was a conflict; each was intent already accepted but
+not carried through.
+
+| Inherited requirement | Declared by | Owner | Disposition |
+|---|---|---|---|
+| Repeated denial attempts are a reportable condition | R10 §10 | R11 | Added R11-FR-1110a. R10-FR-1015 already declared the pattern reportable; R11-FR-1110 covered only a single denied call |
+| Deliver an independently runnable increment per converged story | R3 §6 | R7, R8 | Added R8-FR-817a. Absent from both named owners |
+| Decompose along independently testable user stories | R2 §8 | R7 | Added R7-FR-701a. R7-FR-701 required deriving the breakdown from the contract but never named its axis |
+| Steering exists; redirecting a worker need not mean killing it | R4 §9 | R7 | Added R7-FR-742a, recording it as deliberately **not** adopted across role boundaries per PD-29, rather than leaving it unresolved |
+| Enabling a messaging channel is a per-profile configuration decision | R6 §8 | R12 | Added R12-FR-1205a. Already carried in R13 §7, so the gap was tracked but unplaced |
+| A runnable validation guide is a completion requirement | R1 §4 | R7 → **R11** | Owner corrected. The requirement is satisfied by R11-FR-1102; the row pointed at a stage that never carried it |
+
+**Alternatives considered**: Deleting the uncovered rows was rejected — each states accepted intent,
+so removing the row would discard the decision rather than fulfil it. Deferring all six to build was
+rejected because an inherited requirement with no owning requirement becomes invisible the moment
+the roadmap stops being read, which is the failure FR-1342 exists to prevent.
+
+**Impact**: R4 through R13 were already `in-progress`, so five of the six additions touch stages
+awaiting review and no accepted stage reopens. R1 is `done` and its change is a routing correction —
+the decision it states is unchanged, only the stage named as its downstream owner — so R1 is
+**not** returned to `in-progress`. R2, R3, R4, R6 and R10 are unchanged: each already stated its
+requirement correctly and the defect was in the receiving stage.
+
+**Recording note**: R7, R8, R11 and R12 carry inline `Evidence` sections rather than research
+artifacts (ROADMAP §3). Those sections hold verified-or-assumed claims about the runtime, and these
+six changes introduce no runtime claim, so the rationale is recorded here rather than being written
+into them as evidence it is not.

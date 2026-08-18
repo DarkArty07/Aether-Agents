@@ -33,6 +33,7 @@ The runtime resolves each worker's model from its own profile when the dispatche
 - **FR-1203**: The implementer tier is where nearly all tokens are spent, and is therefore where cost is governed. Reducing cost anywhere else is optimising the wrong term.
 - **FR-1204**: A cheaper implementer tier MUST still satisfy the project constitution, which is scored identically regardless of which model produced the work (R11-FR-1132).
 - **FR-1205**: Aether MUST NOT express capability differences by adding roles or profiles (PD-30, PD-33).
+- **FR-1205a**: Enabling a messaging channel is a **per-profile** configuration decision, not a system-wide one. Where one is enabled it attaches to Morfeo's profile alone (R6-FR-616); no other profile acquires it as a side effect of how tiers are assigned.
 
 ## 3. Per-Unit Override
 

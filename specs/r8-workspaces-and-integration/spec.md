@@ -66,6 +66,7 @@ The resolution is a writer rule, not a new mechanism:
 - **FR-815**: Integration order MUST follow the dependency graph, not completion order. Two units that completed in an arbitrary order do not thereby acquire an integration order.
 - **FR-816**: Each unit MUST enter the integration branch as its **own** commit or merge commit. Units MUST NOT be combined into one integration commit, because that would destroy the per-unit reversibility R1-FR-126 requires.
 - **FR-817**: Integration MUST run the project's verification before the integrated result is declared done, and the result of that run is evidence (R11).
+- **FR-817a**: Each converged story MUST yield an **independently runnable** increment. Integration order (FR-815) and one commit per unit (FR-816) preserve reversibility; this preserves deliverability — the increment for one story MUST be runnable without the sibling stories it was decomposed alongside (R3 §6).
 - **FR-818**: A conflict between two units MUST NOT be adjudicated by either author. It is resolved by a reconciliation card whose parents are both conflicting cards, executed by a fresh worker that produced neither side (PD-31).
 - **FR-819**: A reconciliation card MAY carry a stronger model and a pinned reconciliation procedure. Neither creates a new role (PD-33).
 

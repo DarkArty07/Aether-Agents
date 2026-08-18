@@ -109,7 +109,7 @@ These follow from R1 and MUST NOT be rediscovered independently:
 | Spec Kit's clarification budget is removed while its taxonomy and question-quality rules are kept | R3 |
 | Units of work must have a bounded blast radius so one wrong unit is not fatal | R7 |
 | Convergence must be bounded by attempt limits, since neither spending nor approval bounds it | R7 |
-| A runnable validation guide is a completion requirement, not documentation | R7 |
+| A runnable validation guide is a completion requirement, not documentation | R11 |
 | Every integrated change must be individually reversible after the fact; there is no pre-merge gate | R8 |
 | Irreversible effects must be identified and constrained, since no human review precedes them | R8, R10 |
 | Morfeo's owner-preference memory is the system's only personalization mechanism | R9 |

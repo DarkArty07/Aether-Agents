@@ -42,6 +42,7 @@ Every completion MUST answer four questions:
 - **FR-1108**: Structured metadata MUST NOT carry secrets, raw logs, tokens, or unrelated transcripts. Pointers and summaries only (R9-FR-908).
 - **FR-1109**: A decision card's evidence is the decision itself, stated as binding, with the reasoning that produced it (R7-FR-718).
 - **FR-1110**: A denied protected effect MUST appear in the unit's evidence, including what was attempted and why it was refused (R10-FR-1014).
+- **FR-1110a**: Repeated attempts at a denied effect MUST surface as a reportable condition in their own right, not as a series of unrelated single denials. R10-FR-1015 declares the pattern reportable; the pattern is only visible where denials are counted per unit, so evidence MUST distinguish one refusal from a worker routing around a gate.
 
 ## 4. Evidence Classes and Severity
 

@@ -23,6 +23,7 @@ R7 does not define branch or integration mechanics (R8), retention (R9), enforce
 R3-D01 assigned `tasks` to the supervising role because a breakdown requires concrete file paths and knowledge of the real codebase. That assignment is now load-bearing in a way R3 could not have known, because the runtime ships a competing decomposer.
 
 - **FR-701**: The supervisor MUST derive the breakdown from the contract, and MUST run cross-artifact analysis before creating any execution instance (R2-FR-214).
+- **FR-701a**: The breakdown MUST be decomposed along **independently testable user stories**, which is what keeps one wrong unit cheap instead of fatal (R2 §8, R1 §4). A breakdown organised by layer or by file touches every story at once and destroys the bounded blast radius the contract relies on.
 - **FR-702**: `tasks.md` is the breakdown of record; cards are execution instances of its units (PD-34). The supervisor MUST NOT create a card that traces to no unit.
 - **FR-703**: The supervisor MUST NOT implement. Its terminal action after fan-out is completing its own card with a summary of the decomposition.
 - **FR-704**: Every decision two sibling units would each have to make MUST be made once by the supervisor and written into **both** card bodies. Workers cannot see sibling cards, so an unstamped shared decision is a decision each worker invents differently.
@@ -130,6 +131,7 @@ The runtime provides first-class same-card review: an implementer can hand its c
 - **FR-740**: A unit expected to exceed one hour MUST emit liveness signals, or the dispatcher reclaims it as crashed and its current progress is lost.
 - **FR-741**: A reclaim MUST be treated as benign — lost progress, not a failure (R5-FR-537).
 - **FR-742**: Aether MUST NOT report an outcome the board does not record (R5-FR-538).
+- **FR-742a**: Aether MUST NOT steer a running worker across a role boundary. Steering exists and stays available inside a single worker's own run (R4-FR-417), but crossing a role boundary always uses the board (PD-29). Redirecting already-dispatched work MUST therefore use the review return path (FR-736) or a decision card (FR-717), never an out-of-band interruption.
 
 ## 10. Collision Hotspots
 
