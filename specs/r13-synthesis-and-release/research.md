@@ -1,0 +1,309 @@
+# R13 Research: Verification of the Ten Unobserved Claims
+
+**Stage**: R13
+**Date**: 2026-08-17
+**Hermes evidence**: version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`, source `home/.venv-hermes/src/hermes-agent` — the tree the runtime actually loads
+**Method**: source reading plus direct execution against an isolated board in a disposable `HERMES_HOME`. **No profile was created, no agent was spawned, no model was called, and the owner's Aether profile was not touched.**
+
+## 1. Why this pass exists
+
+R13 §5 listed ten claims the design depended on and nobody had observed. They were labelled assumed under R11-FR-1124, which is honest but weak: an assumption that a protected effect can actually be denied is not a design, it is a hope.
+
+This pass closes eight of the ten without running a single agent, by using two techniques the runtime itself provides:
+
+- **The injectable spawn function.** `dispatch_once(conn, spawn_fn=…)` accepts a substitute for the real worker launcher — the same seam the upstream test suite uses. Passing a stub exercises the entire dispatch path (reclaim, promote, atomic claim, workspace preparation, run-row creation, process accounting) and stops exactly where the model would be called.
+- **Direct calls into the board kernel.** Blocking, review, completion, and crash detection are ordinary functions. They can be driven with fabricated state and their effects read back from the database.
+
+The technique matters beyond this pass: **most of Aether's runtime assumptions are testable for free.** Only behaviour that requires a model in the loop needs paid execution.
+
+## 2. Results
+
+| # | Claim | Status | What changed |
+|---|---|---|---|
+| 1 | A worker spawns for an assigned unit | **Verified by execution** | — |
+| 2 | A crashed worker is reclaimed without losing the unit | **Verified by execution** | **A crash ticks the failure counter.** Crashes are not free (§3.2) |
+| 3 | A per-card worktree is created; two units never share a tree | **Verified by execution** | Branch form observed as `wt/<task-id>` (§3.3) |
+| 4 | Goal-mode judging terminates a unit; exhaustion blocks | **Verified in source, partially** | Wiring confirmed; the judge itself needs a model |
+| 5 | The review path claims a unit and returns rework | **Verified by execution** | `request_changes` requires an active claimed review run (§3.5) |
+| 6 | A terminal event wakes Morfeo | **Verified in source** | `review_requested` also wakes, not only terminal events |
+| 7 | A fail-closed hook denies a protected effect | **Verified by execution** | Consent and fail-closed semantics are narrower than assumed (§3.7) |
+| 8 | Automatic decomposition is confirmed inert when disabled | **Verified by execution** | — |
+| 9 | Evidence from a real unit suffices for acceptance | **Still assumed** | Not mechanically verifiable (§3.9) |
+| 10 | Cost and duration per unit are observable | **Split: duration yes, cost no** | The board records no cost at all (§3.10) |
+
+Eight of ten moved from assumed to verified. Two remain, and both are named honestly rather than quietly promoted.
+
+## 3. Findings
+
+### 3.1 The dispatch path
+
+A tick with a stub spawn claimed two ready units, resolved each workspace, called the stub with `(task, workspace_path, board)`, and recorded the returned process id on the unit. Run rows were created in `running` state with the process id attached.
+
+**Concurrency was verified as a live cap, not a per-tick budget.** With a limit of two and three eligible units, the first tick spawned exactly two; the second tick spawned none, because two were already running. This is the mechanism R7-FR-712 relies on, and it behaves as that requirement assumes.
+
+**A unit whose assignee is not a real profile is skipped, not dispatched.** With all units assigned to `implementer` — a profile that does not exist in the test home — the dispatcher spawned nothing and reported them as a skipped non-spawnable lane. Reassigning to a real profile made them dispatch immediately. This confirms R5-FR-508a from the other direction.
+
+### 3.2 A crash costs an attempt **and** a failure
+
+A unit was placed in `running` with a host-local claim and a process id that does not exist. `detect_crashed_workers` found it, released the claim, cleared the process id, returned the unit to `ready`, and appended a `crashed` event carrying the dead process id and the claimer.
+
+The unit was not lost. **But `consecutive_failures` incremented to 1.**
+
+This contradicts the summary in `R9 §5`, which listed a crash as costing "one attempt" in the same sense as a stale reclaim. They are not the same:
+
+| Path | Unit returns to | Failure counter |
+|---|---|---|
+| Stale claim released (TTL expired, worker dead) | Its source phase | Not ticked |
+| **Crash detected (process gone)** | Its source phase | **Ticked** |
+
+**Consequence for R7-FR-738.** With an attempt limit of two, **two environmental crashes exhaust a unit's budget and auto-block it** — even though neither crash was the unit's fault. The unit then holds a block, and PD-37 gives it roughly one human answer before the loop breaker routes it out of the work pool. A machine that sleeps twice during an overnight run could therefore consume a unit's entire tolerance without a single defect in the work.
+
+This is the sharpest viability finding in the pass, and it is an argument for setting the attempt limit above two rather than at two.
+
+### 3.3 Per-card worktrees are real
+
+Three units were created with worktree workspaces against a scratch git repository. After one tick, the repository reported:
+
+```text
+…/wtlab                    0a4057d [main]
+…/wtlab/.worktrees/logica  0a4057d [wt/t_9f9fe65d]
+…/wtlab/.worktrees/render  0a4057d [wt/t_40619062]
+```
+
+Two separate directories, two separate branches, both from the same base commit. Concurrent implementers genuinely do not share a working tree, which is the isolation PD-31 assumes and the previous architecture could not obtain.
+
+**Observed branch form: `wt/<task-id>`.** R8-FR-809 requires Aether to use the runtime's derivation rather than invent one; this records what that derivation actually produced under an explicit worktree path. A project-linked task is documented to produce a different form, which is not exercised here.
+
+### 3.4 Goal mode
+
+The spawn builds the worker command with goal-loop environment variables and a quiet-mode flag only when the unit has goal mode set, leaving non-goal units with a clean environment. The turn budget is passed the same way.
+
+The wiring is confirmed. The judge's behaviour — that it terminates a converged unit, and that budget exhaustion blocks rather than exits silently — requires a model and remains assumed.
+
+### 3.5 The review lane works, with a precondition
+
+Driving the review path directly produced a precise picture.
+
+Repeated review requests move the unit to `review` and **never touch `block_recurrences`**, which stayed at zero throughout. This confirms R7-FR-736 and R5-FR-526a: review cycles do not consume the scarce block budget.
+
+`request_changes` initially did nothing. Reading the implementation explained why: it requires the unit to be `running` with an active run claimed **from** `review`, and returns a diagnostic rather than raising when that is not true. Simulating the missing step — a dispatcher tick while the unit sat in `review` — showed the dispatcher **does** claim review-status units and spawn a reviewer for them. With a real review run open, `request_changes` succeeded, returned the original implementer, and routed the unit back to `ready` assigned to that implementer.
+
+Final event sequence for one full cycle:
+
+```text
+created → review_requested → claimed → spawned → changes_requested
+```
+
+with attempt rows recorded per phase and the block budget untouched.
+
+**Design consequence.** The review lane is only available when a dispatcher is running. A reviewer verdict issued against a unit that is merely sitting in `review`, with nothing claimed, silently does nothing. Any Aether procedure that returns rework must go through a claimed review run.
+
+### 3.6 The wake channel
+
+The gateway's notifier watcher polls board events and resolves each subscription's delivery mode, waking the destination agent when the mode requests it and sending a passive message otherwise — the three modes R6 §6 depends on.
+
+One detail R6 did not record: **`review_requested` wakes the origin subscriber the same way a block does.** If Morfeo subscribes to a contract card and the supervising role uses same-card review, Morfeo is woken at review time, not only at completion. R6-FR-619 requires every owner-facing wake to be an end-of-work report or an unresolvable defect, so review-time wakes must be scoped to Morfeo's own reasoning and must not reach the owner.
+
+Delivery itself requires a live gateway and remains assumed.
+
+### 3.7 Enforcement: narrower than assumed, but real
+
+This claim produced the most correction, in both directions.
+
+**A hook that is not allowlisted does not fire at all.** `hermes hooks doctor` states it plainly: *"not allowlisted — hook will NOT fire at runtime"*. It does not fail closed; it is simply absent, and every effect it was meant to deny is permitted. An enforcement point can therefore be fully configured and completely inert.
+
+**But dispatcher-spawned workers are not affected.** The spawn passes `--accept-hooks` explicitly, with a comment stating the reason: workers switch to a profile-scoped home and would otherwise see that profile's empty allowlist instead of the dispatcher's. So hooks registered on the supervisor and implementer profiles **do** fire for board work.
+
+The gap is the role that is *not* dispatcher-spawned: **Morfeo**, which runs as a persistent interactive session. A hook constraining Morfeo requires consent through a terminal prompt or the auto-accept setting, and the owner's live profile currently has auto-accept off.
+
+**Blocking works.** Fed a payload representing a forbidden card creation, the hook exited 2 with a block payload and the runtime parsed it into its wire shape:
+
+```json
+{"action": "block", "message": "R10: un implementer solo crea cards de decision dirigidas al supervisor"}
+```
+
+**`fail_closed` is narrower than the design assumed.** Reading the dispatcher: it converts a **spawn error, a timeout, or malformed output** into a block. It does **not** convert an arbitrary non-zero exit into a block — a hook exiting 77 contributed nothing and the call would proceed. Explicit denial is exit 2 plus a block payload; `fail_closed` is a crash net, not a general deny-by-default.
+
+**The payload shape was captured directly**, because the documentation and the implementation disagree on it. The documentation describes a top-level `args` key; the runtime actually delivers:
+
+```json
+{
+  "hook_event_name": "pre_tool_call",
+  "tool_name": "kanban_create",
+  "tool_input": { },
+  "session_id": "…",
+  "cwd": "…",
+  "extra": { }
+}
+```
+
+A hook that reads the documented key finds nothing, compares an empty value, and — for a deny-unless-permitted rule — **denies everything**. That failure is safe but total: it would halt all work while appearing correctly configured.
+
+**One trap in the test harness itself.** `hermes hooks test --payload-file` merges a supplied payload into a synthetic one and does not replace `tool_input`; the supplied arguments land under `extra`. A hook's argument logic therefore cannot be validated with that harness alone, which is how a correct hook appeared broken during this pass.
+
+### 3.8 Disabling automatic decomposition
+
+The gateway's resolver was called directly with three configurations: unset returns enabled with a per-tick cap of three, explicitly true returns the same, and explicitly false returns disabled. The setting is honoured and is re-read each tick, so disabling it takes effect without a restart.
+
+The default is enabled. R7-FR-706 stands, and R13-FR-1332's requirement to *verify* rather than assume the disable is now a one-line check rather than an act of faith.
+
+### 3.9 Evidence sufficiency is not mechanically verifiable
+
+Whether a unit's completion evidence lets the owner accept work by running one command is a judgement about content, not a property of the board. The board guarantees the fields exist and travel; it cannot guarantee they are true or useful. This claim can only be settled by a real run and is deliberately left assumed.
+
+### 3.10 Cost is not observable from the board
+
+Duration is: `task_runs` carries `started_at`, `ended_at`, `max_runtime_seconds`, and `last_heartbeat_at`, so per-attempt wall-clock is directly available.
+
+**Cost is not.** Neither `tasks` nor `task_runs` has any column for cost, tokens, usage, or spend. The board records what happened, not what it cost.
+
+The correlation key is `tasks.session_id`: the worker's session is where the runtime's own usage accounting lives. R12-FR-1215 requires per-unit cost observability and is therefore **not satisfied by the board alone** — it requires joining a unit to its session. Recorded rather than quietly dropped.
+
+## 4. What still requires a paid run
+
+Three things, and only three:
+
+1. **The convergence judge** — that it ends a converged unit and that exhaustion blocks rather than exits silently (§3.4).
+2. **Wake delivery** — that a terminal event actually reaches Morfeo through a live gateway (§3.6).
+3. **Evidence quality** — that what a real worker writes is enough to accept by (§3.9).
+
+Everything else in R13 §5 is now observed. The walking-skeleton checkpoint is correspondingly smaller than when it was written, and its remaining purpose is narrower and clearer.
+
+## 5. Changes this pass forces
+
+| Change | Artifact |
+|---|---|
+| A crash ticks the failure counter; the attempt limit should exceed two | R7, R9 |
+| Observed branch form recorded | R8 |
+| Hook consent gap for the non-dispatched role; `fail_closed` scope; payload shape | R10 |
+| Cost is not on the board; correlation runs through the session | R12 |
+| Ten claims reduced to three | R13 |
+| Review requires a claimed review run; review wakes subscribers | R7, R6 |
+
+## 6. Method note
+
+Every finding above was produced by executing the runtime or reading the tree the runtime loads, never by reading documentation alone. Two of the corrections — the hook payload shape and the `fail_closed` scope — are cases where the documentation is wrong about the implementation, which is the third time this project has found that. PD-41 exists for this reason and this pass is its first deliberate application.
+
+## 7. Constitution materialization
+
+**Need**: `.specify/memory/constitution.md` was still the unfilled Spec Kit core template
+(`source: core`, sha `ce7549540fa45543cca797a150201d868e64495fdff39dc38246fb17bd4024b3`), while
+R0 §4 held six accepted principles and `spec.md:155` directed that a future materialization
+"must copy the accepted principles without creating a second competing governance source".
+
+**Decision**: Materialize R0 §4 into `.specify/memory/constitution.md` at v1.0.0, treating the
+Aether repository as the project it governs. The six principle bodies are copied verbatim; each
+gains one added compliance line stating a verifiable criterion (R3-FR-310). The file declares R0
+the canonical source and routes amendments through R0 §4 first, so no second authority is created.
+
+**Rationale**: R0 §155 anticipates this artifact explicitly. Keeping the principles only in a
+stage spec left the governance Spec Kit reads at runtime empty, so `analyze` and `converge` had no
+constitution to score against — the highest-severity evidence class (R11-FR-1111) was unreachable.
+
+**Evidence**: `specs/r0-design-governance/spec.md:97-127` (principles), `:155` (materialization
+directive); `.specify/memory/.constitution-template.json` (template was upstream core, unmodified);
+`.gitignore:11` (`/.specify/` — the artifact is untracked and outside the `policy.yml` manifest);
+verbatim fidelity confirmed by paragraph-level comparison of all six principles against R0 §4.
+
+**Alternatives considered**: Leaving the template unfilled was rejected because it leaves Spec Kit's
+governance hook empty while accepted principles exist. Authoring new principles was rejected as
+creating the second competing source R0 §155 forbids. Tracking the file in git was rejected because
+it would require changing both `.gitignore` and the `policy.yml` manifest for no design benefit.
+
+**Change forced in R13**: §3 assigned Morfeo no constitution guarantee at all, although R3 §2 gives
+him the `constitution` phase and R3-FR-309 makes it part of starting work. Added FR-1310a and
+FR-1310b. §4 was left unchanged: its inventory is runtime configuration, and a per-project
+constitution is not a runtime default.
+
+**Impact on other stages**: None. R0 is unchanged and remains canonical — its §155 condition is
+satisfied, not superseded. R3 is unchanged; FR-1310a/b restate R3-FR-306/307/309/312 rather than
+adding intent. `CLAUDE.md` was reconciled downward, since it stated the template was still unfilled
+and read as forbidding what R0 §155 authorizes.
+
+## 8. Cross-artifact coverage pass
+
+**Need**: Spec Kit's `analyze` phase cannot run against this repository — it requires `spec.md`,
+`plan.md` and `tasks.md` for one feature, and no plan or task artifact exists or should exist before
+build. Its detection passes were therefore applied directly to the fourteen stage specifications.
+
+**Method**: Requirement inventory (475 FR, 101 SC); cross-reference resolution for every
+`RN-FR-nnn`, `RN-SC-nnn`, `PD-nn` and `RN-Dnn` citation; placeholder and vague-adjective scans over
+576 requirement bodies; stage-status consistency between each `spec.md` and `ROADMAP.md`; and
+coverage of the 76 requirements declared in the `Requirements Inherited by Later Stages` tables
+against the stage each names as owner. Keyword overlap only nominated candidates; every finding was
+then confirmed or discarded by reading the named stage.
+
+**Clean**: no unresolved or mis-stage-prefixed cross-reference; no requirement number defined in two
+stages; no placeholder; no vague adjective in any requirement body; no status mismatch. Three
+nominated gaps were discarded as false positives — R2→R5 is satisfied by R5-FR-523, R3→R7 by
+R7-FR-738/738a/738b, and R9→R10 by R10 §5.
+
+**Findings and disposition**: six inherited requirements were declared by an upstream stage and never
+landed in the stage named as their owner. None was a conflict; each was intent already accepted but
+not carried through.
+
+| Inherited requirement | Declared by | Owner | Disposition |
+|---|---|---|---|
+| Repeated denial attempts are a reportable condition | R10 §10 | R11 | Added R11-FR-1110a. R10-FR-1015 already declared the pattern reportable; R11-FR-1110 covered only a single denied call |
+| Deliver an independently runnable increment per converged story | R3 §6 | R7, R8 | Added R8-FR-817a. Absent from both named owners |
+| Decompose along independently testable user stories | R2 §8 | R7 | Added R7-FR-701a. R7-FR-701 required deriving the breakdown from the contract but never named its axis |
+| Steering exists; redirecting a worker need not mean killing it | R4 §9 | R7 | Added R7-FR-742a, recording it as deliberately **not** adopted across role boundaries per PD-29, rather than leaving it unresolved |
+| Enabling a messaging channel is a per-profile configuration decision | R6 §8 | R12 | Added R12-FR-1205a. Already carried in R13 §7, so the gap was tracked but unplaced |
+| A runnable validation guide is a completion requirement | R1 §4 | R7 → **R11** | Owner corrected. The requirement is satisfied by R11-FR-1102; the row pointed at a stage that never carried it |
+
+**Alternatives considered**: Deleting the uncovered rows was rejected — each states accepted intent,
+so removing the row would discard the decision rather than fulfil it. Deferring all six to build was
+rejected because an inherited requirement with no owning requirement becomes invisible the moment
+the roadmap stops being read, which is the failure FR-1342 exists to prevent.
+
+**Impact**: R4 through R13 were already `in-progress`, so five of the six additions touch stages
+awaiting review and no accepted stage reopens. R1 is `done` and its change is a routing correction —
+the decision it states is unchanged, only the stage named as its downstream owner — so R1 is
+**not** returned to `in-progress`. R2, R3, R4, R6 and R10 are unchanged: each already stated its
+requirement correctly and the defect was in the receiving stage.
+
+**Recording note**: R7, R8, R11 and R12 carry inline `Evidence` sections rather than research
+artifacts (ROADMAP §3). Those sections hold verified-or-assumed claims about the runtime, and these
+six changes introduce no runtime claim, so the rationale is recorded here rather than being written
+into them as evidence it is not.
+
+## 9. Design acceptance and the EC1 plan
+
+**Acceptance**: on 2026-08-17 Christopher accepted R4 through R13 after the R4–R13 Decision Review,
+which presented 53 material decisions across the ten stages with the consequence of reversing each.
+He changed none. R0–R3 were already accepted, so the design phase is now closed end to end.
+
+A correction made during that review is worth recording, because it was mine. The review first
+presented six decisions as "open questions for the owner". Two of them were not questions at all:
+whether Aether should span machines is already settled, and R6-FR-606 records the two conditions that
+reopen it on their own terms, and the provisional numbers cannot be chosen better before a run produces data
+(R7-FR-713). Four of the remaining items are not decisions in any sense — they are limits of the
+runtime that the design accommodates: the one-block budget, Morfeo's hook-consent gap, the asymmetry
+of containment, and the absence of cost on the board. Presenting a constraint as a choice asks the
+owner to decide something no answer can change, and it was corrected before acceptance.
+
+**Plan**: [`plan.md`](plan.md) was written immediately after acceptance, scoped to EC1 alone at the
+owner's direction rather than to the full build. Its shape follows from the three claims that survive:
+Phases 1 through 4 exist only to make Phase 5 answerable, and the plan says so rather than presenting
+itself as the product build.
+
+Three decisions inside the plan are worth naming:
+
+- **`data-model.md` and `contracts/` are not created.** EC1 has no data model and exposes no external
+  interface. R0 §6 forbids creating optional artifacts with no content.
+- **`quickstart.md` is deferred rather than written.** Verified while writing the plan: the Hermes CLI
+  declares `hermes`, `hermes-agent` and `hermes-acp` as its entry points and registers no `board`
+  subcommand — the board is driven through agent-side tools in board mode and observed through the
+  dashboard. A runnable validation path therefore cannot be written from documentation without
+  inventing commands, which is the failure PD-41 exists to prevent. It is written when Phase 1 begins,
+  from the runtime.
+- **`tasks.md` is not created either.** R3-D01 assigns the breakdown to the supervising role, which
+  does not exist until Phase 1. Producing it here would be the designer performing another role's
+  phase, which is what R4-FR-410a classifies as incompatible when the runtime does it.
+
+**Authority**: acceptance granted design authority only. Phases 1–4 need build authorization and
+Phase 5 needs a separate activation authorization (FR-1335, FR-1337). Neither exists. Writing this
+plan changed no runtime state and created no profile, configuration, prompt, or hook.
+
+**Impact**: R4–R13 move to `done`; `ROADMAP.md` §8, `README.md` §Status and `CLAUDE.md` were
+reconciled downward, including the stale claim that ten runtime assumptions remained — three do.

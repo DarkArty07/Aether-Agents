@@ -8,6 +8,7 @@
 /.aether/
 /.claude/
 /.hermes/
+/.specify/
 __pycache__/
 *.py[cod]
 .pytest_cache/
