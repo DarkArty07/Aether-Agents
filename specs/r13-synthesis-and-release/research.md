@@ -183,3 +183,39 @@ Everything else in R13 §5 is now observed. The walking-skeleton checkpoint is c
 ## 6. Method note
 
 Every finding above was produced by executing the runtime or reading the tree the runtime loads, never by reading documentation alone. Two of the corrections — the hook payload shape and the `fail_closed` scope — are cases where the documentation is wrong about the implementation, which is the third time this project has found that. PD-41 exists for this reason and this pass is its first deliberate application.
+
+## 7. Constitution materialization
+
+**Need**: `.specify/memory/constitution.md` was still the unfilled Spec Kit core template
+(`source: core`, sha `ce7549540fa45543cca797a150201d868e64495fdff39dc38246fb17bd4024b3`), while
+R0 §4 held six accepted principles and `spec.md:155` directed that a future materialization
+"must copy the accepted principles without creating a second competing governance source".
+
+**Decision**: Materialize R0 §4 into `.specify/memory/constitution.md` at v1.0.0, treating the
+Aether repository as the project it governs. The six principle bodies are copied verbatim; each
+gains one added compliance line stating a verifiable criterion (R3-FR-310). The file declares R0
+the canonical source and routes amendments through R0 §4 first, so no second authority is created.
+
+**Rationale**: R0 §155 anticipates this artifact explicitly. Keeping the principles only in a
+stage spec left the governance Spec Kit reads at runtime empty, so `analyze` and `converge` had no
+constitution to score against — the highest-severity evidence class (R11-FR-1111) was unreachable.
+
+**Evidence**: `specs/r0-design-governance/spec.md:97-127` (principles), `:155` (materialization
+directive); `.specify/memory/.constitution-template.json` (template was upstream core, unmodified);
+`.gitignore:11` (`/.specify/` — the artifact is untracked and outside the `policy.yml` manifest);
+verbatim fidelity confirmed by paragraph-level comparison of all six principles against R0 §4.
+
+**Alternatives considered**: Leaving the template unfilled was rejected because it leaves Spec Kit's
+governance hook empty while accepted principles exist. Authoring new principles was rejected as
+creating the second competing source R0 §155 forbids. Tracking the file in git was rejected because
+it would require changing both `.gitignore` and the `policy.yml` manifest for no design benefit.
+
+**Change forced in R13**: §3 assigned Morfeo no constitution guarantee at all, although R3 §2 gives
+him the `constitution` phase and R3-FR-309 makes it part of starting work. Added FR-1310a and
+FR-1310b. §4 was left unchanged: its inventory is runtime configuration, and a per-project
+constitution is not a runtime default.
+
+**Impact on other stages**: None. R0 is unchanged and remains canonical — its §155 condition is
+satisfied, not superseded. R3 is unchanged; FR-1310a/b restate R3-FR-306/307/309/312 rather than
+adding intent. `CLAUDE.md` was reconciled downward, since it stated the template was still unfilled
+and read as forbidding what R0 §155 authorizes.
