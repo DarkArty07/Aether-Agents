@@ -35,6 +35,7 @@ jobs:
           CONTRIBUTING.md
           DESIGN.md
           LICENSE
+          README.md
           ROADMAP.md
           SECURITY.md
           VERSION
