@@ -1,7 +1,8 @@
 # R8 Specification: Workspaces, Git, and Integration
 
 **Roadmap ID**: R8
-**Stage status**: in-progress
+**Stage status**: done
+**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor

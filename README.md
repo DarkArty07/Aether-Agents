@@ -91,7 +91,7 @@ The contract is the Spec Kit artifact set — `spec.md`, `plan.md`, `tasks.md`, 
 
 ## Status
 
-**Design is complete through R13. Nothing is built.** No profile exists, no configuration is applied, no agent has run. The design deliberately stops at the boundary where implementation would begin.
+**Design is complete and accepted through R13. Nothing is built.** R0–R13 were accepted on 2026-08-17. No profile exists, no configuration is applied, no agent has run — acceptance closes the design and authorizes nothing to run. The design deliberately stops at the boundary where implementation would begin.
 
 What has been verified by direct execution against Hermes 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a` — with no profile created, no agent spawned, and no model called:
 

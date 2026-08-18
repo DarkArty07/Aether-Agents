@@ -266,3 +266,44 @@ requirement correctly and the defect was in the receiving stage.
 artifacts (ROADMAP §3). Those sections hold verified-or-assumed claims about the runtime, and these
 six changes introduce no runtime claim, so the rationale is recorded here rather than being written
 into them as evidence it is not.
+
+## 9. Design acceptance and the EC1 plan
+
+**Acceptance**: on 2026-08-17 Christopher accepted R4 through R13 after the R4–R13 Decision Review,
+which presented 53 material decisions across the ten stages with the consequence of reversing each.
+He changed none. R0–R3 were already accepted, so the design phase is now closed end to end.
+
+A correction made during that review is worth recording, because it was mine. The review first
+presented six decisions as "open questions for the owner". Two of them were not questions at all:
+whether Aether should span machines is already settled, and R6-FR-606 records the two conditions that
+reopen it on their own terms, and the provisional numbers cannot be chosen better before a run produces data
+(R7-FR-713). Four of the remaining items are not decisions in any sense — they are limits of the
+runtime that the design accommodates: the one-block budget, Morfeo's hook-consent gap, the asymmetry
+of containment, and the absence of cost on the board. Presenting a constraint as a choice asks the
+owner to decide something no answer can change, and it was corrected before acceptance.
+
+**Plan**: [`plan.md`](plan.md) was written immediately after acceptance, scoped to EC1 alone at the
+owner's direction rather than to the full build. Its shape follows from the three claims that survive:
+Phases 1 through 4 exist only to make Phase 5 answerable, and the plan says so rather than presenting
+itself as the product build.
+
+Three decisions inside the plan are worth naming:
+
+- **`data-model.md` and `contracts/` are not created.** EC1 has no data model and exposes no external
+  interface. R0 §6 forbids creating optional artifacts with no content.
+- **`quickstart.md` is deferred rather than written.** Verified while writing the plan: the Hermes CLI
+  declares `hermes`, `hermes-agent` and `hermes-acp` as its entry points and registers no `board`
+  subcommand — the board is driven through agent-side tools in board mode and observed through the
+  dashboard. A runnable validation path therefore cannot be written from documentation without
+  inventing commands, which is the failure PD-41 exists to prevent. It is written when Phase 1 begins,
+  from the runtime.
+- **`tasks.md` is not created either.** R3-D01 assigns the breakdown to the supervising role, which
+  does not exist until Phase 1. Producing it here would be the designer performing another role's
+  phase, which is what R4-FR-410a classifies as incompatible when the runtime does it.
+
+**Authority**: acceptance granted design authority only. Phases 1–4 need build authorization and
+Phase 5 needs a separate activation authorization (FR-1335, FR-1337). Neither exists. Writing this
+plan changed no runtime state and created no profile, configuration, prompt, or hook.
+
+**Impact**: R4–R13 move to `done`; `ROADMAP.md` §8, `README.md` §Status and `CLAUDE.md` were
+reconciled downward, including the stale claim that ten runtime assumptions remained — three do.
