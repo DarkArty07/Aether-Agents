@@ -48,6 +48,7 @@ jobs:
           scripts/sync_policy_hooks.py
           tests/test_aether_tui_launcher.py
           tests/test_policy_hooks.py
+          tests/test_same_card_phase_predicates.py
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
@@ -70,7 +71,8 @@ jobs:
             scripts/aether_tui.py \
             scripts/sync_policy_hooks.py \
             tests/test_aether_tui_launcher.py \
-            tests/test_policy_hooks.py
+            tests/test_policy_hooks.py \
+            tests/test_same_card_phase_predicates.py
           test "$(git ls-files -s policy/hooks/aether_pre_tool_policy.py | awk '{print $1}')" = 100755
           test "$(git ls-files -s scripts/aether_tui.py | awk '{print $1}')" = 100755
           test "$(git ls-files -s scripts/sync_policy_hooks.py | awk '{print $1}')" = 100755
