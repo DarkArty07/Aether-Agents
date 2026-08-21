@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Reproducible policy hooks
+
+- Added a sanitized, versioned canonical source for the shared Morfeo, Supervisor, and Implementer pre-tool policy.
+- Added an explicit standard-library synchronization tool with atomic installation, content-and-mode parity checks, drift-safe rollback, and no process or network activation surface.
+- Added clean-clone tests for installation, verification, rollback, secret exclusion, and the #199 Implementer branch-inspection regression.
+
 ## 0.24.0 — 2026-08-17
 
 ### R0 design-governance baseline

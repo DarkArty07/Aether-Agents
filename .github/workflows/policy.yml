@@ -42,6 +42,10 @@ jobs:
           home/.env.example
           home/SOUL.md
           home/config.yaml.template
+          policy/hooks/README.md
+          policy/hooks/aether_pre_tool_policy.py
+          scripts/sync_policy_hooks.py
+          tests/test_policy_hooks.py
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
@@ -50,8 +54,21 @@ jobs:
           test -n "$(git ls-files 'specs/**')"
           ! git ls-files -s specs | grep -Eq '^120000 '
           grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
-          ! git ls-files | grep -Eq '^(docs|src|schemas|scripts|tests|home/(profiles|skills|plugins|prompts))/'
+          ! git ls-files | grep -Eq '^(docs|src|schemas|home/(profiles|skills|plugins|prompts))/'
           ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
+
+      - name: Validate reproducible policy hooks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v
+          python3 -m py_compile \
+            policy/hooks/aether_pre_tool_policy.py \
+            scripts/sync_policy_hooks.py \
+            tests/test_policy_hooks.py
+          test "$(git ls-files -s policy/hooks/aether_pre_tool_policy.py | awk '{print $1}')" = 100755
+          test "$(git ls-files -s scripts/sync_policy_hooks.py | awk '{print $1}')" = 100755
+          test "$(git ls-files -s tests/test_policy_hooks.py | awk '{print $1}')" = 100644
 
       - name: Validate accepted R0 design baseline
         shell: bash
