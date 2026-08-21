@@ -1,7 +1,8 @@
 # R3 Specification: Spec Kit as a Multi-Agent Method
 
 **Roadmap ID**: R3  
-**Stage status**: done  
+**Stage status**: done
+**Amended**: 2026-08-18 — PD-44 direct stewardship distinguished from distributed Spec Kit phases
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -13,7 +14,7 @@
 
 ## 1. Purpose
 
-R3 assigns Spec Kit's phases to Aether's roles, and decides where standing quality standards live.
+R3 assigns Spec Kit's phases to Aether's roles for work Morfeo dispatches to the pipeline, and decides where standing quality standards live. A bounded direct PD-44 operation is not a distributed Spec Kit phase and does not transfer ownership of `tasks`, `analyze`, `checklist`, `implement`, or `converge` to Morfeo.
 
 Spec Kit's process is designed for one agent working with a present human. Aether has three roles and an absent owner. R3 does not rewrite the process — it distributes it, and resolves every point where upstream would stop and ask a human.
 
@@ -35,9 +36,9 @@ The upstream order is `constitution → specify → clarify → plan → tasks �
 | `implement` | Implementers | Parallel where the breakdown marks it safe |
 | `converge` | Supervision | The convergence loop, bounded by the contract's budget |
 
-- **FR-301**: Each Spec Kit phase MUST have exactly one owning role.
-- **FR-302**: A role MUST NOT perform a phase owned by another role, per PD-13.
-- **FR-303**: The handoff boundary is between `plan` and `tasks`. Morfeo delivers intent and approach; the supervision role makes it executable.
+- **FR-301**: Each Spec Kit phase in the pipeline MUST have exactly one owning role.
+- **FR-302**: A role MUST NOT perform a pipeline phase owned by another role, per PD-13. A direct PD-44 operation is not reclassified as Morfeo owning the pipeline's `implement` phase.
+- **FR-303**: For pipeline work, the handoff boundary is between `plan` and `tasks`. Morfeo delivers intent and approach; the supervision role makes it executable. Direct bounded work crosses no role boundary and creates no fake phase artifact.
 - **FR-304**: Deriving the task breakdown MUST NOT alter intent. It expresses the contract as executable work and nothing more.
 - **FR-305**: Quality phases MUST be applied where ambiguity or risk is material, not ceremonially on every unit of work.
 
@@ -79,8 +80,8 @@ Every point where a Spec Kit phase expects a present human, with Aether's resolu
 | `converge` recommends a next step to the user | The supervision role takes it, bounded by the contract's attempt budget |
 | `implement` is scoped by a human across several runs for large features | The task breakdown's story phases provide the scoping; increments are delivered per converged story |
 
-- **FR-318**: Requirements-quality review MUST be performed by a role that authored neither the requirements nor the implementation.
-- **FR-319**: Self-approval of one's own requirements or implementation is prohibited. Where upstream relies on a human reviewer, Aether MUST substitute a different role, never the same one.
+- **FR-318**: In pipeline work, requirements-quality review MUST be performed by a role that authored neither the requirements nor the implementation.
+- **FR-319**: Pipeline self-approval of one's own requirements or implementation is prohibited. Where upstream relies on a human reviewer inside the pipeline, Aether MUST substitute a different role, never the same one. Direct PD-44 verification is not represented as independent Spec Kit review.
 - **FR-320**: No phase may block waiting for the owner during unattended execution.
 - **FR-321**: Where a resolution grants a role an answer a human would have given, that answer MUST be bounded by the contract, not invented.
 
@@ -107,9 +108,9 @@ Every point where a Spec Kit phase expects a present human, with Aether's resolu
 
 ## 7. Success Criteria
 
-- **SC-301**: Every upstream phase has exactly one owning role, and no role performs another's phase.
+- **SC-301**: Every upstream phase in the pipeline has exactly one owning role, and no role performs another's pipeline phase; direct PD-44 stewardship creates no shadow phase ownership.
 - **SC-302**: No phase in unattended execution waits for the owner.
-- **SC-303**: No role reviews requirements it wrote or implementation it produced.
+- **SC-303**: In pipeline work, no role reviews requirements it wrote or implementation it produced; direct PD-44 verification is not labelled independent review.
 - **SC-304**: Owner preferences appear in Morfeo's memory, never as a project's constitutional principle.
 - **SC-305**: A project's testing standard is resolved during extraction and recorded in that project's constitution.
 - **SC-306**: For an existing project, the conventions actually in use win over any general preference.

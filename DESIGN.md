@@ -1,7 +1,8 @@
 # Aether Agents — Conceptual Multi-Agent Design
 
-**Status:** accepted conceptual baseline through R0
-**Accepted:** 2026-08-17
+**Status:** accepted current conceptual design through PD-45
+**Accepted baseline:** 2026-08-17
+**Last amended:** 2026-08-20
 **Product authority:** Christopher
 
 ## 1. Purpose and scope
@@ -30,7 +31,7 @@ Aether is not specialized to a stack, a domain, or a project type, and it is not
 
 ### Why the roles are separated
 
-Aether was previously hub-and-spoke: a single Hermes agent designed, delegated, held the conversation with the owner, and maintained its own skills. One agent holding four jobs did all four badly. The current separation is the correction of a diagnosed failure, not an architectural preference — and it follows that **re-concentration is the standing failure mode**. Any later stage in which one role absorbs a neighbouring role's responsibility is rebuilding the architecture that was abandoned.
+Aether was previously hub-and-spoke: a single Hermes agent permanently designed, delegated, supervised, implemented, held the conversation with the owner, and maintained its own skills. That overload failed. The current role separation corrects a diagnosed failure, not an architectural preference, so **permanent re-concentration remains the standing failure mode**. It is distinct from a bounded operational action performed directly by Morfeo: punctual stewardship does not transfer the Supervisor's or Implementer's standing responsibilities to Morfeo.
 
 The split mirrors a software team: the owner is the product owner, Morfeo is the designer, the supervision role is the tech lead, and the implementation role writes the code. A design decision that would make no sense in a human team is probably wrong.
 
@@ -39,18 +40,19 @@ The split mirrors a software team: the owner is the product owner, Morfeo is the
 Aether separates one human authority and three AI-agent roles:
 
 1. **Christopher designs and decides.**
-2. **Morfeo turns intent into coherent design, specifications, and contracts.**
+2. **Morfeo turns intent into coherent design, specifications, and contracts, and is the owner's direct operational steward for proportional bounded work.**
 3. **The unnamed supervision role conducts execution against an accepted contract.**
 4. **The unnamed implementation role executes bounded units of work and may be replicated as A, B, C...N instances.**
 
-This separation prevents an economical implementation agent from taking product decisions, a supervisor from silently changing design, or Morfeo from spending high-value reasoning on bounded mechanical work that another role can execute.
+This separation prevents an economical implementation agent from taking product decisions or a supervisor from silently changing design. It also prevents the opposite inefficiency: waking the full pipeline for bounded operational work that Morfeo can complete confidently without gaining proportionate assurance from decomposition and independent review.
 
 ## 3. Conceptual flow
 
 ```mermaid
 flowchart LR
     U["Christopher<br/>User · Designer · Final authority"]
-    M["Morfeo<br/>Design · Architecture · Specification<br/>Highest design reasoning"]
+    M["Morfeo<br/>Design · Contract architecture · Operational stewardship<br/>Highest design reasoning"]
+    D["Direct bounded action<br/>Morfeo executes and verifies"]
     S["Supervision role<br/>Decomposition · Supervision · Convergence"]
 
     I1["Implementer A<br/>Bounded execution"]
@@ -59,7 +61,8 @@ flowchart LR
     IN["Implementer N<br/>Bounded execution"]
 
     U <-->|"Joint design, decisions, and feedback"| M
-    M -->|"Accepted contract and specs"| S
+    M -->|"Bounded operational objective"| D
+    M -->|"Substantial objective: accepted contract and specs"| S
 
     S -->|"Bounded work unit"| I1
     S -->|"Bounded work unit"| I2
@@ -81,6 +84,7 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | **Christopher — user and designer** | Own product intent and final technology authority | Vision, objectives, constraints, priorities, preferences, acceptance, and protected external effects | Nothing inside product authority; safety and platform constraints still apply | Current intent and final decisions |
 | **Morfeo — design and specification** | Convert Christopher's intent into coherent design and executable contracts | Evidence-backed reversible design defaults within delegated scope | Material ambiguity without a defensible default; conflicts with Christopher's intent; protected effects | Accepted specs and contracts |
+| **Morfeo — operational stewardship** | Complete bounded operational objectives directly when the full pipeline adds no proportionate guarantee | Route selection for the complete owner objective; local reversible execution choices inside existing authority | A direct action that expands into substantial work; any authority or protected effect not already delegated | Verified direct result, or one executable contract handed to Supervisor |
 | **Morfeo — learning and adaptation** | Improve long-term collaboration with Christopher | Durable memory, preferences, reusable design skills, and context strategy | Any inference that would contradict current instruction or turn temporary state into a permanent preference | Better context and future contracts |
 | **Supervision role — unnamed** | Conduct execution until the accepted contract is satisfied or shown defective | Work decomposition, dependencies, parallelism, assignment, retries, evidence review, and operational convergence within the contract | Any need to change product intent, selected technology, authority, or acceptance criteria | Integrated result and evidence, or a structured contract defect |
 | **Implementation role — unnamed, replicable** | Execute one bounded work unit correctly | Local implementation choices allowed by the task and contract | Missing authority, contract ambiguity, blockers, or any required redesign | Executed change, evidence, and status or blocker |
@@ -102,6 +106,12 @@ Supervision and implementation resume
 ## 5. Prompt-native operating method
 
 Aether's multi-agent workflow means a pattern of prompts, instructions, contracts, handoffs, and agent reasoning. It is not a deterministic pipeline.
+
+Morfeo selects between direct stewardship and the multi-agent pipeline by reasoning about the owner's complete objective. No classifier, score, numeric threshold, workflow state, or external gate makes that decision. A direct route is appropriate when scope is understood and bounded, consequences are inspectable, correction or reversal is reasonably simple, decomposition is unnecessary, and independent review would not add proportionate value. A feature, architectural change, multi-responsibility objective, complex integration, or materially uncertain build belongs to the pipeline.
+
+The unit of classification is the objective the owner requested, not each technical mutation. Morfeo must not split a substantial objective into apparently small steps to execute it directly. Inspection to discover scope is allowed and does not itself select the direct route. If direct inspection reveals substantial work, Morfeo stops expanding the change, produces the canonical contract, and hands it to Supervisor.
+
+The governing rule is: use the process that fits the problem, not the maximum process available.
 
 An agent may infer, define, split, combine, revisit, or reorder practical work stages as evidence requires. Roadmap labels and gates are documentary or instructional signals. Tests, checklists, scripts, and validators measure artifacts, implementations, or effects; they do not authorize cognitive stage transitions.
 
@@ -184,15 +194,15 @@ R6 must therefore decide against that guidance and against Aether's chosen topol
 | **PD-10** | Aether builds software from a stated intent: tested, validated, working code produced without supervision. | Christopher redefines what the product does. |
 | **PD-11** | Greenfield and brownfield work are both first-class. | Christopher restricts the product to one of the two. |
 | **PD-12** | Aether is universal and open source; the only personalization is Morfeo's learned owner preferences. | Christopher decides Aether is personal infrastructure rather than a distributable product. |
-| **PD-13** | Re-concentration of roles is the standing architectural risk, since the prior hub-and-spoke design failed by role overload. | Evidence shows a specific separation costs more than the overload it prevents. |
+| **PD-13** | Permanent re-concentration of roles is the standing architectural risk, since the prior hub-and-spoke design failed by role overload. Punctual proportional execution by Morfeo under PD-44 is legitimate stewardship, not reassignment of Supervisor or Implementer as standing responsibilities. | Evidence shows the proportional boundary causes Morfeo to become Aether's general implementer or weakens the three-role separation. |
 | **PD-14** | Completed work is reviewed by running the product, not by reading the diff, and review is retrospective. | Christopher changes how he accepts work. |
-| **PD-15** | **Aether** maintains the project end to end. The owner operates no part of the repository, toolchain, or release path, and the normal path contains no confirmation gate. Each effect is performed by the role that owns the phase — Morfeo holds no implementation tools (PD-30). | An irreversible failure demonstrates that recoverability and R10 enforcement cannot carry the safety burden alone. |
+| **PD-15** | **Aether** maintains the project end to end. The owner operates no part of the repository, toolchain, or release path, and the normal path contains no confirmation gate. Pipeline effects are performed by the role that owns the phase; PD-44 additionally permits Morfeo to perform bounded operational work directly without assuming pipeline implementation as a permanent role. | An irreversible failure demonstrates that recoverability and R10 enforcement cannot carry the safety burden alone. |
 | **PD-16** | Defects noticed outside the requested scope are raised as a question, never fixed or discarded silently. | Christopher delegates in-scope judgement for incidental repairs. |
 | **PD-17** | The contract is the Spec Kit artifact set. Aether introduces no competing contract artifact, and carries its own authority, budget, and brownfield boundary inside `plan.md`. | Evidence shows the upstream artifact set cannot carry an Aether obligation without distortion. |
 | **PD-18** | Contract defects reach Morfeo and external failures reach the owner. **Resolved by PD-32:** both are raised by blocking the card with a reason, which waits durably instead of interrupting anyone. | — |
 | **PD-19** | Aether borrows Spec Kit's intellectual practices and builds its own workflow on top. Upstream is read before anything is designed, only genuine gaps are designed, and every deviation is recorded. | Spec Kit ceases to be maintained or diverges from Spec-Driven Development. |
-| **PD-20** | The handoff falls between technical planning and task breakdown. Morfeo delivers intent and approach; the supervision role makes it executable and owns breakdown, analysis, review, and convergence. | Evidence shows the supervision role cannot derive a breakdown faithful to the contract. |
-| **PD-21** | The supervision role is the independent reviewer that Spec Kit assumes must be human, because it authors neither the requirements nor the code. No role reviews its own output. | A separate reviewing capability proves necessary beyond the three roles. |
+| **PD-20** | When Morfeo selects the pipeline, the handoff falls between technical planning and task breakdown. Morfeo delivers intent and approach; the supervision role makes it executable and owns breakdown, analysis, review, and convergence. A direct PD-44 action creates no delegated unit or role boundary. | Evidence shows the supervision role cannot derive a breakdown faithful to the contract. |
+| **PD-21** | In the pipeline, the supervision role is the independent reviewer that Spec Kit assumes must be human, because it authors neither the requirements nor the code. Direct PD-44 stewardship is selected only when independent review would not add proportionate value; it is not disguised pipeline work. | A separate reviewing capability proves necessary beyond the three roles, or direct-route defects show review cannot remain a proportional judgement. |
 | **PD-22** | Owner preferences live in Morfeo's learned memory; a project's standards live in that project's constitution. The two are never merged. | Aether becomes single-user infrastructure rather than a distributable product. |
 | **PD-23** | Testing is a per-project standard recorded in that project's constitution, resolved during extraction and never defaulted. Test-first is optional. | Christopher imposes a universal testing rule. |
 | **PD-24** | Execution never pauses for the owner between units of work. Each converged increment is independently runnable. A unit blocked on a defect is the exception and does not stop its siblings. | Christopher asks to validate between units. |
@@ -200,9 +210,9 @@ R6 must therefore decide against that guidance and against Aether's chosen topol
 | **PD-26** | **Superseded by PD-29.** Recorded as "unattended execution cannot survive a runtime restart"; that was a property of in-process delegation, not of Hermes. | — |
 | **PD-27** | Every agent gets its own profile. Two agent processes MUST NOT share one Hermes home, because both write memory and each loads the other's writes into its prompt. Shared memory, where needed, uses an external memory provider. | Upstream withdraws the constraint. |
 | **PD-28** | Hermes provides three coordination primitives — in-process delegation, a durable multi-profile board, and A2A. Aether selects among them on upstream's stated criteria, and builds none of them. | A requirement is found that no primitive satisfies. |
-| **PD-29** | Aether's coordination primitive is Hermes's durable multi-profile board. The unit of durability is the card, not the process: a crash or restart costs at most one attempt. Work crossing a role boundary always moves as a card. | A requirement is found that the board cannot satisfy and delegation or A2A can. |
-| **PD-30** | Three profiles, one per role, matching PD-02 exactly. The designer's toolsets exclude implementation, so it structurally cannot do the work it delegates. Parallelism is a concurrency setting, never additional roles or profiles. | Christopher restructures the roles. |
-| **PD-35** | Role containment is **asymmetric**, verified in source. The designer can be structurally prevented from implementing; an implementer cannot be structurally prevented from creating work, because card creation is available to every worker. That direction is an instruction plus a blocking tool-call hook, and must never be described as structural. | Upstream gates card creation to orchestrators. |
+| **PD-29** | Aether's coordination primitive is Hermes's durable multi-profile board. The unit of durability is the card, not the process: a crash or restart costs at most one attempt. Work crossing a role boundary always moves as a card. A direct PD-44 action crosses no role boundary and therefore does not require a ceremonial card. | A requirement is found that the board cannot satisfy and delegation or A2A can. |
+| **PD-30** | Three profiles, one per role, matching PD-02 exactly; the Implementer remains replicable and Supervisor remains separate. **Partially superseded by PD-44:** absence of Morfeo's operational tools is no longer the mechanism separating the roles. Parallelism is a concurrency setting, never additional roles or profiles. | Christopher restructures the roles. |
+| **PD-35** | Role containment is **asymmetric**, verified in source. Morfeo has broad operational capability bounded by current authority and agentic self-control; Supervisor and Implementer retain their role limits, including the enforced restriction on arbitrary implementer fan-out. Capability must never be described as authority, and instructed or hook-enforced limits must never be described as structural. | Upstream changes the relevant capability gates or observed direct execution shows a missing protected-effect boundary. |
 | **PD-31** | Implementation work runs in a git worktree per card, so parallel workers never share a working tree. A conflict is resolved by a fresh worker that produced neither side, carrying both intents through parent links — neutrality comes from fresh context, not from a new role. | — |
 | **PD-32** | Escalation is a blocked card with a reason. It waits durably, any role or Christopher may act on it, and sibling work is untouched. Non-convergence blocks for review rather than exiting silently. | — |
 | **PD-33** | An execution problem is never solved by adding an agent role. Fresh context, a card-pinned skill, or a per-card model override are tried first; a new role requires Christopher's explicit decision against PD-02. | Christopher decides a fourth role is warranted. |
@@ -210,10 +220,12 @@ R6 must therefore decide against that guidance and against Aether's chosen topol
 | **PD-36** | **Escalation is two-tier.** A question the contract can answer is resolved by the system: the asking unit addresses a decision card to the supervisor, links it as a parent of its own card, and resumes automatically when it is answered. No human is involved and no block is spent. Only a question the contract genuinely cannot answer becomes a block, which reaches Morfeo, who alone may revise a contract, and who then asks Christopher. Christopher's instruction, 2026-08-17. Verified end to end against the runtime. | Christopher changes who answers a stuck unit. |
 | **PD-37** | **The human-visible block budget is effectively one attempt per unit.** After one block, one release, and a second block for the same cause, the runtime routes the unit out of the work pool. The threshold is a source constant, absent from configuration, and raising it would mean modifying upstream core. Aether designs so this budget is rarely spent. | Upstream makes the threshold configurable. |
 | **PD-38** | **A native behaviour that performs a phase Aether assigned to a role is incompatible and is disabled, not tolerated.** Automatic triage decomposition and automatic triage specification are both on by default and both do the supervisor's work without reading the contract. Availability is not adoption, and a default is not a decision. | The supervisor role is removed or upstream removes the behaviours. |
-| **PD-39** | **Contract artifacts are written only on the integration branch, by their owning role.** Morfeo owns the specification and the plan, the supervisor owns the breakdown, implementers own only code in their own worktree. An implementer never reads the breakdown to understand its work — its card body carries every decision it depends on. | Evidence shows a card body cannot carry a unit's decisions. |
+| **PD-39** | **Contract artifacts are written only on the integration branch, by their owning role.** Morfeo owns the specification and the plan; in pipeline work Supervisor owns the breakdown and Implementers own code in their worktrees. In direct PD-44 work, Morfeo owns and manages the bounded change it performs without creating a false implementation card. An Implementer never reads the breakdown to understand its work — its card body carries every decision it depends on. | Evidence shows a card body cannot carry a unit's decisions or direct stewardship cannot preserve attributable reversible changes. |
 | **PD-40** | **The board is the only inter-role transport.** A2A is implemented as a platform adapter, is complete, and is deliberately unused while every role runs on one host; MCP is an outward integration surface and never a work transport. | A role must run on another machine, or a non-Hermes agent must participate as a role. |
 | **PD-42** | **Recovery is not free.** A crashed worker's unit survives, but the crash consumes an attempt *and* increments the failure counter, while a stale-claim reclaim does not. Environmental failure and defective work draw on the same budget, so the attempt limit must exceed the number of environmental failures one unattended session can plausibly produce. Verified by execution. | Upstream separates environmental failure from work failure. |
-| **PD-43** | **Enforcement can be fully configured and completely inert.** A hook that is not on the runtime's first-use allowlist does not fire at all — it does not fail closed, it is absent. Dispatcher-spawned workers are immune because the dispatcher accepts hooks explicitly when spawning; **Morfeo is the exposed role**, because it runs as a persistent interactive session. Enforcement must be verified as live, never assumed from configuration. | Upstream removes the consent gate or applies it uniformly. |
+| **PD-43** | **Enforcement can be fully configured and completely inert.** A hook that is not on the runtime's first-use allowlist does not fire at all — it does not fail closed, it is absent. Dispatcher-spawned workers are immune because the dispatcher accepts hooks explicitly when spawning; **Morfeo is the exposed role**, because it runs as a persistent interactive session. Enforcement must be verified as live, never assumed from configuration. This runtime fact does not require a hook that restricts Morfeo to contract-file writes; PD-44 removes that conceptual dependency. | Upstream removes the consent gate or applies it differently to persistent sessions. |
+| **PD-44** | **Morfeo executes proportionally.** Morfeo is the owner's interlocutor, contract architect, and operational steward. It may use terminal and general project file access to complete a bounded objective directly when the full pipeline adds no proportionate guarantee. It chooses agentically against the complete owner objective: no classifier, score, numeric threshold, special workflow, or external gate selects the route. It must not fragment substantial work into small mutations, and if inspection reveals feature-scale, architectural, multi-responsibility, or materially uncertain work, it stops expansion and hands one executable contract to Supervisor. Existing authority and protected-effect limits remain unchanged; Git rollback is used when appropriate. **Amended 2026-08-20:** Morfeo also receives `code_execution`, `cronjob`, and `delegation` (`delegate_task`) on both CLI and Telegram; browser execution and computer use remain excluded. Cron may either schedule Morfeo's own follow-up on direct work or schedule a future pipeline start, chosen case by case by the same whole-objective reasoning as the direct/pipeline route, and never creates permanent autonomy outside an owner-requested objective. Delegated subagents may only assist Morfeo's own bounded direct work, never receive product implementation that belongs to Supervisor/Implementer; this delegation boundary is agentic doctrine, not hook enforcement. | Evidence shows the agentic boundary is unreliable enough to require an owner-approved redesign, or Christopher changes Morfeo's stewardship authority. |
+| **PD-45** | **`skills` and `vision` are base toolsets for Morfeo, Supervisor, and Implementer.** Every role may manage skill documents for continuous self-improvement and inspect images or frontends within work it is already authorized to perform. Tool access does not widen any role's decision authority or responsibility boundary. | Evidence shows `skills` or `vision` access produced an unforeseen effect that requires containment, or Christopher restricts either capability to fewer roles. |
 | **PD-41** | **Every claim about runtime behaviour is labelled verified or assumed.** Executing the behaviour outranks reading the code, which outranks reading the documentation; where they disagree, the more direct evidence wins and the disagreement is recorded. This project has paid twice for treating documentation as evidence. | — |
 A current explicit instruction from Christopher always supersedes older project content; the owning artifact must then be updated.
 

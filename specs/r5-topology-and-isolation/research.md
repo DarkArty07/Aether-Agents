@@ -30,7 +30,7 @@ Aether's design maps onto the board with almost nothing left over.
 
 | Aether concept | Board mechanism |
 |---|---|
-| Morfeo | Orchestrator profile — *"a well-behaved orchestrator does not do the work itself. It decomposes the user's goal into tasks, links them, assigns each to one of the profiles you've set up, and steps back."* |
+| Morfeo | Owner interlocutor and contract architect; when the complete objective is substantial it creates exactly one Supervisor card, while PD-44 permits bounded direct operational stewardship without crossing a role boundary |
 | Supervising role | A worker on its own card that creates and links child cards |
 | Implementer | Worker profile on an inexpensive model, one per card, many concurrent |
 | Contract | Card title and body, plus parent handoffs and the comment thread |
@@ -114,10 +114,38 @@ Recorded as a general rule in FR-509: an execution problem must be solved with f
 - **Alternatives considered**: Letting the supervising role reconcile was rejected as re-concentration and because it would hold both roles' authority over one conflict.
 - **Change impact**: R8 owns merge order. R7 owns creating reconciliation cards.
 
+## R5-D07 — Contract authorship requires a narrowly enforced file surface
+
+- **Need**: The R13 Phase 3 build audit found that R5-FR-506 removed every file tool from Morfeo while R8-FR-805 and R13-FR-1304 require Morfeo to write accepted clarifications into the repository's canonical contract artifacts. A prompt cannot guarantee an effect for which its profile has no capability.
+- **Contradiction**: Keeping all file mutation absent preserves the earlier structural-containment claim but makes Morfeo's contract ownership impossible. Enabling Hermes's generic `file` toolset without enforcement restores authorship but also permits source-code mutation, so it is not structural containment. Hermes 0.20.1 exposes `read_file`, `write_file`, `patch`, and `search_files` together and has no native path allowlist or contract-only tool.
+- **Decision**: Morfeo retains structural absence of terminal, code execution, browser execution, and delegation. Its generic file toolset is enabled only atomically with a fail-closed, consented Phase 4 hook that permits the canonical contract artifacts Morfeo owns on the integration branch and denies all other mutation. Until that hook is verified, the file toolset remains disabled and Morfeo remains stopped.
+- **Why this correction**: It preserves the accepted writer rule and avoids inventing a fourth role, duplicating the contract on the board, or adding Hermes core/product code. It also states the real strength of the guarantee: contract-path containment is enforced, not structural.
+- **Alternatives rejected**: Having Supervisor apply Morfeo's edits violates the writer matrix and creates split authority. Recording clarifications only in board comments creates a competing contract. Building a new contract-specific tool would restore structural narrowness but adds product code not justified by EC1.
+- **Change impact**: R5-FR-506 and R10 containment are narrowed; R13 Phase 4 must enable capability and enforcement as one operation. The 2026-08-18 correction changes no role count, writer ownership, runtime state, or profile activation.
+
+## R5-D08 — PD-44 replaces structural non-execution with proportional direct stewardship
+
+- **Need**: DOC-09/P5-F13 showed that routing a routine, local, reversible operation through Morfeo → Supervisor → decomposition → Implementer → review imposed disproportionate latency and token cost. The owner also corrected Morfeo's responsibility: it is the owner's operational assistant, not only a contract architect.
+- **Owner decision**: Morfeo receives terminal and general project file capability. It selects direct action or the pipeline agentically against the complete requested objective. No classifier, risk score, numeric threshold, special workflow, fast board lane, or hook makes that decision. Features, architectural work, multi-responsibility objectives, complex integration, and materially uncertain builds remain in the pipeline. Morfeo may inspect to discover scope, may not fragment substantial intent into small direct mutations, and must change route when the real scope grows.
+- **Rationale**: The full pipeline is valuable when decomposition, independent contexts, integration, or independent review add meaningful assurance. Making it universal turns separation into ceremony. The direct route restores proportionality without transferring Supervisor or Implementer to Morfeo as permanent responsibilities.
+- **Authority and safety**: Technical capability does not widen authority. Existing credential, secret, protected-effect, scope, product-decision, and out-of-scope-work rules remain. Git rollback is used when appropriate. R10 removes only obsolete Morfeo execution/file containment and retains transversal protections and other-role constraints.
+- **Activation**: Prompt, `file + terminal` toolsets, and reconciled hook policy are prepared while Morfeo is stopped and activated together. Browser execution, computer use, sandboxed code execution, cron, delegation, and unrelated toolsets are not enabled.
+- **Testing decision**: Christopher explicitly deferred functional validation of direct-versus-pipeline behaviour to his own later manual exercise. This implementation requires only mechanical syntax/configuration validity and diff consistency. Consequence: prompt-route quality and live hook behaviour remain unverified and must not be reported as proven when the build is delivered.
+- **Alternatives rejected**: A classifier, score, threshold, fast lane, new card type, fourth role, or external route gate would convert an agentic judgement into workflow machinery and was explicitly rejected. Keeping contract-only file access or terminal absence would preserve the defect. Removing the hook indiscriminately would discard independent security protections.
+- **Supersession and impact**: R5-D07 remains historical evidence of the previous contradiction and atomic-activation lesson but its contract-only containment decision is superseded. PD-30 is partially superseded; PD-13 continues to prohibit permanent role reconcentration. R1, R5, R7, R8, R10, R12, R13, the Morfeo prompt/profile/hook, README, and ROADMAP require reconciliation. Issue #196 remains open until the owner performs the deferred manual validation.
+
+## R5-D09 — Final PD-44 capability surface and PD-45
+
+- **Owner decision**: On 2026-08-20 Christopher expanded Morfeo's proportional route with `code_execution`, `cronjob`, and `delegation` on both CLI and Telegram. Cron supports bounded follow-up or a future pipeline start; delegated subagents assist Morfeo's own bounded work and do not receive product implementation. Browser execution and computer use remain excluded.
+- **PD-45**: `skills` and `vision` are base toolsets for Morfeo, Supervisor, and Implementer without widening authority. Supervisor and Implementer preserve `code_execution` and CLI/Telegram parity but do not receive cron or delegation.
+- **Evidence and closure**: The stopped profiles passed configuration, hook-compilation, effective-toolset, diff, and secret checks. Christopher then accepted the active direct-execution experience as sufficient functional validation and explicitly closed #196 on 2026-08-20. This supersedes only R5-D08's pending-validation/#196-open state; its proportionality, anti-fragmentation, and authority limits remain binding.
+
 ## 5. Superseded and Resolved
 
 | Prior decision | Outcome |
 |---|---|
+| **R5-D03** — Morfeo has no implementation tools | **Partially superseded by R5-D08 / PD-44.** Three profiles and per-role model tiers remain; Morfeo now has `file + terminal` for proportional direct stewardship. |
+| **R5-D07** — contract authorship uses contract-path-only file containment | **Superseded by R5-D08 / PD-44.** The atomic-activation lesson remains; the path restriction and terminal absence do not. |
 | **PD-18** — Morfeo reachable for contract defects; mechanism pending | **Resolved.** A blocked card is the channel; any profile or human may act on it. |
 | **PD-26** — unattended execution cannot survive a restart | **Superseded.** The unit of durability is the card, not the process. A crash costs one attempt. |
 | R4's Gap 1 — no upward channel | Resolved for the board. Remains true of in-process delegation, which Aether no longer uses across roles. |
@@ -161,7 +189,7 @@ Documentation claims that accepted decisions depend on were checked against the 
 
 The orchestrator gate's own docstring explains the intent: *"Dispatcher-spawned workers should close their own task via the lifecycle tools, not enumerate or unblock board state."* Enumeration and unblocking are contained. **Creation and linking are not.**
 
-**Consequence.** R5's first draft claimed role containment was structural. It is structural in one direction only: withholding implementation tools from the designer works, but an implementer cannot be structurally prevented from fanning out work. Recorded as PD-35 and FR-506a to FR-506d. The overclaim mattered because PD-13 — re-concentration as the standing risk — was the failure that killed the previous architecture, and an instruction is a weaker guard than a guarantee.
+**Historical consequence, superseded for Morfeo by PD-44.** R5's first draft claimed role containment was structural. The source inspection correctly established that an implementer cannot be structurally prevented from fanning out work, and worker enumeration/unblocking remain structurally gated. PD-44 later removed structural non-execution as Morfeo's boundary: its direct-versus-pipeline choice is agentic and must not be restated as hook or toolset enforcement.
 
 **What is genuinely structural for workers**, and therefore may be relied on: a worker cannot enumerate the board, and cannot unblock any card including its own. So an implementer cannot discover sibling work and cannot release itself from a block.
 

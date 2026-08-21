@@ -3,6 +3,7 @@
 **Roadmap ID**: R9
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — direct PD-44 actions distinguished from delegated board execution
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
@@ -24,11 +25,11 @@ R9 does not design enforcement (R10), define evidence content (R11), or select m
 | Store | Owns | Lifetime |
 |---|---|---|
 | The project repository | The contract and the code it governs | Permanent, versioned |
-| The board's durable rows | What was executed, by whom, in how many attempts, with what result | Permanent until retention removes it |
+| The board's durable rows | What was delegated, by whom, in how many attempts, with what result | Permanent until retention removes it |
 | Each profile's own home | That role's memory, sessions, skills, credentials | Per profile, never shared |
 
-- **FR-901**: Aether MUST NOT create a fourth store. Any question about what happened is answered from the board; any question about what was asked for is answered from the repository.
-- **FR-902**: Aether MUST NOT maintain a parallel record of execution. The board's rows, events, comments, and attempt records are the record (R5-FR-534).
+- **FR-901**: Aether MUST NOT create a fourth store. Any question about delegated pipeline execution is answered from the board; any question about what was asked for is answered from the repository. A direct PD-44 action is evidenced by the project repository, actual tool output, and Morfeo's existing profile session, not by a new execution store.
+- **FR-902**: Aether MUST NOT maintain a parallel record of delegated execution. The board's rows, events, comments, and attempt records are the pipeline record (R5-FR-534). Direct action MUST NOT manufacture a card or shadow ledger merely to appear in that record.
 - **FR-903**: The same fact MUST NOT be authoritative in two stores. Where a fact appears in both, the owning store wins and the other copy is a snapshot.
 - **FR-904**: Two agent processes MUST NOT share a profile home (PD-27). Where roles need shared memory, an external memory provider MUST be used rather than a shared home.
 
@@ -52,7 +53,7 @@ Owner preferences are Aether's only personalization mechanism (PD-12, PD-22). Ev
 
 ## 5. Recovery
 
-The unit of durability is the card, not the process. This is what makes unattended execution survivable and it supersedes the earlier finding that it could not be (PD-26 superseded by PD-29).
+For delegated work, the unit of durability is the card, not the process. This is what makes unattended pipeline execution survivable and it supersedes the earlier finding that it could not be (PD-26 superseded by PD-29). A direct Morfeo action is bounded to the current session and relies on the managed project's ordinary reversibility; if work needs durable multi-attempt recovery, that is evidence that the pipeline adds value.
 
 | Failure | Native handling | Cost |
 |---|---|---|
@@ -119,7 +120,7 @@ Not inspected: the memory provider internals and the board's full event referenc
 
 ## 10. Success Criteria
 
-- **SC-901**: No fact about what happened is authoritative anywhere except the board.
+- **SC-901**: No fact about delegated execution is authoritative anywhere except the board; direct action evidence remains in existing project and profile/session surfaces without a shadow execution store.
 - **SC-902**: No fact about what was asked for is authoritative anywhere except the repository.
 - **SC-903**: A crash during unattended work costs at most one attempt.
 - **SC-904**: A re-dispatched unit never repeats a path that already failed in a recorded attempt.
@@ -135,5 +136,5 @@ Not inspected: the memory provider internals and the board's full event referenc
 - [x] Recovery semantics and the cost of each failure are stated.
 - [x] The indeterminate outcome is preserved for unprovable side effects.
 - [x] Retention separates the acceptance record from execution telemetry.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
 - [ ] Retention values are set from an observed growth rate.

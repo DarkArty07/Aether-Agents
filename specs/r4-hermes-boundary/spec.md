@@ -175,4 +175,4 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 - [x] Requirements inherited by later stages are recorded.
 - [x] Hooks inspected directly, including the consent allowlist that can render an enforcement point inert (PD-43).
 - [ ] Still not inspected directly: memory internals, terminal backends, and the A2A adapter's implementation. Each is read by the stage that owns it.
-- [ ] Christopher has reviewed the corrected classification.
+- [x] Christopher has reviewed the corrected classification (R4–R13 Decision Review, 2026-08-17).

@@ -2,6 +2,7 @@
 
 **Roadmap ID**: R1  
 **Stage status**: done  
+**Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -52,10 +53,10 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 
 ### Effects
 
-> **Reconciliation note.** R1 was written before R5 established the topology, and used "Morfeo" as shorthand for the whole system. It no longer is: Morfeo designs and holds no implementation tools (PD-30). The requirements below are stated for the role that actually performs each effect. The authority model is unchanged; only the attribution is corrected.
+> **Reconciliation note.** R1 was written before R5 established the topology, and used "Morfeo" as shorthand for the whole system. Pipeline work remains split across Morfeo, Supervisor, and Implementer. PD-44 additionally recognizes Morfeo as the owner's operational steward for bounded direct work. The authority model is unchanged; only the available route and effect attribution are corrected.
 
 - **FR-110**: **Aether** maintains the project. The owner does not operate the repository, the toolchain, or the release path on the system's behalf.
-- **FR-111**: The normal path contains no confirmation gate. Work in the workspace, commits, branches, pushes, pull requests, merges, tags, releases and deploys happen as maintaining the project requires, performed by the role that owns the phase.
+- **FR-111**: The normal path contains no confirmation gate. Work in the workspace, commits, branches, pushes, pull requests, merges, tags, releases and deploys happen as maintaining the project requires, performed by the role that owns the pipeline phase or by Morfeo for a direct PD-44 action, always within the authority already conferred for the objective and effect.
 - **FR-112**: Spending is unrestricted.
 - **FR-113**: Because no human gate exists in the normal path, protection against an irreversible mistake MUST come from recoverability and from enforcement designed in R10 — not from asking the owner first.
 - **FR-114**: **Every role** operates only with credentials and access the owner has already provisioned, and MUST NOT acquire, create, or widen them. This is a scope limit, not a confirmation step, and it applies per profile (PD-27).
@@ -78,7 +79,7 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 Recoverability replaces the confirmation gate. It is the only thing standing between an unattended mistake and a fatal one, so it carries weight it would not carry in a gated system.
 
 - **FR-125**: Errors discovered after Phase 1 MUST be correctable by small adjustment. A single wrong unit of work MUST NOT invalidate the rest.
-- **FR-126**: Every integrated change MUST be individually reversible after the fact, with history preserved. Integration is performed by the supervising role (PD-20).
+- **FR-126**: Every change MUST be individually reversible after the fact when Git applies, with history preserved. Pipeline integration is performed by the supervising role (PD-20); Morfeo manages the rollback of its own direct PD-44 change without inventing an integration card.
 - **FR-127**: Irreversible effects MUST be identified and constrained by design in R8 and R10, since no human review precedes them.
 
 ### Precedence and memory
@@ -91,7 +92,12 @@ Recoverability replaces the confirmation gate. It is the only thing standing bet
 ### Universality and role boundaries
 
 - **FR-132**: Morfeo's instructions MUST address the project owner generically and MUST NOT hardcode Christopher, a stack, a domain, or a project type.
-- **FR-133**: Morfeo MUST NOT absorb supervision or implementation responsibilities, per PD-13.
+- **FR-133**: Morfeo MUST NOT absorb supervision or implementation as permanent responsibilities, per PD-13. Punctual direct stewardship under PD-44 is distinct from becoming Aether's general Implementer.
+- **FR-133a**: Morfeo MUST choose between direct execution and the pipeline by reasoning about the complete objective the owner requested. No classifier, risk score, numeric threshold, special workflow, or external gate may make or enforce that selection.
+- **FR-133b**: Morfeo SHOULD execute directly when the objective is understood and bounded, consequences are readily inspectable, correction or reversal is reasonably simple, decomposition or parallel context is unnecessary, and independent review adds no proportionate value. It MUST NOT create a contract and wake the pipeline merely because the maximum process exists.
+- **FR-133c**: A feature, architectural modification, multi-responsibility objective, complex integration, or materially uncertain build MUST use Morfeo → Supervisor → Implementer(s). Morfeo MUST NOT split that complete objective into small technical mutations and classify each mutation separately.
+- **FR-133d**: Morfeo MAY inspect directly to discover scope. If a direct action grows materially or reveals pipeline-scale work, Morfeo MUST stop expanding the mutation, formalize the executable contract, and change route. Inspection alone does not make Morfeo the feature's Implementer.
+- **FR-133e**: Direct operational capability MUST NOT widen authority. Morfeo may not invent objectives, acquire or widen credentials, silently change product decisions, convert inferred preferences into decisions, hide incidental out-of-scope work, or treat terminal access as unlimited authority.
 
 ### Automation
 
@@ -127,6 +133,7 @@ These follow from R1 and MUST NOT be rediscovered independently:
 - **SC-106**: Every behavior in this specification is realized by an instruction or a native runtime guarantee, except for the two named automations.
 - **SC-107**: No role's instructions name an individual, a stack, or a project type.
 - **SC-108**: An out-of-scope defect any role noticed appears in the end-of-work report as a question, and was neither fixed nor dropped.
+- **SC-109**: A bounded operational objective can complete in Morfeo's current session without a ceremonial contract or card, while a substantial objective still enters the three-role pipeline as one complete owner goal.
 
 Success criteria describe what a correct realization must satisfy. They are verified when Morfeo is built, not during R1.
 
