@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Reproducible Morfeo TUI activation
+
+- Added a versioned, standard-library launcher that binds Morfeo to the repository-local profile and project directory.
+- Added a side-effect-free `--check` mode with visible validation of profile state, executable availability, and required `file`/`kanban` toolsets.
+- Added clean-process regression coverage for cwd independence, environment cleanup, reserved argument rejection, and missing prerequisites.
+
 ### Reproducible policy hooks
 
 - Added a sanitized, versioned canonical source for the shared Morfeo, Supervisor, and Implementer pre-tool policy.

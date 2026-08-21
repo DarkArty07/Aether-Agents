@@ -44,7 +44,9 @@ jobs:
           home/config.yaml.template
           policy/hooks/README.md
           policy/hooks/aether_pre_tool_policy.py
+          scripts/aether_tui.py
           scripts/sync_policy_hooks.py
+          tests/test_aether_tui_launcher.py
           tests/test_policy_hooks.py
           EOF
           sed -i 's/^          //' "$expected"
@@ -62,12 +64,17 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v
+          python3 -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v
           python3 -m py_compile \
             policy/hooks/aether_pre_tool_policy.py \
+            scripts/aether_tui.py \
             scripts/sync_policy_hooks.py \
+            tests/test_aether_tui_launcher.py \
             tests/test_policy_hooks.py
           test "$(git ls-files -s policy/hooks/aether_pre_tool_policy.py | awk '{print $1}')" = 100755
+          test "$(git ls-files -s scripts/aether_tui.py | awk '{print $1}')" = 100755
           test "$(git ls-files -s scripts/sync_policy_hooks.py | awk '{print $1}')" = 100755
+          test "$(git ls-files -s tests/test_aether_tui_launcher.py | awk '{print $1}')" = 100644
           test "$(git ls-files -s tests/test_policy_hooks.py | awk '{print $1}')" = 100644
 
       - name: Validate accepted R0 design baseline

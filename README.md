@@ -112,6 +112,19 @@ The run also exposed material lifecycle findings: `initial_status: blocked` auto
 
 **Phase 6 has not been rerun after EC1.** Its earlier `HOLD` packet remains the historical pre-run qualification; no runtime claim has been formally promoted and no `READY`, product activation, publication, deployment, or Hermes-to-Morfeo cutover is authorized. The next protected step is Phase 6 evidence re-qualification, not another Phase 5 run.
 
+## Canonical Morfeo TUI activation
+
+The versioned launcher is the supported entry point for a local Morfeo TUI:
+
+```bash
+python3 scripts/aether_tui.py --check
+python3 scripts/aether_tui.py
+```
+
+`--check` performs no model or network call. It fails visibly unless the repository-local Morfeo profile, Hermes executable, `SOUL.md`, and the `file` and `kanban` toolsets are present. A real launch clears inherited Python path overrides, sets `HERMES_HOME` to Morfeo, and starts Hermes with `--tui --in <repository>`, so profile and working directory do not depend on the caller's shell or previous session.
+
+A short user-local `aether` command may delegate to this versioned script. The wrapper itself remains local because machine paths and profile state are not repository artifacts.
+
 On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. This does not replace Phase 6 or close the remaining runtime/debt issues.
 
 ## For whoever implements this
@@ -138,6 +151,7 @@ Two defaults must be changed before the first unattended run, and both are recor
 | [`AGENTS.md`](AGENTS.md) | How Aether is built, and the evidence rules |
 | [`specs/`](specs) | One directory per design area, each owning its requirements |
 | [`policy/hooks/`](policy/hooks) | Canonical sanitized pre-tool policy, synchronization, verification, and rollback instructions |
+| [`scripts/aether_tui.py`](scripts/aether_tui.py) | Canonical validation and activation of the local Morfeo TUI |
 | `home/` | A live Hermes profile used as runtime evidence. Not documentation of intent |
 
 ## Principles that must not be violated
