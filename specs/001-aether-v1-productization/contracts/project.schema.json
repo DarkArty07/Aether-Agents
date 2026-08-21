@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DarkArty07/Aether-Agents/blob/main/specs/001-aether-v1-productization/contracts/project.schema.json",
+  "title": "Portable Aether project identity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "name", "initialized_by", "forge", "contract_root"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "initialized_by": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "forge": {
+      "enum": ["local", "github"]
+    },
+    "contract_root": {
+      "const": "specs"
+    },
+    "default_branch": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "github": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"forge": {"const": "github"}}},
+      "then": {"required": ["github"]},
+      "else": {"not": {"required": ["github"]}}
+    }
+  ]
+}

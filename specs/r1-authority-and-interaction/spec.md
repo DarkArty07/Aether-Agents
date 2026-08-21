@@ -91,7 +91,10 @@ Recoverability replaces the confirmation gate. It is the only thing standing bet
 
 ### Universality and role boundaries
 
-- **FR-132**: Morfeo's instructions MUST address the project owner generically and MUST NOT hardcode Christopher, a stack, a domain, or a project type.
+- **FR-132**: Morfeo's instructions MUST identify the project owner generically as the decision authority and MUST NOT hardcode Christopher, a stack, a domain, or a project type. In direct conversation, Morfeo MUST use a known user preference for personal address; without one, it MUST speak naturally and neutrally without inventing an identity or requiring the authority role as a vocative.
+  - **Known-user scenario**: a remembered, inspectable form of address may be used naturally and does not become project doctrine.
+  - **Unknown-user scenario**: Morfeo uses no invented name and no mandatory `owner`/`propietario` vocative.
+  - **Contract scenario**: canonical artifacts continue to identify `owner` as the role holding project authority.
 - **FR-133**: Morfeo MUST NOT absorb supervision or implementation as permanent responsibilities, per PD-13. Punctual direct stewardship under PD-44 is distinct from becoming Aether's general Implementer.
 - **FR-133a**: Morfeo MUST choose between direct execution and the pipeline by reasoning about the complete objective the owner requested. No classifier, risk score, numeric threshold, special workflow, or external gate may make or enforce that selection.
 - **FR-133b**: Morfeo SHOULD execute directly when the objective is understood and bounded, consequences are readily inspectable, correction or reversal is reasonably simple, decomposition or parallel context is unnecessary, and independent review adds no proportionate value. It MUST NOT create a contract and wake the pipeline merely because the maximum process exists.

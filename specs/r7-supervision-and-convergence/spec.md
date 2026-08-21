@@ -4,6 +4,7 @@
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — scoped explicitly to work Morfeo dispatches under PD-44
+**Amended**: 2026-08-21 — asymmetric starting capacity accepted: one Supervisor and three Implementers
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -57,8 +58,10 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 
 - **FR-710**: Parallelism MUST follow the breakdown's own independence markers and dependency ordering (R3-FR-303, PD-34). Aether MUST NOT add an independent concurrency policy on top of the breakdown.
 - **FR-711**: Parallelism MUST be expressed as a concurrency limit against one implementer profile, never as additional roles or profiles (PD-30).
-- **FR-712**: A board-wide concurrent-unit limit and a per-profile limit MUST both be set. Starting values are **four** board-wide and **three** per implementer profile.
-- **FR-713**: FR-712's numbers are calibration starting points, not derived constants. They MUST be revised from observed collision rate, integration cost, and provider rate limiting, and the revision MUST be recorded.
+- **FR-712**: A board-wide concurrent-unit limit and explicit profile overrides MUST both be set. The accepted starting values are **four** board workers total, **one** Supervisor, and **three** Implementers. The runtime representation is `max_in_progress: 4`, uniform fallback `max_in_progress_per_profile: 3`, and overrides `supervisor: 1`, `implementer: 3` (PD-47).
+- **FR-712a**: Ready and review dispatch MUST share the same effective profile limit and running count. Review must not bypass either the uniform fallback or an explicit override.
+- **FR-712b**: A single Supervisor owns decomposition, review, convergence, and integration for one contract. Throughput is increased by releasing independent Implementer units; Aether MUST NOT duplicate Supervisors merely to consume more concurrency.
+- **FR-713**: FR-712's numbers are calibration starting points, not derived constants. They MUST be revised from observed contract duration, idle time, worker occupancy, collision rate, integration cost, provider rate limiting, and host saturation; the revision MUST be recorded.
 - **FR-714**: Units that would each edit the same file MUST NOT be dispatched concurrently. Independence in the breakdown means file-level independence, not merely logical separability.
 
 ## 5. Escalation — Two Tiers

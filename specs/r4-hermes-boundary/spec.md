@@ -1,7 +1,7 @@
 # R4 Specification: The Hermes Framework Boundary
 
 **Roadmap ID**: R4  
-**Stage status**: done  
+**Stage status**: in-progress — reopened 2026-08-20 by PD-49 and A1 downstream productization  
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review  
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  

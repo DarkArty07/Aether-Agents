@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DarkArty07/Aether-Agents/blob/main/specs/001-aether-v1-productization/contracts/release-lock.schema.json",
+  "title": "Aether release dependency lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "aether", "hermes", "profile_bundle"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "aether": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "package_version", "git_tag", "git_commit"],
+      "properties": {
+        "version": {"$ref": "#/$defs/semver"},
+        "package_version": {"type": "string", "minLength": 1},
+        "git_tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+        "git_commit": {"$ref": "#/$defs/git_commit"}
+      }
+    },
+    "hermes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version", "upstream_tag", "upstream_commit", "fork_tag", "fork_commit", "python_requires", "artifacts"],
+      "properties": {
+        "repository": {"const": "https://github.com/DarkArty07/hermes-agent"},
+        "version": {"type": "string", "minLength": 1},
+        "upstream_tag": {"type": "string", "minLength": 1},
+        "upstream_commit": {"$ref": "#/$defs/git_commit"},
+        "fork_tag": {"type": "string", "minLength": 1},
+        "fork_commit": {"$ref": "#/$defs/git_commit"},
+        "python_requires": {"type": "string", "minLength": 1},
+        "artifacts": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"$ref": "#/$defs/artifact"},
+          "allOf": [
+            {"contains": {"properties": {"kind": {"const": "wheel"}}, "required": ["kind"]}},
+            {"contains": {"properties": {"kind": {"const": "sdist"}}, "required": ["kind"]}}
+          ]
+        }
+      }
+    },
+    "profile_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256", "roles"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "roles": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "morfeo"},
+            {"const": "supervisor"},
+            {"const": "implementer"}
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "filename", "url", "sha256", "provenance_url"],
+      "properties": {
+        "kind": {"enum": ["wheel", "sdist"]},
+        "filename": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "provenance_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+      }
+    }
+  }
+}

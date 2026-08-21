@@ -1,17 +1,19 @@
 # R13 Specification: Design Synthesis and Implementation Entry
 
 **Roadmap ID**: R13
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by PD-48–PD-64 and the A1 public release contract
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — Christopher explicitly requested autonomous Phase 6 work, with blockers
 recorded as debt and independent work continued to its safe boundary
 **Amended**: 2026-08-18 — PD-44 proportional direct execution for Morfeo accepted for build
 **Amended**: 2026-08-20 — PD-44 capability surface, PD-45, mechanical delivery, and owner acceptance recorded
+**Amended**: 2026-08-20 — Christopher closed the §11 Phase 6 qualification gate; see `research.md` §17
+**Amended**: 2026-08-21 — PD-46 model binding and PD-47 asymmetric concurrency synthesized
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
 **Depends on**: R0 through R12, `DESIGN.md`
-**May affect**: Nothing. R13 is terminal for the design phase
+**May affect**: A1 productization and every derived public release artifact
 **Parent roadmap**: `../../ROADMAP.md`
 **Hermes evidence**: version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`, source `home/.venv-hermes/src/hermes-agent`
 
@@ -40,12 +42,12 @@ When a unit meets a question its card does not answer, it does not stop and does
 | What is Hermes and what is Aether | Runtime versus method | R4 |
 | How work moves | Cards on one durable board, one profile per role | R5 |
 | How the parts communicate | The board only; A2A reserved, MCP outward | R6 |
-| How work is split and finished | Supervisor decomposes; two-tier escalation; configured convergence | R7 |
+| How work is split and finished | One Supervisor decomposes/reviews/integrates; up to three Implementers execute independent units under the initial cap | R7 |
 | Where work happens and how it merges | Worktree per unit; per-unit revertible integration | R8 |
 | What is remembered and what survives | Three stores, one owner each; the card is the unit of durability | R9 |
 | What is protected | Fail-closed hooks on an enumerated list of effects | R10 |
 | What counts as proof | The running product, plus per-unit evidence | R11 |
-| How capability is allocated | Per profile, with per-unit override | R12 |
+| How capability is allocated | Per profile: Morfeo/Sol, Supervisor/Terra, Implementer/Luna; per-unit override remains available | R12 |
 
 ## 3. What Each Prompt Must Guarantee
 
@@ -61,7 +63,7 @@ The system prompts are the delivery form of this design. Writing their wording i
 - **FR-1306**: When Morfeo selects the pipeline, it MUST hand over exactly one card addressed to Supervisor and MUST NOT create implementation units (R5-FR-517). A direct action MUST NOT create a ceremonial handoff card.
 - **FR-1307**: Morfeo's prompt MUST treat file, terminal, `code_execution`, `cronjob`, and `delegate_task` as normal operational capabilities under amended PD-44, with the same effective surface on CLI and Telegram. It MUST keep browser execution and computer use excluded; govern cron as either direct-work follow-up or a future pipeline start chosen by whole-objective reasoning; limit delegated subagents to assisting Morfeo's own bounded direct work rather than product implementation; and state that technical capability does not widen authority. The cron and delegation route limits are agentic doctrine, not hook enforcement (R5-FR-506, R5-FR-506g, R10-FR-1013a).
 - **FR-1308**: For pipeline work, it MUST assemble the end-of-work report from durable board state, never from memory (R11-FR-1114). For direct work, it MUST report from the actual tool output, repository diff, and current observed state rather than conversational recollection.
-- **FR-1309**: It MUST address the owner generically and MUST NOT hardcode a person, a stack, a domain, or a project type (R1-FR-132).
+- **FR-1309**: It MUST identify the owner generically as the project authority and MUST NOT hardcode a person, a stack, a domain, or a project type. In direct conversation it MUST follow a known user preference for personal address, otherwise remain natural and neutral, and MUST NOT require the authority role as a vocative (R1-FR-132).
 - **FR-1310**: When it disagrees with the owner, it MUST say so once, record it, execute the decision, and not raise it again (R1-FR-131).
 - **FR-1310a**: It MUST establish or confirm the project's constitution as part of starting work on a project, never as an afterthought, drafting it from what it knows of the owner and what the project already does (R3-FR-307, R3-FR-309).
 - **FR-1310b**: It MUST NOT write owner preferences into a project's constitution as if they were that project's standards, and MUST NOT add, remove, or redefine a principle on its own authority. It proposes and drafts; the owner decides (R3-FR-306, R3-FR-312).
@@ -136,8 +138,9 @@ Everything that must be set, and why. This is the complete list; anything absent
 This table is the **pre-run baseline** that bounded the original checkpoint. Ten claims were originally
 listed here as unobserved. **Eight had been verified** — seven by executing the runtime and one by reading
 the tree it loads — without creating a profile, spawning an agent, or calling a model. The later Phase 5
-candidate evidence and its findings are in [`research.md §14`](research.md); Phase 6 has not promoted those
-claims and therefore does not rewrite this historical baseline.
+candidate evidence and its findings are in [`research.md §14`](research.md). Phase 6, the mechanism that
+would have promoted those claims, is **closed** by owner instruction (`research.md` §17) rather than merely
+not-yet-run, so items 9 and 10 below remain at their last recorded disposition permanently, not pending.
 
 | # | Claim | Status |
 |---|---|---|
@@ -201,6 +204,8 @@ Items that are decided but not finished, listed so they are not lost:
 
 R13 introduces no new claims about the runtime. Its evidence is the sum of R4 through R12, all recorded against version 0.20.1 at revision `411903b6fa258f81afcc3869eb615f6218e1776a`, from the source tree the runtime actually loads.
 
+R13 §11's Phase 6 qualification gate is **closed** by explicit 2026-08-20 owner instruction, recorded at `research.md` §17. The claims and provisional values it would have qualified keep their last recorded disposition — candidate evidence, not a qualified verification — permanently, unless the owner separately reopens the question.
+
 The strongest evidence in the design was produced by execution rather than reading: the two-tier escalation of R7 §5 was run end to end on an isolated board before it was specified, and the unblock-loop constraint of R7 §6 was discovered the same way, having been described incorrectly from documentation twice.
 
 ## 9. Success Criteria
@@ -225,12 +230,17 @@ The strongest evidence in the design was produced by execution rather than readi
 - [x] Christopher has reviewed the stage and the design as a whole.
 - [x] Christopher accepted PD-44, its explicit non-goals, and its mechanical-only implementation verification standard on 2026-08-18.
 
-## 11. Phase 6 — Post-Run Qualification Contract
+## 11. Phase 6 — Post-Run Qualification Contract *(closed 2026-08-20)*
 
-Phase 6 formalizes the work previously listed only as “After the run.” It consumes EC1 evidence and
-decides whether Aether is ready to request a later operational decision. It is not another run and it
-does not authorize cutover, product work, publication, deployment, credentials, or any irreversible
-effect.
+**Closed by explicit owner instruction on 2026-08-20**, recorded at `research.md` §17: Christopher chose
+closure over deferral, judging his own direct use of the system sufficient validation and declining to
+gate further work on producing the packet below. The contract that follows is retained as the historical
+record of what a formal qualification would have required — it is no longer a live obligation, and none
+of it authorizes anyone to produce it later without a new owner decision to reopen it.
+
+Phase 6 formalized the work previously listed only as “After the run.” It would have consumed EC1 evidence
+and decided whether Aether was ready to request a later operational decision. It was never another run and
+never authorized cutover, product work, publication, deployment, credentials, or any irreversible effect.
 
 - **FR-1343**: Phase 6 MUST follow a completed, explicitly authorized Phase 5. It MUST NOT manufacture,
   simulate, or substitute the live evidence that EC1 exists to produce.
@@ -256,6 +266,7 @@ effect.
   affected claim or decision, and evidence already available. “Blocked” without those fields is not a
   finished qualification record.
 
-Phase 6 is done only when the claim ledger, provisional-value review, cost account, contradiction
-review, debt register, and readiness recommendation are all explicit. With no completed Phase 5, the
-only truthful terminal state is `HOLD — qualification prepared; EC1 evidence absent`.
+Phase 6 would have been done only when the claim ledger, provisional-value review, cost account,
+contradiction review, debt register, and readiness recommendation were all explicit. It never reached that
+state before closure; its terminal state is **closed, not `READY` and not `HOLD`** — the owner ended the
+gate itself rather than resolving it.

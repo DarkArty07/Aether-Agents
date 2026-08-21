@@ -1,7 +1,7 @@
 # R10 Specification: Security, Trust, and Authority Enforcement
 
 **Roadmap ID**: R10
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by PD-49, PD-57, PD-60–PD-64, and A1 public supply-chain boundaries
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — Morfeo operational containment reconciled under PD-44
 **Amended**: 2026-08-20 — execution, cron, delegation, skills, and vision surfaces reconciled under amended PD-44 and PD-45

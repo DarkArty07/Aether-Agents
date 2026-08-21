@@ -1,7 +1,7 @@
 # R8 Specification: Workspaces, Git, and Integration
 
 **Roadmap ID**: R8
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by PD-52, PD-62, and A1 public project isolation
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — direct PD-44 workspace, Git, and publication rules
 **Decision authority**: Christopher

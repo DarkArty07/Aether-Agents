@@ -110,7 +110,7 @@ Phase 5 produced candidate evidence for the three previously assumed runtime cla
 
 The run also exposed material lifecycle findings: `initial_status: blocked` auto-promoted, worker-side creation omitted the retry field, `needs_input` entered triage and redispatched without an unblock, and one same-card goal needed distinct Implementer and Supervisor predicates. These findings and the complete task/session/commit trace are recorded in [`R13 research §14`](specs/r13-synthesis-and-release/research.md).
 
-**Phase 6 has not been rerun after EC1.** Its earlier `HOLD` packet remains the historical pre-run qualification; no runtime claim has been formally promoted and no `READY`, product activation, publication, deployment, or Hermes-to-Morfeo cutover is authorized. The next protected step is Phase 6 evidence re-qualification, not another Phase 5 run.
+**Phase 6 evidence qualification is closed, not pending.** Christopher closed it by explicit instruction on 2026-08-20, preferring his own direct use of the system to a formal qualification packet ([`R13 research §17`](specs/r13-synthesis-and-release/research.md)). Its earlier `HOLD` packet remains the historical pre-run qualification; no runtime claim has been formally promoted, and no `READY`, product activation, publication, deployment, or Hermes-to-Morfeo cutover is authorized by the closure.
 
 ## Canonical Morfeo TUI activation
 
@@ -125,7 +125,7 @@ python3 scripts/aether_tui.py
 
 A short user-local `aether` command may delegate to this versioned script. The wrapper itself remains local because machine paths and profile state are not repository artifacts.
 
-On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. This does not replace Phase 6 or close the remaining runtime/debt issues.
+On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. That same standard led him to separately close the Phase 6 qualification gate the same day, rather than have it re-run against the EC1 evidence — see above. Neither closure closes the remaining runtime/debt issues.
 
 ## For whoever implements this
 
@@ -138,7 +138,7 @@ Implementation order that the design supports:
 3. Write the three system prompts to the behavioural specifications in [R1](specs/r1-authority-and-interaction/spec.md), [R7](specs/r7-supervision-and-convergence/spec.md), and [R13](specs/r13-synthesis-and-release/spec.md). Writing the wording is build, not design, and is deliberately left open.
 4. Install the enforcement hooks in [R10](specs/r10-security-and-authority/spec.md).
 5. Run the walking-skeleton checkpoint described in [`ROADMAP.md`](ROADMAP.md) before trusting any runtime claim this design labels as assumed.
-6. Qualify the checkpoint evidence through [R13 Phase 6](specs/r13-synthesis-and-release/plan.md): promote or retain claims, revisit provisional values, correlate cost, record debt, and return `READY` or `HOLD`. This step never performs cutover or product activation.
+6. ~~Qualify the checkpoint evidence through R13 Phase 6~~ — **closed 2026-08-20** by explicit owner instruction rather than executed; see [`R13 Phase 6`](specs/r13-synthesis-and-release/plan.md) and [`R13 research §17`](specs/r13-synthesis-and-release/research.md). Christopher chose his own direct validation of the system over this formal qualification step. This closure never performed cutover or product activation.
 
 Two defaults must be changed before the first unattended run, and both are recorded with their reasons in [R7](specs/r7-supervision-and-convergence/spec.md). Leaving them alone produces a system that quietly reassigns work the contract never authorised.
 

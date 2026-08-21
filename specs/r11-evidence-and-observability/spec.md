@@ -1,7 +1,7 @@
 # R11 Specification: Evidence, Observability, and Evaluation
 
 **Roadmap ID**: R11
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by PD-51, PD-56, PD-59, PD-64, and A1 public-path qualification
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — proportional direct-work evidence under PD-44
 **Decision authority**: Christopher

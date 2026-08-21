@@ -1114,3 +1114,51 @@ to the separate `max_retries` qualification and is not Aether repository content
 The local `CLAUDE.md` adapter remains non-canonical and ignored. Its reconciliation was attempted during
 consolidation, but the protected instruction-file approval prompt expired without a user response. The write
 was not retried or bypassed; Aether issue #193 therefore remains open.
+
+## 17. Phase 6 formal qualification gate closed by owner instruction
+
+**Decided**: 2026-08-20, in conversation with Christopher. Asked explicitly whether the §11 Phase 6
+qualification gate should be treated as closed or postponed, Christopher chose closure: he is validating
+the system through his own direct, ongoing use rather than through a formal analytical packet, and does
+not want further work gated on producing one.
+
+**What closes.** The §11 contract (FR-1343 through FR-1351) — claim ledger, provisional-value review, cost
+account, contradiction review, debt register, and a `READY`/`HOLD` recommendation — will not be produced.
+§13's pre-run `HOLD` packet and §14's Phase 5 candidate evidence remain the permanent, truthful record of
+what was actually observed; neither is retroactively rewritten into a completed qualification, because none
+was produced. Phase 6's terminal state is **closed**, not `READY` and not `HOLD` — the gate itself ended,
+rather than being resolved through it.
+
+**What does not close.**
+
+- **No claim is promoted.** The three EC1 claims (convergence/exhaustion, wake delivery, acceptance
+  evidence) keep the disposition §14.2 already recorded — candidate evidence from one live run, not a
+  qualified verification. FR-1336's rule still applies: an unrun promotion step must not be treated as
+  having silently promoted anything, and closing the gate does not change that.
+- **No provisional value is revised.** Model tiers, retry/turn/wall-clock budgets, and concurrency limits
+  (spec.md §4) remain provisional under R12-FR-1219 until an owner decision revises them by some other
+  route.
+- **No cost correlation, cutover, product activation, publication, deployment, or Hermes-to-Morfeo switch
+  is authorized by this closure.** PD-09's separation of design, build, and activation is unaffected;
+  closing an evidence-qualification gate is not an activation decision.
+- **R4–R12's accepted claims are not reopened.** This is a decision about whether to keep running a
+  post-hoc qualification process, not a finding that contradicts any accepted requirement, so FR-1339's
+  reopen-the-owning-stage rule does not apply here.
+
+**Reason.** Christopher judges his own direct use of the proportional-Morfeo surface — the same standard
+already applied to close issue #196 (§16) — sufficient for his purposes, and does not want the design to
+keep gating further work on a packet that would duplicate a judgement he has already made informally and
+repeatedly.
+
+**Alternative considered.** Deferral (keep Phase 6 as a still-required, merely postponed step) was offered
+explicitly and declined in favor of closure.
+
+**Impact.**
+
+- `spec.md` §5's pre-run baseline note and §11's Phase 6 contract are marked closed; the FRs remain as a
+  historical record of what a formal qualification would have required, not as live obligations.
+- `plan.md`'s Phase 6 phase is marked closed with the same disposition.
+- `ROADMAP.md` §6 and §8, and `README.md`'s status section, no longer name Phase 6 re-qualification as the
+  next protected gate — there is no next protected evidence gate; the design's remaining protected
+  boundary is PD-09 itself (no build authorization is granted by this closure, and no activation is
+  authorized without separate explicit instruction).

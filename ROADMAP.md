@@ -1,6 +1,6 @@
 # Aether Agents — Design Roadmap
 
-**Status:** R0–R13, amended PD-44, and PD-45 accepted; proportional Morfeo delivery is mechanically verified and #196 is closed by owner acceptance
+**Status:** PD-48 through PD-64 accepted; R4 and R8–R13 are in progress for Aether 1.0 productization under the executable A1 contract
 **Updated:** 2026-08-20
 **Product authority:** Christopher
 
@@ -50,16 +50,18 @@ These labels are documentation, not runtime states. Decisions do not have a sepa
 | **R1** | Product authority and operating experience | Define owner–Morfeo interaction, extraction, interruption, effects, delivery, and review. Does not define contract content or technology. | R0 | **done** | [`spec.md`](specs/r1-authority-and-interaction/spec.md) |
 | **R2** | Multi-agent contract and handoff | Identify the contract as the Spec Kit artifact set, add Aether's execution envelope, make completeness measurable, and define defect return. Does not select transport or runtime topology. | R0, R1 | **done** | [`spec.md`](specs/r2-contract-and-handoff/spec.md) |
 | **R3** | Spec Kit as a multi-agent method | Assign every Spec Kit phase to exactly one role, locate the handoff boundary, and separate owner preferences from project constitutions. Does not install or fork Spec Kit. | R1, R2 | **done** | [`spec.md`](specs/r3-speckit-multiagent-method/spec.md) |
-| **R4** | Hermes Framework boundary | Classify Hermes's three coordination primitives and its native capabilities against accepted Aether requirements; record the runtime/method boundary. Does not select a primitive or activate anything. | R0, R1, R2, R3 | **done** | [`spec.md`](specs/r4-hermes-boundary/spec.md) |
+| **R4** | Hermes Framework boundary | Classify Hermes's three coordination primitives and its native capabilities against accepted Aether requirements; record the runtime/method boundary. Does not select a primitive or activate anything. | R0, R1, R2, R3 | **in-progress** | [`spec.md`](specs/r4-hermes-boundary/spec.md) |
 | **R5** | Topology, identity, and isolation | The durable board is Aether's coordination primitive; three profiles, one per role; per-card worktrees; blocked cards as the escalation channel. Does not decide A2A's scope. | R1, R2, R4 | **done** | [`spec.md`](specs/r5-topology-and-isolation/spec.md) |
 | **R6** | Protocol and communication | The board is the only inter-role transport. A2A is a platform adapter, available and unused, with two stated reopening conditions; MCP is an outward surface only. Owns the owner's notification channel. | R2, R3, R4, R5 | **done** | [`spec.md`](specs/r6-protocol-and-communication/spec.md) |
 | **R7** | Supervision, parallelism, and convergence | Decomposition belongs to the supervisor against a competing runtime default; two-tier escalation; convergence configured, not designed; concurrency and budget starting values. | R2, R3, R5, R6 | **done** | [`spec.md`](specs/r7-supervision-and-convergence/spec.md) |
-| **R8** | Workspaces, Git, and integration | Worktree per unit, the contract's writer rule, dependency-ordered integration, one commit per unit so every unit is individually revertible, bounded publication authority. | R2, R5, R7 | **done** | [`spec.md`](specs/r8-workspaces-and-integration/spec.md) |
-| **R9** | State, artifacts, memory, and recovery | Three stores with one owner each, deliverable declaration, owner-preference memory bounded, the card as the unit of durability, retention that separates record from telemetry. | R2, R5, R6, R7, R8 | **done** | [`spec.md`](specs/r9-state-and-recovery/spec.md) |
-| **R10** | Security, trust, and authority enforcement | Single-host trusted-local-user threat model, asymmetric containment, a fail-closed pre-tool-call hook as the enforcement point, and a definitive list of protected effects. | R1, R5, R6, R7, R8, R9 | **done** | [`spec.md`](specs/r10-security-and-authority/spec.md) |
-| **R11** | Evidence, observability, and evaluation | The running product as deliverable, per-unit evidence answering four questions, ranked finding classes, and the verified-or-assumed discipline for claims about the runtime. | R2, R3, R7, R8, R9, R10 | **done** | [`spec.md`](specs/r11-evidence-and-observability/spec.md) |
-| **R12** | Models, routing, and economics | Capability allocated per profile with a per-unit override, auxiliary slots dispositioned, provider-agnostic. Model names are bound at build time, not here. | R1, R7, R10, R11 | **done** | [`spec.md`](specs/r12-models-and-economics/spec.md) |
-| **R13** | Design synthesis and release | Reconciles R0–R12, specifies what each prompt must guarantee, lists the complete configuration inventory and the ten unobserved claims. Authorizes no build and no run. | R0–R12 | **done** | [`spec.md`](specs/r13-synthesis-and-release/spec.md) |
+| **R8** | Workspaces, Git, and integration | Worktree per unit, the contract's writer rule, dependency-ordered integration, one commit per unit so every unit is individually revertible, bounded publication authority. | R2, R5, R7 | **in-progress** | [`spec.md`](specs/r8-workspaces-and-integration/spec.md) |
+| **R9** | State, artifacts, memory, and recovery | Three stores with one owner each, deliverable declaration, owner-preference memory bounded, the card as the unit of durability, retention that separates record from telemetry. | R2, R5, R6, R7, R8 | **in-progress** | [`spec.md`](specs/r9-state-and-recovery/spec.md) |
+| **R10** | Security, trust, and authority enforcement | Single-host trusted-local-user threat model, asymmetric containment, a fail-closed pre-tool-call hook as the enforcement point, and a definitive list of protected effects. | R1, R5, R6, R7, R8, R9 | **in-progress** | [`spec.md`](specs/r10-security-and-authority/spec.md) |
+| **R11** | Evidence, observability, and evaluation | The running product as deliverable, per-unit evidence answering four questions, ranked finding classes, and the verified-or-assumed discipline for claims about the runtime. | R2, R3, R7, R8, R9, R10 | **in-progress** | [`spec.md`](specs/r11-evidence-and-observability/spec.md) |
+| **R12** | Models, routing, and economics | Capability allocated per profile with a per-unit override, auxiliary slots dispositioned, provider-agnostic. Model names are bound at build time, not here. | R1, R7, R10, R11 | **in-progress** | [`spec.md`](specs/r12-models-and-economics/spec.md) |
+| **R13** | Design synthesis and release | Reconciles R0–R12, specifies what each prompt must guarantee, lists the complete configuration inventory and the ten unobserved claims. Authorizes no build and no run. | R0–R12 | **in-progress** | [`spec.md`](specs/r13-synthesis-and-release/spec.md) |
+
+R4 and R8–R13 were reopened on 2026-08-20 only where PD-48 through PD-64 materially changed their accepted content: the qualified downstream boundary, public project/workspace isolation, XDG state and recovery, package and publication security, public-path evidence, provider-independent model allocation, and release synthesis. The executable implementation contract is [`A1 — Aether 1.0 Productization`](specs/001-aether-v1-productization/spec.md). R0–R3 and R5–R7 remain done.
 
 ## 6. EC1 — Walking-skeleton evidence checkpoint
 
@@ -81,9 +83,12 @@ acceptance-quality worker evidence. It also exposed lifecycle contradictions aro
 triage redispatch, worker-created limits, and same-card goal predicates. The complete trace is
 [`R13 research §14`](specs/r13-synthesis-and-release/research.md).
 
-After EC1, [`R13 Phase 6`](specs/r13-synthesis-and-release/plan.md) qualifies that evidence, revisits
-provisional decisions, correlates cost, records debt, and returns `READY` or `HOLD`. Phase 6 is an
-evidence-closure phase inside R13, not a new roadmap design area and not cutover authority.
+[`R13 Phase 6`](specs/r13-synthesis-and-release/plan.md) would have qualified that evidence, revisited
+provisional decisions, correlated cost, recorded debt, and returned `READY` or `HOLD`. It was an
+evidence-closure phase inside R13, not a new roadmap design area and not cutover authority. Christopher
+closed it as a required gate on 2026-08-20, preferring his own direct use of the system to a formal
+qualification packet (`specs/r13-synthesis-and-release/research.md` §17). No claim from §14 is promoted by
+that closure, and no build or activation authority follows from it.
 
 EC1 was not automatically authorized by this roadmap; it ran only after Christopher's separate explicit
 authorization. It remained a sacrificial evidence checkpoint, not product implementation or a
@@ -114,10 +119,13 @@ cutover occurred.
 
 This repository's own governance is materialized at `.specify/memory/constitution.md`, copying the accepted R0 §4 principles as `specs/r0-design-governance/spec.md` directs. It is untracked and R0 remains its canonical source. The constitution of a project Aether *builds* is a different artifact that lives inside that project, and is written when work on it starts (R3-D04).
 
-**The next protected gate is Phase 6 evidence re-qualification, not another Phase 5 run or cutover.**
-The earlier Phase 6 `HOLD` packet was truthful before EC1 and remains historical; it has not yet consumed
-the new evidence or classified the runtime findings. Until that analytical phase is re-executed, no claim
-is formally promoted and no `READY` recommendation is current.
+**Phase 6 evidence qualification is closed, not pending.** Christopher closed it by explicit instruction on
+2026-08-20 rather than have it re-executed (`specs/r13-synthesis-and-release/research.md` §17). The earlier
+Phase 6 `HOLD` packet was truthful before EC1 and remains historical; it was never rerun against the Phase 5
+evidence, so no claim is formally promoted and no `READY` recommendation was ever issued — that outcome is
+now permanent for this design rather than outstanding. This closure carries no build or cutover authority:
+no another-Phase-5 run, product activation, publication, deployment, or Hermes-to-Morfeo cutover is
+authorized by it.
 
 PD-44's proportional-Morfeo contract and its 2026-08-20 capability amendment are accepted and canonical;
 PD-45 adds `skills` and `vision` to all three roles without widening authority. The stopped live profiles now
@@ -131,8 +139,8 @@ recorded at `NousResearch/hermes-agent#89677`. The gateway reload completed, but
 still requires its own live acceptance before #198 closes. #199 is closed after 27/27 focused regressions and
 a live read-only branch-inspection proof. #200 is closed by merged PR #201: `policy/hooks/` is the sanitized
 canonical source and `scripts/sync_policy_hooks.py` provides atomic install, parity check, and drift-safe
-restore. Phase 6 evidence re-qualification, the other open issues, release, deployment, and product cutover
-remain separate work.
+restore. Phase 6 evidence qualification is closed (2026-08-20; see above); the other open issues, release,
+deployment, and product cutover remain separate work.
 
 A deliverable previously scheduled into R3 no longer exists there. R3 was to extract Christopher's standing code-quality standards into constitution principles, on the assumption that a single constitution governed all Aether work. R3-D04 corrected that: Spec Kit's constitution lives **inside the project being built**, so there is no Aether-wide constitution to author. Per-project standards are established when work on a project starts, and the owner's cross-project preferences belong to Morfeo's learned memory, whose realization is R4 and whose storage is R9.
 

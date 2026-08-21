@@ -1,9 +1,10 @@
 # R12 Specification: Models, Routing, and Economics
 
 **Roadmap ID**: R12
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by amended PD-46 and A1 provider-independent setup
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — Morfeo's existing tier also serves direct stewardship
+**Amended**: 2026-08-21 — Sol/Terra/Luna descending operating baseline accepted
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
@@ -14,9 +15,9 @@
 
 ## 1. Purpose
 
-R12 decides how reasoning capability is allocated across roles and units, and what governs the trade between cost and quality.
+R12 records how reasoning capability is allocated across roles and units, the current owner-approved model binding, and what governs the trade between cost, throughput, and quality.
 
-It does **not** name models. Naming them is a build decision that requires two things this stage does not have: the catalogue the owner's provider actually exposes, and comparative evidence from a real run. R12 specifies the allocation scheme, the override mechanism, and the rule that decides when a cheaper configuration may be adopted.
+Model identifiers are operational configuration facts rather than portable product requirements. The current Aether instance binds the accepted Frontier/Capable/Inexpensive tiers to Sol/Terra/Luna; future replacement must preserve the role semantics and quality gates even if those identifiers or their provider disappear.
 
 R12 does not authorize a run (R13).
 
@@ -24,11 +25,13 @@ R12 does not authorize a run (R13).
 
 The runtime resolves each worker's model from its own profile when the dispatcher spawns it. Tiering is therefore a property of the role, expressed once, not a routing decision made per unit.
 
-| Role | Tier | Why |
-|---|---|---|
-| Morfeo | Frontier | Extraction quality determines everything downstream; the same profile also performs bounded direct stewardship under PD-44 |
-| Supervisor | Capable | Decomposition, analysis, review, and contract-derived decisions are judgement work on a written contract |
-| Implementer | Inexpensive | Executes a unit that already carries its goal, its context, and its decisions |
+| Role | Tier | Current binding | Why |
+|---|---|---|---|
+| Morfeo | Frontier | `gpt-5.6-sol` | Extraction quality determines everything downstream; the same profile also performs bounded direct stewardship under PD-44 |
+| Supervisor | Capable | `gpt-5.6-terra` | Decomposition, analysis, review, integration, and contract-derived decisions are judgement work on a written contract |
+| Implementer | Inexpensive | `gpt-5.6-luna` | Executes a bounded unit that already carries its goal, context, and decisions; lower unit cost makes parallel throughput economical |
+
+The descending order is deliberate: capability and unit cost decrease as the decision space narrows. It does not create descending quality criteria. The contract, constitution, tests, evidence obligations, and Supervisor review remain unchanged across all three bindings.
 
 - **FR-1201**: Model tiering MUST be expressed per profile.
 - **FR-1202**: Morfeo MUST run on the strongest available tier. Extraction is the one phase with no second chance (R1 §2), and PD-44 direct stewardship uses the same established profile tier.
@@ -63,6 +66,8 @@ The runtime routes several internal functions to separately configured auxiliary
 ## 5. Economics
 
 - **FR-1213**: Spending is unrestricted (R1-FR-112). Cost is a design consideration, not a gate.
+- **FR-1213a**: Aether's throughput strategy is to reserve stronger, more expensive capability for upstream decisions whose errors propagate, then parallelize bounded implementation on the lower-cost Implementer tier. Greater speed MUST NOT be obtained by weakening review, tests, acceptance criteria, or evidence.
+- **FR-1213b**: One Supervisor coordinates a contract. Increasing concurrency means more independent Implementer instances, not duplicate Supervisors competing over decomposition or integration (PD-47).
 - **FR-1214**: Because no spending gate bounds a runaway loop, the attempt, turn, and wall-clock budgets of R7 are the only bound, and MUST be set before any unattended run (R1-FR-116).
 - **FR-1215**: Cost MUST be observable per unit and per attempt, for visibility rather than control (R1-FR-134).
 - **FR-1215a**: **The board records no cost.** Verified by inspecting its schema: neither the unit table nor the attempt table carries any column for cost, tokens, usage, or spend. Duration is available per attempt — start, end, wall-clock limit, and last liveness signal — but cost is not.
@@ -72,10 +77,10 @@ The runtime routes several internal functions to separately configured auxiliary
 
 ## 6. Selection Rules
 
-- **FR-1217**: A tier assignment MUST NOT be selected by preference or reputation. It requires a controlled comparison holding the contract constant and varying one thing (R11-FR-1130).
-- **FR-1218**: Cost MUST NOT substitute for demonstrated quality (R11-FR-1131).
-- **FR-1219**: Until such evidence exists, tier assignments are **provisional** and MUST be labelled as such wherever they are recorded.
-- **FR-1220**: Model names MUST be bound in profile configuration at build time, never in a prompt, a card body, or a contract artifact. Binding them in content would make a model change a content change across every project.
+- **FR-1217**: The current Sol/Terra/Luna binding is an explicit owner decision and therefore the operating baseline. It MUST NOT be described as experimentally optimal without a controlled comparison holding the contract constant and varying one model at one role/gate (R11-FR-1130).
+- **FR-1218**: Cost MUST NOT substitute for demonstrated quality (R11-FR-1131). A cheaper tier is acceptable only while it satisfies the same constitution, tests, acceptance criteria, and review requirements.
+- **FR-1219**: Future re-tiering and claims that another binding is superior MUST be supported by controlled evidence. Until then, the current binding remains authoritative but scientifically unconfirmed as optimal.
+- **FR-1220**: Model names MUST be bound in profile configuration at build time and may be recorded here as current configuration truth; they MUST NOT appear in a prompt, a card body, or a project contract artifact. Binding them in work content would make a model change a content change across every project.
 - **FR-1221**: The design MUST remain provider-agnostic. A provider or router is a configuration fact, and no requirement in this repository may depend on a specific vendor's model existing.
 
 ## 7. Evidence
@@ -87,15 +92,20 @@ From direct inspection at the recorded revision:
 - Auxiliary functions resolve through separately configured slots and fall back to the main model when a slot is unset.
 - Automatic decomposition is enabled by default and re-read by the dispatcher on every tick, so disabling it takes effect without a restart.
 
-Observed on the owner's live profile: the runtime is pointed at a locally hosted router rather than a public provider, which is exactly why FR-1221 is stated as a requirement rather than assumed.
+Observed on the live Aether profiles:
 
-Not measured: any comparison between tiers. No run has occurred, so every tier assignment in §2 is provisional under FR-1219.
+- Morfeo is bound to `gpt-5.6-sol`.
+- Supervisor is bound to `gpt-5.6-terra`.
+- Implementer is bound to `gpt-5.6-luna`.
+- All three resolve through the same configured local router while preserving separate profile identity.
+
+Not measured: a controlled comparison between these bindings and alternatives. The binding is accepted current configuration, but no optimality or quality-superiority claim is made without that experiment.
 
 ## 8. Requirements Inherited by Later Stages
 
 | Requirement | Owner |
 |---|---|
-| Tier assignments are provisional until the first authorized run produces comparative evidence | R13 |
+| Current binding remains authoritative until Christopher changes it; claims of optimality or future re-tiering require comparative evidence | R13 |
 | Budgets must be set before the first unattended run | R13 |
 
 ## 9. Success Criteria
@@ -104,7 +114,7 @@ Not measured: any comparison between tiers. No run has occurred, so every tier a
 - **SC-1202**: A unit needing more capability receives it by override, not by a new role.
 - **SC-1203**: No auxiliary slot performs work Aether assigned to a role.
 - **SC-1204**: No unconfigured slot silently falls back to the main model while its behaviour remains enabled.
-- **SC-1205**: Every tier assignment is either supported by comparative evidence or labelled provisional.
+- **SC-1205**: The current role binding is recorded as owner-approved configuration; any claim of optimality or future re-tiering is supported by controlled comparative evidence.
 - **SC-1206**: No model name appears in a prompt, a card body, or a contract artifact.
 - **SC-1207**: No requirement depends on a specific vendor's model existing.
 
@@ -114,7 +124,7 @@ Not measured: any comparison between tiers. No run has occurred, so every tier a
 - [x] The per-unit override is made the first resort for capability, not a new role.
 - [x] Every auxiliary slot is dispositioned, including the silent-fallback trap.
 - [x] The economics of an ungated system are tied to R7's budgets.
-- [x] Selection rules forbid preference-based choice.
+- [x] Selection rules distinguish the owner-approved operating baseline from claims that require controlled evidence.
 - [x] Provider-agnosticism is required rather than assumed.
 - [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
 - [ ] Tier assignments are confirmed or revised against comparative evidence.

@@ -1,7 +1,7 @@
 # Implementation Plan: EC1 — The Walking-Skeleton Checkpoint
 
 **Roadmap ID**: R13 / EC1
-**Plan status**: Phases 0–5 complete; Phase 5 produced live evidence with recorded deviations; the pre-run Phase 6 qualification remains **HOLD** until re-executed
+**Plan status**: Phases 0–5 complete; Phase 5 produced live evidence with recorded deviations; Phase 6 is **closed** by explicit owner instruction on 2026-08-20 (`research.md` §17) rather than re-executed
 **Decision authority**: Christopher
 **Derived from**: [`spec.md`](spec.md) §5, §6, and §11, against the accepted R0–R13 baseline
 **Parent roadmap**: [`../../ROADMAP.md`](../../ROADMAP.md) §6
@@ -9,6 +9,7 @@
 **Written**: 2026-08-17
 **Amended**: 2026-08-18 — Phase 6 formalized, then Phase 5 executed under separate explicit owner authorization
 **Amended**: 2026-08-18 — PD-44 proportional direct execution contract added; obsolete EC1 Morfeo containment superseded
+**Amended**: 2026-08-20 — Christopher closed Phase 6 as a required gate; see `research.md` §17
 
 ## Summary
 
@@ -296,9 +297,14 @@ block does (R6-FR-617a). Those wakes must be absorbed by Morfeo and must not rea
 **Reversible**: the repository work is revertible per unit (R8-FR-820). The board rows are permanent
 and are the acceptance record — that is intended, not a leak.
 
-## Phase 6 — Qualification and release decision *(evidence closure; no activation)*
+## Phase 6 — Qualification and release decision *(closed 2026-08-20; never activation)*
 
-Phase 6 consumes the completed Phase 5 record. It starts no profile, worker, judge, gateway, or model.
+**Closed by explicit owner instruction on 2026-08-20** (`research.md` §17): Christopher chose closure over
+deferral, preferring his own direct use of the system to a formal qualification packet. What follows is
+retained as the historical record of what that packet would have required — it is not a live obligation,
+and it will not be produced without a new owner decision to reopen it.
+
+Phase 6 would have consumed the completed Phase 5 record. It would have started no profile, worker, judge, gateway, or model.
 Its authority is analytical: qualify evidence, revise provisional decisions, expose debt, and return a
 `READY` or `HOLD` recommendation to the owner. Neither result performs a cutover or starts product work
 (FR-1343, FR-1350).

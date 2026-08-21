@@ -1,7 +1,7 @@
 # R9 Specification: State, Artifacts, Memory, and Recovery
 
 **Roadmap ID**: R9
-**Stage status**: done
+**Stage status**: in-progress — reopened 2026-08-20 by PD-55, PD-62, PD-63, and A1 public recovery
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — direct PD-44 actions distinguished from delegated board execution
 **Decision authority**: Christopher
