@@ -3,6 +3,7 @@
 **Roadmap ID**: R8
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — direct PD-44 workspace, Git, and publication rules
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -26,6 +27,7 @@ The runtime provides three workspace kinds. Aether uses each for exactly one pur
 | Aether work | Workspace kind | Lifetime |
 |---|---|---|
 | Implementing a unit | A git worktree per card | Preserved |
+| Morfeo direct stewardship | The existing managed project workspace | Preserved; no false implementation card |
 | Working on an existing project in place | An absolute directory path | Preserved |
 | Decision cards, analysis, decomposition | Ephemeral scratch | Deleted on completion |
 
@@ -33,6 +35,9 @@ The runtime provides three workspace kinds. Aether uses each for exactly one pur
 - **FR-802**: A directory workspace MUST be an absolute path. Relative paths are rejected at dispatch as a confused-deputy vector, and Aether MUST NOT work around that rejection.
 - **FR-803**: A unit whose workspace is ephemeral MUST declare its deliverables explicitly at completion, or they are destroyed with the workspace.
 - **FR-804**: Decision cards (R7 §5) SHOULD use ephemeral workspaces. Their product is a decision recorded in the completion summary, not a file.
+- **FR-804a**: A direct PD-44 action MUST use the project workspace already in Morfeo's current context and MUST follow that project's established Git and workspace conventions. It MUST NOT create a worktree or implementation card solely to imitate pipeline mechanics.
+- **FR-804b**: When a pipeline build must modify ignored live profile state that a clean worktree cannot contain, Supervisor MAY prepare a blocked Implementer worktree by copying only the current non-secret target files and immutable baseline snapshots into it before unblocking the card. The Implementer produces and mechanically verifies the candidate under normal branch-bound containment. A later Supervisor integration unit applies only the independently approved candidate bytes or reviewed diff to the stopped live profile and derived shared documents. This is workspace preparation and integration, not implementation by Supervisor. `.env`, credentials, sessions, databases, memories, tokens, and other private runtime state MUST NOT be copied; if a required target contains a secret, the unit blocks rather than staging it.
+- **FR-804c**: The loaded Hermes `0.20.1` and current upstream `74f99af470ae8ce47f0903cf431d106cecbd37f2` cannot yet satisfy FR-804b safely: on the first worktree spawn, the resolved branch is persisted after claim but the stale claimed object reaches `_default_spawn`, so `HERMES_KANBAN_BRANCH` is absent. Issue #198 tracks the defect. Aether MUST NOT rely on a deliberate failed first attempt, direct database edit, global `.env` branch, hook weakening, or branchless `dir` worker. FR-804b remains the selected mechanism but is blocked until an owner-authorized Hermes correction is verified on the first spawn.
 
 ## 3. Where the Contract Lives — and Who May Write It
 
@@ -45,9 +50,10 @@ The resolution is a writer rule, not a new mechanism:
 | `constitution.md` | Morfeo, on owner authority | All roles |
 | `spec.md`, `plan.md` | Morfeo only | Supervisor |
 | `tasks.md` | Supervisor only | Supervisor |
-| Source and tests | Implementers, in their own worktree | All roles |
+| Source and tests in pipeline work | Implementers, in their own worktree | All roles |
+| Bounded direct operational change | Morfeo, in the managed project workspace | Owner; relevant later roles if the work changes route |
 
-- **FR-805**: Contract artifacts MUST be written only on the integration branch, by the role that owns them. No implementer worktree ever modifies a contract artifact.
+- **FR-805**: Contract artifacts MUST be written only on the integration branch, by the role that owns them. No implementer worktree ever modifies a contract artifact. General project-file mutation by Morfeo during a direct PD-44 action is not a contract-ownership violation.
 - **FR-806**: An implementer MUST NOT read `tasks.md` to understand its work. Its card body carries every decision it depends on (R7-FR-704), and the copy in its worktree is a point-in-time snapshot that may already be stale.
 - **FR-807**: Because no implementer writes a contract artifact, merging implementer branches MUST NOT produce contract-artifact conflicts. If one occurs, it is evidence that FR-805 was violated, not a merge problem to resolve.
 - **FR-808**: Appending remaining work to `tasks.md` during convergence MUST happen on the integration branch, and each appended unit MUST be materialised as a new card (PD-34).
@@ -62,6 +68,8 @@ The resolution is a writer rule, not a new mechanism:
 
 ## 5. Integration
 
+This section governs pipeline work only. A direct PD-44 action has no delegated branches to integrate; Morfeo owns the bounded change and its verification.
+
 - **FR-813**: Integration MUST be performed by the supervising role (R1-FR-126). An implementer never integrates its own work.
 - **FR-814**: Integration MUST be materialised as its own card, gated on every unit it integrates, so it cannot start before its inputs exist.
 - **FR-815**: Integration order MUST follow the dependency graph, not completion order. Two units that completed in an arbitrary order do not thereby acquire an integration order.
@@ -70,6 +78,8 @@ The resolution is a writer rule, not a new mechanism:
 - **FR-817a**: Each converged story MUST yield an **independently runnable** increment. Integration order (FR-815) and one commit per unit (FR-816) preserve reversibility; this preserves deliverability — the increment for one story MUST be runnable without the sibling stories it was decomposed alongside (R3 §6).
 - **FR-818**: A conflict between two units MUST NOT be adjudicated by either author. It is resolved by a reconciliation card whose parents are both conflicting cards, executed by a fresh worker that produced neither side (PD-31).
 - **FR-819**: A reconciliation card MAY carry a stronger model and a pinned reconciliation procedure. Neither creates a new role (PD-33).
+- **FR-819a**: A direct action MUST NOT create a fake integration card. If the objective grows until independent integration or review adds material value, Morfeo changes route before expanding the work.
+- **FR-819b**: For the FR-804b ignored-state case, Supervisor integration MUST be byte-for-byte or reviewed-diff application of the approved candidate after independent review; it MUST NOT add, redesign, or “fix” content during application. The candidate worktree and baseline evidence remain preserved until the owner completes any deferred manual validation.
 
 ## 6. Reversibility
 
@@ -79,12 +89,13 @@ Reversibility replaces the confirmation gate the owner removed. It carries the w
 - **FR-821**: History MUST NOT be rewritten on the integration branch. Squashing several units together, amending merged commits, and force-pushing are all prohibited because each destroys FR-820.
 - **FR-822**: A revert MUST be a new commit, so the record shows both the change and its withdrawal.
 - **FR-823**: An effect that cannot be reverted by a commit — a published release, a deployment, a destructive migration, an external write — MUST be identified in advance and constrained by R10. It MUST NOT be discovered at the moment it is performed.
+- **FR-823a**: Morfeo MUST preserve a practical rollback for direct work when Git applies, using the project's ordinary diff, commit, revert, or restore mechanics as authorized and appropriate. Terminal capability alone does not authorize rewriting history, discarding unknown work, or committing or publishing when the current objective does not confer that authority.
 
 ## 7. Publication
 
 Aether maintains the project end to end and the normal path contains no confirmation gate (PD-15). That authority is real but bounded.
 
-- **FR-824**: Publication actions — pushing, opening a pull request, tagging, releasing, deploying — MUST be performed by the supervising role as part of integration, never by an implementer.
+- **FR-824**: Pipeline publication actions — pushing, opening a pull request, tagging, releasing, deploying — MUST be performed by the supervising role as part of integration, never by an implementer. For a direct PD-44 objective, Morfeo MAY perform a publication action only when the current instruction already authorizes that effect; technical access is not publication authority.
 - **FR-825**: Publication MUST stay inside the authority the contract conferred (R2-FR-205). Absence of a stated limit is not permission for an irreversible effect; FR-823 governs.
 - **FR-826**: When a pull request already exists for a unit, the runtime refuses to respawn that unit. Aether MUST treat that refusal as correct behaviour and MUST NOT defeat it by creating a duplicate card for the same unit.
 - **FR-827**: Credentials MUST be the ones the owner already provisioned on that profile. No role acquires, creates, or widens access (R1-FR-114).
@@ -129,6 +140,7 @@ Not inspected: the terminal backends. Aether's design assumes local execution; a
 - **SC-805**: Every conflict is resolved by a worker that authored neither side.
 - **SC-806**: Every irreversible effect performed was identified in advance.
 - **SC-807**: An out-of-boundary change in an existing project appears as a question, not as a silent edit.
+- **SC-808**: A direct Morfeo change is inspectable and practically reversible without a false worktree, implementation card, or integration card, and no publication occurs merely because terminal access exists.
 
 ## 12. Done When
 
@@ -138,5 +150,5 @@ Not inspected: the terminal backends. Aether's design assumes local execution; a
 - [x] Integration is assigned, ordered, and made per-unit revertible.
 - [x] Publication authority is bounded without adding a confirmation gate.
 - [x] The brownfield boundary is carried into execution.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
 - [ ] Remote terminal backends are re-read if one is ever adopted.

@@ -2,6 +2,7 @@
 
 **Roadmap ID**: R2  
 **Stage status**: done  
+**Amended**: 2026-08-18 — handoff requirements scoped to the PD-44 pipeline route
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -13,7 +14,7 @@
 
 ## 1. Purpose
 
-R2 defines what Morfeo hands to the supervision role, and what comes back.
+R2 defines what Morfeo hands to the supervision role, and what comes back, after Morfeo selects the PD-44 pipeline route. A bounded direct operation crosses no role boundary and therefore creates no contract handoff merely to satisfy R2.
 
 The governing finding is that **Aether does not need to invent a contract**. Spec Kit's artifact set already carries almost all of it, and its `analyze` and `converge` commands already implement the completeness check and the convergence loop as prompts. R2's real work is small: name what the handoff consists of, add the three things upstream has no reason to carry, and decide who acts where upstream would stop and ask a human.
 
@@ -84,7 +85,7 @@ Completeness is measured with mechanisms that already exist upstream, not assert
 - **FR-220**: Findings MUST be classified by gap type — absent, incomplete, contradicting stated intent, or present but never requested.
 - **FR-221**: Work present but never requested MUST be surfaced as a question and MUST NOT be deleted or silently kept, per R1-FR-122 and PD-16.
 - **FR-222**: A contract defect — contradictory, impossible, or missing something needed to proceed — MUST be escalated to Morfeo, the only role permitted to revise the contract.
-- **FR-223**: An external failure — a tool, framework, project or dependency not doing what it was expected to do — MUST go to the owner's end-of-work report. Morfeo cannot repair it either.
+- **FR-223**: An external failure — a tool, framework, project or dependency not doing what it was expected to do — MUST go to the owner's end-of-work report rather than being silently absorbed into dispatched scope. A separately authorized direct operational objective MAY ask Morfeo to inspect or repair that failure under PD-44; technical capability alone does not widen the current objective.
 - **FR-224**: The supervision role MUST NOT improvise around a contract defect. Improvisation is the mechanism by which the owner's stated failure mode occurs.
 - **FR-225**: Convergence MUST terminate either as converged, or as not converged with the budget exhausted. Both are legitimate outcomes.
 - **FR-226**: When nothing remains, the outcome MUST be reported as converged without producing empty ceremony.

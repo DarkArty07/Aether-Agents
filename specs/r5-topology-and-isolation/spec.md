@@ -1,8 +1,10 @@
 # R5 Specification: Topology, Identity, and Isolation
 
 **Roadmap ID**: R5  
-**Stage status**: done  
-**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review  
+**Stage status**: done
+**Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
+**Amended**: 2026-08-20 — PD-44 capability surface expanded and PD-45 accepted by Christopher
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -46,22 +48,27 @@ One profile per agent (PD-27). Each is a separate Hermes home with its own confi
 
 | Profile | Role | Model tier | Owns |
 |---|---|---|---|
-| `morfeo` | Designer; the only role Christopher converses with | Frontier | `constitution`, `specify`, `clarify`, `plan` |
+| `morfeo` | Owner interlocutor, contract architect, and direct operational steward | Frontier | `constitution`, `specify`, `clarify`, `plan`, bounded direct operations |
 | `supervisor` | Decomposition, executability analysis, review, convergence, integration | Capable | `tasks`, `analyze`, `checklist`, `converge` |
 | `implementer` | Writes the code | Inexpensive | `implement` |
 
+By PD-45, `skills` and `vision` are base toolsets for all three profiles. They add access to skill-document management and visual inspection without changing any role's decision authority or owned work.
+
 - **FR-504**: Aether MUST have exactly three agent roles, each under its own profile. Two agent processes MUST NOT share a Hermes home.
 - **FR-505**: A single `implementer` profile MUST serve many concurrent cards. Concurrency is a dispatcher limit, not a profile count, so parallelism MUST NOT be expressed by adding roles or profiles.
-- **FR-506**: `morfeo` MUST be restricted to board operations, memory, and research tools, and MUST NOT hold implementation tools — so it structurally cannot do the work it is supposed to delegate.
+- **FR-506**: `morfeo` MUST expose board, file, and terminal toolsets, together with the existing memory and research surfaces composed for its platform. File access is general within the project it is managing; terminal enables direct operational stewardship. Only browser execution and computer use remain excluded from Morfeo's operational surface.
 
 ### Containment is asymmetric — verified in source
 
-Withholding implementation tools from the designer works. The reverse does not: **card creation is available to every dispatched worker.** Verified in the tool registry — board-routing tools are gated to orchestrators and hidden from workers, but card creation and linking are gated only on being in board mode, which every worker is.
+Morfeo's route boundary is agentic rather than structurally enforced: its operational capability is broader than the direct work it should choose. Implementer card creation remains non-structural because card creation is available to every dispatched worker. Board enumeration and unblocking remain structurally gated to orchestrators.
 
-- **FR-506a**: An `implementer` MUST NOT create or link cards. The framework will not prevent it, so this is an instruction, not a structural guarantee, and it MUST be stated as such wherever containment is claimed.
-- **FR-506b**: Aether MUST NOT claim that role containment is structural in both directions. The designer's containment is structural; the implementer's is instructed.
+- **FR-506a**: An `implementer` MUST NOT create or link cards. The framework will not prevent it, so this is an instruction reinforced by a blocking hook, not a structural guarantee, and it MUST be stated as such wherever containment is claimed.
+- **FR-506b**: Aether MUST NOT describe Morfeo's direct-versus-pipeline judgement as structural or hook-enforced. It is agentic self-control under PD-44. Implementer card-creation containment remains enforced, not structural.
 - **FR-506c**: R10 MUST treat implementer card creation as a protected effect. A tool-call hook that can block and fail closed is the available enforcement point.
 - **FR-506d**: Two forms of containment **are** structural for workers and MUST be relied on: a worker cannot enumerate the board, and a worker cannot unblock a card — including its own.
+- **FR-506e**: The revised Morfeo prompt, `file + terminal` toolsets, and reconciled R10 policy MUST be prepared while the profile is stopped and activated as one bounded change. Morfeo MUST NOT run in a deliberate intermediate state where prompt, capability, and policy express different responsibility models.
+- **FR-506f**: No classifier, score, threshold, special board lane, or hook may decide whether Morfeo acts directly. The complete owner objective is the unit of judgement; fragmentation into small mutations MUST NOT change the route.
+- **FR-506g**: Under amended PD-44, Morfeo MAY use `code_execution`, `cronjob`, and `delegation` (`delegate_task`) on both CLI and Telegram. `code_execution` supports bounded direct work with many repetitive mechanical steps. Cron may schedule Morfeo's own follow-up or a future pipeline start, selected case by case through the same whole-objective reasoning as the direct/pipeline route, and MUST NOT establish permanent autonomy beyond an owner-requested objective. Delegated subagents may assist only Morfeo's own bounded direct work and MUST NOT receive product implementation belonging to Supervisor/Implementer. As with FR-506b's route choice, that delegation boundary is agentic self-control, not structural or hook-enforced.
 - **FR-507**: Model tiering MUST be expressed per profile, with a per-card override reserved for quality-sensitive units.
 - **FR-508**: Every card's assignee MUST name a profile that exists. Assignment MUST be grounded in actual profiles before a card is created.
 - **FR-508a**: **Corrected by execution.** An unknown assignee does not fail loudly and does not fail silently everywhere: the dispatcher reports it in its own output as a skipped non-spawnable lane and treats it as legitimate, because an assignee that is not a local profile is a supported external-worker shape. **Nothing is written to the card** — its event history shows only creation and promotion. A typo'd assignee therefore leaves a unit waiting forever and is invisible at the place anyone would look. Detection MUST come from the board's health snapshot, which reports a unit whose assignee never produces a claim (R11-FR-1122).
@@ -69,7 +76,7 @@ Withholding implementation tools from the designer works. The reverse does not: 
 
 ### Concurrent processes
 
-At any moment Aether runs one `morfeo`, one `supervisor`, and up to N `implementer` workers, where N is the configured concurrency limit. The role count is three; the process count varies with N.
+At any moment Aether runs one `morfeo` and, when Morfeo dispatches substantial work, one `supervisor` and up to N `implementer` workers, where N is the configured concurrency limit. The role count remains three; a direct action creates no new role or worker.
 
 ## 4. Boards Are the Project Boundary
 
@@ -96,20 +103,20 @@ The constraint that defeated the previous design does not exist here. The board 
 
 ```text
 Christopher ──conversation──► morfeo
-                                │  creates one card: execute this contract
-                                ▼
-                          [ supervisor ]
-                                │  reads card, derives breakdown, runs analysis
-                    ┌───────────┼───────────┐  creates linked child cards
-                    ▼           ▼           ▼
-            [ implementer ] [ implementer ] [ implementer ]
-                    │           │           │  each in its own worktree
-                    └───────────┼───────────┘  each completes with evidence
-                                ▼  promoted when all parents are done
-                        [ integration card ]
-                                │
-                                ▼
-                     Christopher reviews the running result
+                    │
+                    ├── bounded operational objective ──► Morfeo acts directly
+                    │                                      and verifies the result
+                    │
+                    └── substantial objective ──► one contract card
+                                                   ▼
+                                             [ supervisor ]
+                                                   │  derives breakdown and analyzes
+                                       ┌───────────┼───────────┐
+                                       ▼           ▼           ▼
+                               [ implementer ] [ implementer ] [ implementer ]
+                                       └───────────┼───────────┘
+                                                   ▼
+                                           [ integration card ]
 ```
 
 ### The seam between the breakdown and the board
@@ -117,12 +124,12 @@ Christopher ──conversation──► morfeo
 Spec Kit produces `tasks.md`; the board executes cards. Nothing until now said how they relate, and leaving it implicit would produce two competing records of what work exists.
 
 - **FR-516a**: `tasks.md` is the **breakdown of record** and belongs to the contract. Cards are **execution instances** of the units it names. There is one plan and one execution surface, never two plans.
-- **FR-516b**: Every implementation card MUST trace to a unit in `tasks.md`, and every unit intended for execution MUST be materialized as a card. A card with no unit behind it is unrequested work; a unit with no card is unexecuted work.
+- **FR-516b**: Every pipeline implementation card MUST trace to a unit in `tasks.md`, and every unit intended for pipeline execution MUST be materialized as a card. A direct PD-44 action is not a pipeline unit and MUST NOT be represented by a false implementation card merely to satisfy this rule.
 - **FR-516c**: When convergence appends remaining work to `tasks.md`, each appended unit MUST be materialized as a new card rather than reopening a completed one.
 - **FR-516d**: The breakdown's parallel markers MUST determine card independence, and its dependency ordering MUST determine parent links.
 - **FR-516e**: A card MUST NOT be edited to change what the contract asks for. Intent changes at the artifact that owns it, and the board is re-materialized from the corrected breakdown.
 
-- **FR-517**: Morfeo MUST hand the contract over as a single card assigned to `supervisor`. Morfeo MUST NOT create implementation cards, because decomposition belongs to the supervising role (R3-D01).
+- **FR-517**: When Morfeo selects the pipeline, it MUST hand the contract over as exactly one card assigned to `supervisor`. Morfeo MUST NOT create implementation cards, because decomposition belongs to the supervising role (R3-D01). Direct PD-44 work requires no handoff card because no role boundary is crossed.
 - **FR-518**: The supervising role MUST create child cards, link them to their integration card, and then step back. It MUST NOT perform the implementation itself.
 - **FR-519**: Every child card body MUST carry every decision it depends on. Workers cannot see sibling cards, so a decision left implicit is a decision each worker will invent differently. This is R2's handoff completeness principle at the card level.
 - **FR-520**: Any decision two parallel cards would each have to make MUST be made once by the supervising role and stamped into both bodies.
@@ -157,10 +164,10 @@ The board provides the upward channel the previous design could not find.
 
 ## 9. Identity and Correlation
 
-- **FR-532**: Every unit of work MUST be identified by its card, and every attempt MUST be recorded as its own row.
-- **FR-533**: Role attribution MUST come from the card's assignee profile.
+- **FR-532**: Every delegated unit of work MUST be identified by its card, and every delegated attempt MUST be recorded as its own row. A direct Morfeo action remains attributable to Morfeo's current session and repository diff or command evidence rather than inventing a board unit.
+- **FR-533**: Pipeline role attribution MUST come from the card's assignee profile; direct action attribution comes from Morfeo's profile and session.
 - **FR-534**: Aether MUST use the board's durable rows, events, comments, and attempt records as its record. It MUST NOT build a parallel one.
-- **FR-535**: Any change in a repository MUST be attributable to a card, a profile, and an attempt.
+- **FR-535**: A pipeline repository change MUST be attributable to a card, profile, and attempt. A direct PD-44 change MUST be attributable to Morfeo's profile and session, with the actual diff or command result available for inspection.
 
 ## 10. Failure and Recovery — PD-26 Resolved
 
@@ -199,6 +206,7 @@ Restart durability was recorded as an unavoidable limit. It was a limit of in-pr
 | Worktree naming, branch strategy, and integration order | R8 |
 | Retention of durable rows, attachments, and preserved worktrees | R9 |
 | Workers can create and link cards; a blocking fail-closed tool-call hook is the verified enforcement point | R10 |
+| Morfeo's direct operational capability is activated atomically with its prompt and reconciled policy | R10, R13 |
 | The board is single-host under a trusted-local-user model | R10 |
 | Structured completion evidence is the evidence base | R11 |
 | Per-profile models plus per-card override | R12 |
@@ -210,11 +218,20 @@ Restart durability was recorded as an unavoidable limit. It was a limit of in-pr
 - **SC-502**: Two parallel implementers never share a working tree.
 - **SC-503**: A worker crash or gateway restart loses at most one attempt's progress, never the unit of work.
 - **SC-504**: A contract defect reaches Morfeo durably without discarding sibling work.
-- **SC-505**: Every repository change is attributable to a card, profile, and attempt.
+- **SC-505**: Every pipeline repository change is attributable to a card, profile, and attempt; every direct change is attributable to Morfeo's profile, session, and actual diff or command evidence.
 - **SC-506**: Non-convergence blocks for review rather than exiting silently.
 - **SC-507**: Aether adds no queue, state machine, retry, reclaim, or audit mechanism of its own.
+- **SC-508**: Morfeo has file and terminal capability for bounded direct operations, no unrelated toolset is enabled, and substantial work still crosses the role boundary through one Supervisor card.
 
-## 14. Done When
+## 14. Owner correction resolved: Morfeo is also the owner's operational steward
+
+During analysis of DOC-09/P5-F13, the owner corrected the responsibility model: Morfeo is not only Aether's contract architect; Morfeo is also the owner's operational assistant and must perform direct project stewardship, including terminal- and GitHub-mediated work, when the complete objective does not justify the full multi-role pipeline.
+
+The blanket removal of terminal and general project writing was a design error, not a safety principle. Permanent role reconcentration remains prohibited, while bounded proportional execution is legitimate. Route selection belongs to Morfeo's reasoning over the complete owner objective, with anti-fragmentation and direct-to-pipeline route change required by R1-FR-133a through FR-133d.
+
+The owner has now resolved the previously open boundary: no classifier, threshold, fast lane, fourth role, or external gate is added; feature-scale work remains in the pipeline; authority and protected effects do not widen; Git provides ordinary rollback where applicable. For this implementation, only mechanical syntax, configuration, and diff checks are required. Functional validation of Morfeo's route judgement is deliberately deferred to the owner and the limitation must remain explicit rather than being reported as verified.
+
+## 15. Done When
 
 - [x] The coordination primitive is selected against upstream's criteria.
 - [x] The profile per role is defined with its model tier and owned phases.
@@ -227,7 +244,9 @@ Restart durability was recorded as an unavoidable limit. It was a limit of in-pr
 - [x] Collision handling follows upstream's neutral-reconciler pattern.
 - [x] Load-bearing claims verified in source, not only documentation: tool gating, the enforcement point for protected effects, and the currency of the Spec Kit checkout.
 - [x] The asymmetry of role containment is recorded rather than overclaimed.
+- [x] The R13 build contradiction between Morfeo's contract ownership and its absent file capability is corrected and recorded as R5-D07; activation is deferred atomically to Phase 4 enforcement.
+- [x] PD-44 replaces the obsolete no-execution boundary with proportional direct stewardship while preserving three roles, pipeline separation for substantial work, and the anti-fragmentation rule.
 - [x] Corrected against execution, not only reading: the escalation model was split into two tiers (R7 §5), the block budget was found to be effectively one attempt, the unknown-assignee behaviour was restated accurately, and the review lane was found to be a first-class transition with a bundled procedure.
 - [x] Dispatcher internals inspected and executed: claim, workspace preparation, spawn, live concurrency capping, crash detection, stale reclaim, and the review claim path.
 - [ ] Still not inspected: memory-provider internals and terminal backends. Each is read by the stage that relies on it — R9 and R8 respectively.
-- [ ] Christopher has reviewed the design.
+- [x] Christopher reviewed the baseline (R4–R13 Decision Review, 2026-08-17), accepted PD-44 on 2026-08-18, and accepted the capability amendment plus PD-45 on 2026-08-20.

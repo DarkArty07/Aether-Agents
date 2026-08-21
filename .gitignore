@@ -5,6 +5,8 @@
 !/home/config.yaml.template
 
 # Local tooling and generated files
+/.worktrees/
+CLAUDE.md
 /.aether/
 /.claude/
 /.hermes/

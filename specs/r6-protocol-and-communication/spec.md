@@ -124,4 +124,4 @@ Not inspected: the A2A plugin's internals beyond its manifest and tool surface, 
 - [x] MCP is placed as an outward surface and excluded as a work transport.
 - [x] The owner's channel is specified, including that the terminal alone suffices.
 - [x] The owner is removed from first-responder duty, per Christopher's instruction.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).

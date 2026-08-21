@@ -1,7 +1,7 @@
 # Aether Agents — Design Roadmap
 
-**Status:** R0–R3 accepted; R4–R13 written and awaiting review
-**Updated:** 2026-08-17
+**Status:** R0–R13, amended PD-44, and PD-45 accepted; proportional Morfeo delivery is mechanically verified and #196 is closed by owner acceptance
+**Updated:** 2026-08-20
 **Product authority:** Christopher
 
 ## 1. Purpose
@@ -51,7 +51,7 @@ These labels are documentation, not runtime states. Decisions do not have a sepa
 | **R2** | Multi-agent contract and handoff | Identify the contract as the Spec Kit artifact set, add Aether's execution envelope, make completeness measurable, and define defect return. Does not select transport or runtime topology. | R0, R1 | **done** | [`spec.md`](specs/r2-contract-and-handoff/spec.md) |
 | **R3** | Spec Kit as a multi-agent method | Assign every Spec Kit phase to exactly one role, locate the handoff boundary, and separate owner preferences from project constitutions. Does not install or fork Spec Kit. | R1, R2 | **done** | [`spec.md`](specs/r3-speckit-multiagent-method/spec.md) |
 | **R4** | Hermes Framework boundary | Classify Hermes's three coordination primitives and its native capabilities against accepted Aether requirements; record the runtime/method boundary. Does not select a primitive or activate anything. | R0, R1, R2, R3 | **done** | [`spec.md`](specs/r4-hermes-boundary/spec.md) |
-| **R5** | Topology, identity, and isolation | The durable board is Aether's coordination primitive; four profiles, one per role; per-card worktrees; blocked cards as the escalation channel. Does not decide A2A's scope. | R1, R2, R4 | **done** | [`spec.md`](specs/r5-topology-and-isolation/spec.md) |
+| **R5** | Topology, identity, and isolation | The durable board is Aether's coordination primitive; three profiles, one per role; per-card worktrees; blocked cards as the escalation channel. Does not decide A2A's scope. | R1, R2, R4 | **done** | [`spec.md`](specs/r5-topology-and-isolation/spec.md) |
 | **R6** | Protocol and communication | The board is the only inter-role transport. A2A is a platform adapter, available and unused, with two stated reopening conditions; MCP is an outward surface only. Owns the owner's notification channel. | R2, R3, R4, R5 | **done** | [`spec.md`](specs/r6-protocol-and-communication/spec.md) |
 | **R7** | Supervision, parallelism, and convergence | Decomposition belongs to the supervisor against a competing runtime default; two-tier escalation; convergence configured, not designed; concurrency and budget starting values. | R2, R3, R5, R6 | **done** | [`spec.md`](specs/r7-supervision-and-convergence/spec.md) |
 | **R8** | Workspaces, Git, and integration | Worktree per unit, the contract's writer rule, dependency-ordered integration, one commit per unit so every unit is individually revertible, bounded publication authority. | R2, R5, R7 | **done** | [`spec.md`](specs/r8-workspaces-and-integration/spec.md) |
@@ -73,11 +73,21 @@ The task must be trivial, bounded, reversible, and unrelated to product delivery
 
 Since R5 selected the durable board, EC1 is a board run across three profiles rather than an in-process delegation.
 
-**EC1 has shrunk to three items.** Two verification passes on 2026-08-17 exercised the runtime directly on an isolated database, using its injectable spawn seam and its directly callable board kernel — no profile, no agent, no model. Between them they settled dependency gating, parallel release, verbatim handoff, durable blocking, two-tier escalation, attempt history, the unblock-loop limit, worker dispatch, per-card worktrees, live concurrency capping, crash reclaim, the review lane, enforcement blocking, and the decomposition disable.
+Two verification passes on 2026-08-17 settled every mechanically testable board/runtime claim without a
+profile, agent, or model. Christopher then explicitly authorized Phase 5 on 2026-08-18. The live EC1 run
+completed one sacrificial Morfeo → Supervisor → Implementer → review → integration path and one impossible
+goal-mode negative control. It observed both convergence outcomes, real TUI wake delivery to Morfeo, and
+acceptance-quality worker evidence. It also exposed lifecycle contradictions around initial blocking,
+triage redispatch, worker-created limits, and same-card goal predicates. The complete trace is
+[`R13 research §14`](specs/r13-synthesis-and-release/research.md).
 
-Three claims still require a paid run: convergence judging, wake delivery, and whether a real worker's evidence supports acceptance. [`R13 §5`](specs/r13-synthesis-and-release/spec.md) is the authoritative checklist and [`R13 research`](specs/r13-synthesis-and-release/research.md) holds the findings, including four corrections that changed accepted requirements.
+After EC1, [`R13 Phase 6`](specs/r13-synthesis-and-release/plan.md) qualifies that evidence, revisits
+provisional decisions, correlates cost, records debt, and returns `READY` or `HOLD`. Phase 6 is an
+evidence-closure phase inside R13, not a new roadmap design area and not cutover authority.
 
-EC1 is not automatically authorized by this roadmap, is not a product implementation, and is not a code-enforced stage transition. If Christopher does not authorize it, affected later stages must label runtime behavior as an assumption rather than measured fact.
+EC1 was not automatically authorized by this roadmap; it ran only after Christopher's separate explicit
+authorization. It remained a sacrificial evidence checkpoint, not product implementation or a
+code-enforced stage transition.
 
 ## 7. Change and regression
 
@@ -94,13 +104,35 @@ Git preserves superseded text. No B0/B1 registry or per-decision state machine i
 
 ## 8. Current boundary
 
-**The design phase is complete and accepted.** R0 through R13 are accepted, all on 2026-08-17 — R0–R3 at the R0 review, R4 through R13 at the R4–R13 Decision Review. R4 and R5 additionally carry corrections made after their first drafts were contradicted by direct execution of the runtime.
+**The design phase is complete and accepted.** R0 through R13 are accepted, all on 2026-08-17 — R0–R3 at the R0 review, R4 through R13 at the R4–R13 Decision Review. R4 and R5 additionally carry corrections made after their first drafts were contradicted by direct execution of the runtime. R13 was amended on 2026-08-18 by explicit owner instruction to formalize Phase 6.
 
-No profile, worker, scheduler, protocol, persistence service, model route, product code, or runtime activation is authorized. Acceptance closes design and authorizes nothing to run (R13-FR-1337). The system prompts are build artifacts and are deliberately not written; [`R13 §3`](specs/r13-synthesis-and-release/spec.md) specifies what each prompt must guarantee without writing one.
+Build Phases 0–4 and the separately authorized EC1 Phase 5 run are complete. Morfeo, Supervisor, and
+Implementer returned to a stopped-profile state after producing permanent board evidence: two `done`
+cards and one deliberately `blocked` negative control. The canonical sacrificial fixture passes
+`python3 verify.py`. No product code, publication, deployment, credential change, or Hermes-to-Morfeo
+cutover occurred.
 
 This repository's own governance is materialized at `.specify/memory/constitution.md`, copying the accepted R0 §4 principles as `specs/r0-design-governance/spec.md` directs. It is untracked and R0 remains its canonical source. The constitution of a project Aether *builds* is a different artifact that lives inside that project, and is written when work on it starts (R3-D04).
 
-The next action is **build authorization, not design**. The sequence is the build order in [`README.md`](README.md), and then the evidence checkpoint of §6 — the only thing that can promote this repository's three remaining assumptions to measured fact. That checkpoint requires its own explicit authorization, which accepting the design did not grant (R13-FR-1335).
+**The next protected gate is Phase 6 evidence re-qualification, not another Phase 5 run or cutover.**
+The earlier Phase 6 `HOLD` packet was truthful before EC1 and remains historical; it has not yet consumed
+the new evidence or classified the runtime findings. Until that analytical phase is re-executed, no claim
+is formally promoted and no `READY` recommendation is current.
+
+PD-44's proportional-Morfeo contract and its 2026-08-20 capability amendment are accepted and canonical;
+PD-45 adds `skills` and `vision` to all three roles without widening authority. The stopped live profiles now
+contain the mechanically verified delivery: Morfeo has CLI/Telegram parity with `code_execution`, `cronjob`,
+and `delegation`, while Supervisor and Implementer retain `code_execution` and gain `skills`/`vision` but not
+cron or delegation. Browser execution and computer use remain excluded from Morfeo. #196 is closed by
+explicit owner acceptance of the active direct-execution experience as sufficient functional validation.
+
+The separately authorized #198 runtime repair remains local and mechanically verified; its upstream defect is
+recorded at `NousResearch/hermes-agent#89677`. The gateway reload completed, but first-spawn branch propagation
+still requires its own live acceptance before #198 closes. #199 is closed after 27/27 focused regressions and
+a live read-only branch-inspection proof. #200 is closed by merged PR #201: `policy/hooks/` is the sanitized
+canonical source and `scripts/sync_policy_hooks.py` provides atomic install, parity check, and drift-safe
+restore. Phase 6 evidence re-qualification, the other open issues, release, deployment, and product cutover
+remain separate work.
 
 A deliverable previously scheduled into R3 no longer exists there. R3 was to extract Christopher's standing code-quality standards into constitution principles, on the assumption that a single constitution governed all Aether work. R3-D04 corrected that: Spec Kit's constitution lives **inside the project being built**, so there is no Aether-wide constitution to author. Per-project standards are established when work on a project starts, and the owner's cross-project preferences belong to Morfeo's learned memory, whose realization is R4 and whose storage is R9.
 

@@ -3,6 +3,7 @@
 **Roadmap ID**: R11
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — proportional direct-work evidence under PD-44
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Supervisor
 **Future role owner**: Supervisor
@@ -21,14 +22,15 @@ R11 does not select models (R12) or authorize any run (R13).
 
 ## 2. The Deliverable Is the Running Product
 
-- **FR-1101**: The reviewable deliverable is the running product, not a diff, a log, or a summary (R1-FR-117).
-- **FR-1102**: Every body of work MUST ship a runnable validation path with prerequisites, commands, and expected outcomes, carried by the contract's quickstart artifact (R2-FR-203).
+- **FR-1101**: For product work delivered through the pipeline, the reviewable deliverable is the running product, not a diff, a log, or a summary (R1-FR-117). Direct operational work requires evidence proportional to the actual objective and testing standard.
+- **FR-1102**: Every pipeline body of work MUST ship a runnable validation path with prerequisites, commands, and expected outcomes, carried by the contract's quickstart artifact (R2-FR-203). A direct action has no synthetic contract quickstart; it records the actual command, inspection, or diff used for proportional verification.
 - **FR-1103**: Each converged user story MUST be independently runnable, so a failure in a later story leaves earlier ones inspectable and usable (R2-FR-228).
-- **FR-1104**: The validation path MUST be executed by the system before work is reported as done. An unrun validation path is documentation, not evidence.
+- **FR-1104**: The pipeline validation path MUST be executed by the system before work is reported as done. An unrun validation path is documentation, not evidence.
+- **FR-1104a**: A direct PD-44 action MUST execute the testing standard the owner selected for that objective and report what was not tested. For DOC-09/P5-F13, Christopher selected mechanical configuration/syntax/diff checks only and deferred functional route validation to himself; the build therefore MUST NOT claim functional verification.
 
 ## 3. Per-Unit Evidence
 
-Contract-level validation proves the whole; per-unit evidence proves each part and is what the next unit reads. Both are required and they are not substitutes.
+In pipeline work, contract-level validation proves the whole; per-unit evidence proves each part and is what the next unit reads. Both are required and they are not substitutes. A direct action has no delegated unit, so its completion report answers the same material questions from actual tool output without inventing card metadata.
 
 Every completion MUST answer four questions:
 
@@ -37,7 +39,7 @@ Every completion MUST answer four questions:
 3. What would unblock or retry this if it failed?
 4. What risk is deliberately left open?
 
-- **FR-1105**: Every unit MUST complete with a human-readable summary and structured metadata carrying, at minimum: the files changed, the verification actually run, and the residual risk knowingly accepted.
+- **FR-1105**: Every delegated unit MUST complete with a human-readable summary and structured metadata carrying, at minimum: the files changed, the verification actually run, and the residual risk knowingly accepted. A direct action reports those facts in Morfeo's response from observed state.
 - **FR-1106**: Evidence MUST describe what was actually executed, not what was intended. A verification listed but not run is a false claim, not an omission.
 - **FR-1107**: A unit with no files and no tests MUST say so explicitly and record whatever evidence does exist — sources consulted, decisions made, manual steps performed.
 - **FR-1108**: Structured metadata MUST NOT carry secrets, raw logs, tokens, or unrelated transcripts. Pointers and summaries only (R9-FR-908).
@@ -65,19 +67,19 @@ Not all findings are equal, and treating them equally is how the important ones 
 
 ## 5. The End-of-Work Report
 
-- **FR-1114**: Morfeo MUST assemble the end-of-work report from durable board state, never from its own recollection of the run (R1-FR-122).
+- **FR-1114**: Morfeo MUST assemble a pipeline end-of-work report from durable board state, never from its own recollection of the run (R1-FR-122). For direct work it MUST use actual tool output, current repository diff, and observed state.
 - **FR-1115**: The report MUST list the increments delivered, each with its validation path.
 - **FR-1116**: The report MUST list every unit that terminated as not converged, with its budget and its last state, presented as a legitimate outcome rather than a failure (R1-FR-121).
-- **FR-1117**: The report MUST list external failures separately from contract defects. The owner can act on the first; Morfeo already handled the second.
+- **FR-1117**: The report MUST list external failures separately from contract defects. The owner may act on the first or authorize a separate direct operational objective; Morfeo already handled the second.
 - **FR-1118**: The report MUST list out-of-scope defects and accepted residual risk as questions.
-- **FR-1119**: The report MUST NOT claim an outcome the board does not record (R5-FR-538).
+- **FR-1119**: A pipeline report MUST NOT claim an outcome the board does not record (R5-FR-538). A direct report MUST NOT claim an outcome the executed tools or current project state do not establish.
 
 ## 6. Observability During a Run
 
 The runtime records every transition as a durable event, one row per attempt, per-worker logs, and a board health snapshot. Aether adds nothing.
 
 - **FR-1120**: Aether MUST NOT build an observability layer. The event stream, attempt records, logs, and diagnostics already exist (FR-503).
-- **FR-1121**: Every change in a repository MUST be attributable to a unit, a profile, and an attempt (R5-FR-535).
+- **FR-1121**: Every pipeline repository change MUST be attributable to a unit, profile, and attempt (R5-FR-535). Every direct change MUST be attributable to Morfeo's profile and session with the actual diff or command result available.
 - **FR-1122**: A unit that never gets picked up MUST be detectable. The runtime reports a unit whose assignee produces no claim, and the design MUST NOT depend on someone noticing its absence by eye.
 - **FR-1123**: Watching a run MUST be possible without interrupting it. Reading the board is not participation.
 
@@ -123,9 +125,10 @@ Assumed: that a live worker's logs and liveness signals behave as documented. No
 - **SC-1102**: Every completed unit answers the four questions.
 - **SC-1103**: No evidence claims a verification that was not executed.
 - **SC-1104**: Every out-of-scope defect and accepted risk reaches the owner as a question.
-- **SC-1105**: Every repository change is attributable to a unit, a profile, and an attempt.
+- **SC-1105**: Every pipeline repository change is attributable to a unit, profile, and attempt; every direct change is attributable to Morfeo's profile/session and actual evidence.
 - **SC-1106**: Every claim about runtime behaviour in this repository is labelled verified or assumed.
 - **SC-1107**: No configuration is adopted on preference alone.
+- **SC-1108**: No direct action is forced into a fake card or quickstart, and no deferred functional validation is reported as passed.
 
 ## 12. Done When
 
@@ -136,4 +139,4 @@ Assumed: that a live worker's logs and liveness signals behave as documented. No
 - [x] Observability is inherited rather than built.
 - [x] The verified-or-assumed discipline is made a requirement.
 - [x] Controlled evaluation rules are set for R12.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).

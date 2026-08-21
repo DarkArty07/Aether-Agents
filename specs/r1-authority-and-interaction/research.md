@@ -170,14 +170,14 @@ Quality is fidelity, and the specification is its mechanism. The operational con
 - **Alternatives considered**: Raising the cap to a larger fixed number was rejected as arbitrary; the correct terminal condition is coverage, not count.
 - **Change impact**: This is a recorded deviation from upstream Spec Kit and R0-FR-014 requires it to be justified and revisited on upgrade. R3 owns the full Spec Kit profile.
 
-## R1-D11 — Re-concentration is the standing architectural risk
+## R1-D11 — Permanent re-concentration is the standing architectural risk *(amended by PD-44)*
 
 - **Need**: The prior system failed by one agent holding four jobs. Nothing yet prevents the same drift.
-- **Decision**: Recorded as a standing design constraint. Morfeo does not take implementation work, the supervisor does not redesign, and implementers do not decide scope. A later stage that blurs a role boundary is rebuilding the abandoned architecture.
-- **Rationale**: The separation is corrective, not aesthetic, so its erosion is the specific regression to guard against.
+- **Decision**: Recorded as a standing design constraint. Morfeo does not absorb Supervisor or Implementer as permanent responsibilities, the supervisor does not redesign, and implementers do not decide scope. PD-44 later distinguished bounded direct operational stewardship from permanent role reassignment; the complete-objective anti-fragmentation rule prevents that distinction becoming an evasion.
+- **Rationale**: The separation is corrective, not aesthetic, so its erosion is the specific regression to guard against. A full pipeline for every bounded operation is also a regression against proportionality and Simplicity Over Ceremony.
 - **Evidence**: Christopher's account of the hub-and-spoke failure.
 - **Alternatives considered**: None; this is a direct reading of the stated history.
-- **Change impact**: Applies to R2, R5, R7 and R13 as a review criterion.
+- **Change impact**: Applies to R2, R3, R5, R7, R8, R9, R10, R11, R12, and R13 as a review criterion; the accepted PD-44 rationale and testing boundary are recorded in R5-D08.
 
 ## 7. Spec Kit Evidence Verified Directly
 

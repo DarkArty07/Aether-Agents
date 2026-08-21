@@ -3,6 +3,7 @@
 **Roadmap ID**: R7
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — scoped explicitly to work Morfeo dispatches under PD-44
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -13,13 +14,15 @@
 
 ## 1. Purpose
 
-R7 specifies how a contract becomes parallel work, what happens when a unit cannot proceed, and how work terminates.
+R7 specifies how a contract Morfeo dispatches to the pipeline becomes parallel work, what happens when a delegated unit cannot proceed, and how that work terminates. It does not govern a direct PD-44 action, because no delegated unit, Supervisor run, or cross-role convergence exists on that route.
 
 The stage was scoped expecting to design decomposition, retries, and a convergence engine. All three exist in the runtime. What R7 actually owns is narrower and more consequential: **which of the runtime's behaviours Aether uses, which it must switch off, and what the supervisor decides that no mechanism can decide for it.**
 
 R7 does not define branch or integration mechanics (R8), retention (R9), enforcement (R10), evidence format (R11), or model selection (R12).
 
 ## 2. Decomposition Belongs to the Supervisor
+
+- **FR-700**: Every requirement in this stage applies when Morfeo has selected and dispatched the pipeline. A direct action MUST NOT be wrapped in a ceremonial contract, decomposition, review card, or integration unit merely to satisfy R7.
 
 R3-D01 assigned `tasks` to the supervising role because a breakdown requires concrete file paths and knowledge of the real codebase. That assignment is now load-bearing in a way R3 could not have known, because the runtime ships a competing decomposer.
 
@@ -132,7 +135,7 @@ The runtime provides first-class same-card review: an implementer can hand its c
 - **FR-740**: A unit expected to exceed one hour MUST emit liveness signals, or the dispatcher reclaims it as crashed and its current progress is lost.
 - **FR-741**: A reclaim MUST be treated as benign — lost progress, not a failure (R5-FR-537).
 - **FR-742**: Aether MUST NOT report an outcome the board does not record (R5-FR-538).
-- **FR-742a**: Aether MUST NOT steer a running worker across a role boundary. Steering exists and stays available inside a single worker's own run (R4-FR-417), but crossing a role boundary always uses the board (PD-29). Redirecting already-dispatched work MUST therefore use the review return path (FR-736) or a decision card (FR-717), never an out-of-band interruption.
+- **FR-742a**: Aether MUST NOT steer a running worker across a role boundary. Steering exists and stays available inside a single worker's own run (R4-FR-417), but crossing a role boundary always uses the board (PD-29). Redirecting already-dispatched work MUST therefore use the review return path (FR-736) or a decision card (FR-717), never an out-of-band interruption. A direct Morfeo action crosses no role boundary, so this rule does not require a card for it.
 
 ## 10. Collision Hotspots
 
@@ -182,8 +185,9 @@ Still assumed: goal-mode judging, which needs a model in the loop.
 - **SC-704**: No unit reaches the triage column.
 - **SC-705**: Two parallel units never edit the same file.
 - **SC-706**: A non-converging unit terminates as not converged, with its budget recorded.
-- **SC-707**: No role reviews its own output.
+- **SC-707**: In the pipeline, no role reviews its own output. Direct PD-44 verification is not represented as independent pipeline review.
 - **SC-708**: Every numeric limit in this specification is either observed or explicitly marked as an uncalibrated starting value.
+- **SC-709**: No direct Morfeo action is materialized as a fake delegated unit, while every substantial objective selected for the pipeline remains governed by R7 in full.
 
 ## 14. Done When
 
@@ -196,5 +200,5 @@ Still assumed: goal-mode judging, which needs a model in the loop.
 - [x] Convergence is configured rather than designed, with its precondition stated.
 - [x] Review is assigned without ceding reviewing authority to a bundled skill.
 - [x] Attempt, runtime, and liveness bounds are set.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
 - [ ] Starting values are calibrated against a first authorized run.

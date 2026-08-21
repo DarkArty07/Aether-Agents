@@ -20,7 +20,7 @@ The whole design follows from that split. Every rule about handoffs, evidence, a
 
 | Role | Talks to the owner | Owns | Model tier |
 |---|---|---|---|
-| **Morfeo** | Yes — the only one | Constitution, specification, clarification, technical plan | Frontier |
+| **Morfeo** | Yes — the only one | Constitution, specification, clarification, technical plan, and bounded direct operational stewardship | Frontier |
 | **Supervisor** | No | Task breakdown, executability analysis, review, decisions, convergence, integration | Capable |
 | **Implementer** | No | Writing the code. Many run concurrently | Inexpensive |
 
@@ -32,21 +32,30 @@ Roles are never added to solve an execution problem. Fresh context, a card-pinne
 
 ```text
 owner ──conversation──► morfeo
-                          │  writes the contract, creates ONE card
-                          ▼
-                    [ supervisor ]
-                          │  derives the breakdown, analyses executability,
-                          │  stamps shared decisions, creates child cards
-              ┌───────────┼───────────┐
-              ▼           ▼           ▼
-      [ implementer ] [ implementer ] [ implementer ]
-              │           │           │   each in its own git worktree
-              └───────────┼───────────┘   each completes with evidence
-                          ▼  promoted automatically when all parents finish
-                  [ integration card ]
-                          ▼
-                  owner reviews the running product
+                          │
+              ┌───────────┴────────────┐
+              │                        │
+      bounded operational      substantial objective
+      objective: Morfeo acts   writes the contract,
+      directly and verifies    creates ONE card
+              │                        ▼
+              │                  [ supervisor ]
+              │                        │  derives the breakdown, analyses executability,
+              │                        │  stamps shared decisions, creates child cards
+              │            ┌───────────┼───────────┐
+              │            ▼           ▼           ▼
+              │    [ implementer ] [ implementer ] [ implementer ]
+              │            │           │           │   each in its own git worktree
+              │            └───────────┼───────────┘   each completes with evidence
+              │                        ▼  promoted automatically when all parents finish
+              │                [ integration card ]
+              │                        │
+              └────────────┬───────────┘
+                            ▼
+                  owner reviews the result
 ```
+
+Morfeo chooses between the two routes by reasoning over the owner's complete objective, never by a classifier, score, or threshold. **Direct action** fits a bounded objective whose consequences are inspectable and easy to correct, where decomposition or independent review would add no proportionate value — Morfeo completes it with its own file and terminal access and verifies the real result. **The pipeline** fits a feature, an architectural change, multiple responsibilities, complex integration, or material uncertainty — Morfeo hands over exactly one contract card, and Supervisor's breakdown, independent review, and controlled integration take it from there. Direct action never substitutes for that independent review and controlled integration on work that actually needs them; it exists only for work that doesn't.
 
 The coordination substrate is Hermes's durable board: a SQLite table where each row is one unit of work, plus a dispatcher loop that launches the assigned profile as a process. Nothing in Aether queues, retries, reclaims, or audits — all of that already exists.
 
@@ -91,29 +100,19 @@ The contract is the Spec Kit artifact set — `spec.md`, `plan.md`, `tasks.md`, 
 
 ## Status
 
-**Design is complete and accepted through R13. Nothing is built.** R0–R13 were accepted on 2026-08-17. No profile exists, no configuration is applied, no agent has run — acceptance closes the design and authorizes nothing to run. The design deliberately stops at the boundary where implementation would begin.
+**Design R0–R13 and build Phases 0–4 are complete. The explicitly authorized Phase 5 EC1 run completed on 2026-08-18.** Morfeo, Supervisor, and Implementer exist as separate profiles with configured hooks; the checkpoint used live models, a shared durable board, an isolated worktree, independent review, and one local integration in a sacrificial repository unrelated to product delivery.
 
-What has been verified by direct execution against Hermes 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a` — with no profile created, no agent spawned, and no model called:
+Phase 5 produced candidate evidence for the three previously assumed runtime claims:
 
-- Dependency gating, automatic promotion, and parallel release of sibling units
-- Verbatim forward delivery of a completed unit's summary and structured metadata
-- Durable blocking, human answer by comment, and resumption with full history
-- The two-tier escalation pattern, end to end, using only worker-available tools
-- Worker dispatch: atomic claim, workspace preparation, spawn, and attempt records
-- Per-card git worktrees — separate directories on separate branches, concurrently
-- Concurrency as a live cap rather than a per-tick budget
-- Crash detection and reclaim, including that a crash also consumes a failure
-- The review lane end to end, without touching the block budget
-- Enforcement: a hook denying a forbidden call, and three ways it can be silently inert
-- That disabling automatic decomposition is honoured
+- A converged goal-mode unit reached same-card review and final completion; a separate impossible unit exhausted `2/2` turns and was durably blocked without a false success or file mutation.
+- Terminal board events resumed the same live Morfeo TUI session, including a final turn that assembled its report from board state.
+- A real Implementer changed only `result.txt`; Supervisor independently reviewed and integrated it; `python3 verify.py` passes in the canonical fixture with `PASS: EC1 result is exact`.
 
-What remains assumed, and needs a real run with a model:
+The run also exposed material lifecycle findings: `initial_status: blocked` auto-promoted, worker-side creation omitted the retry field, `needs_input` entered triage and redispatched without an unblock, and one same-card goal needed distinct Implementer and Supervisor predicates. These findings and the complete task/session/commit trace are recorded in [`R13 research §14`](specs/r13-synthesis-and-release/research.md).
 
-- Goal-mode convergence judging
-- Wake delivery to Morfeo through a live gateway
-- Whether a real worker's evidence is good enough to accept by
+**Phase 6 has not been rerun after EC1.** Its earlier `HOLD` packet remains the historical pre-run qualification; no runtime claim has been formally promoted and no `READY`, product activation, publication, deployment, or Hermes-to-Morfeo cutover is authorized. The next protected step is Phase 6 evidence re-qualification, not another Phase 5 run.
 
-The design labels these as assumptions wherever it depends on them. The verification method — the runtime's own injectable spawn seam and directly callable board kernel — is recorded in [`specs/r13-synthesis-and-release/research.md`](specs/r13-synthesis-and-release/research.md), because most runtime assumptions in this project are testable for free.
+On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. This does not replace Phase 6 or close the remaining runtime/debt issues.
 
 ## For whoever implements this
 
@@ -126,6 +125,7 @@ Implementation order that the design supports:
 3. Write the three system prompts to the behavioural specifications in [R1](specs/r1-authority-and-interaction/spec.md), [R7](specs/r7-supervision-and-convergence/spec.md), and [R13](specs/r13-synthesis-and-release/spec.md). Writing the wording is build, not design, and is deliberately left open.
 4. Install the enforcement hooks in [R10](specs/r10-security-and-authority/spec.md).
 5. Run the walking-skeleton checkpoint described in [`ROADMAP.md`](ROADMAP.md) before trusting any runtime claim this design labels as assumed.
+6. Qualify the checkpoint evidence through [R13 Phase 6](specs/r13-synthesis-and-release/plan.md): promote or retain claims, revisit provisional values, correlate cost, record debt, and return `READY` or `HOLD`. This step never performs cutover or product activation.
 
 Two defaults must be changed before the first unattended run, and both are recorded with their reasons in [R7](specs/r7-supervision-and-convergence/spec.md). Leaving them alone produces a system that quietly reassigns work the contract never authorised.
 

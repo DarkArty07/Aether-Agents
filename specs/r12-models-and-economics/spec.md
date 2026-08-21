@@ -3,6 +3,7 @@
 **Roadmap ID**: R12
 **Stage status**: done
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Amended**: 2026-08-18 — Morfeo's existing tier also serves direct stewardship
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
@@ -25,12 +26,13 @@ The runtime resolves each worker's model from its own profile when the dispatche
 
 | Role | Tier | Why |
 |---|---|---|
-| Morfeo | Frontier | Extraction quality determines everything downstream and cannot be recovered later (R1-FR-105) |
+| Morfeo | Frontier | Extraction quality determines everything downstream; the same profile also performs bounded direct stewardship under PD-44 |
 | Supervisor | Capable | Decomposition, analysis, review, and contract-derived decisions are judgement work on a written contract |
 | Implementer | Inexpensive | Executes a unit that already carries its goal, its context, and its decisions |
 
 - **FR-1201**: Model tiering MUST be expressed per profile.
-- **FR-1202**: Morfeo MUST run on the strongest available tier. Extraction is the one phase with no second chance (R1 §2).
+- **FR-1202**: Morfeo MUST run on the strongest available tier. Extraction is the one phase with no second chance (R1 §2), and PD-44 direct stewardship uses the same established profile tier.
+- **FR-1202a**: Selecting direct action versus pipeline MUST NOT invoke a special model router, model switch, classifier slot, or auxiliary model. It is Morfeo's reasoning responsibility inside the existing profile.
 - **FR-1203**: The implementer tier is where nearly all tokens are spent, and is therefore where cost is governed. Reducing cost anywhere else is optimising the wrong term.
 - **FR-1204**: A cheaper implementer tier MUST still satisfy the project constitution, which is scored identically regardless of which model produced the work (R11-FR-1132).
 - **FR-1205**: Aether MUST NOT express capability differences by adding roles or profiles (PD-30, PD-33).
@@ -114,5 +116,5 @@ Not measured: any comparison between tiers. No run has occurred, so every tier a
 - [x] The economics of an ungated system are tied to R7's budgets.
 - [x] Selection rules forbid preference-based choice.
 - [x] Provider-agnosticism is required rather than assumed.
-- [ ] Christopher has reviewed the stage.
+- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
 - [ ] Tier assignments are confirmed or revised against comparative evidence.
