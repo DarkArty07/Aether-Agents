@@ -74,7 +74,7 @@ The rule that separates the tiers: **a question the contract can answer is never
 | Convergence judging, steering, hooks | The instructions that make each role behave |
 | Profiles, memory, skills, scheduling | Quality standards and evidence expectations |
 
-Aether does not fork, vendor, or patch Hermes. It expresses itself entirely through profiles, configuration, skills, and prompts. Where Hermes enforces something structurally that Aether specified as an instruction, the structural guarantee is primary and the instruction is reinforcement.
+Aether does not fork, vendor, or patch Hermes. It expresses itself through profiles, configuration, skills, prompts, and a versioned policy-hook template installed into those profiles. Where Hermes enforces something structurally that Aether specified as an instruction, the structural guarantee is primary and the instruction is reinforcement.
 
 ## The method
 
@@ -137,6 +137,7 @@ Two defaults must be changed before the first unattended run, and both are recor
 | [`ROADMAP.md`](ROADMAP.md) | Design-area index, dependencies, status |
 | [`AGENTS.md`](AGENTS.md) | How Aether is built, and the evidence rules |
 | [`specs/`](specs) | One directory per design area, each owning its requirements |
+| [`policy/hooks/`](policy/hooks) | Canonical sanitized pre-tool policy, synchronization, verification, and rollback instructions |
 | `home/` | A live Hermes profile used as runtime evidence. Not documentation of intent |
 
 ## Principles that must not be violated

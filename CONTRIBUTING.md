@@ -11,8 +11,9 @@ Keep changes within Aether's versioned design, design-stage specifications, repo
 Before proposing a change:
 
 1. Run the same canonical-manifest and R0 baseline checks defined in `.github/workflows/policy.yml`.
-2. Validate YAML, Markdown links, file modes, and `git diff --check`.
-3. Inspect the complete staged diff and confirm no local runtime state is tracked.
-4. Record evidence, alternatives, and change impact for material design decisions.
+2. Run `python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v` for policy-hook changes.
+3. Validate YAML, Markdown links, file modes, and `git diff --check`.
+4. Inspect the complete staged diff and confirm no local runtime state is tracked.
+5. Record evidence, alternatives, and change impact for material design decisions.
 
 Publication and release are protected external effects and require current authority.
