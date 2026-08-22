@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schema_version", "aether", "hermes", "profile_bundle"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "aether": {
       "type": "object",
       "additionalProperties": false,
@@ -21,25 +21,74 @@
     "hermes": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "version", "upstream_tag", "upstream_commit", "fork_tag", "fork_commit", "python_requires", "artifacts"],
+      "required": [
+        "source_mode",
+        "repository",
+        "version",
+        "tag",
+        "commit",
+        "python_requires",
+        "artifacts"
+      ],
       "properties": {
-        "repository": {"const": "https://github.com/DarkArty07/hermes-agent"},
+        "source_mode": {"enum": ["upstream", "transitional_fork"]},
+        "repository": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/"},
         "version": {"type": "string", "minLength": 1},
-        "upstream_tag": {"type": "string", "minLength": 1},
-        "upstream_commit": {"$ref": "#/$defs/git_commit"},
-        "fork_tag": {"type": "string", "minLength": 1},
-        "fork_commit": {"$ref": "#/$defs/git_commit"},
+        "tag": {"type": "string", "minLength": 1},
+        "commit": {"$ref": "#/$defs/git_commit"},
         "python_requires": {"type": "string", "minLength": 1},
+        "upstream_base": {"$ref": "#/$defs/upstream_base"},
+        "residual_patches": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
         "artifacts": {
           "type": "array",
-          "minItems": 2,
-          "items": {"$ref": "#/$defs/artifact"},
-          "allOf": [
-            {"contains": {"properties": {"kind": {"const": "wheel"}}, "required": ["kind"]}},
-            {"contains": {"properties": {"kind": {"const": "sdist"}}, "required": ["kind"]}}
-          ]
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/artifact"}
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"source_mode": {"const": "upstream"}},
+            "required": ["source_mode"]
+          },
+          "then": {
+            "properties": {
+              "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
+              "residual_patches": {"maxItems": 0},
+              "artifacts": {
+                "contains": {
+                  "properties": {"kind": {"const": "source"}},
+                  "required": ["kind"]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"source_mode": {"const": "transitional_fork"}},
+            "required": ["source_mode"]
+          },
+          "then": {
+            "required": ["upstream_base", "residual_patches"],
+            "properties": {
+              "repository": {"const": "https://github.com/DarkArty07/hermes-agent"},
+              "residual_patches": {"minItems": 1},
+              "artifacts": {
+                "minItems": 2,
+                "allOf": [
+                  {"contains": {"properties": {"kind": {"const": "wheel"}}, "required": ["kind"]}},
+                  {"contains": {"properties": {"kind": {"const": "sdist"}}, "required": ["kind"]}}
+                ]
+              }
+            }
+          }
+        }
+      ]
     },
     "profile_bundle": {
       "type": "object",
@@ -75,12 +124,22 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "upstream_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "commit"],
+      "properties": {
+        "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
+        "tag": {"type": "string", "minLength": 1},
+        "commit": {"$ref": "#/$defs/git_commit"}
+      }
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "filename", "url", "sha256", "provenance_url"],
       "properties": {
-        "kind": {"enum": ["wheel", "sdist"]},
+        "kind": {"enum": ["source", "wheel", "sdist"]},
         "filename": {"type": "string", "minLength": 1},
         "url": {"type": "string", "format": "uri", "pattern": "^https://"},
         "sha256": {"$ref": "#/$defs/sha256"},

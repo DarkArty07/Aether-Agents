@@ -8,7 +8,9 @@
 
 Aether's three-role method is functioning in Christopher's local environment, but the public repository still distributes a design and a few reconstruction pieces rather than the product that was tested. `v1.0.0` is therefore not a version bump over `v0.24.0`; it is the first release whose promise includes third-party installation, independent credentials and models, updates, rollback, privacy, and public qualification.
 
-The owner accepted PD-48 through PD-64 in conversation before this contract was written. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
+The owner accepted PD-48 through PD-64 in conversation before this contract was written and later accepted PD-65 through PD-67 during canonical reconciliation. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
+
+**2026-08-21 amendment:** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The current decision is upstream-by-default with a release-locked `transitional_fork` mode only while indispensable patches remain, and no new Aether capability may add a downstream-only Hermes core dependency.
 
 ## 2. Observed Aether repository state
 
@@ -97,7 +99,7 @@ Observed capabilities:
 
 Observed limitation relevant to Aether:
 
-- The native unit is one profile distribution. Aether is a coordinated set of three profiles, one shared policy, one compatible downstream runtime, project boards, and a service lifecycle.
+- The native unit is one profile distribution. Aether is a coordinated set of three profiles, one shared policy, one compatible lock-selected Hermes runtime, project boards, and a service lifecycle.
 - Remote Git install follows a repository/default branch and the first release did not support immutable `@ref` pinning.
 
 Conclusion: Aether should reuse native profile semantics and file formats inside its managed bundle, but a small fleet manager is still required. Building a fourth orchestration framework would be wrong; managing a three-profile product release is the missing product layer.
@@ -161,9 +163,11 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 **Rejected**: label the accepted R0-R13 design `1.0.0`. It would misrepresent a local-only installation as public product maturity.
 
-### A1-D02 — Qualified downstream fork
+### A1-D02 — Qualified downstream fork (superseded as the permanent default by PD-65)
 
-**Decision**: maintain a minimal public downstream and continue upstreaming generally useful fixes.
+**Historical decision**: maintain a minimal public downstream and continue upstreaming generally useful fixes.
+
+**Current disposition**: retain the fork only as a bounded transition. Each release targets a stable upstream tag and uses the fork only if its lock names indispensable residual patches and their retirement gates.
 
 **Why**: core Aether guarantees currently depend on six changes outside upstream releases. Waiting gives upstream scheduling authority over Aether; silently using local patches destroys reproducibility.
 
@@ -173,9 +177,9 @@ Pending publishers can create a project on first trusted publication. Configurin
 - weaken Aether's guarantees to match unqualified upstream behavior;
 - create a permanently divergent general-purpose Hermes fork.
 
-### A1-D03 — Separate repositories
+### A1-D03 — Separate repositories (amended by PD-65)
 
-**Decision**: `Aether-Agents` owns the product; `DarkArty07/hermes-agent` owns the downstream runtime.
+**Current decision**: `Aether-Agents` owns the product and all Aether-specific capability. `DarkArty07/hermes-agent` owns only the temporary downstream patch line while a release still selects `transitional_fork`; steady-state runtime ownership remains upstream.
 
 **Assumption**: preserving upstream history and package identity reduces maintenance and makes Aether's actual product layer inspectable.
 
@@ -194,9 +198,9 @@ Pending publishers can create a project on first trusted publication. Configurin
 - container-first distribution;
 - fork-integrated monolith.
 
-### A1-D05 — GitHub Release downstream artifacts
+### A1-D05 — GitHub Release downstream artifacts (conditional under PD-65)
 
-**Decision**: build the original `hermes-agent` wheel/sdist from the downstream and publish them as verified GitHub Release assets. Aether carries the exact lock.
+**Current decision**: when a release selects `transitional_fork`, build the original `hermes-agent` wheel/sdist from the downstream and publish them as verified GitHub Release assets. In normal `upstream` mode, lock and verify the stable upstream source archive and build the original distribution in a controlled environment.
 
 **Why**: PyPI's `hermes-agent` namespace belongs to upstream and renaming would require unrelated metadata divergence. A GitHub asset can retain the original distribution name while remaining pinned and auditable.
 

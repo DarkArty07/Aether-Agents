@@ -24,7 +24,7 @@ aether setup [--config PATH] [--dry-run] [--json]
 
 Guided mode is used when `--config` is absent. Declarative mode parses the TOML file into the data model defined by `setup-config.schema.json`. Both modes call one planner/validator/effect engine.
 
-Effects may include creating XDG directories, staging the locked downstream runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
+Effects may include creating XDG directories, staging the lock-selected upstream or transitional-fork Hermes runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
 
 ### `aether init`
 
@@ -112,7 +112,7 @@ aether version [--json]
 aether --version
 ```
 
-Reports manager version, active product version, downstream Hermes version/tag/commit, profile-policy version, and mismatch state.
+Reports manager version, active product version, selected Hermes source mode and version/tag/commit, profile-policy version, and mismatch state.
 
 ## 3. Stable JSON envelope
 

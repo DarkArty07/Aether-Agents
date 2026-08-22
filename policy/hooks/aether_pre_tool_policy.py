@@ -270,27 +270,62 @@ def _under(path: Path, root: Path) -> bool:
         return False
 
 
-def _patch_targets(args: dict[str, Any], cwd: Path) -> list[Path]:
+def _patch_raw_targets(args: dict[str, Any]) -> list[str]:
     mode = str(args.get("mode") or "replace").casefold()
     if mode == "replace":
-        return [_path(args.get("path"), cwd)]
+        raw = args.get("path")
+        if not isinstance(raw, str) or not raw.strip():
+            raise Undecidable("missing path")
+        return [raw]
     if mode != "patch":
         raise Undecidable(f"unknown patch mode {mode!r}")
     patch_text = args.get("patch")
     if not isinstance(patch_text, str) or not patch_text.strip():
         raise Undecidable("patch payload is empty")
+
+    lines = patch_text.splitlines()
+    begin = re.compile(r"^\*\*\*\s*Begin\s+Patch\s*$")
+    end = re.compile(r"^\*\*\*\s*End\s+Patch\s*$")
+    start_index = -1
+    end_index = len(lines)
+    for index, line in enumerate(lines):
+        if begin.match(line):
+            start_index = index
+        elif end.match(line):
+            end_index = index
+            break
+
     raw_targets: list[str] = []
-    for line in patch_text.splitlines():
-        match = re.match(r"^\*\*\*\s+(?:Add|Update|Delete)\s+File:\s*(.+?)\s*$", line)
+    operation_prefix = re.compile(r"^\*\*\*\s*(?:Add|Update|Delete|Move)\b")
+    for line in lines[start_index + 1 : end_index]:
+        match = re.match(r"^\*\*\*\s*(?:Add|Update|Delete)\s+File:\s*(.+)", line)
         if match:
-            raw_targets.append(match.group(1))
+            raw_targets.append(match.group(1).strip())
             continue
-        move = re.match(r"^\*\*\*\s+Move\s+to:\s*(.+?)\s*$", line)
+        move = re.match(r"^\*\*\*\s*Move\s+File:\s*(.+?)\s*->\s*(.+)", line)
         if move:
-            raw_targets.append(move.group(1))
-    if not raw_targets:
+            raw_targets.extend((move.group(1).strip(), move.group(2).strip()))
+            continue
+        if operation_prefix.match(line):
+            raise Undecidable("patch payload contains an unrecognized patch operation header")
+    if not raw_targets or any(not raw for raw in raw_targets):
         raise Undecidable("patch payload has no recognized file targets")
-    return [_path(raw, cwd) for raw in raw_targets]
+    return raw_targets
+
+
+def _patch_targets(args: dict[str, Any], cwd: Path) -> list[Path]:
+    return [_path(raw, cwd) for raw in _patch_raw_targets(args)]
+
+
+def _raw_mutation_targets(tool_name: str, args: dict[str, Any]) -> list[str]:
+    if tool_name == "write_file":
+        raw = args.get("path")
+        if not isinstance(raw, str) or not raw.strip():
+            raise Undecidable("missing path")
+        return [raw]
+    if tool_name == "patch":
+        return _patch_raw_targets(args)
+    return []
 
 
 def _mutation_targets(tool_name: str, args: dict[str, Any], cwd: Path) -> list[Path]:
@@ -299,6 +334,15 @@ def _mutation_targets(tool_name: str, args: dict[str, Any], cwd: Path) -> list[P
     if tool_name == "patch":
         return _patch_targets(args, cwd)
     return []
+
+
+def _require_absolute_mutation_targets(tool_name: str, args: dict[str, Any]) -> None:
+    raw_targets = _raw_mutation_targets(tool_name, args)
+    if not raw_targets:
+        raise Undecidable("file mutation has no target")
+    for raw in raw_targets:
+        if not Path(raw).expanduser().is_absolute():
+            raise Undecidable("Morfeo task-bound structured writes require absolute paths")
 
 
 def _credential_target(path: Path) -> bool:
@@ -645,6 +689,87 @@ def _implementer_context(payload: dict[str, Any], args: dict[str, Any]) -> tuple
     return workspace, context
 
 
+def _morfeo_mutation_context(
+    payload: dict[str, Any], args: dict[str, Any], cwd: Path
+) -> tuple[Path, dict[str, Any]]:
+    context = _git_context(cwd)
+    if (
+        context["main_worktree"]
+        and context["integration"]
+        and context["branch"] == context["integration"]
+    ):
+        return context["top"], context
+
+    workspace_raw = os.environ.get("HERMES_KANBAN_WORKSPACE", "").strip()
+    branch_expected = os.environ.get("HERMES_KANBAN_BRANCH", "").strip()
+    task_id = os.environ.get("HERMES_KANBAN_TASK", "").strip()
+    run_raw = os.environ.get("HERMES_KANBAN_RUN_ID", "").strip()
+    if not workspace_raw or not branch_expected or not task_id or not run_raw:
+        raise Undecidable("Morfeo task workspace, branch, task, or run binding is unavailable")
+    try:
+        run_id = int(run_raw)
+    except ValueError as exc:
+        raise Undecidable("worker run binding is invalid") from exc
+
+    workspace = Path(workspace_raw).expanduser().resolve()
+    raw_workdir = args.get("workdir") or payload.get("cwd")
+    workdir = _path(raw_workdir, workspace)
+    if not _under(workdir, workspace):
+        raise Undecidable("tool working directory is outside the assigned Morfeo workspace")
+    context = _git_context(workdir)
+    if workspace != context["top"]:
+        raise Undecidable("Morfeo workspace does not match the current project root")
+    if context["main_worktree"]:
+        raise Undecidable("Morfeo task workspace is not a linked worktree")
+    if context["branch"] != branch_expected:
+        raise Undecidable("current branch does not match the Morfeo branch binding")
+
+    board = _board_path({})
+    try:
+        conn = sqlite3.connect(f"file:{board}?mode=ro", uri=True, timeout=2)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                """
+                SELECT t.assignee, t.status, t.workspace_kind, t.workspace_path, t.branch_name,
+                       t.current_run_id, r.profile AS run_profile,
+                       r.status AS run_status, r.task_id AS run_task_id
+                FROM tasks AS t
+                LEFT JOIN task_runs AS r ON r.id = t.current_run_id
+                WHERE t.id = ?
+                """,
+                (task_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as exc:
+        raise Undecidable("Morfeo task binding could not be inspected") from exc
+    if row is None:
+        raise Undecidable("Morfeo task does not exist on the pinned board")
+    if str(row["assignee"] or "").casefold() != "morfeo":
+        raise Undecidable("task is not assigned to Morfeo")
+    if str(row["status"] or "").casefold() != "running":
+        raise Undecidable("Morfeo task is not running")
+    if str(row["workspace_kind"] or "").casefold() != "worktree":
+        raise Undecidable("Morfeo task workspace is not an isolated worktree")
+    board_workspace = str(row["workspace_path"] or "").strip()
+    if not board_workspace:
+        raise Undecidable("board workspace is unavailable")
+    if Path(board_workspace).expanduser().resolve() != workspace:
+        raise Undecidable("board workspace does not match the Morfeo workspace binding")
+    if str(row["branch_name"] or "") != branch_expected:
+        raise Undecidable("board branch does not match the Morfeo branch binding")
+    if row["current_run_id"] != run_id:
+        raise Undecidable("board run does not match the Morfeo run binding")
+    if str(row["run_task_id"] or "") != task_id:
+        raise Undecidable("active task run does not belong to the Morfeo task")
+    if str(row["run_profile"] or "").casefold() != "morfeo":
+        raise Undecidable("active task run does not belong to Morfeo")
+    if str(row["run_status"] or "").casefold() != "running":
+        raise Undecidable("Morfeo task run is not active")
+    return workspace, context
+
+
 def _integration_refs(command: str, operation: str) -> list[str]:
     if re.search(r"[;&|`$<>\n]", command):
         raise Undecidable(f"complex git {operation} command cannot be inspected safely")
@@ -690,8 +815,8 @@ def _apply_morfeo(tool_name: str, args: dict[str, Any], payload: dict[str, Any],
         _block("UNRELATED-TOOLSET", "this tool is outside Morfeo's authorized operational surface")
     if tool_name not in FILE_MUTATION_TOOLS:
         return
-    context = _git_context(cwd)
-    _require_integration(context)
+    _require_absolute_mutation_targets(tool_name, args)
+    workspace, context = _morfeo_mutation_context(payload, args, cwd)
     targets = _mutation_targets(tool_name, args, cwd)
     if not targets:
         raise Undecidable("file mutation has no target")
@@ -701,6 +826,8 @@ def _apply_morfeo(tool_name: str, args: dict[str, Any], payload: dict[str, Any],
         # the owner). Still resolved relative to the repo so the call fails
         # closed — via _relative_to_repo's Undecidable — for any target
         # outside the current project, same as every other role.
+        if not _under(target, workspace):
+            raise Undecidable("Morfeo file mutation is outside the authorized workspace")
         _relative_to_repo(target, context)
 
 

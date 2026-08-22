@@ -10,24 +10,24 @@
 
 ## 1. Summary
 
-Build Aether 1.0 as two independently versioned but release-locked products:
+Build Aether 1.0 as one product with two independently versioned but release-locked components:
 
 1. **Aether Manager** — the minimal `aether-agents` Python package on PyPI, exposing `aether` and managing setup, projects, service lifecycle, diagnosis, update, rollback, and uninstall.
-2. **Aether Hermes Downstream** — the public `DarkArty07/hermes-agent` fork, carrying a minimal reconciled patch stack and publishing the original `hermes-agent` wheel/sdist as verified GitHub Release assets.
+2. **Managed Hermes runtime** — the original `hermes-agent` distribution from a locked stable upstream source by default, or from the public `DarkArty07/hermes-agent` fork only in declared `transitional_fork` mode while indispensable patches remain.
 
-The manager includes a release lock and a sanitized three-profile resource bundle. It installs the locked downstream into an Aether-owned versioned runtime, keeps user state in stable XDG locations, and maps each project identity to one local board/workspace boundary. The manager never vendors Hermes, embeds private runtime state, or replaces another Hermes installation.
+The manager includes a release lock and a sanitized three-profile resource bundle. It installs the selected locked Hermes source into an Aether-owned versioned runtime, keeps user state in stable XDG locations, and maps each project identity to one local board/workspace boundary. The manager never vendors Hermes, embeds private runtime state, or replaces another Hermes installation.
 
-The stable release is produced only after an RC installed from PyPI consumes the exact public downstream asset and passes deterministic plus owner-authorized live qualification on Linux native and WSL2.
+The stable release is produced only after an RC installed from PyPI consumes the exact public Hermes source or artifact declared by its lock and passes deterministic plus owner-authorized live qualification on Linux native and WSL2.
 
 ## 2. Technical context
 
-**Manager language**: Python `>=3.11,<3.14`, matching the inspected Hermes support range unless the qualified downstream changes it before RC freeze.
+**Manager language**: Python `>=3.11,<3.14`, matching the inspected Hermes support range unless the qualified locked runtime changes it before RC freeze.
 
 **Manager packaging**: PEP 621 `pyproject.toml`, src layout, wheel and sdist, uv for development/build/install.
 
 **Manager dependency policy**: standard-library first. Runtime download, hashing, atomic filesystem operations, subprocess execution, TOML reading, JSON output, and service inspection are available in Python 3.11. Add a manager dependency only when it removes a demonstrated reliability/security risk; exact-pin and lock it. The managed Hermes dependency tree is not imported by the manager.
 
-**Runtime**: qualified `hermes-agent` downstream wheel installed into a versioned virtual environment.
+**Runtime**: qualified original `hermes-agent` distribution built or consumed from the lock's `upstream` or `transitional_fork` public source and installed into a versioned virtual environment.
 
 **Service**: systemd user service on supported Linux/WSL2, wrapping only the Aether-managed Hermes gateway/dispatcher.
 
@@ -41,11 +41,11 @@ The stable release is produced only after an RC installed from PyPI consumes the
 
 | Principle | Assessment |
 |---|---|
-| Current intent and human authority | Pass. Owner-approved PD-48–PD-64 define the public product. Publication, credentials, spend, live cutover, and destructive effects remain explicit gates. |
+| Current intent and human authority | Pass. Owner-approved PD-48–PD-67 define the public product. Publication, credentials, spend, live cutover, and destructive effects remain explicit gates. |
 | Specification owns intent | Pass. `spec.md` is normative; this plan and future tasks may not weaken it. |
 | Autonomous, bounded design | Pass. Technical defaults are chosen only where the owner delegated them and assumptions are recorded in `research.md`. |
 | Evidence and traceable convergence | Pass. Existing local tests are distinguished from missing public-path qualification. Every release claim has an evidence path. |
-| Simplicity over ceremony | Pass. One manager package and one minimal downstream are used. No control plane, installer daemon, container layer, renamed runtime package, or fourth agent is introduced. |
+| Simplicity over ceremony | Pass. One manager package and one source-mode-aware managed runtime are used. The transitional fork is retained only while indispensable. No control plane, installer daemon, container layer, renamed runtime package, or fourth agent is introduced. |
 | Separate design, build, and activation | Pass. Build may prepare local artifacts. Remote publication, live model calls, and migration of Christopher's installation remain gated. |
 
 No constitutional exception is authorized.
@@ -63,13 +63,12 @@ PyPI
     ├── public schemas
     └── XDG/project/service lifecycle logic
 
-GitHub: DarkArty07/hermes-agent
-└── qualified downstream release
-    ├── hermes-agent wheel
-    ├── source distribution
-    ├── SHA-256 checksums
-    ├── provenance/attestation
-    └── patch ledger + qualification evidence
+Hermes public source selected by release-lock mode
+├── upstream: NousResearch/hermes-agent stable tag + commit + source digest
+└── transitional_fork: DarkArty07/hermes-agent release
+    ├── original hermes-agent wheel/source distribution
+    ├── SHA-256 checksums + provenance
+    └── residual patch ledger + retirement evidence
 
 User machine
 ├── uv-managed aether CLI environment
@@ -93,10 +92,10 @@ Each manager release packages one `release-lock.json` conforming to `release-loc
 
 - SemVer and PEP 440 Aether versions;
 - Aether Git tag and commit;
-- stable Hermes upstream tag/commit;
-- downstream fork tag/commit;
+- source mode, repository, tag, and commit;
+- stable upstream base and residual patch IDs when mode is `transitional_fork`;
 - Python compatibility;
-- wheel and sdist URLs, filenames, SHA-256 values, and provenance URLs;
+- source/artifact URLs, filenames, SHA-256 values, and provenance URLs required by the selected mode;
 - exact profile-policy bundle version and digest.
 
 A release is incoherent if any version, ref, artifact, digest, or profile-policy value differs.
@@ -224,7 +223,7 @@ Aether-Agents/
 └── VERSION
 ```
 
-The downstream fork separately owns:
+When `transitional_fork` is selected, the downstream repository separately owns:
 
 ```text
 hermes-agent/
@@ -235,7 +234,7 @@ hermes-agent/
 └── release workflow for wheel/sdist/checksums/provenance
 ```
 
-Supervisor may consolidate manager modules where that improves cohesion. It MUST NOT merge downstream source into this tree or duplicate the private local profile catalog.
+Supervisor may consolidate manager modules where that improves cohesion. It MUST NOT merge Hermes source into this tree or duplicate the private local profile catalog.
 
 ## 6. Public CLI implementation contract
 
@@ -261,8 +260,8 @@ No command-specific shortcut may skip integrity or recovery checks that the shar
 1. Resolve an immutable target Aether release from the canonical package/release metadata.
 2. Fetch its release lock and verify the Aether source/tag relationship.
 3. Preview version, storage, service interruption, and user-state treatment.
-4. Download downstream artifacts into cache staging.
-5. Verify SHA-256, provenance, Python/platform compatibility, and wheel metadata.
+4. Download the locked upstream source or transitional-fork artifacts into cache staging.
+5. Verify SHA-256, provenance, Python/platform compatibility, source mode, and package metadata.
 6. Build a new immutable release directory.
 7. Snapshot product-owned profile files and transition metadata; do not snapshot/copy raw credentials into release artifacts.
 8. Apply product-owned profile/config changes to staging or through reversible atomic file operations.
@@ -294,27 +293,30 @@ Rollback selects a previously verified release directory and restores only produ
 - Record upstream tag, commit, package version, Python range, and release notes.
 - Freeze that baseline for the RC unless a security/correctness blocker requires a documented restart.
 
-### 8.2 Reconcile the patch stack
+### 8.2 Reconcile patches and select the source mode
 
 For every entry in `HERMES_LOCAL_PATCHES.md`:
 
 - inspect whether upstream merged an equivalent;
 - test semantic parity before removing local code;
-- port only still-required behavior onto the stable baseline;
+- prefer a stable upstream release with every accepted guarantee;
+- select `transitional_fork` only if an indispensable residual patch remains;
+- port only still-required behavior onto the stable baseline when that transition is necessary;
 - keep one auditable logical patch commit per concern where practical;
 - update the downstream ledger with upstream PR, Aether requirement, tests, and retirement condition;
 - exclude unrelated local package-lock or generated drift.
 
 No force-push or shared-history rewrite is authorized. Upstream updates enter through reviewable commits/merges according to the fork's protected branch policy.
 
-### 8.3 Qualify and release the runtime
+### 8.3 Qualify the selected runtime source
 
 - run the applicable complete upstream test suite plus Aether-specific regressions;
-- build wheel and sdist in CI from the downstream tag commit;
+- in `upstream` mode, verify the locked source archive and build the original wheel/sdist in the controlled qualification environment;
+- in `transitional_fork` mode, build wheel and sdist in CI from the downstream tag commit;
 - inspect metadata and contents;
 - produce SHA-256 checksums and provenance;
 - test installing the wheel into a clean isolated environment;
-- publish only after the fork-publication gate;
+- publish fork artifacts only when `transitional_fork` is selected and after its publication gate;
 - record URLs/digests in the Aether lock; never point to mutable workflow artifacts.
 
 ## 9. Profile and policy productization
@@ -378,7 +380,7 @@ Update description, topics, README, roadmap, changelog, contribution/security do
 
 - three roles and two routing paths;
 - public CLI installation;
-- qualified downstream boundary;
+- upstream-first runtime boundary and transitional-fork retirement policy;
 - Linux/WSL2 support;
 - flexible descending model methodology;
 - privacy/no telemetry;
@@ -398,7 +400,7 @@ Required sections:
 - commands and JSON/exit contracts;
 - updates, rollback, uninstall, and recovery;
 - Linux/WSL2 support matrix;
-- downstream policy and patch ledger;
+- Hermes source-mode policy and residual patch ledger;
 - privacy/security/threat model;
 - troubleshooting/doctor codes;
 - contribution and release process;
@@ -418,13 +420,13 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 ### Phase 0 — Canonical reconciliation and baseline freeze
 
-- reconcile R4/R9/R10/R11/R12/R13 and derived public docs with PD-48–PD-64;
+- reconcile R4/R8/R9/R10/R11/R12/R13 and derived public docs with PD-48–PD-67;
 - preserve historical rationale;
 - freeze current repository diff and avoid swallowing unrelated local changes;
-- refresh upstream Hermes evidence and select the stable downstream base;
+- refresh upstream Hermes evidence, select a stable baseline, and determine whether any indispensable patch requires `transitional_fork`;
 - establish package/version/schema ownership.
 
-**Exit**: no canonical artifact instructs workers to avoid the accepted downstream/public product, and the exact build baselines are recorded.
+**Exit**: no canonical artifact treats the fork as permanent or unconditional, and the exact upstream baseline plus any justified transitional source are recorded.
 
 ### Phase 1 — Manager/package skeleton and public contracts
 
@@ -432,14 +434,14 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 **Exit**: built wheel installs through uv in a disposable environment; help/version/doctor skeleton operates without Hermes.
 
-### Phase 2 — Downstream reconciliation and artifact production
+### Phase 2 — Hermes source reconciliation and runtime production
 
 - reconcile patch stack on the stable upstream tag;
-- add downstream ledger and regressions;
+- classify every patch as retired, upstream-pending, or indispensable-transition and keep the residual ledger and regressions;
 - build/install/inspect candidate wheel and sdist;
 - prepare release workflow, checksums, and provenance.
 
-**External gate**: publishing downstream GitHub Release assets.
+**External gate**: publishing downstream GitHub Release assets, only if `transitional_fork` is selected.
 
 **Exit**: local candidate artifacts are verified and their future immutable release coordinates can populate the Aether lock.
 
@@ -491,12 +493,12 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 ### Phase 8 — Deterministic RC qualification
 
-- build source, wheel, sdist, profile bundle, release lock, downstream artifacts;
+- build/verify the selected Hermes source mode, wheel, sdist, profile bundle, and release lock;
 - install the exact RC package in clean native Linux and WSL2 lanes;
 - exercise guided and declarative setup, init, service, project isolation, update fault injection, rollback, uninstall, package/docs/security checks;
 - retain machine-readable evidence.
 
-**External gates**: publish downstream release, configure trusted publisher, publish Aether RC.
+**External gates**: publish a downstream release only if selected, configure trusted publisher, and publish the Aether RC.
 
 **Exit**: the public RC can be installed and passes deterministic qualification with all deviations recorded.
 
@@ -536,7 +538,7 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 | Privacy | source/build/docs/profile/release secret scans; local log redaction; no telemetry/network analytics |
 | Docs/workflows | link/code-snippet/nav validation; action linting; release tag/version gates; OIDC permission review |
 | Platform | clean Ubuntu native, Ubuntu WSL2, Garuda/Arch dogfood |
-| Live | public PyPI RC + public downstream + public provider + complete three-role flow + independent evidence review |
+| Live | public PyPI RC + lock-selected public Hermes source + public provider + complete three-role flow + independent evidence review |
 
 No coverage percentage is invented. Supervisor must require tests that exercise every accepted guarantee and failure boundary and report uncovered risk explicitly.
 
@@ -544,7 +546,7 @@ No coverage percentage is invented. Supervisor must require tests that exercise 
 
 | Gate | Required owner action | Work allowed before it |
 |---|---|---|
-| Downstream push/release | authorize remote publication | local fork reconciliation, tests, artifact build |
+| Transitional-fork push/release | authorize remote publication, only if that source mode is selected | local residual-patch reconciliation, tests, artifact build |
 | GitHub settings | authorize Pages/Discussions/private reporting/environment changes | workflow/docs/config preparation |
 | PyPI project/publisher | configure/authorize pending Trusted Publisher | package build and TestPyPI-ready verification without publication |
 | RC publication | authorize tag/GitHub/PyPI prerelease | complete deterministic local qualification |
@@ -559,7 +561,7 @@ A gate denial is authoritative. Workers must not route around it with another to
 
 | Risk | Mitigation |
 |---|---|
-| Fork drifts into a general Hermes product | minimal patch ledger, stable-tag bases, upstream every general fix, retirement criteria |
+| Transitional fork becomes permanent or drifts into a general Hermes product | upstream-default source mode, prohibition on new downstream-only capability, residual patch ledger, stable-tag bases, upstream every general fix, executable retirement criteria |
 | PyPI manager and runtime become mixed versions | immutable release lock, active record, doctor mismatch detection, reconcile/rollback |
 | uv upgrades bypass Aether update | detect honestly; permit read-only recovery; refuse incompatible activation |
 | Updating product policy overwrites personal state | path ownership classification, drift report, backup, unknown-file preservation, forward-only user data |
@@ -577,7 +579,7 @@ A gate denial is authoritative. Workers must not route around it with another to
 - product source: this contract authorizes planning only in this artifact set; implementation follows the pipeline.
 - credentials/provider config: protected user state.
 - final quickstart/demo: commands are not called working until the public RC executes them.
-- release lock instance: values do not exist until downstream and Aether candidate artifacts are built.
+- release lock instance: values do not exist until the selected Hermes source and Aether candidate artifacts are built or verified.
 - stable release notes: derive from verified implementation and RC evidence.
 
 ## 17. Supervisor handoff
@@ -585,9 +587,9 @@ A gate denial is authoritative. Workers must not route around it with another to
 Supervisor must treat `spec.md`, this plan, `research.md`, and `contracts/` as one executable contract. Before fan-out it must:
 
 - verify every requirement maps to at least one implementation and evidence owner;
-- decide shared module boundaries, stable upstream base, dependency set, docs generator, transition primitive, downstream tag scheme, and qualification scenario;
+- decide shared module boundaries, stable upstream base, source mode, dependency set, docs generator, transition primitive, conditional downstream tag scheme, and qualification scenario;
 - expose cross-repository dependencies explicitly;
-- isolate Aether manager, downstream runtime, public profiles/policy, project lifecycle, security, docs/GitHub, and qualification lanes where independent work adds value;
+- isolate Aether manager, managed Hermes runtime, residual downstream transition when needed, public profiles/policy, project lifecycle, security, docs/GitHub, and qualification lanes where independent work adds value;
 - create review and integration work that workers do not self-approve;
 - preserve protected external gates and the current dirty-work baseline;
 - return any genuine contract contradiction to Morfeo rather than choosing silently.
