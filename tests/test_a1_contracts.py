@@ -19,6 +19,7 @@ SCHEMA_PATH = (
 )
 A1_PLAN_PATH = ROOT / "specs" / "r13-synthesis-and-release" / "plan.md"
 R6_SPEC_PATH = ROOT / "specs" / "r6-protocol-and-communication" / "spec.md"
+R4_SPEC_PATH = ROOT / "specs" / "r4-hermes-boundary" / "spec.md"
 R13_SPEC_PATH = ROOT / "specs" / "r13-synthesis-and-release" / "spec.md"
 
 
@@ -123,6 +124,11 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
 
 
 class CanonicalContractConsistencyTests(unittest.TestCase):
+    def test_r4_roadmap_id_has_no_inherited_trailing_whitespace(self) -> None:
+        roadmap_id = R4_SPEC_PATH.read_text(encoding="utf-8").splitlines()[2]
+
+        self.assertEqual(roadmap_id, "**Roadmap ID**: R4")
+
     def test_release_lock_schema_and_plan_agree_on_version_two(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
         plan = A1_PLAN_PATH.read_text(encoding="utf-8")

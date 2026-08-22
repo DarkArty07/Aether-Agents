@@ -1,6 +1,6 @@
 # R4 Specification: The Hermes Framework Boundary
 
-**Roadmap ID**: R4  
+**Roadmap ID**: R4
 **Stage status**: done — reconciled 2026-08-21 for PD-49, PD-65, and A1 public productization
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review  
 **Decision authority**: Christopher  
