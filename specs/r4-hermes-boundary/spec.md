@@ -1,7 +1,7 @@
 # R4 Specification: The Hermes Framework Boundary
 
 **Roadmap ID**: R4  
-**Stage status**: in-progress — reopened 2026-08-20 by PD-49 and A1 downstream productization  
+**Stage status**: done — reconciled 2026-08-21 for PD-49, PD-65, and A1 public productization
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review  
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
@@ -10,9 +10,9 @@
 **May affect**: R5, R6, R7, R8, R9, R10, R11, R12  
 **Parent roadmap**: `../../ROADMAP.md`  
 **Research**: `research.md`  
-**Hermes evidence**: version **0.20.1**, revision `411903b6fa258f81afcc3869eb615f6218e1776a`, source `home/.venv-hermes/src/hermes-agent` — the tree the Aether profile actually loads.
+**Selected public baseline**: `NousResearch/hermes-agent` release `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`, Python `>=3.11,<3.14`.
 
-> **This specification was rewritten on 2026-08-17.** Its first version was researched against a different checkout, version 0.19.1, which is not what Aether runs. Three of its findings were false. The record of the error and its retractions are in `research.md` §6b and §11.
+> **Evidence history.** The 2026-08-17 rewrite corrected three false findings after resolving the loaded private runtime at `0.20.1`; that record remains in `research.md` §6b and §11. The 2026-08-21 reconciliation separately inspected the selected public release above. Loaded private state is evidence about one installation, never a public release dependency.
 
 ## 1. Purpose
 
@@ -32,13 +32,16 @@ R4 does not choose which primitive Aether uses (R5), decide A2A's scope (R6), de
 | Resumability | **None — failed is failed** | **Block, unblock, re-run; crash and reclaim** | Task lifecycle with polling and push |
 | Human in the loop | Not supported | **Comment or unblock at any point** | Caller-mediated |
 | Agents per unit of work | One call, one subagent | **Many over the unit's life — retry, review, follow-up** | One peer per call |
-| Audit trail | Lost on context compression | **Durable rows, permanently** | Signed audit log per exchange |
-| Coordination shape | Hierarchical, caller to callee | **Peer — any profile reads and writes any task** | Peer across process or machine |
+| Audit trail | Lost on context compression | **Durable rows and events** | Protocol task record; Aether adopts no stronger audit claim |
+| Coordination shape | Hierarchical, caller to callee | **Shared board across profiles; tool and run context constrain operations** | Peer across process or machine |
 | Per-unit model choice | No — the model pin is global | **Yes, per task** | Per peer |
 
 - **FR-401**: Aether MUST classify a Hermes capability before adopting it, and MUST NOT adopt one merely because it exists.
 - **FR-402**: Aether MUST NOT build a coordination mechanism that duplicates one of these three.
-- **FR-403**: Aether MUST NOT fork or modify Hermes core. Adaptation belongs in configuration, profiles, skills, plugins, and prompts.
+- **FR-403**: Aether targets a qualified stable upstream Hermes release and MUST prefer configuration, profiles, skills, plugins, prompts, and upstream contribution over downstream core changes.
+- **FR-403a**: A public `transitional_fork` is permitted only for an existing indispensable patch whose Aether guarantee, upstream disposition, qualification evidence, and retirement condition are explicit. Aether MUST NOT add a new product capability that requires a downstream-only core change.
+- **FR-403b**: Every release lock MUST declare `upstream` or `transitional_fork` and pin the public repository, release tag, annotated-tag/commit identity where applicable, source or artifact digest, Python range, and Aether compatibility. The original `hermes-agent` distribution remains isolated from any personal installation.
+- **FR-403c**: Generally useful fixes MUST be proposed upstream. Aether-specific policy remains outside Hermes core. A merged PR is not grounds to retire a patch until the exact target release passes that patch's behavior gate.
 - **FR-404**: Every capability claim MUST record the Hermes version, because these claims are version-specific and one minor release already invalidated three of them.
 
 ### Upstream's own selection guidance
@@ -72,7 +75,7 @@ That is Aether's architecture, stated by the framework. Every criterion upstream
 
 ## 4. Capabilities Aether Inherits
 
-Verified against 0.20.1; see `research.md` §12.
+Originally verified against the loaded `0.20.1` tree and rechecked where release-critical against selected public `0.20.4`; see `research.md` §12 and §13.
 
 > **Which primitive provides which.** R5 selected the durable board, so the board's equivalents are the ones Aether actually relies on. Rows below that describe in-process delegation — steering a running child, the progress-based stall monitor, per-child iteration limits — remain accurate but apply only inside a single worker's run, not across role boundaries. The board's counterparts are heartbeats with dispatcher reclaim, bounded retries, and per-card goal mode. Neither list is a menu to mix: crossing a role boundary always uses the board (PD-29).
 
@@ -109,6 +112,7 @@ Four native capabilities were missed by this classification and found by executi
 
 - **FR-410a**: A native behaviour that performs a phase Aether assigned to a role MUST be classified as incompatible and disabled, not tolerated. Availability is not adoption, and a default is not a decision (FR-418).
 - **FR-410b**: Classification MUST include behaviours that are **on by default**. This stage classified capabilities Aether might switch on and missed three that were already running.
+- **FR-410c**: Aether project initialization MUST adapt Hermes's first-class Project, board-project binding, deterministic task worktrees, and branch conventions. Aether adds portable project identity, local mapping, policy, and release management; it MUST NOT build a second project or board kernel.
 
 ## 5. Profiles Are the Isolation Boundary
 
@@ -137,11 +141,35 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 ## 8. Boundary Policy
 
 - **FR-421**: Hermes owns the runtime: conversation, tools, delegation, the board, A2A, terminal backends, memory, its own persistence, and observability of its own execution.
-- **FR-422**: Aether owns the method: roles, phase assignment, the contract, quality standards, extraction behaviour, and the instructions that make each role behave as specified.
-- **FR-423**: Where the two meet, Aether expresses itself through profiles, configuration, skills, and prompts.
+- **FR-422**: Aether owns the method and product layer: roles, phase assignment, contract ownership, quality standards, extraction behaviour, guard policy, portable setup/project mapping, release lock, runtime lifecycle, public packaging, and qualification.
+- **FR-423**: Where the two meet, Aether expresses itself through the public manager/package, profiles, configuration, skills, plugins/hooks, prompts, and adapters.
 - **FR-424**: An upgrade MUST be reviewed against this classification before an accepted Aether decision is treated as still valid. A single minor release invalidated three findings; this is not a hypothetical risk.
 
-## 9. Requirements Inherited by Later Stages
+## 9. Selected Baseline and Transitional Disposition
+
+The selected stable upstream base is the annotated release `v2026.8.18`: tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74` dereferences to commit `e624e9fde561e1add9388384012b295fde669ade`; `pyproject.toml:3-15` identifies `hermes-agent` `0.20.4` and Python `>=3.11,<3.14`. The GitHub-generated source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`; release production must lock this exact byte stream or a separately built immutable artifact and digest.
+
+The task handoff named `9f13bb131670169467d9b2453ae2e8848814ff6e` as the release commit. GitHub does not resolve that object. Because the release tag was the controlling owner selection, reconciliation records its actual annotated-tag object and dereferenced commit above. This is a factual correction, not a product-scope change.
+
+Direct inspection of the selected commit and the active local patch ledger found six still-indispensable workflow guarantees absent or incomplete in the tag: sticky initial blocking, agent-facing `max_retries`, human-gated escalation recovery, one durable terminal handoff, first-spawn branch propagation, and asymmetric per-profile concurrency. Their upstream PRs `#91180`, `#89590`, `#91211`, `#91220`, `#89688`, and `#91266` were all open on 2026-08-21. The directory-versus-script lifecycle-guard fix from `9ac1e65…` is contained in the selected tag and is a retirement candidate pending its exact qualification gate.
+
+- **FR-425**: A1's initial candidate uses `transitional_fork` mode unless qualification proves every indispensable guarantee without downstream core changes. The exact public fork tag, commit, artifacts, digests, and provenance are Phase 2 outputs; no moving branch or unbuilt candidate may appear in a release lock.
+- **FR-426**: The downstream patch stack MUST be minimal, public, tested, and recorded in a ledger with Aether guarantee, upstream disposition, qualification evidence, owner, retirement condition, and target release.
+- **FR-427**: The downstream repository MUST preserve upstream package identity, license, attribution, and source history. It MUST NOT publish a renamed or conflicting distribution to PyPI.
+- **FR-428**: The Aether manager MUST consume only immutable, hash-verified public release artifacts. It MUST NOT install from a developer checkout, mutable branch, or private runtime.
+- **FR-429**: Downstream publication is a protected external effect. Local reconciliation and verification confer no authority to publish a fork, tag, release asset, package, or announcement.
+
+Selected-source findings:
+
+- `hermes_cli/kanban_db.py:43-58,102-135,610-618,2327-2335` defines the durable board, board resolution, workspace kinds, and SQLite store.
+- `tools/kanban_tools.py:467-480,2132-2140,2455-2462` gates some orchestrator operations but registers `kanban_create` in normal board mode; Aether's narrower role rule still requires policy enforcement.
+- `hermes_cli/projects_db.py:1-21,57-96,235-261`, `hermes_cli/projects_cmd.py:1-10,22-104`, and `tests/hermes_cli/test_kanban_project_link.py:29-64` provide first-class Projects, board binding, primary repositories, and deterministic project-linked worktrees/branches.
+- `website/docs/user-guide/profiles.md:5-17,129-153` confirms profile-home isolation and explicitly denies filesystem-sandbox semantics.
+- `website/docs/user-guide/features/hooks.md:9-18,438-445,528-554` exposes plugin and shell hook interception, including blocking and fail-closed approval behavior; precision remains Aether's responsibility.
+- `hermes_cli/config_defaults.py:2513-2586` exposes dispatcher, review, failure, global concurrency, uniform per-profile concurrency, and decomposition settings, but not Aether's required per-role override map at this tag.
+- `hermes_cli/kanban_db.py:10230-10265` persists a derived worktree branch and then spawns with the stale claimed task object, confirming the first-spawn branch defect remains in the selected base.
+
+## 10. Requirements Inherited by Later Stages
 
 | Requirement | Owner |
 |---|---|
@@ -154,19 +182,23 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 | Parallel worktrees are native to the board, not to delegation | R8 |
 | Durable rows are a permanent audit trail; delegation transcripts are not | R9, R11 |
 | Per-task model override exists on the board but not in delegation | R12 |
+| Adapt the native Project/board/worktree surface rather than duplicate it | R8, R9, R13 |
+| Package, lock, update, and qualify the selected public source without depending on private state | R9, R10, R11, R13 |
 
-## 10. Success Criteria
+## 11. Success Criteria
 
 - **SC-401**: Every capability claim names an inspected file, the recorded revision, and the version.
-- **SC-402**: Every claim is verified against the tree the runtime actually loads.
-- **SC-403**: No Aether mechanism duplicates a native capability that satisfies its requirement.
+- **SC-402**: Private-runtime claims identify the loaded tree; product-release claims identify the exact selected public source. Neither substitutes for the other.
+- **SC-403**: No Aether coordination or project mechanism duplicates a native capability that satisfies its requirement.
 - **SC-404**: Each of the three primitives is classified, with upstream's own selection criteria recorded.
 - **SC-405**: No capability is recorded as unselected on unverified evidence.
 - **SC-406**: A future upgrade can be assessed against this classification without re-deriving it.
+- **SC-407**: The selected release mode is explicit; any transitional downstream is public, minimal, immutable in release locks, and separately gated for publication.
+- **SC-408**: No new Aether product capability requires a downstream-only Hermes core change.
 
-## 11. Done When
+## 12. Done When
 
-- [x] The baseline is corrected to the source the runtime loads.
+- [x] The historical loaded-runtime baseline and selected public release baseline are distinguished and exact.
 - [x] The three false findings are retracted with the record of how they occurred.
 - [x] All three coordination primitives are classified, with upstream's selection guidance.
 - [x] The match between the durable board and Aether's architecture is recorded.
@@ -174,5 +206,6 @@ Only one of the three gaps recorded earlier survives, and **R5 removed it from A
 - [x] The one surviving gap is stated as a property of delegation rather than of Hermes.
 - [x] Requirements inherited by later stages are recorded.
 - [x] Hooks inspected directly, including the consent allowlist that can render an enforcement point inert (PD-43).
-- [ ] Still not inspected directly: memory internals, terminal backends, and the A2A adapter's implementation. Each is read by the stage that owns it.
+- [x] Release-critical Projects, Kanban, profile, provider, and hook surfaces were inspected directly at the selected public commit.
+- [ ] Memory internals, remote terminal backends, and A2A implementation remain owned by their adopting stages if their release path changes.
 - [x] Christopher has reviewed the corrected classification (R4–R13 Decision Review, 2026-08-17).

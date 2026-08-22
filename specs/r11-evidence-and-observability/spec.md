@@ -1,7 +1,7 @@
 # R11 Specification: Evidence, Observability, and Evaluation
 
 **Roadmap ID**: R11
-**Stage status**: in-progress — reopened 2026-08-20 by PD-51, PD-56, PD-59, PD-64, and A1 public-path qualification
+**Stage status**: done — reconciled 2026-08-21 for PD-51, PD-56, PD-59, PD-64, PD-66, and A1 public-path qualification
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — proportional direct-work evidence under PD-44
 **Decision authority**: Christopher
@@ -10,7 +10,7 @@
 **Depends on**: R2, R3, R7, R8, R9, R10, `DESIGN.md`
 **May affect**: R12, R13
 **Parent roadmap**: `../../ROADMAP.md`
-**Hermes evidence**: version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`, source `home/.venv-hermes/src/hermes-agent`
+**Selected Hermes baseline**: `NousResearch/hermes-agent` `v2026.8.18`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`
 
 ## 1. Purpose
 
@@ -76,12 +76,21 @@ Not all findings are equal, and treating them equally is how the important ones 
 
 ## 6. Observability During a Run
 
-The runtime records every transition as a durable event, one row per attempt, per-worker logs, and a board health snapshot. Aether adds nothing.
+The runtime records board transitions, runs, worker logs, and health. Aether reuses those surfaces and adds only product-owned transition/release evidence needed to prove install, update, rollback, package, platform, privacy, and publication claims. It does not duplicate board execution state.
 
-- **FR-1120**: Aether MUST NOT build an observability layer. The event stream, attempt records, logs, and diagnostics already exist (FR-503).
+- **FR-1120**: Aether MUST NOT build a parallel pipeline-observability layer. Native events, runs, logs, and diagnostics remain authoritative for delegated execution; Aether's manager records only its own lifecycle and release evidence (FR-503).
+- **FR-1120a**: Liveness, semantic progress, and termination MUST be reported separately. A status, process, stream chunk, or heartbeat proves activity/liveness only; none is a percentage or proof that the objective advanced.
+- **FR-1120b**: Retry evidence MUST distinguish dispatcher failure retries, clean-exit protocol corrections, resumptions, redispatches, review cycles, and authorized lifecycle corrections. A zero technical failure counter MUST NOT be reported as “no retries” when other logical attempts occurred.
 - **FR-1121**: Every pipeline repository change MUST be attributable to a unit, profile, and attempt (R5-FR-535). Every direct change MUST be attributable to Morfeo's profile and session with the actual diff or command result available.
 - **FR-1122**: A unit that never gets picked up MUST be detectable. The runtime reports a unit whose assignee produces no claim, and the design MUST NOT depend on someone noticing its absence by eye.
 - **FR-1123**: Watching a run MUST be possible without interrupting it. Reading the board is not participation.
+
+Current issue state is part of the release-visible evidence boundary:
+
+- Aether `#192`, **OPEN** at inspection on 2026-08-21, owns machine-readable retry/resumption/lifecycle accounting.
+- Aether `#195`, **OPEN** at inspection on 2026-08-21, owns semantic-progress evidence beyond heartbeat.
+
+The selected source reinforces rather than closes those issues. `tools/kanban_tools.py:277-286` describes a runtime-activity-to-board-heartbeat bridge explicitly as liveness and keeps manual heartbeat notes optional. `kanban_db.py:4952-4967` reclaims stale activity even for a live PID, but that still does not prove useful task progress. Neither issue closes until its own acceptance criteria are executed and recorded.
 
 ## 7. Qualifying Claims About Aether Itself
 
@@ -89,6 +98,7 @@ This project has already paid twice for treating documentation as evidence — o
 
 - **FR-1124**: Every claim about runtime behaviour MUST be labelled as **verified** or **assumed**, and a verified claim MUST cite the version, the revision, and the inspected path.
 - **FR-1125**: A claim MUST be verified against the tree the runtime actually loads, resolved before reading (R4-SC-402).
+- **FR-1125a**: A public product claim MUST instead be verified against the exact locked public source/artifact and installed release candidate. Evidence from a private editable runtime cannot qualify a public release path.
 - **FR-1126**: An assumed claim MUST NOT be relied upon by a requirement that would be unsafe if it were false.
 - **FR-1127**: Executing the behaviour outranks reading the code, which outranks reading the documentation. Where they disagree, the more direct evidence wins and the disagreement is recorded.
 - **FR-1128**: An upstream upgrade MUST be reviewed against recorded claims before an accepted decision is treated as still valid (R4-FR-424).
@@ -100,26 +110,40 @@ This project has already paid twice for treating documentation as evidence — o
 - **FR-1131**: Cost MUST NOT substitute for demonstrated quality. A cheaper configuration is adopted only when its evidence is comparable on the same criteria.
 - **FR-1132**: The constitution is scored identically regardless of which model produced the work (R3 inherited requirement).
 
-## 9. Evidence
+## 9. Public Release Qualification
 
-Verified by direct execution at the recorded revision:
+- **FR-1133**: Deterministic qualification MUST build the exact source commit into wheel and sdist, inspect contents/metadata/license, install the built wheel through `uv` in a disposable environment outside the source tree, and execute the public CLI from that installation.
+- **FR-1134**: Runtime evidence MUST verify release-lock coordinates, digest, provenance, package identity/version, Python compatibility, isolated install, executable resolution, profile-policy integrity, and active-release coherence before any runtime executes.
+- **FR-1135**: Lifecycle evidence MUST cover clean install, guided/declarative setup parity, greenfield and brownfield init, two-project isolation, service start/readiness/stop, interrupted update, rollback, external-upgrade mismatch, reconcile, safe uninstall, and destructive-purge denial/confirmation.
+- **FR-1136**: Security evidence MUST cover secret/private-content scans of source and built artifacts, path traversal, symlink/hardlink escape, unsafe archive entries, permissions, atomic writes, service-target isolation, log redaction, and every R10 guard positive/negative control.
+- **FR-1137**: The official matrix is Ubuntu 24.04 native, Ubuntu 24.04 under WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation. A result outside a declared lane is additional evidence, not proof of an untested platform.
+- **FR-1138**: Live RC qualification MUST install the public PyPI RC, consume the exact locked public `upstream` or `transitional_fork` artifact, use a public Hermes-supported provider selected during setup, and execute a preregistered realistic Git project through Morfeo → Supervisor → Implementer → independent review → integration. Credentials, spend, and live execution require their explicit gates.
+- **FR-1139**: Guard qualification under PD-66 MUST reproduce the two known false-positive classes: read-only validation misclassified as gateway lifecycle and an exact active Morfeo task-bound contract worktree denied merely for not being the main worktree. Positive authorized cases and all negative identity/path/tool controls are equally mandatory.
+- **FR-1140**: Machine-readable evidence MUST bind package version, release-lock schema/version, source/fork tag and commit, artifact digests, Aether commit, platform, setup input hash, scenario, budgets, commands, exit status, and retained redacted logs. A heartbeat is never recorded as semantic completion.
+- **FR-1141**: Stable `v1.0.0` is eligible only from the accepted RC commit after every non-waived criterion passes and the owner explicitly authorizes publication. A waiver names the failed criterion, evidence, impact, alternative, and owner decision; it never rewrites failure as success.
+
+## 10. Evidence
+
+Historical board behavior was verified by direct execution against the loaded `0.20.1` runtime. Public release-critical source behavior was inspected at selected commit `e624e9f…`:
 
 - Completion summary and structured metadata are delivered verbatim to dependent units, with the age of each handoff shown.
 - Attempt records exist per attempt, carrying outcome, profile, elapsed time, and reason — observed for a unit blocked twice.
 - Every transition appends a durable event; a unit's history was read back in full after the fact.
 - A board health snapshot reports active conditions per unit with severity.
 
-Assumed: that a live worker's logs and liveness signals behave as documented. Not exercised, because no worker has been spawned.
+The prior EC1 worker run is evidence for that private installation only. Clean-package, public update/rollback, native/WSL platform, and public-provider RC claims remain unverified until A1 executes FR-1133 through FR-1141 against the exact release candidate.
 
-## 10. Requirements Inherited by Later Stages
+## 11. Requirements Inherited by Later Stages
 
 | Requirement | Owner |
 |---|---|
 | Model selection requires controlled comparison on identical work | R12 |
 | Cost never substitutes for demonstrated quality | R12 |
 | The first authorized run is the evidence source for every assumed claim | R13 |
+| Exact public-package and live-RC qualification gates release eligibility | R13 |
+| Issues #192 and #195 remain visible until their acceptance evidence exists | R13 |
 
-## 11. Success Criteria
+## 12. Success Criteria
 
 - **SC-1101**: The owner accepts or rejects a body of work by running one documented command.
 - **SC-1102**: Every completed unit answers the four questions.
@@ -129,8 +153,14 @@ Assumed: that a live worker's logs and liveness signals behave as documented. No
 - **SC-1106**: Every claim about runtime behaviour in this repository is labelled verified or assumed.
 - **SC-1107**: No configuration is adopted on preference alone.
 - **SC-1108**: No direct action is forced into a fake card or quickstart, and no deferred functional validation is reported as passed.
+- **SC-1109**: Built wheel/sdist install and run outside the source tree with contents, metadata, identity, and provenance verified.
+- **SC-1110**: Update fault injection, rollback, mismatch reconciliation, and uninstall prove coherent-state recovery without damage to unrelated Hermes/user state.
+- **SC-1111**: Native Linux and WSL2 lanes execute the documented public path and retain machine-readable evidence.
+- **SC-1112**: Guard positives, negatives, both known false-positive regressions, and a complete no-recovery pipeline all pass.
+- **SC-1113**: Reports distinguish liveness, semantic progress, termination, failure retries, resumptions, redispatches, review cycles, and lifecycle corrections.
+- **SC-1114**: Stable publication occurs only from the accepted RC commit after explicit owner authority.
 
-## 12. Done When
+## 13. Done When
 
 - [x] The running product is confirmed as the deliverable, with an executed validation path.
 - [x] Per-unit evidence is defined by the four questions it must answer.
@@ -139,4 +169,6 @@ Assumed: that a live worker's logs and liveness signals behave as documented. No
 - [x] Observability is inherited rather than built.
 - [x] The verified-or-assumed discipline is made a requirement.
 - [x] Controlled evaluation rules are set for R12.
+- [x] Clean-package, runtime integrity, lifecycle, security, platform, public-provider, and publication evidence are defined.
+- [x] Open issues #192/#195 and the liveness-versus-progress boundary remain release-visible.
 - [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).

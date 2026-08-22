@@ -1,147 +1,135 @@
-# Aether Agents — Design Roadmap
+# Aether Agents Roadmap
 
-**Status:** PD-48 through PD-64 accepted; R4 and R8–R13 are in progress for Aether 1.0 productization under the executable A1 contract
-**Updated:** 2026-08-20
-**Product authority:** Christopher
+**Decision authority**: Christopher
+**Current conceptual baseline**: `DESIGN.md` through PD-67
+**Current product contract**: `specs/001-aether-v1-productization/`
+**Current synthesis/entry**: `specs/r13-synthesis-and-release/`
+**Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
+**Initial A1 release mode**: `transitional_fork` under PD-65
 
-## 1. Purpose
+## 1. What this roadmap means
 
-This file is Aether's shallow **spec of specs**. It owns only stable design-area identifiers, intent, scope boundaries, dependencies, documentary status, and links to active specifications.
+Stages are scopes of reasoning and ownership, not a workflow engine. A stage is `done` when its accepted decisions are explicit and mutually consistent; implementation and release evidence are tracked separately. Tests provide evidence. Kanban provides durable coordination. Neither defines the method or grants authority.
 
-Detailed requirements, research, decisions, and acceptance criteria belong in the specification directory of the stage that owns them. This roadmap must not duplicate the accepted and open product decisions in `DESIGN.md`.
+The owner's current instruction outranks every artifact. Artifacts outrank memory. Design acceptance does not authorize implementation, activation, credentials, spend, publication, deployment, cutover, destructive migration, or history rewriting.
 
-## 2. Agentic interpretation
+## 2. Canonical design stages
 
-This roadmap guides agent reasoning; it is not an executable workflow definition. R0–R13 name durable design areas and useful dependencies. The active agent may infer, define, split, combine, or revisit the practical cognitive frame needed for current intent without code instantiating a stage.
+| Stage | Scope | Status | Current artifact |
+|---|---|---|---|
+| R0 | Design governance and constitution principles | done | `specs/r0-design-governance/` |
+| R1 | Authority and owner interaction | done | `specs/r1-authority-and-interaction/` |
+| R2 | Contract and handoff | done | `specs/r2-contract-and-handoff/` |
+| R3 | Spec Kit multi-agent method | done | `specs/r3-speckit-multiagent-method/` |
+| R4 | Hermes foundation/adaptation boundary | done; A1-reconciled | `specs/r4-hermes-boundary/` |
+| R5 | Role topology and profile isolation | done | `specs/r5-topology-and-isolation/` |
+| R6 | Protocol and communication | done | `specs/r6-protocol-and-communication/` |
+| R7 | Supervision, convergence, review, integration | done | `specs/r7-supervision-and-convergence/` |
+| R8 | Workspaces, canonical authoring, integration, publication | done; A1/PD-67-reconciled | `specs/r8-workspaces-and-integration/` |
+| R9 | State, XDG ownership, projects, update/recovery | done; A1-reconciled | `specs/r9-state-and-recovery/` |
+| R10 | Security, authority, supply chain, privacy, guard precision | done; A1/PD-66-reconciled | `specs/r10-security-and-authority/` |
+| R11 | Evidence, observability, package/platform/release qualification | done; A1-reconciled | `specs/r11-evidence-and-observability/` |
+| R12 | Provider-independent model allocation and economics | done; A1-reconciled | `specs/r12-models-and-economics/` |
+| R13 | Synthesis and public product/release entry | done; A1-reconciled | `specs/r13-synthesis-and-release/` |
 
-`Stage`, `status`, `gate`, `close`, `reopen`, and `return` are semantic signals interpreted by agents and Christopher. They do not require a workflow engine, parser, scheduler, database, or executable transition validator. Tests and scripts may validate artifacts or effects but never control the existence or intellectual progression of a design stage.
+Historical EC1/private-profile build evidence remains in R13 research and Git history. It does not qualify the public product and is not the current implementation plan. R13 `tasks.md` is historical and must not be dispatched for A1.
 
-## 3. Sources of truth
+## 3. A1 public product target
 
-- `README.md` is the entry point: what Aether is, how work flows, and what a builder must do.
-- `DESIGN.md` owns the current conceptual product design, accepted foundations, open decisions, and review triggers.
-- `specs/r0-design-governance/spec.md` owns the accepted R0 governance model.
-- Each later `specs/<stage>/spec.md` owns its stage.
-- This roadmap owns only decomposition, dependency guidance, documentary progress, and links.
+Aether 1.0 is a public stable product, not a documentation tag. It has two release-locked components:
 
-**Recorded deviation.** R0 through R5 separate requirements from evidence into `spec.md` and `research.md`. R6 through R13 were designed in a single verification session whose evidence is shared across all of them, so each carries an `Evidence` section inline stating what was verified, what was assumed, and what was not inspected. The obligation is unchanged — every claim still names its source and its status — and splitting one session's evidence into eight files would have produced ceremony rather than traceability.
+1. `aether-agents` on PyPI, exposing `aether` and owning setup, project mapping, service lifecycle, diagnosis, update, rollback, uninstall, schemas, release lock, and sanitized product resources; and
+2. the original `hermes-agent` distribution from the exact public `upstream` or `transitional_fork` source/artifact selected by that lock.
 
-If this roadmap conflicts with an owning specification, correct the owning artifact first and then reconcile this index.
+The public path supports Linux native and WSL2 only for 1.0. It installs into Aether-owned XDG roots, keeps persistent user/profile/project state outside immutable releases, reuses Hermes profiles/Projects/boards/worktrees/review/lifecycle, and never replaces an unrelated personal Hermes installation.
 
-## 4. Documentary status model
+Public artifacts exclude private profiles, credentials/authentication, sessions, memories, boards, logs, repositories, owner identifiers, machine paths, ignored runtime state, and private provider/model/router bindings. Users select supported bindings during setup and provision credentials through Hermes-supported local flows.
 
-```text
-planned → in-progress → done
-              ↑          │
-              └──────────┘ materially affected change
-```
+## 4. Hermes adaptation and transition rule
 
-- **planned:** bounded design area, not currently active.
-- **in-progress:** active, under review, blocked, or revising materially affected content.
-- **done:** accepted requirements and decisions have passed their quality checks and are part of a durable Git baseline.
+The selected upstream tag is annotated: the tag object and commit are separate identities. A previously supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` does not resolve and is not a release coordinate. The source archive observed during reconciliation had SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`.
 
-These labels are documentation, not runtime states. Decisions do not have a separate status lifecycle.
+A1 starts in `transitional_fork` mode because the selected upstream artifact does not yet qualify six indispensable existing guarantees:
 
-## 5. Roadmap
+- sticky initial blocking;
+- agent-facing retry override;
+- human-gated escalation recovery;
+- one durable terminal handoff;
+- first-spawn branch propagation; and
+- asymmetric per-profile concurrency.
 
-| ID | Design area | Intent and scope boundary | Depends on | Status | Owning spec |
-| --- | --- | --- | --- | --- | --- |
-| **R0** | Design governance and baseline | Define current-truth ownership, agentic stage semantics, autonomous review, change impact, evidence, and authority scopes. Does not implement Spec Kit or runtime mechanisms. | Conceptual design | **done** | [`spec.md`](specs/r0-design-governance/spec.md) |
-| **R1** | Product authority and operating experience | Define owner–Morfeo interaction, extraction, interruption, effects, delivery, and review. Does not define contract content or technology. | R0 | **done** | [`spec.md`](specs/r1-authority-and-interaction/spec.md) |
-| **R2** | Multi-agent contract and handoff | Identify the contract as the Spec Kit artifact set, add Aether's execution envelope, make completeness measurable, and define defect return. Does not select transport or runtime topology. | R0, R1 | **done** | [`spec.md`](specs/r2-contract-and-handoff/spec.md) |
-| **R3** | Spec Kit as a multi-agent method | Assign every Spec Kit phase to exactly one role, locate the handoff boundary, and separate owner preferences from project constitutions. Does not install or fork Spec Kit. | R1, R2 | **done** | [`spec.md`](specs/r3-speckit-multiagent-method/spec.md) |
-| **R4** | Hermes Framework boundary | Classify Hermes's three coordination primitives and its native capabilities against accepted Aether requirements; record the runtime/method boundary. Does not select a primitive or activate anything. | R0, R1, R2, R3 | **in-progress** | [`spec.md`](specs/r4-hermes-boundary/spec.md) |
-| **R5** | Topology, identity, and isolation | The durable board is Aether's coordination primitive; three profiles, one per role; per-card worktrees; blocked cards as the escalation channel. Does not decide A2A's scope. | R1, R2, R4 | **done** | [`spec.md`](specs/r5-topology-and-isolation/spec.md) |
-| **R6** | Protocol and communication | The board is the only inter-role transport. A2A is a platform adapter, available and unused, with two stated reopening conditions; MCP is an outward surface only. Owns the owner's notification channel. | R2, R3, R4, R5 | **done** | [`spec.md`](specs/r6-protocol-and-communication/spec.md) |
-| **R7** | Supervision, parallelism, and convergence | Decomposition belongs to the supervisor against a competing runtime default; two-tier escalation; convergence configured, not designed; concurrency and budget starting values. | R2, R3, R5, R6 | **done** | [`spec.md`](specs/r7-supervision-and-convergence/spec.md) |
-| **R8** | Workspaces, Git, and integration | Worktree per unit, the contract's writer rule, dependency-ordered integration, one commit per unit so every unit is individually revertible, bounded publication authority. | R2, R5, R7 | **in-progress** | [`spec.md`](specs/r8-workspaces-and-integration/spec.md) |
-| **R9** | State, artifacts, memory, and recovery | Three stores with one owner each, deliverable declaration, owner-preference memory bounded, the card as the unit of durability, retention that separates record from telemetry. | R2, R5, R6, R7, R8 | **in-progress** | [`spec.md`](specs/r9-state-and-recovery/spec.md) |
-| **R10** | Security, trust, and authority enforcement | Single-host trusted-local-user threat model, asymmetric containment, a fail-closed pre-tool-call hook as the enforcement point, and a definitive list of protected effects. | R1, R5, R6, R7, R8, R9 | **in-progress** | [`spec.md`](specs/r10-security-and-authority/spec.md) |
-| **R11** | Evidence, observability, and evaluation | The running product as deliverable, per-unit evidence answering four questions, ranked finding classes, and the verified-or-assumed discipline for claims about the runtime. | R2, R3, R7, R8, R9, R10 | **in-progress** | [`spec.md`](specs/r11-evidence-and-observability/spec.md) |
-| **R12** | Models, routing, and economics | Capability allocated per profile with a per-unit override, auxiliary slots dispositioned, provider-agnostic. Model names are bound at build time, not here. | R1, R7, R10, R11 | **in-progress** | [`spec.md`](specs/r12-models-and-economics/spec.md) |
-| **R13** | Design synthesis and release | Reconciles R0–R12, specifies what each prompt must guarantee, lists the complete configuration inventory and the ten unobserved claims. Authorizes no build and no run. | R0–R12 | **in-progress** | [`spec.md`](specs/r13-synthesis-and-release/spec.md) |
+R4 research §13 owns the exact source evidence, upstream issue/PR state, and retirement gates. No new product capability may require a downstream-only Hermes change. Each patch retires only when an exact released upstream artifact passes its behavior gate. If all six retire before the candidate lock is frozen, A1 switches to `upstream`; the fork is not published unnecessarily.
 
-R4 and R8–R13 were reopened on 2026-08-20 only where PD-48 through PD-64 materially changed their accepted content: the qualified downstream boundary, public project/workspace isolation, XDG state and recovery, package and publication security, public-path evidence, provider-independent model allocation, and release synthesis. The executable implementation contract is [`A1 — Aether 1.0 Productization`](specs/001-aether-v1-productization/spec.md). R0–R3 and R5–R7 remain done.
+## 5. A1 dependency phases
 
-## 6. EC1 — Walking-skeleton evidence checkpoint
+These are dependency phases. Supervisor creates the actual implementation graph only after canonical reconciliation is independently reviewed and integrated.
 
-After R2 and R5 are accepted—and before R6, R7, or R9 closes empirical claims—Aether should seek a **separate explicit build authorization** for one minimal evidence run:
+| Phase | Scope | Status | Exit/gate |
+|---|---|---|---|
+| 0 | Canonical reconciliation and baseline freeze | complete in this artifact set; requires independent review/integration | No stale no-fork/private-binding/private-local entry; exact base/mode/evidence recorded |
+| 1 | Manager/package skeleton and public contracts | pending | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
+| 2 | Transitional downstream reconciliation/artifacts | pending | Six-patch candidate passes exact gates; local wheel/sdist/source/provenance ready. **External gate** before public fork/tag/release |
+| 3 | Runtime lifecycle and recovery | pending | Fault-injected install/update/rollback/reconcile/uninstall preserves coherent active release and unrelated state |
+| 4 | Profiles, setup, policy, Aether-only service | pending | Clean setup reaches doctor-ready without credentials/model call; precise guard controls and unrelated-service refusal pass |
+| 5 | Project initialization and isolation | pending | Empty/brownfield init, native Project/board mapping, moved clone/collision, two-project and WSL path controls pass |
+| 6 | Security, privacy, package hardening | pending | Built distributions and installed state pass path/archive/race, private-data, permissions/redaction, service/process, and independent review |
+| 7 | Public GitHub/docs surface | pending | Docs/package/GitHub agree; local/docs CI green. **External gates** for settings, Pages, Discussions/private reporting, trusted publisher |
+| 8 | Deterministic RC qualification | pending | Exact RC passes clean-package, runtime, lifecycle, guard, project, security, Linux/WSL2, and evidence matrices. **External gates** for downstream/RC publication |
+| 9 | Live public-path RC qualification | pending | Preregistered realistic three-role path passes with independently reviewed evidence. **External gates** for credentials, spend, and live run |
+| 10 | Stable release decision | pending | Exact accepted RC and all non-waived criteria agree. **External gate** for stable tag/release/PyPI/announcement/cutover |
 
-```text
-Morfeo → supervision → one implementer → evidence → independent review
-```
+The complete testing standard and Supervisor handoff are in `specs/r13-synthesis-and-release/plan.md` §§3–7. Morfeo creates no implementation units.
 
-The task must be trivial, bounded, reversible, and unrelated to product delivery. Its purpose is to measure contract handoff, cancellation, evidence quality, authority preservation, and recovery assumptions before later stages rely on them.
+## 6. Evidence boundary
 
-Since R5 selected the durable board, EC1 is a board run across three profiles rather than an in-process delegation.
+Public release claims are verified against the exact locked public artifact and installed RC, not a private editable runtime. Required evidence includes:
 
-Two verification passes on 2026-08-17 settled every mechanically testable board/runtime claim without a
-profile, agent, or model. Christopher then explicitly authorized Phase 5 on 2026-08-18. The live EC1 run
-completed one sacrificial Morfeo → Supervisor → Implementer → review → integration path and one impossible
-goal-mode negative control. It observed both convergence outcomes, real TUI wake delivery to Morfeo, and
-acceptance-quality worker evidence. It also exposed lifecycle contradictions around initial blocking,
-triage redispatch, worker-created limits, and same-card goal predicates. The complete trace is
-[`R13 research §14`](specs/r13-synthesis-and-release/research.md).
+- wheel/sdist build, content/metadata/license inspection, and `uv` install outside source;
+- source/runtime digest and provenance verification before execution;
+- guided/declarative setup parity, project isolation, service ownership, update interruption, rollback, mismatch reconciliation, safe uninstall, and destructive-purge controls;
+- secret/private-content scans, path/symlink/archive/race/permission/log-redaction tests;
+- representative authorized work for every role, every protected/undecidable negative, both known policy false positives, and one complete pipeline without guard-caused manual recovery;
+- Ubuntu 24.04 native, Ubuntu 24.04 WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation; and
+- a preregistered public-PyPI/live-provider RC scenario after explicit credential/spend/live-run authority.
 
-[`R13 Phase 6`](specs/r13-synthesis-and-release/plan.md) would have qualified that evidence, revisited
-provisional decisions, correlated cost, recorded debt, and returned `READY` or `HOLD`. It was an
-evidence-closure phase inside R13, not a new roadmap design area and not cutover authority. Christopher
-closed it as a required gate on 2026-08-20, preferring his own direct use of the system to a formal
-qualification packet (`specs/r13-synthesis-and-release/research.md` §17). No claim from §14 is promoted by
-that closure, and no build or activation authority follows from it.
+Liveness, semantic progress, and termination are separate. Failure retries, resumptions, redispatches, reviews, and lifecycle corrections are separate. Heartbeat never proves progress; a zero technical failure counter never proves zero logical attempts.
 
-EC1 was not automatically authorized by this roadmap; it ran only after Christopher's separate explicit
-authorization. It remained a sacrificial evidence checkpoint, not product implementation or a
-code-enforced stage transition.
+## 7. Open release-visible limitations
 
-## 7. Change and regression
+Read-only GitHub inspection on 2026-08-21 found:
 
-When current intent or evidence changes:
+- `#192` — retry/resumption/lifecycle accounting: **OPEN**;
+- `#195` — semantic progress beyond heartbeat: **OPEN**; and
+- `#210` — task-bound Morfeo canonical worktree policy mismatch: **OPEN** while the PD-67 candidate proceeds through review/integration;
+- `#211` — per-flow Morfeo/Supervisor session affinity: **OPEN**; and
+- `#212` — TUI Kanban subscriptions are not a valid notifier platform and their events are discarded: **OPEN**.
 
-1. Update the artifact that owns the affected decision.
-2. Record the reason, evidence, alternatives, and change impact in that stage's research artifact.
-3. Inspect direct and transitive roadmap dependencies.
-4. Return only materially affected `done` stages to `in-progress` with a short reason.
-5. Reconcile derived plans, contracts, prompts, tasks, code, or runtime evidence.
-6. Present Christopher only the changed material decisions and consequences.
+Issue `#198` is closed for the owner-authorized local repair, but the selected public Hermes tag still exhibits the first-spawn branch defect; that public behavior remains a transitional patch gate. An issue or upstream merge is not qualification by itself.
 
-Git preserves superseded text. No B0/B1 registry or per-decision state machine is required.
+## 8. Change and regression
 
-## 8. Current boundary
+When intent or evidence changes:
 
-**The design phase is complete and accepted.** R0 through R13 are accepted, all on 2026-08-17 — R0–R3 at the R0 review, R4 through R13 at the R4–R13 Decision Review. R4 and R5 additionally carry corrections made after their first drafts were contradicted by direct execution of the runtime. R13 was amended on 2026-08-18 by explicit owner instruction to formalize Phase 6.
+1. update the artifact that owns the decision;
+2. record reason, evidence, alternatives, and impact in the owning research artifact;
+3. inspect direct and transitive dependencies;
+4. reopen only materially affected `done` stages with a short reason;
+5. reconcile derived plans, prompts, tasks, code, runtime, package, and release evidence; and
+6. present Christopher only changed material decisions and consequences.
 
-Build Phases 0–4 and the separately authorized EC1 Phase 5 run are complete. Morfeo, Supervisor, and
-Implementer returned to a stopped-profile state after producing permanent board evidence: two `done`
-cards and one deliberately `blocked` negative control. The canonical sacrificial fixture passes
-`python3 verify.py`. No product code, publication, deployment, credential change, or Hermes-to-Morfeo
-cutover occurred.
+For Hermes upgrades, resolve the actual public/release/runtime source before reading it; inspect the exact path and revision; re-run every applicable adaptation and patch-retirement gate; and never treat docs, branch containment, or another agent's claim as execution evidence.
 
-This repository's own governance is materialized at `.specify/memory/constitution.md`, copying the accepted R0 §4 principles as `specs/r0-design-governance/spec.md` directs. It is untracked and R0 remains its canonical source. The constitution of a project Aether *builds* is a different artifact that lives inside that project, and is written when work on it starts (R3-D04).
+Every material out-of-scope finding remains visible as a question. No worker silently fixes or discards it.
 
-**Phase 6 evidence qualification is closed, not pending.** Christopher closed it by explicit instruction on
-2026-08-20 rather than have it re-executed (`specs/r13-synthesis-and-release/research.md` §17). The earlier
-Phase 6 `HOLD` packet was truthful before EC1 and remains historical; it was never rerun against the Phase 5
-evidence, so no claim is formally promoted and no `READY` recommendation was ever issued — that outcome is
-now permanent for this design rather than outstanding. This closure carries no build or cutover authority:
-no another-Phase-5 run, product activation, publication, deployment, or Hermes-to-Morfeo cutover is
-authorized by it.
+## 9. Current authority boundary
 
-PD-44's proportional-Morfeo contract and its 2026-08-20 capability amendment are accepted and canonical;
-PD-45 adds `skills` and `vision` to all three roles without widening authority. The stopped live profiles now
-contain the mechanically verified delivery: Morfeo has CLI/Telegram parity with `code_execution`, `cronjob`,
-and `delegation`, while Supervisor and Implementer retain `code_execution` and gain `skills`/`vision` but not
-cron or delegation. Browser execution and computer use remain excluded from Morfeo. #196 is closed by
-explicit owner acceptance of the active direct-execution experience as sufficient functional validation.
+This roadmap and the reconciled contracts authorize no public or destructive effect. In particular, they do not authorize:
 
-The separately authorized #198 runtime repair remains local and mechanically verified; its upstream defect is
-recorded at `NousResearch/hermes-agent#89677`. The gateway reload completed, but first-spawn branch propagation
-still requires its own live acceptance before #198 closes. #199 is closed after 27/27 focused regressions and
-a live read-only branch-inspection proof. #200 is closed by merged PR #201: `policy/hooks/` is the sanitized
-canonical source and `scripts/sync_policy_hooks.py` provides atomic install, parity check, and drift-safe
-restore. Phase 6 evidence qualification is closed (2026-08-20; see above); the other open issues, release,
-deployment, and product cutover remain separate work.
+- public fork/release assets;
+- push, pull request, tag, GitHub Release, repository settings, Pages, Discussions/private reporting, or announcements;
+- PyPI trusted-publisher configuration or package publication;
+- credential acquisition/widening, paid model use, or live RC execution;
+- existing-install cutover, deployment, destructive migration/purge, or unrelated service/process mutation; or
+- force-push, history rewrite, or discard of unknown local work.
 
-A deliverable previously scheduled into R3 no longer exists there. R3 was to extract Christopher's standing code-quality standards into constitution principles, on the assumption that a single constitution governed all Aether work. R3-D04 corrected that: Spec Kit's constitution lives **inside the project being built**, so there is no Aether-wide constitution to author. Per-project standards are established when work on a project starts, and the owner's cross-project preferences belong to Morfeo's learned memory, whose realization is R4 and whose storage is R9.
-
-The extraction itself remains worthwhile. It is now an input to Morfeo's memory rather than a design artifact, and is not a gate on any design stage.
+The next operational route is the pre-created independent review/integration of Phase 0. Product implementation begins only after that durable gate releases Supervisor. Publication and stable release remain separate owner decisions.
