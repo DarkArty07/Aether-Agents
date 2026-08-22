@@ -70,15 +70,15 @@ MCP's purpose is exposing tools to an agent. Using it as a work transport invert
 
 This is the part of R6 that was genuinely undecided, and R5 left it unaddressed while depending on it: R1 requires that difficulties reach the owner at the end without interrupting him, and named no mechanism.
 
-The runtime provides one. A card's terminal events can carry a subscription with three delivery modes — a passive message, a passive message plus a real turn taken by the destination agent, or a turn with no message. When a card is created from inside a persistent session, that session is subscribed automatically, so its originator is resumed with a synthetic status turn when the card terminates.
+The runtime provides notification and wake delivery for registered gateway platforms, but the terminal TUI is not one of them. Direct inspection for issue `#212` found that Hermes auto-creates subscriptions with `platform=tui`, while the notifier's platform enum rejects `tui`, advances the subscription cursor, and discards the event before delivery-mode handling. A stored TUI subscription is therefore not evidence of notification or wake delivery.
 
 - **FR-612**: Morfeo MUST run as a persistent session, because it is the only role the owner converses with and the only role that must be resumable when work terminates.
-- **FR-613**: Morfeo's contract card MUST carry a subscription that wakes Morfeo on terminal events. Morfeo assembles the end-of-work report from durable board state, never from memory (R1-FR-122).
+- **FR-613**: Morfeo's contract card MUST preserve its terminal outcome on the board. On a registered asynchronous gateway platform, a qualified subscription MAY wake the same persistent Morfeo session. In a TUI-only installation, no automatic wake may be claimed: when the owner returns or sends the next turn, that same Morfeo session MUST reconcile subscribed/owned work from durable board state before reporting or starting unrelated work.
 - **FR-614**: Supervisor and implementer processes MUST NOT hold owner-facing subscriptions. Only Morfeo speaks to the owner (PD-02).
-- **FR-615**: The channel the owner is reached through MUST be a configuration choice, not a design assumption. The design MUST work when the only channel is the terminal the owner returns to.
-- **FR-616**: If a messaging channel is enabled, it MUST be attached to Morfeo's profile only, and the accuracy of the originating chat type MUST be preserved, because it determines which session a woken turn resolves to.
+- **FR-615**: The owner channel is a configuration choice. The design MUST work when the only channel is the terminal the owner returns to, without pretending that an absent asynchronous delivery occurred.
+- **FR-616**: If a messaging channel is enabled alongside an authoritative TUI session, it MAY deliver a passive completion/defect alert from board state but MUST NOT create or wake a second Morfeo reasoning session. If an asynchronous gateway session is instead selected as the authoritative owner session, its platform/chat/session identity MUST be exact so a qualified wake resumes that session rather than a parallel one.
 - **FR-617**: A woken Morfeo MUST NOT act on the owner's behalf on anything the contract does not already authorise. Waking is a reporting event, not an authority event.
-- **FR-617a**: **Review requests wake subscribers too.** Verified in source: requesting review wakes a subscribed originator in the same way a block does, so a subscription is not woken only at terminal events. Morfeo therefore wakes mid-flight whenever same-card review is used, and those wakes MUST be absorbed by Morfeo's own reasoning without reaching the owner (FR-619).
+- **FR-617a**: On a qualified asynchronous platform, review requests can wake subscribers in the same way as terminal events; those mid-flight wakes MUST be absorbed by Morfeo without reaching the owner (FR-619). This behavior is not available to the TUI path while issue `#212` remains open.
 
 ### Why the owner is not the first responder
 
@@ -94,9 +94,10 @@ Inspected directly at the recorded revision:
 - The A2A plugin lives at `plugins/platforms/a2a/` and is registered as a platform, with outbound client tools and an inbound adapter serving an agent card. It requires a bound port and a bearer credential; without a credential it binds to loopback only.
 - Upstream's own guidance places delegation or the board first for same-machine multi-agent work and reserves A2A for crossing process, machine, or framework boundaries.
 - The board's documentation declares multi-host explicitly out of scope: the database is a local file and crash detection assumes host-local process identifiers.
-- Delivery modes and automatic subscription on creation are documented behaviours of the board's notifier, with subscription defaults active.
+- Delivery modes and automatic subscription on creation are documented board behaviors for registered gateway platforms.
+- Direct inspection for `#212` verified that `gateway.config.Platform` does not contain `tui`; `gateway/kanban_watchers.py` catches that `ValueError`, advances the cursor, and continues without delivery. Existing TUI subscriptions are therefore invalid evidence and are not retried.
 
-Not inspected: the A2A plugin's internals beyond its manifest and tool surface, and the notifier's delivery path. Neither carries an accepted decision here beyond availability, and both are re-read by whoever enables them.
+Not inspected: the A2A plugin's internals beyond its manifest and tool surface. The notifier's TUI failure path was inspected directly; registered asynchronous-platform delivery still requires exact release/runtime qualification before a public RC claims it.
 
 ## 8. Requirements Inherited by Later Stages
 
@@ -112,8 +113,8 @@ Not inspected: the A2A plugin's internals beyond its manifest and tool surface, 
 
 - **SC-601**: No work crosses a role boundary by any mechanism other than a card.
 - **SC-602**: Aether runs to completion with A2A absent and no capability is missing.
-- **SC-603**: Every owner-facing wake is either an end-of-work report or an unresolvable contract defect.
-- **SC-604**: The design functions unchanged when the owner's only channel is the terminal.
+- **SC-603**: Every owner-facing wake or passive alert is either an end-of-work report or an unresolvable contract defect; a stored subscription is never reported as delivery evidence.
+- **SC-604**: When the owner's only channel is the TUI, the same persistent Morfeo reconciles durable board outcomes on the next owner turn and no second Morfeo is created to simulate a wake.
 - **SC-605**: No Aether component holds coordination state outside the board.
 
 ## 10. Done When
