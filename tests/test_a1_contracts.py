@@ -17,6 +17,9 @@ SCHEMA_PATH = (
     / "contracts"
     / "release-lock.schema.json"
 )
+A1_PLAN_PATH = ROOT / "specs" / "r13-synthesis-and-release" / "plan.md"
+R6_SPEC_PATH = ROOT / "specs" / "r6-protocol-and-communication" / "spec.md"
+R13_SPEC_PATH = ROOT / "specs" / "r13-synthesis-and-release" / "spec.md"
 
 
 class ReleaseLockSourceModeTests(unittest.TestCase):
@@ -117,6 +120,29 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
         lock = self.upstream_lock()
         del lock["hermes"]["source_mode"]
         self.assert_invalid(lock)
+
+
+class CanonicalContractConsistencyTests(unittest.TestCase):
+    def test_release_lock_schema_and_plan_agree_on_version_two(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        plan = A1_PLAN_PATH.read_text(encoding="utf-8")
+
+        self.assertEqual(schema["properties"]["schema_version"]["const"], 2)
+        self.assertIn("release-lock schema is integer `2`", plan)
+        self.assertNotIn("requires downstream fork coordinates unconditionally", plan)
+
+    def test_tui_subscription_is_not_claimed_as_delivery(self) -> None:
+        r6 = R6_SPEC_PATH.read_text(encoding="utf-8")
+        r13 = R13_SPEC_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("platform=tui", r6)
+        self.assertIn("not evidence of notification or wake delivery", r6)
+        self.assertIn("same persistent Morfeo", r6)
+        self.assertIn("#212", r13)
+        self.assertNotIn(
+            "session is subscribed automatically, so its originator is resumed",
+            r6,
+        )
 
 
 if __name__ == "__main__":
