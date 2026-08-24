@@ -147,7 +147,9 @@ class PolicyHookSyncTests(unittest.TestCase):
             alias.name.split(".", 1)[0]
             for node in ast.walk(tree)
             if isinstance(node, (ast.Import, ast.ImportFrom))
-            for alias in (node.names if isinstance(node, ast.Import) else [ast.alias(node.module or "")])
+            for alias in (
+                node.names if isinstance(node, ast.Import) else [ast.alias(node.module or "")]
+            )
         }
         self.assertTrue({"subprocess", "socket", "requests", "urllib"}.isdisjoint(imports))
         self.assertNotIn("systemctl", source)
@@ -469,27 +471,21 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
 
     def test_task_bound_write_rejects_run_owned_by_another_task(self) -> None:
         with sqlite3.connect(self.board) as conn:
-            conn.execute(
-                "UPDATE task_runs SET task_id = 't_other' WHERE id = ?", (self.run_id,)
-            )
+            conn.execute("UPDATE task_runs SET task_id = 't_other' WHERE id = ?", (self.run_id,))
         result = self.run_hook()
         self.assertEqual(result.returncode, 2)
         self.assertIn("active task run does not belong", json.loads(result.stdout)["reason"])
 
     def test_task_bound_write_rejects_missing_board_workspace(self) -> None:
         with sqlite3.connect(self.board) as conn:
-            conn.execute(
-                "UPDATE tasks SET workspace_path = NULL WHERE id = ?", (self.task_id,)
-            )
+            conn.execute("UPDATE tasks SET workspace_path = NULL WHERE id = ?", (self.task_id,))
         result = self.run_hook()
         self.assertEqual(result.returncode, 2)
         self.assertIn("board workspace is unavailable", json.loads(result.stdout)["reason"])
 
     def test_task_bound_write_requires_worktree_workspace_kind(self) -> None:
         with sqlite3.connect(self.board) as conn:
-            conn.execute(
-                "UPDATE tasks SET workspace_kind = 'dir' WHERE id = ?", (self.task_id,)
-            )
+            conn.execute("UPDATE tasks SET workspace_kind = 'dir' WHERE id = ?", (self.task_id,))
         result = self.run_hook()
         self.assertEqual(result.returncode, 2)
         self.assertIn("not an isolated worktree", json.loads(result.stdout)["reason"])
@@ -546,11 +542,7 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
     def test_task_bound_v4a_move_validates_both_endpoints(self) -> None:
         inside = self.workspace / "specs" / "example" / "spec.md"
         outside = self.root / "moved.md"
-        patch_text = (
-            "*** Begin Patch\n"
-            f"*** Move File: {inside} -> {outside}\n"
-            "*** End Patch"
-        )
+        patch_text = f"*** Begin Patch\n*** Move File: {inside} -> {outside}\n*** End Patch"
         result = self.run_hook(
             tool_name="patch",
             tool_input={"mode": "patch", "patch": patch_text},
@@ -560,11 +552,7 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
 
     def test_task_bound_v4a_unrecognized_operation_header_is_denied(self) -> None:
         target = self.workspace / "specs" / "example" / "spec.md"
-        patch_text = (
-            "*** Begin Patch\n"
-            f"*** Move to: {target}\n"
-            "*** End Patch"
-        )
+        patch_text = f"*** Begin Patch\n*** Move to: {target}\n*** End Patch"
         result = self.run_hook(
             tool_name="patch",
             tool_input={"mode": "patch", "patch": patch_text},
@@ -623,7 +611,9 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 2)
-        self.assertIn("structured writes require absolute paths", json.loads(result.stdout)["reason"])
+        self.assertIn(
+            "structured writes require absolute paths", json.loads(result.stdout)["reason"]
+        )
 
 
 class RolePolicyContractTests(unittest.TestCase):

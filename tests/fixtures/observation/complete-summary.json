@@ -1,0 +1,869 @@
+{
+  "acceptance": {
+    "complete": true,
+    "criteria": [
+      {
+        "criterion_ref": "criterion-1",
+        "evidence_refs": [
+          "evidence-1"
+        ],
+        "last_event_id": "evt_0000000000000000000000000000000d",
+        "state": "passed"
+      }
+    ],
+    "criterion_count": 1,
+    "failed": 0,
+    "passed": 1,
+    "pending": 0,
+    "unknown": 0
+  },
+  "as_of": "2026-01-02T03:04:23.000Z",
+  "bottlenecks": [],
+  "capability_evidence": {
+    "declared_toolset_fingerprint": null,
+    "denied_tool_refs": [],
+    "effective_surface_fingerprint": null,
+    "estimator_ref": null,
+    "failed_tool_refs": [],
+    "fingerprint_key_id": "fpk_00000000000000000000000000000000",
+    "granted_tool_refs": [],
+    "loaded_skill_refs": [],
+    "missing_hook_refs": [],
+    "never_used_tool_refs": [],
+    "observed_tool_count": null,
+    "schema_estimated_tokens": null,
+    "schema_serialized_bytes": null,
+    "surface_coverage": "unavailable",
+    "used_tool_refs": []
+  },
+  "completion_state": "completed",
+  "configuration_fingerprints": [],
+  "contract_id": null,
+  "coverage": {
+    "complete": true,
+    "gap_count": 0,
+    "gaps": []
+  },
+  "defect_attributions": [],
+  "duration": {
+    "active_ms": 0,
+    "contract_creation_ms": 2000,
+    "dispatch_latency_ms": 1000,
+    "execution_ms": 13000,
+    "external_wait_ms": 0,
+    "handoff_latency_ms": 1000,
+    "overlap_ms": 0,
+    "owner_wait_ms": 0,
+    "review_wait_ms": 2000,
+    "time_to_completion_ms": 17000,
+    "time_to_executable_ms": 1000,
+    "time_to_first_action_ms": 1000,
+    "time_to_termination_ms": null,
+    "unclassified_ms": 15000,
+    "wall_ms": 17000
+  },
+  "flow": {
+    "authorized_reversions": 0,
+    "classifications": [
+      {
+        "count": 1,
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000007"
+        ],
+        "kind": "cycle"
+      }
+    ],
+    "cycles": 1,
+    "owner_direction_changes": 0,
+    "regressions": 0,
+    "revision_count": 0,
+    "semantic_loops": 0,
+    "technical_retries": 0,
+    "unexplained_reversions": 0,
+    "useful_iterations": 0
+  },
+  "improvement_evidence": {
+    "automated_recommendation": null,
+    "strength": "anecdotal",
+    "supporting_trace_count": 1
+  },
+  "invariants": [
+    {
+      "key": "OBS-INV-001",
+      "last_event_id": "evt_0000000000000000000000000000000e",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-002",
+      "last_event_id": "evt_0000000000000000000000000000000f",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-003",
+      "last_event_id": "evt_00000000000000000000000000000010",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-004",
+      "last_event_id": "evt_00000000000000000000000000000011",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-005",
+      "last_event_id": "evt_00000000000000000000000000000012",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-006",
+      "last_event_id": "evt_00000000000000000000000000000013",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-007",
+      "last_event_id": "evt_00000000000000000000000000000014",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-008",
+      "last_event_id": "evt_00000000000000000000000000000015",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-009",
+      "last_event_id": "evt_00000000000000000000000000000016",
+      "state": "passed"
+    },
+    {
+      "key": "OBS-INV-010",
+      "last_event_id": "evt_00000000000000000000000000000017",
+      "state": "passed"
+    }
+  ],
+  "model_context_economics": {
+    "attempt_count": 0,
+    "context_compression_count": null,
+    "context_overflow_count": null,
+    "context_signal_coverage": "unavailable",
+    "duration_ms": 0,
+    "failed_request_count": 0,
+    "finish_reasons": {},
+    "invalid_argument_count": null,
+    "invalid_argument_coverage": "unavailable",
+    "protocol_violation_count": 0,
+    "request_count": 0,
+    "token_coverage": "not_applicable",
+    "tokens": {
+      "cache_read_tokens": null,
+      "cache_write_tokens": null,
+      "input_tokens": null,
+      "output_tokens": null,
+      "reasoning_tokens": null,
+      "total_tokens": null
+    },
+    "turns": 0,
+    "turns_without_semantic_delta": 0
+  },
+  "participants": [
+    {
+      "action_total": 15,
+      "actions": {
+        "acceptance.evaluated": 1,
+        "contract.completion_verified": 1,
+        "contract.executable": 1,
+        "contract.persisted": 1,
+        "invariant.passed": 10,
+        "trace.closed": 1
+      },
+      "actor_id": "morfeo",
+      "actor_kind": "agent",
+      "evidence_event_ids": [
+        "evt_00000000000000000000000000000002",
+        "evt_00000000000000000000000000000003",
+        "evt_0000000000000000000000000000000d",
+        "evt_0000000000000000000000000000000e",
+        "evt_0000000000000000000000000000000f",
+        "evt_00000000000000000000000000000010",
+        "evt_00000000000000000000000000000011",
+        "evt_00000000000000000000000000000012",
+        "evt_00000000000000000000000000000013",
+        "evt_00000000000000000000000000000014",
+        "evt_00000000000000000000000000000015",
+        "evt_00000000000000000000000000000016",
+        "evt_00000000000000000000000000000017",
+        "evt_00000000000000000000000000000018",
+        "evt_00000000000000000000000000000019"
+      ],
+      "profile": "morfeo",
+      "role": "verification"
+    },
+    {
+      "action_total": 7,
+      "actions": {
+        "handoff.completed": 1,
+        "review.approved": 1,
+        "review.requested": 1,
+        "work_unit.bound": 3,
+        "work_unit.status": 1
+      },
+      "actor_id": "supervisor",
+      "actor_kind": "agent",
+      "evidence_event_ids": [
+        "evt_00000000000000000000000000000004",
+        "evt_00000000000000000000000000000005",
+        "evt_00000000000000000000000000000006",
+        "evt_00000000000000000000000000000009",
+        "evt_0000000000000000000000000000000a",
+        "evt_0000000000000000000000000000000b",
+        "evt_0000000000000000000000000000000c"
+      ],
+      "profile": "supervisor",
+      "role": "supervision"
+    },
+    {
+      "action_total": 1,
+      "actions": {
+        "trace.opened": 1
+      },
+      "actor_id": "owner",
+      "actor_kind": "owner",
+      "evidence_event_ids": [
+        "evt_00000000000000000000000000000001"
+      ],
+      "profile": null,
+      "role": null
+    },
+    {
+      "action_total": 2,
+      "actions": {
+        "run.finished": 1,
+        "run.started": 1
+      },
+      "actor_id": "implementer-1",
+      "actor_kind": "subagent",
+      "evidence_event_ids": [
+        "evt_00000000000000000000000000000007",
+        "evt_00000000000000000000000000000008"
+      ],
+      "profile": "implementer",
+      "role": null
+    }
+  ],
+  "process": {
+    "critical_path": {
+      "coverage": "exact",
+      "dependency_wait_ms": 0,
+      "dispatch_wait_ms": 0,
+      "duration_ms": 6000,
+      "review_wait_ms": 2000,
+      "rework_ms": 0,
+      "step_ids": [
+        "stp-0002",
+        "stp-0003"
+      ]
+    },
+    "rounds": [
+      {
+        "deployed_unit_count": 2,
+        "duration_ms": 8000,
+        "ended_at": "2026-01-02T03:04:19.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000007",
+          "evt_00000000000000000000000000000008",
+          "evt_0000000000000000000000000000000a",
+          "evt_0000000000000000000000000000000b"
+        ],
+        "index": 0,
+        "outcome": "settled",
+        "participant_refs": [
+          "implementer-1",
+          "supervisor"
+        ],
+        "previous_round_id": null,
+        "round_id": "rnd-0000",
+        "started_at": "2026-01-02T03:04:11.000Z",
+        "step_ids": [
+          "stp-0002",
+          "stp-0003"
+        ],
+        "trigger": "initial_dispatch",
+        "wave_ids": [
+          "wav-0000",
+          "wav-0001"
+        ]
+      }
+    ],
+    "steps": [
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:06.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000002"
+        ],
+        "index": 0,
+        "kind": "contract_executable",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": true,
+        "started_at": "2026-01-02T03:04:06.000Z",
+        "step_id": "stp-0000",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:07.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000003"
+        ],
+        "index": 1,
+        "kind": "contract_persistence",
+        "outcome": "completed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": true,
+        "started_at": "2026-01-02T03:04:07.000Z",
+        "step_id": "stp-0001",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 4000,
+        "ended_at": "2026-01-02T03:04:15.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000007",
+          "evt_00000000000000000000000000000008"
+        ],
+        "index": 2,
+        "kind": "implementation",
+        "outcome": "completed",
+        "participant_ref": "implementer-1",
+        "predecessor_step_ids": [],
+        "round_id": "rnd-0000",
+        "run_refs": [
+          "1"
+        ],
+        "semantic_delta": true,
+        "started_at": "2026-01-02T03:04:11.000Z",
+        "step_id": "stp-0002",
+        "task_refs": [
+          "impl"
+        ],
+        "wave_id": "wav-0000"
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 2000,
+        "ended_at": "2026-01-02T03:04:19.000Z",
+        "evidence_event_ids": [
+          "evt_0000000000000000000000000000000a",
+          "evt_0000000000000000000000000000000b"
+        ],
+        "index": 3,
+        "kind": "review",
+        "outcome": "approved",
+        "participant_ref": "supervisor",
+        "predecessor_step_ids": [
+          "stp-0002"
+        ],
+        "round_id": "rnd-0000",
+        "run_refs": [],
+        "semantic_delta": true,
+        "started_at": "2026-01-02T03:04:17.000Z",
+        "step_id": "stp-0003",
+        "task_refs": [
+          "review"
+        ],
+        "wave_id": "wav-0001"
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.010Z",
+        "evidence_event_ids": [
+          "evt_0000000000000000000000000000000e"
+        ],
+        "index": 4,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.010Z",
+        "step_id": "stp-0004",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.020Z",
+        "evidence_event_ids": [
+          "evt_0000000000000000000000000000000f"
+        ],
+        "index": 5,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.020Z",
+        "step_id": "stp-0005",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.030Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000010"
+        ],
+        "index": 6,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.030Z",
+        "step_id": "stp-0006",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.040Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000011"
+        ],
+        "index": 7,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.040Z",
+        "step_id": "stp-0007",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.050Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000012"
+        ],
+        "index": 8,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.050Z",
+        "step_id": "stp-0008",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.060Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000013"
+        ],
+        "index": 9,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.060Z",
+        "step_id": "stp-0009",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.070Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000014"
+        ],
+        "index": 10,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.070Z",
+        "step_id": "stp-0010",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.080Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000015"
+        ],
+        "index": 11,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.080Z",
+        "step_id": "stp-0011",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.090Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000016"
+        ],
+        "index": 12,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.090Z",
+        "step_id": "stp-0012",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:21.100Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000017"
+        ],
+        "index": 13,
+        "kind": "invariant_check",
+        "outcome": "passed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:21.100Z",
+        "step_id": "stp-0013",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:22.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000018"
+        ],
+        "index": 14,
+        "kind": "terminal_verification",
+        "outcome": "verified",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": true,
+        "started_at": "2026-01-02T03:04:22.000Z",
+        "step_id": "stp-0014",
+        "task_refs": [],
+        "wave_id": null
+      },
+      {
+        "coverage": "exact",
+        "duration_ms": 0,
+        "ended_at": "2026-01-02T03:04:23.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000019"
+        ],
+        "index": 15,
+        "kind": "closure",
+        "outcome": "completed",
+        "participant_ref": "morfeo",
+        "predecessor_step_ids": [],
+        "round_id": null,
+        "run_refs": [],
+        "semantic_delta": null,
+        "started_at": "2026-01-02T03:04:23.000Z",
+        "step_id": "stp-0015",
+        "task_refs": [],
+        "wave_id": null
+      }
+    ],
+    "waves": [
+      {
+        "barrier": "dependency",
+        "deployed_unit_count": 1,
+        "duration_ms": 4000,
+        "eligible_unit_count_observed": null,
+        "ended_at": "2026-01-02T03:04:15.000Z",
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000007",
+          "evt_00000000000000000000000000000008"
+        ],
+        "global_limit": null,
+        "participant_refs": [
+          "implementer-1"
+        ],
+        "peak_parallelism": 1,
+        "per_profile_limit": null,
+        "ready_but_not_running_count_observed": null,
+        "ready_but_not_running_ms_observed": null,
+        "round_id": "rnd-0000",
+        "sampling_precision_ms": null,
+        "started_at": "2026-01-02T03:04:11.000Z",
+        "step_ids": [
+          "stp-0002"
+        ],
+        "wave_id": "wav-0000",
+        "work_unit_refs": [
+          "impl"
+        ]
+      },
+      {
+        "barrier": "review",
+        "deployed_unit_count": 1,
+        "duration_ms": 2000,
+        "eligible_unit_count_observed": null,
+        "ended_at": "2026-01-02T03:04:19.000Z",
+        "evidence_event_ids": [
+          "evt_0000000000000000000000000000000a",
+          "evt_0000000000000000000000000000000b"
+        ],
+        "global_limit": null,
+        "participant_refs": [
+          "supervisor"
+        ],
+        "peak_parallelism": 1,
+        "per_profile_limit": null,
+        "ready_but_not_running_count_observed": null,
+        "ready_but_not_running_ms_observed": null,
+        "round_id": "rnd-0000",
+        "sampling_precision_ms": null,
+        "started_at": "2026-01-02T03:04:17.000Z",
+        "step_ids": [
+          "stp-0003"
+        ],
+        "wave_id": "wav-0001",
+        "work_unit_refs": [
+          "review"
+        ]
+      }
+    ]
+  },
+  "project_id": "11111111-1111-4111-8111-111111111111",
+  "provenance": {
+    "compatibility_pairs": [
+      {
+        "collector_version": "0.24.0",
+        "normalizer_ref": "hermes.tool-category.v1",
+        "runtime_fingerprint": "3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ],
+    "producer_count": 1
+  },
+  "reducer_version": "aether.observation.reducer.v1+0.24.0",
+  "review_brief": {
+    "change_classes": [],
+    "evidence_status": "partial",
+    "findings": [
+      {
+        "code": "EVIDENCE_ANECDOTAL_SINGLE_TRACE",
+        "evidence_refs": [
+          "ctr_11111111111111111111111111111111"
+        ],
+        "on_critical_path": null,
+        "provenance": "deterministic_derived",
+        "severity": "info"
+      }
+    ],
+    "next_gate": {
+      "evidence_refs": [],
+      "kind": "none",
+      "target_ref": null
+    },
+    "primary_reason_code": "VERIFIED_COMPLETION",
+    "since_summary_id": null,
+    "unfinished_acceptance_criteria": 0,
+    "unfinished_required_units": 0,
+    "verdict": "completed"
+  },
+  "runtime_state": {
+    "activity": "idle",
+    "anomalies": "clear",
+    "liveness": "not_applicable",
+    "progress": "complete",
+    "termination": "completed",
+    "waiting": "none"
+  },
+  "schema_version": "aether.observation.summary.v1",
+  "source_event_count": 25,
+  "summary_id": "sum_6ab3057941648d7acc9f6dd578d4d333185ac56e7ce9fd71ab0ffa371053112c",
+  "timestamps": {
+    "closed_at": "2026-01-02T03:04:22.000Z",
+    "completed_at": "2026-01-02T03:04:22.000Z",
+    "executable_at": "2026-01-02T03:04:06.000Z",
+    "execution_started_at": "2026-01-02T03:04:09.000Z",
+    "first_action_at": "2026-01-02T03:04:06.000Z",
+    "handed_off_at": "2026-01-02T03:04:08.000Z",
+    "last_verified_progress_at": "2026-01-02T03:04:22.000Z",
+    "persisted_at": "2026-01-02T03:04:07.000Z",
+    "started_at": "2026-01-02T03:04:05.000Z",
+    "terminated_at": null
+  },
+  "tools": {
+    "blocked": 0,
+    "by_actor": [],
+    "by_name": [],
+    "cancelled": 0,
+    "completed": 0,
+    "failed": 0,
+    "interrupted": 0,
+    "technical_retries": 0,
+    "timed_out": 0,
+    "total_calls": 0,
+    "total_duration_ms": 0,
+    "unknown": 0
+  },
+  "trace_id": "ctr_11111111111111111111111111111111",
+  "work_graph": {
+    "all_required_done": true,
+    "blocked_required_units": 0,
+    "done_required_units": 3,
+    "open_required_units": 0,
+    "required_units": 3,
+    "review_required_units": 0,
+    "root_task_ref": "root",
+    "run_totals": {
+      "blocked": 0,
+      "changes_requested": 0,
+      "completed": 1,
+      "crashed": 0,
+      "failed": 0,
+      "gave_up": 0,
+      "protocol_violation": 0,
+      "rate_limited": 0,
+      "reclaimed": 0,
+      "review_requested": 0,
+      "running": 0,
+      "scheduled": 0,
+      "spawn_failed": 0,
+      "stale": 0,
+      "timed_out": 0,
+      "total": 1,
+      "unknown": 0
+    },
+    "total_units": 3,
+    "units": [
+      {
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000006",
+          "evt_00000000000000000000000000000007",
+          "evt_00000000000000000000000000000008"
+        ],
+        "latest_run_id": 1,
+        "latest_run_outcome": "completed",
+        "latest_run_status": "done",
+        "parent_task_refs": [
+          "root"
+        ],
+        "relation": "implementation",
+        "required": true,
+        "review_state": "not_required",
+        "runtime_state": {
+          "activity": "idle",
+          "anomalies": "clear",
+          "liveness": "unknown",
+          "progress": "complete",
+          "termination": "completed",
+          "waiting": "none"
+        },
+        "task_ref": "impl",
+        "task_status": "done"
+      },
+      {
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000009",
+          "evt_0000000000000000000000000000000a",
+          "evt_0000000000000000000000000000000b"
+        ],
+        "latest_run_id": null,
+        "latest_run_outcome": null,
+        "latest_run_status": null,
+        "parent_task_refs": [
+          "impl"
+        ],
+        "relation": "review",
+        "required": true,
+        "review_state": "approved",
+        "runtime_state": {
+          "activity": "idle",
+          "anomalies": "clear",
+          "liveness": "unknown",
+          "progress": "complete",
+          "termination": "completed",
+          "waiting": "none"
+        },
+        "task_ref": "review",
+        "task_status": "done"
+      },
+      {
+        "evidence_event_ids": [
+          "evt_00000000000000000000000000000005",
+          "evt_0000000000000000000000000000000c"
+        ],
+        "latest_run_id": null,
+        "latest_run_outcome": null,
+        "latest_run_status": null,
+        "parent_task_refs": [],
+        "relation": "root",
+        "required": true,
+        "review_state": "not_required",
+        "runtime_state": {
+          "activity": "idle",
+          "anomalies": "clear",
+          "liveness": "unknown",
+          "progress": "complete",
+          "termination": "completed",
+          "waiting": "none"
+        },
+        "task_ref": "root",
+        "task_status": "done"
+      }
+    ]
+  }
+}

@@ -131,7 +131,9 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         with (
             patch.object(module.os, "environ", dirty_env),
             patch.object(module.os, "chdir") as chdir,
-            patch.object(module.os, "execve", side_effect=RuntimeError("exec intercepted")) as execve,
+            patch.object(
+                module.os, "execve", side_effect=RuntimeError("exec intercepted")
+            ) as execve,
             self.assertRaisesRegex(RuntimeError, "exec intercepted"),
         ):
             module.main(["--resume", "latest"])

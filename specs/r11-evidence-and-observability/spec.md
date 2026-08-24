@@ -76,11 +76,15 @@ Not all findings are equal, and treating them equally is how the important ones 
 
 ## 6. Observability During a Run
 
-The runtime records board transitions, runs, worker logs, and health. Aether reuses those surfaces and adds only product-owned transition/release evidence needed to prove install, update, rollback, package, platform, privacy, and publication claims. It does not duplicate board execution state.
+The runtime records board transitions, runs, worker logs, health, messages, and tool traces. Aether reuses those surfaces and adds only product-owned transition/release evidence plus the bounded contract-observation metadata defined by [`../002-aether-contract-observation/spec.md`](../002-aether-contract-observation/spec.md). It does not duplicate board execution state.
 
-- **FR-1120**: Aether MUST NOT build a parallel pipeline-observability layer. Native events, runs, logs, and diagnostics remain authoritative for delegated execution; Aether's manager records only its own lifecycle and release evidence (FR-503).
-- **FR-1120a**: Liveness, semantic progress, and termination MUST be reported separately. A status, process, stream chunk, or heartbeat proves activity/liveness only; none is a percentage or proof that the objective advanced.
+- **FR-1120**: Aether MUST NOT build a parallel pipeline-execution or status authority. Native events, runs, SessionDB, Kanban, logs, and diagnostics remain authoritative for delegated execution. Under PD-68, Aether MAY maintain one local metadata-only contract journal and deterministic derived read model for its own contract semantics; that projection cannot activate, retry, complete, approve, or mutate work.
+- **FR-1120a**: Liveness, activity, semantic progress, waiting, anomalies, and termination MUST be reported separately. A status, process, stream chunk, or heartbeat proves activity/liveness only; none is a percentage or proof that the objective advanced.
 - **FR-1120b**: Retry evidence MUST distinguish dispatcher failure retries, clean-exit protocol corrections, resumptions, redispatches, review cycles, and authorized lifecycle corrections. A zero technical failure counter MUST NOT be reported as “no retries” when other logical attempts occurred.
+- **FR-1120c**: Contract observation MUST span the owner message, Morfeo contract creation, Supervisor handoff, explicitly bound implementation/review graph, acceptance verification, and terminal resolution. It reports phase/wall/active/wait/unclassified duration; causally linked participants and observed actions; exact tool totals by participant/status; bound task/run/review/acceptance state; ordered semantic process steps; parallel deployment waves; execution/rework rounds with deployed agent/unit counts; critical-path, queue, dependency, review, rework, eligible-versus-deployed, and captured-capacity evidence; useful iterations, technical retries, semantic loops, regressions, authorized direction changes, and reversions; plus whether source coverage is complete. Aggregate agent/tool totals alone do not satisfy this requirement.
+- **FR-1120d**: The contract observer MUST be local, deterministic, metadata-only, and non-blocking. It MUST NOT copy raw prompts, responses, messages, files, diffs, commands, outputs, web queries/content, secrets, or chain-of-thought, and it MUST make no outbound or non-loopback collection, reduction, or query request. A dashboard/API and separate read-only agent query tool are out of the 1.0 observation surface.
+- **FR-1120e**: Observation MUST be non-intrusive. It MUST NOT add a required workflow step, mandatory declaration, extra approval, or behavioural obligation to any role, and no lifecycle action may fail or be withheld because observation metadata is missing. Absent optional semantics reduce signal quality only.
+- **FR-1120f**: Observation MUST record field-covered configuration evidence for each trace — effective model/provider, exact project-keyed and field-domain-separated HMAC-SHA-256 instruction/skill-set/declared-toolset fingerprints when exposed, an effective tool-surface fingerprint only from a complete request-correlated snapshot, the non-secret project key-epoch ID, concurrency limits, and runtime/observer versions — plus observed capability use, model/context economics, and sampled bottleneck attribution evidenced by native dispatcher signals. Configured and effective surfaces MUST remain distinct; key bytes and raw HMAC inputs MUST never persist; cross-key/project comparison is unavailable; unavailable/estimated fields remain explicit; and negative `never_used` claims require exact surface coverage. This exists to make `FR-1129`/`FR-1130` controlled comparison possible; it MUST NOT produce productivity scores, participant rankings, or automated configuration recommendations.
 - **FR-1121**: Every pipeline repository change MUST be attributable to a unit, profile, and attempt (R5-FR-535). Every direct change MUST be attributable to Morfeo's profile and session with the actual diff or command result available.
 - **FR-1122**: A unit that never gets picked up MUST be detectable. The runtime reports a unit whose assignee produces no claim, and the design MUST NOT depend on someone noticing its absence by eye.
 - **FR-1123**: Watching a run MUST be possible without interrupting it. Reading the board is not participation.
@@ -88,9 +92,9 @@ The runtime records board transitions, runs, worker logs, and health. Aether reu
 Current issue state is part of the release-visible evidence boundary:
 
 - Aether `#192`, **OPEN** at inspection on 2026-08-21, owns machine-readable retry/resumption/lifecycle accounting.
-- Aether `#195`, **OPEN** at inspection on 2026-08-21, owns semantic-progress evidence beyond heartbeat.
+- Aether `#195`, **OPEN** at inspection on 2026-08-21, owns semantic-progress evidence beyond heartbeat and is now a 1.0 release prerequisite under PD-68.
 
-The selected source reinforces rather than closes those issues. `tools/kanban_tools.py:277-286` describes a runtime-activity-to-board-heartbeat bridge explicitly as liveness and keeps manual heartbeat notes optional. `kanban_db.py:4952-4967` reclaims stale activity even for a live PID, but that still does not prove useful task progress. Neither issue closes until its own acceptance criteria are executed and recorded.
+The selected source reinforces rather than closes those issues. `tools/kanban_tools.py:277-286` describes a runtime-activity-to-board-heartbeat bridge explicitly as liveness and keeps manual heartbeat notes optional. `kanban_db.py:4952-4967` reclaims stale activity even for a live PID, but that still does not prove useful task progress. Issue #192 may remain a disclosed release limitation; issue #195 closes only after the deterministic and controlled-real-trace criteria in the 002 contract execute and pass.
 
 ## 7. Qualifying Claims About Aether Itself
 
@@ -141,7 +145,7 @@ The prior EC1 worker run is evidence for that private installation only. Clean-p
 | Cost never substitutes for demonstrated quality | R12 |
 | The first authorized run is the evidence source for every assumed claim | R13 |
 | Exact public-package and live-RC qualification gates release eligibility | R13 |
-| Issues #192 and #195 remain visible until their acceptance evidence exists | R13 |
+| Issue #192 remains visible; issue #195 is a 1.0 release prerequisite with deterministic and real-trace evidence | 002 / R13 |
 
 ## 12. Success Criteria
 
@@ -157,8 +161,9 @@ The prior EC1 worker run is evidence for that private installation only. Clean-p
 - **SC-1110**: Update fault injection, rollback, mismatch reconciliation, and uninstall prove coherent-state recovery without damage to unrelated Hermes/user state.
 - **SC-1111**: Native Linux and WSL2 lanes execute the documented public path and retain machine-readable evidence.
 - **SC-1112**: Guard positives, negatives, both known false-positive regressions, and a complete no-recovery pipeline all pass.
-- **SC-1113**: Reports distinguish liveness, semantic progress, termination, failure retries, resumptions, redispatches, review cycles, and lifecycle corrections.
+- **SC-1113**: Reports distinguish liveness, activity, semantic progress, waiting, anomalies, termination, failure retries, resumptions, redispatches, review cycles, and lifecycle corrections.
 - **SC-1114**: Stable publication occurs only from the accepted RC commit after explicit owner authority.
+- **SC-1115**: One full-lifecycle contract observation summary deterministically reconciles duration, participants/actions, tool totals, the bound task/run/review/acceptance graph, separated current state, flow classifications, terminal result, and coverage against native sources without capturing raw content or changing native authority.
 
 ## 13. Done When
 
@@ -166,9 +171,9 @@ The prior EC1 worker run is evidence for that private installation only. Clean-p
 - [x] Per-unit evidence is defined by the four questions it must answer.
 - [x] Evidence classes are ranked, with the constitution conflict highest.
 - [x] The end-of-work report's contents and its source are specified.
-- [x] Observability is inherited rather than built.
+- [x] Native execution observability remains authoritative; PD-68's bounded local contract projection is specified separately.
 - [x] The verified-or-assumed discipline is made a requirement.
 - [x] Controlled evaluation rules are set for R12.
 - [x] Clean-package, runtime integrity, lifecycle, security, platform, public-provider, and publication evidence are defined.
-- [x] Open issues #192/#195 and the liveness-versus-progress boundary remain release-visible.
+- [x] Issue #192 remains release-visible; issue #195 is a pre-1.0 qualification gate and the liveness-versus-progress boundary remains explicit.
 - [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).

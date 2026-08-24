@@ -8,7 +8,7 @@
 
 Aether's three-role method is functioning in Christopher's local environment, but the public repository still distributes a design and a few reconstruction pieces rather than the product that was tested. `v1.0.0` is therefore not a version bump over `v0.24.0`; it is the first release whose promise includes third-party installation, independent credentials and models, updates, rollback, privacy, and public qualification.
 
-The owner accepted PD-48 through PD-64 in conversation before this contract was written and later accepted PD-65 through PD-67 during canonical reconciliation. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
+The owner accepted PD-48 through PD-64 in conversation before this contract was written, accepted PD-65 through PD-67 during canonical reconciliation, PD-68 on 2026-08-21 for pre-1.0 contract observation, and PD-69 on 2026-08-23 for the single-distribution modular project structure. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
 
 **2026-08-21 amendment:** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The current decision is upstream-by-default with a release-locked `transitional_fork` mode only while indispensable patches remain, and no new Aether capability may add a downstream-only Hermes core dependency.
 
@@ -259,11 +259,11 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 **Rejected**: require GitHub authentication before local setup, or claim untested GitLab/Bitbucket support.
 
-### A1-D13 — No telemetry
+### A1-D13 — No remote telemetry; bounded local observation only
 
-**Decision**: no Aether telemetry; local redacted logs only.
+**Current decision**: Aether ships no remote telemetry, hosted analytics, remote ingestion, or raw-content observation. PD-68 permits only the local, metadata-only, fail-open contract observer owned by specification 002; local redacted operational logs remain permitted.
 
-**Why**: contracts and repositories can contain highly sensitive material, and no demonstrated 1.0 need justifies collection.
+**Why**: contracts and repositories can contain highly sensitive material. The pre-1.0 diagnosis requirement is satisfied locally without transmitting evidence or widening data collection.
 
 ### A1-D14 — RC before stable
 
@@ -273,7 +273,19 @@ Pending publishers can create a project on first trusted publication. Configurin
 
 ### A1-D15 — Known limitations remain honest
 
-**Decision**: `#192` and `#195` are non-blocking future-minor issues. Aether does not equate heartbeat with semantic progress or a technical failure count with all logical attempts.
+**Historical decision**: `#192` and `#195` were classified as non-blocking future-minor issues. Aether does not equate heartbeat with semantic progress or a technical failure count with all logical attempts.
+
+**Superseded in part on 2026-08-21 by PD-68**: `#192` remains non-blocking; `#195` is now a 1.0 release prerequisite owned by `../002-aether-contract-observation/`. The reason is the owner's requirement to diagnose repeated system failures from deterministic contract-level duration, participant/action, tool-use, and flow evidence before stable release.
+
+### A1-D16 — One modular distribution, dual isolated installation
+
+**Decision**: keep Aether-specific code in the `Aether-Agents` monorepo and publish one versioned `aether-agents` wheel. Install the exact same staged wheel in the isolated manager environment and with `--no-deps` in the versioned Hermes runtime. The manager owns the public `aether` CLI; Hermes discovers only `aether_agents.observation.capture.hermes_plugin` through `hermes_agent.plugins`.
+
+**Why**: one source, distribution, and version prevent manager/observer drift while an explicit import boundary preserves doctor and rollback when Hermes is broken. The locked Hermes loader natively supports module entry points exposing `register(ctx)`, so no core patch or profile-local source copy is needed.
+
+**Artifact identity**: release-lock schema `3` binds the immutable pre-build tuple (distribution, package version, tag, commit, Python range, observer entry point), the digest of the wheel-packaged hash-bound observer dependency closure, and a deterministic digest of the locally materialized Hermes Git tree. That tree digest is deliberately separate from remote source-artifact digests. External release provenance and the local transition record bind the final wheel filename/SHA-256 because a wheel cannot contain its own final digest without circularity. The validated lock bytes are retained per release; activation compares their digest, installed-file fingerprints, dependency versions, and source-tree identity across both environments.
+
+**Rejected**: a second observer package/repository/version, copied per-profile plugin directories, mutable `PYTHONPATH` installation, a new observer daemon, or importing Hermes into manager modules.
 
 ## 8. Technical assumptions delegated to implementation
 

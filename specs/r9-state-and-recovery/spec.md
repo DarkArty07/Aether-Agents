@@ -16,7 +16,7 @@
 
 R9 decides what Aether remembers, where each kind of state lives, what survives a failure, and what is thrown away.
 
-Its governing constraint is ownership, not an obsolete store count. The public manager needs product-owned XDG state for immutable releases, profiles, project mappings, transition journals, and safe recovery; it must not create a shadow record of project intent or delegated execution.
+Its governing constraint is ownership, not an obsolete store count. The public manager needs product-owned XDG state for immutable releases, profiles, project mappings, transition journals, bounded contract-observation metadata, and safe recovery; it must not create a second authority for project intent or delegated execution.
 
 R9 does not design enforcement (R10), define evidence content (R11), or select models (R12).
 
@@ -27,10 +27,10 @@ R9 does not design enforcement (R10), define evidence content (R11), or select m
 | The project repository | The contract and the code it governs | Permanent, versioned |
 | The board's durable rows | What was delegated, by whom, in how many attempts, with what result | Permanent until retention removes it |
 | Each profile's own home | That role's memory, sessions, skills, credentials | Per profile, never shared |
-| Aether XDG product state | Installed releases, active-release record, sanitized product resources, project mappings, transition journals, backups, and local redacted logs | Product-managed; user-preserving update/uninstall rules |
+| Aether XDG product state | Installed releases, active-release record, sanitized product resources, project mappings, transition journals, backups, bounded contract-observation metadata/read models, and local redacted logs | Product-managed; user-preserving update/uninstall rules |
 
-- **FR-901**: Aether MUST NOT create a shadow contract or execution store. Any question about delegated pipeline execution is answered from the board; any question about what was asked for is answered from the repository. A direct PD-44 action is evidenced by the project repository, actual tool output, and Morfeo's profile session, not by a manufactured card or ledger.
-- **FR-902**: Aether MUST NOT maintain a parallel record of delegated execution. The board's rows, events, comments, and attempt records are the pipeline record (R5-FR-534). Direct action MUST NOT manufacture a card or shadow ledger merely to appear in that record.
+- **FR-901**: Aether MUST NOT create a second authoritative contract or execution store. Any question about delegated pipeline status is answered from the board; any question about what was accepted is answered from the repository. PD-68 permits a metadata-only contract journal and rebuildable summary projection for observation, but neither can alter or overrule those owning stores. A direct PD-44 action is evidenced by the project repository, actual tool output, and Morfeo's profile session, not by a manufactured card.
+- **FR-902**: Aether MUST NOT maintain a parallel authority for delegated execution. The board's rows, events, comments, and attempt records are the pipeline record (R5-FR-534). The 002 observer may reference native task/run/session IDs and cache derived counts, but it MUST label them as projections and expose coverage gaps. Direct action MUST NOT manufacture a card merely to appear in that record.
 - **FR-903**: The same fact MUST NOT be authoritative in two stores. Where a fact appears in both, the owning store wins and the other copy is a snapshot.
 - **FR-904**: Two agent processes MUST NOT share a profile home (PD-27). Where roles need shared memory, an external memory provider MUST be used rather than a shared home.
 
@@ -41,7 +41,7 @@ All roots honor the corresponding `XDG_*_HOME` variable and fall back to the sta
 ```text
 ~/.config/aether/             # non-secret product choices and generated-service source/records
 ~/.local/share/aether/        # active.json, immutable releases, isolated runtimes, profiles, projects
-~/.local/state/aether/        # transition journals, backups, local redacted logs
+~/.local/state/aether/        # transition journals, backups, observations, local redacted logs
 ~/.cache/aether/downloads/    # replaceable verified-download staging
 ```
 
@@ -92,6 +92,9 @@ For delegated work, the unit of durability is the card, not the process. This is
 - **FR-919b**: Before changing persistent Aether-owned profile/project state, the manager MUST create a safe metadata/state backup sufficient for rollback. It MUST NOT back up or restore an unrelated personal Hermes installation.
 - **FR-919c**: `aether doctor` MUST detect external package-manager drift between CLI, active release, runtime, profiles, and lock. It MUST refuse incompatible activation and offer explicit reconciliation or rollback; it MUST NOT silently trust an external upgrade.
 - **FR-919d**: Normal uninstall MUST remove only Aether-owned service/runtime/cache state and preserve user profiles/projects by default. Destructive purge requires a separately explicit operation and confirmation.
+- **FR-919e**: Every install/update/reconcile transition record MUST identify the one staged `aether-agents` wheel by filename and SHA-256, the release-lock schema/version and immutable Aether pre-build tuple, both target environments, and their installed-file fingerprints. The wheel-contained release lock MUST NOT contain its own final digest. Activation fails before pointer switch when manager/runtime identities, entry point, or profile enablement differ.
+- **FR-919f**: Observation JSONL is immutable forward state and is never migrated, rewritten, or restored from an older release. Each reducer uses a versioned disposable projection, pure upcasters for every historical event version it claims, and a quarantine index that preserves exact unknown-newer bytes. Rollback cannot delete or downgrade those bytes; forward re-update MUST reingest them.
+- **FR-919g**: A project fingerprint key is private persistent state, not a credential, product resource, or public artifact. It MUST use `0600`, survive ordinary update/rollback/uninstall-preserve, enter only private local recovery backup or a separately authorized protected export, and never enter logs, summaries, transition records, release artifacts, public evidence, or ordinary export. Rotation/loss creates a new key epoch and a visible comparison boundary; it MUST NOT be classified as a configuration change.
 
 ## 6. Retention
 
@@ -109,12 +112,17 @@ Every durable surface grows without bound by default. Retention is therefore a d
 | Notification subscriptions | Removed when the work they watch reaches its irreversible end state |
 | Immutable release directories | Retained while active or rollback-eligible; pruned only after a newer coherent release is proven |
 | Transition journals and backups | Retained through the rollback window; never published |
+| Contract observation summaries | Immutable summaries retained with project state; current/older reducer versions remain addressable until explicit owner purge |
+| Contract observation detailed events | Retained indefinitely with preserved UTC instant and local offset; only verified closed segments may enter deterministic lossless compaction and source removal after verified replay; no pruning; deletion only through explicit owner purge |
+| Observation projections/quarantine indexes | Versioned, rebuildable, non-authoritative; may be replaced only by deterministic rebuild while source/unknown bytes remain untouched |
+| Observation fingerprint keys | Private persistent project state across update/rollback/uninstall-preserve; never published or included in ordinary export |
 | Download cache | Freely replaceable after integrity verification and activation |
 
 - **FR-920**: Retention MUST distinguish the acceptance record from execution telemetry. Rows and branches are the record; events, logs, and worktrees are telemetry and may be pruned.
 - **FR-921**: A retention sweep MUST NOT remove anything an unfinished unit depends on. Pruning is only ever applied to terminal work.
 - **FR-922**: Pruning worktrees MUST NOT remove the corresponding branch. The branch is what makes a merged unit inspectable later; the worktree is only a checkout of it.
 - **FR-923**: Retention values are calibration, not architecture, and MUST be recorded when set.
+- **FR-923a**: Observation has no pruning path. Compaction MUST preserve exact uncompressed event bytes, final schema-valid summaries, invariant results, coverage/gap declarations, safe evidence references, and decision references; raw content never enters any retained layer. Explicit purge deletes the selected observation state rather than manufacturing a reduced historical record.
 
 ## 7. Boards Are the Project Boundary
 
@@ -159,6 +167,8 @@ Not inspected: the memory provider internals and the board's full event referenc
 - **SC-908**: A failed update or rollback never activates mixed release components and never damages unrelated Hermes/user state.
 - **SC-909**: Two initialized projects and three role profiles resolve isolated project state while sharing no profile home and duplicating no board.
 - **SC-910**: Default uninstall preserves profiles/projects; destructive purge is explicit and separately confirmed.
+- **SC-911**: Update, rollback, and forward re-update preserve every observation source byte and key epoch; incompatible readers use separate projections and never destroy unknown newer evidence.
+- **SC-912**: No public/release/log/ordinary-export surface contains a fingerprint key, and key rotation is visible without fabricating a configuration delta.
 
 ## 11. Done When
 

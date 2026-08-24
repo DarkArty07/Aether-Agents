@@ -338,4 +338,4 @@ PD-65 makes the fork transitional rather than permanent. The selected upstream t
 
 ### 13.4 Current Aether issue state
 
-Read-only GitHub inspection on 2026-08-21 found Aether issues `#192` (retry/resumption/lifecycle accounting) and `#195` (semantic progress beyond heartbeat) still **OPEN**, both last updated 2026-08-19. They remain release-visible limitations owned by R11; a newer upstream tag does not close an Aether acceptance criterion without the required evidence.
+Read-only GitHub inspection on 2026-08-21 found Aether issues `#192` (retry/resumption/lifecycle accounting) and `#195` (semantic progress beyond heartbeat) still **OPEN**, both last updated 2026-08-19. Issue `#192` remains release-visible under its accepted limitation contract. PD-68 later changed `#195` into a stable-1.0 prerequisite governed by `../002-aether-contract-observation/`; an upstream tag does not close either Aether acceptance criterion without its required evidence.

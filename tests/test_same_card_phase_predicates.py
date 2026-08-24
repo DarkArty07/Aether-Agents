@@ -93,10 +93,7 @@ def test_same_card_cycle_preserves_contract_candidate_budget_and_history(
     assert awaiting_rework.status == "ready"
     assert awaiting_rework.assignee == "implementer"
     assert _stable_contract(awaiting_rework) == stable
-    assert (
-        kb.goal_run_status(conn, task_id, review_1.current_run_id)
-        == "changes_requested"
-    )
+    assert kb.goal_run_status(conn, task_id, review_1.current_run_id) == "changes_requested"
 
     implementation_2 = kb.claim_task(conn, task_id, claimer="implementer:2")
     assert implementation_2 is not None

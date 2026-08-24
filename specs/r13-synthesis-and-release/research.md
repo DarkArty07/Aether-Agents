@@ -1208,7 +1208,7 @@ Current source changed the adaptation boundary materially:
 
 **Impact**:
 
-- The A1 release-lock schema was corrected to version `2` after PD-65. It now carries conditional `upstream|transitional_fork` semantics; Phase 1 must implement and validate that accepted schema before generating a lock.
+- The A1 release-lock schema was corrected to version `2` after PD-65 and advanced to version `3` through PD-69/70. It retains conditional `upstream|transitional_fork` semantics and now binds the single `aether-agents` distribution, official observer entry point, event/summary/segment-manifest read/write versions, and projection schema version; the final wheel digest stays in external provenance and local transition records to avoid a circular self-digest. Phase 1 must implement and validate that accepted schema before generating a lock.
 - Phase 2 reconciles only six patch lines, preserves original `hermes-agent` identity/license/history, and produces public provenance/digests under a separate publication gate.
 - Every upstream release is requalified patch by patch; a patch retires only on released-artifact behavior evidence.
 - Public role resources and setup contain user-selected binding placeholders only. Private model/provider/router identifiers and ignored runtime state cannot be package inputs.
@@ -1219,8 +1219,12 @@ Read-only GitHub inspection on 2026-08-21 found Aether issue `#192` (retry/resum
 
 Issue `#198` is CLOSED as completed for the owner-authorized local repair, but the selected public tag still exhibits the stale first-spawn branch object. Therefore the local issue's closure is not public-upstream qualification and the behavior remains one of the transitional patch gates. Issue `#210` remains OPEN while this candidate goes through independent review/integration; PD-67 is the accepted policy that makes this exact task-bound structured-write context valid.
 
-### 18.5 Current implementation-entry replacement
+### 18.5 Contract-observation release decision
 
-`spec.md` now owns the portable role contracts, public manager/runtime boundary, exact Hermes base, transitional adaptation, dependency order, release qualification, external gates, and success criteria. `plan.md` now owns package/version/schema decisions, XDG layout, native adaptation, patch inventory, explicit release testing standard, ten implementation phases, authority ledger, risks/rollback, and the single Supervisor handoff.
+On 2026-08-21 Christopher changed issue `#195` from a future-minor limitation to a stable-1.0 prerequisite. PD-68 and `../002-aether-contract-observation/` own the replacement design. The accepted boundary is a local metadata-only projection over public Hermes hooks and native identifiers, not a second task-status authority and not remote telemetry. Stable 1.0 now requires deterministic fixture evidence and one controlled real contract trace; the previous #195 limitation status remains above as historical evidence, not current release policy.
+
+### 18.6 Current implementation-entry replacement
+
+`spec.md` now owns the portable role contracts, public manager/runtime boundary, exact Hermes base, transitional adaptation, dependency order, release qualification, external gates, and success criteria. `plan.md` now owns package/version/schema decisions, XDG layout, native adaptation, patch inventory, explicit release testing standard, eleven implementation phases after Phase 0, authority ledger, risks/rollback, and the single Supervisor handoff.
 
 No implementation unit was created by Morfeo. The pre-created C0 review and integration children remain the only downstream graph for this documentation objective.

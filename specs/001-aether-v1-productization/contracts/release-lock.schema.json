@@ -6,16 +6,24 @@
   "additionalProperties": false,
   "required": ["schema_version", "aether", "hermes", "profile_bundle"],
   "properties": {
-    "schema_version": {"const": 2},
+    "schema_version": {"const": 3},
     "aether": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "package_version", "git_tag", "git_commit"],
+      "required": ["version", "package_version", "distribution", "git_tag", "git_commit", "python_requires", "observer", "observer_requirements_sha256", "observation_compatibility"],
       "properties": {
         "version": {"$ref": "#/$defs/semver"},
         "package_version": {"type": "string", "minLength": 1},
+        "distribution": {"const": "aether-agents"},
         "git_tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
-        "git_commit": {"$ref": "#/$defs/git_commit"}
+        "git_commit": {"$ref": "#/$defs/git_commit"},
+        "python_requires": {"const": ">=3.11,<3.14"},
+        "observer": {"$ref": "#/$defs/observer_entry_point"},
+        "observer_requirements_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of the hash-bound observer runtime dependency closure packaged in the candidate wheel; distinct from the final wheel digest."
+        },
+        "observation_compatibility": {"$ref": "#/$defs/observation_compatibility"}
       }
     },
     "hermes": {
@@ -28,6 +36,7 @@
         "tag",
         "commit",
         "python_requires",
+        "source_tree_sha256",
         "artifacts"
       ],
       "properties": {
@@ -37,6 +46,10 @@
         "tag": {"type": "string", "minLength": 1},
         "commit": {"$ref": "#/$defs/git_commit"},
         "python_requires": {"type": "string", "minLength": 1},
+        "source_tree_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "SHA-256 of the deterministic path-and-file-byte projection of the exact Git commit materialized locally; this is distinct from every externally published artifact digest."
+        },
         "upstream_base": {"$ref": "#/$defs/upstream_base"},
         "residual_patches": {
           "type": "array",
@@ -63,7 +76,9 @@
                 "contains": {
                   "properties": {"kind": {"const": "source"}},
                   "required": ["kind"]
-                }
+                },
+                "minContains": 1,
+                "maxContains": 1
               }
             }
           }
@@ -134,16 +149,89 @@
         "commit": {"$ref": "#/$defs/git_commit"}
       }
     },
+    "observer_entry_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin_name", "group", "target"],
+      "properties": {
+        "plugin_name": {"const": "aether-contract-observer"},
+        "group": {"const": "hermes_agent.plugins"},
+        "target": {"const": "aether_agents.observation.capture.hermes_plugin"}
+      }
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "filename", "url", "sha256", "provenance_url"],
       "properties": {
         "kind": {"enum": ["source", "wheel", "sdist"]},
-        "filename": {"type": "string", "minLength": 1},
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
         "url": {"type": "string", "format": "uri", "pattern": "^https://"},
         "sha256": {"$ref": "#/$defs/sha256"},
         "provenance_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+      }
+    },
+    "observation_compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_write_version",
+        "event_read_versions",
+        "summary_write_version",
+        "summary_read_versions",
+        "segment_manifest_write_version",
+        "segment_manifest_read_versions",
+        "projection_schema_version"
+      ],
+      "properties": {
+        "event_write_version": {
+          "const": "aether.observation.event.v1"
+        },
+        "event_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.event\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.event.v1"}
+        },
+        "summary_write_version": {
+          "const": "aether.observation.summary.v1"
+        },
+        "summary_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.summary\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.summary.v1"}
+        },
+        "segment_manifest_write_version": {
+          "const": "aether.observation.segment-manifest.v1"
+        },
+        "segment_manifest_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.segment-manifest\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.segment-manifest.v1"}
+        },
+        "projection_schema_version": {
+          "type": "string",
+          "pattern": "^aether\\.observation\\.projection\\.v[1-9][0-9]*$"
+        }
       }
     }
   }

@@ -5,11 +5,11 @@
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — proportional Morfeo and EC1 evidence work
 **Amended**: 2026-08-20 — EC1 Phase 6 closed by owner instruction
-**Amended**: 2026-08-21 — private-local implementation entry superseded by PD-48–PD-67 and A1
+**Amended**: 2026-08-21 — private-local implementation entry superseded by PD-48–PD-68, A1, and the 002 contract-observation prerequisite
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
-**Depends on**: R0–R12, `DESIGN.md`, `specs/001-aether-v1-productization/`
+**Depends on**: R0–R12, `DESIGN.md`, `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`
 **Parent roadmap**: `../../ROADMAP.md`
 **Research**: `research.md`
 **Plan**: `plan.md`
@@ -120,7 +120,7 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 10. explicitly authorized stable release.
 
 - **FR-1341**: Supervisor MUST settle package/version/schema/API shapes before fan-out and carry each decision into every dependent card.
-- **FR-1342**: Open limitations remain visible until evidence closes them. Aether issues `#192` (retry/resumption/lifecycle accounting), `#195` (semantic progress beyond heartbeat), `#211` (per-flow session affinity), and `#212` (discarded TUI notification subscriptions) remain release-visible. No RC may claim automatic TUI return while the configured notifier rejects `platform=tui`.
+- **FR-1342**: Open limitations remain visible until evidence closes them. Aether issues `#192` (retry/resumption/lifecycle accounting), `#211` (per-flow session affinity), and `#212` (discarded TUI notification subscriptions) may remain release-visible under their accepted limitation contracts. Under PD-68, `#195` (semantic progress beyond heartbeat) is a 1.0 release prerequisite and cannot pass as an open limitation. No RC may claim automatic TUI return while the configured notifier rejects `platform=tui`.
 - **FR-1343**: Each implementation unit has explicit inputs, outputs, tests, dependency parents, authority, and external-effect boundary. Product-scale work is performed by Implementers and independently reviewed.
 - **FR-1344**: No phase consumes an unbuilt moving branch, a private editable runtime, or a worker's conversational claim as release evidence.
 
@@ -130,7 +130,7 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 - **FR-1346**: Guard qualification includes representative authorized work for every role, every protected/undecidable negative control, both known false-positive classes, and one complete pipeline without guard-caused manual recovery. Three distinct ordinary-work false-positive categories trigger redesign/replacement under PD-66.
 - **FR-1347**: Platform qualification covers Ubuntu 24.04 native, Ubuntu 24.04 under WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation.
 - **FR-1348**: Live RC qualification is preregistered, installs the public PyPI RC, consumes the exact locked public Hermes artifact, uses a public Hermes-supported user-selected provider, and runs a realistic Git project through all three roles and independent review. Credentials, spend, and the live run require explicit authority.
-- **FR-1349**: Evidence distinguishes liveness, semantic progress, and completion; and failure retries, resumptions, redispatches, reviews, and lifecycle corrections. Heartbeat alone never proves progress.
+- **FR-1349**: Evidence distinguishes liveness, activity, semantic progress, waiting, anomalies, and termination; and failure retries, resumptions, redispatches, reviews, lifecycle corrections, useful contract iterations, semantic loops, regressions, owner-authorized direction changes, and reversions. Heartbeat alone never proves progress. The 002 contract observer supplies one full-lifecycle summary from the owner message through the explicitly bound execution/review graph and verified completion or distinct non-success terminal resolution, with explicit coverage declaration.
 - **FR-1350**: Stable `v1.0.0` may be published only from the accepted RC commit after all non-waived criteria pass and Christopher explicitly authorizes publication.
 - **FR-1351**: A waiver identifies the failed criterion, evidence, impact, alternative, and owner decision. It does not edit the requirement or label missing evidence as success.
 
@@ -155,7 +155,7 @@ Each effect requires the exact gate named by the A1 contract. A denial is author
 - **SC-1304**: Aether reuses native Hermes profile, Project, board, worktree, review, and lifecycle primitives instead of duplicating them.
 - **SC-1305**: Exact board-verified Morfeo task-bound contract authoring succeeds through structured file tools while all PD-67 negative controls remain denied.
 - **SC-1306**: Update/rollback/uninstall fault tests preserve coherent active state and unrelated Hermes/user data.
-- **SC-1307**: Issues `#192`, `#195`, `#211`, and `#212` are either evidenced against their acceptance criteria or explicitly remain open release limitations; no report equates heartbeat with progress, zero technical failures with zero logical retries, or a stored TUI subscription with actual delivery.
+- **SC-1307**: Issues `#192`, `#211`, and `#212` are either evidenced against their acceptance criteria or explicitly remain open release limitations; issue `#195` is evidenced and closed before stable 1.0. No report equates heartbeat with progress, zero technical failures with zero logical retries, or a stored TUI subscription with actual delivery.
 - **SC-1308**: Deterministic and live RC matrices retain machine-readable evidence bound to exact commits, versions, artifacts, platforms, scenarios, budgets, and exit status.
 - **SC-1309**: No public or destructive external effect occurs without its explicit owner gate.
 

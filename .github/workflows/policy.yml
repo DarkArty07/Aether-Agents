@@ -13,14 +13,17 @@ jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - name: Validate canonical base manifest
         shell: bash
         run: |
           set -euo pipefail
           expected=$(mktemp)
           actual=$(mktemp)
-          trap 'rm -f "$expected" "$actual"' EXIT
+          spec_manifest=$(mktemp)
+          trap 'rm -f "$expected" "$actual" "$spec_manifest"' EXIT
           cat >"$expected" <<'EOF'
           .github/ISSUE_TEMPLATE/bug_report.md
           .github/ISSUE_TEMPLATE/feature_request.md
@@ -34,6 +37,7 @@ jobs:
           CODE_OF_CONDUCT.md
           CONTRIBUTING.md
           DESIGN.md
+          HERMES_LOCAL_PATCHES.md
           LICENSE
           README.md
           ROADMAP.md
@@ -44,20 +48,114 @@ jobs:
           home/config.yaml.template
           policy/hooks/README.md
           policy/hooks/aether_pre_tool_policy.py
+          pyproject.toml
           scripts/aether_tui.py
+          scripts/qualify_observation.py
           scripts/sync_policy_hooks.py
+          src/aether_agents/__init__.py
+          src/aether_agents/cli.py
+          src/aether_agents/commands/__init__.py
+          src/aether_agents/commands/observe.py
+          src/aether_agents/lifecycle.py
+          src/aether_agents/observation/__init__.py
+          src/aether_agents/observation/capture/__init__.py
+          src/aether_agents/observation/capture/collector.py
+          src/aether_agents/observation/capture/flusher.py
+          src/aether_agents/observation/capture/hermes_plugin.py
+          src/aether_agents/observation/capture/journal.py
+          src/aether_agents/observation/capture/projectors.py
+          src/aether_agents/observation/checkpoint.py
+          src/aether_agents/observation/context.py
+          src/aether_agents/observation/contracts.py
+          src/aether_agents/observation/correlation.py
+          src/aether_agents/observation/fingerprints.py
+          src/aether_agents/observation/identity.py
+          src/aether_agents/observation/locking.py
+          src/aether_agents/observation/privacy.py
+          src/aether_agents/observation/projection_transition.py
+          src/aether_agents/observation/query.py
+          src/aether_agents/observation/reduce/__init__.py
+          src/aether_agents/observation/reduce/attribution.py
+          src/aether_agents/observation/reduce/flow.py
+          src/aether_agents/observation/reduce/ingest.py
+          src/aether_agents/observation/reduce/process.py
+          src/aether_agents/observation/reduce/reconciliation.py
+          src/aether_agents/observation/reduce/reducer.py
+          src/aether_agents/observation/reduce/review.py
+          src/aether_agents/observation/reduce/upcast.py
+          src/aether_agents/observation/report.py
+          src/aether_agents/observation/retention.py
+          src/aether_agents/observation/storage.py
+          src/aether_agents/paths.py
+          src/aether_agents/resources/observer-requirements.txt
+          src/aether_agents/resources/profiles/implementer/config.yaml
+          src/aether_agents/resources/profiles/morfeo/config.yaml
+          src/aether_agents/resources/profiles/supervisor/config.yaml
+          src/aether_agents/result.py
+          tests/fixtures/observation/complete-summary.json
+          tests/fixtures/observation/performance-baseline.json
+          tests/observation_helpers.py
+          tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_observation_cli_plugin.py
+          tests/test_observation_contracts.py
+          tests/test_observation_journal_storage.py
+          tests/test_observation_lifecycle.py
+          tests/test_observation_packaging.py
+          tests/test_observation_path_confinement.py
+          tests/test_observation_performance.py
+          tests/test_projection_transition_runner.py
+          tests/test_observation_qualification.py
+          tests/test_observation_reducer.py
           tests/test_policy_hooks.py
           tests/test_same_card_phase_predicates.py
+          uv.lock
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
           git ls-files | grep -v '^specs/' | sort >"$actual"
           diff -u "$expected" "$actual"
           test -n "$(git ls-files 'specs/**')"
-          ! git ls-files -s specs | grep -Eq '^120000 '
+          git ls-files -s specs >"$spec_manifest"
+          python3 - "$spec_manifest" <<'PY'
+          import re
+          import sys
+          from pathlib import Path, PurePosixPath
+
+          manifest = Path(sys.argv[1]).read_text(encoding='utf-8').splitlines()
+          assert manifest, 'spec manifest must not be empty'
+          for row in manifest:
+              metadata, name = row.split('\t', 1)
+              mode, _object_id, stage = metadata.split()
+              path = PurePosixPath(name)
+              if mode != '100644' or stage != '0':
+                  raise SystemExit(f'unsafe spec mode/stage: {name}')
+              if (
+                  path.is_absolute()
+                  or not path.parts
+                  or path.parts[0] != 'specs'
+                  or any(part in {'', '.', '..'} for part in path.parts)
+              ):
+                  raise SystemExit(f'unsafe spec path: {name}')
+              suffix = path.suffix.lower()
+              if suffix not in {'.json', '.md'}:
+                  raise SystemExit(f'unsupported spec extension: {name}')
+              data = Path(name).read_bytes()
+              if b'\0' in data:
+                  raise SystemExit(f'binary spec payload: {name}')
+              try:
+                  text = data.decode('utf-8')
+              except UnicodeDecodeError as error:
+                  raise SystemExit(f'non-UTF-8 spec payload: {name}') from error
+              if re.search(
+                  r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|'
+                  r'\bghp_[A-Za-z0-9]{20,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b',
+                  text,
+              ):
+                  raise SystemExit(f'secret-like spec payload: {name}')
+          PY
           grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(\.dev[0-9]+)?$' VERSION
-          ! git ls-files | grep -Eq '^(docs|src|schemas|home/(profiles|skills|plugins|prompts))/'
+          ! git ls-files | grep -Eq '^(docs|schemas|home/(profiles|skills|plugins|prompts))/'
           ! git grep -n -i -E 'daedalus|hefesto|ictinus|daimon|aether_mcp|olympus|acpmanager|harmonia|honcho|talk_to|orca-status' -- ':(exclude).github/workflows/policy.yml'
 
       - name: Validate reproducible policy hooks
@@ -124,6 +222,90 @@ jobs:
                   resolved = (path.parent / target).resolve()
                   assert resolved.exists(), f'broken link in {path}: {target}'
           PY
+
+  observation-qualification:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: 0.12.3
+          enable-cache: true
+      - name: Install locked development environment
+        run: uv sync --frozen --python "${{ matrix.python-version }}"
+      - name: Recreate and verify exact public Hermes baseline
+        run: >-
+          uv run --frozen python scripts/qualify_observation.py checkout
+          --path "${RUNNER_TEMP}/hermes-v2026.8.18" --json
+      - name: Execute observation suite and real PluginContext harness
+        shell: bash
+        env:
+          AETHER_RUN_DEEP_QUALIFICATION: "0"
+        run: |
+          set -euo pipefail
+          python_path="$(uv run --frozen python -c 'import sys; print(sys.executable)')"
+          env -u HERMES_DELEGATED_CHILD_CONTEXT \
+            uv run --frozen python scripts/qualify_observation.py test \
+              --checkout "${RUNNER_TEMP}/hermes-v2026.8.18" \
+              --python "$python_path" \
+              --output "${RUNNER_TEMP}/observation-tests-python-${{ matrix.python-version }}.json" \
+              --json
+          env -u HERMES_DELEGATED_CHILD_CONTEXT \
+            PYTHONPATH="${RUNNER_TEMP}/hermes-v2026.8.18" \
+            uv run --frozen pytest -q
+      - name: Retain exact-Hermes test qualification artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: observation-tests-python-${{ matrix.python-version }}
+          path: ${{ runner.temp }}/observation-tests-python-${{ matrix.python-version }}.json
+          if-no-files-found: error
+      - name: Execute 10k/100k and real-callback performance evidence
+        if: matrix['python-version'] == '3.11'
+        run: |
+          env -u HERMES_DELEGATED_CHILD_CONTEXT \
+            PYTHONPATH="${RUNNER_TEMP}/hermes-v2026.8.18" \
+            uv run --frozen python scripts/qualify_observation.py benchmark \
+              --checkout "${RUNNER_TEMP}/hermes-v2026.8.18" \
+              --output "${RUNNER_TEMP}/observation-benchmark-python-3.11.json" \
+              --json
+      - name: Contrast stable report claims with retained qualification evidence
+        if: matrix['python-version'] == '3.11'
+        run: |
+          uv run --frozen python scripts/qualify_observation.py contrast-validation \
+            --report specs/002-aether-contract-observation/evidence/implementation-validation.md \
+            --result "tests=${RUNNER_TEMP}/observation-tests-python-3.11.json" \
+            --result "benchmark=${RUNNER_TEMP}/observation-benchmark-python-3.11.json" \
+            --json
+      - name: Retain named 100k benchmark artifact
+        if: matrix['python-version'] == '3.11'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: observation-benchmark-python-3.11
+          path: ${{ runner.temp }}/observation-benchmark-python-3.11.json
+          if-no-files-found: error
+      - name: Static, format and bytecode gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.base.sha }}...HEAD"
+          else
+            git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
+          fi
+          uv run --frozen python -m compileall -q src tests scripts/qualify_observation.py
+          uv run --frozen ruff check src tests scripts/qualify_observation.py
+          uv run --frozen ruff format --check src tests scripts/qualify_observation.py
+      - name: Build wheel and source distribution
+        run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
 
   pull-request-target:
     if: github.event_name == 'pull_request'

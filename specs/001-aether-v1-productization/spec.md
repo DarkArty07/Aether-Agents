@@ -1,13 +1,14 @@
 # Aether 1.0 Productization and Public Release Specification
 
 **Contract ID**: A1
-**Status**: canonical reconciliation in progress under PD-65 through PD-67
-**Accepted product decisions**: `DESIGN.md` PD-01 through PD-67
+**Status**: normative PD-70 contract active; implementation and release evidence remain separately gated
+**Accepted product decisions**: `DESIGN.md` PD-01 through PD-70
+**Product-definition version**: `PD-70`
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
 **Written**: 2026-08-20
-**Repository baseline inspected**: `00260254b497dc07f0c7d1922831612cc10114a5`
+**Implementation baseline inspected**: `47e26c5884d906aeb9790937910ec4a7bb67c3ed`
 **Depends on**: `DESIGN.md`, R0-R13, the current public Aether repository, Hermes Agent upstream, the transitional public `DarkArty07/hermes-agent` fork only while indispensable patches remain, PyPI, uv, and GitHub Actions
 **May affect**: R4, R8, R9, R10, R11, R12, R13, README, repository policy, release automation, and the live Aether installation only after a separately authorized cutover
 **Research and rationale**: [`research.md`](research.md)
@@ -47,19 +48,20 @@ Supervisor MUST stop the affected lane at the relevant gate rather than interpre
 - Linux-native and WSL2 support;
 - public documentation, GitHub presentation, support surfaces, release automation, provenance, and known limitations;
 - deterministic qualification and a preregistered live release-candidate flow;
-- reconciliation of every canonical or derived artifact invalidated by PD-48 through PD-67.
+- local deterministic contract observation as defined by [`../002-aether-contract-observation/spec.md`](../002-aether-contract-observation/spec.md);
+- reconciliation of every canonical or derived artifact invalidated by PD-48 through PD-70.
 
 ### 3.2 Out of scope for 1.0
 
 - Windows-native or macOS support;
-- Aether-owned telemetry;
+- remote telemetry, hosted analytics, or raw-content observation;
 - a hosted Aether service, cloud control plane, centralized account, or credential broker;
 - replacing or modifying another Hermes installation;
 - Docker/Podman as the canonical product surface;
 - publishing a renamed Hermes fork to PyPI;
 - automatic adoption of Hermes upstream changes;
 - supporting forges other than GitHub as a qualified external collaboration surface;
-- guaranteeing semantic live progress beyond heartbeats or perfect retry/recovery taxonomy (`#195` and `#192`);
+- perfect retry/recovery taxonomy (`#192`); full-lifecycle local contract observation is in scope under feature 002, and its owner-approved controlled real trace remains a separate `#195` release gate;
 - a public model benchmark or a fixed vendor/model list;
 - copying Christopher's Router, model aliases, credentials, memories, sessions, preferences, logs, databases, caches, or personal skill catalog;
 - changing the three-role topology or adding a fourth role.
@@ -152,13 +154,17 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-015**: Each Aether release lock MUST declare `upstream` or `transitional_fork` as its Hermes source mode and bind the exact public repository, tag, commit, source or artifact location, SHA-256, Python compatibility, and provenance evidence used by that mode.
 - **A1-FR-016**: Aether MUST install the original `hermes-agent` distribution into an isolated versioned runtime and MUST NOT rename it on PyPI, vendor its source into the Aether package, or modify another Hermes installation.
 - **A1-FR-017**: A `transitional_fork` lock MUST additionally bind the exact upstream base and fork ref and MUST identify every residual downstream patch whose retirement gate prevents upstream mode.
-- **A1-FR-018**: Setup and update MUST verify the complete release lock before installing or activating a runtime.
+- **A1-FR-018**: Setup and update MUST verify the complete release lock before installing or activating a runtime. The exact validated bytes MUST be retained inside the versioned release and revalidated by digest during doctor, recovery, update, rollback, and re-update. A local checkout is authenticated by the lock's deterministic source-tree digest; a distinct remote artifact digest MUST NOT be substituted for that proof.
 - **A1-FR-019**: Runtime artifacts MUST be installed into an Aether-owned versioned environment and MUST NOT modify another Hermes environment or executable.
 - **A1-FR-020**: Every patch line recorded in `HERMES_LOCAL_PATCHES.md` MUST be reconciled against the selected stable upstream baseline and classified as retired, upstream-pending, or indispensable-transition; none MAY be copied blindly.
 
 ### 5.3 Package and publication
 
 - **A1-FR-021**: `aether-agents` MUST build reproducible wheel and source distributions from a standard `pyproject.toml` src-layout package.
+- **A1-FR-021a**: Aether 1.0 MUST use one `aether-agents` distribution and one product version. The exact same staged immutable wheel MUST be installed into the isolated manager environment and, with `--no-deps`, into the versioned Hermes runtime. The release lock binds distribution/version/pre-build identity/entry point; external release provenance and the local transition record bind the staged wheel filename/SHA-256, avoiding an impossible self-digest inside the wheel.
+- **A1-FR-021b**: The wheel MUST expose exactly `aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"` in the `hermes_agent.plugins` entry-point group. Manager modules MUST NOT import Hermes; the adapter MUST NOT import manager commands/transitions/release/service/auth; shared observation modules MUST be Hermes-independent.
+- **A1-FR-021c**: No second observer distribution, repository, daemon, independent version, or editable per-profile plugin copy may be introduced. Normative observer schemas have one editable source and package copies MUST be byte-identical in wheel and sdist.
+- **A1-FR-021d**: Canonical release-lock schema `3` MUST bind the observer entry-point tuple, the packaged hash-bound observer dependency closure, plus observation event, summary, and segment-manifest write/read versions and projection schema version. The manager MUST sync that closure with hashes; the runtime MUST reconcile the same exact closure after its independently locked Hermes dependencies. `doctor` and every transition MUST verify dependency and schema digests, that each declared write version belongs to its corresponding read set, and that packaged schemas/upcasters/projection code match the declaration; a mismatch blocks activation, never native work already running.
 - **A1-FR-022**: The manager CLI MUST minimize its own dependencies so diagnosis and rollback remain available when the managed Hermes runtime is broken.
 - **A1-FR-023**: Package tests MUST install and exercise the built wheel, not only import the source checkout.
 - **A1-FR-024**: PyPI publication MUST use GitHub Actions OIDC Trusted Publishing and MUST NOT require a stored PyPI API token.
@@ -206,7 +212,7 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 
 ### 5.7 Update, rollback, doctor, and uninstall
 
-- **A1-FR-057**: `aether doctor` MUST validate platform, CLI/product compatibility, release lock, artifact digests, runtime executable, profile-policy parity, service state, XDG ownership, project mapping, and required tools.
+- **A1-FR-057**: `aether doctor` MUST validate platform, CLI/product compatibility, release lock, external/transition artifact digests, runtime executable, manager/runtime `aether-agents` distribution/version/pre-build identity/installed-file-fingerprint parity, observer entry-point target and per-profile enablement, declared observation write/read/upcaster/projection compatibility, profile-policy parity, service state, XDG ownership, project mapping, and required tools.
 - **A1-FR-058**: `doctor --json` MUST use the stable output contract in [`contracts/cli.md`](contracts/cli.md).
 - **A1-FR-059**: `aether update` MUST preview the current and target versions, protected effects, storage changes, and preserved user state before applying.
 - **A1-FR-060**: Update MUST stage a complete candidate under a non-active version path, verify it, create a recoverable transition record, and switch active pointers atomically.
@@ -219,7 +225,13 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 
 ### 5.8 Privacy and security
 
-- **A1-FR-067**: Aether 1.0 MUST add no telemetry or remote analytics.
+- **A1-FR-067**: Aether 1.0 MUST add no remote telemetry, hosted analytics, remote ingestion, or raw-content observation. PD-68's bounded local contract observer is permitted only under the 002 specification.
+- **A1-FR-067a**: The product MUST package the public-hook observer in the single `aether-agents` wheel, materialize it in the versioned runtime through the official `hermes_agent.plugins` entry point, and include the optional internal fail-open checkpoint sink, local crash-safe journal, deterministic reducer/read model, one Morfeo-oriented `aether observe` review brief with human and JSON projections, causal step/wave/round reconstruction and sampled critical-path/acceleration evidence, field-covered configuration/tool/model evidence, provenance-bearing bottleneck/defect attribution, normative schemas, indefinite indexed retention, and release tests defined by [`../002-aether-contract-observation/spec.md`](../002-aether-contract-observation/spec.md). Configured toolsets MUST NOT be conflated with an effective granted surface, negative `never_used` claims require a complete snapshot, and unavailable locked-runtime signals remain explicit. Observation MUST remain non-intrusive: no role acquires a required observation step and no downstream Hermes core patch is introduced. A dashboard/API, separate read-only agent query tool, and cross-trace comparison surface are deferred beyond 1.0.
+- **A1-FR-067b**: Observer degradation MUST leave legitimate contract work available and mark coverage incomplete; it MUST NOT fabricate exact totals, block contract persistence, or mutate native Kanban/SessionDB/canonical-artifact state.
+- **A1-FR-067c**: Observation MUST resolve exactly one canonical project UUID through the priority and cross-check rules in PD-70/OBS-D-022 before writing a project journal. Unresolved or conflicting context MUST create no cross-project write; content-free observer-health counters and later exact native reconciliation preserve visibility without a durable global owner-message queue. Owner messages are candidates until authoritative materialization, ambiguous origins use null timing, continuation requires exact trace/contract/work identity, and traces are never automatically merged.
+- **A1-FR-067d**: Observation journals MUST remain immutable across update/rollback, use restart-safe producer/event identity, and exclude reducer-written source events. Current reducers MUST use pure versioned upcasters and versioned rebuildable projections; older rollbacks preserve/index unknown newer bytes without modification. Synchronous callbacks MUST perform no `fsync`, SQLite, compaction, reconciliation, or migration. Project-keyed HMAC-SHA-256 fingerprint keys are private persistent state with explicit key epochs; deterministic compaction applies only to closed verified segments and removes source JSONL only after atomic verified replay.
+- **A1-FR-067e**: Observation `completed` MUST require an exact authoritative root, every required unit done, approval by every assigned required-review authority, every acceptance criterion passed with evidence, every OBS-INV-001 through OBS-INV-010 present/passed, and fresh final verification by product-owned Morfeo identity/profile/role. Event-supplied authority never suffices, and any later semantic delta invalidates verification. Process predecessors, waves, rounds, retries, regressions, and critical-path edges MUST come only from durable references/native span identity, never temporal proximity or overlap. Missing hooks, span endpoints, turn/API IDs, heartbeat recency, and every distinct native run outcome remain explicit coverage/state facts rather than inferred positives.
+- **A1-FR-067f**: Native observation payloads MUST be structurally projected and provenance-validated before queue, logs, journal, SQLite, summary, retry, or error reporting. `XDG_STATE_HOME` and generated paths MUST remain absolutely confined; symlinks, hard links, ownership/mode mismatch, and DB/WAL/SHM permission drift fail before persistence. Critical flush intent survives failed `fsync`; source JSONL survives every incomplete compaction; each event plus its derived rows is atomic; bulk ingest isolates a failing event; and projection pointer transitions are lock/CAS guarded so readers cannot downgrade them.
 - **A1-FR-068**: Aether MUST NOT upload projects, prompts, contracts, code, credentials, memories, sessions, or usage metrics except through a separate user-authorized product action such as a GitHub push or selected model call.
 - **A1-FR-069**: Logs MUST remain local, apply secret redaction, and avoid raw prompt/code capture by default.
 - **A1-FR-070**: Product-managed directories and credential-adjacent files MUST use least-privilege user permissions.
@@ -236,11 +248,12 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-078**: The public architecture diagram and short terminal demonstration MUST derive from the verified RC and MUST NOT contain simulated success, private identifiers, credentials, or Christopher's project data.
 - **A1-FR-079**: GitHub Issues MUST handle defects and features, Discussions MUST handle questions, and private vulnerability reporting MUST handle security disclosures, with no response-time SLA implied.
 - **A1-FR-080**: Pre-1.0 history and releases MUST be preserved and described as experimental/legacy rather than rewritten or deleted.
-- **A1-FR-081**: Issues `#192` and `#195` MUST remain visible non-blocking known limitations assigned to future minor release scope unless Christopher explicitly changes them.
+- **A1-FR-081**: Issue `#192` remains a visible non-blocking known limitation unless Christopher changes it. Issue `#195` is a 1.0 release prerequisite under PD-68 and MUST close with the deterministic and controlled-real-trace evidence defined by the 002 contract.
 
 ### 5.10 Qualification and release gates
 
-- **A1-FR-082**: Deterministic CI MUST test CLI parsing, schemas, path safety, manifest verification, profile-policy parity, project isolation, setup parity, service command boundaries, update staging, rollback, uninstall preservation, package metadata, built distributions, docs links, workflow validity, and secret absence.
+- **A1-FR-082**: Deterministic CI MUST test CLI parsing, schemas, path safety, manifest verification, profile-policy parity, project/context isolation, setup parity, service command boundaries, immutable-journal update/rollback/re-update, versioned projection preservation, private fingerprint-key recovery/rotation, deterministic compaction, uninstall preservation, package metadata, built distributions, docs links, workflow validity, and secret absence.
+- **A1-FR-082a**: Observation qualification MUST recreate and verify the clean public Hermes `v2026.8.18` checkout at commit `e624e9fde561e1add9388384012b295fde669ade`, run at least 119 observation tests against that checkout, register 22 callbacks through real public plugin context, capture tool/API events without raw prompt/response, and leave zero hooks after unload. A dirty or different-revision local runtime is non-qualifying.
 - **A1-FR-083**: Clean-install tests MUST start from a disposable user environment and MUST NOT rely on Christopher's ignored `home/` state, editable Hermes checkout, credentials, cache, or existing services.
 - **A1-FR-084**: The release candidate MUST be installed from PyPI and MUST consume the exact verified public Hermes source or artifact declared by its release-lock mode; `transitional_fork` qualification MUST use the locked downstream GitHub Release artifacts, while `upstream` qualification MUST use the locked stable upstream source and controlled original-package build path.
 - **A1-FR-085**: A preregistered live scenario MUST use a realistic Git repository and a public Hermes-supported provider, never private owner infrastructure.
@@ -286,6 +299,7 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - **A1-SC-011**: GitHub, PyPI, Pages, package metadata, changelog, and release notes agree on identity, version, support, privacy, limitations, and install command.
 - **A1-SC-012**: `v1.0.0` is published only from the accepted RC commit after explicit publication authority.
 - **A1-SC-013**: Read-only contract/package validation and exact board-verified Morfeo task-bound contract authoring through native structured file tools execute without false policy denial, while real gateway lifecycle violations, cross-role contract mutation, missing board identity, stale or cross-task run identity, standalone checkout, workspace-kind or branch mismatch, relative targets, parser-hidden operations, and writes outside the assigned workspace remain denied. Shell/code-execution authority is tested against its own protected-effect contract rather than counted as path confinement evidence.
+- **A1-SC-014**: The packaged contract observer produces one schema-valid deterministic summary spanning the owner message, Morfeo creation, Supervisor handoff, explicitly bound implementation/review graph, acceptance verification, and terminal resolution; its duration partition, participant actions, exact tool totals, task/run/review/acceptance state, flow classifications, invariant transitions, separated lifecycle state, and coverage reconcile with a controlled real contract trace. Collection remains local, metadata-only, and non-blocking.
 
 ## 9. Known assumptions and limitations
 
@@ -293,12 +307,12 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - The public provider used for live qualification remains an owner-gated execution choice because it depends on credentials and spend. The contract fixes that it cannot use private owner infrastructure.
 - Git is mandatory. GitHub is the only qualified remote forge for 1.0, but local work can proceed before remote authorization.
 - TUI is the required human surface. Hermes messaging adapters may work but are not 1.0 qualification claims.
-- `#192` and `#195` are accepted non-blocking limitations for future minors.
+- `#192` is an accepted non-blocking limitation for a future minor. `#195` is not: its bounded contract-observation MVP is required before 1.0.0.
 - No response-time support commitment is made.
 
 ## 10. Impact and reconciliation
 
-PD-48 through PD-67 supersede older text that described Aether as a private single-profile configuration layered on unmodified Hermes, as permanently bound to a downstream fork, or as requiring all Morfeo contract drafts to be written directly on the integration checkout. Before implementation closes, the owning and derived artifacts MUST be reconciled. At minimum:
+PD-48 through PD-70 supersede older text that described Aether as a private single-profile configuration layered on unmodified Hermes, as permanently bound to a downstream fork, as requiring all Morfeo contract drafts to be written directly on the integration checkout, as deferring all semantic contract observation beyond 1.0, as leaving manager/observer packaging independently selectable, or as allowing observation to guess project/origin identity, rewrite source history, or perform durability/reduction work on the agent callback path. Before implementation closes, the owning and derived artifacts MUST be reconciled. At minimum:
 
 - R4: replace both the absolute no-fork rule and the permanent-downstream assumption with the upstream-first transitional boundary;
 - R9: reconcile public XDG state, project identity, backup, and update ownership;

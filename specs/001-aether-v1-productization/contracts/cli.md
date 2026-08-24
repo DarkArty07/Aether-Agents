@@ -19,12 +19,19 @@
 ### `aether setup`
 
 ```text
-aether setup [--config PATH] [--dry-run] [--json]
+aether setup [--config PATH] [--release-lock PATH] [--dry-run] [--json]
 ```
 
 Guided mode is used when `--config` is absent. Declarative mode parses the TOML file into the data model defined by `setup-config.schema.json`. Both modes call one planner/validator/effect engine.
 
 Effects may include creating XDG directories, staging the lock-selected upstream or transitional-fork Hermes runtime, writing product-owned profile policy/configuration, and preparing the user service. Login autostart is opt-in. Provider authentication is delegated to the managed Hermes native mechanism.
+
+The local wheel/check-out implementation path requires an explicit schema-3
+`--release-lock`. The manager validates its six-field Aether pre-build identity
+against wheel metadata, its hash-bound observer dependency digest against the packaged
+lock, and its Hermes source-tree digest against a tracked-commit archive. It retains
+the exact validated lock in the staged release and never invents Git provenance from
+a filename, remote artifact digest, or wheel digest.
 
 ### `aether init`
 
@@ -66,12 +73,12 @@ These commands address only the Aether-managed user service and never another He
 aether doctor [--project PATH] [--json]
 ```
 
-Validates platform, XDG paths and permissions, manager/product compatibility, release lock, runtime artifact and executable, profile-policy parity, service state, required tools, project identity, board mapping, and WSL2 filesystem constraints. It is read-only.
+Validates platform, XDG paths and permissions, manager/product compatibility, release-lock schema `3`, external provenance and local transition digests, the runtime artifact/executable, manager/runtime `aether-agents` distribution/package/Git/source/installed-file identity parity, the exact `aether-contract-observer` entry-point target and per-profile enablement, declared observation write versions contained in their read sets and matched to packaged schemas/upcasters/projection code, runtime-local CLI non-shadowing, profile-policy parity, service state, required tools, project identity, board/session/launch context mappings, observation health counters, journal/archive integrity, projection compatibility, fingerprint-key permissions/epochs, and WSL2 filesystem constraints. It reports unresolved/conflicting context and preserved unknown-newer observation bytes without exposing their identifiers or key material. It is read-only and remains usable when Hermes cannot import.
 
 ### `aether update`
 
 ```text
-aether update [VERSION] [--prerelease] [--dry-run] [--yes] [--json]
+aether update [VERSION] [--prerelease] [--release-lock PATH] [--dry-run] [--yes] [--json]
 ```
 
 - Defaults to the newest stable compatible release.
@@ -87,7 +94,7 @@ aether update [VERSION] [--prerelease] [--dry-run] [--yes] [--json]
 aether rollback [VERSION] [--dry-run] [--yes] [--json]
 ```
 
-Defaults to the most recent prior coherent product version. Switches product-owned runtime/policy pointers and never overwrites newer user data with an old backup.
+Defaults to the most recent prior coherent product version. Switches product-owned runtime/policy pointers and never overwrites newer user data with an old backup. Observation journals and key epochs continue forward unchanged; the selected reducer uses its versioned projection and preserves/indexes unknown newer bytes until a compatible forward update.
 
 ### `aether reconcile`
 
@@ -104,6 +111,29 @@ aether uninstall [--purge] [--export PATH] [--dry-run] [--yes] [--json]
 ```
 
 Normal uninstall stops/removes the Aether service and product-owned runtime while preserving projects and exportable user state. `--purge` deletes Aether user state only after explicit confirmation. The command must leave or execute a safe finalizer for removing its uv tool environment; it must never remove uv or unrelated tools.
+
+### `aether observe`
+
+```text
+aether observe [REF] [--project PATH] [--since SUMMARY_ID] [--watch] [--json]
+```
+
+- `REF` resolves an exact observation `trace_id`, canonical `contract_id`, or bound Kanban `task_id`.
+- Without `REF`, one open trace is selected; no trace returns an empty-state brief and multiple open traces return bounded ambiguity instead of guessing.
+- Default human output is one coherent Morfeo-oriented review brief from the deterministic summary defined by `../../002-aether-contract-observation/contracts/observation-summary.schema.json`. It prioritizes conclusion, causal step/round/wave reconstruction, current state, verified progress, blockers/anomalies, unfinished required work and acceptance, critical path/acceleration evidence, configuration/tool/model coverage, execution quality, evidence coverage, and the next decision rather than exposing atomic per-section queries.
+- `--since SUMMARY_ID` emphasizes deterministic semantic changes from a previous summary. If summary schema/reducer versions lack a declared normalization path, it reports comparison incompatibility instead of manufacturing a diff; fingerprint-key rotation alone is not a configuration change.
+- `--watch` refreshes only when the summary ID, verdict, priority findings, coverage state, or next gate changes; it never tails raw journal events. It performs incremental ingestion, checks no faster than once per second, backs off to at most five seconds while unchanged, resets after a detected change, and never full-replays the journal on each check.
+- `--watch` and `--json` are mutually exclusive. The stable `--json` contract emits exactly one envelope and does not silently become an NDJSON stream; the invalid combination returns one `WATCH_JSON_UNSUPPORTED` error envelope.
+- For a resolved summary, `--json` sets the standard envelope's `data` object to
+  `{"state":"summary","summary":{...}}`, where `summary` is exactly one normative
+  observation-summary instance.
+- With no open trace, `--json` sets `data` exactly to
+  `{"state":"empty","summary":null}`. Human output is a projection of that same
+  explicit state rather than an independently inferred absence.
+- The envelope remains at `schema_version: 1`; clients discriminate the two
+  observation variants through `data.state`, and the formerly underspecified `{}`
+  empty payload is not a conforming observation result.
+- The command is read-only, labels partial/estimated/unavailable fields, and makes no network or model call.
 
 ### Version
 

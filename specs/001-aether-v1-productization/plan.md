@@ -2,7 +2,7 @@
 
 **Contract**: [`spec.md`](spec.md)
 **Research**: [`research.md`](research.md)
-**Plan status**: ready for Supervisor executability analysis
+**Plan status**: normative plan active; implementation and release evidence are tracked separately
 **Decision authority**: Christopher
 **Plan owner**: Morfeo
 **Execution owner**: Supervisor
@@ -41,7 +41,7 @@ The stable release is produced only after an RC installed from PyPI consumes the
 
 | Principle | Assessment |
 |---|---|
-| Current intent and human authority | Pass. Owner-approved PD-48–PD-67 define the public product. Publication, credentials, spend, live cutover, and destructive effects remain explicit gates. |
+| Current intent and human authority | Pass. Owner-approved PD-48–PD-70 define the public product. Publication, credentials, spend, live cutover, and destructive effects remain explicit gates. |
 | Specification owns intent | Pass. `spec.md` is normative; this plan and future tasks may not weaken it. |
 | Autonomous, bounded design | Pass. Technical defaults are chosen only where the owner delegated them and assumptions are recorded in `research.md`. |
 | Evidence and traceable convergence | Pass. Existing local tests are distinguished from missing public-path qualification. Every release claim has an evidence path. |
@@ -56,10 +56,11 @@ No constitutional exception is authorized.
 
 ```text
 PyPI
-└── aether-agents (manager wheel/sdist)
+└── aether-agents (single product wheel/sdist)
     ├── aether CLI
     ├── release-lock.json
     ├── profile-policy bundle
+    ├── contract-observer entry point + shared observation modules
     ├── public schemas
     └── XDG/project/service lifecycle logic
 
@@ -71,18 +72,24 @@ Hermes public source selected by release-lock mode
     └── residual patch ledger + retirement evidence
 
 User machine
-├── uv-managed aether CLI environment
+├── uv-managed aether CLI environment (aether-agents wheel)
 ├── Aether-managed versioned Hermes runtime
+│   ├── release-locked hermes-agent distribution
+│   └── the exact same aether-agents wheel, installed --no-deps for the plugin
 ├── persistent Aether profile/user state
 ├── systemd user service
 └── N isolated projects
     ├── tracked identity + contracts
-    └── local board/workspaces outside Git
+    └── local board/workspaces/observations outside Git
 ```
 
 ### 4.2 Manager versus runtime
 
 The manager MUST NOT import Hermes modules. It operates on Hermes as a versioned external executable. This preserves diagnosis and rollback if the runtime cannot import, has dependency damage, or is mid-transition.
+
+One immutable `aether-agents` wheel is installed into two isolated environments. The `uv tool` environment owns the public `aether` command. The staged runtime installs that same wheel with `--no-deps` only so Hermes can discover `aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"` through the public `hermes_agent.plugins` entry-point group and reuse Hermes-independent observation contracts/reducer code. Runtime-local console scripts are never put on the public manager path.
+
+The import boundary is structural: manager commands/transitions/release/service/auth never import Hermes; the Hermes adapter never imports those manager modules; shared observation modules import neither. The schema-3 release lock binds the pre-build tuple `distribution + package_version + git_tag + git_commit + python_requires + observer entry point`, observation event/summary/segment-manifest read/write versions, and projection schema version. Doctor and every transition verify that each write version belongs to its read set and matches packaged schemas/upcasters/projection code. External provenance and the local transition record bind the staged wheel filename/SHA-256; activation verifies installed-file fingerprint and profile enablement. A second observer package, copied per-profile implementation, or independent observer version is not permitted.
 
 The runtime MUST NOT update the manager or fetch mutable Aether product policy. Aether product updates originate in the manager and require a verified Aether release lock.
 
@@ -92,13 +99,20 @@ Each manager release packages one `release-lock.json` conforming to `release-loc
 
 - SemVer and PEP 440 Aether versions;
 - Aether Git tag and commit;
+- Aether distribution name, normalized package version, Git tag/commit, Python requirement, and observer entry-point identity; together these form the pre-build identity tuple. External release provenance and each local transition record, rather than the self-contained lock, bind the staged wheel filename/SHA-256 used for runtime installation;
 - source mode, repository, tag, and commit;
 - stable upstream base and residual patch IDs when mode is `transitional_fork`;
-- Python compatibility;
+- Python compatibility and the SHA-256 of the packaged, hash-bound observer
+  dependency closure used to sync the manager and reconcile the runtime;
+- the deterministic path-and-file-byte digest of the exact Hermes Git tree
+  materialized locally, kept distinct from digests of remote source artifacts;
 - source/artifact URLs, filenames, SHA-256 values, and provenance URLs required by the selected mode;
 - exact profile-policy bundle version and digest.
 
-A release is incoherent if any version, ref, artifact, digest, or profile-policy value differs.
+A release is incoherent if any version, ref, artifact, source-tree, dependency-lock,
+or profile-policy value differs. The validated external lock is copied byte-for-byte
+to `<release>/release-lock.json`; its digest and both local materialization digests are
+re-proved by doctor and before every activation.
 
 ### 4.4 XDG and version layout
 
@@ -114,7 +128,7 @@ Target logical layout:
 ├── releases/
 │   └── <aether-semver>/
 │       ├── release-lock.json
-│       ├── runtime/            # isolated venv with locked hermes-agent wheel
+│       ├── runtime/            # isolated venv with locked Hermes + same Aether wheel
 │       └── product-resources/  # immutable profile-policy bundle
 ├── profiles/                   # persistent per-role Hermes user state
 │   ├── morfeo/
@@ -129,6 +143,19 @@ Target logical layout:
 ~/.local/state/aether/
 ├── transitions/                # update/rollback journals
 ├── backups/                    # metadata + safe state backups
+├── observations/
+│   ├── health/                 # content-free unresolved/IO counters only
+│   └── <project-uuid>/
+│       ├── journal/
+│       │   ├── active/         # one append-only JSONL segment per producer epoch
+│       │   ├── closed/         # immutable verified JSONL awaiting/without compaction
+│       │   ├── archive/        # deterministic gzip + canonical manifests
+│       │   └── quarantine/     # preserved corrupt/unknown segments
+│       ├── keys/               # private 0600 HMAC fingerprint epochs
+│       ├── projections/        # versioned deterministic rebuildable SQLite models
+│       ├── projection.current.json # derived active-projection pointer
+│       ├── summaries/          # durable schema-valid final summaries
+│       └── locks/              # bounded reducer/compaction coordination
 └── logs/                       # local redacted manager/service logs
 
 ~/.cache/aether/
@@ -142,6 +169,9 @@ Implementation may adjust leaf names during Supervisor analysis, but it MUST pre
 - no absolute path in portable project identity;
 - atomic active-release selection;
 - project UUID isolation;
+- exact project-context resolution before any project journal write;
+- immutable journals, versioned disposable projections, and preserved unknown-newer bytes across rollback;
+- fingerprint keys remain private persistent state and never product/release resources;
 - XDG ownership and least-privilege permissions.
 
 ### 4.5 Persistent profiles and product-owned policy
@@ -199,6 +229,32 @@ Aether-Agents/
 │   ├── service.py
 │   ├── auth.py
 │   ├── commands/
+│   │   └── observe.py
+│   ├── observation/
+│   │   ├── __init__.py
+│   │   ├── contracts.py       # Hermes-independent typed contracts
+│   │   ├── privacy.py         # allowlist projection and forbidden-content guards
+│   │   ├── context.py         # exact project/session/task resolution
+│   │   ├── identity.py        # trace/producer/event identity and dedup keys
+│   │   ├── fingerprints.py    # private project-key epochs and HMAC domains
+│   │   ├── correlation.py     # trace/task/session/request identities
+│   │   ├── capture/
+│   │   │   ├── __init__.py
+│   │   │   ├── hermes_plugin.py  # sole Hermes-facing entry-point adapter
+│   │   │   ├── projectors.py
+│   │   │   ├── journal.py
+│   │   │   └── flusher.py     # supervised durability outside callbacks
+│   │   ├── reduce/
+│   │   │   ├── __init__.py
+│   │   │   ├── ingest.py
+│   │   │   ├── upcast.py      # pure released-schema evolution
+│   │   │   ├── reducer.py
+│   │   │   ├── reconciliation.py
+│   │   │   └── process.py
+│   │   ├── storage.py
+│   │   ├── retention.py       # closed-segment compaction/manifests
+│   │   ├── query.py
+│   │   └── report.py
 │   └── resources/
 │       ├── release-lock.json
 │       ├── schemas/
@@ -209,14 +265,21 @@ Aether-Agents/
 │           └── implementer/
 ├── tests/
 │   ├── unit/
+│   │   └── observation/
 │   ├── integration/
+│   │   └── observation/
 │   ├── packaging/
 │   ├── security/
-│   └── qualification/
+│   │   └── observation/
+│   ├── qualification/
+│   │   └── observation/
+│   └── fixtures/
+│       └── observation/
 ├── docs/
 ├── scripts/
 ├── policy/
 ├── specs/001-aether-v1-productization/
+├── specs/002-aether-contract-observation/
 ├── .github/workflows/
 ├── CHANGELOG.md
 ├── README.md
@@ -234,7 +297,18 @@ hermes-agent/
 └── release workflow for wheel/sdist/checksums/provenance
 ```
 
-Supervisor may consolidate manager modules where that improves cohesion. It MUST NOT merge Hermes source into this tree or duplicate the private local profile catalog.
+Supervisor may consolidate manager modules where that improves cohesion. It MUST NOT merge Hermes source into this tree or duplicate the private local profile catalog. The observer subpackage boundaries are normative: `capture/hermes_plugin.py` is the only Hermes-facing adapter; shared context/identity/fingerprint/contracts/reducer/storage/report modules remain Hermes-independent; callback and flusher responsibilities stay separate; public CLI ownership stays under `commands/observe.py`.
+
+The editable normative observer schemas remain under `specs/002-aether-contract-observation/contracts/`. Build configuration includes those exact bytes in `aether_agents/resources/schemas/` inside wheel and sdist; that package path is generated build output, not a second hand-maintained source. Packaging tests compare bytes and SHA-256 across source, wheel, and sdist.
+
+`pyproject.toml` declares one observer entry point:
+
+```toml
+[project.entry-points."hermes_agent.plugins"]
+aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"
+```
+
+The target is a module exposing `register(ctx)`, matching the release-locked Hermes entry-point loader. It is enabled by product-owned profile configuration, registers no public Aether CLI command inside Hermes, and must be idempotent per plugin-manager generation.
 
 ## 6. Public CLI implementation contract
 
@@ -257,13 +331,13 @@ No command-specific shortcut may skip integrity or recovery checks that the shar
 
 ### 7.1 Update
 
-1. Resolve an immutable target Aether release from the canonical package/release metadata.
-2. Fetch its release lock and verify the Aether source/tag relationship.
+1. Resolve one immutable target `aether-agents` wheel from canonical package/release metadata and record its filename/SHA-256 in the pending local transition.
+2. Fetch its schema-3 release lock and verify the Aether distribution/package/tag/commit/Python/observer tuple, observation compatibility declaration, and external wheel provenance. Each declared write schema MUST belong to its corresponding read set and match packaged schemas/upcasters/projection code; never expect the wheel-contained lock to hash its containing wheel.
 3. Preview version, storage, service interruption, and user-state treatment.
 4. Download the locked upstream source or transitional-fork artifacts into cache staging.
 5. Verify SHA-256, provenance, Python/platform compatibility, source mode, and package metadata.
-6. Build a new immutable release directory.
-7. Snapshot product-owned profile files and transition metadata; do not snapshot/copy raw credentials into release artifacts.
+6. Install the exact staged Aether wheel into the manager candidate and with `--no-deps` into the new immutable Hermes runtime; verify installed-file fingerprints, official entry-point discovery, per-profile enablement, and public-CLI non-shadowing.
+7. Snapshot product-owned profile files and transition metadata. Preserve observation journals, versioned projections, summaries, and project fingerprint keys as persistent forward state; private local recovery backups MAY include the keys under `0600`, but release/publication artifacts, logs, summaries, and ordinary exports MUST NOT.
 8. Apply product-owned profile/config changes to staging or through reversible atomic file operations.
 9. Run doctor against the candidate while inactive.
 10. Stop only the Aether service if required, switch the active record atomically, and start/verify it when previously active.
@@ -282,7 +356,7 @@ No command-specific shortcut may skip integrity or recovery checks that the shar
 
 ### 7.3 Rollback
 
-Rollback selects a previously verified release directory and restores only product-owned policy/config versions. Persistent user-owned state continues forward. Any data migration introduced after 1.0 must declare backward compatibility or make rollback block before mutation; no such migration is authorized in this contract.
+Rollback selects a previously verified release directory and restores only product-owned policy/config versions. Persistent user-owned state continues forward. Observation journals are never migrated or rewritten: the rollback reducer uses its own versioned projection, preserves/indexes unknown newer bytes, and forward re-update reingests them. Any other data migration introduced after 1.0 must declare backward compatibility or make rollback block before mutation; no such migration is authorized in this contract.
 
 ## 8. Downstream Hermes maintenance plan
 
@@ -383,7 +457,7 @@ Update description, topics, README, roadmap, changelog, contribution/security do
 - upstream-first runtime boundary and transitional-fork retirement policy;
 - Linux/WSL2 support;
 - flexible descending model methodology;
-- privacy/no telemetry;
+- privacy/no remote telemetry and bounded local contract observation;
 - known limitations and pre-1.0 legacy history.
 
 ### 11.2 Documentation
@@ -430,9 +504,9 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 ### Phase 1 — Manager/package skeleton and public contracts
 
-- establish src-layout package, version mapping, resource inclusion, build/lock tooling, command parser/result envelope, XDG path model, schemas, and wheel-installed test path.
+- establish the single src-layout `aether-agents` package, version mapping, observer entry point, one-source schema/resource inclusion, build/lock tooling, command parser/result envelope, XDG path model, and dual isolated wheel-install test path.
 
-**Exit**: built wheel installs through uv in a disposable environment; help/version/doctor skeleton operates without Hermes.
+**Exit**: one built wheel installs through uv in disposable manager and runtime environments; help/version/doctor operates without Hermes; runtime discovery resolves the exact observer entry point without making the runtime-local `aether` script public.
 
 ### Phase 2 — Hermes source reconciliation and runtime production
 
@@ -470,10 +544,24 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 **Exit**: two concurrent disposable projects remain isolated and no init path performs remote effects.
 
-### Phase 6 — Security, privacy, and package hardening
+### Phase 6 — Contract observation
+
+- before broad observer implementation fan-out, recreate the clean locked Hermes checkout and execute the disposable native-callback/append/flush/reducer/corrupt-tail/ENOSPC spike; retain measurements and return any infeasible contract threshold to Morfeo rather than silently redesigning it;
+- package the public-hook observer and optional internal fail-open checkpoint sink inside the single product wheel, install that exact wheel `--no-deps` beside Hermes, and enable the official entry point in every participating profile with no role-facing observation step;
+- implement exact project-context resolution, bounded owner-message candidates, restart-safe identities, the per-process append-only journal plus out-of-callback flusher, pure schema upcasters, versioned deterministic projections, project-keyed fingerprint epochs, verified closed-segment compaction, and schema validation;
+- enforce product-owned completion authority, exact root/review/acceptance/invariant closure, and post-verification semantic-delta invalidation; reconstruct waves and every causal edge only from durable references/native span identity, never timestamp overlap;
+- make partial hook registration, unpaired spans, missing turn/API IDs, heartbeat recency, and the complete native run-outcome taxonomy trace-visible coverage/state; preserve `unknown`/`unavailable` rather than inferring a positive fact;
+- project and provenance-validate native payloads before every sink; confine absolute XDG paths and closed generated components; reject symlink/hard-link/mode violations before write; retain critical flush intent after failed `fsync`; atomically ingest each event and derived rows; preserve source through compaction failure; and guard projection pointers with lock/CAS transitions;
+- expose one Morfeo-oriented `aether observe` review brief with human and JSON projections; defer the dashboard/API and separate read-only agent query tool;
+- implement full-lifecycle duration partitioning, participants/actions, exact observed-tool accounting, causal semantic steps, parallel deployment waves, execution/rework rounds, deployed agent/unit counts, critical-path and dispatch-tick-sampled acceleration evidence, explicit bound task/run/review/acceptance state, field-covered configuration/tool/model evidence, provenance-bearing attribution, flow classification, invariant evaluation, separated lifecycle state, retention, and explicit coverage gaps;
+- execute the 002 deterministic fixture matrix and one controlled real trace.
+
+**Exit**: A1-SC-014 passes; issue `#195` closes from machine-readable evidence; configured/effective tool surfaces are not conflated; unresolved project/origin evidence never leaks or guesses; update/rollback/re-update preserves immutable source history; callbacks contain no synchronous durability/reduction work; unavailable signals remain explicit; the pipeline completes with no observation declaration; observer degradation is proven non-blocking; no downstream Hermes core patch is introduced; and privacy scans find no forbidden raw content or fingerprint key bytes.
+
+### Phase 7 — Security, privacy, and package hardening
 
 - path/symlink/race protections;
-- permissions and log redaction;
+- permissions, log redaction, observer allowlist/retention, and local-only enforcement;
 - secret/private-content scans of source and built artifacts;
 - package metadata/license/attribution;
 - service/process/environment isolation;
@@ -481,7 +569,7 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 **Exit**: security tests and independent review pass on built distributions and installed state.
 
-### Phase 7 — Public GitHub/docs surface
+### Phase 8 — Public GitHub/docs surface
 
 - update repository identity/docs/templates/policy;
 - build Pages documentation, architecture asset, quickstart, support matrix, and RC-derived demo pipeline;
@@ -491,27 +579,27 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 
 **Exit**: local/docs CI is green and external configuration steps are explicit and ready.
 
-### Phase 8 — Deterministic RC qualification
+### Phase 9 — Deterministic RC qualification
 
 - build/verify the selected Hermes source mode, wheel, sdist, profile bundle, and release lock;
 - install the exact RC package in clean native Linux and WSL2 lanes;
-- exercise guided and declarative setup, init, service, project isolation, update fault injection, rollback, uninstall, package/docs/security checks;
+- exercise guided and declarative setup, init, service, project isolation, contract observation, update fault injection, rollback, uninstall, package/docs/security checks;
 - retain machine-readable evidence.
 
 **External gates**: publish a downstream release only if selected, configure trusted publisher, and publish the Aether RC.
 
 **Exit**: the public RC can be installed and passes deterministic qualification with all deviations recorded.
 
-### Phase 9 — Live RC qualification
+### Phase 10 — Live RC qualification
 
 - preregister realistic project/objective, expected artifacts, owner acceptance command, provider, model bindings, budgets, and redaction plan;
 - obtain explicit credential and spending authorization;
-- install from public PyPI RC and run the complete three-role path;
+- install from public PyPI RC, run the complete three-role path, and reconcile its full owner-message-to-terminal contract-observation summary against native evidence;
 - review evidence independently and record Linux/WSL2 results without equating heartbeat with progress.
 
 **Exit**: A1-SC-010 is evidenced or the release remains RC.
 
-### Phase 10 — Stable release decision
+### Phase 11 — Stable release decision
 
 - reconcile RC findings without weakening requirements;
 - verify versions/commits/artifacts/docs all agree;
@@ -528,14 +616,15 @@ These are dependency phases, not implementation cards. Supervisor derives and li
 |---|---|
 | Schemas/contracts | JSON Schema validation; command/help/version snapshots; JSON envelope and exit-code tests |
 | Unit | parsing, version normalization, path mapping, hashing, redaction, merge ownership, transition planning |
-| Filesystem/security | symlink escape, traversal, permissions, atomic write, interrupted transition, malicious archive/filename |
-| Package | build wheel/sdist, inspect contents/metadata/license, install built wheel with uv, import/execute outside source tree |
+| Filesystem/security | relative `XDG_STATE_HOME`, generated-component grammar, symlink/hard-link escape, traversal, DB/WAL/SHM private modes, atomic write, interrupted transition, malicious archive/filename |
+| Package | build one wheel/sdist, inspect contents/metadata/license, install the same staged wheel in isolated manager/runtime environments, verify build/file-fingerprint, transition-digest, entry-point and schema parity plus import boundaries, execute outside source, and prove runtime-local CLI non-shadowing |
 | Runtime integrity | locked download hash/provenance/metadata, clean wheel install, executable/version verification |
 | Profiles/policy | public allowlist, no private data, role config invariants, hook parity, update drift/backup/restore, and read-only-validation versus real gateway-lifecycle denial regression |
 | Service | generated unit inspection, user-only lifecycle, environment cleanup, readiness/failure, unrelated service safety |
 | Projects | empty/brownfield init, dirty tree preservation, UUID collision, moved clone, two-project isolation, WSL `/mnt/c` refusal |
 | Update/recovery | failure injection before/after every transition boundary, manager mismatch, rollback without user-state rollback |
-| Privacy | source/build/docs/profile/release secret scans; local log redaction; no telemetry/network analytics |
+| Contract observation | event/summary schema validation; exact product-owned completion authority, root/review/acceptance/invariant closure and semantic-delta invalidation; durable-reference-only causal step/wave/round reconstruction; deployed agent/unit and eligible-versus-running accounting; critical-path/queue/dependency/review/rework/capacity evidence; explicit task/run/review/acceptance graph; participant/action causality; exact tool totals and distinct run outcomes; missing-hook/unpaired-span/ID/heartbeat coverage; iteration/retry/loop/regression/reversion fixtures; blocked/review/crash/timeout/resume and no-premature-close tests; lifecycle-state separation; crash/restart/idempotence/atomic-ingest/pointer/compaction tests; CLI human/JSON summary parity; exact clean Hermes callback qualification; proof that deferred read surfaces are absent; controlled real full trace |
+| Privacy | native malicious-payload projection before queue/log/journal/SQLite/summary/retry; source/build/docs/profile/release secret scans; local log redaction; observer allowlist/retention; no remote telemetry/network analytics or raw-content capture |
 | Docs/workflows | link/code-snippet/nav validation; action linting; release tag/version gates; OIDC permission review |
 | Platform | clean Ubuntu native, Ubuntu WSL2, Garuda/Arch dogfood |
 | Live | public PyPI RC + lock-selected public Hermes source + public provider + complete three-role flow + independent evidence review |
@@ -576,7 +665,7 @@ A gate denial is authoritative. Workers must not route around it with another to
 ## 16. Artifacts intentionally absent
 
 - `tasks.md`: Supervisor owns decomposition and tasks.
-- product source: this contract authorizes planning only in this artifact set; implementation follows the pipeline.
+- verified product/release completion evidence: source may exist as an implementation candidate, but deterministic validation and the owner-approved controlled real trace remain mandatory before A1 can be called complete or release-ready;
 - credentials/provider config: protected user state.
 - final quickstart/demo: commands are not called working until the public RC executes them.
 - release lock instance: values do not exist until the selected Hermes source and Aether candidate artifacts are built or verified.
