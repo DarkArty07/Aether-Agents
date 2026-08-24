@@ -25,9 +25,10 @@ dependencies = [
 [project.scripts]
 aether = "aether_agents.cli:main"
 
-# OBS-FR-072: exactly one observer entry point, targeting a module exposing register(ctx).
+# Aether plugin allow-list: exact entry points, each targeting a module exposing register(ctx).
 [project.entry-points."hermes_agent.plugins"]
 aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"
+aether-objective-contracts = "aether_agents.objective_contracts.hermes_plugin"
 
 [project.urls]
 Homepage = "https://github.com/DarkArty07/aether-agents"
@@ -49,12 +50,14 @@ packages = ["src/aether_agents"]
 "specs/002-aether-contract-observation/contracts/observation-summary.schema.json" = "aether_agents/resources/schemas/observation-summary.schema.json"
 "specs/002-aether-contract-observation/contracts/observation-segment-manifest.schema.json" = "aether_agents/resources/schemas/observation-segment-manifest.schema.json"
 "specs/001-aether-v1-productization/contracts/release-lock.schema.json" = "aether_agents/resources/schemas/release-lock.schema.json"
+"specs/001-aether-v1-productization/contracts/project.schema.json" = "aether_agents/resources/schemas/project.schema.json"
 
 [tool.hatch.build.targets.sdist]
 include = [
   "/src/aether_agents",
   "/specs/002-aether-contract-observation/contracts",
   "/specs/001-aether-v1-productization/contracts/release-lock.schema.json",
+  "/specs/001-aether-v1-productization/contracts/project.schema.json",
   "/tests",
   "/VERSION",
   "/README.md",

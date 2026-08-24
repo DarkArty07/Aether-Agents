@@ -428,14 +428,15 @@ def _build_wheel(
     )
     a1_contracts = source / "specs" / "001-aether-v1-productization" / "contracts"
     a1_contracts.mkdir(parents=True)
-    shutil.copy2(
-        repository
-        / "specs"
-        / "001-aether-v1-productization"
-        / "contracts"
-        / "release-lock.schema.json",
-        a1_contracts / "release-lock.schema.json",
-    )
+    for schema_name in ("release-lock.schema.json", "project.schema.json"):
+        shutil.copy2(
+            repository
+            / "specs"
+            / "001-aether-v1-productization"
+            / "contracts"
+            / schema_name,
+            a1_contracts / schema_name,
+        )
     output = root / f"dist-{version}"
     subprocess.run(
         ["uv", "build", "--wheel", "--out-dir", str(output)],
@@ -873,6 +874,23 @@ def test_wheel_fingerprint_binds_runtime_metadata_schemas_and_entry_points(
     assert len(identity["observer_requirements_sha256"]) == 64
 
 
+def test_wheel_rejects_unapproved_third_plugin_entry_point(tmp_path: Path) -> None:
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    tampered = _tamper_wheel_member(
+        wheel,
+        tmp_path / "third-plugin.whl",
+        ".dist-info/entry_points.txt",
+        lambda data: data.replace(
+            b"[hermes_agent.plugins]\n",
+            b"[hermes_agent.plugins]\nhostile-extra = hostile.plugin\n",
+            1,
+        ),
+    )
+
+    with pytest.raises(IntegrityError, match="Aether plugin entry-point set"):
+        LifecycleManager._inspect_wheel(tampered)
+
+
 def test_wheel_inspection_binds_the_targets_own_projection_schema(tmp_path: Path) -> None:
     future_schema = "aether.observation.projection.v2"
     wheel = _build_wheel(
@@ -1268,7 +1286,7 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
     isolated_environment = lifecycle._isolated_subprocess_environment()
     source_module = Path(lifecycle.__file__).parent / "__init__.py"
     source_module_bytes = source_module.read_bytes()
-    expected_profile = b"plugins:\n  enabled:\n    - aether-contract-observer\n"
+    expected_profiles = Path(lifecycle.__file__).parent / "resources" / "profiles"
     assert (release / "profile-bundle.json").is_file()
     assert {child.name for child in (release / "profiles").iterdir() if child.is_dir()} == {
         "morfeo",
@@ -1276,6 +1294,7 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         "implementer",
     }
     for role in ("morfeo", "supervisor", "implementer"):
+        expected_profile = (expected_profiles / role / "config.yaml").read_bytes()
         assert (release / "profiles" / role / "config.yaml").read_bytes() == expected_profile
     assert manager.validate_release(record.release_id) == record
     release_manifest = json.loads((release / "release.json").read_text(encoding="utf-8"))
@@ -1329,10 +1348,11 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
     )
 
     profile = release / "profiles" / "morfeo" / "config.yaml"
-    profile.write_bytes(expected_profile + b"# drift\n")
+    expected_morfeo_profile = (expected_profiles / "morfeo" / "config.yaml").read_bytes()
+    profile.write_bytes(expected_morfeo_profile + b"# drift\n")
     with pytest.raises(IntegrityError, match="profile configuration drift"):
         manager.validate_release(record.release_id)
-    profile.write_bytes(expected_profile)
+    profile.write_bytes(expected_morfeo_profile)
 
     artifact = release / "artifacts" / record.wheel_filename
     artifact_bytes = artifact.read_bytes()

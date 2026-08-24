@@ -1,0 +1,10 @@
+schema_version = 1
+project_id = "12027989-a08f-41cd-a82c-54ff1bfb6b03"
+name = "Aether Agents"
+initialized_by = "0.24.0"
+forge = "github"
+contract_root = "specs"
+default_branch = "main"
+
+[github]
+repository = "DarkArty07/Aether-Agents"

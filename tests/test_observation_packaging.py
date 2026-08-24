@@ -61,7 +61,7 @@ def built_distribution(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, 
     return wheel, sdist
 
 
-def test_wheel_has_one_official_observer_entrypoint_and_all_profile_opt_ins(
+def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
     built_distribution: tuple[Path, Path],
 ) -> None:
     wheel, _ = built_distribution
@@ -72,17 +72,18 @@ def test_wheel_has_one_official_observer_entrypoint_and_all_profile_opt_ins(
         parser = configparser.ConfigParser()
         parser.read_string(archive.read(entry_name).decode("utf-8"))
         assert dict(parser["hermes_agent.plugins"]) == {
-            "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin"
+            "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
+            "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
         }
         for profile in PROFILE_NAMES:
             data = archive.read(f"aether_agents/resources/profiles/{profile}/config.yaml").decode(
                 "utf-8"
             )
-            assert data.splitlines() == [
-                "plugins:",
-                "  enabled:",
-                "    - aether-contract-observer",
-            ]
+            source = (
+                ROOT / "src" / "aether_agents" / "resources" / "profiles" / profile / "config.yaml"
+            ).read_text(encoding="utf-8")
+            assert data == source
+            assert ("aether-objective-contracts" in data) is (profile == "morfeo")
         assert not any("aether_observer" in name for name in archive.namelist())
 
 
@@ -187,10 +188,10 @@ eps = sorted(
     for ep in importlib.metadata.entry_points().select(group='hermes_agent.plugins')
     if ep.dist and ep.dist.metadata['Name'] == 'aether-agents'
 )
-if len(eps) != 1:
-    raise RuntimeError('observer entry point is not unique')
+if len(eps) != 2:
+    raise RuntimeError('Aether plugin entry-point set mismatch')
 observer = importlib.import_module('aether_agents.observation.capture.hermes_plugin')
-loaded = eps[0].load()
+loaded = next(ep for ep in eps if ep.name == 'aether-contract-observer').load()
 package_root = d.locate_file('').resolve()
 observer_path = __import__('pathlib').Path(observer.__file__).resolve()
 print(json.dumps({
@@ -269,7 +270,8 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
     assert manager_identity == runtime_identity
     assert manager_identity["name"] == "aether-agents"
     assert manager_identity["entrypoints"] == [
-        ["aether-contract-observer", "aether_agents.observation.capture.hermes_plugin"]
+        ["aether-contract-observer", "aether_agents.observation.capture.hermes_plugin"],
+        ["aether-objective-contracts", "aether_agents.objective_contracts.hermes_plugin"],
     ]
     assert manager_identity["observer_module"] == (
         "aether_agents.observation.capture.hermes_plugin"

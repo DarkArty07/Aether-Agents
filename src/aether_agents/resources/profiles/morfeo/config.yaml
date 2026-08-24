@@ -1,3 +1,8 @@
 plugins:
   enabled:
     - aether-contract-observer
+    - aether-objective-contracts
+  entries:
+    aether-objective-contracts:
+      settings:
+        author_profile: morfeo

@@ -110,6 +110,17 @@ OBSERVER_ENTRY_POINT: dict[str, str] = {
     "target": "aether_agents.observation.capture.hermes_plugin",
 }
 
+OBJECTIVE_CONTRACT_ENTRY_POINT: dict[str, str] = {
+    "plugin_name": "aether-objective-contracts",
+    "group": "hermes_agent.plugins",
+    "target": "aether_agents.objective_contracts.hermes_plugin",
+}
+
+AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
+    OBSERVER_ENTRY_POINT["plugin_name"]: OBSERVER_ENTRY_POINT["target"],
+    OBJECTIVE_CONTRACT_ENTRY_POINT["plugin_name"]: OBJECTIVE_CONTRACT_ENTRY_POINT["target"],
+}
+
 
 @dataclass(frozen=True, slots=True)
 class AetherPrebuildIdentity:
@@ -3499,17 +3510,16 @@ class LifecycleManager:
             raise IntegrityError("candidate entry-point groups mismatch")
         if dict(parser["console_scripts"]) != {"aether": "aether_agents.cli:main"}:
             raise IntegrityError("candidate public CLI entry point mismatch")
-        if dict(parser["hermes_agent.plugins"]) != {
-            "aether-contract-observer": OBSERVER_ENTRY_POINT["target"]
-        }:
-            raise IntegrityError("candidate observer entry-point set mismatch")
+        plugin_entry_points = dict(parser["hermes_agent.plugins"])
         try:
-            target = parser["hermes_agent.plugins"]["aether-contract-observer"]
+            target = plugin_entry_points[OBSERVER_ENTRY_POINT["plugin_name"]]
         except (configparser.Error, KeyError) as error:
             raise IntegrityError("candidate observer entry point is missing") from error
         observed = f"aether-contract-observer={target}"
         if observed != HERMES_BASELINE.observer_entry_point:
             raise IntegrityError("candidate observer entry point target mismatch")
+        if plugin_entry_points != AETHER_PLUGIN_ENTRY_POINTS:
+            raise IntegrityError("candidate Aether plugin entry-point set mismatch")
         schema_versions = {
             key: payload.get("properties", {}).get("schema_version", {}).get("const")
             for key, payload in schema_payloads.items()
@@ -3520,7 +3530,9 @@ class LifecycleManager:
             "manifest": observation_compatibility["segment_manifest_write_version"],
         }:
             raise IntegrityError("candidate packaged schema version mismatch")
-        entrypoints = [[OBSERVER_ENTRY_POINT["plugin_name"], OBSERVER_ENTRY_POINT["target"]]]
+        entrypoints = [
+            [name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())
+        ]
         fingerprint_blob = json.dumps(
             {"files": sorted(rows), "entrypoints": entrypoints},
             sort_keys=True,
@@ -3791,14 +3803,28 @@ print(json.dumps({
         except (json.JSONDecodeError, UnicodeError) as error:
             raise IntegrityError("installed Aether identity is malformed") from error
         expected = [
-            ["aether-contract-observer", HERMES_BASELINE.observer_entry_point.split("=", 1)[1]]
+            [name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())
         ]
+        if not isinstance(identity, dict):
+            raise IntegrityError("installed Aether identity is malformed")
+        installed_entrypoints = identity.get("entrypoints")
+        if not isinstance(installed_entrypoints, list) or any(
+            not isinstance(item, list)
+            or len(item) != 2
+            or not all(isinstance(value, str) for value in item)
+            for item in installed_entrypoints
+        ):
+            raise IntegrityError("installed Aether plugin entry-point set mismatch")
+        installed_plugins = {item[0]: item[1] for item in installed_entrypoints}
+        if installed_plugins.get(OBSERVER_ENTRY_POINT["plugin_name"]) != OBSERVER_ENTRY_POINT[
+            "target"
+        ]:
+            raise IntegrityError("installed observer entry point mismatch")
         if (
-            not isinstance(identity, dict)
-            or identity.get("entrypoints") != expected
+            installed_entrypoints != expected
             or identity.get("console_scripts") != [["aether", "aether_agents.cli:main"]]
         ):
-            raise IntegrityError("installed observer entry point mismatch")
+            raise IntegrityError("installed Aether plugin entry-point set mismatch")
         version = identity.get("version")
         fingerprint = identity.get("fingerprint")
         if not isinstance(version, str) or not _VERSION_RE.fullmatch(version):
