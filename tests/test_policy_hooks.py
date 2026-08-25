@@ -210,6 +210,16 @@ class ImplementerPolicyRegressionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
+    def workspace_launcher(self) -> tuple[Path, Path]:
+        external = self.root / "uv" / "python3.11"
+        external.parent.mkdir(parents=True)
+        external.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        external.chmod(0o755)
+        launcher = self.repo / ".qualification-final" / "py311" / "bin" / "python"
+        launcher.parent.mkdir(parents=True)
+        launcher.symlink_to(external)
+        return launcher, external
+
     def run_hook(
         self,
         command: str,
@@ -241,6 +251,83 @@ class ImplementerPolicyRegressionTests(unittest.TestCase):
             env=env,
             check=False,
         )
+
+    def test_workspace_venv_launcher_allows_the_real_qualification_command(self) -> None:
+        launcher, external = self.workspace_launcher()
+        qualification = self.repo / ".qualification-final"
+        checkout = qualification / "hermes-v2026.8.18"
+        raw = qualification / "raw"
+        checkout.mkdir()
+        raw.mkdir()
+        self.assertFalse(external.is_relative_to(self.repo))
+        self.assertEqual(launcher.resolve(), external)
+        command = (
+            f"{launcher} scripts/qualify_observation.py test "
+            f"--checkout {checkout} --python {launcher} "
+            f"--output {raw / 'tests.json'} --json "
+            f"> {raw / 'tests.stdout'} 2> {raw / 'tests.stderr'}; "
+            "rc=$?; printf 'test exit_code=%s\\n' \"$rc\" >> "
+            f"{qualification / 'commands.log'}; exit \"$rc\""
+        )
+
+        result = self.run_hook(command)
+
+        self.assertEqual(result.returncode, 0, result.stdout or result.stderr)
+
+    def test_workspace_symlink_output_to_external_executable_remains_denied(self) -> None:
+        launcher, external = self.workspace_launcher()
+        raw = self.repo / ".qualification-final" / "raw"
+        raw.mkdir()
+        output = raw / "result.json"
+        output.symlink_to(external)
+
+        result = self.run_hook(f"{launcher} run.py --output {output} 2> {raw / 'stderr.log'}")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside the assigned workspace", json.loads(result.stdout)["reason"])
+
+    def test_workspace_launcher_used_as_output_remains_denied(self) -> None:
+        launcher, _ = self.workspace_launcher()
+
+        result = self.run_hook(f"{launcher} run.py --output {launcher} > result.log")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside the assigned workspace", json.loads(result.stdout)["reason"])
+
+    def test_implementer_merge_base_is_read_only_but_merge_file_remains_denied(self) -> None:
+        allowed = self.run_hook("git merge-base --is-ancestor HEAD HEAD")
+        denied = self.run_hook("git merge-file ours base theirs")
+
+        self.assertEqual(allowed.returncode, 0, allowed.stdout or allowed.stderr)
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("BRANCH-HISTORY", json.loads(denied.stdout)["reason"])
+
+    def test_system_executable_is_allowed_but_system_output_is_denied(self) -> None:
+        allowed = self.run_hook(f"/usr/bin/python3 -c 'print(1)' > {self.repo / 'result.log'}")
+        denied = self.run_hook("/usr/bin/python3 -c 'print(1)' > /usr/local/bin/aether-policy-probe")
+
+        self.assertEqual(allowed.returncode, 0, allowed.stdout or allowed.stderr)
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("outside the assigned workspace", json.loads(denied.stdout)["reason"])
+
+    def test_outside_symlink_to_system_executable_is_not_a_system_launcher(self) -> None:
+        outside = self.root / "outside-python"
+        outside.symlink_to("/usr/bin/python3")
+
+        result = self.run_hook(f"{outside} -c 'print(1)' > {self.repo / 'result.log'}")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside the assigned workspace", json.loads(result.stdout)["reason"])
+
+    def test_redirection_symlink_to_external_executable_remains_denied(self) -> None:
+        launcher, external = self.workspace_launcher()
+        output = self.repo / "redirect.log"
+        output.symlink_to(external)
+
+        result = self.run_hook(f"{launcher} -c 'print(1)' > {output}")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside the assigned workspace", json.loads(result.stdout)["reason"])
 
     def test_read_only_branch_inspection_remains_allowed(self) -> None:
         commands = [

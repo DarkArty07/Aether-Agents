@@ -130,7 +130,7 @@ IMPLEMENTER_HISTORY_RE = re.compile(
     r"\bgit\s+(?:[^\n;&|]*\s)?commit\b[^\n;&|]*--amend\b|"
     r"\bgit\s+(?:[^\n;&|]*\s)?reset\b|"
     r"\bgit\s+(?:[^\n;&|]*\s)?push\b|"
-    r"\bgit\s+(?:[^\n;&|]*\s)?(?:checkout|switch|branch|worktree|merge|cherry-pick|revert|tag)\b|"
+    r"\bgit\s+(?:[^\n;&|]*\s)?(?:checkout|switch|branch|worktree|merge(?!-base\b)|cherry-pick|revert|tag)\b|"
     r"\bgit\s+(?:[^\n;&|]*\s)?pull\b"
     r")"
 )
@@ -268,6 +268,49 @@ def _under(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _workspace_launcher(raw: str, workspace: Path) -> bool:
+    lexical = Path(os.path.normpath(raw))
+    if not _under(lexical.parent, workspace):
+        return False
+    try:
+        resolved = lexical.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    return resolved.is_file() and os.access(resolved, os.X_OK)
+
+
+def _shell_launcher_allowances(command: str, workspace: Path) -> dict[str, int]:
+    """Count outside-resolving paths proven to be command launchers."""
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return {}
+
+    allowances: dict[str, int] = {}
+    segment: list[str] = []
+    for token in [*tokens, ";"]:
+        if token not in {";", "&&", "||", "|", "&"}:
+            segment.append(token)
+            continue
+        executable = next(
+            (item for item in segment if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", item)),
+            "",
+        )
+        if executable.startswith("/"):
+            lexical = str(Path(os.path.normpath(executable)))
+            system = lexical.startswith(("/usr/", "/bin/"))
+            if system or _workspace_launcher(executable, workspace):
+                allowances[executable] = allowances.get(executable, 0) + 1
+                for index, item in enumerate(segment[:-1]):
+                    if item == "--python" and segment[index + 1] == executable:
+                        allowances[executable] += 1
+        segment = []
+    return allowances
 
 
 def _patch_raw_targets(args: dict[str, Any]) -> list[str]:
@@ -877,12 +920,19 @@ def _apply_implementer(tool_name: str, args: dict[str, Any], payload: dict[str, 
             _block("EXTERNAL-EFFECT", "irreversible external effects belong to Supervisor integration")
         if _contract_reference(command) and SHELL_MUTATION_RE.search(command):
             _block("CONTRACT-OWNER", "Implementer shell call may mutate a contract artifact")
-        # A mutating shell call that names an absolute path outside the workspace is undecidable.
+        # A workspace-local venv may resolve to a provisioned interpreter outside
+        # the worktree. Exempt only occurrences proven to be launchers; every
+        # other outside-resolving path remains denied.
         if SHELL_MUTATION_RE.search(command):
+            launcher_allowances = _shell_launcher_allowances(command, workspace)
             for raw in re.findall(r"(?<![A-Za-z0-9_.-])(/[A-Za-z0-9_./@+:-]+)", command):
                 candidate = Path(raw).resolve(strict=False)
-                if not _under(candidate, workspace) and not str(candidate).startswith(("/usr/", "/bin/")):
-                    raise Undecidable("mutating command names a path outside the assigned workspace")
+                if _under(candidate, workspace):
+                    continue
+                if launcher_allowances.get(raw, 0) > 0:
+                    launcher_allowances[raw] -= 1
+                    continue
+                raise Undecidable("mutating command names a path outside the assigned workspace")
         if context["branch"] != os.environ.get("HERMES_KANBAN_BRANCH"):
             raise Undecidable("worker branch changed during policy evaluation")
     if tool_name in IMPLEMENTER_INTERACTIVE_EXTERNAL_TOOLS:
