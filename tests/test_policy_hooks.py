@@ -583,6 +583,25 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("not a linked worktree", json.loads(result.stdout)["reason"])
 
+    def test_supervisor_allows_merge_base_but_still_gates_merge(self) -> None:
+        with sqlite3.connect(self.board) as conn:
+            conn.execute("UPDATE tasks SET assignee = 'supervisor' WHERE id = ?", (self.task_id,))
+            conn.execute("UPDATE task_runs SET profile = 'supervisor' WHERE id = ?", (self.run_id,))
+        self.hook = self.home / "profiles" / "supervisor" / "hooks" / CANONICAL.name
+
+        allowed = self.run_hook(
+            tool_name="terminal",
+            tool_input={"command": "git merge-base --is-ancestor HEAD HEAD", "workdir": str(self.workspace)},
+        )
+        self.assertEqual(allowed.returncode, 0, allowed.stdout or allowed.stderr)
+
+        denied = self.run_hook(
+            tool_name="terminal",
+            tool_input={"command": "git merge main", "workdir": str(self.workspace)},
+        )
+        self.assertEqual(denied.returncode, 2)
+        self.assertIn("not the project's main worktree", json.loads(denied.stdout)["reason"])
+
     def test_main_integration_write_remains_allowed_without_task_binding(self) -> None:
         result = self.run_hook(
             path=str(self.repo / "specs" / "example" / "spec.md"),

@@ -792,7 +792,7 @@ def _integration_refs(command: str, operation: str) -> list[str]:
 
 def _supervisor_integration_guard(command: str, cwd: Path) -> None:
     operation = None
-    if re.search(r"(?is)\bgit\b[^\n;&|]*\bmerge\b", command):
+    if re.search(r"(?is)\bgit\b[^\n;&|]*(?<![\w-])merge(?=$|[\s;&|])", command):
         operation = "merge"
     elif re.search(r"(?is)\bgit\b[^\n;&|]*\bcherry-pick\b", command):
         operation = "cherry-pick"
