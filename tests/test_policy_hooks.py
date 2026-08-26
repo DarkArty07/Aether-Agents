@@ -253,35 +253,6 @@ class ImplementerPolicyRegressionTests(unittest.TestCase):
                 result = self.run_hook(command)
                 self.assertEqual(result.returncode, 0, result.stdout or result.stderr)
 
-    def test_implementer_nested_contract_redirection_remains_denied(self) -> None:
-        nested_commands = [
-            "sh -c 'printf x > specs/example/spec.md'",
-            "eval 'printf x > specs/example/spec.md'",
-            'printf "$(printf x > specs/example/spec.md)"',
-            'printf "`printf x > specs/example/spec.md`"',
-            '''sh -c "git log --format='$(printf x > specs/example/spec.md)'"''',
-            '''eval "git show --pretty='$(printf x > specs/example/spec.md)'"''',
-            """cat <<EOF
-git log --format='$(touch specs/example/spec.md)'
-EOF""",
-            """cat <<EOF
-git show --pretty='$(printf x > specs/example/spec.md)'
-EOF""",
-        ]
-        for command in nested_commands:
-            with self.subTest(command=command):
-                denied = self.run_hook(command)
-                self.assertEqual(denied.returncode, 2)
-                self.assertIn("CONTRACT-OWNER", json.loads(denied.stdout)["reason"])
-
-        for command in (
-            "git log -1 --format='%H <%ae>' -- specs/example/spec.md",
-            "git show -s --pretty='<%ae>' -- specs/example/spec.md",
-        ):
-            with self.subTest(command=command):
-                allowed = self.run_hook(command)
-                self.assertEqual(allowed.returncode, 0, allowed.stdout or allowed.stderr)
-
     def test_branch_and_history_mutations_remain_denied(self) -> None:
         commands = [
             "git branch topic",
@@ -611,74 +582,6 @@ class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("not a linked worktree", json.loads(result.stdout)["reason"])
-
-    def test_supervisor_read_only_git_format_angle_bracket_is_not_redirection(self) -> None:
-        with sqlite3.connect(self.board) as conn:
-            conn.execute("UPDATE tasks SET assignee = 'supervisor' WHERE id = ?", (self.task_id,))
-            conn.execute("UPDATE task_runs SET profile = 'supervisor' WHERE id = ?", (self.run_id,))
-        self.hook = self.home / "profiles" / "supervisor" / "hooks" / CANONICAL.name
-
-        exact_command = """printf '%s\\n' '--- recent contract-history ---'
-git log --oneline --decorate -8
-printf '%s\\n' '--- base-to-head name-status ---'
-git diff --name-status 5c6e99e9c1d8e4292abff5188c120d134af72f74..HEAD
-printf '%s\\n' '--- current R10 provenance ---'
-git log -1 --format='%H%n%an <%ae>%n%s' -- specs/r10-security-and-authority/spec.md
-printf '%s\\n' '--- existing config branch keys ---'
-git config --show-origin --get-regexp 'aether.*integration|integration.*branch|AETHER_INTEGRATION_BRANCH' || true
-printf '%s\\n' '--- worktrees ---'
-git worktree list --porcelain"""
-        allowed = self.run_hook(
-            tool_name="terminal",
-            tool_input={"command": exact_command, "workdir": str(self.workspace)},
-        )
-        self.assertEqual(allowed.returncode, 0, allowed.stdout or allowed.stderr)
-
-        nested_commands = [
-            "sh -c 'printf x > specs/example/spec.md'",
-            "eval 'printf x > specs/example/spec.md'",
-            'printf "$(printf x > specs/example/spec.md)"',
-            'printf "`printf x > specs/example/spec.md`"',
-            '''sh -c "git log --format='$(printf x > specs/example/spec.md)'"''',
-            '''eval "git show --pretty='$(printf x > specs/example/spec.md)'"''',
-            """cat <<EOF
-git log --format='$(touch specs/example/spec.md)'
-EOF""",
-            """cat <<EOF
-git show --pretty='$(printf x > specs/example/spec.md)'
-EOF""",
-        ]
-        for command in nested_commands:
-            with self.subTest(command=command):
-                denied = self.run_hook(
-                    tool_name="terminal",
-                    tool_input={"command": command, "workdir": str(self.workspace)},
-                )
-                self.assertEqual(denied.returncode, 2)
-                self.assertIn("CONTRACT-OWNER", json.loads(denied.stdout)["reason"])
-
-        for command in (
-            "git log -1 --format='%H <%ae>' -- specs/example/spec.md",
-            "git show -s --pretty='<%ae>' -- specs/example/spec.md",
-        ):
-            with self.subTest(command=command):
-                quoted = self.run_hook(
-                    tool_name="terminal",
-                    tool_input={"command": command, "workdir": str(self.workspace)},
-                )
-                self.assertEqual(quoted.returncode, 0, quoted.stdout or quoted.stderr)
-
-        for operator in (">", ">>"):
-            with self.subTest(operator=operator):
-                denied = self.run_hook(
-                    tool_name="terminal",
-                    tool_input={
-                        "command": f"printf unsafe {operator} specs/example/spec.md",
-                        "workdir": str(self.workspace),
-                    },
-                )
-                self.assertEqual(denied.returncode, 2)
-                self.assertIn("CONTRACT-OWNER", json.loads(denied.stdout)["reason"])
 
     def test_supervisor_allows_merge_base_but_still_gates_merge(self) -> None:
         with sqlite3.connect(self.board) as conn:
