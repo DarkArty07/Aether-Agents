@@ -18,6 +18,7 @@
 - Added a sanitized, versioned canonical source for the shared Morfeo, Supervisor, and Implementer pre-tool policy.
 - Added an explicit standard-library synchronization tool with atomic installation, content-and-mode parity checks, drift-safe rollback, and no process or network activation surface.
 - Added clean-clone tests for installation, verification, rollback, secret exclusion, and the #199 Implementer branch-inspection regression.
+- Kept contract redirection fail-closed while permitting literal single-quoted Git `log`/`show` pretty formats such as `<%ae>`; added exact `#237`, nested-shell, outer-quote and heredoc bypass regressions for Supervisor and Implementer.
 
 ## 0.24.0 — 2026-08-17
 

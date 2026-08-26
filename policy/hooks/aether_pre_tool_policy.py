@@ -171,6 +171,9 @@ SHELL_MUTATION_RE = re.compile(
     r"\bperl\b[^\n]*\s-pi\b|\b(?:write_text|write_bytes|write_file)\s*\(|"
     r"\bopen\s*\([^\n]*,[^\n]*[\"'][wax+]|\bgit\s+(?:apply|checkout|restore|merge|cherry-pick)\b)"
 )
+GIT_LITERAL_PRETTY_RE = re.compile(
+    r"(?is)(\bgit\s+[^;&|\n]*?\b(?:log|show)\b[^;&|\n]*?--(?:format|pretty)=)'([^']*)'"
+)
 
 
 class Undecidable(RuntimeError):
@@ -493,6 +496,54 @@ def _extract_command(args: dict[str, Any]) -> str:
         if isinstance(value, str):
             return value
     return json.dumps(args, ensure_ascii=False, sort_keys=True)
+
+
+def _literal_single_quote_spans(command: str) -> set[tuple[int, int]]:
+    spans: set[tuple[int, int]] = set()
+    quote: str | None = None
+    content_start = 0
+    index = 0
+    while index < len(command):
+        character = command[index]
+        if quote == "'":
+            if character == "'":
+                spans.add((content_start, index))
+                quote = None
+            index += 1
+            continue
+        if quote == '"':
+            if character == "\\":
+                index += 2
+            elif character == '"':
+                quote = None
+                index += 1
+            else:
+                index += 1
+            continue
+        if character == "\\":
+            index += 2
+            continue
+        if character == "'":
+            quote = character
+            content_start = index + 1
+        elif character == '"':
+            quote = character
+        index += 1
+    return spans
+
+
+def _shell_mutation(command: str) -> bool:
+    if "<<" in command:
+        return bool(SHELL_MUTATION_RE.search(command))
+    literal_spans = _literal_single_quote_spans(command)
+
+    def mask_literal_pretty(match: re.Match[str]) -> str:
+        if match.span(2) not in literal_spans:
+            return match.group(0)
+        return f"{match.group(1)}'{' ' * len(match.group(2))}'"
+
+    inspected = GIT_LITERAL_PRETTY_RE.sub(mask_literal_pretty, command)
+    return bool(SHELL_MUTATION_RE.search(inspected))
 
 
 def _implementer_chain_segments(command: str) -> list[tuple[int, int]] | None:
@@ -842,7 +893,7 @@ def _apply_supervisor(tool_name: str, args: dict[str, Any], payload: dict[str, A
                 _require_integration(context)
     if tool_name in {"terminal", "execute_code"}:
         command = _extract_command(args)
-        if _contract_reference(command) and SHELL_MUTATION_RE.search(command):
+        if _contract_reference(command) and _shell_mutation(command):
             # tasks.md is Supervisor-owned, but any shell mutation must still be on integration.
             context = _git_context(Path(args.get("workdir") or cwd))
             if re.search(r"(?i)(?:^|[/\\])tasks\.md\b", command):
@@ -875,10 +926,10 @@ def _apply_implementer(tool_name: str, args: dict[str, Any], payload: dict[str, 
             _block("BRANCH-HISTORY", "Implementer may not change branches, integrate, publish, or rewrite history")
         if IMPLEMENTER_EXTERNAL_EFFECT_RE.search(command):
             _block("EXTERNAL-EFFECT", "irreversible external effects belong to Supervisor integration")
-        if _contract_reference(command) and SHELL_MUTATION_RE.search(command):
+        if _contract_reference(command) and _shell_mutation(command):
             _block("CONTRACT-OWNER", "Implementer shell call may mutate a contract artifact")
         # A mutating shell call that names an absolute path outside the workspace is undecidable.
-        if SHELL_MUTATION_RE.search(command):
+        if _shell_mutation(command):
             for raw in re.findall(r"(?<![A-Za-z0-9_.-])(/[A-Za-z0-9_./@+:-]+)", command):
                 candidate = Path(raw).resolve(strict=False)
                 if not _under(candidate, workspace) and not str(candidate).startswith(("/usr/", "/bin/")):
