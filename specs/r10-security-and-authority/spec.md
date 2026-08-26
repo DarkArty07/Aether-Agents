@@ -1,200 +1,169 @@
-# R10 Specification: Security, Trust, and Authority Enforcement
+# R10 Specification: Security, Trust, and Edge-Effect Enforcement
 
 **Roadmap ID**: R10
-**Stage status**: done — reconciled 2026-08-21 for PD-49, PD-57, PD-60–PD-67, and A1 public supply-chain boundaries
-**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
-**Amended**: 2026-08-18 — Morfeo operational containment reconciled under PD-44
-**Amended**: 2026-08-20 — execution, cron, delegation, skills, and vision surfaces reconciled under amended PD-44 and PD-45
-**Amended**: 2026-08-25 — retired generic command-text path confinement while preserving enumerated protected effects
+**Stage status**: in-progress — operational simplification amendment under PD-71/PD-72/PD-73/PD-74
+**Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Reopened**: 2026-08-26 — Christopher rejected the accumulated strict enforcement after repeated E2E failures and authorized simplification
 **Decision authority**: Christopher
-**Autonomous design delegate for this stage**: Hermes
-**Future role owner**: Supervisor
-**Depends on**: R1, R5, R6, R7, R8, R9, `DESIGN.md`
-**May affect**: R11, R12, R13
-**Parent roadmap**: `../../ROADMAP.md`
-**Selected Hermes baseline**: `NousResearch/hermes-agent` `v2026.8.18`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution version `0.20.4`
+**Depends on**: R1, R5, R7, R8, R9, `DESIGN.md`
+**May affect**: R11, R13, A1
+**Selected Hermes baseline**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `0.20.4`
 
 ## 1. Purpose
 
-R10 decides what Aether protects, from whom, and by what mechanism.
+R10 protects the few effects for which prevention is materially better than recovery. It no longer attempts to encode Aether's role chart, task semantics, contract ownership, branch workflow, or ordinary local execution as a permission engine.
 
-The stage matters more here than in a gated system, because the owner removed the confirmation gate from the normal path (PD-15). Nothing asks him before acting, so protection comes from two places only: effects that can be undone, and effects that are structurally prevented. R10 owns the second.
+The governing rule is PD-71:
 
-R10 does not define evidence (R11), select models (R12), or write any hook.
+> **Work that is local and practically reversible is governed by scope, isolation, Git, tests, review and rollback. A pre-tool guard is reserved for high-confidence effects at the irreversible/external edge.**
 
-## 2. Threat Model
+This amendment retires the previous board/run/worktree/branch/operation-parser micro-authorization design. Git history preserves that design; it is no longer current authority.
 
-Aether's threat model is deliberately narrow, and stating it plainly prevents a false sense of protection.
+## 2. Threat model
 
-**In scope.** An agent doing something the contract did not authorise. A role acquiring authority it was not given. An irreversible effect performed without anyone noticing. Untrusted repository/web/archive/package content steering execution. A secret or private owner content entering a durable/public artifact. A malicious or substituted package, archive, path, symlink, service target, release coordinate, or update state escaping validation.
+Aether is a single-host product operated by one trusted local user. Morfeo, Supervisor and Implementer are not OS security principals.
 
-**Out of scope.** Defending the owner's machine from the owner. Isolating one role from another as security principals. Multi-user or multi-tenant separation.
+**In scope**:
 
-- **FR-1001**: Aether MUST operate under a single-host, trusted-local-user model, and MUST NOT be described as providing isolation between principals.
-- **FR-1002**: The board MUST NOT be treated as a security boundary. Its local database is readable and writable by any process running as the owner.
-- **FR-1003**: The runtime's local dashboard plugin routes are unauthenticated by design when bound to a loopback address. Aether MUST NOT bind that surface to a non-loopback address, and MUST NOT rely on it being unreachable.
-- **FR-1004**: Every profile MUST use only credentials the owner already provisioned for it. No role acquires, creates, or widens access (R1-FR-114).
-- **FR-1004a**: Public installation MUST be isolated under Aether-owned XDG roots and MUST NOT replace, import, mutate, back up, or remove an unrelated personal Hermes installation.
+- a secret or credential entering a durable/public artifact;
+- an agent acquiring or widening credentials;
+- a remote publication, deploy, push, external mutation or release without explicit authority;
+- a clearly destructive operation whose loss is not practically recoverable by the project workflow;
+- a structurally provable escape from an isolation boundary that Aether actually claims to enforce.
 
-## 3. Containment Is Asymmetric
+**Out of scope**:
 
-This is verified in the tool registry and must never be overstated. Board routing tools are gated to orchestrators; card creation and linking are gated only on being in board mode, which every dispatched worker is.
+- defending the owner's machine from the owner;
+- sandboxing one Aether role from another as hostile principals;
+- deciding whether Morfeo should use direct or pipeline execution;
+- deciding whether a local implementation choice is good;
+- preventing every possible local mistake before it occurs;
+- inferring filesystem confinement from arbitrary shell/code text.
 
-| Direction | Mechanism | Strength |
-|---|---|---|
-| Morfeo selects direct action versus pipeline proportionally | Prompted reasoning over the complete owner objective; no external classifier or gate | **Agentic, not structural or enforced** |
-| Morfeo lacks unrelated execution surfaces | Browser execution and computer use are not enabled by amended PD-44 | **Structural where the toolset is absent** |
-| A worker cannot enumerate the board | Orchestrator gate | **Structural** |
-| A worker cannot release a blocked unit, including its own | Orchestrator gate | **Structural** |
-| An implementer cannot create arbitrary work | Instruction plus a blocking hook | **Enforced, not structural** |
+- **FR-1001**: Aether MUST operate under a single-host, trusted-local-user model and MUST NOT claim isolation between roles as security principals.
+- **FR-1002**: The board MUST NOT be treated as a security boundary; a process running as the owner can access the same local state.
+- **FR-1003**: Loopback-only local runtime surfaces MUST remain loopback-only where upstream does not authenticate them.
+- **FR-1004**: No role may acquire, create or widen credentials beyond credentials the owner already provisioned.
+- **FR-1004a**: Public installation MUST remain isolated under Aether-owned XDG roots and MUST NOT replace or import unrelated personal Hermes state.
 
-- **FR-1005**: Aether MUST NOT claim that role containment is structural in both directions or that Morfeo's proportional route choice is enforced (PD-35). Morfeo has broad file and terminal capability; direct-versus-pipeline selection is agentic self-control. Implementer card-creation containment is enforced.
-- **FR-1006**: Where a guarantee is structural, it is primary and any instruction restating it is reinforcement (PD-25).
-- **FR-1007**: Where a protected-effect guarantee is not structural, it MUST be enforced by a mechanism that can refuse, not by an instruction alone. Cognitive route selection under PD-44 is not a protected-effect guarantee.
+## 3. Responsibility is not a permission boundary
 
-## 4. The Enforcement Point
+The roles remain semantically distinct:
 
-The selected runtime supports plugin and shell hooks, and a `pre_tool_call` hook can block before execution or escalate to approval. Aether's enforcement package may use either supported registration surface, but every release must prove the actual dispatcher, payload, consent, denial, and fail-closed semantics it ships.
+- Morfeo owns owner dialogue, product intent, contract revision and proportional routing.
+- Supervisor owns pipeline decomposition, independent review, convergence and integration judgement.
+- Implementer owns bounded implementation units.
 
-- **FR-1008**: Protected effects MUST be enforced with a pre-tool-call hook configured to fail closed, registered on the profile that must be constrained.
-- **FR-1009**: A hook that cannot decide MUST deny. An enforcement point that permits on error protects nothing.
-- **FR-1010**: Enforcement MUST be per profile. A single global rule set cannot express that Morfeo may write a contract artifact and an implementer may not.
-- **FR-1011**: A hook MUST NOT be used to add capability, only to remove it. Hooks that rewrite arguments to widen what a call does are prohibited.
-- **FR-1012**: Every protected effect MUST have exactly one enforcement point, so a denial has one explanation.
+Those responsibilities are enforced by contracts, prompts, attribution, review and acceptance evidence. They are not reasons to reject ordinary local tool calls.
 
-### Three properties of the mechanism, verified by execution
+- **FR-1005**: Aether MUST NOT use a pre-tool hook to choose direct versus pipeline routing, determine task size, judge a local implementation decision, or enforce the role chart as if the roles were OS principals.
+- **FR-1006**: Native structural restrictions that Hermes already supplies remain primary where useful, but Aether MUST NOT add a second hook restriction solely to mirror an instruction.
+- **FR-1007**: Executable prevention is required only for the definitive protected edge effects in §5. A cognitive responsibility is not a protected effect merely because violating it would be bad work.
 
-The enforcement point is real — a hook fed a forbidden call exited with a block and the runtime parsed it into its block directive. But three properties are narrower than this stage originally assumed, and each is a way enforcement can be present and inert.
+## 4. Enforcement point
 
-**An unconsented hook does not fire at all.** The runtime keeps a first-use allowlist, and a hook absent from it is skipped rather than failed closed. Its diagnostic states it plainly: the hook *will not fire at runtime*. Every effect it was meant to deny is then permitted, while the configuration looks correct.
+Hermes `v2026.8.18` exposes `pre_tool_call` as a real blocking hook. Direct inspection of the selected source confirms shell hooks can block via exit code `2`/block payload and can be configured `fail_closed`; hook consent remains a separate runtime concern.
 
-- **FR-1008a**: Every enforcement hook MUST be confirmed as allowlisted on its profile before that profile does unattended work. Configuration alone is not enforcement.
-- **FR-1008b**: Dispatcher-spawned workers are **not** exposed to this gap: the dispatcher passes an explicit accept-hooks flag when spawning, precisely so a worker registers its own profile's hooks. Supervisor and implementer enforcement therefore holds without operator action.
-- **FR-1008c**: **Morfeo is the exception**, because it runs as a persistent interactive session rather than a dispatched worker. Any hook constraining Morfeo MUST be consented to explicitly — through its profile's auto-accept setting or a one-time confirmation — or it is inert.
-- **FR-1008h**: Morfeo's revised prompt, `file + terminal` toolsets, and reconciled hook policy MUST be prepared while the profile is stopped and activated as one bounded change. The hook continues to enforce independent protected effects but MUST NOT classify task size, block terminal generally, or confine Morfeo to contract-file writes.
+Aether keeps one small canonical pre-tool policy because it is useful at the edge. The policy is deliberately incapable of understanding the whole project workflow.
 
-**Failing closed is a crash net, not a deny-by-default.** The dispatcher converts a spawn error, a timeout, or malformed output into a block. An ordinary non-zero exit does not block: a hook exiting with an arbitrary error code contributes nothing and the call proceeds.
+- **FR-1008**: The shared pre-tool policy MUST block only effects enumerated in §5 plus malformed hook invocation. It MUST otherwise return allow.
+- **FR-1008a**: Every release MUST run positive controls for representative ordinary Morfeo, Supervisor and Implementer work, negative controls for every protected edge family, and a complete E2E canary with zero guard-caused manual recovery.
+- **FR-1008b**: An unknown or unfamiliar ordinary local tool call MUST be allowed when it does not match a protected edge effect. Lack of a role/worktree/board proof is not by itself dangerous.
+- **FR-1008c**: Invalid JSON, an invalid event shape, or missing required hook payload structure MAY fail closed because the hook invocation itself is malformed.
+- **FR-1008d**: The guard MUST NOT parse arbitrary shell/code text to infer contract ownership, branch ownership, task size, workspace confinement, or whether a role is performing another role's intellectual responsibility.
+- **FR-1008e**: The guard MUST NOT open Kanban/SQLite, query task/run identity, or execute Git merely to decide whether an ordinary local file or terminal action may run.
+- **FR-1008f**: The same versioned policy bytes are installed for the three roles. Role names MAY appear in diagnostics, but ordinary allow/deny semantics are not a second per-role authorization system.
+- **FR-1008g**: `fail_closed` is a crash/malformed-invocation net. It MUST NOT be used to turn uncertainty about ordinary work into deny-by-default.
+- **FR-1008h**: A denial MUST state the protected edge family and the concrete reason in a caller-visible payload.
+- **FR-1008i**: An agent MUST NOT route around a genuine protected-edge denial. A false positive discovered on ordinary work is instead a product regression and enters PD-72 recovery.
+- **FR-1008j**: The previous guard crossed the PD-66 redesign threshold after multiple distinct ordinary-work false positives. Incremental exception-patching of that retired design MUST NOT resume without a new owner decision.
+- **FR-1008k**: Read-only inspection, normal local Git, local branches, local commits, test runners, interpreters, package/build tools and reversible project-file mutations MUST remain available unless the exact call independently matches §5.
+- **FR-1008l**: Aether MUST NOT claim generic process/filesystem confinement from a command-string scanner. A real sandbox/container/OS boundary requires its own explicit design and evidence.
 
-- **FR-1008d**: A hook MUST deny explicitly, with the runtime's block exit code and a block payload carrying the reason. Aether MUST NOT rely on a non-zero exit alone to deny.
-- **FR-1008e**: `fail_closed` MUST be set on every enforcement hook, but MUST be understood as covering only crash, timeout, and malformed output.
+## 5. Definitive protected edge effects
 
-**The payload's shape is not what the documentation says.** The documentation describes a top-level arguments key that the runtime does not deliver. A real Phase 4 capture showed `tool_name`, `tool_input`, and `session_id` at the top level; `task_id`, `tool_call_id`, `turn_id`, `api_request_id`, and `middleware_trace` are under `extra`. There is no top-level `args` key.
+This list is intentionally short. Adding another family is a design change, not an implementation convenience.
 
-- **FR-1008f**: A hook MUST be written against the payload the runtime actually delivers, confirmed by capture, not against its documentation. A hook that reads a non-existent key sees an empty value and — for a deny-unless-permitted rule — denies **everything**, halting all work while appearing correctly configured.
-- **FR-1008g**: The built-in hook test harness merges a supplied payload into a synthetic one rather than replacing the arguments, so it MUST NOT be used as the only validation of a hook's argument logic.
-- **FR-1008i**: Under PD-66, every enforcement rule MUST have positive controls for representative authorized Morfeo, Supervisor, and Implementer work; negative controls for every protected effect and undecidable identity; and a complete pipeline run that needs no guard-caused manual recovery.
-- **FR-1008j**: Every material false positive becomes a regression. If three focused corrections expose material false positives in distinct ordinary-work categories, the guard design is presumed overbroad and MUST be redesigned or replaced rather than patched indefinitely. Fail-closed behavior does not excuse unusable precision.
-- **FR-1008k**: Read-only validation and inspection MUST NOT be classified as gateway/service lifecycle merely because a command contains a path or token resembling that effect. Real lifecycle controls remain denied to an unauthorized caller.
-- **FR-1008l**: Aether MUST NOT claim process or filesystem confinement by extracting path-like strings from arbitrary `terminal` or `execute_code` command text. Implementer enforcement remains on the definitive protected effects and on inspectable targets supplied to structured mutation tools. Because a process can derive an unmentioned path at runtime, the generic command-text path scan is retired rather than expanded with more parsing. A parser, broker, container, or OS sandbox requires a separate owner-approved design change and is not implied by this retirement.
+| Protected edge family | What the guard prevents during normal stabilization |
+|---|---|
+| Secret persistence/exposure | Credential-shaped material entering durable fields or obvious outbound/mutation payloads |
+| Credential acquisition/widening | Login/provision/key-generation/secret-store operations that create or enlarge access |
+| Remote/external mutation | Push, PR/release publication, package publication, deploy, infrastructure mutation, destructive HTTP writes and equivalent obvious remote effects |
+| Clearly destructive irreversible local operation | Root/home/device wiping, destructive disk operations, hard cleanup that destroys unknown local state, and similarly unambiguous loss |
+| Structurally provable isolation escape | Only a typed/structured target whose boundary can be checked without interpreting arbitrary program behavior; if no such boundary is configured, the hook makes no confinement claim |
 
-## 5. Protected Effects
+- **FR-1013**: The table above is the definitive protected-effect enumeration for the stabilization baseline.
+- **FR-1013a**: Contract ownership, card shape, local branch choice, local commit workflow, ordinary file paths, technical design decisions, review decisions and routing are NOT protected effects.
+- **FR-1013b**: During stabilization, remote publication/deploy/external mutation is blocked by default. Public release/cutover later requires the explicit external gate owned by A1/R13; this branch does not invent a new bypass token.
+- **FR-1013c**: A destructive-operation detector MUST prefer a small high-confidence list over broad command semantics. A false negative that remains local/reversible is handled by isolation/review; a false positive that blocks ordinary work is a regression.
+- **FR-1014**: A denied edge effect MUST be visible in the E2E evidence.
+- **FR-1015**: Repeated attempts to perform the same genuine denied edge effect are reportable; ordinary false positives trigger recovery rather than more denials.
 
-Each row is a thing no instruction can be trusted to prevent, with the role it is enforced on.
+## 6. Secrets, credentials and privacy
 
-| Protected effect | Enforced on | Rule |
-|---|---|---|
-| Creating work beyond a decision card | Implementer | Card creation is denied unless the card is addressed to the supervisor and declared as a decision card (R7-FR-719) |
-| Linking cards for any other purpose | Implementer | Linking is denied unless it attaches a decision card as a parent of the worker's own card |
-| Writing a contract artifact | Implementer, Supervisor, and unbound Morfeo calls | `spec.md`/`plan.md` remain Morfeo-owned and `tasks.md` Supervisor-owned; task-bound Morfeo writes require the exact PD-67 identity and structured file tool contract (R8-FR-805 through FR-805b) |
-| Rewriting shared history | Implementer | Force-push and history-rewriting operations are denied outright (R8-FR-811) |
-| Touching a branch it does not own | Implementer | Operations naming a branch other than the worker's own are denied (R8-FR-810) |
-| Irreversible external effects | Implementer; any role lacking the explicit gate | Push, PR, release, deploy, package upload, destructive migration, repository setting, Pages/announcement, and external destructive calls are denied outside their exact integration/publication authority (R8-FR-824) |
-| Writing secrets into durable fields | All roles | Completion, comment, and metadata payloads matching credential shapes are denied (R9-FR-908) |
-| Acquiring or widening credentials | All roles | Credential-provisioning operations are denied (FR-1004) |
+- **FR-1015a**: Versioned source, wheel/sdist, profiles, hooks and docs MUST contain no private owner credentials, tokens, sessions, databases, memories or private provider bindings.
+- **FR-1015b**: Credential-shaped content MUST be rejected from durable board/comment/memory/attachment payloads unless it is an explicit redacted/example placeholder.
+- **FR-1015c**: High-confidence credential material supplied to any other tool call MUST be blocked rather than copied into a subprocess or external effect.
+- **FR-1015d**: Credential acquisition/widening commands remain blocked even when they contain no credential yet.
+- **FR-1015e**: Contract Observation remains local, metadata-only and fail-open; it is not part of the security boundary and MUST NOT block legitimate work.
 
-- **FR-1013**: The list above MUST be maintained as the definitive enumeration of Aether's protected effects. An effect that is not on it is not protected, and adding one is a design change.
-- **FR-1013a**: Morfeo writing project files or using terminal, `code_execution`, `cronjob`, or `delegate_task` for an amended PD-44 objective is not by itself a protected effect. The Morfeo hook MUST NOT deny `execute_code`, `cronjob`, or `delegate_task` as unrelated execution surfaces; it MUST retain transversal secret and credential protections and all Supervisor/Implementer restrictions, while removing only obsolete Morfeo no-execution and contract-only-write containment. Direct-versus-pipeline selection and the rule that delegated subagents assist Morfeo rather than bypassing Supervisor/Implementer MUST remain agentic self-control, following FR-1005/FR-1007, and MUST NOT be implemented as hook enforcement in R10.
-- **FR-1013b**: Task-bound Morfeo contract authorization MUST fail closed unless board, task, task-owned run, assignee, active status, workspace kind, workspace, project root, branch, operation parser, and absolute target path all match. Standalone checkouts, relative paths, parser-hidden writes, shell/code-execution mutation, and writes outside the assigned worktree remain denied.
-- **FR-1014**: A denied call MUST be visible: the worker records what it attempted and why it was refused, so a denial becomes evidence rather than a silent dead end.
-- **FR-1015**: A worker that is denied MUST NOT route around the denial. Repeatedly attempting a denied effect is itself a reportable condition.
+## 7. External authority
 
-## 6. Public Package, Provenance, Privacy, and Publication
+Aether's normal unattended local workflow does not imply authority to publish or spend.
 
-- **FR-1015a**: Source archives, wheels, sdists, and profile bundles MUST be treated as untrusted until their release-lock coordinates, digest, expected package identity, version, and provenance validate. Verification precedes extraction, import, install, or execution.
-- **FR-1015b**: Archive extraction, writes, backups, and activation MUST reject traversal, symlink/hardlink escape, special files, unsafe permissions, race-prone replacement, and targets outside Aether-owned roots.
-- **FR-1015c**: The manager MUST install the original `hermes-agent` distribution in an isolated release runtime. In `transitional_fork` mode the public downstream preserves upstream package identity, license, attribution, and history; it MUST NOT publish a conflicting PyPI distribution.
-- **FR-1015d**: Source and built artifacts MUST pass secret/private-content scanning. Public resources MUST exclude private profiles, credentials/authentication, memories, sessions, boards, logs, repositories, owner identifiers, private provider/model/router bindings, and ignored runtime state.
-- **FR-1015e**: Aether sends no remote telemetry or analytics. Manager/service logs and PD-68 contract-observation metadata remain local, redacted/allowlisted, and permission-restricted. They must not include prompts, responses, messages, file contents, diffs, commands, outputs, web query/content, credentials, raw provider payloads, chain-of-thought, or private paths beyond an approved relative diagnostic reference. Observer collection, reduction, and CLI query make no outbound or non-loopback network request; no observation dashboard/API ships in 1.0.
-- **FR-1015f**: Building and verifying local candidates grants no publication authority. Fork/tag/release assets, PyPI, repository settings, Pages, Discussions/private reporting, announcements, credentials, spend, stable cutover, and destructive purge are separately enumerated external gates.
-- **FR-1015g**: The user service is user-scoped, Aether-named, and generated only for Aether-owned paths. Lifecycle commands MUST refuse an ambiguous or unrelated Hermes service/process target.
+- **FR-1016**: Push, PR, tag, release, deploy, package upload, repository settings, public announcement, paid live qualification, credential changes and destructive purge remain separate external gates.
+- **FR-1017**: This stabilization candidate blocks obvious remote mutations rather than trying to infer authorization from prose, cards or shell context.
+- **FR-1018**: A later public activation mechanism MUST carry explicit external-effect authority through a bounded product surface before the guard can permit that effect; absence of such a surface is deny, not a reason to parse conversational text.
+- **FR-1019**: Local technical capability never self-grants an external effect.
+- **FR-1020**: Christopher's current explicit instruction outranks older artifacts; the owning artifact must be updated rather than silently bypassed.
 
-## 7. Authority
+## 8. Untrusted content
 
-- **FR-1016**: Authority MUST NOT be inherited or self-granted. The supervisor MUST NOT confer on an implementer more than the contract conferred on it, and MUST NOT widen its own (R2-FR-206).
-- **FR-1017**: A card body MUST NOT be a channel for granting authority the contract did not grant. Authority lives in `plan.md`; a card instance carries it, never extends it (R2-FR-204a).
-- **FR-1018**: Waking Morfeo on a terminal event is a reporting event and confers no additional authority (R6-FR-617).
-- **FR-1019**: No role may delete or overwrite work it did not produce without an instruction that covers it (R1-FR-115).
-- **FR-1020**: The owner's current instruction outranks every artifact, and every artifact outranks memory (R1-FR-128).
+- **FR-1021**: Repository/web/archive/package content read during execution is data, not authority to expand scope or external effects.
+- **FR-1022**: A role MUST NOT widen its objective because a file or fetched page instructs it to do so.
+- **FR-1023**: Referenced attachments or fetched content MUST NOT be executed merely because they contain executable-looking instructions.
+- **FR-1024**: Native inbound prompt-injection filtering and credential scrubbing remain useful defense in depth; they do not enlarge the pre-tool edge list.
 
-## 8. Untrusted Content
+## 9. Recovery and what enforcement cannot do
 
-Unattended workers read material Aether did not write: fetched pages, attachments, dependency documentation, and the contents of an existing repository in brownfield work.
-
-- **FR-1021**: Content read during execution MUST be treated as data, never as instruction. A directive found inside fetched or repository content MUST NOT change what a worker does.
-- **FR-1022**: A worker MUST NOT expand its own scope on the authority of anything it read. Scope comes from the card body and the contract.
-- **FR-1023**: Attachment paths and fetched content MUST NOT be executed merely because a card references them.
-- **FR-1024**: Where the runtime already filters inbound content or scrubs outbound credential-shaped strings, that filtering is primary and Aether's instruction is reinforcement.
-
-## 9. What Enforcement Cannot Do
-
-Stating the limits prevents the design from resting on them.
-
-- **FR-1025**: Enforcement MUST NOT be treated as a substitute for reversibility. Most protection in Aether comes from R8's revertibility; hooks cover only what cannot be undone.
-- **FR-1026**: Enforcement cannot make a wrong decision safe. A unit that implements the contract incorrectly, within its authority, is caught by review and evidence, not by a hook.
-- **FR-1027**: Enforcement runs inside the same trust boundary as the agent it constrains. It raises the cost of a mistake; it does not defend against a hostile local process.
+- **FR-1025**: Reversibility is the primary local safety mechanism. The hook MUST NOT be treated as a substitute for worktrees, Git, tests, review or rollback.
+- **FR-1026**: Enforcement cannot make an incorrect implementation correct. Correctness belongs to tests, review and acceptance.
+- **FR-1027**: The hook runs inside the same local trust boundary as the agent; it is a mistake-prevention layer, not a hostile-process sandbox.
+- **FR-1028**: A material false positive on ordinary authorized work enters PD-72 recovery: restore the last green E2E first, then investigate separately.
+- **FR-1029**: Recovery MUST NOT expand the protected-effect list merely to explain an incident. A new protected family requires a reproduced material edge risk and owner-approved design change.
 
 ## 10. Evidence
 
-Verified directly at selected public commit `e624e9f…` where stated:
+### Upstream inspection
 
-- Board tool gating: only board enumeration and unblocking are gated to orchestrator mode; card creation and linking are available to every dispatched worker. Confirmed by reading each tool's registration and its gate function.
-- `website/docs/user-guide/features/hooks.md:9-18,438-445,528-554` documents plugin and shell hook interception, blocking, approval, argument modification, and fail-closed approval outcomes. Aether still relies on direct dispatcher/payload execution for the exact packaged behavior.
-- The dashboard's plugin API deliberately skips the authentication middleware, so the board's routes are reachable from any local process when the dashboard runs.
-- The runtime filters inbound protocol content and scrubs credential-shaped strings from outbound text on the agent-to-agent surface.
+Refreshed 2026-08-26:
 
-**Verified by execution** in the pass recorded in [`../r13-synthesis-and-release/research.md`](../r13-synthesis-and-release/research.md): a hook fed a forbidden card creation exited with the block code and a block payload, and the runtime parsed it into its wire block directive. The consent gap, the narrow scope of failing closed, and the true payload shape were all established in the same pass and are stated as FR-1008a through FR-1008g.
+- Spec Kit checkout was refreshed before this amendment; its task template still groups tasks by independently testable user story and its analysis command remains explicitly read-only. Aether retains that intellectual contract and does not copy its interactive human-stop semantics.
+- Hermes selected source was checked out independently at exact tag `v2026.8.18`: tag object `9f13bb…`, commit `e624e9f…`. `website/docs/user-guide/features/hooks.md` and the actual hook dispatcher confirm `pre_tool_call`, blocking, `fail_closed` and `--accept-hooks` are real supported surfaces.
+- No inspected upstream source requires Aether to implement role semantics, contract ownership or branch workflow in a pre-tool hook.
 
-Phase 4 then verified the installed hook on all three profiles through the real plugin dispatcher: each exact command was allowlisted, each permitted call continued, each tested protected effect returned a caller-visible denial, and making the installed hook non-executable caused the configured `fail_closed` path to block. These tests did not start a worker or model.
+### Local baseline
 
-Still assumed: that a denial is legible to the worker as an event it can record, since that requires a real worker to be denied.
+Before this amendment, focused policy/A1/launcher tests passed `58 passed, 46 subtests` after restoring the versioned launcher executable bit in the moved worktree. The earlier guard source was 921 lines and contained Kanban SQLite lookup, Git context evaluation, contract ownership, branch/history parsing and per-role card restrictions. Those mechanisms are the simplification target, not evidence to preserve them.
 
-The package/provenance/path/privacy requirements above are Aether requirements, not claims that Hermes already implements Aether's release manager. They require built-artifact and installed-state evidence under R11.
+## 11. Success criteria
 
-## 11. Requirements Inherited by Later Stages
+- **SC-1001**: Representative local/reversible work for all three roles is not blocked by policy.
+- **SC-1002**: Secret/credential, credential-acquisition, obvious remote mutation and clearly destructive controls are denied with a precise reason.
+- **SC-1003**: The guard contains no SQLite/Kanban dependency and performs no Git subprocess invocation.
+- **SC-1004**: The guard does not classify contract ownership, decision-card shape, task size or direct/pipeline routing.
+- **SC-1005**: A complete three-role canary needs zero guard-caused manual recovery.
+- **SC-1006**: No release-visible artifact contains private owner state.
+- **SC-1007**: No external publication/destructive effect occurs without its separate gate.
+- **SC-1008**: A false-positive recovery restores a known-good canary before any hardening work begins.
 
-| Requirement | Owner |
-|---|---|
-| A denied call is evidence and appears in the record | R11 |
-| Repeated denial attempts are a reportable condition | R11 |
-| Enforcement is verified before the first unattended run | R13 |
-| Morfeo's prompt, file/terminal capability, and independent hook protections are activated coherently | R13 |
-| Built packages, update/rollback, platform, privacy, and publication gates are evidenced before release | R11, R13 |
+## 12. Done when
 
-## 12. Success Criteria
-
-- **SC-1001**: Every protected effect has exactly one fail-closed enforcement point on the correct profile.
-- **SC-1002**: An implementer cannot create work other than a decision card, and the attempt is recorded.
-- **SC-1003**: No contract artifact is ever modified by a role that does not own it.
-- **SC-1004**: No durable field contains a credential.
-- **SC-1005**: No role ends a run with more authority than it started with.
-- **SC-1006**: Content read during execution never changes a worker's scope.
-- **SC-1007**: Aether's documentation never describes implementer containment as structural.
-- **SC-1008**: Morfeo can use file and terminal across the managed project; the hook neither blocks direct work as implementation nor chooses the route, while independent protected effects remain enforced.
-- **SC-1009**: Representative authorized work passes, every protected/undecidable control is denied, and the complete three-role pipeline needs no guard-caused manual recovery.
-- **SC-1010**: A clean built distribution contains no private data or private bindings and installs only into Aether-owned paths.
-- **SC-1011**: Every installed runtime artifact is hash/provenance verified before execution, and path/symlink/race controls prevent escape.
-- **SC-1012**: No external publication or stable cutover occurs without its explicit gate.
-
-## 13. Done When
-
-- [x] The threat model is stated, including what is deliberately out of scope.
-- [x] The asymmetry of containment is recorded with the strength of each direction.
-- [x] PD-44 supersedes the contract-only Morfeo boundary: file and terminal are operational capabilities, direct-route selection is agentic, and independent protected effects remain explicit.
-- [x] The enforcement point is named and required to fail closed.
-- [x] Protected effects are enumerated definitively, each bound to a role.
-- [x] Authority rules are consolidated and the card is barred as a grant channel.
-- [x] Untrusted content is bounded as data.
-- [x] The limits of enforcement are stated so the design does not lean on them.
-- [x] Guard precision, task-bound Morfeo authoring, package supply chain, privacy, service ownership, and publication gates are explicit.
-- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
-- [x] The hook dispatcher was read: failing closed covers spawn error, timeout, and malformed output only; explicit denial is the block exit code plus a payload; the delivered payload shape differs from the documentation. Recorded as FR-1008d to FR-1008g.
+- [x] Christopher explicitly reopened the strict enforcement design on 2026-08-26.
+- [x] The threat model is narrowed to the real trusted-local-user boundary.
+- [x] Reversibility/review are primary for ordinary local work.
+- [x] Protected edge families are enumerated narrowly.
+- [x] Role semantics are removed from the normative hook contract.
+- [ ] The minimal hook implementation and positive/negative matrix pass.
+- [ ] A real E2E canary completes without guard-caused recovery.
+- [ ] The rolling reliability gate in PD-74 passes before R10 returns to `done`.

@@ -110,7 +110,7 @@
       "additionalProperties": false,
       "required": ["version", "sha256", "roles"],
       "properties": {
-        "version": {"type": "string", "minLength": 1},
+        "version": {"const": "2"},
         "sha256": {"$ref": "#/$defs/sha256"},
         "roles": {
           "type": "array",

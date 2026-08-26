@@ -1,0 +1,14 @@
+{
+  "id": "e2e-11",
+  "fixture": "direct-text",
+  "owner_message": "Restaura el objetivo normal de este fixture: greeting.txt debe quedar en Hola y verify.py debe pasar. El harness inyectará una degradación de Aether; recupérala con rollback o el arreglo mínimo, prueba el canary y detente. No conviertas el incidente en una nueva feature.",
+  "expected_route": "recovery",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 900,
+  "max_dispatch_passes": 20,
+  "scripted_replies": [],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": [],
+  "live_requires_spend": true,
+  "fault_injection": "hook_false_positive_file_mutation"
+}

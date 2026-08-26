@@ -1,9 +1,9 @@
 # Aether Agents Roadmap
 
 **Decision authority**: Christopher
-**Current conceptual baseline**: `DESIGN.md` through PD-70
-**Current product contracts**: `specs/001-aether-v1-productization/` and `specs/002-aether-contract-observation/`
-**Current synthesis/entry**: `specs/r13-synthesis-and-release/`
+**Current conceptual baseline**: `DESIGN.md` through PD-74
+**Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
+**Current synthesis/entry**: `specs/r13-synthesis-and-release/`, reopened until the PD-74 reliability gate passes
 **Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
 **Initial A1 release mode**: `transitional_fork` under PD-65
 
@@ -24,13 +24,13 @@ The owner's current instruction outranks every artifact. Artifacts outrank memor
 | R4 | Hermes foundation/adaptation boundary | done; A1-reconciled | `specs/r4-hermes-boundary/` |
 | R5 | Role topology and profile isolation | done | `specs/r5-topology-and-isolation/` |
 | R6 | Protocol and communication | done | `specs/r6-protocol-and-communication/` |
-| R7 | Supervision, convergence, review, integration | done | `specs/r7-supervision-and-convergence/` |
-| R8 | Workspaces, canonical authoring, integration, publication | done; A1/PD-67-reconciled | `specs/r8-workspaces-and-integration/` |
+| R7 | Supervision, convergence, review, integration | in-progress; reopened for PD-73 autonomy/E2E | `specs/r7-supervision-and-convergence/` |
+| R8 | Workspaces, canonical authoring, integration, publication | in-progress; PD-67 micro-authorization superseded by PD-71/PD-73 | `specs/r8-workspaces-and-integration/` |
 | R9 | State, XDG ownership, projects, update/recovery | done; A1-reconciled | `specs/r9-state-and-recovery/` |
-| R10 | Security, authority, supply chain, privacy, guard precision | done; A1/PD-66-reconciled | `specs/r10-security-and-authority/` |
-| R11 | Evidence, observability, package/platform/release qualification | done; A1-reconciled | `specs/r11-evidence-and-observability/` |
+| R10 | Security, trust, privacy, minimal edge guard | in-progress; strict micro-permission design retired under PD-71 | `specs/r10-security-and-authority/` |
+| R11 | Evidence, observability, E2E/package/platform/release qualification | in-progress; reopened for PD-74 rolling E2E evidence | `specs/r11-evidence-and-observability/` |
 | R12 | Provider-independent model allocation and economics | done; A1-reconciled | `specs/r12-models-and-economics/` |
-| R13 | Synthesis and public product/release entry | done; A1-reconciled | `specs/r13-synthesis-and-release/` |
+| R13 | Synthesis and public product/release entry | in-progress; release entry paused behind PD-74 reliability gate | `specs/r13-synthesis-and-release/` |
 
 Historical EC1/private-profile build evidence remains in R13 research and Git history. It does not qualify the public product and is not the current implementation plan. R13 `tasks.md` is historical and must not be dispatched for A1.
 
@@ -66,8 +66,9 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 
 | Phase | Scope | Status | Exit/gate |
 |---|---|---|---|
-| 0 | Canonical reconciliation and baseline freeze | complete in this artifact set; requires independent review/integration | No stale no-fork/private-binding/private-local entry; exact base/mode/evidence recorded |
-| 1 | Manager/package skeleton and public contracts | pending | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
+| 0 | Canonical reconciliation and baseline freeze | in progress; reopened by PD-71–PD-74 | DESIGN/R7/R8/R10/A1/R13/role resources agree on reversibility-first local work and the minimal edge boundary |
+| S | 004 operational simplification + E2E reliability | in progress; **feature freeze active** | Minimal guard + aligned roles + disposable E2E canary; then >=19/20 representative passes with latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations |
+| 1 | Manager/package skeleton and public contracts | frozen behind phase S | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
 | 2 | Transitional downstream reconciliation/artifacts | pending | Six-patch candidate passes exact gates; local wheel/sdist/source/provenance ready. **External gate** before public fork/tag/release |
 | 3 | Runtime lifecycle and recovery | pending | Fault-injected install/update/rollback/reconcile/uninstall preserves coherent active release and unrelated state |
 | 4 | Profiles, setup, policy, Aether-only service | pending | Clean setup reaches doctor-ready without credentials/model call; precise guard controls and unrelated-service refusal pass |
@@ -89,7 +90,7 @@ Public release claims are verified against the exact locked public artifact and 
 - source/runtime digest and provenance verification before execution;
 - guided/declarative setup parity, project isolation, service ownership, update interruption, rollback, mismatch reconciliation, safe uninstall, and destructive-purge controls;
 - secret/private-content scans, path/symlink/archive/race/permission/log-redaction tests;
-- representative authorized work for every role, every protected/undecidable negative, both known policy false positives, and one complete pipeline without guard-caused manual recovery;
+- representative local/reversible work for every role and unknown ordinary tools allowed, every PD-71 protected edge family denied, and one complete pipeline without guard-caused manual recovery;
 - deterministic contract-observation fixtures plus one controlled real trace reconciling duration, participants/actions, exact tool totals, flow classifications, and coverage against native sources;
 - Ubuntu 24.04 native, Ubuntu 24.04 WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation; and
 - a preregistered public-PyPI/live-provider RC scenario after explicit credential/spend/live-run authority.
@@ -102,7 +103,7 @@ Read-only GitHub inspection on 2026-08-21 found:
 
 - `#192` — retry/resumption/lifecycle accounting: **OPEN**;
 - `#195` — semantic progress beyond heartbeat: **OPEN and blocking stable 1.0 until the 002 contract evidence passes**;
-- `#210` — task-bound Morfeo canonical worktree policy mismatch: **OPEN** while the PD-67 candidate proceeds through review/integration;
+- `#210` — task-bound Morfeo canonical worktree policy mismatch: **OPEN historically**, but the PD-67 micro-authorization it targeted is superseded by PD-71; close/reclassify only after the simplified E2E candidate is qualified, not by patching the old guard;
 - `#211` — per-flow Morfeo/Supervisor session affinity: **OPEN**; and
 - `#212` — TUI Kanban subscriptions are not a valid notifier platform and their events are discarded: **OPEN**.
 
@@ -136,4 +137,4 @@ This roadmap and the reconciled contracts authorize no public or destructive eff
 - existing-install cutover, deployment, destructive migration/purge, or unrelated service/process mutation; or
 - force-push, history rewrite, or discard of unknown local work.
 
-The current operational route is deterministic validation, independent review, and integration of the contract-observation implementation candidate while every unmet dependency phase remains explicitly pending. The owner-approved controlled real trace, publication, and stable release remain separate external decisions; candidate code or deterministic evidence authorizes none of them.
+The current operational route is **004 stabilization**: finish canonical alignment, replace the overbroad guard, align portable role behavior, build the disposable E2E canary, then execute the real reliability matrix only after its existing credential/spend gate is explicitly opened. Feature expansion, Hermes upgrades, observation expansion, RC qualification, publication and stable release remain frozen/separate until PD-74 passes; deterministic candidate code does not authorize those external effects.

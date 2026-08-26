@@ -1,9 +1,10 @@
 # R11 Specification: Evidence, Observability, and Evaluation
 
 **Roadmap ID**: R11
-**Stage status**: done — reconciled 2026-08-21 for PD-51, PD-56, PD-59, PD-64, PD-66, and A1 public-path qualification
-**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Stage status**: in-progress — reopened for PD-71/PD-74 minimal-guard and rolling E2E reliability evidence
+**Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — proportional direct-work evidence under PD-44
+**Reopened**: 2026-08-26 — route quality and guard precision now require disposable E2E evidence before feature/release expansion resumes
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Supervisor
 **Future role owner**: Supervisor
@@ -26,7 +27,7 @@ R11 does not select models (R12) or authorize any run (R13).
 - **FR-1102**: Every pipeline body of work MUST ship a runnable validation path with prerequisites, commands, and expected outcomes, carried by the contract's quickstart artifact (R2-FR-203). A direct action has no synthetic contract quickstart; it records the actual command, inspection, or diff used for proportional verification.
 - **FR-1103**: Each converged user story MUST be independently runnable, so a failure in a later story leaves earlier ones inspectable and usable (R2-FR-228).
 - **FR-1104**: The pipeline validation path MUST be executed by the system before work is reported as done. An unrun validation path is documentation, not evidence.
-- **FR-1104a**: A direct PD-44 action MUST execute the testing standard the owner selected for that objective and report what was not tested. For DOC-09/P5-F13, Christopher selected mechanical configuration/syntax/diff checks only and deferred functional route validation to himself; the build therefore MUST NOT claim functional verification.
+- **FR-1104a**: A direct PD-44 action MUST execute the testing standard the owner selected for that objective and report what was not tested. Route-selection quality is no longer deferred to owner intuition: PD-74 requires the disposable E2E harness to exercise bounded direct and pipeline objectives with deterministic acceptance before reliability is claimed.
 
 ## 3. Per-Unit Evidence
 
@@ -44,8 +45,8 @@ Every completion MUST answer four questions:
 - **FR-1107**: A unit with no files and no tests MUST say so explicitly and record whatever evidence does exist — sources consulted, decisions made, manual steps performed.
 - **FR-1108**: Structured metadata MUST NOT carry secrets, raw logs, tokens, or unrelated transcripts. Pointers and summaries only (R9-FR-908).
 - **FR-1109**: A decision card's evidence is the decision itself, stated as binding, with the reasoning that produced it (R7-FR-718).
-- **FR-1110**: A denied protected effect MUST appear in the unit's evidence, including what was attempted and why it was refused (R10-FR-1014).
-- **FR-1110a**: Repeated attempts at a denied effect MUST surface as a reportable condition in their own right, not as a series of unrelated single denials. R10-FR-1015 declares the pattern reportable; the pattern is only visible where denials are counted per unit, so evidence MUST distinguish one refusal from a worker routing around a gate.
+- **FR-1110**: A denied protected edge effect MUST appear in the unit's evidence, including what was attempted and why it was refused (R10-FR-1014). An unexpected denial of ordinary local/reversible work is classified separately as a guard regression, not as evidence of missing user authority.
+- **FR-1110a**: Repeated attempts at a genuine denied edge effect MUST surface as a reportable condition in their own right, not as a series of unrelated single denials. R10-FR-1015 declares the pattern reportable; evidence MUST distinguish one refusal from a worker routing around a gate and from PD-72 recovery of a false positive.
 
 ## 4. Evidence Classes and Severity
 
@@ -122,9 +123,11 @@ This project has already paid twice for treating documentation as evidence — o
 - **FR-1136**: Security evidence MUST cover secret/private-content scans of source and built artifacts, path traversal, symlink/hardlink escape, unsafe archive entries, permissions, atomic writes, service-target isolation, log redaction, and every R10 guard positive/negative control.
 - **FR-1137**: The official matrix is Ubuntu 24.04 native, Ubuntu 24.04 under WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation. A result outside a declared lane is additional evidence, not proof of an untested platform.
 - **FR-1138**: Live RC qualification MUST install the public PyPI RC, consume the exact locked public `upstream` or `transitional_fork` artifact, use a public Hermes-supported provider selected during setup, and execute a preregistered realistic Git project through Morfeo → Supervisor → Implementer → independent review → integration. Credentials, spend, and live execution require their explicit gates.
-- **FR-1139**: Guard qualification under PD-66 MUST reproduce the two known false-positive classes: read-only validation misclassified as gateway lifecycle and an exact active Morfeo task-bound contract worktree denied merely for not being the main worktree. Positive authorized cases and all negative identity/path/tool controls are equally mandatory.
+- **FR-1139**: Guard qualification under PD-66/PD-71 MUST keep the two historical false-positive classes as **positive allow regressions** while proving the new boundary: representative local/reversible work for all roles and unknown ordinary tools are allowed; every enumerated protected-edge family is denied; no Kanban/SQLite/Git lookup is required to authorize ordinary work; and a complete pipeline finishes without guard-caused manual recovery.
 - **FR-1140**: Machine-readable evidence MUST bind package version, release-lock schema/version, source/fork tag and commit, artifact digests, Aether commit, platform, setup input hash, scenario, budgets, commands, exit status, and retained redacted logs. A heartbeat is never recorded as semantic completion.
 - **FR-1141**: Stable `v1.0.0` is eligible only from the accepted RC commit after every non-waived criterion passes and the owner explicitly authorizes publication. A waiver names the failed criterion, evidence, impact, alternative, and owner decision; it never rewrites failure as success.
+- **FR-1142**: Each disposable E2E run MUST retain a compact evidence set sufficient to reconstruct the test from outside the agent: scenario id, synthetic-owner transcript, Morfeo final output, board list/show/run state where applicable, Git before/after/diff, deterministic acceptance stdout/stderr, command records, usage metadata when available, guard/fault evidence, and one `run.json` verdict. The harness MUST NOT serialize subprocess environment values or provider credentials into evidence.
+- **FR-1143**: PD-74 reliability evidence counts only live/model-backed runs that use real Hermes processes, boards/worktrees/Git and deterministic project acceptance. Prepare-only fixture construction never counts as agent reliability. The rolling gate requires at least 19 PASS results in the latest 20 representative live runs, the latest 10 consecutive PASS, representative direct/pipeline/safety/recovery routes, zero guard-caused manual recovery, zero protected-edge violation, and zero unintended modification of the Aether source tree.
 
 ## 10. Evidence
 
@@ -160,10 +163,11 @@ The prior EC1 worker run is evidence for that private installation only. Clean-p
 - **SC-1109**: Built wheel/sdist install and run outside the source tree with contents, metadata, identity, and provenance verified.
 - **SC-1110**: Update fault injection, rollback, mismatch reconciliation, and uninstall prove coherent-state recovery without damage to unrelated Hermes/user state.
 - **SC-1111**: Native Linux and WSL2 lanes execute the documented public path and retain machine-readable evidence.
-- **SC-1112**: Guard positives, negatives, both known false-positive regressions, and a complete no-recovery pipeline all pass.
+- **SC-1112**: Minimal-edge guard positives/negatives, the historical false-positive allow regressions, and a complete no-guard-recovery pipeline all pass.
 - **SC-1113**: Reports distinguish liveness, activity, semantic progress, waiting, anomalies, termination, failure retries, resumptions, redispatches, review cycles, and lifecycle corrections.
 - **SC-1114**: Stable publication occurs only from the accepted RC commit after explicit owner authority.
 - **SC-1115**: One full-lifecycle contract observation summary deterministically reconciles duration, participants/actions, tool totals, the bound task/run/review/acceptance graph, separated current state, flow classifications, terminal result, and coverage against native sources without capturing raw content or changing native authority.
+- **SC-1116**: The disposable E2E runner produces the FR-1142 evidence set without copying private profile state or environment values, and the rolling scorer cannot report PD-74 PASS from prepare-only runs or from fewer than 20 representative live runs.
 
 ## 13. Done When
 
@@ -176,4 +180,6 @@ The prior EC1 worker run is evidence for that private installation only. Clean-p
 - [x] Controlled evaluation rules are set for R12.
 - [x] Clean-package, runtime integrity, lifecycle, security, platform, public-provider, and publication evidence are defined.
 - [x] Issue #192 remains release-visible; issue #195 is a pre-1.0 qualification gate and the liveness-versus-progress boundary remains explicit.
-- [x] Christopher has reviewed the stage (R4–R13 Decision Review, 2026-08-17).
+- [x] The disposable 15-scenario E2E harness, synthetic-owner contract, compact evidence set, prepare-only non-counting rule, and rolling reliability scorer are implemented and deterministically tested.
+- [ ] The real model-backed canary/matrix, persistent Morfeo wake lane, and rolling PD-74 reliability gate remain pending their existing explicit live/spend authority.
+- [x] Christopher has reviewed the original stage baseline (R4–R13 Decision Review, 2026-08-17) and explicitly authorized this 2026-08-26 simplification implementation.

@@ -1,0 +1,13 @@
+{
+  "id": "e2e-06",
+  "fixture": "two-component-feature",
+  "owner_message": "Completa e integra la feature de saludo en normalize.py y render.py y verifica app.greet. Si al integrar queda un import, referencia o wiring mecánico roto, resuélvelo durante la integración; no abras otra tarea salvo que aparezca comportamiento nuevo.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 80,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

@@ -59,7 +59,7 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
                 },
             },
             "profile_bundle": {
-                "version": "1",
+                "version": "2",
                 "sha256": digest,
                 "roles": ["morfeo", "supervisor", "implementer"],
             },
@@ -217,10 +217,11 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
         self.observation = OBS_SPEC_PATH.read_text(encoding="utf-8")
         self.research = OBS_RESEARCH_PATH.read_text(encoding="utf-8")
 
-    def test_product_definition_metadata_matches_the_pd70_baseline(self) -> None:
-        self.assertIn("accepted current conceptual design through PD-70", self.design)
-        self.assertIn("`DESIGN.md` through PD-70", self.roadmap)
-        self.assertIn("**Product-definition version**: `PD-70`", self.a1_spec)
+    def test_product_definition_metadata_matches_the_pd74_stabilization_baseline(self) -> None:
+        self.assertIn("accepted current conceptual design through PD-74", self.design)
+        self.assertIn("`DESIGN.md` through PD-74", self.roadmap)
+        self.assertIn("**Product-definition version**: `PD-74`", self.a1_spec)
+        self.assertIn("PD-74 reliability gate", self.roadmap)
         self.assertNotIn(
             "product source: this contract authorizes planning only",
             self.a1_plan,

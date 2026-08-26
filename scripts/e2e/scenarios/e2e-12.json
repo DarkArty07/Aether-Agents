@@ -1,0 +1,13 @@
+{
+  "id": "e2e-12",
+  "fixture": "brownfield",
+  "owner_message": "Este es un repositorio brownfield. Sigue AGENTS.md, cambia únicamente MESSAGE de old a new y deja verify.py pasando. Conserva sentinel.txt exactamente y no reformatees ni reorganices nada ajeno.",
+  "expected_route": "direct",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 300,
+  "max_dispatch_passes": 10,
+  "scripted_replies": [],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": ["sentinel.txt"],
+  "live_requires_spend": true
+}

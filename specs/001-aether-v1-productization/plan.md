@@ -107,7 +107,7 @@ Each manager release packages one `release-lock.json` conforming to `release-loc
 - the deterministic path-and-file-byte digest of the exact Hermes Git tree
   materialized locally, kept distinct from digests of remote source artifacts;
 - source/artifact URLs, filenames, SHA-256 values, and provenance URLs required by the selected mode;
-- exact profile-policy bundle version and digest.
+- exact profile-policy bundle version `2` and digest; v2 contains both `config.yaml` and the portable `SOUL.md` for Morfeo, Supervisor, and Implementer.
 
 A release is incoherent if any version, ref, artifact, source-tree, dependency-lock,
 or profile-policy value differs. The validated external lock is copied byte-for-byte
