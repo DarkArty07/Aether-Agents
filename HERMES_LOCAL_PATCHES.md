@@ -31,6 +31,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-198` | `#198` | el primer spawn de un worktree recibe la rama efectiva ya resuelta | issue `NousResearch/hermes-agent#89677`; PR `#89688` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-204` | `#204`, `#205` | límites asimétricos por perfil aplicados de forma compartida a ready/review; topología inicial Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | sin issue/PR nuevo; `#209` conserva sólo la traza downstream previa | los directorios detectados por el walker no se tratan como scripts inseguros; dispositivos y scripts reales siguen fail-closed | issue upstream `#86753`; commit integrado `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
+| `HLP-226` | `#226` | un hijo con `workspace_kind=worktree` y sin ruta hereda el Project canónico del worker; se rechaza cambiar a otro Project | PR `NousResearch/hermes-agent#89363` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 
 ## HLP-188 — `initial_status=blocked` sticky
 
@@ -128,6 +129,18 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Upstream:** issue cerrado <https://github.com/NousResearch/hermes-agent/issues/86753>; corrección integrada en `origin/main` mediante commit <https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702>. La revisión upstream inspeccionada `a86569bd1134867e46b49f7cef1988083d7666d8` pasó la sonda equivalente: directorio inocuo permitido, script real de lifecycle y `/dev/null` bloqueados. No se necesita nuevo issue ni PR upstream.
 - **Validación runtime pendiente:** la recarga del servicio está verificada; falta recuperar humanamente la escalación de B0, mover la misma tarjeta a `review`, repetir por la ruta ordinaria la validación que originó el falso positivo y confirmar que los controles negativos siguen bloqueados.
 - **Gate de retirada:** en una futura revisión de Hermes sin el hunk local, ejecutar la regresión exacta, toda `test_gateway_restart_loop.py` y la sonda runtime post-reinicio; sólo entonces retirar el backport y marcar `RETIRED`.
+
+## HLP-226 — herencia canónica de Project en hijos worktree
+
+- **Motivo:** `kanban_create` desactivaba la herencia de Project cuando el worker pedía explícitamente `workspace_kind="worktree"`; el hijo quedaba con `project_id=null` y `workspace_path=null` y no podía ejecutarse.
+- **Archivos activos principales:**
+  - `tools/kanban_tools.py`
+  - `tests/tools/test_kanban_tools.py`
+- **Cambio local:** cuando no existe `workspace_path` literal, el hijo hereda el Project canónico de la tarea worker y rechaza un Project explícito diferente.
+- **Evidencia:** RED `2 failed`; GREEN `2 passed`; suite focalizada herramienta + integración Project `45 passed`; validación runtime `t_81f6290f` → `t_850223ff` preservó Project, worktree y rama con `workspace_kind="worktree"` explícito.
+- **Upstream:** <https://github.com/NousResearch/hermes-agent/pull/89363>, abierto; el backport reproduce su comportamiento relevante sin reemplazar otros parches locales del mismo archivo.
+- **Estado de activación:** `ACTIVE_LOCAL`; un Supervisor nuevo cargó el handler en proceso fresco y creó `t_850223ff` con `project_id=p_227bd972`, worktree y rama resueltos. La guardia negó reiniciar el gateway desde su propio proceso y no se rodeó; este handler se ejecuta en cada worker fresco y quedó probado por la ruta real.
+- **Gate de retirada:** sobre una revisión upstream objetivo sin este hunk local, repetir las dos regresiones y la creación real cross-profile; retirar solo si el hijo conserva Project, worktree y rama y un Project conflictivo es rechazado.
 
 ## Procedimiento obligatorio antes de actualizar Hermes
 
