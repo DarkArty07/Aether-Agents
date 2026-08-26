@@ -5,6 +5,7 @@
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — Morfeo operational containment reconciled under PD-44
 **Amended**: 2026-08-20 — execution, cron, delegation, skills, and vision surfaces reconciled under amended PD-44 and PD-45
+**Amended**: 2026-08-25 — retired generic command-text path confinement while preserving enumerated protected effects
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -84,6 +85,7 @@ The enforcement point is real — a hook fed a forbidden call exited with a bloc
 - **FR-1008i**: Under PD-66, every enforcement rule MUST have positive controls for representative authorized Morfeo, Supervisor, and Implementer work; negative controls for every protected effect and undecidable identity; and a complete pipeline run that needs no guard-caused manual recovery.
 - **FR-1008j**: Every material false positive becomes a regression. If three focused corrections expose material false positives in distinct ordinary-work categories, the guard design is presumed overbroad and MUST be redesigned or replaced rather than patched indefinitely. Fail-closed behavior does not excuse unusable precision.
 - **FR-1008k**: Read-only validation and inspection MUST NOT be classified as gateway/service lifecycle merely because a command contains a path or token resembling that effect. Real lifecycle controls remain denied to an unauthorized caller.
+- **FR-1008l**: Aether MUST NOT claim process or filesystem confinement by extracting path-like strings from arbitrary `terminal` or `execute_code` command text. Implementer enforcement remains on the definitive protected effects and on inspectable targets supplied to structured mutation tools. Because a process can derive an unmentioned path at runtime, the generic command-text path scan is retired rather than expanded with more parsing. A parser, broker, container, or OS sandbox requires a separate owner-approved design change and is not implied by this retirement.
 
 ## 5. Protected Effects
 
