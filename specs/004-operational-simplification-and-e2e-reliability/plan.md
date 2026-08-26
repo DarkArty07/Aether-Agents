@@ -1,7 +1,7 @@
 # Plan de corrección, simplificación operacional y confiabilidad E2E de Aether Agents
 
 **Plan ID:** 004  
-**Estado:** en ejecución sobre `feat/004-operational-simplification`  
+**Estado:** implementación integrada en `main`; E2E live y cutover de runtime pendientes  
 **Fecha:** 2026-08-26  
 **Autoridad de producto:** Christopher  
 **Propósito:** recuperar una ejecución autónoma confiable antes de continuar ampliando Aether 1.0  
@@ -92,9 +92,9 @@ No se añadirá otro framework, scheduler, permission engine, base de datos, das
 
 ### 3.6 Estado de implementación — 2026-08-26
 
-La candidata se implementa en la branch `feat/004-operational-simplification`, en un worktree aislado hermano del checkout canónico; no se ha activado en los perfiles o servicios vivos.
+La implementación candidata ya está integrada en `main`; el worktree y la branch `feat/004-operational-simplification` fueron retirados después de pasar la verificación post-merge. Los perfiles y servicios vivos todavía no fueron activados/cut over con esta candidata.
 
-Completado en la candidata:
+Completado e integrado en `main`:
 
 - autoridad canónica reconciliada mediante PD-71 a PD-74 y specs afectadas;
 - guardia mínima sin dependencias Kanban/SQLite/Git para autorizar trabajo local;
