@@ -296,6 +296,67 @@ class ImplementerPolicyRegressionTests(unittest.TestCase):
                 reason = json.loads(result.stdout)["reason"]
                 self.assertTrue(reason.startswith("AETHER-IMPLEMENTER-UNDECIDABLE:"))
 
+    def test_workspace_local_venv_launcher_is_allowed(self) -> None:
+        # Issue #233. The retired confinement resolved this launcher through
+        # its symlink to a managed interpreter outside the worktree and denied
+        # the call, even though every argv path is workspace-local. The target
+        # must sit outside /usr and /bin, like a uv-managed interpreter, or the
+        # old rule's exemption hides the defect.
+        managed = self.root / "uv-python" / "cpython-3.11" / "bin"
+        managed.mkdir(parents=True)
+        interpreter = managed / "python3.11"
+        interpreter.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        interpreter.chmod(0o755)
+        venv_bin = self.repo / ".qualification-final" / "py311" / "bin"
+        venv_bin.mkdir(parents=True)
+        launcher = venv_bin / "python"
+        launcher.symlink_to(interpreter)
+        command = (
+            f"{launcher} scripts/qualify_observation.py test "
+            f"--python {launcher} --output {self.repo}/tests.json "
+            f"> {self.repo}/run.log 2> {self.repo}/run.err"
+        )
+        result = self.run_hook(command)
+        self.assertEqual(result.returncode, 0, result.stdout or result.stderr)
+        self.assertEqual(json.loads(result.stdout), {})
+
+    def test_read_only_git_provenance_format_is_allowed(self) -> None:
+        # Issue #237. The quoted pretty-format contains '>' inside <%ae>, which
+        # the retired shell-text classifier read as redirection toward the
+        # named contract path.
+        command = "git log -1 --format='%H%n%an <%ae>%n%s' -- specs/example/spec.md"
+        result = self.run_hook(command)
+        self.assertEqual(result.returncode, 0, result.stdout or result.stderr)
+        self.assertEqual(json.loads(result.stdout), {})
+
+    def test_retired_shell_classifier_leaves_structured_guards_intact(self) -> None:
+        # Contract ownership is still enforced where the target is a typed
+        # argument rather than a substring guessed out of shell text.
+        payload = {
+            "hook_event_name": "pre_tool_call",
+            "tool_name": "write_file",
+            "tool_input": {
+                "path": str(self.repo / "specs" / "example" / "spec.md"),
+                "content": "# owned by Morfeo\n",
+            },
+            "extra": {},
+            "cwd": str(self.repo),
+        }
+        env = os.environ.copy()
+        env["HERMES_KANBAN_WORKSPACE"] = str(self.repo)
+        env["HERMES_KANBAN_BRANCH"] = "wt/test"
+        result = subprocess.run(
+            [sys.executable, str(self.hook)],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        reason = json.loads(result.stdout)["reason"]
+        self.assertTrue(reason.startswith("AETHER-IMPLEMENTER-CONTRACT-OWNER:"))
+
 
 class MorfeoTaskBoundPolicyRegressionTests(unittest.TestCase):
     def setUp(self) -> None:

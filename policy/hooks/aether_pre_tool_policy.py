@@ -166,11 +166,6 @@ CONTRACT_BASENAMES = {
     "tasks.md",
 }
 MORFEO_OWNED_BASENAMES = CONTRACT_BASENAMES - {"tasks.md"}
-SHELL_MUTATION_RE = re.compile(
-    r"(?is)(?:>|>>|\b(?:rm|mv|cp|touch|install|truncate|tee)\b|\bsed\b[^\n]*\s-i\b|"
-    r"\bperl\b[^\n]*\s-pi\b|\b(?:write_text|write_bytes|write_file)\s*\(|"
-    r"\bopen\s*\([^\n]*,[^\n]*[\"'][wax+]|\bgit\s+(?:apply|checkout|restore|merge|cherry-pick)\b)"
-)
 
 
 class Undecidable(RuntimeError):
@@ -475,16 +470,6 @@ def _require_integration(context: dict[str, Any]) -> None:
         raise Undecidable("not the project's main worktree")
     if not context["integration"] or context["branch"] != context["integration"]:
         raise Undecidable("current branch is not the integration branch")
-
-
-def _contract_reference(text: str) -> bool:
-    return bool(
-        re.search(
-            r"(?i)(?:^|[/\\])(?:constitution|spec|plan|data-model|quickstart|tasks)\.md\b|"
-            r"(?:^|[/\\])contracts[/\\]",
-            text,
-        )
-    )
 
 
 def _extract_command(args: dict[str, Any]) -> str:
@@ -842,17 +827,12 @@ def _apply_supervisor(tool_name: str, args: dict[str, Any], payload: dict[str, A
                 _require_integration(context)
     if tool_name in {"terminal", "execute_code"}:
         command = _extract_command(args)
-        if _contract_reference(command) and SHELL_MUTATION_RE.search(command):
-            # tasks.md is Supervisor-owned, but any shell mutation must still be on integration.
-            context = _git_context(Path(args.get("workdir") or cwd))
-            if re.search(r"(?i)(?:^|[/\\])tasks\.md\b", command):
-                _require_integration(context)
-            if re.search(
-                r"(?i)(?:^|[/\\])(?:constitution|spec|plan|data-model|quickstart)\.md\b|"
-                r"(?:^|[/\\])contracts[/\\]",
-                command,
-            ):
-                _block("CONTRACT-OWNER", "Supervisor shell call may mutate a Morfeo-owned contract artifact")
+        # Contract ownership for Supervisor is enforced on the structured file
+        # tools above, where the target path is an explicit typed argument.
+        # Shell command text is deliberately NOT classified: a pre-execution
+        # string matcher cannot prove what an arbitrary program writes, and
+        # attempting it only produced false denials of read-only Git work
+        # (#233, #237). Retired by owner decision.
         _supervisor_integration_guard(command, Path(args.get("workdir") or cwd))
 
 
@@ -868,21 +848,22 @@ def _apply_implementer(tool_name: str, args: dict[str, Any], payload: dict[str, 
             if _is_contract_rel(relative):
                 _block("CONTRACT-OWNER", "Implementer may not mutate any contract artifact")
     if tool_name in {"terminal", "execute_code"}:
-        workspace, context = _implementer_context(payload, args)
+        _, context = _implementer_context(payload, args)
         command = _extract_command(args)
         history_command = _remove_read_only_branch_atoms(command)
         if IMPLEMENTER_HISTORY_RE.search(history_command):
             _block("BRANCH-HISTORY", "Implementer may not change branches, integrate, publish, or rewrite history")
         if IMPLEMENTER_EXTERNAL_EFFECT_RE.search(command):
             _block("EXTERNAL-EFFECT", "irreversible external effects belong to Supervisor integration")
-        if _contract_reference(command) and SHELL_MUTATION_RE.search(command):
-            _block("CONTRACT-OWNER", "Implementer shell call may mutate a contract artifact")
-        # A mutating shell call that names an absolute path outside the workspace is undecidable.
-        if SHELL_MUTATION_RE.search(command):
-            for raw in re.findall(r"(?<![A-Za-z0-9_.-])(/[A-Za-z0-9_./@+:-]+)", command):
-                candidate = Path(raw).resolve(strict=False)
-                if not _under(candidate, workspace) and not str(candidate).startswith(("/usr/", "/bin/")):
-                    raise Undecidable("mutating command names a path outside the assigned workspace")
+        # Generic filesystem confinement by command text is retired (#233).
+        # It never enforced anything: an allowed interpreter derives a
+        # destination internally, so no path appears in argv. What it did do
+        # was deny legitimate work whose argv merely mentioned a path that
+        # resolved outside the worktree - a workspace-local venv launcher
+        # symlinked to the real interpreter. Contract and workspace ownership
+        # remain enforced on the structured file tools above, where targets are
+        # typed arguments rather than substrings guessed out of shell text.
+        # Retired by owner decision; real confinement belongs to the OS.
         if context["branch"] != os.environ.get("HERMES_KANBAN_BRANCH"):
             raise Undecidable("worker branch changed during policy evaluation")
     if tool_name in IMPLEMENTER_INTERACTIVE_EXTERNAL_TOOLS:
