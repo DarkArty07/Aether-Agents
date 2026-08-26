@@ -35,6 +35,8 @@ The tool must never infer identity from cwd, last-used repository, profile, repo
 
 Actions are `begin`, `set_section`, `show`, `list`, `finalize`, `supersede` and `prepare_handoff`. Accepted content is persisted one section at a time with optimistic `expected_revision`; a complete contract is never transported in one tool argument.
 
+Objective Contract prose is UTF-8 and may be multiline or longer than observation metadata. The authoring boundary rejects truncation sentinels and recognized credential value shapes, but it does not apply observation-only ASCII, length, URI, email or machine-path restrictions to contract prose.
+
 Required sections are owner intent, objective, decisions/assumptions, in/out scope, authority, deliverables, acceptance criteria, testing standard, stop conditions and canonical references.
 
 Drafts are editable. Finalization validates completeness, rejects truncation sentinels, records provenance, writes and reads back the final bytes, and returns SHA-256. Finalized identity is immutable: corrections create `vN+1` with `supersedes` and a change reason; prior bytes remain unchanged.
@@ -66,6 +68,7 @@ No dashboard, semantic search, outcome artifact, multi-repository project, autom
 7. The plugin exposes exactly one transactional tool only when configured for Morfeo.
 8. A real fresh Supervisor worktree reads and verifies the same contract bytes before decomposition.
 9. The blocked telemetry qualification is recreated from a short envelope and proceeds to the next real bug.
+10. Unicode, multiline and long contract prose round-trips unchanged except for documented outer whitespace normalization, while recognized credential value shapes remain denied.
 
 ## Bootstrap
 

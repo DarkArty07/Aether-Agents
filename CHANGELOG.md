@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Objective Contract prose boundary
+
+- Separated Objective Contract secret-shape rejection from the observation metadata scanner so UTF-8, multiline and long contract prose remains authorable while recognized credential values stay denied.
+- Added source and built-wheel regressions for the pipeline-blocking `#236` case.
+
 ### Reproducible Morfeo TUI activation
 
 - Added a versioned, standard-library launcher that binds Morfeo to the repository-local profile and project directory.

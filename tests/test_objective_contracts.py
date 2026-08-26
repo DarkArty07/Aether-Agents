@@ -67,6 +67,37 @@ def _complete(store: ObjectiveContractStore, project_id: str, contract_id: str, 
     return revision
 
 
+def test_contract_sections_accept_unicode_multiline_prose_beyond_observation_metadata_limits(
+    tmp_path: Path,
+) -> None:
+    store, registry = _store(tmp_path)
+    _project(tmp_path, registry, PROJECT_A, "alpha")
+    started = store.begin(
+        project_id=PROJECT_A,
+        title="Retirar confinamiento inválido",
+        session_id="s1",
+    )
+    content = (
+        "El propietario decidió retirar una guardia de terminal que bloquea trabajo legítimo.\n\n"
+        + "La decisión conserva contratos, Git, credenciales y Kanban. " * 12
+    )
+    assert len(content) > 512
+
+    updated = store.set_section(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=1,
+        section="owner_intent",
+        content=content,
+        session_id="s1",
+    )
+
+    assert updated["revision"] == 2
+    assert store.show(project_id=PROJECT_A, contract_id=started["contract_id"])["sections"][
+        "owner_intent"
+    ] == content.strip()
+
+
 def test_begin_binds_project_and_records_system_provenance(tmp_path: Path) -> None:
     store, registry = _store(tmp_path)
     project = _project(tmp_path, registry, PROJECT_A, "alpha")
@@ -247,7 +278,13 @@ def test_supersede_rejects_secret_change_reason(tmp_path: Path) -> None:
     revision = _complete(store, PROJECT_A, started["contract_id"], 1)
     store.finalize(project_id=PROJECT_A, contract_id=started["contract_id"], expected_revision=revision, session_id="s1")
     with pytest.raises(ContractError, match="SECRET"):
-        store.supersede(project_id=PROJECT_A, contract_id=started["contract_id"], version=1, change_reason="api_key = «redacted:sk-…»", session_id="s2")
+        store.supersede(
+            project_id=PROJECT_A,
+            contract_id=started["contract_id"],
+            version=1,
+            change_reason="credential material: " + "sk-" + "a" * 20,
+            session_id="s2",
+        )
 
 
 def test_finalize_never_replaces_preexisting_version(tmp_path: Path) -> None:

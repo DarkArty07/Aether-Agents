@@ -27,6 +27,7 @@ __all__ = [
     "ForbiddenPayload",
     "NativePseudonymKind",
     "assert_clean",
+    "contains_secret_shape",
     "is_native_kanban_source_hook",
     "is_native_source_hook",
     "native_agent_task_ref",
@@ -203,6 +204,12 @@ _SECRET_VALUE_RES: Final = (
     re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
 )
 
+
+def contains_secret_shape(value: Any) -> bool:
+    """Whether a string contains a recognized credential value shape."""
+    return isinstance(value, str) and any(pattern.search(value) for pattern in _SECRET_VALUE_RES)
+
+
 #: A projected metadata string is short by construction. Anything longer is prose.
 MAX_METADATA_STRING = 512
 
@@ -340,9 +347,8 @@ def _value_reason(value: str) -> str | None:
         return "URI_SHAPED_VALUE"
     if _EMAIL_RE.search(value):
         return "EMAIL_SHAPED_VALUE"
-    for pattern in _SECRET_VALUE_RES:
-        if pattern.search(value):
-            return "SECRET_SHAPED_VALUE"
+    if contains_secret_shape(value):
+        return "SECRET_SHAPED_VALUE"
     return None
 
 

@@ -20,7 +20,7 @@ from typing import Any, Callable, Final, Iterator
 from jsonschema import Draft202012Validator
 
 from aether_agents.observation.context import ProjectRegistry, canonical_project_id
-from aether_agents.observation.privacy import scan
+from aether_agents.observation.privacy import contains_secret_shape
 from aether_agents.paths import (
     FILE_MODE,
     UnsafeObservationPath,
@@ -306,7 +306,12 @@ class ObjectiveContractStore:
         project_id, root = self._project(project_id)
         session_id = self._session(session_id)
         title = title.strip() if isinstance(title, str) else ""
-        if not title or len(title) > 200 or _TRUNCATION_RE.search(title) or scan(title) is not None:
+        if (
+            not title
+            or len(title) > 200
+            or _TRUNCATION_RE.search(title)
+            or contains_secret_shape(title)
+        ):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-TITLE-INVALID", "title is empty, too long, truncated, or secret-shaped")
         with _contract_lock(root, "begin"):
             utc, local = self._now()
@@ -389,7 +394,7 @@ class ObjectiveContractStore:
                 raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECTION-EMPTY", "section content is empty")
             if _TRUNCATION_RE.search(content):
                 raise ContractError("AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "section contains a truncation sentinel")
-            if scan(content) is not None:
+            if contains_secret_shape(content):
                 raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "section contains secret-shaped content")
             sections = dict(draft.get("sections") or {})
             sections[section] = content
@@ -452,7 +457,11 @@ class ObjectiveContractStore:
         ]
         if any(_TRUNCATION_RE.search(value) for value in sections.values() if isinstance(value, str)):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "contract contains a truncation sentinel")
-        if any(scan(value) is not None for value in sections.values() if isinstance(value, str)):
+        if any(
+            contains_secret_shape(value)
+            for value in sections.values()
+            if isinstance(value, str)
+        ):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "contract contains secret-shaped content")
         return sections, missing
 
@@ -536,7 +545,10 @@ class ObjectiveContractStore:
         text_fields = ("title", "created_at_utc", "created_at_local", "finalized_at_utc", "finalized_at_local", "created_in_session", "finalized_in_session")
         if metadata["author_profile"] != "morfeo" or any(not isinstance(metadata[key], str) or not metadata[key].strip() for key in text_fields):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract provenance is invalid")
-        if any(_TRUNCATION_RE.search(value) or scan(value) is not None for value in sections.values()):
+        if any(
+            _TRUNCATION_RE.search(value) or contains_secret_shape(value)
+            for value in sections.values()
+        ):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract content is unsafe")
 
     def finalize(
@@ -596,7 +608,7 @@ class ObjectiveContractStore:
         reason = change_reason.strip() if isinstance(change_reason, str) else ""
         if not reason or _TRUNCATION_RE.search(reason):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-CHANGE-INVALID", "change reason is empty or truncated")
-        if scan(reason) is not None:
+        if contains_secret_shape(reason):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "change reason contains secret-shaped content")
         with _contract_lock(root, contract_id):
             source = self._final_path(root, contract_id, version)
