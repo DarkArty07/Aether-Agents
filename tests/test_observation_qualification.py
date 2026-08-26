@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 from observation_helpers import PROJECT_ID, TRACE_ID
 
-from aether_agents.lifecycle import HERMES_BASELINE, verify_clean_checkout
+from aether_agents.lifecycle import HERMES_BASELINE, IntegrityError, verify_clean_checkout
 from aether_agents.observation.capture.journal import list_segments, read_segment
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import validate_event
@@ -45,6 +45,31 @@ def _load_runner(name: str):
     return module
 
 
+def _skip_unless_runtime_is_exact_baseline(checkout: Path) -> None:
+    """These lanes import the *installed* plugin, so the runtime itself must be the baseline.
+
+    Unlike the lifecycle lane, they cannot be redirected at another checkout:
+    `hermes_cli.plugins` is imported from whatever is installed. Under the
+    declared transitional_fork mode the runtime carries the local patch set and
+    a newer commit, so it can never be the locked baseline (#234). Skipping
+    states that honestly instead of failing on an environment fact that says
+    nothing about Aether.
+    """
+
+    try:
+        verify_clean_checkout(
+            checkout,
+            expected_tag=HERMES_BASELINE.tag,
+            expected_commit=HERMES_BASELINE.commit,
+            expected_tag_object=HERMES_BASELINE.tag_object,
+        )
+    except (IntegrityError, OSError, subprocess.SubprocessError) as error:
+        pytest.skip(
+            "installed Hermes runtime is not the locked baseline "
+            f"({HERMES_BASELINE.tag} @ {HERMES_BASELINE.commit[:12]}): {error}"
+        )
+
+
 @pytest.mark.hermes_exact
 def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -55,6 +80,7 @@ def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
     checkout = Path(plugins.__file__).resolve().parents[1]
     tracked_source = os.environ.get("AETHER_QUALIFICATION_TRACKED_SOURCE")
     if tracked_source is None:
+        _skip_unless_runtime_is_exact_baseline(checkout)
         evidence = verify_clean_checkout(
             checkout,
             expected_tag=HERMES_BASELINE.tag,
@@ -287,7 +313,9 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "tests/test_observation_reducer.py",
         "tests/test_observation_cli_plugin.py",
         "tests/test_observation_packaging.py",
+        "tests/test_observation_path_confinement.py",
         "tests/test_observation_performance.py",
+        "tests/test_projection_transition_runner.py",
     ]
     assert not any(
         name.endswith(("test_observation_lifecycle.py", "test_observation_qualification.py"))
@@ -591,12 +619,27 @@ def test_prioritize_exact_source_evicts_preloaded_hermes_modules(
     assert "hermes_cli.hostile" not in sys.modules
 
 
+def _exact_source_checkout(runtime_checkout: Path) -> Path:
+    """Resolve a checkout for lanes that only *read* the Hermes tree.
+
+    These can be redirected at any clean baseline checkout, unlike the lanes
+    that import the installed plugin. Prefer the explicitly configured one so
+    the lane still produces evidence on a transitional_fork runtime (#234).
+    """
+
+    configured = os.environ.get("AETHER_EXACT_HERMES_CHECKOUT")
+    if configured:
+        return Path(configured).resolve(strict=True)
+    _skip_unless_runtime_is_exact_baseline(runtime_checkout)
+    return runtime_checkout
+
+
 @pytest.mark.hermes_exact
 def test_qualification_source_excludes_ignored_egg_info_and_bytecode(
     tmp_path: Path,
 ) -> None:
     plugins = pytest.importorskip("hermes_cli.plugins")
-    checkout = Path(plugins.__file__).resolve().parents[1]
+    checkout = _exact_source_checkout(Path(plugins.__file__).resolve().parents[1])
     module = _load_runner("qualify_observation_tracked_source")
     destination = tmp_path / "tracked-source"
 

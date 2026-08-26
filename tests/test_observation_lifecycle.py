@@ -474,7 +474,33 @@ def _exact_hermes_checkout() -> Path:
     spec = importlib.util.find_spec("hermes_cli.plugins")
     if spec is None or spec.origin is None:
         pytest.skip("exact Hermes checkout is not present")
-    return Path(spec.origin).resolve().parents[1]
+    candidate = Path(spec.origin).resolve().parents[1]
+    # The installed runtime is the development checkout. Under the declared
+    # transitional_fork mode it carries the local patch set and a newer commit,
+    # so it can never satisfy the exact baseline (#234). Falling through to it
+    # turned an opt-in evidence lane into a permanent failure that said nothing
+    # about the product. Only accept it when it really is the locked baseline;
+    # otherwise skip and name the checkout the lane needs.
+    if not _is_exact_baseline(candidate):
+        pytest.skip(
+            "installed Hermes runtime is not the locked baseline "
+            f"({HERMES_BASELINE.tag} @ {HERMES_BASELINE.commit[:12]}); "
+            "point AETHER_EXACT_HERMES_CHECKOUT at a clean checkout of it"
+        )
+    return candidate
+
+
+def _is_exact_baseline(checkout: Path) -> bool:
+    try:
+        verify_clean_checkout(
+            checkout,
+            expected_tag=HERMES_BASELINE.tag,
+            expected_commit=HERMES_BASELINE.commit,
+            expected_tag_object=HERMES_BASELINE.tag_object,
+        )
+    except (IntegrityError, OSError, subprocess.SubprocessError):
+        return False
+    return True
 
 
 def _exercise_installed_plugin(
