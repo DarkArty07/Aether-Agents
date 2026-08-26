@@ -1,0 +1,13 @@
+{
+  "id": "e2e-01",
+  "fixture": "direct-text",
+  "owner_message": "En este proyecto cambia el texto de bienvenida de Hello a Hola y ejecuta la verificación existente. Quiero el resultado, no un plan ni un pipeline para un cambio tan pequeño.",
+  "expected_route": "direct",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 300,
+  "max_dispatch_passes": 10,
+  "scripted_replies": [],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": [],
+  "live_requires_spend": true
+}

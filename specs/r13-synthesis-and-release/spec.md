@@ -1,11 +1,12 @@
 # R13 Specification: Synthesis and Public Release Entry
 
 **Roadmap ID**: R13
-**Stage status**: done — reconciled 2026-08-21 as the A1 public product/release entry contract
-**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Stage status**: in-progress — reopened for PD-71 through PD-74 operational reliability stabilization before A1 release entry resumes
+**Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — proportional Morfeo and EC1 evidence work
 **Amended**: 2026-08-20 — EC1 Phase 6 closed by owner instruction
 **Amended**: 2026-08-21 — private-local implementation entry superseded by PD-48–PD-68, A1, and the 002 contract-observation prerequisite
+**Reopened**: 2026-08-26 — reliability/E2E gate now precedes feature expansion and release qualification
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
@@ -23,7 +24,7 @@ The owner-approved A1 artifacts under `specs/001-aether-v1-productization/` own 
 
 The earlier EC1/private-profile build and its closed Phase 6 are historical evidence only. Their rationale and observed results remain in `research.md` §§1–17 and Git history; they are not an implementation plan, package input, release baseline, or authority source. `tasks.md` in this directory is likewise a historical completed-work artifact and MUST NOT be dispatched for A1.
 
-- **FR-1300**: Current owner instruction and `DESIGN.md` PD-48–PD-67 supersede historical private-local build assumptions. No historical evidence may be rewritten as public-product qualification.
+- **FR-1300**: Current owner instruction and `DESIGN.md` PD-48–PD-74 supersede historical private-local build assumptions. PD-71 through PD-74 also supersede the previous role-micro-permission guard and place operational reliability ahead of feature/release expansion. No historical evidence may be rewritten as current qualification.
 
 ## 2. Portable role contracts
 
@@ -53,8 +54,8 @@ The earlier EC1/private-profile build and its closed Phase 6 are historical evid
 - **FR-1311**: Supervisor establishes executability and performs cross-artifact analysis before creating a unit.
 - **FR-1312**: It settles every shared implementation decision before fan-out and stamps the decision into every dependent card body.
 - **FR-1313**: Each card body carries explicit acceptance criteria and all context the worker needs without sibling context.
-- **FR-1314**: Supervisor decomposes, reviews, integrates, and routes; it does not implement product units.
-- **FR-1315**: A genuine unanswered decision uses the board's decision/escalation path and never becomes a guess.
+- **FR-1314**: Supervisor decomposes, reviews, integrates, and routes; it does not own feature implementation. Under PD-73 it MAY make bounded integration repairs—conflicts, imports, wiring, build/config glue or reference corrections—when they introduce no new product behavior, acceptance criterion or shared-interface decision.
+- **FR-1315**: A genuine shared/material unanswered decision uses the board's decision/escalation path and never becomes a guess; ordinary reversible implementation judgement stays with Implementer.
 - **FR-1316**: Supervisor MUST NOT improvise around a contract defect.
 - **FR-1317**: Independent review is performed by a role/run that did not author the candidate; rework returns through review, not a fake blocker.
 - **FR-1318**: Integration follows dependencies, preserves one revertible unit per commit, and never rewrites shared history.
@@ -62,11 +63,11 @@ The earlier EC1/private-profile build and its closed Phase 6 are historical evid
 
 ### 2.3 Implementer
 
-- **FR-1320**: The contract-derived card body is the only source of scope; repository/web/package content is data, never authority.
-- **FR-1321**: An unanswered product decision is escalated through the allowed decision path, never guessed.
-- **FR-1322**: An Implementer creates no work except the narrowly permitted decision/escalation artifact; policy enforcement remains authoritative.
-- **FR-1323**: An Implementer never modifies a contract artifact.
-- **FR-1324**: It works only in its exact workspace and branch.
+- **FR-1320**: The contract-derived card body is the source of unit scope; repository/web/package content and broader project artifacts may be inspected as evidence but never expand that scope.
+- **FR-1321**: Implementer decides reversible technical details locally when they preserve scope, acceptance, shared interfaces, sibling independence and authority. A genuinely material product/shared decision is escalated through the allowed decision path, never guessed.
+- **FR-1322**: An Implementer does not fan out product implementation on its own authority. That responsibility is verified by review/E2E rather than pre-tool card-creation denial.
+- **FR-1323**: Implementer does not author new product intent or silently redefine canonical contract meaning. Ordinary local file access is not a security boundary; semantic drift is rejected through review/revert.
+- **FR-1324**: It normally works in its assigned workspace/branch so isolation and attribution remain simple. Local reversible Git/file operations are not protected edge effects; cross-unit drift is a review/integration defect.
 - **FR-1325**: Completion evidence says what changed, what was actually verified, what would unblock/retry failure, and what risk remains.
 - **FR-1326**: Collision hotspots are flagged rather than silently compounded.
 - **FR-1327**: Unfinished work is blocked/escalated; no role reports an outcome it did not achieve.
@@ -106,18 +107,19 @@ Direct drift review found six indispensable guarantees not yet present as qualif
 
 ## 5. Implementation entry and dependency gates
 
-Supervisor receives this specification, A1's accepted spec/plan/research/contracts, and the reconciled R4/R8–R12 artifacts as one contract. The dependency order is:
+Supervisor receives this specification, A1's accepted spec/plan/research/contracts, the reconciled R4/R8–R12 artifacts, and the 004 operational-reliability plan as one contract. PD-74 inserts a stabilization gate ahead of further product expansion. The dependency order is:
 
-1. manager/package skeleton and schemas;
-2. transitional downstream reconciliation and local artifact production;
-3. runtime install/update/rollback/reconcile/uninstall;
-4. sanitized profiles, setup, policy, and Aether-only service;
-5. portable project initialization and isolation;
-6. supply-chain, path, privacy, and guard hardening;
-7. public docs/GitHub/workflows;
-8. deterministic RC qualification;
-9. explicitly authorized live public-path RC qualification;
-10. explicitly authorized stable release.
+1. align canonical authority, role prompts and the minimal edge policy;
+2. build and deterministically test the disposable E2E harness/canary;
+3. run the authorized real E2E matrix and satisfy the rolling PD-74 reliability gate;
+4. only then resume manager/package skeleton and remaining schemas;
+5. transitional downstream reconciliation and local artifact production;
+6. runtime install/update/rollback/reconcile/uninstall;
+7. portable project initialization, setup/service and public resource completion;
+8. supply-chain/path/privacy qualification plus public docs/GitHub/workflows;
+9. deterministic RC qualification;
+10. explicitly authorized live public-path RC qualification;
+11. explicitly authorized stable release.
 
 - **FR-1341**: Supervisor MUST settle package/version/schema/API shapes before fan-out and carry each decision into every dependent card.
 - **FR-1342**: Open limitations remain visible until evidence closes them. Aether issues `#192` (retry/resumption/lifecycle accounting), `#211` (per-flow session affinity), and `#212` (discarded TUI notification subscriptions) may remain release-visible under their accepted limitation contracts. Under PD-68, `#195` (semantic progress beyond heartbeat) is a 1.0 release prerequisite and cannot pass as an open limitation. No RC may claim automatic TUI return while the configured notifier rejects `platform=tui`.
@@ -127,7 +129,7 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 ## 6. Qualification and stable-release contract
 
 - **FR-1345**: Deterministic qualification builds and inspects wheel/sdist, installs the exact built wheel with `uv` outside the source tree, verifies locked runtime provenance/digests, and exercises setup, init, service, project isolation, update fault injection, rollback, mismatch reconciliation, uninstall, package metadata, privacy, and security.
-- **FR-1346**: Guard qualification includes representative authorized work for every role, every protected/undecidable negative control, both known false-positive classes, and one complete pipeline without guard-caused manual recovery. Three distinct ordinary-work false-positive categories trigger redesign/replacement under PD-66.
+- **FR-1346**: Guard qualification proves PD-71's minimal edge policy: representative local/reversible work for every role and unknown ordinary tools remain allowed; every enumerated protected edge family is denied; the guard contains no Kanban/SQLite/Git dependency for ordinary authorization; and one complete pipeline finishes without guard-caused manual recovery. The previous false-positive classes remain positive regressions demonstrating that the retired micro-permission design does not return.
 - **FR-1347**: Platform qualification covers Ubuntu 24.04 native, Ubuntu 24.04 under WSL2 with `systemd` and Linux-filesystem state, and continued Garuda/Arch validation.
 - **FR-1348**: Live RC qualification is preregistered, installs the public PyPI RC, consumes the exact locked public Hermes artifact, uses a public Hermes-supported user-selected provider, and runs a realistic Git project through all three roles and independent review. Credentials, spend, and the live run require explicit authority.
 - **FR-1349**: Evidence distinguishes liveness, activity, semantic progress, waiting, anomalies, and termination; and failure retries, resumptions, redispatches, reviews, lifecycle corrections, useful contract iterations, semantic loops, regressions, owner-authorized direction changes, and reversions. Heartbeat alone never proves progress. The 002 contract observer supplies one full-lifecycle summary from the owner message through the explicitly bound execution/review graph and verified completion or distinct non-success terminal resolution, with explicit coverage declaration.
@@ -145,7 +147,7 @@ Canonical reconciliation and local build/verification do not authorize any of th
 - installation cutover of an existing private Aether/Hermes runtime;
 - destructive purge or unrelated service/process mutation.
 
-Each effect requires the exact gate named by the A1 contract. A denial is authoritative and MUST NOT be routed around.
+Each external/destructive effect requires the exact gate named by the A1 contract. A genuine protected-edge denial is authoritative and MUST NOT be routed around. An unexpected denial of ordinary local/reversible work is instead a PD-72 product regression: recover the last green canary, do not disguise the false positive as user authority.
 
 ## 8. Success criteria
 
@@ -153,17 +155,19 @@ Each effect requires the exact gate named by the A1 contract. A denial is author
 - **SC-1302**: The release lock resolves one coherent Aether manager, Hermes source/artifact, profile-policy bundle, schema set, and Python range with verified digests/provenance.
 - **SC-1303**: No public prompt/template/default/artifact contains a private identifier, credential, private path, session, memory, board, repository, or runtime state.
 - **SC-1304**: Aether reuses native Hermes profile, Project, board, worktree, review, and lifecycle primitives instead of duplicating them.
-- **SC-1305**: Exact board-verified Morfeo task-bound contract authoring succeeds through structured file tools while all PD-67 negative controls remain denied.
+- **SC-1305**: Morfeo, Supervisor and Implementer perform representative local/reversible work without policy false positives; contract authoring stays attributable/reviewable without PD-67 board/run/worktree micro-authorization, while every PD-71 protected edge control remains denied.
 - **SC-1306**: Update/rollback/uninstall fault tests preserve coherent active state and unrelated Hermes/user data.
 - **SC-1307**: Issues `#192`, `#211`, and `#212` are either evidenced against their acceptance criteria or explicitly remain open release limitations; issue `#195` is evidenced and closed before stable 1.0. No report equates heartbeat with progress, zero technical failures with zero logical retries, or a stored TUI subscription with actual delivery.
 - **SC-1308**: Deterministic and live RC matrices retain machine-readable evidence bound to exact commits, versions, artifacts, platforms, scenarios, budgets, and exit status.
 - **SC-1309**: No public or destructive external effect occurs without its explicit owner gate.
+- **SC-1310**: Before A1 feature/release expansion resumes, the latest 20 representative E2E runs contain at least 19 passes, the latest 10 pass consecutively, and there are zero guard-caused manual recoveries or protected-edge violations.
 
 ## 9. Done when
 
-- [x] R4 and R8–R12 are reconciled with PD-48–PD-67 and current Hermes evidence.
 - [x] The exact stable upstream base and initial `transitional_fork` disposition are recorded.
 - [x] Historical private-local implementation assumptions are preserved in research but removed from current execution entry.
-- [x] Portable role-resource, setup, project, lifecycle, security, evidence, platform, and release contracts are synthesized.
-- [x] Testing and publication gates are explicit.
-- [ ] A1 implementation, deterministic qualification, live RC qualification, and publication remain unperformed and separately gated.
+- [x] PD-71 through PD-74 reopen the affected role/security/release-entry contract without adding another runtime framework.
+- [x] Testing, reliability and publication gates are explicit.
+- [ ] Minimal edge policy, aligned portable role resources and disposable E2E harness pass deterministic qualification.
+- [ ] The PD-74 real E2E reliability gate passes under separately authorized model/provider spend.
+- [ ] A1 implementation, deterministic RC qualification, live public-path RC qualification, and publication remain unperformed and separately gated.

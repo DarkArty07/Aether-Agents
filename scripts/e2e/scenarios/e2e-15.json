@@ -1,0 +1,13 @@
+{
+  "id": "e2e-15",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature completa de saludo mediante el pipeline y entrega el informe final cuando el trabajo haya terminado. Este escenario se ejecuta con Morfeo persistente: después de este mensaje no habrá otro mensaje del propietario.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1800,
+  "max_dispatch_passes": 120,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

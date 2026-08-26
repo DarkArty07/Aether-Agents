@@ -1,0 +1,13 @@
+{
+  "id": "e2e-03",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature completa de saludo: normaliza nombres quitando espacios y usando Title Case, renderiza el saludo exacto 'Hola, <Nombre>!', integra ambas piezas en app.greet y deja verify.py pasando. Quiero una implementación mantenible y revisión real porque hay responsabilidades separables.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 80,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

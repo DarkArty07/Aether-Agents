@@ -1,10 +1,11 @@
 # R5 Specification: Topology, Identity, and Isolation
 
 **Roadmap ID**: R5  
-**Stage status**: done
+**Stage status**: done — reconciled 2026-08-26 for PD-71/PD-73; role topology unchanged
 **Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
 **Amended**: 2026-08-20 — PD-44 capability surface expanded and PD-45 accepted by Christopher
+**Amended**: 2026-08-26 — role responsibility remains semantic while the pre-tool micro-permission boundary is retired
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -58,15 +59,15 @@ By PD-45, `skills` and `vision` are base toolsets for all three profiles. They a
 - **FR-505**: A single `implementer` profile MUST serve many concurrent cards. Concurrency is a dispatcher limit, not a profile count, so parallelism MUST NOT be expressed by adding roles or profiles.
 - **FR-506**: `morfeo` MUST expose board, file, and terminal toolsets, together with the existing memory and research surfaces composed for its platform. File access is general within the project it is managing; terminal enables direct operational stewardship. Only browser execution and computer use remain excluded from Morfeo's operational surface.
 
-### Containment is asymmetric — verified in source
+### Responsibility is semantic; selected runtime gates remain structural
 
-Morfeo's route boundary is agentic rather than structurally enforced: its operational capability is broader than the direct work it should choose. Implementer card creation remains non-structural because card creation is available to every dispatched worker. Board enumeration and unblocking remain structurally gated to orchestrators.
+Morfeo's route boundary is agentic rather than structurally enforced: its operational capability is broader than the direct work it should choose. Implementer also has ordinary board/file/terminal capability within its dispatched context; that capability is not product authority. Board enumeration and unblocking remain structurally gated to orchestrators by Hermes.
 
-- **FR-506a**: An `implementer` MUST NOT create or link cards. The framework will not prevent it, so this is an instruction reinforced by a blocking hook, not a structural guarantee, and it MUST be stated as such wherever containment is claimed.
-- **FR-506b**: Aether MUST NOT describe Morfeo's direct-versus-pipeline judgement as structural or hook-enforced. It is agentic self-control under PD-44. Implementer card-creation containment remains enforced, not structural.
-- **FR-506c**: R10 MUST treat implementer card creation as a protected effect. A tool-call hook that can block and fail closed is the available enforcement point.
-- **FR-506d**: Two forms of containment **are** structural for workers and MUST be relied on: a worker cannot enumerate the board, and a worker cannot unblock a card — including its own.
-- **FR-506e**: The revised Morfeo prompt, `file + terminal` toolsets, and reconciled R10 policy MUST be prepared while the profile is stopped and activated as one bounded change. Morfeo MUST NOT run in a deliberate intermediate state where prompt, capability, and policy express different responsibility models.
+- **FR-506a**: An `implementer` MUST NOT fan out sibling product implementation or widen its own unit scope on its own authority. A material shared question may use the Tier-1 decision-card pattern in R7. This is a semantic/review obligation under PD-73, not a pre-tool card-creation denial.
+- **FR-506b**: Aether MUST NOT describe Morfeo's direct-versus-pipeline judgement or any role's ordinary local technical responsibility as structural or hook-enforced. It is agentic responsibility, evidenced by the resulting artifacts and E2E behavior.
+- **FR-506c**: R10 protects only PD-71 edge effects. Card creation/linking, ordinary local Git/file use, artifact inspection and reversible implementation choices are not protected effects solely because a role could misuse them.
+- **FR-506d**: Two useful restrictions **are** native/structural for dispatched workers and MAY be relied on operationally: a worker cannot enumerate the board, and a worker cannot unblock a card — including its own. They are not a security boundary between principals.
+- **FR-506e**: Portable `config.yaml`, `SOUL.md`, and the reconciled minimal R10 policy MUST be versioned and activated coherently. The public profile bundle therefore carries both behavior and configuration bytes for every role.
 - **FR-506f**: No classifier, score, threshold, special board lane, or hook may decide whether Morfeo acts directly. The complete owner objective is the unit of judgement; fragmentation into small mutations MUST NOT change the route.
 - **FR-506g**: Under amended PD-44, Morfeo MAY use `code_execution`, `cronjob`, and `delegation` (`delegate_task`) on both CLI and Telegram. `code_execution` supports bounded direct work with many repetitive mechanical steps. Cron may schedule Morfeo's own follow-up or a future pipeline start, selected case by case through the same whole-objective reasoning as the direct/pipeline route, and MUST NOT establish permanent autonomy beyond an owner-requested objective. Delegated subagents may assist only Morfeo's own bounded direct work and MUST NOT receive product implementation belonging to Supervisor/Implementer. As with FR-506b's route choice, that delegation boundary is agentic self-control, not structural or hook-enforced.
 - **FR-507**: Model tiering MUST be expressed per profile, with a per-card override reserved for quality-sensitive units.
@@ -205,8 +206,8 @@ Restart durability was recorded as an unavoidable limit. It was a limit of in-pr
 | Decide when a unit runs in goal mode and what turn budget it carries | R7 |
 | Worktree naming, branch strategy, and integration order | R8 |
 | Retention of durable rows, attachments, and preserved worktrees | R9 |
-| Workers can create and link cards; a blocking fail-closed tool-call hook is the verified enforcement point | R10 |
-| Morfeo's direct operational capability is activated atomically with its prompt and reconciled policy | R10, R13 |
+| Workers can create/link cards; semantic fan-out responsibility is verified by review/E2E while only PD-71 edge effects are hook-enforced | R7, R10, R11 |
+| Portable role configuration and `SOUL.md` behavior bytes are activated coherently with the reconciled minimal policy | A1, R10, R13 |
 | The board is single-host under a trusted-local-user model | R10 |
 | Structured completion evidence is the evidence base | R11 |
 | Per-profile models plus per-card override | R12 |
@@ -229,7 +230,7 @@ During analysis of DOC-09/P5-F13, the owner corrected the responsibility model: 
 
 The blanket removal of terminal and general project writing was a design error, not a safety principle. Permanent role reconcentration remains prohibited, while bounded proportional execution is legitimate. Route selection belongs to Morfeo's reasoning over the complete owner objective, with anti-fragmentation and direct-to-pipeline route change required by R1-FR-133a through FR-133d.
 
-The owner has now resolved the previously open boundary: no classifier, threshold, fast lane, fourth role, or external gate is added; feature-scale work remains in the pipeline; authority and protected effects do not widen; Git provides ordinary rollback where applicable. For this implementation, only mechanical syntax, configuration, and diff checks are required. Functional validation of Morfeo's route judgement is deliberately deferred to the owner and the limitation must remain explicit rather than being reported as verified.
+The owner has now resolved the previously open boundary: no classifier, threshold, fast lane, fourth role, or route-selection gate is added; feature-scale product work remains in the pipeline; PD-71 narrows protected effects to the irreversible/external edge; Git provides ordinary rollback where applicable. PD-74 now requires functional E2E validation of Morfeo's route judgement through the disposable real-path harness rather than deferring that validation to owner intuition. Until the model-backed reliability gate is explicitly authorized and passes, route quality remains implemented but not fully qualified.
 
 ## 15. Done When
 
@@ -242,11 +243,11 @@ The owner has now resolved the previously open boundary: no classifier, threshol
 - [x] Convergence and non-convergence are defined.
 - [x] Failure handling supersedes PD-26.
 - [x] Collision handling follows upstream's neutral-reconciler pattern.
-- [x] Load-bearing claims verified in source, not only documentation: tool gating, the enforcement point for protected effects, and the currency of the Spec Kit checkout.
-- [x] The asymmetry of role containment is recorded rather than overclaimed.
-- [x] The R13 build contradiction between Morfeo's contract ownership and its absent file capability is corrected and recorded as R5-D07; activation is deferred atomically to Phase 4 enforcement.
-- [x] PD-44 replaces the obsolete no-execution boundary with proportional direct stewardship while preserving three roles, pipeline separation for substantial work, and the anti-fragmentation rule.
-- [x] Corrected against execution, not only reading: the escalation model was split into two tiers (R7 §5), the block budget was found to be effectively one attempt, the unknown-assignee behaviour was restated accurately, and the review lane was found to be a first-class transition with a bundled procedure.
+- [x] Load-bearing claims verified in source, not only documentation: native board/tool gating, the real pre-tool interception surface, and the currency of the Spec Kit checkout.
+- [x] Structural runtime gates are distinguished from semantic role responsibility rather than overclaimed as role isolation.
+- [x] The R13 build contradiction between Morfeo's stewardship and its absent file capability is corrected; portable `config.yaml` + `SOUL.md` activation now carries the reconciled behavior contract while R10 protects only PD-71 edge effects.
+- [x] PD-44 replaces the obsolete no-execution boundary with proportional direct stewardship while preserving three roles, pipeline separation for substantial product work, and the anti-fragmentation rule.
+- [x] Corrected against execution, not only reading: escalation is now proportional Tier 0/1/2, the block budget remains effectively one human-visible attempt, the unknown-assignee behaviour is stated accurately, and the review lane remains a first-class transition with a bundled procedure.
 - [x] Dispatcher internals inspected and executed: claim, workspace preparation, spawn, live concurrency capping, crash detection, stale reclaim, and the review claim path.
 - [ ] Still not inspected: memory-provider internals and terminal backends. Each is read by the stage that relies on it — R9 and R8 respectively.
 - [x] Christopher reviewed the baseline (R4–R13 Decision Review, 2026-08-17), accepted PD-44 on 2026-08-18, and accepted the capability amendment plus PD-45 on 2026-08-20.

@@ -1,0 +1,13 @@
+{
+  "id": "e2e-14",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature de saludo y sométela a revisión independiente. Si review encuentra un defecto corregible, usa el mismo ciclo review/rework y vuelve a verificar; no conviertas rework normal en bloqueo humano.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 100,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

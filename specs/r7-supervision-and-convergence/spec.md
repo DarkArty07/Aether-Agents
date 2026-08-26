@@ -1,10 +1,11 @@
 # R7 Specification: Supervision, Parallelism, and Convergence
 
 **Roadmap ID**: R7
-**Stage status**: done
-**Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
+**Stage status**: in-progress — reopened for PD-73 autonomy and PD-74 E2E reliability qualification
+**Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — scoped explicitly to work Morfeo dispatches under PD-44
 **Amended**: 2026-08-21 — asymmetric starting capacity accepted: one Supervisor and three Implementers
+**Reopened**: 2026-08-26 — local reversible judgement and integration repair are no longer forced through decision-card/guard ceremony
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -30,7 +31,7 @@ R3-D01 assigned `tasks` to the supervising role because a breakdown requires con
 - **FR-701**: The supervisor MUST derive the breakdown from the contract, and MUST run cross-artifact analysis before creating any execution instance (R2-FR-214).
 - **FR-701a**: The breakdown MUST be decomposed along **independently testable user stories**, which is what keeps one wrong unit cheap instead of fatal (R2 §8, R1 §4). A breakdown organised by layer or by file touches every story at once and destroys the bounded blast radius the contract relies on.
 - **FR-702**: `tasks.md` is the breakdown of record; cards are execution instances of its units (PD-34). The supervisor MUST NOT create a card that traces to no unit.
-- **FR-703**: The supervisor MUST NOT implement. Its terminal action after fan-out is completing its own card with a summary of the decomposition.
+- **FR-703**: The Supervisor does not own feature implementation. After fan-out it remains the decomposition/review/integration authority, but under PD-73 it MAY make a bounded integration repair (for example a conflict resolution, import, wiring, build/config glue, or reference correction) when that repair is strictly required to combine already-accepted units and introduces no new product behavior, acceptance criterion, shared-interface decision, or feature scope. Anything larger returns to an Implementer.
 - **FR-704**: Every decision two sibling units would each have to make MUST be made once by the supervisor and written into **both** card bodies. Workers cannot see sibling cards, so an unstamped shared decision is a decision each worker invents differently.
 - **FR-705**: Each card body MUST be written as explicit acceptance criteria, not as a description. This is a hard requirement rather than a style preference, because the convergence judge reads the body as its acceptance criteria (§7).
 
@@ -64,45 +65,49 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 - **FR-713**: FR-712's numbers are calibration starting points, not derived constants. They MUST be revised from observed contract duration, idle time, worker occupancy, collision rate, integration cost, provider rate limiting, and host saturation; the revision MUST be recorded.
 - **FR-714**: Units that would each edit the same file MUST NOT be dispatched concurrently. Independence in the breakdown means file-level independence, not merely logical separability.
 
-## 5. Escalation — Two Tiers
+## 5. Escalation — local judgement first, durable escalation when material
 
-Christopher's instruction, recorded during this stage:
+Christopher's original instruction remains authoritative at the material boundary:
 
 > If an implementer blocks, the system resolves it through the supervisor, not me. If the system does not have enough information to be built, then it goes back up to Morfeo and he asks me what was never defined.
 
-Implementing this required care, because **a dispatcher-spawned worker cannot release a blocked card** — unblocking is gated to orchestrators and every Aether worker runs as a dispatched worker. An escalation designed around blocking and unblocking would have needed a privileged, always-running supervisor, which is the hub shape PD-13 forbids.
+The 2026-08-26 simplification clarifies what **blocks** means. A normal implementation choice is not a block simply because the card did not spell it out.
 
-### Tier 1 — the decision card
+### Tier 0 — Implementer decides locally
 
-The mechanism below was executed end to end against the runtime and uses only tools available to an ordinary worker.
+- **FR-715**: Implementer MUST decide a technical detail locally when the choice is reversible, testable inside its unit, does not change scope or acceptance criteria, does not alter an agreed shared interface, does not affect another independent unit, and does not grant new authority.
+- **FR-716**: A Tier-0 choice MUST be visible in normal code/evidence when material to review, but it MUST NOT create a decision card merely to obtain permission for ordinary implementation judgement.
+- **FR-717**: If several reasonable local implementations satisfy the same contract, choosing one is implementation work, not a contract defect.
 
-1. The implementer meets a question its card does not answer and the contract does not settle.
-2. It creates a **decision card** addressed to the supervisor, stating the question, the options it sees, and the consequence of each.
-3. It links that decision card as a **parent of its own card**. The link alone returns its own card to waiting; the dependency gate does the rest.
-4. A fresh supervisor process is dispatched to the decision card, decides with the contract in view, and completes with the decision in its summary.
-5. The implementer's card promotes automatically and re-spawns, receiving the decision verbatim as parent handoff.
+### Tier 1 — material contract-supported decision
 
-- **FR-715**: Tier 1 escalation MUST use the decision-card pattern. It MUST NOT use a block, because a block wakes a human and consumes the recurrence budget of §6.
-- **FR-716**: A decision card MUST carry the question, the candidate answers, and what each implies. A decision card that only reports confusion is incomplete.
-- **FR-717**: The supervisor MUST answer from the contract. Where the contract settles the question, the answer is a reading; where it does not, §5 tier 2 applies.
-- **FR-718**: A decision card's answer MUST be stated as binding in its completion summary, so the resuming implementer treats it as contract-derived rather than advisory.
-- **FR-719**: An implementer MUST NOT create any card other than a decision card addressed to the supervisor. All other fan-out is the supervisor's, and this restriction is enforced by R10 rather than trusted to instruction.
+The existing decision-card mechanism remains useful when the choice affects shared execution or requires Supervisor judgement. It is no longer mandatory ceremony for every unanswered detail.
 
-### Tier 2 — the contract is defective
+1. Implementer states the material question, candidate answers and consequences.
+2. It creates a decision card addressed to Supervisor and links it as a parent of its own card.
+3. The dependency gate returns the implementation unit to waiting.
+4. Supervisor decides from the canonical contract and completes the decision card with a binding summary.
+5. The implementation unit promotes and resumes with the decision.
 
-- **FR-720**: When the supervisor determines the answer is not derivable from the contract, it MUST block the decision card as needing input rather than invent an answer (R2-FR-224).
-- **FR-721**: Tier 2 MUST reach Morfeo, who is the only role permitted to revise a contract (R2-FR-222). Sibling units continue untouched.
-- **FR-722**: A repaired contract MUST be corrected in the artifact that owns it, and the affected units re-materialised, rather than patched into a card body (PD-34, R5-FR-516e).
+- **FR-718**: Tier 1 SHOULD use the verified decision-card pattern rather than a human-visible block.
+- **FR-719**: Implementer MUST NOT fan out product implementation or create sibling execution work on its own authority. This is a semantic/review rule under PD-73, not a pre-tool permission rule under R10.
+- **FR-719a**: A decision card MUST carry the question, candidate answers and consequences; a card that only reports confusion is incomplete.
 
-### The rule that separates the tiers
+### Tier 2 — the contract is genuinely defective
 
-- **FR-723**: A question the contract can answer MUST NOT reach a human. A question the contract cannot answer MUST NOT be answered by an agent.
+- **FR-720**: When Supervisor determines that a material answer is not derivable from the contract and no safe local default preserves the same acceptance/interface contract, it MUST surface the missing product decision rather than invent one.
+- **FR-721**: Tier 2 reaches Morfeo, who owns contract revision and asks Christopher only for the missing product/authority decision. Sibling units continue untouched.
+- **FR-722**: The repaired decision is corrected in the artifact that owns it and propagated to affected work; unrelated units are not rematerialised.
+
+### Separation rule
+
+- **FR-723**: Local reversible technical judgement stays with Implementer; shared contract-supported judgement stays with Supervisor; genuinely missing product intent reaches Morfeo/Christopher. The system MUST NOT promote a lower tier merely because automation can represent the question as a card.
 
 ## 6. A Hard Limit That Cannot Be Configured Away
 
 After a card is blocked, unblocked, and blocked again for the same cause, the runtime routes it to triage for a human decision. The threshold is a source-level constant, not a configuration key, and the counter deliberately survives each unblock, resetting only on successful completion.
 
-- **FR-724**: Aether MUST treat the number of human-visible blocks per unit as effectively **one useful attempt**, and MUST design escalation so this budget is rarely spent. Tier 1 exists precisely to avoid spending it.
+- **FR-724**: Aether MUST treat the number of human-visible blocks per unit as effectively **one useful attempt**, and MUST design escalation so this budget is rarely spent. Tier 0 local judgement and Tier 1 durable decisions exist precisely to avoid spending it on ordinary technical uncertainty.
 - **FR-725**: The limit MUST NOT be raised by patching the runtime. Modifying upstream core is prohibited (FR-403).
 - **FR-726**: An answer to a blocked unit MUST resolve the underlying cause, not merely release the card. Releasing without resolving spends the last attempt.
 - **FR-727**: Where a unit's difficulty is a dependency on other work rather than a missing decision, it MUST be expressed as a dependency wait, which returns the unit to waiting and auto-resumes without human involvement or recurrence accounting.
@@ -138,7 +143,7 @@ The runtime provides first-class same-card review: an implementer can hand its c
 - **FR-740**: A unit expected to exceed one hour MUST emit liveness signals, or the dispatcher reclaims it as crashed and its current progress is lost.
 - **FR-741**: A reclaim MUST be treated as benign — lost progress, not a failure (R5-FR-537).
 - **FR-742**: Aether MUST NOT report an outcome the board does not record (R5-FR-538).
-- **FR-742a**: Aether MUST NOT steer a running worker across a role boundary. Steering exists and stays available inside a single worker's own run (R4-FR-417), but crossing a role boundary always uses the board (PD-29). Redirecting already-dispatched work MUST therefore use the review return path (FR-736) or a decision card (FR-717), never an out-of-band interruption. A direct Morfeo action crosses no role boundary, so this rule does not require a card for it.
+- **FR-742a**: Aether MUST NOT steer a running worker across a role boundary. Steering exists and stays available inside a single worker's own run (R4-FR-417), but crossing a role boundary always uses the board (PD-29). Redirecting already-dispatched work MUST therefore use the review return path (FR-736) or a Tier-1 decision card (FR-718), never an out-of-band interruption. A direct Morfeo action crosses no role boundary, so this rule does not require a card for it.
 
 ## 10. Collision Hotspots
 
@@ -174,7 +179,7 @@ Still assumed: goal-mode judging, which needs a model in the loop.
 |---|---|
 | Concurrent units must not share a working tree; integration order follows the dependency graph | R8 |
 | Preserved worktrees and durable rows accumulate and need retention | R9 |
-| Implementer card creation must be restricted to decision cards by enforcement, not instruction | R10 |
+| Protected external/irreversible effects remain edge-enforced; Implementer fan-out responsibility is verified by review/E2E rather than pre-tool card denial | R10, R11 |
 | The two disabled defaults are configuration facts that must be verified before a run | R10, R13 |
 | Completion evidence is the evidence base; not-converged is a reportable outcome | R11 |
 | Goal-mode judging and the disabled auxiliary slots are model decisions | R12 |
@@ -183,14 +188,15 @@ Still assumed: goal-mode judging, which needs a model in the loop.
 ## 13. Success Criteria
 
 - **SC-701**: No unit is decomposed by anything other than the supervisor.
-- **SC-702**: A question the contract answers is resolved without waking a human.
-- **SC-703**: A question the contract does not answer reaches Morfeo without any sibling unit stopping.
+- **SC-702**: A reversible local technical detail is decided by Implementer without a decision card or human wake; a shared contract-supported question is resolved by Supervisor without waking a human.
+- **SC-703**: A genuinely missing product/contract decision reaches Morfeo without any sibling unit stopping.
 - **SC-704**: No unit reaches the triage column.
 - **SC-705**: Two parallel units never edit the same file.
 - **SC-706**: A non-converging unit terminates as not converged, with its budget recorded.
 - **SC-707**: In the pipeline, no role reviews its own output. Direct PD-44 verification is not represented as independent pipeline review.
 - **SC-708**: Every numeric limit in this specification is either observed or explicitly marked as an uncalibrated starting value.
 - **SC-709**: No direct Morfeo action is materialized as a fake delegated unit, while every substantial objective selected for the pipeline remains governed by R7 in full.
+- **SC-710**: Supervisor may repair integration glue without creating a new implementation unit only when the repair adds no new behavior; E2E evidence distinguishes that bounded repair from feature implementation.
 
 ## 14. Done When
 

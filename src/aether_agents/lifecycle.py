@@ -312,7 +312,7 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
     assert isinstance(hermes_source_tree_sha256, str)
     profile_bundle = payload.get("profile_bundle")
     assert isinstance(profile_bundle, dict)
-    if profile_bundle.get("version") != "1":
+    if profile_bundle.get("version") != "2":
         raise IntegrityError("release lock profile bundle version mismatch")
     profile_bundle_sha256 = profile_bundle.get("sha256")
     assert isinstance(profile_bundle_sha256, str)
@@ -2571,33 +2571,41 @@ class LifecycleManager:
             )
 
     @staticmethod
-    def _profile_source(role: str) -> Path:
+    def _profile_source(role: str, name: str = "config.yaml") -> Path:
         if role not in _PROFILE_ROLES:
             raise IntegrityError("unknown managed profile")
-        return Path(__file__).parent / "resources" / "profiles" / role / "config.yaml"
+        if name not in {"config.yaml", "SOUL.md"}:
+            raise IntegrityError("unknown managed profile resource")
+        return Path(__file__).parent / "resources" / "profiles" / role / name
+
+    @classmethod
+    def _profile_sources(cls, role: str) -> dict[str, Path]:
+        return {name: cls._profile_source(role, name) for name in ("config.yaml", "SOUL.md")}
 
     def _materialize_profile_bundle(self, stage: Path) -> str:
-        profiles: dict[str, dict[str, str]] = {}
+        profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
         profiles_root = stage / "profiles"
         _create_private_directory(profiles_root)
         for role in _PROFILE_ROLES:
-            source = self._profile_source(role)
-            if source.is_symlink() or not source.is_file():
-                raise IntegrityError("packaged profile resource is unavailable")
-            try:
-                data = read_private_bytes(source)
-            except (OSError, ValueError) as error:
-                raise IntegrityError("packaged profile resource is unreadable") from error
             target_dir = profiles_root / role
             _create_private_directory(target_dir)
-            target = target_dir / "config.yaml"
-            self._write_durable(target, data)
-            profiles[role] = {
-                "path": f"profiles/{role}/config.yaml",
-                "sha256": hashlib.sha256(data).hexdigest(),
-            }
+            resources: dict[str, dict[str, str]] = {}
+            for name, source in self._profile_sources(role).items():
+                if source.is_symlink() or not source.is_file():
+                    raise IntegrityError("packaged profile resource is unavailable")
+                try:
+                    data = read_private_bytes(source)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("packaged profile resource is unreadable") from error
+                target = target_dir / name
+                self._write_durable(target, data)
+                resources[name] = {
+                    "path": f"profiles/{role}/{name}",
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                }
+            profiles[role] = {"resources": resources}
         manifest = {
-            "schema_version": 1,
+            "schema_version": 2,
             "observer_entry_point": HERMES_BASELINE.observer_entry_point,
             "roles": list(_PROFILE_ROLES),
             "profiles": profiles,
@@ -2607,14 +2615,14 @@ class LifecycleManager:
         return _sha256(manifest_path)
 
     def _capture_profile_product_state(self) -> dict[Path, bytes | None]:
-        """Snapshot only the two Aether-owned files in each persistent role home."""
+        """Snapshot only Aether-owned files in each persistent role home."""
 
         snapshot: dict[Path, bytes | None] = {}
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
             if home.is_symlink():
                 raise IntegrityError("managed profile home must not be a symlink")
-            for name in ("config.yaml", "aether-observer.json"):
+            for name in ("config.yaml", "SOUL.md", "aether-observer.json"):
                 path = home / name
                 if path.is_symlink():
                     raise IntegrityError("managed profile product file must not be a symlink")
@@ -2652,18 +2660,19 @@ class LifecycleManager:
         release = self.store.release_path(record.release_id)
         ensure_private_dir(self.store.profile_homes)
         for role in _PROFILE_ROLES:
-            source = release / "profiles" / role / "config.yaml"
-            if source.is_symlink() or not source.is_file():
-                raise IntegrityError("managed profile configuration is missing")
             home = self.store.profile_home(role)
             if home.is_symlink():
                 raise IntegrityError("managed profile home must not be a symlink")
             ensure_private_dir(home)
-            try:
-                source_bytes = read_private_bytes(source)
-            except (OSError, ValueError) as error:
-                raise IntegrityError("managed profile configuration is unreadable") from error
-            _atomic_bytes(home / "config.yaml", source_bytes)
+            for name in ("config.yaml", "SOUL.md"):
+                source = release / "profiles" / role / name
+                if source.is_symlink() or not source.is_file():
+                    raise IntegrityError("managed profile resource is missing")
+                try:
+                    source_bytes = read_private_bytes(source)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile resource is unreadable") from error
+                _atomic_bytes(home / name, source_bytes)
             _atomic_json(home / "aether-observer.json", self._profile_activation(record, role))
         _fsync_directory(self.store.profile_homes)
 
@@ -2673,21 +2682,30 @@ class LifecycleManager:
             raise IntegrityError("managed profile homes are unavailable")
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
-            source = release / "profiles" / role / "config.yaml"
             config = home / "config.yaml"
+            soul = home / "SOUL.md"
             activation = home / "aether-observer.json"
-            if any(path.is_symlink() for path in (home, config, activation)):
+            if any(path.is_symlink() for path in (home, config, soul, activation)):
                 raise IntegrityError("managed profile activation contains a symlink")
-            if not home.is_dir() or not config.is_file() or not activation.is_file():
+            if (
+                not home.is_dir()
+                or not config.is_file()
+                or not soul.is_file()
+                or not activation.is_file()
+            ):
                 raise IntegrityError("managed profile activation is incomplete")
             try:
                 config_bytes = read_private_bytes(config)
-                source_bytes = read_private_bytes(source)
+                config_source_bytes = read_private_bytes(
+                    release / "profiles" / role / "config.yaml"
+                )
+                soul_bytes = read_private_bytes(soul)
+                soul_source_bytes = read_private_bytes(release / "profiles" / role / "SOUL.md")
                 activation_bytes = read_private_bytes(activation)
             except (OSError, ValueError) as error:
                 raise IntegrityError("managed profile activation is unreadable") from error
-            if config_bytes != source_bytes:
-                raise IntegrityError("managed profile activation configuration drift")
+            if config_bytes != config_source_bytes or soul_bytes != soul_source_bytes:
+                raise IntegrityError("managed profile activation resource drift")
             try:
                 payload = json.loads(activation_bytes.decode("utf-8"))
             except (UnicodeError, json.JSONDecodeError) as error:
@@ -2697,6 +2715,7 @@ class LifecycleManager:
             if os.name == "posix" and (
                 stat.S_IMODE(home.stat().st_mode) != DIR_MODE
                 or stat.S_IMODE(config.stat().st_mode) != FILE_MODE
+                or stat.S_IMODE(soul.stat().st_mode) != FILE_MODE
                 or stat.S_IMODE(activation.stat().st_mode) != FILE_MODE
             ):
                 raise IntegrityError("managed profile activation permissions mismatch")
@@ -2717,20 +2736,21 @@ class LifecycleManager:
             activation = home / "aether-observer.json"
             if activation.exists() or activation.is_symlink():
                 activation.unlink()
-            config = home / "config.yaml"
-            source = self._profile_source(role)
-            if (
-                config.is_file()
-                and not config.is_symlink()
-                and source.is_file()
-                and not source.is_symlink()
-            ):
-                try:
-                    product_owned = read_private_bytes(config) == read_private_bytes(source)
-                except (OSError, ValueError) as error:
-                    raise IntegrityError("managed profile configuration is unreadable") from error
-                if product_owned:
-                    config.unlink()
+            for name in ("config.yaml", "SOUL.md"):
+                target = home / name
+                source = self._profile_source(role, name)
+                if (
+                    target.is_file()
+                    and not target.is_symlink()
+                    and source.is_file()
+                    and not source.is_symlink()
+                ):
+                    try:
+                        product_owned = read_private_bytes(target) == read_private_bytes(source)
+                    except (OSError, ValueError) as error:
+                        raise IntegrityError("managed profile resource is unreadable") from error
+                    if product_owned:
+                        target.unlink()
             _fsync_directory(home)
         _fsync_directory(self.store.profile_homes)
 
@@ -3013,7 +3033,7 @@ class LifecycleManager:
             raise IntegrityError("managed profile bundle digest mismatch")
         if (
             not isinstance(profile_manifest, dict)
-            or profile_manifest.get("schema_version") != 1
+            or profile_manifest.get("schema_version") != 2
             or profile_manifest.get("roles") != list(_PROFILE_ROLES)
             or profile_manifest.get("observer_entry_point") != HERMES_BASELINE.observer_entry_point
             or set(profile_manifest)
@@ -3038,41 +3058,46 @@ class LifecycleManager:
         if observed_roles != set(_PROFILE_ROLES):
             raise IntegrityError("managed profile directory set mismatch")
         for role in _PROFILE_ROLES:
-            expected_path = f"profiles/{role}/config.yaml"
             details = profiles.get(role)
-            if not isinstance(details, dict) or set(details) != {"path", "sha256"}:
+            if not isinstance(details, dict) or set(details) != {"resources"}:
                 raise IntegrityError("managed profile evidence is malformed")
-            if details.get("path") != expected_path:
-                raise IntegrityError("managed profile path mismatch")
-            source = self._profile_source(role)
+            resources = details.get("resources")
+            if not isinstance(resources, dict) or set(resources) != {"config.yaml", "SOUL.md"}:
+                raise IntegrityError("managed profile resource evidence is malformed")
             role_root = profiles_root / role
-            target = release / expected_path
-            if (
-                role_root.is_symlink()
-                or not role_root.is_dir()
-                or source.is_symlink()
-                or not source.is_file()
-                or target.is_symlink()
-                or not target.is_file()
-            ):
-                raise IntegrityError("managed profile configuration is missing")
-            if {child.name for child in role_root.iterdir()} != {"config.yaml"}:
+            if role_root.is_symlink() or not role_root.is_dir():
+                raise IntegrityError("managed profile directory is missing")
+            if {child.name for child in role_root.iterdir()} != {"config.yaml", "SOUL.md"}:
                 raise IntegrityError("managed profile contains unknown product bytes")
-            if os.name == "posix" and (
-                stat.S_IMODE(role_root.stat().st_mode) != DIR_MODE
-                or stat.S_IMODE(target.stat().st_mode) != FILE_MODE
-            ):
-                raise IntegrityError("managed profile configuration permissions mismatch")
-            try:
-                expected_bytes = read_private_bytes(source)
-                observed_bytes = read_private_bytes(target)
-            except (OSError, ValueError) as error:
-                raise IntegrityError("managed profile configuration is unreadable") from error
-            if observed_bytes != expected_bytes:
-                raise IntegrityError("managed profile configuration drift")
-            digest = hashlib.sha256(expected_bytes).hexdigest()
-            if details.get("sha256") != digest:
-                raise IntegrityError("managed profile configuration digest mismatch")
+            if os.name == "posix" and stat.S_IMODE(role_root.stat().st_mode) != DIR_MODE:
+                raise IntegrityError("managed profile directory permissions mismatch")
+            for name, source in self._profile_sources(role).items():
+                expected_path = f"profiles/{role}/{name}"
+                resource = resources.get(name)
+                if not isinstance(resource, dict) or set(resource) != {"path", "sha256"}:
+                    raise IntegrityError("managed profile resource evidence is malformed")
+                if resource.get("path") != expected_path:
+                    raise IntegrityError("managed profile path mismatch")
+                target = release / expected_path
+                if (
+                    source.is_symlink()
+                    or not source.is_file()
+                    or target.is_symlink()
+                    or not target.is_file()
+                ):
+                    raise IntegrityError("managed profile resource is missing")
+                if os.name == "posix" and stat.S_IMODE(target.stat().st_mode) != FILE_MODE:
+                    raise IntegrityError("managed profile resource permissions mismatch")
+                try:
+                    expected_bytes = read_private_bytes(source)
+                    observed_bytes = read_private_bytes(target)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile resource is unreadable") from error
+                if observed_bytes != expected_bytes:
+                    raise IntegrityError("managed profile resource drift")
+                digest = hashlib.sha256(expected_bytes).hexdigest()
+                if resource.get("sha256") != digest:
+                    raise IntegrityError("managed profile resource digest mismatch")
 
     def validate_release(self, release_id: str) -> ReleaseRecord:
         """Re-prove every activation boundary for an installed release."""

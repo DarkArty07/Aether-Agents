@@ -217,9 +217,10 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
         synthetic_manager_python.chmod(0o700)
     resources = Path(lifecycle.__file__).parent / "resources" / "profiles"
     for role in ("morfeo", "supervisor", "implementer"):
-        profile = stage / "profiles" / role / "config.yaml"
-        profile.parent.mkdir(parents=True, exist_ok=True)
-        profile.write_bytes((resources / role / "config.yaml").read_bytes())
+        profile_root = stage / "profiles" / role
+        profile_root.mkdir(parents=True, exist_ok=True)
+        for name in ("config.yaml", "SOUL.md"):
+            (profile_root / name).write_bytes((resources / role / name).read_bytes())
     (stage / "release.json").write_text(
         json.dumps(
             {
@@ -311,15 +312,19 @@ def _aether_identity(version: str) -> dict[str, object]:
 
 
 def _profile_bundle_sha256() -> str:
-    profiles: dict[str, dict[str, str]] = {}
+    profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
+    resources_root = Path(lifecycle.__file__).parent / "resources" / "profiles"
     for role in ("morfeo", "supervisor", "implementer"):
-        source = Path(lifecycle.__file__).parent / "resources" / "profiles" / role / "config.yaml"
-        profiles[role] = {
-            "path": f"profiles/{role}/config.yaml",
-            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-        }
+        resources: dict[str, dict[str, str]] = {}
+        for name in ("config.yaml", "SOUL.md"):
+            source = resources_root / role / name
+            resources[name] = {
+                "path": f"profiles/{role}/{name}",
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            }
+        profiles[role] = {"resources": resources}
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "observer_entry_point": HERMES_BASELINE.observer_entry_point,
         "roles": ["morfeo", "supervisor", "implementer"],
         "profiles": profiles,
@@ -387,7 +392,7 @@ def _write_release_lock(
             ],
         },
         "profile_bundle": {
-            "version": "1",
+            "version": "2",
             "sha256": _profile_bundle_sha256(),
             "roles": ["morfeo", "supervisor", "implementer"],
         },
@@ -736,9 +741,10 @@ def test_activation_materializes_three_explicit_profile_homes_under_store(
     for role in ("morfeo", "supervisor", "implementer"):
         home = store.profile_home(role)
         assert home == store.root / "profiles" / role
-        assert (home / "config.yaml").read_bytes() == (
-            Path(lifecycle.__file__).parent / "resources" / "profiles" / role / "config.yaml"
-        ).read_bytes()
+        for name in ("config.yaml", "SOUL.md"):
+            assert (home / name).read_bytes() == (
+                Path(lifecycle.__file__).parent / "resources" / "profiles" / role / name
+            ).read_bytes()
         activation = json.loads((home / "aether-observer.json").read_text(encoding="utf-8"))
         assert activation == {
             "schema_version": 1,
@@ -1320,8 +1326,9 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         "implementer",
     }
     for role in ("morfeo", "supervisor", "implementer"):
-        expected_profile = (expected_profiles / role / "config.yaml").read_bytes()
-        assert (release / "profiles" / role / "config.yaml").read_bytes() == expected_profile
+        for name in ("config.yaml", "SOUL.md"):
+            expected_profile = (expected_profiles / role / name).read_bytes()
+            assert (release / "profiles" / role / name).read_bytes() == expected_profile
     assert manager.validate_release(record.release_id) == record
     release_manifest = json.loads((release / "release.json").read_text(encoding="utf-8"))
     assert release_manifest["schema_version"] == 3
@@ -1376,9 +1383,16 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
     profile = release / "profiles" / "morfeo" / "config.yaml"
     expected_morfeo_profile = (expected_profiles / "morfeo" / "config.yaml").read_bytes()
     profile.write_bytes(expected_morfeo_profile + b"# drift\n")
-    with pytest.raises(IntegrityError, match="profile configuration drift"):
+    with pytest.raises(IntegrityError, match="profile resource drift"):
         manager.validate_release(record.release_id)
     profile.write_bytes(expected_morfeo_profile)
+
+    soul = release / "profiles" / "morfeo" / "SOUL.md"
+    expected_morfeo_soul = (expected_profiles / "morfeo" / "SOUL.md").read_bytes()
+    soul.write_bytes(expected_morfeo_soul + b"\n# drift\n")
+    with pytest.raises(IntegrityError, match="profile resource drift"):
+        manager.validate_release(record.release_id)
+    soul.write_bytes(expected_morfeo_soul)
 
     artifact = release / "artifacts" / record.wheel_filename
     artifact_bytes = artifact.read_bytes()
@@ -2355,6 +2369,7 @@ def test_initial_install_recovery_deactivates_only_aether_profile_bytes(
         home = store.profile_home(role)
         assert not (home / "aether-observer.json").exists()
         assert not (home / "config.yaml").exists()
+        assert not (home / "SOUL.md").exists()
     assert user_state.read_bytes() == b"user-owned"
     assert json.loads(transition.read_text(encoding="utf-8"))["state"] == "recovered"
 
@@ -3204,6 +3219,7 @@ def test_uninstall_preserve_deactivates_profiles_without_deleting_user_bytes(
         home = store.profile_home(role)
         assert not (home / "aether-observer.json").exists()
         assert not (home / "config.yaml").exists()
+        assert not (home / "SOUL.md").exists()
     assert user_state.read_bytes() == b"user-owned-state"
 
 

@@ -1,0 +1,13 @@
+{
+  "id": "e2e-10",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature de saludo completa con responsabilidades separables y verificación final. Este escenario calificará recuperación de un fallo transitorio de worker: el objetivo debe continuar, no transformarse en rediseño del runtime.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 100,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

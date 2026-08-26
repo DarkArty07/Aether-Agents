@@ -1,0 +1,13 @@
+{
+  "id": "e2e-04",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature de saludo definida por verify.py: normalización y render son responsabilidades separables. No tengo preferencia sobre el algoritmo interno mientras cumpla exactamente el comportamiento, sea simple y quede probado.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 80,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

@@ -1,9 +1,9 @@
 # Aether 1.0 Productization and Public Release Specification
 
 **Contract ID**: A1
-**Status**: normative PD-70 contract active; implementation and release evidence remain separately gated
-**Accepted product decisions**: `DESIGN.md` PD-01 through PD-70
-**Product-definition version**: `PD-70`
+**Status**: normative product contract active but stabilization-frozen under PD-71 through PD-74; implementation and release evidence remain separately gated
+**Accepted product decisions**: `DESIGN.md` PD-01 through PD-74, including the 2026-08-26 operational simplification
+**Product-definition version**: `PD-74`
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
@@ -49,7 +49,8 @@ Supervisor MUST stop the affected lane at the relevant gate rather than interpre
 - public documentation, GitHub presentation, support surfaces, release automation, provenance, and known limitations;
 - deterministic qualification and a preregistered live release-candidate flow;
 - local deterministic contract observation as defined by [`../002-aether-contract-observation/spec.md`](../002-aether-contract-observation/spec.md);
-- reconciliation of every canonical or derived artifact invalidated by PD-48 through PD-70.
+- reconciliation of every canonical or derived artifact invalidated by PD-48 through PD-74;
+- an operational-simplification and E2E-reliability gate that must pass before feature expansion or release qualification resumes.
 
 ### 3.2 Out of scope for 1.0
 
@@ -185,7 +186,7 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-036**: The role configuration MUST express descending capability and cost: highest-capability Morfeo, strong independent Supervisor, and the least expensive Implementer that still passes the required quality gates.
 - **A1-FR-037**: Users MUST be allowed to select the same supported model for two or all three roles.
 - **A1-FR-038**: Model/provider identifiers MUST remain user configuration and MUST NOT become product decisions or prompt content.
-- **A1-FR-039**: Setup MUST install sanitized Morfeo, Supervisor, and Implementer identities plus the shared canonical policy with a visible profile-policy version.
+- **A1-FR-039**: Setup MUST install sanitized Morfeo, Supervisor, and Implementer identities plus the shared canonical policy with a visible profile-policy version. Profile bundle version `2` carries both portable `config.yaml` and `SOUL.md` bytes for all three roles so the product cannot activate a configuration without the behavior contract that it was qualified against.
 - **A1-FR-040**: The public distribution MUST use an explicit allowlist of Aether-owned profile resources; it MUST NOT recursively copy any local profile or skill directory.
 
 ### 5.5 Local service and launch
@@ -236,7 +237,7 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-069**: Logs MUST remain local, apply secret redaction, and avoid raw prompt/code capture by default.
 - **A1-FR-070**: Product-managed directories and credential-adjacent files MUST use least-privilege user permissions.
 - **A1-FR-071**: Download, extraction, installation, backup, restore, and path resolution MUST defend against symlink escape, path traversal, partial writes, and replacement races.
-- **A1-FR-072**: The shared pre-tool policy MUST remain fail-closed for secrets, credentials, cross-role boundaries, and protected effects while permitting the accepted role capabilities. For native structured file mutation tools, Morfeo contract authoring is permitted in either the launcher-bound integration context or an exact active task-bound linked worktree verified against the explicitly pinned board, task-owned run, assignee, status, `workspace_kind`, workspace, project root, and branch. Morfeo calls in either context MUST use absolute target paths; patch target extraction MUST be parser-equivalent to the lock-selected Hermes version, validate both move endpoints, and fail closed on unrecognized operation headers. This requirement does not claim that shell or code-execution tools are path-confined by the same parser.
+- **A1-FR-072**: The shared pre-tool policy MUST implement PD-71's narrow edge boundary: high-confidence secret/credential exposure, credential acquisition or widening, unauthorized remote publication/deploy/external mutation, clearly destructive irreversible operations, and only structurally provable typed-target isolation escape. It MUST NOT enforce role ownership, decision-card shape, local branch workflow, contract authorship, task/run/worktree identity, or direct-versus-pipeline routing. Ordinary local/reversible work is allowed unless the exact call independently matches a protected edge family; malformed hook invocation may fail closed.
 - **A1-FR-073**: `computer_use` and browser execution MUST remain absent from Aether role configurations in 1.0.
 - **A1-FR-074**: Secret scanning MUST cover tracked source, built wheel/sdist contents, generated docs, profile bundles, release manifests, and downstream release metadata.
 
@@ -262,11 +263,13 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-088**: Linux-native and WSL2 results MUST be separately recorded; Garuda/Arch dogfood MUST not substitute for either reference lane.
 - **A1-FR-089**: No `v1.0.0` tag or stable publication MAY occur until the exact RC satisfies every non-waived success criterion and Christopher explicitly authorizes publication.
 - **A1-FR-090**: A waiver MUST identify the failed criterion, evidence, impact, alternative, and owner decision; it MUST NOT silently rewrite the requirement or represent missing evidence as success.
-- **A1-FR-091**: Release qualification MUST reproduce and prevent both observed policy false-positive classes: read-only validation classified as protected gateway lifecycle, and an exact active Morfeo task-bound contract workspace rejected solely because it is not the main worktree. The task-bound regression MUST use production-shaped Hermes hook identity and negative controls for missing board pin, stale or cross-task run, non-Morfeo assignee, inactive state, missing or mismatched workspace, non-worktree kind, standalone clone, branch mismatch, relative or out-of-workspace target, parser-recognized no-space operation markers, hidden mixed operations, both move endpoints, and unrecognized operation headers. Denials remain authoritative during development; each correction requires positive and negative regression evidence rather than a tool workaround.
+- **A1-FR-091**: Release qualification MUST prove the minimal edge policy rather than the retired micro-authorization matrix. Positive cases cover representative Morfeo, Supervisor and Implementer local work—including read-only Git, local branches/commits, project-file and contract-file mutation, tests/builds, unknown ordinary tools and bounded integration glue—without guard-caused recovery. Negative cases cover every PD-71 protected edge family. A genuine protected-edge denial remains authoritative; an unexpected denial of ordinary local/reversible work is a regression and triggers PD-72 recovery rather than another ad-hoc exception.
+- **A1-FR-092**: Before A1 feature expansion or RC qualification resumes, the disposable E2E laboratory MUST exercise direct work, a real three-role pipeline, positive and negative edge-policy controls, bounded recovery, brownfield preservation, parallel work and review/rework using real Hermes processes, real boards/worktrees/Git and deterministic project acceptance. Model/provider execution remains subject to the explicit credential/spend gate in A1-FR-086.
+- **A1-FR-093**: PD-74's reliability gate MUST be satisfied before the stabilization freeze lifts: at least 19 passes in the latest 20 representative E2E runs, the latest 10 consecutive runs passing, zero protected-edge violations and zero manual recovery caused by the guard. Each infrastructure change MUST pass the small canary before another infrastructure change is layered on top.
 
 ## 6. Non-functional requirements
 
-- **A1-NFR-001 — Recoverability**: Every local mutation made by setup, init, update, rollback, service management, or uninstall MUST either be atomic or have tested deterministic recovery.
+- **A1-NFR-001 — Recoverability**: Every local mutation made by setup, init, update, rollback, service management, or uninstall MUST either be atomic or have tested deterministic recovery. When Aether/Hermes itself breaks the requested route, PD-72 recovery restores the last known-good E2E by safe retry/resume, rollback, or at most two focused repairs before any separate hardening work begins.
 - **A1-NFR-002 — Inspectability**: Every command that changes state MUST provide a dry-run or preview where meaningful and a machine-readable report of planned or completed effects.
 - **A1-NFR-003 — Portability**: Product resources MUST contain no personal name requirement, absolute machine path, private provider, private model, secret, or local runtime identifier.
 - **A1-NFR-004 — Minimal manager**: The management CLI MUST remain usable for doctor and rollback even when the managed Hermes runtime cannot import or start.
@@ -298,8 +301,9 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - **A1-SC-010**: The public-provider live RC scenario completes the full three-role path with durable, owner-readable evidence.
 - **A1-SC-011**: GitHub, PyPI, Pages, package metadata, changelog, and release notes agree on identity, version, support, privacy, limitations, and install command.
 - **A1-SC-012**: `v1.0.0` is published only from the accepted RC commit after explicit publication authority.
-- **A1-SC-013**: Read-only contract/package validation and exact board-verified Morfeo task-bound contract authoring through native structured file tools execute without false policy denial, while real gateway lifecycle violations, cross-role contract mutation, missing board identity, stale or cross-task run identity, standalone checkout, workspace-kind or branch mismatch, relative targets, parser-hidden operations, and writes outside the assigned workspace remain denied. Shell/code-execution authority is tested against its own protected-effect contract rather than counted as path confinement evidence.
-- **A1-SC-014**: The packaged contract observer produces one schema-valid deterministic summary spanning the owner message, Morfeo creation, Supervisor handoff, explicitly bound implementation/review graph, acceptance verification, and terminal resolution; its duration partition, participant actions, exact tool totals, task/run/review/acceptance state, flow classifications, invariant transitions, separated lifecycle state, and coverage reconcile with a controlled real contract trace. Collection remains local, metadata-only, and non-blocking.
+- **A1-SC-013**: Representative local/reversible work for all three roles executes without policy denial—including local Git, local contract/project edits, tests/builds, unknown ordinary tools and bounded Supervisor integration repair—while secrets/credentials, credential acquisition/widening, unauthorized remote mutation and clearly destructive irreversible controls remain denied.
+- **A1-SC-014**: The packaged contract observer produces one schema-valid deterministic summary spanning the owner message, Morfeo creation, Supervisor handoff, explicitly bound implementation/review graph, acceptance verification, and terminal resolution; its duration partition, participant actions, exact tool totals, task/run/review/acceptance state, flow classifications, invariant transitions, separated lifecycle state, and coverage reconcile with a controlled real contract trace. Collection remains local, metadata-only, non-blocking and is not permitted to change the functional E2E outcome during PD-74 stabilization.
+- **A1-SC-015**: The operational reliability gate reaches at least 19/20 representative E2E passes with the latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations before feature expansion or release qualification resumes.
 
 ## 9. Known assumptions and limitations
 
@@ -312,7 +316,7 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 
 ## 10. Impact and reconciliation
 
-PD-48 through PD-70 supersede older text that described Aether as a private single-profile configuration layered on unmodified Hermes, as permanently bound to a downstream fork, as requiring all Morfeo contract drafts to be written directly on the integration checkout, as deferring all semantic contract observation beyond 1.0, as leaving manager/observer packaging independently selectable, or as allowing observation to guess project/origin identity, rewrite source history, or perform durability/reduction work on the agent callback path. Before implementation closes, the owning and derived artifacts MUST be reconciled. At minimum:
+PD-48 through PD-74 supersede older text that described Aether as a private single-profile configuration layered on unmodified Hermes, as permanently bound to a downstream fork, as requiring all Morfeo contract drafts to be written directly on the integration checkout, as deferring all semantic contract observation beyond 1.0, as leaving manager/observer packaging independently selectable, as allowing observation to guess project/origin identity, or as requiring a board/run/worktree-aware pre-tool micro-permission system for ordinary local work. Before implementation closes, the owning and derived artifacts MUST be reconciled. The 004 operational-simplification gate precedes resumed feature/release expansion. At minimum:
 
 - R4: replace both the absolute no-fork rule and the permanent-downstream assumption with the upstream-first transitional boundary;
 - R9: reconcile public XDG state, project identity, backup, and update ownership;
