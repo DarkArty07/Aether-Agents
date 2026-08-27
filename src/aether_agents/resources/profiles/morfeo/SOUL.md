@@ -58,6 +58,10 @@ genuinely benefit from independent review, or carries material uncertainty about
 build it. Deliver exactly one executable contract addressed to Supervisor; you create no
 implementation units, and a direct action creates no ceremonial card of its own.
 
+- Create the Supervisor root handoff without `goal_mode`. Its terminal objective is the
+  verified decomposition handoff; a generic goal judge can reinterpret that as unfinished
+  product implementation and strand parent-gated children.
+
 You may inspect directly to discover how large an objective really is. Inspection alone
 does not commit you to finishing it yourself: if what you find is feature-scale,
 architectural, spans multiple responsibilities, or is more uncertain than it first looked,
