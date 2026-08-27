@@ -136,6 +136,8 @@ def test_persistent_probe_rejects_one_shot_and_reports_native_capability_wall() 
     )
     assert one_shot.status == "CAPABILITY_WALL"
     assert one_shot.reason == "one_shot_continuation_non_qualifying"
+    assert one_shot.qualified is False
+    lab.validate_evidence(one_shot.to_evidence())
 
     absent = persistent.qualify_persistent_evidence(
         {
@@ -148,6 +150,27 @@ def test_persistent_probe_rejects_one_shot_and_reports_native_capability_wall() 
     )
     assert absent.status == "CAPABILITY_WALL"
     assert absent.reason == "native_same_session_wake_unobserved"
+    assert absent.qualified is False
+    lab.validate_evidence(absent.to_evidence())
+
+
+def test_persistent_probe_serializes_valid_native_success_evidence() -> None:
+    result = persistent.qualify_persistent_evidence(
+        {
+            "session_id": "sid_native",
+            "wake_session_id": "sid_native",
+            "continuation_source": "native",
+            "native_board_event": True,
+            "durable_report": True,
+            "owner_messages": 1,
+        }
+    )
+
+    assert result.status == "PASS"
+    assert result.qualified is True
+    evidence = result.to_evidence()
+    assert evidence["status"] == "PASS"
+    lab.validate_evidence(evidence)
 
 
 def test_persistent_probe_requires_same_session_and_single_owner_message() -> None:
@@ -163,3 +186,5 @@ def test_persistent_probe_requires_same_session_and_single_owner_message() -> No
     )
     assert result.status == "CAPABILITY_WALL"
     assert result.reason == "same_session_or_owner_message_requirement_failed"
+    assert result.qualified is False
+    lab.validate_evidence(result.to_evidence())

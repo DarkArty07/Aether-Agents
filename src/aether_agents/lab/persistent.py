@@ -29,7 +29,7 @@ class PersistentProbeResult:
 
     @property
     def qualified(self) -> bool:
-        return self.status == "QUALIFIED"
+        return self.status == "PASS"
 
     def to_evidence(self) -> dict[str, Any]:
         return {
@@ -69,7 +69,7 @@ def qualify_persistent_evidence(receipts: Mapping[str, Any]) -> PersistentProbeR
         reason = "same_session_or_owner_message_requirement_failed"
     else:
         return PersistentProbeResult(
-            "QUALIFIED", "native_same_session_wake_verified", surface, True,
+            "PASS", "native_same_session_wake_verified", surface, True,
             True, True, owner_messages,
         )
     return PersistentProbeResult(
