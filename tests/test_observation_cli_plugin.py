@@ -1414,6 +1414,11 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
     observer._reconcile_native()
     health = observer._collector.health.read()
     observer.unload()
+    second = hermes_plugin._Observer(FakePluginContext())
+    assert second._collector is not None
+    second._reconcile_native()
+    health.update(second._collector.health.read())
+    second.unload()
     events = _journal_events(paths)
     bindings = {
         event["work_unit"]["task_ref"]
@@ -1421,6 +1426,12 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
         if event["event_type"] == "work_unit.bound"
     }
     assert {"t_11111111", "t_22222222"} <= bindings
+    assert sum(
+        1
+        for event in events
+        if event["event_type"] == "work_unit.bound"
+        and event["work_unit"]["task_ref"] == "t_11111111"
+    ) == 1
     assert all(event["project_id"] == PROJECT_ID for event in events)
     assert "EVENT_IDENTITY_COLLISION" not in health
 

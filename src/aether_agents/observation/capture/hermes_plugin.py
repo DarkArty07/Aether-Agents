@@ -56,6 +56,7 @@ from aether_agents.observation.identity import (
     native_identity,
     parse_correlation_token,
 )
+from aether_agents.observation.locking import project_lock
 from aether_agents.observation.privacy import (
     NativePseudonymKind,
     assert_clean,
@@ -1443,6 +1444,30 @@ class _Observer:
             return True
         return False
 
+    def _emit_binding_durable(
+        self,
+        collector: Collector,
+        *,
+        trace_id: str,
+        task_ref: str,
+        relation: str,
+        event: dict[str, Any],
+    ) -> bool:
+        with project_lock(collector.paths, "native-binding"):
+            retained = _retained_binding(collector.paths, task_ref)
+            if retained is None:
+                return collector.emit(event).accepted
+            if retained == (trace_id, relation):
+                collector.binder.restore(
+                    task_ref=task_ref,
+                    trace_id=trace_id,
+                    relation=relation,
+                )
+                collector.restore_materialized_trace(trace_id)
+                return True
+            collector.health.increment("BINDING_DURABLE_CONFLICT")
+            return False
+
     def _emit_native_rejections(
         self,
         collector: Collector,
@@ -1548,10 +1573,12 @@ class _Observer:
                 continue
             if already is None:
                 builder = collector.builder_for(trace_id)
-                self._emit_native_once(
+                self._emit_binding_durable(
                     collector,
-                    ("binding", trace_id, task_id, "root"),
-                    builder.work_unit(
+                    trace_id=trace_id,
+                    task_ref=task_id,
+                    relation="root",
+                    event=builder.work_unit(
                         event_type="work_unit.bound",
                         status="reported",
                         task_ref=task_id,
@@ -1596,10 +1623,12 @@ class _Observer:
                 changed = True
                 task = tasks[task_id]
                 builder = collector.builder_for(decision.trace_id)
-                self._emit_native_once(
+                self._emit_binding_durable(
                     collector,
-                    ("binding", decision.trace_id, task_id, "other"),
-                    builder.work_unit(
+                    trace_id=decision.trace_id,
+                    task_ref=task_id,
+                    relation="unknown",
+                    event=builder.work_unit(
                         event_type="work_unit.bound",
                         status="reported",
                         task_ref=task_id,
@@ -2145,8 +2174,12 @@ class _Observer:
             self._emit_tool_start(collector, trace, metadata)
         self._emit_tool_terminal(collector, trace, payload, metadata)
         assert decision is not None and decision.task_ref is not None
-        collector.emit(
-            collector.builder_for(trace).work_unit(
+        self._emit_binding_durable(
+            collector,
+            trace_id=trace,
+            task_ref=decision.task_ref,
+            relation=decision.relation,
+            event=collector.builder_for(trace).work_unit(
                 event_type="work_unit.bound",
                 status="reported",
                 task_ref=decision.task_ref,
