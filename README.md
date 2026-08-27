@@ -111,6 +111,35 @@ The stabilization work has four priorities:
 
 Historical EC1/live evidence remains useful evidence in [`R13 research`](specs/r13-synthesis-and-release/research.md), but it no longer substitutes for the new rolling reliability gate. A paid/provider-backed real matrix still requires its explicit credential/spend authority; deterministic harness and policy qualification do not grant it.
 
+### Formal qualification laboratory
+
+The disposable qualification harness is now a formal, Hermes-free Python package in
+`src/aether_agents/lab`, exposed as `aether_agents.lab`. The historical commands under
+`scripts/e2e/` remain compatibility wrappers and retain their documented arguments:
+
+```bash
+python3 scripts/e2e/run.py e2e-01 --prepare-only --run-root /tmp/aether-e2e-01
+python3 scripts/e2e/matrix.py --suite full --prepare-only --parallel 2 \
+  --matrix-root /tmp/aether-e2e-full --history /tmp/aether-e2e-history.jsonl
+```
+
+Preparation creates distinct disposable repository, profile, board, XDG-state, and
+evidence roots; independent runs use at most two workers, while E2E-15 and shared
+Morfeo-session lanes are serial. `PREPARED` is never counted in the rolling live
+reliability window. `--live` remains spend-gated by the exact Hermes executable,
+candidate profiles, and explicit `--allow-model-spend` acknowledgement; no live run
+or provider call is implied by the deterministic lane.
+
+The separate `observation` preparation suite seeds a local trace and invokes the
+registered `aether_observe` tool's `status`, `changes`, and `diagnose` actions. It is
+excluded from the PD-74 score and writes only schema-validated bounded metadata under
+the disposable evidence root. The persistent E2E-15 prerequisite is a native Hermes
+CLI/TUI/gateway surface under PTY that wakes the same Morfeo session from the terminal
+board event, reports durable state, and uses no second owner message; a one-shot
+harness continuation is explicitly non-qualifying. The current qualification state is
+therefore deterministic preparation complete, with owner-authorized live reliability
+and native persistent wake still pending.
+
 ### Implemented product surface
 
 The current `0.24.0` package is a **beta stabilization build, not a release candidate**. Its implemented public surface is:

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.invalid/lab/scenario.schema.json",
+  "title": "Aether laboratory scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "fixture", "owner_message", "expected_route", "acceptance_command"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^e2e-[0-9]{2}$"},
+    "fixture": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+    "owner_message": {"type": "string", "minLength": 1},
+    "expected_route": {"type": "string", "enum": ["direct", "pipeline", "safety", "recovery"]},
+    "acceptance_command": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 14400},
+    "max_dispatch_passes": {"type": "integer", "minimum": 1, "maximum": 500},
+    "scripted_replies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "reply"],
+        "properties": {
+          "pattern": {"type": "string", "minLength": 1},
+          "reply": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "forbidden_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "required_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "live_requires_spend": {"type": "boolean"},
+    "fault_injection": {"type": ["string", "null"], "enum": [null, "hook_false_positive_file_mutation"]},
+    "expected_owner_interventions": {"type": "integer", "minimum": 0},
+    "expected_guard_denial_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}

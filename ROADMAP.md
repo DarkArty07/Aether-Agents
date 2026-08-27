@@ -67,7 +67,7 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 | Phase | Scope | Status | Exit/gate |
 |---|---|---|---|
 | 0 | Canonical reconciliation and baseline freeze | in progress; reopened by PD-71–PD-74 | DESIGN/R7/R8/R10/A1/R13/role resources agree on reversibility-first local work and the minimal edge boundary |
-| S | 004 operational simplification + E2E reliability | in progress; **feature freeze active** | Minimal guard + aligned roles + disposable E2E canary; then >=19/20 representative passes with latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations |
+| S | 004 operational simplification + E2E reliability | in progress; **feature freeze active** | `aether_agents.lab` is the formal Hermes-free qualification API; `scripts/e2e` remains wrappers, with schema-validated full/observation preparation, isolated `--parallel 2` roots, and serialized E2E-15. Minimal guard + aligned roles + disposable E2E canary; then >=19/20 representative live passes with latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations |
 | 1 | Manager/package skeleton and public contracts | frozen behind phase S | Built wheel installs with `uv`; help/version/no-runtime doctor run outside source tree |
 | 2 | Transitional downstream reconciliation/artifacts | pending | Six-patch candidate passes exact gates; local wheel/sdist/source/provenance ready. **External gate** before public fork/tag/release |
 | 3 | Runtime lifecycle and recovery | pending | Fault-injected install/update/rollback/reconcile/uninstall preserves coherent active release and unrelated state |
@@ -83,6 +83,15 @@ These are dependency phases and release-evidence gates, not a claim that code mu
 The complete testing standard and Supervisor handoff are in `specs/r13-synthesis-and-release/plan.md` §§3–7. Morfeo creates no implementation units.
 
 ## 6. Evidence boundary
+
+The formal laboratory keeps canonical scenarios, fixture metadata, and evidence schemas
+under `lab/`, packages those exact bytes for wheel consumers, and writes compact
+redacted JSON/JSONL only inside disposable run roots. The observation suite is a
+separate preparation/live lane and never contributes to the PD-74 rolling 20-run
+score. Native persistent-session proof is still pending: E2E-15 must demonstrate a
+same-session Morfeo wake from the terminal board event under PTY, and a one-shot
+harness continuation cannot satisfy that requirement. No deterministic preparation
+result is a live qualification or release claim.
 
 Public release claims are verified against the exact locked public artifact and installed RC, not a private editable runtime. Required evidence includes:
 

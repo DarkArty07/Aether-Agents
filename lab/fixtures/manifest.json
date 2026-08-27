@@ -1,0 +1,13 @@
+{
+  "schema_version": "aether.lab.fixture-manifest.v1",
+  "fixtures": [
+    {"id": "brownfield", "path": "lab/fixtures/sandbox/brownfield", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "concurrent", "path": "lab/fixtures/sandbox/concurrent", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "direct-bug", "path": "lab/fixtures/sandbox/direct-bug", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "direct-text", "path": "lab/fixtures/sandbox/direct-text", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "local-choice", "path": "lab/fixtures/sandbox/local-choice", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "product-decision", "path": "lab/fixtures/sandbox/product-decision", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "safety", "path": "lab/fixtures/sandbox/safety", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"},
+    {"id": "two-component-feature", "path": "lab/fixtures/sandbox/two-component-feature", "acceptance_command": ["python3", "verify.py"], "deterministic": true, "acceptance": "command_exit_zero"}
+  ]
+}

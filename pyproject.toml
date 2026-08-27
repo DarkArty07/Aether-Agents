@@ -43,8 +43,8 @@ pattern = "^(?P<version>[^\\s]+)$"
 packages = ["src/aether_agents"]
 
 # OBS-FR-075: package the exact normative bytes without maintaining a second
-# source copy. Hatch's force-include runs for both a source checkout and a wheel
-# built from the sdist because the normative directory is included below.
+# source copy. The laboratory bytes are mapped into package resources by the
+# source-distribution force-include below.
 [tool.hatch.build.targets.wheel.force-include]
 "specs/002-aether-contract-observation/contracts/observation-event.schema.json" = "aether_agents/resources/schemas/observation-event.schema.json"
 "specs/002-aether-contract-observation/contracts/observation-summary.schema.json" = "aether_agents/resources/schemas/observation-summary.schema.json"
@@ -56,6 +56,9 @@ packages = ["src/aether_agents"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/src/aether_agents",
+  "/src/aether_agents/resources/lab/**",
+  "/lab",
+  "/scripts/e2e",
   "/specs/002-aether-contract-observation/contracts",
   "/specs/001-aether-v1-productization/contracts/release-lock.schema.json",
   "/specs/001-aether-v1-productization/contracts/project.schema.json",
@@ -64,6 +67,9 @@ include = [
   "/README.md",
   "/LICENSE",
 ]
+
+[tool.hatch.build.targets.sdist.force-include]
+"lab" = "src/aether_agents/resources/lab"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
