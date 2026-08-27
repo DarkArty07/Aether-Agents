@@ -305,8 +305,10 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "version": "0.20.4",
     }
     assert contract["minimum_observation_tests"] == 119
-    assert contract["expected_core_tests"] >= 300
-    assert len(contract["expected_core_node_manifest_sha256"]) == 64
+    assert contract["expected_core_tests"] == 450
+    assert contract["expected_core_node_manifest_sha256"] == (
+        "b68b40ea44361b17788017d056c24031bea6d942fbefc87f87220a1412e19b2c"
+    )
     assert contract["core_test_files"] == [
         "tests/test_observation_contracts.py",
         "tests/test_observation_journal_storage.py",
@@ -359,6 +361,20 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
     assert f'{exact_pythonpath[:-1]}:${{PWD}}/src:${{PWD}}/tests"' not in workflow
     assert workflow.count("qualify_observation.py benchmark") == 1
     assert 'AETHER_RUN_DEEP_QUALIFICATION: "0"' in workflow
+
+
+def test_locked_core_manifest_matches_the_actual_collected_nodes() -> None:
+    module = _load_runner("qualify_observation_locked_manifest")
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", *module.CORE_TESTS],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    count, digest = module._collection_manifest(completed.stdout)
+    assert count == module.EXPECTED_CORE_TESTS
+    assert digest == module.EXPECTED_CORE_NODE_MANIFEST_SHA256
 
 
 def test_policy_workflow_pins_every_action_and_confines_spec_files() -> None:
