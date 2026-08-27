@@ -31,7 +31,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-198` | `#198` | el primer spawn de un worktree recibe la rama efectiva ya resuelta | issue `NousResearch/hermes-agent#89677`; PR `#89688` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-204` | `#204`, `#205` | límites asimétricos por perfil aplicados de forma compartida a ready/review; topología inicial Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | sin issue/PR nuevo; `#209` conserva sólo la traza downstream previa | los directorios detectados por el walker no se tratan como scripts inseguros; dispositivos y scripts reales siguen fail-closed | issue upstream `#86753`; commit integrado `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
-| `HLP-226` | `#226` | un hijo con `workspace_kind=worktree` y sin ruta hereda el Project canónico del worker; se rechaza cambiar a otro Project | PR `NousResearch/hermes-agent#89363` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
+| `HLP-226` | `#226` | un hijo cross-profile con `workspace_kind=worktree` hereda el Project canónico del worker y recibe worktree propio | commit upstream `b9b5481d6`; PR previo `#89363` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 
 ## HLP-188 — `initial_status=blocked` sticky
 
@@ -135,12 +135,13 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Motivo:** `kanban_create` desactivaba la herencia de Project cuando el worker pedía explícitamente `workspace_kind="worktree"`; el hijo quedaba con `project_id=null` y `workspace_path=null` y no podía ejecutarse.
 - **Archivos activos principales:**
   - `tools/kanban_tools.py`
+  - `hermes_cli/kanban_db.py`
   - `tests/tools/test_kanban_tools.py`
-- **Cambio local:** cuando no existe `workspace_path` literal, el hijo hereda el Project canónico de la tarea worker y rechaza un Project explícito diferente.
-- **Evidencia:** RED `2 failed`; GREEN `2 passed`; suite focalizada herramienta + integración Project `45 passed`; validación runtime `t_81f6290f` → `t_850223ff` preservó Project, worktree y rama con `workspace_kind="worktree"` explícito.
-- **Upstream:** <https://github.com/NousResearch/hermes-agent/pull/89363>, abierto; el backport reproduce su comportamiento relevante sin reemplazar otros parches locales del mismo archivo.
-- **Estado de activación:** `ACTIVE_LOCAL`; un Supervisor nuevo cargó el handler en proceso fresco y creó `t_850223ff` con `project_id=p_227bd972`, worktree y rama resueltos. La guardia negó reiniciar el gateway desde su propio proceso y no se rodeó; este handler se ejecuta en cada worker fresco y quedó probado por la ruta real.
-- **Gate de retirada:** sobre una revisión upstream objetivo sin este hunk local, repetir las dos regresiones y la creación real cross-profile; retirar solo si el hijo conserva Project, worktree y rama y un Project conflictivo es rechazado.
+- **Cambio local:** cuando no existe `workspace_path` literal, el handler transmite la card worker como fuente canónica. Si el perfil creador no tiene el Project en su `projects.db`, `create_task` deriva repositorio y convención de rama desde esa card compartida, conserva el UUID y crea una ruta propia; un Project explícito diferente se rechaza.
+- **Evidencia:** regresión upstream cross-profile portada y verde; suite focalizada herramienta + Projects `52 passed`; Ruff y `git diff --check` verdes. E2E de tres procesos/perfiles con board compartido y `projects.db` de Supervisor vacío (`0` Projects): Morfeo creó padre `t_455b8352`, Supervisor creó hijo `t_4d5f1488` con `project_id=p_1766de25`, ruta propia y rama determinista; `_resolve_worktree_workspace` materializó un worktree Git real en esa ruta y `git branch --show-current` coincidió exactamente.
+- **Upstream:** corrección integrada en `origin/main` mediante commit <https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872>; el PR previo <https://github.com/NousResearch/hermes-agent/pull/89363> permanece abierto, pero ya no es el gate de retirada.
+- **Estado de activación:** `ACTIVE_LOCAL / UPSTREAM_VERIFIED`; el checkout editable cargado conserva la corrección y cada worker nuevo la importa por proceso. No requiere reinicio del gateway.
+- **Gate de retirada:** al actualizar al upstream que contiene `b9b5481d6`, repetir la regresión cross-profile y el E2E con registro de Projects vacío; retirar el hunk local sólo si el hijo conserva UUID, worktree y rama, materializa el checkout real y un Project conflictivo sigue rechazado.
 
 ## HLP-247 — un padre archivado no es un padre completado
 
