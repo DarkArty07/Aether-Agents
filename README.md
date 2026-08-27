@@ -111,6 +111,27 @@ The stabilization work has four priorities:
 
 Historical EC1/live evidence remains useful evidence in [`R13 research`](specs/r13-synthesis-and-release/research.md), but it no longer substitutes for the new rolling reliability gate. A paid/provider-backed real matrix still requires its explicit credential/spend authority; deterministic harness and policy qualification do not grant it.
 
+### Implemented product surface
+
+The current `0.24.0` package is a **beta stabilization build, not a release candidate**. Its implemented public surface is:
+
+- the `aether` CLI for `--version`, `observe`, `doctor`, verified local `setup`/`update`, `rollback`, and `uninstall`;
+- the Contract Observer and Objective Contract Hermes plugins;
+- the portable Morfeo, Supervisor, and Implementer profile bundle;
+- release-lock validation, isolated manager/runtime staging, and deterministic qualification.
+
+The operational `init`, `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders until the immutable runtime set and activation semantics are completed. Public OIDC release publication and the owner-authorized live reliability matrix are also pending. The CLI returns an unsupported/error result rather than pretending those effects occurred.
+
+Non-destructive candidate inspection:
+
+```bash
+aether --version
+aether observe --help
+aether doctor --json
+```
+
+`doctor` may return a non-zero readiness result in a clean environment with no installed release; that is the expected truthful response, not a failed installation attempt.
+
 ## Canonical Morfeo TUI activation
 
 The versioned launcher is the supported entry point for a local Morfeo TUI:

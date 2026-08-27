@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tarfile
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -63,3 +64,19 @@ def test_scanner_checks_wheel_and_sdist_members(tmp_path: Path) -> None:
     )
     assert completed.returncode == 1
     assert "candidate.tar.gz!candidate/evidence.txt: absolute-user-home" in completed.stderr
+
+
+def test_readme_and_package_metadata_describe_the_current_beta_product() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert "multi-agent software-engineering product" in readme
+    assert "Objective Contract" in readme
+    assert "documented transitional downstream" in readme
+    assert "beta stabilization build, not a release candidate" in readme
+    assert "remain explicit unsupported placeholders" in readme
+    assert project["name"] == "aether-agents"
+    assert "multi-agent software-engineering method" in project["description"]
+    assert set(project["entry-points"]["hermes_agent.plugins"]) == {
+        "aether-contract-observer",
+        "aether-objective-contracts",
+    }
