@@ -923,6 +923,32 @@ def test_wheel_rejects_unapproved_third_plugin_entry_point(tmp_path: Path) -> No
         LifecycleManager._inspect_wheel(tampered)
 
 
+def test_installed_environment_probe_loads_every_approved_aether_plugin(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    monkeypatch.setattr(manager, "_run_uv", lambda *args, **kwargs: None)
+    captured: list[str] = []
+
+    def record_probe(arguments, **kwargs):
+        captured.append(arguments[2])
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(lifecycle.subprocess, "run", record_probe)
+    manager._verify_installed_environment(Path(sys.executable), runtime=False)
+
+    [script] = captured
+    for name, target in lifecycle.AETHER_PLUGIN_ENTRY_POINTS.items():
+        assert repr(name) in script
+        assert repr(target) in script
+    assert "entry.value != target" in script
+    assert "entry.load()" in script
+
+
 def test_wheel_inspection_binds_the_targets_own_projection_schema(tmp_path: Path) -> None:
     future_schema = "aether.observation.projection.v2"
     wheel = _build_wheel(

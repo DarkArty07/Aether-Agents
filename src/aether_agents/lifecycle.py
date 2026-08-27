@@ -3620,15 +3620,22 @@ class LifecycleManager:
         """Run package consistency/import checks before a candidate can be recorded."""
 
         self._run_uv("--no-config", "pip", "check", "--python", str(python))
-        script = """
+        expected_plugins = repr(AETHER_PLUGIN_ENTRY_POINTS)
+        script = f"""
 import importlib.metadata as metadata
 import aether_agents
-entries = [
-    entry for entry in metadata.entry_points().select(group='hermes_agent.plugins')
-    if entry.name == 'aether-contract-observer'
-]
-if len(entries) != 1 or not callable(getattr(entries[0].load(), 'register', None)):
+expected = {expected_plugins}
+entries = {{
+    entry.name: entry
+    for entry in metadata.entry_points().select(group='hermes_agent.plugins')
+    if entry.name in expected
+}}
+if set(entries) != set(expected):
     raise SystemExit(3)
+for name, target in expected.items():
+    entry = entries[name]
+    if entry.value != target or not callable(getattr(entry.load(), 'register', None)):
+        raise SystemExit(3)
 """
         if runtime:
             script = "import hermes_cli\n" + script
