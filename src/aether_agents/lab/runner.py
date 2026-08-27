@@ -504,6 +504,7 @@ def _invoke_morfeo(
     *,
     resume_session_id: str | None,
     usage_name: str,
+    observation_route: bool = False,
 ) -> str:
     argv: list[str] = [
         str(hermes),
@@ -515,9 +516,14 @@ def _invoke_morfeo(
         "--in",
         str(repo),
     ]
-    if resume_session_id is not None:
-        argv.extend(("--resume", resume_session_id, "--no-restore-cwd"))
-    argv.extend(("chat", "-q", query, "-Q"))
+    if observation_route:
+        if resume_session_id is not None:
+            raise HarnessError("observation route does not support session continuation")
+        argv.extend(("--toolsets", "aether_observation", "--oneshot", query))
+    else:
+        if resume_session_id is not None:
+            argv.extend(("--resume", resume_session_id, "--no-restore-cwd"))
+        argv.extend(("chat", "-q", query, "-Q"))
     result = run_command(
         argv,
         cwd=repo,

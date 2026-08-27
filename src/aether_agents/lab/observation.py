@@ -308,7 +308,7 @@ def _session_tool_calls(hermes_root: Path) -> list[tuple[str, dict[str, Any], di
         for role, content, tool_name, tool_calls in rows:
             if isinstance(tool_name, str) and tool_name.strip():
                 result = _json_object(content)
-                requested_rows.append((tool_name.strip(), result, result))
+                result_rows.append((tool_name.strip(), result, result))
             if role != "assistant":
                 continue
             calls = tool_calls
@@ -325,14 +325,24 @@ def _session_tool_calls(hermes_root: Path) -> list[tuple[str, dict[str, Any], di
                     requested_rows.append((name, _tool_call_arguments(call), {}))
 
     # Tool-result rows contain the actual bounded result and avoid counting each
-    # successful call twice alongside its assistant request row. If a runtime
-    # only persists requests, retain those as unsuccessful calls.
+    # successful call twice alongside its assistant request row. Preserve every
+    # result row, including empty results from a failed/fallback tool, then add
+    # only assistant requests that have no corresponding result row. This keeps
+    # fallback detection complete without retaining transcript content.
+    result_keys: dict[tuple[str, str | None], int] = {}
+    for name, _action_args, result in result_rows:
+        action = result.get("action") if isinstance(result, dict) else None
+        key = (name, action if isinstance(action, str) else None)
+        result_keys[key] = result_keys.get(key, 0) + 1
+    merged = list(result_rows)
     for name, action_args, result in requested_rows:
-        if result:
-            result_rows.append((name, action_args, result))
-    if result_rows:
-        return result_rows
-    return requested_rows
+        action = action_args.get("action") if isinstance(action_args, dict) else None
+        key = (name, action if isinstance(action, str) else None)
+        if result_keys.get(key, 0):
+            result_keys[key] -= 1
+            continue
+        merged.append((name, action_args, result))
+    return merged
 
 
 def _live_call_evidence(
@@ -481,6 +491,7 @@ def live_observation(
             _LIVE_PROMPT,
             resume_session_id=None,
             usage_name=".usage.json",
+            observation_route=True,
         )
         invocation_completed = True
         usage = _read_usage_summary(usage_path)

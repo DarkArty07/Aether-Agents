@@ -152,11 +152,23 @@ print("aether_observe status changes diagnose completed")
     assert invoked.is_file(), "the caller-supplied Hermes executable was not invoked"
     payload = json.loads(invoked.read_text(encoding="utf-8"))
     assert "--in" in payload["argv"]
+    assert "--oneshot" in payload["argv"]
+    assert payload["argv"][payload["argv"].index("--toolsets") + 1] == "aether_observation"
+    assert "chat" not in payload["argv"]
+    assert "-q" not in payload["argv"]
     assert payload["home"]
     assert result["mode"] == "live-oneshot"
     assert result["rolling_reliability_counted"] is False
     assert result["registered_tool"] == "aether_observe"
     assert result["aether_observe_calls"] == 3
+    assert result["model"] == "test-model"
+    assert result["provider"] == "test-provider"
+    assert result["api_calls"] == 1
+    assert [(call["action"], call["success"], call["limit"]) for call in result["calls"]] == [
+        ("status", True, 2048),
+        ("changes", True, 2048),
+        ("diagnose", True, 4096),
+    ]
     assert result["provider_operationally_exercised"] is True
     assert result["forbidden_fallback_counts"] == {
         "terminal": 0,
@@ -168,6 +180,65 @@ print("aether_observe status changes diagnose completed")
     assert not (tmp_path / "observation-live" / "hermes-home").exists()
     assert not (tmp_path / "observation-live" / "state").exists()
     assert not (tmp_path / "observation-live" / "project").exists()
+
+
+def test_live_observation_rejects_missing_usage_and_forbidden_fallbacks(tmp_path: Path) -> None:
+    fake_hermes = tmp_path / "hermes"
+    fake_hermes.write_text(
+        '''#!/usr/bin/env python3
+import json, os, sqlite3, sys
+from pathlib import Path
+
+database = Path(os.environ["HERMES_HOME"]) / "profiles" / "morfeo" / "state.db"
+database.parent.mkdir(parents=True, exist_ok=True)
+with sqlite3.connect(database) as connection:
+    connection.execute("CREATE TABLE messages (role TEXT, content TEXT, tool_name TEXT, tool_calls TEXT)")
+    for name, result in (
+        ("aether_observe", {"action": "status", "state": "ready", "summary_id": "sum_" + "a" * 64}),
+        ("aether_observe", {"action": "changes", "comparable": True}),
+        ("aether_observe", {"action": "diagnose", "verdict": "clear"}),
+        ("terminal", {}),
+        ("read_file", {}),
+        ("raw_logs", {}),
+    ):
+        connection.execute(
+            "INSERT INTO messages VALUES (?, ?, ?, ?)",
+            ("tool", json.dumps(result), name, None),
+        )
+print("completed without a verifiable usage report")
+''',
+        encoding="utf-8",
+    )
+    fake_hermes.chmod(0o755)
+
+    profile_root = tmp_path / "profiles"
+    for role in ("morfeo", "supervisor", "implementer"):
+        target = profile_root / role
+        target.mkdir(parents=True)
+        (target / "config.yaml").write_text(
+            "hooks:\n"
+            "  pre_tool_call:\n"
+            "    - matcher: .*\n"
+            "      command: /candidate/aether_pre_tool_policy.py\n",
+            encoding="utf-8",
+        )
+
+    result = lab.live_observation(
+        tmp_path / "observation-live",
+        hermes=fake_hermes,
+        profile_root=profile_root,
+        allow_model_spend=True,
+    )
+
+    assert result["status"] == "FAIL"
+    assert result["api_calls"] == 0
+    assert result["provider_operationally_exercised"] is False
+    assert result["aether_observe_calls"] == 3
+    assert result["forbidden_fallback_counts"] == {
+        "terminal": 1,
+        "file": 1,
+        "raw_logs_events": 1,
+    }
 
 
 def test_observation_records_do_not_contaminate_rolling_score_history() -> None:
