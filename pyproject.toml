@@ -48,6 +48,7 @@ packages = ["src/aether_agents"]
 [tool.hatch.build.targets.wheel.force-include]
 "specs/002-aether-contract-observation/contracts/observation-event.schema.json" = "aether_agents/resources/schemas/observation-event.schema.json"
 "specs/002-aether-contract-observation/contracts/observation-summary.schema.json" = "aether_agents/resources/schemas/observation-summary.schema.json"
+"specs/002-aether-contract-observation/contracts/observation-brief.schema.json" = "aether_agents/resources/schemas/observation-brief.schema.json"
 "specs/002-aether-contract-observation/contracts/observation-segment-manifest.schema.json" = "aether_agents/resources/schemas/observation-segment-manifest.schema.json"
 "specs/001-aether-v1-productization/contracts/release-lock.schema.json" = "aether_agents/resources/schemas/release-lock.schema.json"
 "specs/001-aether-v1-productization/contracts/project.schema.json" = "aether_agents/resources/schemas/project.schema.json"

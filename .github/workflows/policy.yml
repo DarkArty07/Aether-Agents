@@ -59,6 +59,7 @@ jobs:
           src/aether_agents/commands/observe.py
           src/aether_agents/lifecycle.py
           src/aether_agents/observation/__init__.py
+          src/aether_agents/observation/brief.py
           src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/collector.py
           src/aether_agents/observation/capture/flusher.py
@@ -99,6 +100,7 @@ jobs:
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
           tests/test_observation_cli_plugin.py
+          tests/test_observation_brief_tool.py
           tests/test_observation_contracts.py
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py

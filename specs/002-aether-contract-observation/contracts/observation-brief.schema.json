@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aether.local/schemas/observation-brief.schema.json",
+  "title": "Aether curated observation brief",
+  "oneOf": [
+    {"$ref": "#/$defs/empty"},
+    {"$ref": "#/$defs/status"},
+    {"$ref": "#/$defs/changes"},
+    {"$ref": "#/$defs/diagnose"}
+  ],
+  "$defs": {
+    "id": {"type": ["string", "null"], "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"},
+    "common": {
+      "type": "object",
+      "required": ["schema_version", "action", "state", "project_id", "trace_id", "contract_id", "summary_id"],
+      "properties": {
+        "schema_version": {"const": "aether.observation.brief.v1"},
+        "action": {"enum": ["status", "changes", "diagnose"]},
+        "state": {"enum": ["ready", "empty"]},
+        "project_id": {"type": "string", "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$"},
+        "trace_id": {"type": ["string", "null"], "pattern": "^ctr_[a-f0-9]{32}$"},
+        "contract_id": {"$ref": "#/$defs/id"},
+        "summary_id": {"type": ["string", "null"], "pattern": "^sum_[a-f0-9]{64}$"},
+        "as_of": {"type": "string", "maxLength": 40}
+      }
+    },
+    "empty": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "additionalProperties": false, "properties": {
+          "schema_version": {}, "action": {}, "state": {"const": "empty"}, "project_id": {},
+          "trace_id": {"type": "null"}, "contract_id": {"type": "null"}, "summary_id": {"type": "null"}
+        }}
+      ]
+    },
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["liveness", "activity", "progress", "waiting", "anomalies", "termination"],
+      "properties": {
+        "liveness": {"enum": ["alive", "stale", "dead", "not_applicable", "unknown"]},
+        "activity": {"enum": ["idle", "model_call", "tool_running", "working", "waiting", "reviewing", "unknown"]},
+        "progress": {"enum": ["verified", "no_verified_progress", "suspected_loop", "suspected_stall", "complete", "unknown"]},
+        "waiting": {"enum": ["none", "owner", "dependency", "approval", "provider_backoff", "process", "review", "unknown"]},
+        "anomalies": {"enum": ["clear", "present", "unknown"]},
+        "termination": {"enum": ["open", "completed", "cancelled", "abandoned", "failed"]}
+      }
+    },
+    "status": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "additionalProperties": false,
+          "required": ["schema_version", "action", "state", "project_id", "trace_id", "contract_id", "summary_id", "as_of", "completion_state", "runtime_state", "work", "acceptance"],
+          "properties": {
+            "schema_version": {}, "action": {"const": "status"}, "state": {"const": "ready"}, "project_id": {}, "trace_id": {}, "contract_id": {}, "summary_id": {}, "as_of": {},
+            "completion_state": {"enum": ["open", "completion_candidate", "persisted", "handed_off", "executing", "blocked", "in_review", "awaiting_final_verification", "completed", "cancelled", "abandoned", "failed"]},
+            "runtime_state": {"$ref": "#/$defs/runtime"},
+            "work": {"type": "object", "additionalProperties": false, "required": ["total_units", "required_units", "done_required_units", "open_required_units", "blocked_required_units", "review_required_units", "all_required_done"], "properties": {
+              "total_units": {"type": "integer", "minimum": 0}, "required_units": {"type": "integer", "minimum": 0}, "done_required_units": {"type": "integer", "minimum": 0}, "open_required_units": {"type": "integer", "minimum": 0}, "blocked_required_units": {"type": "integer", "minimum": 0}, "review_required_units": {"type": "integer", "minimum": 0}, "all_required_done": {"type": "boolean"}
+            }},
+            "acceptance": {"type": "object", "additionalProperties": false, "required": ["complete", "criterion_count", "passed", "failed", "pending", "unknown"], "properties": {
+              "complete": {"type": "boolean"}, "criterion_count": {"type": "integer", "minimum": 0}, "passed": {"type": "integer", "minimum": 0}, "failed": {"type": "integer", "minimum": 0}, "pending": {"type": "integer", "minimum": 0}, "unknown": {"type": "integer", "minimum": 0}
+            }}
+          }
+        }
+      ]
+    },
+    "changes": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "additionalProperties": false,
+          "required": ["schema_version", "action", "state", "project_id", "trace_id", "contract_id", "summary_id", "as_of", "previous_summary_id", "comparable", "comparison_error", "change_classes", "fingerprint_boundary"],
+          "properties": {
+            "schema_version": {}, "action": {"const": "changes"}, "state": {"const": "ready"}, "project_id": {}, "trace_id": {}, "contract_id": {}, "summary_id": {}, "as_of": {},
+            "previous_summary_id": {"type": "string", "pattern": "^sum_[a-f0-9]{64}$"}, "comparable": {"type": "boolean"}, "comparison_error": {"type": ["string", "null"], "maxLength": 64}, "change_classes": {"type": "array", "uniqueItems": true, "maxItems": 10, "items": {"enum": ["verdict", "next_gate", "required_work", "acceptance", "anomaly", "bottleneck", "defect", "process", "configuration", "coverage"]}}, "fingerprint_boundary": {"type": "boolean"}
+          }
+        }
+      ]
+    },
+    "diagnose": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "additionalProperties": false,
+          "required": ["schema_version", "action", "state", "project_id", "trace_id", "contract_id", "summary_id", "as_of", "verdict", "primary_reason_code", "evidence_status", "unfinished_required_units", "unfinished_acceptance_criteria", "next_gate", "coverage", "finding_codes", "bottleneck_classes", "defect_classes"],
+          "properties": {
+            "schema_version": {}, "action": {"const": "diagnose"}, "state": {"const": "ready"}, "project_id": {}, "trace_id": {}, "contract_id": {}, "summary_id": {}, "as_of": {},
+            "verdict": {"type": "string", "maxLength": 64}, "primary_reason_code": {"type": "string", "pattern": "^[A-Z0-9_]{2,64}$"}, "evidence_status": {"type": "string", "maxLength": 64}, "unfinished_required_units": {"type": "integer", "minimum": 0}, "unfinished_acceptance_criteria": {"type": "integer", "minimum": 0},
+            "next_gate": {"type": "object", "additionalProperties": false, "required": ["kind", "target_ref"], "properties": {"kind": {"type": "string", "maxLength": 64}, "target_ref": {"$ref": "#/$defs/id"}}},
+            "coverage": {"type": "object", "additionalProperties": false, "required": ["complete", "gap_count", "reason_codes"], "properties": {"complete": {"type": "boolean"}, "gap_count": {"type": "integer", "minimum": 0}, "reason_codes": {"type": "array", "maxItems": 5, "items": {"type": "string", "pattern": "^[A-Z0-9_]{2,64}$"}}}},
+            "finding_codes": {"type": "array", "maxItems": 5, "items": {"type": "string", "pattern": "^[A-Z0-9_]{2,64}$"}},
+            "bottleneck_classes": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 64}},
+            "defect_classes": {"type": "array", "maxItems": 5, "items": {"type": "string", "maxLength": 64}}
+          }
+        }
+      ]
+    }
+  }
+}

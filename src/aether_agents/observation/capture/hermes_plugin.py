@@ -43,6 +43,7 @@ from aether_agents.observation.contracts import (
     CoverageClass,
     canonical_digest,
     canonical_json_bytes,
+    canonical_json_str,
     compute_runtime_fingerprint,
     event_validator,
     fallback_tool_category,
@@ -2891,6 +2892,61 @@ def register(ctx: Any) -> None:
                 # A missing future/older hook reduces coverage; plugin load continues.
                 observer.note_hook_registration_failure(hook_name)
                 continue
+
+    register_tool = getattr(ctx, "register_tool", None)
+    get_config = getattr(ctx, "get_config", None)
+    curated_tool_enabled = False
+    if getattr(ctx, "profile_name", "") == "morfeo" and callable(get_config):
+        try:
+            curated_tool_enabled = get_config("curated_tool", False) is True
+        except Exception:
+            # Optional query access is fail-closed. Passive capture must still
+            # load when profile config is unavailable or temporary.
+            curated_tool_enabled = False
+    if callable(register_tool) and curated_tool_enabled:
+        from aether_agents.observation.brief import BriefError, observe
+
+        def tool_handler(args: dict[str, Any], **_runtime: Any) -> str:
+            try:
+                value = observe(args, profile_name=getattr(ctx, "profile_name", ""))
+                return canonical_json_str(value)
+            except BriefError as exc:
+                return canonical_json_str(
+                    {"success": False, "error": {"code": exc.code, "message": str(exc)}}
+                )
+
+        register_tool(
+            name="aether_observe",
+            toolset="aether_observation",
+            description=(
+                "Read a bounded curated status, semantic change set, or diagnosis from "
+                "Aether Contract Observation; never returns logs or raw payloads."
+            ),
+            schema={
+                "name": "aether_observe",
+                "description": (
+                    "Read compact deterministic Contract Observation for the current project. "
+                    "Use status normally, changes with since_summary_id, and diagnose only for "
+                    "blockage or anomaly. Output is capped and contains no raw logs/events."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["action"],
+                    "properties": {
+                        "action": {"type": "string", "enum": ["status", "changes", "diagnose"]},
+                        "ref": {"type": "string", "maxLength": 128},
+                        "project": {"type": "string", "maxLength": 4096},
+                        "since_summary_id": {
+                            "type": "string",
+                            "pattern": "^sum_[a-f0-9]{64}$",
+                        },
+                    },
+                },
+            },
+            handler=tool_handler,
+            check_fn=lambda: getattr(ctx, "profile_name", "") == "morfeo",
+        )
 
     on_unload = getattr(ctx, "on_unload", None)
     if callable(on_unload):
