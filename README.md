@@ -117,6 +117,7 @@ The current `0.24.0` package is a **beta stabilization build, not a release cand
 
 - the `aether` CLI for `--version`, `observe`, `doctor`, verified local `setup`/`update`, `rollback`, and `uninstall`;
 - the Contract Observer and Objective Contract Hermes plugins;
+- Morfeo-only `aether_observe` with bounded `status`, `changes`, and `diagnose` views over validated summaries (no logs, prompts, commands, outputs, diffs, or raw events);
 - the portable Morfeo, Supervisor, and Implementer profile bundle;
 - release-lock validation, isolated manager/runtime staging, and deterministic qualification.
 
