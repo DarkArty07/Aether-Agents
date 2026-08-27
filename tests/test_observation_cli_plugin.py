@@ -149,6 +149,25 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
             "observation_trace_id": trace_id,
         },
     )
+    context.hooks["pre_tool_call"][0](
+        tool_name="objective_contract",
+        tool_call_id="prepare",
+        session_id="session-contract",
+        args={"action": "prepare_handoff"},
+    )
+    context.hooks["post_tool_call"][0](
+        tool_name="objective_contract",
+        tool_call_id="prepare",
+        session_id="session-contract",
+        status="success",
+        args={"action": "prepare_handoff"},
+        result={
+            "project_id": PROJECT_ID,
+            "contract_id": contract_id,
+            "version": 1,
+            "observation_trace_id": trace_id,
+        },
+    )
     context.hooks["post_tool_call"][0](
         tool_name="kanban_create",
         tool_call_id="root-create",
@@ -162,6 +181,8 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
     assert {event["event_type"] for event in events} >= {
         "trace.opened",
         "contract.persisted",
+        "tool.started",
+        "tool.completed",
         "work_unit.bound",
     }
     assert {event["trace_id"] for event in events} == {trace_id}

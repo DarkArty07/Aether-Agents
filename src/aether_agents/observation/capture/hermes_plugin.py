@@ -1961,7 +1961,7 @@ class _Observer:
             return
         pending = self._pending_spans.pop(key, None)
         if "objective_contract" in name:
-            self._finish_objective_contract(collector, payload)
+            self._finish_objective_contract(collector, payload, pending)
             return
         if "kanban_create" in name:
             self._finish_create_call(collector, payload, key, name, pending)
@@ -1980,7 +1980,10 @@ class _Observer:
             )
 
     def _finish_objective_contract(
-        self, collector: Collector, payload: dict[str, Any]
+        self,
+        collector: Collector,
+        payload: dict[str, Any],
+        pending: dict[str, Any] | None,
     ) -> None:
         args = _pick(payload, "args", "arguments")
         result = _pick(payload, "result", "tool_result")
@@ -2021,6 +2024,8 @@ class _Observer:
         ):
             return
         self._activate_trace(collector, trace_id)
+        if pending is not None:
+            self._emit_tool_terminal(collector, trace_id, payload, pending)
         if action != "finalize":
             return
         event = collector.builder_for(trace_id).contract(
