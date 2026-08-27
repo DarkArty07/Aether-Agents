@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import sys
 import time
@@ -304,11 +305,12 @@ def _fault_recovered(known_good: Path | None) -> bool:
     return active.is_file() and active.read_bytes() == known_good.read_bytes()
 
 
-def _hermes_env(run_root: Path, hermes_root: Path) -> dict[str, str]:
+def _hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
     env = dict(os.environ)
     env.update(
         {
             "HERMES_HOME": str(hermes_root),
+            "HERMES_BIN": str(hermes.resolve()),
             "HERMES_ACCEPT_HOOKS": "1",
             "HERMES_KANBAN_DB": str(run_root / "kanban.db"),
             "HERMES_KANBAN_WORKSPACES_ROOT": str(run_root / "worktrees"),
@@ -318,6 +320,70 @@ def _hermes_env(run_root: Path, hermes_root: Path) -> dict[str, str]:
         }
     )
     return env
+
+
+def _pid_uses_board(pid: int, board: Path) -> bool:
+    if os.name != "posix":
+        return False
+    try:
+        values = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return False
+    return f"HERMES_KANBAN_DB={board}".encode() in values
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="ascii").split()[2]
+    except (OSError, IndexError):
+        return False
+    return state != "Z"
+
+
+def _cleanup_disposable_workers(run_root: Path, grace_seconds: float = 5.0) -> dict[str, Any]:
+    board = (run_root / "kanban.db").resolve()
+    report: dict[str, Any] = {
+        "candidates": [],
+        "terminated": [],
+        "killed": [],
+        "skipped": [],
+        "survivors": [],
+    }
+    if not board.is_file():
+        return report
+    with sqlite3.connect(board) as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT worker_pid FROM tasks WHERE worker_pid IS NOT NULL"
+        ).fetchall()
+    pids = sorted({int(row[0]) for row in rows if row[0]})
+    report["candidates"] = pids
+    owned: list[int] = []
+    for pid in pids:
+        if not _pid_uses_board(pid, board):
+            report["skipped"].append(pid)
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+            owned.append(pid)
+            report["terminated"].append(pid)
+        except ProcessLookupError:
+            continue
+    deadline = time.monotonic() + grace_seconds
+    while owned and time.monotonic() < deadline:
+        owned = [pid for pid in owned if _pid_alive(pid)]
+        if owned:
+            time.sleep(0.05)
+    for pid in owned:
+        try:
+            os.kill(pid, signal.SIGKILL)
+            report["killed"].append(pid)
+        except ProcessLookupError:
+            pass
+    report["survivors"] = [pid for pid in owned if _pid_alive(pid)]
+    evidence = run_root / "evidence"
+    if evidence.is_dir():
+        write_json(evidence / "worker-cleanup.json", report)
+    return report
 
 
 def _initialize_runtime_project(
@@ -409,7 +475,7 @@ def _invoke_morfeo(
     evidence_dir: Path,
     query: str,
     *,
-    resume: bool,
+    resume_session_id: str | None,
     usage_name: str,
 ) -> str:
     argv: list[str] = [
@@ -419,15 +485,12 @@ def _invoke_morfeo(
         "morfeo",
         "--usage-file",
         str(evidence_dir / usage_name),
-        "chat",
-        "-q",
-        query,
-        "-Q",
         "--in",
         str(repo),
     ]
-    if resume:
-        argv.extend(("--resume", "latest", "--no-restore-cwd"))
+    if resume_session_id is not None:
+        argv.extend(("--resume", resume_session_id, "--no-restore-cwd"))
+    argv.extend(("chat", "-q", query, "-Q"))
     result = run_command(
         argv,
         cwd=repo,
@@ -438,6 +501,21 @@ def _invoke_morfeo(
     if result.returncode != 0:
         raise HarnessError(f"Morfeo invocation failed with rc={result.returncode}")
     return result.stdout.strip()
+
+
+def _origin_morfeo_session_id(hermes_root: Path) -> str:
+    database = hermes_root / "profiles" / "morfeo" / "state.db"
+    if not database.is_file():
+        raise HarnessError("Morfeo session database is missing")
+    with sqlite3.connect(database) as conn:
+        rows = conn.execute(
+            "SELECT id FROM sessions WHERE source != 'kanban' "
+            "AND archived = 0 ORDER BY last_activity_at DESC"
+        ).fetchall()
+    identifiers = [str(row[0]) for row in rows]
+    if len(identifiers) != 1:
+        raise HarnessError("Morfeo origin session is missing or ambiguous")
+    return identifiers[0]
 
 
 def _check_paths(repo: Path, scenario: Scenario) -> tuple[list[str], list[str]]:
@@ -558,7 +636,7 @@ def live_run(
     baseline_acceptance = _run_acceptance(scenario, repo, git_env, commands, evidence, "baseline")
 
     hermes_root = prepare_profiles(profile_root, run_root, commands)
-    env = _hermes_env(run_root, hermes_root)
+    env = _hermes_env(run_root, hermes_root, hermes)
     env["AETHER_HOOK_DENIAL_AUDIT_PATH"] = str(evidence / "hook-denials.jsonl")
     source_status_before = _source_status(commands, env)
     runtime_project_id = _initialize_runtime_project(
@@ -575,10 +653,11 @@ def live_run(
         commands,
         evidence,
         scenario.owner_message,
-        resume=False,
+        resume_session_id=None,
         usage_name="usage-initial.json",
     )
     turns.append(("Morfeo", morfeo_text))
+    origin_session_id = _origin_morfeo_session_id(hermes_root)
 
     owner_interventions = 0
     clarification_requested = bool(QUESTION_RE.search(morfeo_text))
@@ -594,7 +673,7 @@ def live_run(
             commands,
             evidence,
             scripted,
-            resume=True,
+            resume_session_id=origin_session_id,
             usage_name=f"usage-owner-{owner_interventions}.json",
         )
         turns.append(("Morfeo", morfeo_text))
@@ -645,7 +724,7 @@ def live_run(
                 commands,
                 evidence,
                 continuation,
-                resume=True,
+                resume_session_id=origin_session_id,
                 usage_name="usage-harness-final.json",
             )
             turns.append(("Harness continuation (not owner input)", continuation))
@@ -760,12 +839,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    run_root: Path | None = None
+    cleanup_live_workers = False
     try:
         scenario = load_scenario(_scenario_path(args.scenario))
         run_root = _safe_run_root(args.run_root or _default_run_root(scenario))
         if args.prepare_only:
             record = prepare_only(scenario, run_root)
         else:
+            cleanup_live_workers = True
             if args.hermes is None or args.profile_root is None:
                 raise HarnessError("--live requires --hermes and --profile-root")
             record = live_run(
@@ -778,6 +860,9 @@ def main(argv: list[str] | None = None) -> int:
     except (HarnessError, ScenarioError) as exc:
         print(f"E2E_ERROR: {exc}", file=sys.stderr)
         return 3
+    finally:
+        if cleanup_live_workers and run_root is not None:
+            _cleanup_disposable_workers(run_root)
     print(json.dumps(record, indent=2, sort_keys=True, ensure_ascii=False))
     return 0 if record.get("status") in {"PREPARED", "PASS"} else 1
 

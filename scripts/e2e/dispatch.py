@@ -118,6 +118,7 @@ def dispatch_until_settled(
 ) -> BoardState:
     started = time.monotonic()
     last_tasks: list[dict[str, object]] = []
+    poll_seconds = max(poll_seconds, timeout_seconds / max(1, max_passes))
 
     for pass_number in range(1, max_passes + 1):
         if time.monotonic() - started >= timeout_seconds:

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -23,6 +24,7 @@ RUNNER = E2E / "run.py"
 
 sys.path.insert(0, str(E2E))
 import collect  # noqa: E402
+import dispatch  # noqa: E402
 import run as e2e_run  # noqa: E402
 from synthetic_owner import ScenarioError, load_scenario, matching_reply  # noqa: E402
 
@@ -223,6 +225,91 @@ def test_live_mode_refuses_model_spend_before_invoking_hermes(tmp_path: Path) ->
     assert not invoked.exists()
 
 
+def test_hermes_env_pins_the_exact_executable_over_ambient_path(tmp_path: Path) -> None:
+    exact = tmp_path / "candidate" / "hermes"
+    exact.parent.mkdir()
+    exact.write_text("#!/bin/sh\n", encoding="utf-8")
+    env = e2e_run._hermes_env(tmp_path / "run", tmp_path / "home", exact)
+    assert env["HERMES_BIN"] == str(exact.resolve())
+
+
+def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
+    sleeps: list[float] = []
+    monotonic = iter((0.0, 0.0, 0.0, 0.0))
+    monkeypatch.setattr(dispatch.time, "monotonic", lambda: next(monotonic))
+    monkeypatch.setattr(dispatch.time, "sleep", sleeps.append)
+    monkeypatch.setattr(
+        dispatch,
+        "run_command",
+        lambda *args, **kwargs: collect.CommandResult((), 0, "{}", "", 0.0),
+    )
+    monkeypatch.setattr(
+        dispatch,
+        "board_list",
+        lambda *args, **kwargs: [{"id": "t_x", "status": "running"}],
+    )
+    monkeypatch.setattr(dispatch, "snapshot_board", lambda *args, **kwargs: [])
+    state = dispatch.dispatch_until_settled(
+        Path("/hermes"),
+        cwd=Path("/repo"),
+        env={},
+        commands_log=Path("/commands"),
+        evidence_dir=Path("/evidence"),
+        max_passes=2,
+        timeout_seconds=30,
+    )
+    assert state.reason == "pass_budget_exhausted"
+    assert sleeps == [15.0, 15.0]
+
+
+def test_origin_morfeo_session_id_is_exact_and_fail_closed(tmp_path: Path) -> None:
+    profile = tmp_path / "profiles" / "morfeo"
+    profile.mkdir(parents=True)
+    with sqlite3.connect(profile / "state.db") as conn:
+        conn.execute(
+            "CREATE TABLE sessions (id TEXT, source TEXT, archived INTEGER, last_activity_at REAL)"
+        )
+        conn.executemany(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?)",
+            [
+                ("session-origin", "tui", 0, 1.0),
+                ("worker-session", "kanban", 0, 2.0),
+            ],
+        )
+    assert e2e_run._origin_morfeo_session_id(tmp_path) == "session-origin"
+    with sqlite3.connect(profile / "state.db") as conn:
+        conn.execute("INSERT INTO sessions VALUES ('ambiguous', 'tui', 0, 3.0)")
+    with pytest.raises(e2e_run.HarnessError, match="ambiguous"):
+        e2e_run._origin_morfeo_session_id(tmp_path)
+
+
+def test_invoke_morfeo_places_workspace_and_resume_before_chat(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[str] = []
+
+    def record(argv, **kwargs):
+        captured.extend(argv)
+        return collect.CommandResult(tuple(argv), 0, "ok", "", 0.0)
+
+    monkeypatch.setattr(e2e_run, "run_command", record)
+    e2e_run._invoke_morfeo(
+        tmp_path / "hermes",
+        tmp_path / "home",
+        tmp_path / "repo",
+        {},
+        tmp_path / "commands.jsonl",
+        tmp_path / "evidence",
+        "continue",
+        resume_session_id="session-origin",
+        usage_name="usage.json",
+    )
+    assert captured.index("--in") < captured.index("chat")
+    assert captured.index("--resume") < captured.index("chat")
+    assert captured[captured.index("--resume") + 1] == "session-origin"
+
+
 def test_command_evidence_never_serializes_environment(tmp_path: Path) -> None:
     log = tmp_path / "commands.jsonl"
     env = dict(os.environ)
@@ -238,6 +325,35 @@ def test_command_evidence_never_serializes_environment(tmp_path: Path) -> None:
     evidence = log.read_text(encoding="utf-8")
     assert "AETHER_TEST_SUPER_SECRET" not in evidence
     assert "never-write-this-value" not in evidence
+
+
+@pytest.mark.skipif(not Path("/proc").is_dir(), reason="Linux process ownership probe")
+def test_cleanup_stops_only_workers_bound_to_the_disposable_board(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    evidence = run_root / "evidence"
+    evidence.mkdir(parents=True)
+    board = (run_root / "kanban.db").resolve()
+    owned_env = dict(os.environ, HERMES_KANBAN_DB=str(board))
+    decoy_env = dict(os.environ, HERMES_KANBAN_DB=str(tmp_path / "other.db"))
+    owned = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], env=owned_env)
+    decoy = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], env=decoy_env)
+    try:
+        with sqlite3.connect(board) as conn:
+            conn.execute("CREATE TABLE tasks (worker_pid INTEGER)")
+            conn.executemany(
+                "INSERT INTO tasks(worker_pid) VALUES (?)", [(owned.pid,), (decoy.pid,)]
+            )
+        report = e2e_run._cleanup_disposable_workers(run_root, grace_seconds=1.0)
+        owned.wait(timeout=3)
+        assert decoy.poll() is None
+        assert owned.pid in report["terminated"]
+        assert decoy.pid in report["skipped"]
+        assert report["survivors"] == []
+        assert (evidence / "worker-cleanup.json").is_file()
+    finally:
+        if decoy.poll() is None:
+            decoy.terminate()
+            decoy.wait(timeout=3)
 
 
 def test_fixture_acceptance_is_real_and_changes_from_red_to_green(tmp_path: Path) -> None:
