@@ -1524,7 +1524,10 @@ class _Observer:
             task = tasks[task_id]
             materialized_at = _native_datetime(task.get("created_at"))
             session_id = native_pseudonym_ref(task.get("session_id"), kind="session")
-            if not collector.ensure_trace_opened(
+            retained = _retained_trace_exists(collector.paths, trace_id)
+            if retained:
+                collector.restore_materialized_trace(trace_id)
+            elif not collector.ensure_trace_opened(
                 trace_id,
                 session_lineage=(session_id,) if session_id else (),
                 materialized_at=materialized_at,

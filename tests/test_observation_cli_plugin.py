@@ -1399,9 +1399,20 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
     monkeypatch.setenv("HERMES_HOME", str(state_home))
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
 
+    first = hermes_plugin._Observer(FakePluginContext())
+    assert first._collector is not None
+    assert first._collector.ensure_trace_opened(
+        TRACE_ID,
+        contract_id="oc_1234567890abcdef",
+        source_kind="hermes_hook",
+        source_hook="post_tool_call",
+    )
+    first.unload()
+
     observer = hermes_plugin._Observer(FakePluginContext())
     assert observer._collector is not None
     observer._reconcile_native()
+    health = observer._collector.health.read()
     observer.unload()
     events = _journal_events(paths)
     bindings = {
@@ -1411,6 +1422,7 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
     }
     assert {"t_11111111", "t_22222222"} <= bindings
     assert all(event["project_id"] == PROJECT_ID for event in events)
+    assert "EVENT_IDENTITY_COLLISION" not in health
 
 
 def test_native_reconciliation_rejects_content_shaped_identities_before_aether_persistence(
