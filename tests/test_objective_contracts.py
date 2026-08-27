@@ -533,3 +533,7 @@ def test_product_resources_enable_authoring_only_for_morfeo() -> None:
     assert "For every pipeline handoff" in soul
     assert "These requirements do not apply to bounded direct work" in soul
     assert "Supervisor root handoff without `goal_mode`" in soul
+
+    supervisor_soul = (profiles / "supervisor" / "SOUL.md").read_text(encoding="utf-8")
+    assert "Never assign Implementer a unit whose acceptance requires creating" in supervisor_soul
+    assert "finalized, checkpointed contract read-only" in supervisor_soul
