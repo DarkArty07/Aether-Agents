@@ -50,6 +50,7 @@ jobs:
           policy/hooks/aether_pre_tool_policy.py
           pyproject.toml
           scripts/aether_tui.py
+          scripts/check_public_artifacts.py
           scripts/qualify_observation.py
           scripts/sync_policy_hooks.py
           src/aether_agents/__init__.py
@@ -108,6 +109,7 @@ jobs:
           tests/test_observation_qualification.py
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
+          tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
           .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
@@ -359,11 +361,20 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/qualify_observation.py
-          uv run --frozen ruff check src tests scripts/qualify_observation.py
-          uv run --frozen ruff format --check src tests scripts/qualify_observation.py
+          uv run --frozen python -m compileall -q src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
+          uv run --frozen ruff check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
+          uv run --frozen ruff format --check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
+      - name: Reject operator-specific paths in public artifacts
+        run: |
+          set -euo pipefail
+          artifacts=("${RUNNER_TEMP}/aether-dist/"*.whl "${RUNNER_TEMP}/aether-dist/"*.tar.gz)
+          test "${#artifacts[@]}" -eq 2
+          uv run --frozen python scripts/check_public_artifacts.py \
+            --root . \
+            --artifact "${artifacts[0]}" \
+            --artifact "${artifacts[1]}"
 
   pull-request-target:
     if: github.event_name == 'pull_request'

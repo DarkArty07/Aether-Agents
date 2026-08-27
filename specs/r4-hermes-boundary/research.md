@@ -2,11 +2,11 @@
 
 **Purpose**: Evidence for the Hermes capability classification and for the three gaps.  
 **Upstream repository**: `https://github.com/NousResearch/hermes-agent.git`  
-**Local checkout**: `/home/darkarty/.hermes/hermes-agent`  
+**Local checkout**: `<legacy-hermes-checkout>`
 **Inspected revision**: `9ceb0858abfd1d3c3b32bd6f76e98d14ed7a2fbd`  
 **Version**: `hermes-agent` 0.19.1 (`pyproject.toml`)  
 **Checkout state**: clean except a modified `package-lock.json`, which does not affect any claim below.  
-**Live profile inspected**: `/home/darkarty/Desktop/agentes/aether/home/` — local runtime state, evidence only, never committed.
+**Live profile inspected**: `<private-aether-home>/` — local runtime state, evidence only, never committed.
 
 ## 1. Research Question
 
@@ -125,7 +125,7 @@ A different agent protocol adapter **is** present natively as a first-class modu
 
 ## 7. Live Profile Observations
 
-The live profile at `Desktop/agentes/aether/home/` shows subsystems present and initialized: session and state databases, a project database, curated memories, skills, plugins, a gateway with recorded state, sandboxes, agent hooks and a shell-hooks allowlist, messaging platforms and a channel directory, cron, an LSP integration, and a verification-evidence database.
+The live profile at `<private-aether-home>/` shows subsystems present and initialized: session and state databases, a project database, curated memories, skills, plugins, a gateway with recorded state, sandboxes, agent hooks and a shell-hooks allowlist, messaging platforms and a channel directory, cron, an LSP integration, and a verification-evidence database.
 
 Two observations matter for Aether:
 
@@ -186,7 +186,7 @@ The capability table in `spec.md` marks the two rows that depend on unread sourc
 
 ## 11. Correction — Hermes Ships A2A, and the Method Failure That Hid It
 
-**Verified in the source Aether actually runs**: `/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/src/hermes-agent`, version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. The Aether profile installs Hermes as an editable package pointing at that tree.
+**Verified in the source Aether actually runs**: `<private-aether-home>/.venv-hermes/src/hermes-agent`, version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. The Aether profile installs Hermes as an editable package pointing at that tree.
 
 ### What is actually there
 

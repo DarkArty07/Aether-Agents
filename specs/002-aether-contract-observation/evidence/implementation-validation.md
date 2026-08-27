@@ -96,7 +96,7 @@ Two disposable checkouts with those coordinates have been inspected:
   audit. It returned the same commit/tag object and empty porcelain status.
 
 The dirty checkout under
-`/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/src/hermes-agent` is not an
+`<private-aether-home>/.venv-hermes/src/hermes-agent` is not an
 evidence input and is never treated as qualifying.
 
 The upstream tag does not produce an ordinary Hermes wheel/sdist through its own build

@@ -2,7 +2,7 @@
 
 **Purpose**: Evidence and rationale for the phase assignment and for where standing standards live.  
 **Upstream repository**: `https://github.com/github/spec-kit.git`  
-**External checkout**: `/home/darkarty/Desktop/agentes/aether-research/spec-kit`  
+**External checkout**: `<private-spec-kit-checkout>`
 **Inspected revision**: `bf88c9f9a82fa370c7a7257aa2b3cf10b457b65c`  
 **Boundary**: the checkout is outside Aether and is research evidence only.
 

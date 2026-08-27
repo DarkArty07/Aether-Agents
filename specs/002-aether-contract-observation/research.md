@@ -127,7 +127,7 @@ This amendment deliberately treats `blocked`, `review`, crashed, timed-out, fail
 
 ## 7.2 Revalidation against locked Hermes (2026-08-22)
 
-This design was re-researched against the clean public checkout `/tmp/aether-telemetry-hermes-baseline`, tag `v2026.8.18`, commit `e624e9fde561e1add9388384012b295fde669ade`. The locally patched Aether runtime checkout was inspected only to distinguish it from upstream and is not evidence for this contract. In particular, `/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/src/hermes-agent` is a dirty, different-revision antecedent only and is non-qualifying: it cannot supply the recorded Hermes SHA/clean status, observation-test count, callback count, capture assertions, or unload result. The current official Hermes plugin/hook documentation was also reviewed on 2026-08-22 at:
+This design was re-researched against the clean public checkout `<disposable-baseline-checkout>`, tag `v2026.8.18`, commit `e624e9fde561e1add9388384012b295fde669ade`. The locally patched Aether runtime checkout was inspected only to distinguish it from upstream and is not evidence for this contract. In particular, `<private-aether-home>/.venv-hermes/src/hermes-agent` is a dirty, different-revision antecedent only and is non-qualifying: it cannot supply the recorded Hermes SHA/clean status, observation-test count, callback count, capture assertions, or unload result. The current official Hermes plugin/hook documentation was also reviewed on 2026-08-22 at:
 
 - <https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks>
 - <https://hermes-agent.nousresearch.com/docs/guides/build-a-hermes-plugin>

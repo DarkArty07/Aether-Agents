@@ -52,7 +52,7 @@ Research checkouts stay outside this repository. They are evidence sources, not 
 
 - **GitHub Spec Kit**
   - Upstream: `https://github.com/github/spec-kit.git`
-  - Local checkout: `/home/darkarty/Desktop/agentes/aether-research/spec-kit`
+  - Local checkout used for the historical comparison: `<private-spec-kit-checkout>`
   - Baseline inspected for the current design research: `bf88c9f9a82fa370c7a7257aa2b3cf10b457b65c`
   - Verified 2026-08-17: exactly one Spec Kit tree exists on this machine, its HEAD equals `origin/main`, and Spec Kit is not installed as a package — so unlike Hermes there is no second authoritative tree to confuse it with.
 
@@ -60,7 +60,7 @@ Research checkouts stay outside this repository. They are evidence sources, not 
   - Upstream: `https://github.com/NousResearch/hermes-agent.git`
   - **Selected public release evidence:** release `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`.
   - **The source the private Aether installation currently runs:** `home/.venv-hermes/src/hermes-agent` — version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. It is historical/runtime evidence for that installation, not the selected public release source or a distributable dependency.
-  - **Not this one:** `/home/darkarty/.hermes/hermes-agent` is a different, older checkout (0.19.1). It is not what the Aether profile loads. Reading it produced a false finding once already.
+  - **Not this one:** `<legacy-hermes-checkout>` is a different, older checkout (0.19.1). It is not what the Aether profile loads. Reading it produced a false finding once already.
   - Research checkouts and the loaded private tree are read-only evidence during canonical design work. A separately authorized downstream implementation must use an isolated candidate based on the exact selected public release and must not copy private editable state.
   - The live profile under `home/` is runtime evidence about what is initialized. It is not documentation of intent, and its contents are not adopted by being present.
 
