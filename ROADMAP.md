@@ -88,7 +88,8 @@ The formal laboratory keeps canonical scenarios, fixture metadata, and evidence 
 under `lab/`, packages those exact bytes for wheel consumers, and writes compact
 redacted JSON/JSONL only inside disposable run roots. The observation suite is a
 separate preparation/live lane and never contributes to the PD-74 rolling 20-run
-score. Native persistent-session proof is still pending: E2E-15 must demonstrate a
+score. The bounded provider-backed observation lane has passed with real curated tool
+calls and zero fallback. Native persistent-session proof is still pending: E2E-15 must demonstrate a
 same-session Morfeo wake from the terminal board event under PTY, and a one-shot
 harness continuation cannot satisfy that requirement. No deterministic preparation
 result is a live qualification or release claim.
@@ -110,15 +111,14 @@ Liveness, semantic progress, and termination are separate. Failure retries, resu
 
 Read-only GitHub inspection on 2026-08-21 found:
 
-- `#192` — retry/resumption/lifecycle accounting: **OPEN**;
-- `#195` — semantic progress beyond heartbeat: **OPEN and blocking stable 1.0 until the 002 contract evidence passes**;
-- `#210` — task-bound Morfeo canonical worktree policy mismatch: **OPEN historically**, but the PD-67 micro-authorization it targeted is superseded by PD-71; close/reclassify only after the simplified E2E candidate is qualified, not by patching the old guard;
-- `#211` — per-flow Morfeo/Supervisor session affinity: **OPEN**; and
-- `#212` — TUI Kanban subscriptions are not a valid notifier platform and their events are discarded: **OPEN**.
+- `#195` — curated semantic progress: **CLOSED after bounded provider-backed observation qualification**;
+- `#211` — per-flow Morfeo/Supervisor session affinity: **OPEN**;
+- `#220` — protected remote CI qualification for Contract Observation: **OPEN**; and
+- `#242` — immutable Hermes/Aether runtime set: **OPEN**.
 
 Issue `#198` is closed for the owner-authorized local repair, but the selected public Hermes tag still exhibits the first-spawn branch defect; that public behavior remains a transitional patch gate. An issue or upstream merge is not qualification by itself.
 
-Deterministic implementation evidence cannot substitute for the owner-approved controlled real trace. Issue #195 remains open, and Aether 1.0 is not called complete, release-ready, or production-ready until that external gate is executed and independently reconciled against native sources.
+Deterministic implementation evidence did not substitute for the controlled real trace: the observation lane was executed separately and #195 is closed. Aether 1.0 is still not called complete, release-ready, or production-ready while the PD-74 rolling gate, native persistent wake, protected CI (#220), and immutable runtime (#242) remain open.
 
 ## 8. Change and regression
 

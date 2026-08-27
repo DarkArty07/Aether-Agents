@@ -130,15 +130,16 @@ reliability window. `--live` remains spend-gated by the exact Hermes executable,
 candidate profiles, and explicit `--allow-model-spend` acknowledgement; no live run
 or provider call is implied by the deterministic lane.
 
-The separate `observation` preparation suite seeds a local trace and invokes the
-registered `aether_observe` tool's `status`, `changes`, and `diagnose` actions. It is
-excluded from the PD-74 score and writes only schema-validated bounded metadata under
-the disposable evidence root. The persistent E2E-15 prerequisite is a native Hermes
+The separate `observation` suite seeds a local trace and invokes the registered
+`aether_observe` tool's `status`, `changes`, and `diagnose` actions. Its bounded
+provider-backed lane has passed with zero terminal/file/raw fallback. It is excluded
+from the PD-74 score and writes only schema-validated metadata under the disposable
+evidence root. The persistent E2E-15 prerequisite is a native Hermes
 CLI/TUI/gateway surface under PTY that wakes the same Morfeo session from the terminal
 board event, reports durable state, and uses no second owner message; a one-shot
-harness continuation is explicitly non-qualifying. The current qualification state is
-therefore deterministic preparation complete, with owner-authorized live reliability
-and native persistent wake still pending.
+harness continuation is explicitly non-qualifying. The current native probe reports
+`CAPABILITY_WALL/native_same_session_wake_unobserved`; no notifier substitute was
+created. The rolling 20-run reliability gate and native persistent wake remain pending.
 
 ### Implemented product surface
 
