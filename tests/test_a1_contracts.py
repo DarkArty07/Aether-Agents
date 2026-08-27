@@ -47,6 +47,7 @@ class ReleaseLockSourceModeTests(unittest.TestCase):
                     "group": "hermes_agent.plugins",
                     "target": "aether_agents.observation.capture.hermes_plugin",
                 },
+                "wheel_sha256": digest,
                 "observer_requirements_sha256": digest,
                 "observation_compatibility": {
                     "event_write_version": "aether.observation.event.v1",

@@ -21,6 +21,7 @@ import tempfile
 import threading
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace
@@ -344,6 +345,7 @@ def _write_release_lock(
     root: Path,
     version: str,
     *,
+    aether_wheel_sha256: str | None = None,
     hermes_checkout: Path | None = None,
     hermes_commit: str | None = None,
     source_tree_sha256: str | None = None,
@@ -356,6 +358,7 @@ def _write_release_lock(
         "aether": {
             "version": version,
             **_aether_identity(version),
+            "wheel_sha256": aether_wheel_sha256 or ("a" * 64),
             "observer_requirements_sha256": hashlib.sha256(
                 (
                     Path(lifecycle.__file__).parent / "resources" / "observer-requirements.txt"
@@ -1138,6 +1141,100 @@ def test_release_lock_identity_is_explicit_and_semantically_matches_the_wheel(
         LifecycleManager._validate_observer_lock_binding(forged_lock, wheel_identity)
 
 
+def test_inspect_candidate_rejects_wheel_outside_trusted_lock_before_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    release_lock = _write_release_lock(
+        tmp_path,
+        "1.0.0",
+        aether_wheel_sha256="0" * 64,
+        source_tree_sha256=lifecycle._tree_sha256(tmp_path / "empty-source"),
+    )
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.setattr(
+        lifecycle,
+        "verify_clean_checkout",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            path=checkout,
+            commit=HERMES_BASELINE.commit,
+            tag=HERMES_BASELINE.tag,
+            tag_object=HERMES_BASELINE.tag_object,
+            clean=True,
+        ),
+    )
+    inspected = False
+
+    def forbid_inspection(_wheel: Path) -> dict[str, object]:
+        nonlocal inspected
+        inspected = True
+        raise AssertionError("wheel inspected before trusted digest verification")
+
+    monkeypatch.setattr(LifecycleManager, "_inspect_wheel", staticmethod(forbid_inspection))
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    with pytest.raises(IntegrityError, match="trusted Aether wheel digest"):
+        manager.inspect_candidate(
+            wheel=wheel,
+            hermes_checkout=checkout,
+            release_lock=release_lock,
+        )
+    assert inspected is False
+
+
+def test_prepare_release_rejects_untrusted_wheel_before_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = _build_wheel(tmp_path / "build", "1.0.0")
+    release_lock = _write_release_lock(
+        tmp_path,
+        "1.0.0",
+        aether_wheel_sha256="0" * 64,
+        source_tree_sha256="d" * 64,
+    )
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    monkeypatch.setattr(
+        lifecycle,
+        "verify_clean_checkout",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            path=checkout,
+            commit=HERMES_BASELINE.commit,
+            tag=HERMES_BASELINE.tag,
+            tag_object=HERMES_BASELINE.tag_object,
+            clean=True,
+        ),
+    )
+    monkeypatch.setattr(
+        LifecycleManager,
+        "_inspect_wheel",
+        staticmethod(
+            lambda _wheel: (_ for _ in ()).throw(
+                AssertionError("wheel inspected before trusted digest verification")
+            )
+        ),
+    )
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    with pytest.raises(IntegrityError, match="trusted Aether wheel digest"):
+        manager.prepare_release(
+            wheel=wheel,
+            hermes_checkout=checkout,
+            release_lock=release_lock,
+        )
+    assert (
+        not manager.store.releases.exists()
+        or list(manager.store.releases.iterdir()) == []
+    )
+
+
 @pytest.mark.parametrize(
     "mutate",
     (
@@ -1329,6 +1426,7 @@ def test_prepare_release_installs_one_wheel_in_manager_and_exact_runtime(
         release_lock=_write_release_lock(
             tmp_path,
             "0.24.0",
+            aether_wheel_sha256=hashlib.sha256(wheel.read_bytes()).hexdigest(),
             hermes_checkout=checkout,
             hermes_commit=fixture_commit,
         ),
@@ -2952,6 +3050,7 @@ def test_disposable_public_install_capture_query_update_rollback_uninstall_purge
             _write_release_lock(
                 tmp_path,
                 "1.0.0",
+                aether_wheel_sha256=hashlib.sha256(first_wheel.read_bytes()).hexdigest(),
                 source_tree_sha256=hermes_source_tree_sha256,
             )
         ),
@@ -3000,6 +3099,7 @@ def test_disposable_public_install_capture_query_update_rollback_uninstall_purge
                 release_lock=_write_release_lock(
                     tmp_path,
                     "1.0.1",
+                    aether_wheel_sha256=hashlib.sha256(second_wheel.read_bytes()).hexdigest(),
                     source_tree_sha256=hermes_source_tree_sha256,
                 ),
             )

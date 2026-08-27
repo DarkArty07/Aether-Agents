@@ -199,6 +199,7 @@ class ValidatedReleaseLock:
     raw_bytes: bytes
     sha256: str
     aether_identity: AetherPrebuildIdentity
+    aether_wheel_sha256: str
     observer_requirements_sha256: str
     hermes_source_tree_sha256: str
     profile_bundle_sha256: str
@@ -296,6 +297,8 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
     )
     observer_requirements_sha256 = aether.get("observer_requirements_sha256")
     assert isinstance(observer_requirements_sha256, str)
+    aether_wheel_sha256 = aether.get("wheel_sha256")
+    assert isinstance(aether_wheel_sha256, str)
     hermes = payload.get("hermes")
     assert isinstance(hermes, dict)
     expected_hermes = {
@@ -321,6 +324,7 @@ def load_release_lock(path: Path | str) -> ValidatedReleaseLock:
         raw_bytes=raw_bytes,
         sha256=hashlib.sha256(raw_bytes).hexdigest(),
         aether_identity=identity,
+        aether_wheel_sha256=aether_wheel_sha256,
         observer_requirements_sha256=observer_requirements_sha256,
         hermes_source_tree_sha256=hermes_source_tree_sha256,
         profile_bundle_sha256=profile_bundle_sha256,
@@ -2522,8 +2526,9 @@ class LifecycleManager:
             expected_commit=HERMES_BASELINE.commit,
             expected_tag_object=HERMES_BASELINE.tag_object,
         )
-        metadata = self._inspect_wheel(source_wheel)
         validated_lock = load_release_lock(release_lock)
+        self._validate_aether_wheel_lock(validated_lock, source_wheel)
+        metadata = self._inspect_wheel(source_wheel)
         self._validate_aether_identity(validated_lock.aether_identity, metadata)
         self._validate_observer_lock_binding(validated_lock, metadata)
         with tempfile.TemporaryDirectory(prefix="aether-hermes-source-") as temporary:
@@ -2536,6 +2541,16 @@ class LifecycleManager:
             "wheel_filename": source_wheel.name,
             "wheel_sha256": _sha256(source_wheel),
         }
+
+    @staticmethod
+    def _validate_aether_wheel_lock(
+        release_lock: ValidatedReleaseLock,
+        wheel: Path,
+    ) -> str:
+        digest = _sha256(wheel)
+        if digest != release_lock.aether_wheel_sha256:
+            raise IntegrityError("trusted Aether wheel digest mismatch")
+        return digest
 
     @staticmethod
     def _validate_aether_identity(
@@ -2791,13 +2806,13 @@ class LifecycleManager:
             expected_commit=HERMES_BASELINE.commit,
             expected_tag_object=HERMES_BASELINE.tag_object,
         )
-        metadata = self._inspect_wheel(source_wheel)
         validated_lock = load_release_lock(release_lock)
+        digest = self._validate_aether_wheel_lock(validated_lock, source_wheel)
+        metadata = self._inspect_wheel(source_wheel)
         aether_identity = validated_lock.aether_identity
         self._validate_aether_identity(aether_identity, metadata)
         self._validate_observer_lock_binding(validated_lock, metadata)
         version = metadata["version"]
-        digest = _sha256(source_wheel)
         stage_parent = self.store.releases
         ensure_private_dir(stage_parent)
         release_id = f"{version}-{digest[:16]}"
