@@ -307,6 +307,11 @@ def _fault_recovered(known_good: Path | None) -> bool:
 
 def _hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
     env = dict(os.environ)
+    # The laboratory's --in directory is authoritative. Ambient cwd overrides
+    # belong to the parent TUI and would redirect file/terminal tools into the
+    # real Aether checkout.
+    env.pop("TERMINAL_CWD", None)
+    env.pop("HERMES_CWD", None)
     env.update(
         {
             "HERMES_HOME": str(hermes_root),
@@ -644,7 +649,18 @@ def live_run(
     )
     known_good_hook = _apply_fault_injection(scenario, hermes_root, evidence)
 
+    initial_query = scenario.owner_message
     turns: list[tuple[str, str]] = [("Owner (synthetic)", scenario.owner_message)]
+    if known_good_hook is not None:
+        active_hook = known_good_hook.with_name("aether_pre_tool_policy.py")
+        fault_context = (
+            "[HARNESS RECOVERY CONTEXT — not owner input] "
+            f"Disposable repo: {repo}. Active hook: {active_hook}. "
+            f"Known-good sibling: {known_good_hook}. "
+            "Operate only on these disposable paths; never inspect or edit Aether source."
+        )
+        initial_query += "\n\n" + fault_context
+        turns.append(("Harness recovery context (not owner input)", fault_context))
     morfeo_text = _invoke_morfeo(
         hermes,
         hermes_root,
@@ -652,7 +668,7 @@ def live_run(
         env,
         commands,
         evidence,
-        scenario.owner_message,
+        initial_query,
         resume_session_id=None,
         usage_name="usage-initial.json",
     )

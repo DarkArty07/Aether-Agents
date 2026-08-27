@@ -225,12 +225,18 @@ def test_live_mode_refuses_model_spend_before_invoking_hermes(tmp_path: Path) ->
     assert not invoked.exists()
 
 
-def test_hermes_env_pins_the_exact_executable_over_ambient_path(tmp_path: Path) -> None:
+def test_hermes_env_pins_runtime_and_scrubs_ambient_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     exact = tmp_path / "candidate" / "hermes"
     exact.parent.mkdir()
     exact.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("TERMINAL_CWD", "/private/tui-cwd")
+    monkeypatch.setenv("HERMES_CWD", "/private/hermes-cwd")
     env = e2e_run._hermes_env(tmp_path / "run", tmp_path / "home", exact)
     assert env["HERMES_BIN"] == str(exact.resolve())
+    assert "TERMINAL_CWD" not in env
+    assert "HERMES_CWD" not in env
 
 
 def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
