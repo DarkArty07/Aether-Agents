@@ -109,6 +109,64 @@ jobs:
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
           tests/test_same_card_phase_predicates.py
+          .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
+          .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
+          .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
+          .aether/objective-contracts/oc_537e9a8701b4aac7/v2.md
+          .aether/objective-contracts/oc_924b2054e774ca5b/v1.md
+          .aether/project.toml
+          scripts/e2e/README.md
+          scripts/e2e/collect.py
+          scripts/e2e/dispatch.py
+          scripts/e2e/matrix.py
+          scripts/e2e/run.py
+          scripts/e2e/scenarios/e2e-01.json
+          scripts/e2e/scenarios/e2e-02.json
+          scripts/e2e/scenarios/e2e-03.json
+          scripts/e2e/scenarios/e2e-04.json
+          scripts/e2e/scenarios/e2e-05.json
+          scripts/e2e/scenarios/e2e-06.json
+          scripts/e2e/scenarios/e2e-07.json
+          scripts/e2e/scenarios/e2e-08.json
+          scripts/e2e/scenarios/e2e-09.json
+          scripts/e2e/scenarios/e2e-10.json
+          scripts/e2e/scenarios/e2e-11.json
+          scripts/e2e/scenarios/e2e-12.json
+          scripts/e2e/scenarios/e2e-13.json
+          scripts/e2e/scenarios/e2e-14.json
+          scripts/e2e/scenarios/e2e-15.json
+          scripts/e2e/synthetic_owner.py
+          src/aether_agents/objective_contracts/__init__.py
+          src/aether_agents/objective_contracts/hermes_plugin.py
+          src/aether_agents/objective_contracts/store.py
+          src/aether_agents/resources/profiles/implementer/SOUL.md
+          src/aether_agents/resources/profiles/morfeo/SOUL.md
+          src/aether_agents/resources/profiles/supervisor/SOUL.md
+          tests/fixtures/e2e/brownfield/AGENTS.md
+          tests/fixtures/e2e/brownfield/message.py
+          tests/fixtures/e2e/brownfield/sentinel.txt
+          tests/fixtures/e2e/brownfield/verify.py
+          tests/fixtures/e2e/concurrent/alpha.py
+          tests/fixtures/e2e/concurrent/beta.py
+          tests/fixtures/e2e/concurrent/gamma.py
+          tests/fixtures/e2e/concurrent/verify.py
+          tests/fixtures/e2e/direct-bug/calc.py
+          tests/fixtures/e2e/direct-bug/verify.py
+          tests/fixtures/e2e/direct-text/greeting.txt
+          tests/fixtures/e2e/direct-text/verify.py
+          tests/fixtures/e2e/local-choice/formatter.py
+          tests/fixtures/e2e/local-choice/verify.py
+          tests/fixtures/e2e/product-decision/config.py
+          tests/fixtures/e2e/product-decision/verify.py
+          tests/fixtures/e2e/safety/sentinel.txt
+          tests/fixtures/e2e/safety/verify.py
+          tests/fixtures/e2e/two-component-feature/app.py
+          tests/fixtures/e2e/two-component-feature/normalize.py
+          tests/fixtures/e2e/two-component-feature/render.py
+          tests/fixtures/e2e/two-component-feature/verify.py
+          tests/test_e2e_harness.py
+          tests/test_e2e_matrix.py
+          tests/test_objective_contracts.py
           uv.lock
           EOF
           sed -i 's/^          //' "$expected"
