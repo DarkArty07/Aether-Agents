@@ -1292,7 +1292,13 @@ class _Observer:
             with projects_db.connect_closing() as connection:
                 for project in projects_db.list_projects(connection):
                     primary = getattr(project, "primary_path", None)
-                    if primary and Path(primary).resolve(strict=True) == expected:
+                    if not primary:
+                        continue
+                    try:
+                        candidate = Path(primary).resolve(strict=True)
+                    except OSError:
+                        continue
+                    if candidate == expected:
                         project_id = safe_ref(getattr(project, "id", None))
                         if project_id is not None:
                             identifiers.add(project_id)

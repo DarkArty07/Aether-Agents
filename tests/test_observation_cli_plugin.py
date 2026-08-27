@@ -1377,6 +1377,12 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
     project, paths = _install_project(monkeypatch, tmp_path)
     board, state_home = _create_native_databases(tmp_path)
     with projects_db.connect_closing(state_home / "projects.db") as connection:
+        projects_db.create_project(
+            connection,
+            name="Stale",
+            slug="stale",
+            primary_path=str(tmp_path / "missing-project"),
+        )
         runtime_project_id = projects_db.create_project(
             connection,
             name="Fixture",
