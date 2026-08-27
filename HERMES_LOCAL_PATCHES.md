@@ -64,10 +64,10 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
   - `tests/hermes_cli/test_kanban_decompose.py`
   - `tests/hermes_cli/test_kanban_cli.py`
   - `tests/gateway/test_kanban_auto_decompose_recovery.py`
-- **Diferencia local adicional:** `hermes kanban unblock --recover-escalated` registra `triage_escalation_recovered` y reinicia sólo el estado del loop; mantiene la tarjeta en `triage`. Esta superficie CLI no aparece en los archivos del PR upstream `#91211` y debe verificarse separadamente al actualizar.
-- **Evidencia local:** suite focalizada `14 passed`; sonda post-reinicio con dos procesos confirmó que la escalación sobrevivía reconexión y reasignación y permanecía fuera del auto-decomposer.
+- **Diferencia local adicional:** `hermes kanban unblock --recover-escalated` ya no puede reconocer una escalación mientras la tarjeta siga en `triage`. La recuperación sólo se registra después de que una acción explícita de routing/decomposición la haya movido fuera de `triage`; por tanto, reconocer el bloqueo no autoriza trabajo ni expone la card al auto-decomposer. Esta superficie CLI no aparece en los archivos del PR upstream `#91211` y debe verificarse separadamente al actualizar.
+- **Evidencia local:** `19 passed` en las suites focalizadas de CLI, decomposición y watcher, Ruff y `git diff --check` verdes. Una sonda con tres procesos independientes y DB temporal confirmó: `status=triage`, escalación activa, `block_recurrences=2`, ningún evento `triage_escalation_recovered` y `auto_listed=false` después del intento de reconocimiento prematuro.
 - **Upstream:** <https://github.com/NousResearch/hermes-agent/pull/91211>, abierto y mergeable, sin checks reportados al conciliar este índice.
-- **Gate de retirada:** probar escalación, reconexión, reasignación y tick de auto-descomposición; después probar una recuperación explícita que produzca un evento durable y no reanude por sí sola la tarjeta. Si upstream no incluye la recuperación CLI equivalente, conservar esa parte local aunque el resto del PR haya sido integrado.
+- **Gate de retirada:** probar escalación, reconexión, reasignación y tick de auto-descomposición; después probar que una recuperación prematura en `triage` se rechaza y que una recuperación posterior a routing explícito produce el evento durable sin redispatch autónomo. Si upstream no incluye la recuperación CLI equivalente, conservar esa parte local aunque el resto del PR haya sido integrado.
 
 ## HLP-194 — handoff terminal durable y único
 
