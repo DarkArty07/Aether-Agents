@@ -31,6 +31,7 @@ from aether_agents.paths import (
 )
 
 _CONTRACT_ID_RE: Final = re.compile(r"^oc_[a-f0-9]{16}$", re.ASCII)
+_TRACE_ID_RE: Final = re.compile(r"^ctr_[a-f0-9]{32}$", re.ASCII)
 _SESSION_RE: Final = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 _TRUNCATION_RE: Final = re.compile(r"(?:\.\.\.)?\[truncated\]", re.IGNORECASE)
 _PROJECT_SCHEMA_PACKAGED: Final = (
@@ -498,6 +499,7 @@ class ObjectiveContractStore:
             "finalized_in_session": session_id,
             "supersedes": draft.get("supersedes"),
             "change_reason": draft.get("change_reason"),
+            "observation_trace_id": "ctr_" + secrets.token_hex(16),
         }
         lines = ["---"]
         lines.extend(f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in metadata.items())
@@ -545,6 +547,14 @@ class ObjectiveContractStore:
         text_fields = ("title", "created_at_utc", "created_at_local", "finalized_at_utc", "finalized_at_local", "created_in_session", "finalized_in_session")
         if metadata["author_profile"] != "morfeo" or any(not isinstance(metadata[key], str) or not metadata[key].strip() for key in text_fields):
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract provenance is invalid")
+        trace_id = metadata.get("observation_trace_id")
+        if trace_id is not None and (
+            not isinstance(trace_id, str) or _TRACE_ID_RE.fullmatch(trace_id) is None
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID",
+                "final contract observation identity is invalid",
+            )
         if any(
             _TRUNCATION_RE.search(value) or contains_secret_shape(value)
             for value in sections.values()
@@ -579,6 +589,7 @@ class ObjectiveContractStore:
             if persisted != data:
                 raise ContractError("AETHER-OBJECTIVE-CONTRACT-WRITE-MISMATCH", "final bytes differ after persistence")
             digest = hashlib.sha256(persisted).hexdigest()
+            metadata, _ = self._parse_final(final_path)
             draft_path.unlink()
             return {
                 "project_id": project_id,
@@ -587,6 +598,7 @@ class ObjectiveContractStore:
                 "status": "final",
                 "relative_path": self._relative(root, final_path),
                 "sha256": digest,
+                "observation_trace_id": metadata.get("observation_trace_id"),
                 "created_in_session": draft["created_in_session"],
                 "finalized_in_session": session_id,
             }
@@ -716,6 +728,8 @@ class ObjectiveContractStore:
         if current_head.returncode != 0 or current_head.stdout.decode("ascii").strip() != base_commit:
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
         digest = hashlib.sha256(committed.stdout).hexdigest()
+        trace_id = metadata.get("observation_trace_id")
+        token = f"aether.obs.v1:{trace_id}:root" if isinstance(trace_id, str) else None
         envelope = "\n".join(
             (
                 f"Execute Objective Contract {contract_id}@v{version}.",
@@ -734,5 +748,7 @@ class ObjectiveContractStore:
             "relative_path": relative,
             "sha256": digest,
             "base_commit": base_commit,
+            "observation_trace_id": trace_id,
+            "root_idempotency_key": token,
             "envelope": envelope,
         }

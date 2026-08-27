@@ -121,6 +121,55 @@ def test_observe_human_and_json_share_the_same_canonical_summary(
     assert "NEXT DECISION REQUIRED" in human_out.getvalue()
 
 
+def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, paths = _install_project(monkeypatch, tmp_path)
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    contract_id = "oc_1234567890abcdef"
+    trace_id = "ctr_abcdef0123456789abcdef0123456789"
+    context.hooks["post_tool_call"][0](
+        tool_name="objective_contract",
+        tool_call_id="finalize",
+        session_id="session-contract",
+        status="success",
+        args={"action": "finalize"},
+        result={
+            "project_id": PROJECT_ID,
+            "contract_id": contract_id,
+            "version": 1,
+            "status": "final",
+            "relative_path": ".aether/objective-contracts/oc_1234567890abcdef/v1.md",
+            "sha256": "a" * 64,
+            "observation_trace_id": trace_id,
+        },
+    )
+    context.hooks["post_tool_call"][0](
+        tool_name="kanban_create",
+        tool_call_id="root-create",
+        session_id="session-contract",
+        status="success",
+        args={"idempotency_key": correlation_token(trace_id, "root")},
+        result={"ok": True, "task_id": "t_12345678", "project_id": PROJECT_ID},
+    )
+    context.unload_callbacks[-1]()
+    events = _journal_events(paths)
+    assert {event["event_type"] for event in events} >= {
+        "trace.opened",
+        "contract.persisted",
+        "work_unit.bound",
+    }
+    assert {event["trace_id"] for event in events} == {trace_id}
+    assert {event.get("contract_id") for event in events if event["event_type"] == "trace.opened"} == {
+        contract_id
+    }
+
+
 def test_observe_empty_human_and_json_share_one_discriminated_representation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

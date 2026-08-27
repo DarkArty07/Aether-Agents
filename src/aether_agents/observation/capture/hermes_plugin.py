@@ -105,6 +105,7 @@ OBSERVED_HOOKS = (
 _REGISTERED: weakref.WeakSet[Any] = weakref.WeakSet()
 _REGISTERED_FALLBACK: set[int] = set()
 _TRACE_RE = re.compile(r"^ctr_[a-f0-9]{32}$")
+_CONTRACT_RE = re.compile(r"^oc_[a-f0-9]{16}$")
 _NATIVE_RECONCILIATION_INTERVAL_S = 30.0
 _NATIVE_RECONCILIATION_DEBOUNCE_S = 0.05
 _RECONCILIATION_HOOKS = frozenset(
@@ -1893,6 +1894,9 @@ class _Observer:
         if key is None or name is None:
             return
         pending = self._pending_spans.pop(key, None)
+        if "objective_contract" in name:
+            self._finish_objective_contract(collector, payload)
+            return
         if "kanban_create" in name:
             self._finish_create_call(collector, payload, key, name, pending)
             return
@@ -1908,6 +1912,74 @@ class _Observer:
                 payload,
                 pending or self._tool_metadata(collector, payload, key, name),
             )
+
+    def _finish_objective_contract(
+        self, collector: Collector, payload: dict[str, Any]
+    ) -> None:
+        args = _pick(payload, "args", "arguments")
+        result = _pick(payload, "result", "tool_result")
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (TypeError, ValueError):
+                return
+        if not isinstance(args, dict) or not isinstance(result, dict):
+            return
+        action = args.get("action")
+        status, _ = normalize_native_status(_pick(payload, "status", "outcome"))
+        if action not in {"finalize", "prepare_handoff"} or status != "completed":
+            return
+        trace_id = result.get("observation_trace_id")
+        contract_id = result.get("contract_id")
+        project_id = canonical_project_id(result.get("project_id"))
+        version = result.get("version")
+        if (
+            not isinstance(trace_id, str)
+            or _TRACE_RE.fullmatch(trace_id) is None
+            or not isinstance(contract_id, str)
+            or _CONTRACT_RE.fullmatch(contract_id) is None
+            or project_id != collector.paths.project_id
+            or not isinstance(version, int)
+            or isinstance(version, bool)
+            or version < 1
+        ):
+            collector.health.increment("OBJECTIVE_CONTRACT_RESULT_REJECTED")
+            return
+        if not collector.ensure_trace_opened(
+            trace_id,
+            session_lineage=(self._session(collector, payload),),
+            materialization_ref=f"{contract_id}.v{version}",
+            contract_id=contract_id,
+            source_kind="hermes_hook",
+            source_hook="post_tool_call",
+        ):
+            return
+        self._activate_trace(collector, trace_id)
+        if action != "finalize":
+            return
+        event = collector.builder_for(trace_id).contract(
+            event_type="contract.persisted",
+            status="completed",
+            revision=version,
+            artifact_ref=result.get("relative_path"),
+            after_sha256=result.get("sha256"),
+            source_kind="hermes_hook",
+            source_hook="post_tool_call",
+            session_id=self._session(collector, payload) or None,
+            turn_id=self._turn(collector, payload),
+            actor_kind="agent",
+            actor_id="morfeo",
+            profile="morfeo",
+            role="morfeo",
+            contract_id=contract_id,
+            identity=native_identity(
+                kind="objective_contract.finalized",
+                contract_id=contract_id,
+                version=version,
+                sha256=result.get("sha256"),
+            ),
+        )
+        collector.emit(event)
 
     def _finish_create_call(
         self,

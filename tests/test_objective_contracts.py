@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import threading
 from datetime import datetime, timedelta, timezone
@@ -225,6 +226,8 @@ def test_finalize_requires_complete_contract_and_preserves_session_boundary(tmp_
     assert final["sha256"] == hashlib.sha256(artifact.read_bytes()).hexdigest()
     assert 'created_in_session: "session-create"' in content
     assert 'finalized_in_session: "session-final"' in content
+    assert re.search(r'observation_trace_id: "ctr_[a-f0-9]{32}"', content)
+    assert re.fullmatch(r"ctr_[a-f0-9]{32}", final["observation_trace_id"])
     assert "## Testing Standard" in content
 
 
@@ -349,6 +352,10 @@ def test_prepare_handoff_requires_final_bytes_in_git_head(
     assert ready["handoff_ready"] is True
     assert ready["sha256"] == final["sha256"]
     assert ready["relative_path"] == final["relative_path"]
+    assert ready["observation_trace_id"] == final["observation_trace_id"]
+    assert ready["root_idempotency_key"] == (
+        f"aether.obs.v1:{final['observation_trace_id']}:root"
+    )
     monkeypatch.delenv("GIT_DIR")
     assert ready["base_commit"] == subprocess.check_output(
         ("git", "rev-parse", "HEAD"), cwd=project, text=True
