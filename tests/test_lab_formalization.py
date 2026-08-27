@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from aether_agents import lab
-from aether_agents.lab import persistent
+from aether_agents.lab import matrix, persistent
 
 FORBIDDEN_EVIDENCE_KEYS = {
     "environment",
@@ -89,6 +89,111 @@ def test_observation_prepare_only_calls_registered_tool_for_each_action(tmp_path
     assert result["calls"][1]["bytes"] <= 2048
     assert result["calls"][2]["bytes"] <= 4096
     lab.validate_evidence(result)
+
+
+def test_live_observation_invokes_supplied_runtime_once_after_spend_acknowledgement(
+    tmp_path: Path,
+) -> None:
+    invoked = tmp_path / "hermes-invoked.json"
+    fake_hermes = tmp_path / "hermes"
+    fake_hermes.write_text(
+        f'''#!/usr/bin/env python3
+import json, os, sqlite3, sys
+from pathlib import Path
+
+open({str(invoked)!r}, "w", encoding="utf-8").write(
+    json.dumps({{"argv": sys.argv[1:], "home": os.environ.get("HERMES_HOME")}})
+)
+usage = Path(sys.argv[sys.argv.index("--usage-file") + 1])
+usage.write_text(json.dumps({{
+    "model": "test-model",
+    "provider": "test-provider",
+    "api_calls": 1,
+    "completed": True,
+}}), encoding="utf-8")
+database = Path(os.environ["HERMES_HOME"]) / "profiles" / "morfeo" / "state.db"
+database.parent.mkdir(parents=True, exist_ok=True)
+with sqlite3.connect(database) as connection:
+    connection.execute("CREATE TABLE messages (role TEXT, content TEXT, tool_name TEXT, tool_calls TEXT)")
+    for action, result in (
+        ("status", {{"action": "status", "state": "ready", "summary_id": "sum_" + "a" * 64}}),
+        ("changes", {{"action": "changes", "comparable": True}}),
+        ("diagnose", {{"action": "diagnose", "verdict": "clear"}}),
+    ):
+        connection.execute(
+            "INSERT INTO messages VALUES (?, ?, ?, ?)",
+            ("tool", json.dumps(result), "aether_observe", None),
+        )
+print("aether_observe status changes diagnose completed")
+''',
+        encoding="utf-8",
+    )
+    fake_hermes.chmod(0o755)
+
+    profile_root = tmp_path / "profiles"
+    for role in ("morfeo", "supervisor", "implementer"):
+        target = profile_root / role
+        target.mkdir(parents=True)
+        (target / "config.yaml").write_text(
+            "hooks:\n"
+            "  pre_tool_call:\n"
+            "    - matcher: .*\n"
+            "      command: /candidate/aether_pre_tool_policy.py\n",
+            encoding="utf-8",
+        )
+
+    result = lab.live_observation(
+        tmp_path / "observation-live",
+        hermes=fake_hermes,
+        profile_root=profile_root,
+        allow_model_spend=True,
+    )
+
+    assert invoked.is_file(), "the caller-supplied Hermes executable was not invoked"
+    payload = json.loads(invoked.read_text(encoding="utf-8"))
+    assert "--in" in payload["argv"]
+    assert payload["home"]
+    assert result["mode"] == "live-oneshot"
+    assert result["rolling_reliability_counted"] is False
+    assert result["registered_tool"] == "aether_observe"
+    assert result["aether_observe_calls"] == 3
+    assert result["provider_operationally_exercised"] is True
+    assert result["forbidden_fallback_counts"] == {
+        "terminal": 0,
+        "file": 0,
+        "raw_logs_events": 0,
+    }
+    assert result["cleanup"] == {"completed": True, "survivors": 0}
+    assert result["private_runtime_retained"] is False
+    assert not (tmp_path / "observation-live" / "hermes-home").exists()
+    assert not (tmp_path / "observation-live" / "state").exists()
+    assert not (tmp_path / "observation-live" / "project").exists()
+
+
+def test_observation_records_do_not_contaminate_rolling_score_history() -> None:
+    records = [
+        {
+            "mode": "live-oneshot",
+            "status": "PASS",
+            "expected_route": route,
+            "guard_caused_manual_recovery": False,
+            "observed_protected_edge_violation": False,
+            "aether_self_modification": False,
+        }
+        for route in ("direct", "pipeline", "safety", "recovery") * 5
+    ]
+    observation = {
+        "kind": "observation",
+        "mode": "live-persistent",
+        "status": "CAPABILITY_WALL",
+        "rolling_reliability_counted": False,
+    }
+
+    gate = matrix.score_history(records + [observation])
+
+    assert gate["live_run_count"] == 20
+    assert gate["window_size"] == 20
+    assert gate["window_passes"] == 20
 
 
 def test_full_prepare_matrix_bounds_parallelism_and_serializes_e2e15(tmp_path: Path) -> None:

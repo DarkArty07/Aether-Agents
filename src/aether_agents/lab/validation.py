@@ -18,6 +18,7 @@ _FORBIDDEN_KEY_PARTS = (
     "credential", "secret", "prompt", "response", "stdout", "stderr", "command",
     "event", "file", "diff", "log", "transcript", "token",
 )
+_ALLOWED_FALLBACK_KEYS = {"terminal", "file", "raw_logs_events"}
 
 
 @lru_cache(maxsize=None)
@@ -25,16 +26,21 @@ def _validator(name: str) -> Draft202012Validator:
     return Draft202012Validator(resource_json(f"schemas/{name}.schema.json"))
 
 
-def _assert_no_forbidden_keys(value: Any) -> None:
+def _assert_no_forbidden_keys(value: Any, *, parent_key: str | None = None) -> None:
     if isinstance(value, dict):
         for key, nested in value.items():
             normalized = str(key).casefold()
-            if normalized in _FORBIDDEN_KEYS or any(part in normalized for part in _FORBIDDEN_KEY_PARTS):
+            if (
+                not (
+                    parent_key == "forbidden_fallback_counts" and normalized in _ALLOWED_FALLBACK_KEYS
+                )
+                and (normalized in _FORBIDDEN_KEYS or any(part in normalized for part in _FORBIDDEN_KEY_PARTS))
+            ):
                 raise ValueError("evidence contains a forbidden content field")
-            _assert_no_forbidden_keys(nested)
+            _assert_no_forbidden_keys(nested, parent_key=normalized)
     elif isinstance(value, list):
         for nested in value:
-            _assert_no_forbidden_keys(nested)
+            _assert_no_forbidden_keys(nested, parent_key=parent_key)
 
 
 def _validate(value: Any, schema: str, label: str) -> None:

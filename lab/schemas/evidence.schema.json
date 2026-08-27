@@ -43,6 +43,31 @@
     "window_passes": {"type": "integer", "minimum": 0},
     "rolling_reliability_counted": {"type": "boolean"},
     "registered_tool": {"const": "aether_observe"},
+    "model": {"type": "string", "maxLength": 128},
+    "provider": {"type": "string", "maxLength": 128},
+    "api_calls": {"type": "integer", "minimum": 0},
+    "provider_operationally_exercised": {"type": "boolean"},
+    "aether_observe_calls": {"type": "integer", "minimum": 0},
+    "forbidden_fallback_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminal", "file", "raw_logs_events"],
+      "properties": {
+        "terminal": {"type": "integer", "minimum": 0},
+        "file": {"type": "integer", "minimum": 0},
+        "raw_logs_events": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["completed", "survivors"],
+      "properties": {
+        "completed": {"type": "boolean"},
+        "survivors": {"type": "integer", "minimum": 0}
+      }
+    },
+    "private_runtime_retained": {"type": "boolean"},
     "calls": {
       "type": "array",
       "minItems": 3,

@@ -23,7 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .observation import prepare_observation_only
+from .observation import live_observation, prepare_observation_only
 from .resources import source_root
 from .validation import validate_evidence
 
@@ -63,7 +63,13 @@ def _read_history(path: Path) -> list[dict[str, Any]]:
 
 
 def score_history(records: list[dict[str, Any]]) -> dict[str, Any]:
-    live = [record for record in records if str(record.get("mode", "")).startswith("live")]
+    live = [
+        record
+        for record in records
+        if str(record.get("mode", "")).startswith("live")
+        and record.get("kind") != "observation"
+        and record.get("suite") != "observation"
+    ]
     window = live[-20:]
     last_ten = live[-10:]
     passes = sum(record.get("status") == "PASS" for record in window)
@@ -281,14 +287,16 @@ def main(argv: list[str] | None = None) -> int:
     results: list[dict[str, Any]] = []
     if args.suite == "observation":
         try:
-            result = prepare_observation_only(matrix_root / "observation") if args.prepare_only else {
-                "schema_version": "aether.lab.evidence.v1",
-                "kind": "observation",
-                "status": "CAPABILITY_WALL",
-                "mode": "live-persistent",
-                "suite": "observation",
-                "reason": "live_observation_requires_explicit_runtime_authority",
-            }
+            result = (
+                prepare_observation_only(matrix_root / "observation")
+                if args.prepare_only
+                else live_observation(
+                    matrix_root / "observation",
+                    hermes=args.hermes,
+                    profile_root=args.profile_root,
+                    allow_model_spend=args.allow_model_spend,
+                )
+            )
         except (OSError, ValueError, RuntimeError):
             result = {
                 "schema_version": "aether.lab.evidence.v1",
