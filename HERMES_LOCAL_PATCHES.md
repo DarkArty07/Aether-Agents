@@ -32,6 +32,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-204` | `#204`, `#205` | límites asimétricos por perfil aplicados de forma compartida a ready/review; topología inicial Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | sin issue/PR nuevo; `#209` conserva sólo la traza downstream previa | los directorios detectados por el walker no se tratan como scripts inseguros; dispositivos y scripts reales siguen fail-closed | issue upstream `#86753`; commit integrado `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 | `HLP-226` | `#226` | un hijo cross-profile con `workspace_kind=worktree` hereda el Project canónico del worker y recibe worktree propio | commit upstream `b9b5481d6`; PR previo `#89363` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
+| `HLP-246` | `#246` | attachments validan identidad pre-transporte y readback; persisten tamaño y SHA-256 calculados | sin equivalente localizado en `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
 ## HLP-188 — `initial_status=blocked` sticky
 
@@ -142,6 +143,22 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Upstream:** corrección integrada en `origin/main` mediante commit <https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872>; el PR previo <https://github.com/NousResearch/hermes-agent/pull/89363> permanece abierto, pero ya no es el gate de retirada.
 - **Estado de activación:** `ACTIVE_LOCAL / UPSTREAM_VERIFIED`; el checkout editable cargado conserva la corrección y cada worker nuevo la importa por proceso. No requiere reinicio del gateway.
 - **Gate de retirada:** al actualizar al upstream que contiene `b9b5481d6`, repetir la regresión cross-profile y el E2E con registro de Projects vacío; retirar el hunk local sólo si el hijo conserva UUID, worktree y rama, materializa el checkout real y un Project conflictivo sigue rechazado.
+
+## HLP-246 — identidad verificable de attachments Kanban
+
+- **Motivo:** el attachment `qualification-failure-evidence-v2.tar.gz` llegó al write path ya truncado pero con base64 válido; DB y disco conservaron los mismos `8699` bytes corruptos y el sistema devolvió éxito porque sólo validaba sintaxis base64 y tamaño local.
+- **Archivos activos principales:**
+  - `hermes_cli/kanban_db.py`
+  - `hermes_cli/kanban.py`
+  - `tools/kanban_tools.py`
+  - `plugins/kanban/dashboard/plugin_api.py`
+  - `tests/plugins/test_kanban_attachments.py`
+  - `tests/tools/test_kanban_tools.py`
+- **Cambio local:** `kanban_attach` exige tamaño y SHA-256 calculados antes de base64, los compara con los bytes decodificados y rechaza cualquier mismatch antes de escribir. El kernel relee toda escritura, verifica tamaño/hash y sólo entonces inserta la fila. CLI, URL y dashboard calculan la identidad en servidor; listados/contexto exponen el SHA. La migración añade `sha256` nullable y deja attachments legacy en `NULL` para no certificar retroactivamente bytes posiblemente corruptos.
+- **Evidencia:** RED focal `5 failed`; GREEN focal `5 passed`; suites completas relacionadas `93 passed, 1 skipped`; Ruff y `git diff --check` verdes. E2E de tres procesos con tar.gz real de `14191` bytes: tamaño esperado/DB/disco idénticos, SHA-256 `df5a060e1840aa77a61fdbb8f721cce810e6db48a8faa92e30bff76ac3cfe90d` idéntico en emisor/respuesta/DB/readback y archivo abierto con el miembro esperado. El v2 original completo ya no existe; el único archivo hallado es el corrupto y permanece `sha256=NULL`/no verificado.
+- **Upstream:** no se encontró equivalente en `origin/main` ni issue/PR por búsqueda de attachments truncados, checksum o SHA-256.
+- **Estado de activación:** `ACTIVE_LOCAL`; CLI y nuevos workers cargan la corrección por proceso. Procesos/TUI ya vivos conservan su schema de tool anterior hasta una sesión nueva; no se reinicia esta TUI para no destruir la conversación activa.
+- **Gate de retirada:** sobre una revisión upstream objetivo, exigir claims pre-transporte para inline base64, identidad server-computed persistida y retornada, rechazo de escritura parcial, migración legacy no certificante y E2E tar.gz byte-for-byte antes de retirar el parche.
 
 ## HLP-247 — un padre archivado no es un padre completado
 
