@@ -142,6 +142,18 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Estado de activación:** `ACTIVE_LOCAL`; un Supervisor nuevo cargó el handler en proceso fresco y creó `t_850223ff` con `project_id=p_227bd972`, worktree y rama resueltos. La guardia negó reiniciar el gateway desde su propio proceso y no se rodeó; este handler se ejecuta en cada worker fresco y quedó probado por la ruta real.
 - **Gate de retirada:** sobre una revisión upstream objetivo sin este hunk local, repetir las dos regresiones y la creación real cross-profile; retirar solo si el hijo conserva Project, worktree y rama y un Project conflictivo es rechazado.
 
+## HLP-247 — un padre archivado no es un padre completado
+
+- **Motivo:** `recompute_ready` trataba `archived` como equivalente a `done` en la puerta de dependencias. Al archivar un padre, un hijo en `blocked` cuyo bloqueo precede al evento `blocked{initial:true}` (2026-08-20) no es visible para `_has_sticky_block`, se promovía a `ready` dentro de `archive_task` y el dispatcher lo despachaba sin ningún `unblock`. Observado en real: limpiar el tablero relanzó `t_b02bdbad`, bloqueada desde el 2026-08-18, que llegó a ejecutar trabajo contra un contrato obsoleto.
+- **Archivos activos principales:**
+  - `hermes_cli/kanban_db.py`
+  - `tests/hermes_cli/test_kanban_blocked_sticky.py`
+- **Cambio local:** en `recompute_ready`, las tareas en `blocked` exigen padres `done`; las tareas en `todo` conservan la puerta histórica `(done, archived)`. Una sola condición; no toca stickiness, circuit breaker ni migración de datos.
+- **Evidencia:** RED `1 failed, 8 passed` (falla exactamente `assert 'ready' == 'blocked'` al archivar); GREEN `9 passed`; reproducción aislada `/tmp/repro_blocked_promotion.py` deja de reproducir.
+- **Upstream:** `NousResearch/hermes-agent@main` verificado **no corregido** (mismo gate `("done","archived")`, mismo `_has_sticky_block`, `archive_task` sigue llamando a `recompute_ready`). Aether #247. Sin PR upstream todavía.
+- **Estado de activación:** `ACTIVE_LOCAL`.
+- **Gate de retirada:** sobre una revisión upstream objetivo sin este hunk, repetir las tres regresiones; retirar sólo si el hijo `blocked` sigue bloqueado al archivar el padre, el hijo `todo` sí se libera y el hijo no-sticky con padre `done` sí se promueve.
+
 ## Procedimiento obligatorio antes de actualizar Hermes
 
 1. Registrar aquí la versión y commit objetivo; no activar todavía esa revisión.
