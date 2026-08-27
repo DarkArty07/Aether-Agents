@@ -1367,6 +1367,46 @@ def test_out_of_band_native_reconciliation_is_allowlisted_causal_and_retry_prese
         assert forbidden not in disk
 
 
+def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from hermes_cli import projects_db
+
+    from aether_agents.observation.capture import hermes_plugin
+
+    project, paths = _install_project(monkeypatch, tmp_path)
+    board, state_home = _create_native_databases(tmp_path)
+    with projects_db.connect_closing(state_home / "projects.db") as connection:
+        runtime_project_id = projects_db.create_project(
+            connection,
+            name="Fixture",
+            slug="fixture",
+            primary_path=str(project),
+        )
+    with sqlite3.connect(board) as connection:
+        connection.execute(
+            "UPDATE tasks SET project_id=? WHERE id IN ('t_11111111','t_22222222')",
+            (runtime_project_id,),
+        )
+    monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
+    monkeypatch.setenv("HERMES_HOME", str(state_home))
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+
+    observer = hermes_plugin._Observer(FakePluginContext())
+    assert observer._collector is not None
+    observer._reconcile_native()
+    observer.unload()
+    events = _journal_events(paths)
+    bindings = {
+        event["work_unit"]["task_ref"]
+        for event in events
+        if event["event_type"] == "work_unit.bound"
+    }
+    assert {"t_11111111", "t_22222222"} <= bindings
+    assert all(event["project_id"] == PROJECT_ID for event in events)
+
+
 def test_native_reconciliation_rejects_content_shaped_identities_before_aether_persistence(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

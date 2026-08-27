@@ -1086,12 +1086,14 @@ class _Observer:
         connection.row_factory = sqlite3.Row
         try:
             connection.execute("PRAGMA query_only=ON")
+            project_ids = self._native_project_ids(collector)
+            placeholders = ",".join("?" for _ in project_ids)
             rows = connection.execute(
                 "SELECT id, assignee, status, created_at, started_at, completed_at, "
                 "project_id, idempotency_key, max_runtime_seconds, "
                 "last_heartbeat_at, current_run_id, session_id "
-                "FROM tasks WHERE project_id=? AND status!='archived'",
-                (collector.paths.project_id,),
+                f"FROM tasks WHERE project_id IN ({placeholders}) AND status!='archived'",
+                project_ids,
             ).fetchall()
             tasks: dict[str, dict[str, Any]] = {}
             session_candidates: set[str] = set()
@@ -1273,6 +1275,32 @@ class _Observer:
             )
         finally:
             connection.close()
+
+    def _native_project_ids(self, collector: Collector) -> tuple[str, ...]:
+        """Translate a verified Aether UUID to exact Hermes Project ids."""
+        identifiers = {collector.paths.project_id}
+        registry = self._resolver.registry
+        if not registry.verify_with_marker(collector.paths.project_id):
+            return tuple(sorted(identifiers))
+        project_path = registry.project_path(collector.paths.project_id)
+        if project_path is None:
+            return tuple(sorted(identifiers))
+        try:
+            expected = project_path.resolve(strict=True)
+            from hermes_cli import projects_db  # type: ignore[import-not-found]
+
+            with projects_db.connect_closing() as connection:
+                for project in projects_db.list_projects(connection):
+                    primary = getattr(project, "primary_path", None)
+                    if primary and Path(primary).resolve(strict=True) == expected:
+                        project_id = safe_ref(getattr(project, "id", None))
+                        if project_id is not None:
+                            identifiers.add(project_id)
+        except Exception:
+            # Hook-time correlation still works. Native recovery never falls
+            # back to name, cwd, recency, or fuzzy path matching.
+            pass
+        return tuple(sorted(identifiers))
 
     def _reconcile_owner_candidate(
         self,
