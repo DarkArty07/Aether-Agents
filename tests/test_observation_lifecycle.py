@@ -2840,6 +2840,7 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
         release_lock=_write_release_lock(
             tmp_path,
             "1.0.0",
+            aether_wheel_sha256=hashlib.sha256(first_wheel.read_bytes()).hexdigest(),
             source_tree_sha256=hermes_source_tree_sha256,
         ),
         expected_active_release_id=None,
@@ -2957,6 +2958,7 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
         release_lock=_write_release_lock(
             tmp_path,
             "1.0.1",
+            aether_wheel_sha256=hashlib.sha256(second_wheel.read_bytes()).hexdigest(),
             source_tree_sha256=hermes_source_tree_sha256,
         ),
         expected_active_release_id=first.release_id,
