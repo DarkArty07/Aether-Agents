@@ -3,8 +3,9 @@
 
 Suites:
 - canary: 01, 03, 07, 08, 11
-- full: 01..15 once
-- reliability: full matrix plus the five canaries again (20 runs total)
+- full: 01..16 once
+- reliability: full matrix plus the five canaries again (21 runs total; E2E-16 is
+  excluded from the rolling reliability score because it is a qualification lane)
 
 Only live PASS/FAIL results enter the rolling reliability score. Prepare-only runs
 validate fixtures/harness construction but never count as agent reliability evidence.
@@ -32,14 +33,14 @@ ROOT = source_root()
 RUNNER_MODULE = "aether_agents.lab.runner"
 
 CANARY = (1, 3, 7, 8, 11)
-FULL = tuple(range(1, 16))
+FULL = tuple(range(1, 17))
 SUITES = {
     "canary": CANARY,
     "full": FULL,
     "reliability": FULL + CANARY,
     "observation": (),
 }
-SERIAL_SCENARIOS = frozenset({15})
+SERIAL_SCENARIOS = frozenset({15, 16})
 
 
 def _append_jsonl(path: Path, value: dict[str, Any]) -> None:
@@ -69,6 +70,7 @@ def score_history(records: list[dict[str, Any]]) -> dict[str, Any]:
         if str(record.get("mode", "")).startswith("live")
         and record.get("kind") != "observation"
         and record.get("suite") != "observation"
+        and record.get("rolling_reliability_counted", True) is not False
     ]
     window = live[-20:]
     last_ten = live[-10:]
@@ -146,7 +148,7 @@ def _compact_result(payload: dict[str, Any], *, number: int, suite: str) -> dict
         "guard_denials_ok", "observed_protected_edge_violation", "aether_self_modification",
         "fault_recovered", "missing_required_paths", "present_forbidden_paths", "board_task_count",
         "board_settled", "board_successful", "persistent_autonomous_wake_qualified",
-        "rolling_reliability_counted",
+        "rolling_reliability_counted", "reason", "affinity",
     }
     result = {key: payload[key] for key in allowed if key in payload}
     result.setdefault("scenario", f"e2e-{number:02d}")

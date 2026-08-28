@@ -1,0 +1,13 @@
+{
+  "id": "e2e-16",
+  "fixture": "two-component-feature",
+  "owner_message": "Implementa la feature completa de saludo mediante el pipeline. El flujo debe conservar una sola sesión Supervisor por este flow para descomposición, review e integración; cada Implementer debe ser nuevo y trabajar en su propio worktree. Después de enlazar la primera sesión Supervisor, verifica en el board aislado que otro flow, otro Project y otro rol no pueden reutilizarla, que una generación obsoleta no puede escribir y que un hito interno no despierta al origen. Verifica también las rutas terminal, input y revisión. Registra únicamente en metadata acotada bajo affinity_controls los resultados observables, sin incluir prompts, respuestas, comandos, logs o rutas. Verifica la aceptación y devuelve el resultado terminal sin pedir otra intervención del propietario.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1800,
+  "max_dispatch_passes": 120,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}

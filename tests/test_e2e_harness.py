@@ -29,11 +29,11 @@ import run as e2e_run  # noqa: E402
 from synthetic_owner import ScenarioError, load_scenario, matching_reply  # noqa: E402
 
 
-def test_all_15_scenarios_are_strict_and_have_existing_fixtures() -> None:
+def test_all_16_scenarios_are_strict_and_have_existing_fixtures() -> None:
     paths = sorted(SCENARIOS.glob("e2e-*.json"))
-    assert len(paths) == 15
+    assert len(paths) == 16
     scenarios = [load_scenario(path) for path in paths]
-    assert [scenario.id for scenario in scenarios] == [f"e2e-{i:02d}" for i in range(1, 16)]
+    assert [scenario.id for scenario in scenarios] == [f"e2e-{i:02d}" for i in range(1, 17)]
     for scenario in scenarios:
         assert (FIXTURES / scenario.fixture).is_dir()
         assert scenario.acceptance_command

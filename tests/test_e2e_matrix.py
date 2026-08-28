@@ -85,6 +85,22 @@ def test_reliability_gate_fails_on_any_guard_recovery_edge_violation_or_self_mut
         assert gate["passed"] is False
 
 
+def test_e2e16_is_excluded_from_rolling_reliability_even_when_live() -> None:
+    records = _passing_window()
+    records.append(
+        {
+            "scenario": "e2e-16",
+            "mode": "live-persistent",
+            "status": "PASS",
+            "expected_route": "pipeline",
+            "rolling_reliability_counted": False,
+        }
+    )
+    gate = matrix.score_history(records)
+    assert gate["live_run_count"] == 20
+    assert gate["window_passes"] == 19
+
+
 def test_reliability_gate_requires_representative_route_families() -> None:
     records = [_record(route="direct") for _ in range(20)]
     gate = matrix.score_history(records)
@@ -122,6 +138,34 @@ def test_prepare_only_canary_builds_five_isolated_runs_but_does_not_count_as_rel
     assert report["rolling_reliability_gate"]["passed"] is False
     assert (matrix_root / "matrix.json").is_file()
     assert len(history.read_text(encoding="utf-8").splitlines()) == 5
+
+
+def test_prepare_only_full_matrix_includes_serial_e2e16(tmp_path: Path) -> None:
+    matrix_root = tmp_path / "matrix"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(MATRIX),
+            "--suite",
+            "full",
+            "--prepare-only",
+            "--parallel",
+            "2",
+            "--matrix-root",
+            str(matrix_root),
+            "--history",
+            str(tmp_path / "history.jsonl"),
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(completed.stdout)
+    assert len(report["runs"]) == 16
+    assert next(item for item in report["runs"] if item["scenario"] == "e2e-15")["parallel"] == 1
+    assert next(item for item in report["runs"] if item["scenario"] == "e2e-16")["parallel"] == 1
 
 
 def test_live_matrix_refuses_spend_before_creating_matrix_or_invoking_hermes(

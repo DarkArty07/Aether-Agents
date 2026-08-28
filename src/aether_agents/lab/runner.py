@@ -46,6 +46,7 @@ if not SCENARIOS.is_dir():
 SYNC_HOOKS = ROOT / "scripts" / "sync_policy_hooks.py"
 VERSION_FILE = ROOT / "VERSION"
 
+from .affinity import qualify_affinity_evidence  # noqa: E402
 from .collect import git_diff, git_snapshot, run_command, write_json  # noqa: E402
 from .dispatch import board_list, dispatch_until_settled, hermes_argv, snapshot_board  # noqa: E402
 from .synthetic_owner import Scenario, ScenarioError, load_scenario, matching_reply  # noqa: E402
@@ -551,6 +552,370 @@ def _origin_morfeo_session_id(hermes_root: Path) -> str:
     return identifiers[0]
 
 
+def _decode_task_affinity(value: object) -> dict[str, object] | None:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _supervisor_flow_id(tasks: list[dict[str, object]]) -> str | None:
+    for task in tasks:
+        if str(task.get("assignee", "")).casefold() != "supervisor":
+            continue
+        affinity = _decode_task_affinity(task.get("session_affinity"))
+        flow_id = affinity.get("flow_id") if affinity else None
+        if isinstance(flow_id, str) and flow_id:
+            return flow_id
+    return None
+
+
+def _supervisor_project_id(tasks: list[dict[str, object]]) -> str | None:
+    for task in tasks:
+        if str(task.get("assignee", "")).casefold() == "supervisor":
+            project_id = task.get("project_id")
+            if isinstance(project_id, str) and project_id:
+                return project_id
+    return None
+
+
+def _review_integration_observed(tasks: list[dict[str, object]]) -> bool:
+    labels = [
+        str(task.get(key, "")).casefold()
+        for task in tasks
+        for key in ("title", "step_key", "task_type")
+    ]
+    joined = " ".join(labels)
+    return "review" in joined and "integrat" in joined
+
+
+def _board_affinity_row(board: Path, flow_id: str) -> dict[str, object] | None:
+    if not board.is_file():
+        return None
+    try:
+        with sqlite3.connect(board) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT board, project_id, flow_id, assignee, session_id, generation, "
+                "workspace_path, owner_task_id FROM kanban_session_affinity WHERE flow_id = ? "
+                "AND assignee = 'supervisor' ORDER BY generation DESC LIMIT 1",
+                (flow_id,),
+            ).fetchone()
+            return dict(row) if row is not None else None
+    except sqlite3.Error:
+        return None
+
+
+def _board_affinity_table_exists(board: Path) -> bool:
+    if not board.is_file():
+        return False
+    try:
+        with sqlite3.connect(board) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                "AND name = 'kanban_session_affinity'"
+            ).fetchone()
+    except sqlite3.Error:
+        return False
+    return row is not None
+
+
+def _affinity_generation(row: dict[str, object] | None) -> int:
+    value = row.get("generation") if row else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _running_supervisor_worker(board: Path) -> tuple[int, str, str] | None:
+    if not board.is_file():
+        return None
+    try:
+        with sqlite3.connect(board) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT id, worker_pid, workspace_path FROM tasks "
+                "WHERE assignee = 'supervisor' AND status = 'running' "
+                "AND worker_pid IS NOT NULL ORDER BY id"
+            ).fetchall()
+    except sqlite3.Error:
+        return None
+    for row in rows:
+        try:
+            pid = int(row["worker_pid"])
+        except (TypeError, ValueError):
+            continue
+        if pid > 0 and _pid_uses_board(pid, board):
+            return pid, str(row["id"]), str(row["workspace_path"] or "")
+    return None
+
+
+def _session_message_count(database: Path, session_id: str) -> int:
+    if not database.is_file():
+        return 0
+    try:
+        with sqlite3.connect(database) as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
+            ).fetchone()
+    except sqlite3.Error:
+        return 0
+    return int(row[0]) if row else 0
+
+
+def _role_session_ids(database: Path) -> list[str]:
+    if not database.is_file():
+        return []
+    try:
+        with sqlite3.connect(database) as conn:
+            rows = conn.execute(
+                "SELECT id FROM sessions WHERE source = 'kanban' ORDER BY started_at"
+            ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [str(row[0]) for row in rows if row and row[0]]
+
+
+def _affinity_control_metadata(board: Path, flow_id: str) -> dict[str, object]:
+    """Read only the explicitly whitelisted control receipts from task metadata."""
+    controls: dict[str, object] = {}
+    if not board.is_file():
+        return controls
+    try:
+        with sqlite3.connect(board) as conn:
+            rows = conn.execute(
+                "SELECT metadata FROM task_runs WHERE metadata IS NOT NULL"
+            ).fetchall()
+    except sqlite3.Error:
+        return controls
+    allowed = {
+        "other_flow_rejected", "other_project_rejected", "other_role_rejected",
+        "stale_generation_rejected", "internal_milestone_route", "terminal_route",
+        "input_route", "revision_route", "other_flow_session_id",
+        "other_project_session_id", "other_profile_session_id",
+    }
+    for row in rows:
+        try:
+            metadata = json.loads(row[0])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(metadata, dict):
+            continue
+        candidate = metadata.get("affinity_controls")
+        if not isinstance(candidate, dict) or candidate.get("flow_id") != flow_id:
+            continue
+        for key in allowed:
+            value = candidate.get(key)
+            if isinstance(value, bool) or isinstance(value, str):
+                controls[key] = value
+    return controls
+
+
+def _affinity_record(
+    scenario: Scenario,
+    qualification: Any,
+    *,
+    evidence: Path,
+    baseline_acceptance: bool,
+    aether_project_id: str,
+    hermes_project_id: str,
+    observed_route: str,
+    acceptance_passed: bool,
+    missing_paths: list[str],
+    forbidden_paths: list[str],
+    board_state: object | None,
+    aether_self_modification: bool,
+) -> dict[str, Any]:
+    record = qualification.to_evidence()
+    if record.get("status") == "PASS" and (
+        not acceptance_passed
+        or observed_route != scenario.expected_route
+        or bool(missing_paths)
+        or bool(forbidden_paths)
+        or aether_self_modification
+        or not (board_state and getattr(board_state, "settled", False)
+                and getattr(board_state, "successful", False))
+    ):
+        record["status"] = "FAIL"
+        record["reason"] = "e2e_acceptance_failed"
+    record.update(
+        {
+            "observed_route": observed_route,
+            "route_ok": observed_route == scenario.expected_route,
+            "acceptance_passed": acceptance_passed,
+            "baseline_acceptance_passed": baseline_acceptance,
+            "aether_project_id": aether_project_id,
+            "hermes_project_id": hermes_project_id,
+            "missing_required_paths": missing_paths,
+            "present_forbidden_paths": forbidden_paths,
+            "board_task_count": len(getattr(board_state, "tasks", ())) if board_state else 0,
+            "board_settled": bool(getattr(board_state, "settled", False)) if board_state else False,
+            "board_successful": bool(getattr(board_state, "successful", False)) if board_state else False,
+            "aether_self_modification": aether_self_modification,
+            "persistent_autonomous_wake_qualified": False,
+            "rolling_reliability_counted": False,
+        }
+    )
+    compact = _compact_run_record(record)
+    write_json(evidence / "run.json", compact)
+    return compact
+
+
+def _live_affinity_lane(
+    scenario: Scenario,
+    *,
+    hermes: Path,
+    hermes_root: Path,
+    repo: Path,
+    env: dict[str, str],
+    commands: Path,
+    evidence: Path,
+    aether_project_id: str,
+    hermes_project_id: str,
+    baseline_acceptance: bool,
+    source_status_before: str,
+    initial_tasks: list[dict[str, object]],
+) -> dict[str, Any]:
+    """Run E2E-16 through Hermes's native affinity dispatcher path.
+
+    The first Supervisor worker is terminated only after its native session row
+    binds. Hermes then reclaims the disposable task and dispatches it again. No
+    reconstructed conversation is sent by this harness; the resumed worker must
+    use the native ``--resume`` path selected by the dispatcher.
+    """
+    board = Path(env["HERMES_KANBAN_DB"]).resolve()
+    flow_id = _supervisor_flow_id(initial_tasks)
+    project_id = _supervisor_project_id(initial_tasks)
+    if flow_id is None:
+        qualification = qualify_affinity_evidence({"runtime_available": False})
+        return _affinity_record(
+            scenario, qualification, evidence=evidence,
+            baseline_acceptance=baseline_acceptance,
+            aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
+            observed_route=_detect_route(initial_tasks, repo), acceptance_passed=False,
+            missing_paths=[], forbidden_paths=[], board_state=None,
+            aether_self_modification=False,
+        )
+
+    runtime_available = _board_affinity_table_exists(board)
+    first_row = _board_affinity_row(board, flow_id)
+    dispatch = run_command(
+        hermes_argv(hermes, "morfeo", "kanban", "dispatch", "--json", "--max", "1"),
+        cwd=repo, env=env, log_path=commands, timeout_seconds=min(60, scenario.timeout_seconds),
+    )
+    if dispatch.returncode != 0:
+        qualification = qualify_affinity_evidence({"runtime_available": runtime_available})
+        return _affinity_record(
+            scenario, qualification, evidence=evidence,
+            baseline_acceptance=baseline_acceptance,
+            aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
+            observed_route="pipeline", acceptance_passed=False,
+            missing_paths=[], forbidden_paths=[], board_state=None,
+            aether_self_modification=False,
+        )
+
+    worker: tuple[int, str, str] | None = None
+    deadline = time.monotonic() + min(15.0, max(2.0, scenario.timeout_seconds))
+    while time.monotonic() < deadline and worker is None:
+        worker = _running_supervisor_worker(board)
+        if worker is None:
+            time.sleep(0.1)
+    first_row = _board_affinity_row(board, flow_id) or first_row
+    first_session = str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
+    first_generation = _affinity_generation(first_row)
+    terminated = False
+    reclaim_succeeded = False
+    task_id = worker[1] if worker else None
+    if worker is not None:
+        pid = worker[0]
+        try:
+            os.kill(pid, signal.SIGTERM)
+            terminated = True
+        except ProcessLookupError:
+            terminated = False
+        if task_id:
+            while _pid_alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            reclaimed = run_command(
+                hermes_argv(
+                    hermes, "morfeo", "kanban", "reclaim", task_id,
+                    "--reason", "e2e-16 disposable process-boundary probe",
+                ),
+                cwd=repo, env=env, log_path=commands, timeout_seconds=30,
+            )
+            reclaim_succeeded = reclaimed.returncode == 0
+
+    board_state = dispatch_until_settled(
+        hermes, cwd=repo, env=env, commands_log=commands, evidence_dir=evidence,
+        max_passes=scenario.max_dispatch_passes, timeout_seconds=scenario.timeout_seconds,
+    )
+    final_tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
+    final_row = _board_affinity_row(board, flow_id)
+    resumed_session = str(final_row.get("session_id")) if final_row and final_row.get("session_id") else None
+    controls = _affinity_control_metadata(board, flow_id)
+    supervisor_db = hermes_root / "profiles" / "supervisor" / "state.db"
+    implementer_db = hermes_root / "profiles" / "implementer" / "state.db"
+    implementer_sessions = _role_session_ids(implementer_db)
+    task_workspaces = {
+        str(task.get("workspace_path"))
+        for task in final_tasks
+        if task.get("workspace_path")
+    }
+    workspace = str(final_row.get("workspace_path")) if final_row else ""
+    receipt = {
+        "runtime_available": runtime_available,
+        "flow_id": flow_id,
+        "first_supervisor_session_id": first_session,
+        "resumed_supervisor_session_id": resumed_session,
+        "implementer_session_ids": implementer_sessions,
+        "other_flow_session_id": controls.get("other_flow_session_id"),
+        "other_project_session_id": controls.get("other_project_session_id"),
+        "other_profile_session_id": controls.get("other_profile_session_id"),
+        "first_process_exit": -signal.SIGTERM if terminated else None,
+        "resumed_process_exit": 0 if board_state.successful else 1,
+        "resume_invoked": bool(first_session and resumed_session),
+        "workspace_pinned": bool(workspace and workspace in task_workspaces),
+        "prior_tool_evidence_observed": bool(
+            first_session and _session_message_count(supervisor_db, first_session) > 0
+        ),
+        "reconstructed_input_sent": False,
+        "stale_generation_rejected": controls.get("stale_generation_rejected") is True,
+        "implementer_fresh": bool(implementer_sessions)
+        and all(session not in {first_session, resumed_session} for session in implementer_sessions),
+        "internal_milestone_route": controls.get("internal_milestone_route", "missing"),
+        "terminal_route": controls.get("terminal_route", "missing"),
+        "input_route": controls.get("input_route", "missing"),
+        "revision_route": controls.get("revision_route", "missing"),
+        "flow_binding_ok": bool(final_row and final_row.get("flow_id") == flow_id),
+        "project_binding_ok": bool(final_row and final_row.get("project_id") == project_id),
+        "profile_binding_ok": bool(final_row and final_row.get("assignee") == "supervisor"),
+        "other_flow_rejected": controls.get("other_flow_rejected") is True,
+        "other_project_rejected": controls.get("other_project_rejected") is True,
+        "other_role_rejected": controls.get("other_role_rejected") is True,
+        "review_integration_observed": _review_integration_observed(final_tasks),
+        "reclaim_succeeded": reclaim_succeeded
+        or bool(
+            final_row
+            and _affinity_generation(final_row) > first_generation
+        ),
+    }
+    qualification = qualify_affinity_evidence(receipt)
+    acceptance_passed = _run_acceptance(scenario, repo, env, commands, evidence, "final")
+    missing_paths, forbidden_paths = _check_paths(repo, scenario)
+    source_status_after = _source_status(commands, env)
+    return _affinity_record(
+        scenario, qualification, evidence=evidence,
+        baseline_acceptance=baseline_acceptance,
+        aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
+        observed_route=_detect_route(final_tasks, repo), acceptance_passed=acceptance_passed,
+        missing_paths=missing_paths, forbidden_paths=forbidden_paths,
+        board_state=board_state, aether_self_modification=source_status_after != source_status_before,
+    )
+
+
 def _check_paths(repo: Path, scenario: Scenario) -> tuple[list[str], list[str]]:
     missing = [path for path in scenario.required_paths if not (repo / path).exists()]
     forbidden = [path for path in scenario.forbidden_paths if (repo / path).exists()]
@@ -635,6 +1000,7 @@ def _compact_run_record(record: Mapping[str, Any]) -> dict[str, Any]:
         "fault_recovered", "missing_required_paths", "present_forbidden_paths", "board_task_count",
         "board_settled", "board_successful", "persistent_autonomous_wake_qualified",
         "parallel", "parallel_peak", "isolation_verified", "rolling_reliability_counted",
+        "reason", "affinity",
     }
     compact = {key: record[key] for key in allowed if key in record}
     compact.update({"schema_version": "aether.lab.evidence.v1", "kind": "run"})
@@ -675,11 +1041,11 @@ def live_run(
     profile_root: Path,
     allow_model_spend: bool,
 ) -> dict[str, Any]:
-    run_root = _safe_run_root(run_root)
     if scenario.live_requires_spend and not allow_model_spend:
         raise HarnessError(
             "live scenario may consume model/provider quota; pass --allow-model-spend only after explicit authority"
         )
+    run_root = _safe_run_root(run_root)
     hermes = hermes.expanduser().resolve()
     if not hermes.is_file() or not os.access(hermes, os.X_OK):
         raise HarnessError(f"Hermes executable is unavailable: {hermes}")
@@ -728,6 +1094,23 @@ def live_run(
     turns.append(("Morfeo", morfeo_text))
     origin_session_id = _origin_morfeo_session_id(hermes_root)
 
+    tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
+    if scenario.id == "e2e-16":
+        return _live_affinity_lane(
+            scenario,
+            hermes=hermes,
+            hermes_root=hermes_root,
+            repo=repo,
+            env=env,
+            commands=commands,
+            evidence=evidence,
+            aether_project_id=aether_project_id,
+            hermes_project_id=runtime_project_id,
+            baseline_acceptance=baseline_acceptance,
+            source_status_before=source_status_before,
+            initial_tasks=tasks,
+        )
+
     owner_interventions = 0
     clarification_requested = bool(QUESTION_RE.search(morfeo_text))
     scripted = matching_reply(scenario, morfeo_text) if clarification_requested else None
@@ -765,7 +1148,6 @@ def live_run(
         write_json(evidence / "run.json", _compact_run_record(record))
         return record
 
-    tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
     board_state = None
     harness_continuations = 0
     if tasks:
@@ -919,7 +1301,8 @@ def main(argv: list[str] | None = None) -> int:
     cleanup_live_workers = False
     try:
         scenario = load_scenario(_scenario_path(args.scenario))
-        run_root = _safe_run_root(args.run_root or _default_run_root(scenario))
+        run_root = args.run_root or _default_run_root(scenario)
+        assert run_root is not None
         if args.prepare_only:
             record = prepare_only(scenario, run_root)
         else:

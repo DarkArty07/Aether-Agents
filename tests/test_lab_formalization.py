@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from aether_agents import lab
-from aether_agents.lab import matrix, persistent
+from aether_agents.lab import affinity, matrix, persistent, runner
 
 FORBIDDEN_EVIDENCE_KEYS = {
     "environment",
@@ -27,8 +27,8 @@ FORBIDDEN_EVIDENCE_KEYS = {
 
 
 def test_formal_lab_loads_the_full_compatibility_set_from_packaged_resources() -> None:
-    scenarios = [lab.load_scenario(f"e2e-{index:02d}") for index in range(1, 16)]
-    assert [scenario.id for scenario in scenarios] == [f"e2e-{index:02d}" for index in range(1, 16)]
+    scenarios = [lab.load_scenario(f"e2e-{index:02d}") for index in range(1, 17)]
+    assert [scenario.id for scenario in scenarios] == [f"e2e-{index:02d}" for index in range(1, 17)]
     assert lab.schema_bytes("scenario")
     assert lab.schema_bytes("fixture-manifest")
     assert lab.schema_bytes("evidence")
@@ -292,12 +292,157 @@ def test_full_prepare_matrix_bounds_parallelism_and_serializes_e2e15(tmp_path: P
     )
     assert completed.returncode == 0, completed.stderr
     report = json.loads(completed.stdout)
-    assert len(report["runs"]) == 15
+    assert len(report["runs"]) == 16
     assert report["parallel"] == 2
     assert report["isolation_verified"] is True
     assert report["rolling_reliability_gate"]["live_run_count"] == 0
     assert next(item for item in report["runs"] if item["scenario"] == "e2e-15")["parallel"] == 1
-    assert len([path for path in matrix_root.iterdir() if path.is_dir()]) == 15
+    assert len([path for path in matrix_root.iterdir() if path.is_dir()]) == 16
+
+
+def test_e2e16_is_a_serial_persistent_affinity_scenario() -> None:
+    scenario = lab.load_scenario("e2e-16")
+    assert scenario.id == "e2e-16"
+    assert scenario.expected_route == "pipeline"
+    assert scenario.live_requires_spend is True
+    assert scenario.required_paths == (".aether/objective-contracts",)
+
+
+def test_affinity_qualification_requires_real_resume_and_all_negative_controls() -> None:
+    result = affinity.qualify_affinity_evidence(
+        {
+            "flow_id": "aether.flow.v1:" + "a" * 64,
+            "first_supervisor_session_id": "supervisor-session",
+            "resumed_supervisor_session_id": "supervisor-session",
+            "implementer_session_ids": ["implementer-session"],
+            "other_flow_session_id": "other-flow-session",
+            "other_project_session_id": "other-project-session",
+            "other_profile_session_id": "other-profile-session",
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": True,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "runtime_available": True,
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+        }
+    )
+    assert result.status == "PASS"
+    assert result.qualified is True
+    evidence = result.to_evidence()
+    assert evidence["rolling_reliability_counted"] is False
+    assert evidence["affinity"]["session_reused"] is True
+    assert evidence["affinity"]["reconstructed_input_sent"] is False
+    lab.validate_evidence(evidence)
+
+
+def test_affinity_qualification_reports_capability_wall_without_runtime() -> None:
+    result = affinity.qualify_affinity_evidence({"runtime_available": False})
+    assert result.status == "CAPABILITY_WALL"
+    assert result.reason == "runtime_prerequisite_unavailable"
+    assert result.qualified is False
+    lab.validate_evidence(result.to_evidence())
+
+
+def test_affinity_qualification_never_passes_when_a_generation_fence_control_fails() -> None:
+    result = affinity.qualify_affinity_evidence(
+        {
+            "runtime_available": True,
+            "flow_id": "aether.flow.v1:" + "c" * 64,
+            "first_supervisor_session_id": "supervisor-session",
+            "resumed_supervisor_session_id": "supervisor-session",
+            "implementer_session_ids": ["implementer-session"],
+            "other_flow_session_id": "other-flow-session",
+            "other_project_session_id": "other-project-session",
+            "other_profile_session_id": "other-role-session",
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": False,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+        }
+    )
+    assert result.status == "FAIL"
+    assert result.qualified is False
+    assert result.to_evidence()["affinity"]["controls_passed"] is False
+    lab.validate_evidence(result.to_evidence())
+
+
+def test_affinity_sqlite_fixture_uses_real_process_boundaries(tmp_path: Path) -> None:
+    receipt = affinity.run_sqlite_boundary_fixture(tmp_path / "fixture")
+    assert receipt["process_count"] == 3
+    assert len(set(receipt["process_ids"])) == 3
+    assert receipt["same_session"] is True
+    assert receipt["prior_tool_evidence_observed"] is True
+    assert receipt["stale_generation_rejected"] is True
+
+
+def test_e2e16_affinity_evidence_survives_runner_compaction() -> None:
+    result = affinity.qualify_affinity_evidence(
+        {
+            "flow_id": "aether.flow.v1:" + "b" * 64,
+            "first_supervisor_session_id": "supervisor-session",
+            "resumed_supervisor_session_id": "supervisor-session",
+            "implementer_session_ids": ["implementer-session"],
+            "other_flow_session_id": "other-flow-session",
+            "other_project_session_id": "other-project-session",
+            "other_profile_session_id": "other-role-session",
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": True,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "runtime_available": True,
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+        }
+    )
+    compact = runner._compact_run_record(result.to_evidence())
+    assert compact["affinity"]["flow_id"].startswith("aether.flow.v1:")
+    assert compact["rolling_reliability_counted"] is False
+    lab.validate_evidence(compact)
 
 
 def test_persistent_probe_rejects_one_shot_and_reports_native_capability_wall() -> None:
