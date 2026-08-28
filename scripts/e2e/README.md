@@ -1,6 +1,6 @@
 # Aether disposable E2E laboratory
 
-This directory is the small qualification harness for PD-71 through PD-74. It does not add a daemon, workflow engine, database, notifier, or evaluator model.
+This directory preserves the historical command surface for PD-71 through PD-76. The canonical implementation is the Hermes-free `aether_agents.lab` package and the canonical resources/operator documentation live under [`lab/`](../../lab/README.md); files here are thin compatibility wrappers. The laboratory does not add a daemon, workflow engine, database, notifier, or evaluator model.
 
 ## What is real
 

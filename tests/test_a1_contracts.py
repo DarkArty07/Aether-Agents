@@ -218,9 +218,9 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
         self.observation = OBS_SPEC_PATH.read_text(encoding="utf-8")
         self.research = OBS_RESEARCH_PATH.read_text(encoding="utf-8")
 
-    def test_product_definition_metadata_matches_the_pd74_stabilization_baseline(self) -> None:
-        self.assertIn("accepted current conceptual design through PD-74", self.design)
-        self.assertIn("`DESIGN.md` through PD-74", self.roadmap)
+    def test_product_definition_metadata_matches_the_pd76_stabilization_baseline(self) -> None:
+        self.assertIn("accepted current conceptual design through PD-76", self.design)
+        self.assertIn("`DESIGN.md` through PD-76", self.roadmap)
         self.assertIn("**Product-definition version**: `PD-74`", self.a1_spec)
         self.assertIn("PD-74 reliability gate", self.roadmap)
         self.assertNotIn(
@@ -273,8 +273,8 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
         self.assertIn("119 observation tests", self.observation)
         self.assertIn("zero hooks after unload", self.observation)
         self.assertIn("antecedent only and is non-qualifying", self.research)
-        self.assertIn("#195 remains open", self.roadmap)
-        self.assertIn("owner-approved controlled real trace", self.roadmap)
+        self.assertIn("#195` — curated semantic progress: **CLOSED", self.roadmap)
+        self.assertIn("observation lane was executed separately", self.roadmap)
 
 
 if __name__ == "__main__":

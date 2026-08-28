@@ -1,7 +1,7 @@
 # Aether Agents Roadmap
 
 **Decision authority**: Christopher
-**Current conceptual baseline**: `DESIGN.md` through PD-74
+**Current conceptual baseline**: `DESIGN.md` through PD-76
 **Current product contracts**: `specs/001-aether-v1-productization/`, `specs/002-aether-contract-observation/`, and the stabilization plan `specs/004-operational-simplification-and-e2e-reliability/plan.md`
 **Current synthesis/entry**: `specs/r13-synthesis-and-release/`, reopened until the PD-74 reliability gate passes
 **Selected Hermes base**: `NousResearch/hermes-agent` `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`
