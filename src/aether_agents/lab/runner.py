@@ -1568,12 +1568,25 @@ def _live_affinity_lane(
             time.sleep(0.1)
     first_row = _board_affinity_row(board, flow_id) or first_row
     first_session = str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
+    # The dispatcher makes the task visible as running before the worker's CLI
+    # has created and registered its durable Hermes session. Killing at that
+    # intermediate point leaves a generation with ``session_id=NULL`` that is
+    # intentionally not resumable. Wait for registration before exercising the
+    # process-boundary reclaim path.
+    while time.monotonic() < deadline and not first_session:
+        time.sleep(0.05)
+        first_row = _board_affinity_row(board, flow_id) or first_row
+        first_session = (
+            str(first_row.get("session_id"))
+            if first_row and first_row.get("session_id")
+            else None
+        )
     first_generation = _affinity_generation(first_row)
     terminated = False
     reclaim_command_succeeded = False
     task_id = worker[1] if worker else None
     authorized_workspace = worker[2] if worker else ""
-    if worker is not None:
+    if worker is not None and first_session:
         pid = worker[0]
         try:
             os.kill(pid, signal.SIGTERM)
