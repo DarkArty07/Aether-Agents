@@ -1069,26 +1069,55 @@ if os.path.isfile(board):
                                 and affinity.get("flow_id") == flow_id
                             )
 
-                    if _table(conn, "task_runs") and owner_task_id:
+                    affinity_tasks = set()
+                    affinity_task_rows = {}
+                    if _table(conn, "tasks"):
+                        columns = _columns(conn, "tasks")
+                        if "session_affinity" in columns:
+                            for task_row in conn.execute(
+                                "SELECT id, project_id, assignee, status, workspace_path, "
+                                "session_affinity FROM tasks"
+                            ).fetchall():
+                                try:
+                                    value = json.loads(task_row["session_affinity"] or "{}")
+                                except (TypeError, ValueError, json.JSONDecodeError):
+                                    value = {}
+                                if isinstance(value, dict) and value.get("flow_id") == flow_id:
+                                    affinity_tasks.add(task_row["id"])
+                                    affinity_task_rows[task_row["id"]] = (task_row, value)
+
+                    if _table(conn, "task_runs") and affinity_tasks:
+                        placeholders = ",".join("?" * len(affinity_tasks))
                         run_rows = conn.execute(
-                            "SELECT outcome FROM task_runs WHERE task_id = ? "
-                            "ORDER BY started_at, id",
-                            (owner_task_id,),
+                            "SELECT task_id, outcome FROM task_runs WHERE task_id IN ("
+                            + placeholders
+                            + ") ORDER BY started_at, id",
+                            tuple(sorted(affinity_tasks)),
                         ).fetchall()
-                        run_count = len(run_rows)
+                        completed_tasks = {
+                            str(row["task_id"])
+                            for row in run_rows
+                            if str(row["outcome"] or "").casefold()
+                            in {"completed", "success", "succeeded"}
+                        }
                         controls["resume_observed"] = bool(
-                            controls["resume_observed"] and run_count >= 2
+                            controls["resume_observed"]
+                            and len(completed_tasks) >= 2
+                            and requested_task_id in completed_tasks
                         )
-                        if run_count >= 2:
+                        if run_rows:
                             controls["resumed_process_exit"] = (
-                                0 if str(run_rows[-1]["outcome"]).casefold()
-                                in {"completed", "success", "succeeded"} else 1
+                                0
+                                if str(run_rows[-1]["outcome"] or "").casefold()
+                                in {"completed", "success", "succeeded"}
+                                else 1
                             )
                         controls["reclaim_observed"] = conn.execute(
-                            """SELECT 1 FROM task_runs
-                                WHERE task_id = ? AND lower(COALESCE(outcome, ''))
-                                   IN ('reclaimed', 'crashed', 'timed_out') LIMIT 1""",
-                            (owner_task_id,),
+                            "SELECT 1 FROM task_runs WHERE task_id IN ("
+                            + placeholders
+                            + ") AND lower(COALESCE(outcome, '')) "
+                            "IN ('reclaimed', 'crashed', 'timed_out') LIMIT 1",
+                            tuple(sorted(affinity_tasks)),
                         ).fetchone() is not None
 
                     event_rows = []
@@ -1098,20 +1127,6 @@ if os.path.isfile(board):
                         ).fetchall()
                     if any(row["kind"] == "reclaimed" for row in event_rows):
                         controls["reclaim_observed"] = True
-                    affinity_tasks = set()
-                    if _table(conn, "tasks"):
-                        columns = _columns(conn, "tasks")
-                        if "session_affinity" in columns:
-                            for task_row in conn.execute(
-                                "SELECT id, session_affinity FROM tasks"
-                            ).fetchall():
-                                try:
-                                    value = json.loads(task_row["session_affinity"] or "{}")
-                                except (TypeError, ValueError, json.JSONDecodeError):
-                                    value = {}
-                                if isinstance(value, dict) and value.get("flow_id") == flow_id:
-                                    affinity_tasks.add(task_row["id"])
-
                     internal_kinds = {
                         "completed", "blocked", "gave_up", "crashed", "timed_out",
                         "reclaimed", "review_requested", "changes_requested",
@@ -1236,10 +1251,48 @@ if os.path.isfile(board):
                         row["task_id"] for row in event_rows
                         if row["kind"] == "review_requested"
                     }
-                    controls["review_integration_observed"] = any(
-                        row["task_id"] in review_tasks
-                        and row["kind"] in {"completed", "flow_terminal"}
-                        for row in event_rows
+                    root_entry = affinity_task_rows.get(requested_task_id)
+                    terminal_entries = [
+                        (task_ref, task_row, affinity)
+                        for task_ref, (task_row, affinity) in affinity_task_rows.items()
+                        if affinity.get("terminal") is True
+                        and task_row["assignee"] == "supervisor"
+                        and task_row["project_id"] == project_id
+                    ]
+                    root_terminal_ok = False
+                    if root_entry is not None and len(terminal_entries) == 1:
+                        root_row, root_affinity = root_entry
+                        terminal_ref, terminal_row, terminal_affinity = terminal_entries[0]
+                        same_workspace = bool(
+                            root_row["workspace_path"]
+                            and terminal_row["workspace_path"]
+                            and os.path.realpath(str(root_row["workspace_path"]))
+                            == os.path.realpath(str(terminal_row["workspace_path"]))
+                            == os.path.realpath(str(main["workspace_path"]))
+                        )
+                        terminal_ran = False
+                        if _table(conn, "task_runs"):
+                            terminal_ran = conn.execute(
+                                "SELECT 1 FROM task_runs WHERE task_id = ? "
+                                "AND lower(COALESCE(outcome, '')) IN "
+                                "('completed', 'success', 'succeeded') LIMIT 1",
+                                (terminal_ref,),
+                            ).fetchone() is not None
+                        root_terminal_ok = bool(
+                            root_affinity.get("flow_id") == flow_id
+                            and root_affinity.get("terminal") is not True
+                            and terminal_affinity.get("flow_id") == flow_id
+                            and same_workspace
+                            and terminal_ran
+                            and _session(main["session_id"]) == _session(first_session)
+                        )
+                    controls["review_integration_observed"] = bool(
+                        root_terminal_ok
+                        and any(
+                            row["task_id"] in review_tasks
+                            and row["kind"] in {"completed", "flow_terminal"}
+                            for row in event_rows
+                        )
                     )
                     # Route classes are set only by ``native_routing_probe``
                     # above.  Merely seeing an event in SQLite is not evidence

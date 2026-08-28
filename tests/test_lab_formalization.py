@@ -655,8 +655,35 @@ with kanban_db.connect(db_path=board) as connection:
     kanban_db.register_session_affinity(
         connection, task, lease, session_id="main-supervisor-session"
     )
+    terminal_id = kanban_db.create_task(
+        connection,
+        title="native observer terminal review/integration",
+        assignee="supervisor",
+        parents=(task_id,),
+        workspace_kind="dir",
+        workspace_path=str(workspace),
+        project_id=project_id,
+        session_affinity={"flow_id": flow_id, "terminal": True},
+    )
+    kanban_db.add_notify_sub(
+        connection, task_id=task_id, platform="e2e16", chat_id="origin"
+    )
+    kanban_db._append_event(
+        connection, terminal_id, "review_requested", {"control": "native"}
+    )
+    kanban_db.complete_task(connection, task_id, result="decomposed")
+    terminal = kanban_db.claim_task(connection, terminal_id, claimer="fixture-terminal")
+    terminal_lease = kanban_db.reserve_session_affinity(
+        connection, terminal, workspace_path=str(workspace), board="main"
+    )
+    assert terminal_lease.session_id == "main-supervisor-session"
+    kanban_db.register_session_affinity(
+        connection, terminal, terminal_lease, session_id="main-supervisor-session"
+    )
+    kanban_db.complete_task(connection, terminal_id, result="integrated")
     state.close()
-print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_id}))
+print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_id,
+                  "terminal_id": terminal_id}))
 '''
     env = os.environ.copy()
     env.update(
@@ -691,6 +718,9 @@ print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_
     )
 
     assert controls["native_control_lifecycle_observed"] is True
+    assert controls["review_integration_observed"] is True
+    assert controls["workspace_pinned"] is True
+    assert controls["resume_observed"] is True
     assert controls["other_flow_session_id"] != "unavailable"
     assert controls["other_project_session_id"] != "unavailable"
     assert controls["other_role_session_id"] != "unavailable"
