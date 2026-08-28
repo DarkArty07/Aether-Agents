@@ -137,6 +137,7 @@ def test_profile_preparation_copies_only_config_tracked_soul_and_candidate_hook(
         assert "/private/" not in config
         assert str(target / "hooks" / "aether_pre_tool_policy.py") in config
         assert "hooks_auto_accept: true" in config
+        assert "approvals:\n  mode: false" in config
         assert "SECRET-RUNTIME-STATE" not in "\n".join(
             path.read_text(encoding="utf-8", errors="ignore")
             for path in target.rglob("*")

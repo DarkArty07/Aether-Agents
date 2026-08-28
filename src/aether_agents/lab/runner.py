@@ -219,6 +219,18 @@ def _patch_profile_hook(config_text: str, hook_path: Path) -> str:
         updated = auto_accept_pattern.sub("hooks_auto_accept: true", updated, count=1)
     else:
         updated = updated.rstrip() + "\nhooks_auto_accept: true\n"
+    approvals_pattern = re.compile(r"(?ms)^approvals:\n(?P<body>(?:^[ \t]+.*(?:\n|$))*)")
+    approvals = approvals_pattern.search(updated)
+    if approvals is None:
+        updated = updated.rstrip() + "\napprovals:\n  mode: false\n"
+    else:
+        block = approvals.group(0)
+        mode_pattern = re.compile(r"(?m)^[ \t]+mode:\s*.*$")
+        if mode_pattern.search(block):
+            replacement = mode_pattern.sub("  mode: false", block, count=1)
+        else:
+            replacement = "approvals:\n  mode: false\n" + approvals.group("body")
+        updated = updated[: approvals.start()] + replacement + updated[approvals.end() :]
     return updated
 
 
