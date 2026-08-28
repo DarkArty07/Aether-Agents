@@ -178,6 +178,13 @@ def _text(receipts: Mapping[str, Any], key: str) -> str | None:
     return value.strip()
 
 
+def _observed_session(receipts: Mapping[str, Any], key: str) -> str | None:
+    value = _text(receipts, key)
+    if value is None or value.casefold() == "unavailable":
+        return None
+    return value
+
+
 def _boolean(receipts: Mapping[str, Any], key: str) -> bool:
     return receipts.get(key) is True
 
@@ -200,14 +207,19 @@ def _session_ids(receipts: Mapping[str, Any]) -> list[str]:
         return []
     result: list[str] = []
     for value in values:
-        if isinstance(value, str) and _SAFE_TEXT_RE.fullmatch(value.strip()):
-            result.append(value.strip())
+        if not isinstance(value, str):
+            continue
+        candidate = value.strip()
+        if candidate.casefold() == "unavailable":
+            continue
+        if _SAFE_TEXT_RE.fullmatch(candidate):
+            result.append(candidate)
     return result
 
 
 def _facts(receipts: Mapping[str, Any]) -> dict[str, Any]:
-    first = _text(receipts, "first_supervisor_session_id")
-    resumed = _text(receipts, "resumed_supervisor_session_id")
+    first = _observed_session(receipts, "first_supervisor_session_id")
+    resumed = _observed_session(receipts, "resumed_supervisor_session_id")
     implementers = _session_ids(receipts)
     flow_candidate = _text(receipts, "flow_id")
     flow_id = flow_candidate if flow_candidate and _FLOW_ID_RE.fullmatch(flow_candidate) else None
@@ -219,11 +231,11 @@ def _facts(receipts: Mapping[str, Any]) -> dict[str, Any]:
         "first_supervisor_session_id": first or "unavailable",
         "resumed_supervisor_session_id": resumed or "unavailable",
         "implementer_session_ids": implementers,
-        "other_flow_session_id": _text(receipts, "other_flow_session_id") or "unavailable",
-        "other_project_session_id": _text(receipts, "other_project_session_id") or "unavailable",
+        "other_flow_session_id": _observed_session(receipts, "other_flow_session_id") or "unavailable",
+        "other_project_session_id": _observed_session(receipts, "other_project_session_id") or "unavailable",
         "other_role_session_id": (
-            _text(receipts, "other_role_session_id")
-            or _text(receipts, "other_profile_session_id")
+            _observed_session(receipts, "other_role_session_id")
+            or _observed_session(receipts, "other_profile_session_id")
             or "unavailable"
         ),
         "first_process_exit": first_exit if first_exit is not None else 125,
@@ -248,6 +260,9 @@ def _facts(receipts: Mapping[str, Any]) -> dict[str, Any]:
         "other_flow_rejected": _boolean(receipts, "other_flow_rejected"),
         "other_project_rejected": _boolean(receipts, "other_project_rejected"),
         "other_role_rejected": _boolean(receipts, "other_role_rejected"),
+        "native_control_lifecycle_observed": _boolean(
+            receipts, "native_control_lifecycle_observed"
+        ),
         "review_integration_observed": _boolean(receipts, "review_integration_observed"),
         "reclaim_succeeded": _boolean(receipts, "reclaim_succeeded"),
         "session_reused": session_reused,
@@ -270,16 +285,37 @@ def qualify_affinity_evidence(receipts: Mapping[str, Any]) -> AffinityQualificat
         "flow_id": bool(_FLOW_ID_RE.fullmatch(facts["flow_id"])),
         "same_session": facts["session_reused"],
         "distinct_implementer": bool(facts["implementer_session_ids"])
-        and facts["first_supervisor_session_id"] not in facts["implementer_session_ids"],
-        "distinct_other_sessions": all(
-            facts[key] not in {
+        and len(set(facts["implementer_session_ids"])) == len(facts["implementer_session_ids"])
+        and not {
+            facts["first_supervisor_session_id"],
+            facts["resumed_supervisor_session_id"],
+        }.intersection(facts["implementer_session_ids"]),
+        "distinct_other_sessions": (
+            all(
+                facts[key] != "unavailable"
+                for key in (
+                    "other_flow_session_id",
+                    "other_project_session_id",
+                    "other_role_session_id",
+                )
+            )
+            and len(
+                {
+                    facts["other_flow_session_id"],
+                    facts["other_project_session_id"],
+                    facts["other_role_session_id"],
+                }
+            )
+            == 3
+            and not {
                 facts["first_supervisor_session_id"],
                 facts["resumed_supervisor_session_id"],
-            }
-            for key in (
-                "other_flow_session_id",
-                "other_project_session_id",
-                "other_role_session_id",
+            }.intersection(
+                {
+                    facts["other_flow_session_id"],
+                    facts["other_project_session_id"],
+                    facts["other_role_session_id"],
+                }
             )
         ),
         "resume": facts["resume_invoked"],
@@ -294,6 +330,7 @@ def qualify_affinity_evidence(receipts: Mapping[str, Any]) -> AffinityQualificat
         "other_flow": facts["other_flow_rejected"],
         "other_project": facts["other_project_rejected"],
         "other_role": facts["other_role_rejected"],
+        "native_control_lifecycle": facts["native_control_lifecycle_observed"],
         "review_integration": facts["review_integration_observed"],
         "reclaim": facts["reclaim_succeeded"],
         "internal_suppressed": facts["internal_milestone_route"] == "suppressed",

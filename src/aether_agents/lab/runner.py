@@ -20,6 +20,7 @@ import re
 import shutil
 import signal
 import sqlite3
+import subprocess
 import sys
 import time
 import uuid
@@ -584,16 +585,6 @@ def _supervisor_project_id(tasks: list[dict[str, object]]) -> str | None:
     return None
 
 
-def _review_integration_observed(tasks: list[dict[str, object]]) -> bool:
-    labels = [
-        str(task.get(key, "")).casefold()
-        for task in tasks
-        for key in ("title", "step_key", "task_type")
-    ]
-    joined = " ".join(labels)
-    return "review" in joined and "integrat" in joined
-
-
 def _board_affinity_row(board: Path, flow_id: str) -> dict[str, object] | None:
     if not board.is_file():
         return None
@@ -630,20 +621,26 @@ def _affinity_generation(row: dict[str, object] | None) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) else 0
 
 
-def _running_supervisor_worker(board: Path) -> tuple[int, str, str] | None:
+def _running_supervisor_worker(
+    board: Path, flow_id: str | None = None
+) -> tuple[int, str, str] | None:
     if not board.is_file():
         return None
     try:
         with sqlite3.connect(board) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT id, worker_pid, workspace_path FROM tasks "
+                "SELECT id, worker_pid, workspace_path, session_affinity FROM tasks "
                 "WHERE assignee = 'supervisor' AND status = 'running' "
                 "AND worker_pid IS NOT NULL ORDER BY id"
             ).fetchall()
     except sqlite3.Error:
         return None
     for row in rows:
+        if flow_id:
+            affinity = _decode_task_affinity(row["session_affinity"])
+            if not affinity or affinity.get("flow_id") != flow_id:
+                continue
         try:
             pid = int(row["worker_pid"])
         except (TypeError, ValueError):
@@ -653,65 +650,742 @@ def _running_supervisor_worker(board: Path) -> tuple[int, str, str] | None:
     return None
 
 
-def _session_message_count(database: Path, session_id: str) -> int:
-    if not database.is_file():
-        return 0
+_NATIVE_AFFINITY_OBSERVER = r'''
+import dataclasses
+import json
+import os
+import shutil
+from pathlib import Path
+import sqlite3
+import sys
+import tempfile
+import uuid
+
+
+board, supervisor_db, implementer_db, flow_id, project_id, first_session = sys.argv[1:7]
+resumed_session = sys.argv[7]
+first_generation = int(sys.argv[8])
+workspace_path = sys.argv[9]
+task_id = sys.argv[10] or None
+requested_task_id = task_id
+probe_dir = sys.argv[11]
+
+
+def _table(conn, name):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)
+    ).fetchone() is not None
+
+
+def _columns(conn, table):
     try:
-        with sqlite3.connect(database) as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
-            ).fetchone()
+        return {row[1] for row in conn.execute("PRAGMA table_info(" + table + ")")}
     except sqlite3.Error:
-        return 0
-    return int(row[0]) if row else 0
+        return set()
 
 
-def _role_session_ids(database: Path) -> list[str]:
-    if not database.is_file():
-        return []
+def _session(value):
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value if value and value.casefold() != "unavailable" else None
+
+
+def _copy_board():
+    os.makedirs(probe_dir, exist_ok=True)
+    target = tempfile.NamedTemporaryFile(
+        prefix="native-affinity-", suffix=".db", dir=probe_dir, delete=False
+    ).name
+    with sqlite3.connect(board) as source, sqlite3.connect(target) as destination:
+        source.backup(destination)
+    return target
+
+
+def _native_identity_rejections(row, task_id):
+    """Exercise the released Hermes registration guard, not a SQL imitation."""
     try:
-        with sqlite3.connect(database) as conn:
-            rows = conn.execute(
-                "SELECT id FROM sessions WHERE source = 'kanban' ORDER BY started_at"
-            ).fetchall()
-    except sqlite3.Error:
-        return []
-    return [str(row[0]) for row in rows if row and row[0]]
+        from hermes_cli import kanban_db
+        from hermes_cli.kanban_affinity import AffinityLease, AffinityRegistrationError
+    except Exception:
+        return {"other_flow_rejected": False, "other_project_rejected": False,
+                "other_role_rejected": False}
+    if not row or not task_id:
+        return {"other_flow_rejected": False, "other_project_rejected": False,
+                "other_role_rejected": False}
+    try:
+        conn = sqlite3.connect(board)
+        conn.row_factory = sqlite3.Row
+        task = kanban_db.get_task(conn, task_id)
+        if task is None:
+            conn.close()
+            return {"other_flow_rejected": False, "other_project_rejected": False,
+                    "other_role_rejected": False}
+        lease = AffinityLease(
+            board=str(row["board"]), project_id=str(row["project_id"]),
+            flow_id=str(row["flow_id"]), assignee=str(row["assignee"]),
+            generation=int(row["generation"]), token=str(row["lease_token"] or ""),
+        )
+
+        def rejected(candidate):
+            try:
+                kanban_db.register_session_affinity(
+                    conn, task, candidate, session_id=str(first_session or "probe")
+                )
+            except AffinityRegistrationError:
+                return True
+            except Exception:
+                return False
+            return False
+
+        result = {
+            "other_flow_rejected": rejected(dataclasses.replace(
+                lease, flow_id=lease.flow_id + ":wrong-flow"
+            )),
+            "other_project_rejected": rejected(dataclasses.replace(
+                lease, project_id=lease.project_id + ":wrong-project"
+            )),
+            "other_role_rejected": rejected(dataclasses.replace(
+                lease, assignee="implementer"
+            )),
+        }
+        conn.close()
+        return result
+    except Exception:
+        return {"other_flow_rejected": False, "other_project_rejected": False,
+                "other_role_rejected": False}
 
 
-def _affinity_control_metadata(board: Path, flow_id: str) -> dict[str, object]:
-    """Read only the explicitly whitelisted control receipts from task metadata."""
-    controls: dict[str, object] = {}
-    if not board.is_file():
-        return controls
+def _native_control_rows(main):
+    """Create disposable control records through native Hermes APIs."""
+    try:
+        from hermes_cli import kanban_db, projects_db
+        from hermes_state import SessionDB
+    except Exception:
+        return None
+    if not main:
+        return None
+    token = uuid.uuid4().hex
+    control_slug = "e2e16-controls-" + token[:24]
+    source_home = Path(os.environ.get("HERMES_HOME", ""))
+    source_projects = source_home / "projects.db"
+    if not source_projects.is_file():
+        source_projects = source_home / "profiles" / "morfeo" / "projects.db"
+    workspace = str(main["workspace_path"] or "")
+    if not workspace or not os.path.isabs(workspace):
+        return None
+    disposable_home = Path(probe_dir) / ("hermes-" + token)
+    sessions = {
+        "flow": ("e2e16-control-flow-" + token, "supervisor"),
+        "project": ("e2e16-control-project-" + token, "supervisor"),
+        "role": ("e2e16-control-role-" + token, "implementer"),
+    }
+    controls = (
+        ("flow", main["project_id"], main["flow_id"] + ":control-flow", "supervisor"),
+        ("project", None, main["flow_id"], "supervisor"),
+        ("role", main["project_id"], main["flow_id"], "implementer"),
+    )
+    try:
+        if not source_projects.is_file():
+            return None
+        disposable_home.mkdir(parents=True, exist_ok=True)
+        # Snapshot only the project catalog so the native task API can resolve
+        # the real main project ID; no control board/task/affinity rows are
+        # copied into the disposable control board.
+        shutil.copy2(source_projects, disposable_home / "projects.db")
+        os.environ["HERMES_HOME"] = str(disposable_home)
+        os.environ.pop("HERMES_KANBAN_DB", None)
+        os.environ.pop("HERMES_KANBAN_BOARD", None)
+        os.environ["HERMES_KANBAN_HOME"] = str(disposable_home)
+        with projects_db.connect_closing(db_path=disposable_home / "projects.db") as projects:
+            other_project_id = projects_db.create_project(
+                projects,
+                name="E2E-16 disposable project control",
+                slug="e2e16-control-project-" + token[:8],
+                primary_path=workspace,
+                board_slug=control_slug,
+                allow_duplicate_path=True,
+            )
+        controls = tuple(
+            (name, other_project_id if project is None else project, flow, profile)
+            for name, project, flow, profile in controls
+        )
+        board_meta = kanban_db.create_board(
+            control_slug,
+            name="E2E-16 disposable native controls",
+            default_workdir=workspace,
+            project_id=str(main["project_id"]),
+        )
+        control_board = Path(board_meta["db_path"])
+        state_paths = {
+            profile: disposable_home / "profiles" / profile / "state.db"
+            for profile in {profile for _name, _project, _flow, profile in controls}
+        }
+        states = {
+            profile: SessionDB(db_path=path)
+            for profile, path in state_paths.items()
+        }
+        task_ids = {}
+        with kanban_db.connect(db_path=control_board) as conn:
+            for name, project, flow, profile in controls:
+                session_id = sessions[name][0]
+                task_id = kanban_db.create_task(
+                    conn,
+                    title="E2E-16 native " + name + " control",
+                    assignee=profile,
+                    created_by="e2e16-native-observer",
+                    workspace_kind="dir",
+                    workspace_path=workspace,
+                    project_id=project,
+                    session_affinity={"flow_id": flow},
+                )
+                task = kanban_db.claim_task(
+                    conn, task_id, claimer="e2e16-native-observer"
+                )
+                if task is None:
+                    raise RuntimeError("native control task was not claimable")
+                lease = kanban_db.reserve_session_affinity(
+                    conn, task, workspace_path=workspace, board=control_slug
+                )
+                state = states[profile]
+                state.create_session(
+                    session_id,
+                    "kanban",
+                    cwd=workspace,
+                    profile_name=profile,
+                    model="control-probe",
+                )
+                state.append_message(
+                    session_id,
+                    "tool",
+                    content="native control probe",
+                    tool_name="e2e16_control_probe",
+                    observed=True,
+                )
+                kanban_db.validate_worker_resume_session(
+                    session_id,
+                    db_path=state_paths[profile],
+                    workspace_path=workspace,
+                    expected_profile=profile,
+                )
+                kanban_db.register_session_affinity(
+                    conn, task, lease, session_id=session_id
+                )
+                task_ids[name] = task_id
+        for state in states.values():
+            state.close()
+        return {
+            "board": control_board,
+            "sessions": sessions,
+            "task_ids": task_ids,
+            "project_id": other_project_id,
+            "control_slug": control_slug,
+        }
+    except Exception:
+        for state in locals().get("states", {}).values():
+            try:
+                state.close()
+            except Exception:
+                pass
+        return None
+
+
+controls = {
+    "other_flow_session_id": "unavailable",
+    "other_project_session_id": "unavailable",
+    "other_profile_session_id": "unavailable",
+    "other_role_session_id": "unavailable",
+    "other_flow_rejected": False,
+    "other_project_rejected": False,
+    "other_role_rejected": False,
+    "native_control_lifecycle_observed": False,
+    "stale_generation_rejected": False,
+    "internal_milestone_route": "missing",
+    "terminal_route": "missing",
+    "input_route": "missing",
+    "revision_route": "missing",
+    "review_integration_observed": False,
+    "reclaim_observed": False,
+    "resume_observed": False,
+    "resumed_process_exit": None,
+    "workspace_pinned": False,
+    "role_binding_ok": False,
+    "prior_tool_evidence_observed": False,
+    "implementer_session_ids": [],
+    "process_id": os.getpid(),
+}
+
+if os.path.isfile(board):
     try:
         with sqlite3.connect(board) as conn:
-            rows = conn.execute(
-                "SELECT metadata FROM task_runs WHERE metadata IS NOT NULL"
-            ).fetchall()
+            conn.row_factory = sqlite3.Row
+            if _table(conn, "kanban_session_affinity"):
+                main = conn.execute(
+                    """SELECT * FROM kanban_session_affinity
+                       WHERE flow_id = ? AND project_id = ? AND assignee = 'supervisor'
+                       ORDER BY generation DESC LIMIT 1""",
+                    (flow_id, project_id),
+                ).fetchone()
+                if main is not None:
+                    # Releasing a native lease clears owner_task_id.  The
+                    # harness captured the claimed task before reclaim, so use
+                    # that exact id rather than guessing from task membership.
+                    owner_task_id = main["owner_task_id"] or task_id
+                    native_controls = _native_control_rows(main)
+                    cross_board = (
+                        native_controls["board"] if native_controls else board
+                    )
+                    with sqlite3.connect(cross_board) as cross_conn:
+                        cross_conn.row_factory = sqlite3.Row
+                        rows = cross_conn.execute(
+                            """SELECT project_id, flow_id, assignee, session_id
+                               FROM kanban_session_affinity
+                              WHERE session_id IS NOT NULL AND trim(session_id) != ''
+                                AND lower(session_id) != 'unavailable'"""
+                        ).fetchall()
+                        task_ids = native_controls.get("task_ids", {}) if native_controls else {}
+                        expected_controls = {
+                            "flow": (
+                                main["project_id"],
+                                main["flow_id"] + ":control-flow",
+                                "supervisor",
+                            ),
+                            "project": (
+                                native_controls.get("project_id")
+                                if native_controls else None,
+                                main["flow_id"],
+                                "supervisor",
+                            ),
+                            "role": (
+                                main["project_id"], main["flow_id"], "implementer"
+                            ),
+                        }
+                        task_rows = {}
+                        event_kinds = {}
+                        control_sessions = (
+                            native_controls.get("sessions", {}) if native_controls else {}
+                        )
+                        if task_ids and _table(cross_conn, "tasks"):
+                            placeholders = ",".join("?" * len(task_ids))
+                            task_rows = {
+                                row["id"]: row
+                                for row in cross_conn.execute(
+                                    "SELECT id, project_id, assignee "
+                                    "FROM tasks WHERE id IN (" + placeholders + ")",
+                                    tuple(task_ids.values()),
+                                ).fetchall()
+                            }
+                            if _table(cross_conn, "task_events"):
+                                event_kinds = {}
+                                for event in cross_conn.execute(
+                                    "SELECT task_id, kind FROM task_events "
+                                    "WHERE task_id IN (" + placeholders + ")",
+                                    tuple(task_ids.values()),
+                                ).fetchall():
+                                    event_kinds.setdefault(event["task_id"], set()).add(
+                                        event["kind"]
+                                    )
+                        registered = {
+                            (row["project_id"], row["flow_id"], row["assignee"]): row["session_id"]
+                            for row in rows
+                        }
+                        controls["native_control_lifecycle_observed"] = all(
+                            task_ids.get(name) in task_rows
+                            and {"created", "claimed"} <= event_kinds.get(
+                                task_ids[name], set()
+                            )
+                            and task_rows[task_ids[name]]["project_id"] == identity[0]
+                            and task_rows[task_ids[name]]["assignee"] == identity[2]
+                            and registered.get(identity) == control_sessions[name][0]
+                            for name, identity in expected_controls.items()
+                        )
+                    for row in rows:
+                        candidate = _session(row["session_id"])
+                        if not candidate:
+                            continue
+                        if (row["project_id"] == project_id
+                                and row["assignee"] == 'supervisor'
+                                and row["flow_id"] != flow_id):
+                            controls["other_flow_session_id"] = candidate
+                        if (row["flow_id"] == flow_id
+                                and row["assignee"] == 'supervisor'
+                                and row["project_id"] != project_id):
+                            controls["other_project_session_id"] = candidate
+                        if (row["flow_id"] == flow_id
+                                and row["project_id"] == project_id
+                                and row["assignee"] != 'supervisor'):
+                            controls["other_role_session_id"] = candidate
+                            controls["other_profile_session_id"] = candidate
+                    if native_controls:
+                        try:
+                            os.unlink(native_controls["board"])
+                        except OSError:
+                            pass
+                    controls.update(_native_identity_rejections(main, owner_task_id))
+
+                    current_generation = int(main["generation"] or 0)
+                    if (current_generation > first_generation
+                            and _session(first_session)
+                            and _session(resumed_session) == _session(first_session)
+                            and _session(main["session_id"]) == _session(first_session)):
+                        controls["resume_observed"] = True
+
+                    if owner_task_id and _table(conn, "tasks"):
+                        task_columns = _columns(conn, "tasks")
+                        task = conn.execute(
+                            "SELECT * FROM tasks WHERE id = ?", (owner_task_id,)
+                        ).fetchone()
+                        if task is not None and "workspace_path" in task_columns:
+                            task_workspace = task["workspace_path"]
+                            affinity = {}
+                            if "session_affinity" in task_columns and task["session_affinity"]:
+                                try:
+                                    affinity = json.loads(task["session_affinity"])
+                                except (TypeError, ValueError, json.JSONDecodeError):
+                                    affinity = {}
+                            controls["workspace_pinned"] = bool(
+                                task_workspace and main["workspace_path"]
+                                and os.path.isabs(str(task_workspace))
+                                and os.path.realpath(str(task_workspace))
+                                    == os.path.realpath(str(main["workspace_path"]))
+                                and os.path.realpath(str(task_workspace))
+                                    == os.path.realpath(str(workspace_path))
+                                and task["project_id"] == project_id
+                                and affinity.get("flow_id") == flow_id
+                            )
+
+                    if _table(conn, "task_runs") and owner_task_id:
+                        run_rows = conn.execute(
+                            "SELECT outcome FROM task_runs WHERE task_id = ? "
+                            "ORDER BY started_at, id",
+                            (owner_task_id,),
+                        ).fetchall()
+                        run_count = len(run_rows)
+                        controls["resume_observed"] = bool(
+                            controls["resume_observed"] and run_count >= 2
+                        )
+                        if run_count >= 2:
+                            controls["resumed_process_exit"] = (
+                                0 if str(run_rows[-1]["outcome"]).casefold()
+                                in {"completed", "success", "succeeded"} else 1
+                            )
+                        controls["reclaim_observed"] = conn.execute(
+                            """SELECT 1 FROM task_runs
+                                WHERE task_id = ? AND lower(COALESCE(outcome, ''))
+                                   IN ('reclaimed', 'crashed', 'timed_out') LIMIT 1""",
+                            (owner_task_id,),
+                        ).fetchone() is not None
+
+                    event_rows = []
+                    if _table(conn, "task_events"):
+                        event_rows = conn.execute(
+                            "SELECT id, task_id, kind, payload FROM task_events ORDER BY id"
+                        ).fetchall()
+                    if any(row["kind"] == "reclaimed" for row in event_rows):
+                        controls["reclaim_observed"] = True
+                    affinity_tasks = set()
+                    if _table(conn, "tasks"):
+                        columns = _columns(conn, "tasks")
+                        if "session_affinity" in columns:
+                            for task_row in conn.execute(
+                                "SELECT id, session_affinity FROM tasks"
+                            ).fetchall():
+                                try:
+                                    value = json.loads(task_row["session_affinity"] or "{}")
+                                except (TypeError, ValueError, json.JSONDecodeError):
+                                    value = {}
+                                if isinstance(value, dict) and value.get("flow_id") == flow_id:
+                                    affinity_tasks.add(task_row["id"])
+
+                    internal_kinds = {
+                        "completed", "blocked", "gave_up", "crashed", "timed_out",
+                        "reclaimed", "review_requested", "changes_requested",
+                    }
+                    internal_events = [
+                        row for row in event_rows
+                        if row["task_id"] in affinity_tasks and row["kind"] in internal_kinds
+                    ]
+                    if internal_events:
+                        # Native Hermes changes the allowed event set for an
+                        # affinity task to (origin_signal, flow_terminal).  An
+                        # ordinary lifecycle event on such a task is therefore
+                        # an observed suppression, even when the originating
+                        # subscription row remains durable for later signals.
+                        controls["internal_milestone_route"] = "suppressed"
+
+                    def native_routing_probe():
+                        """Claim events on a disposable DB with native filtering."""
+                        try:
+                            from hermes_cli import kanban_db
+                        except Exception:
+                            return {}
+                        routing_path = _copy_board()
+                        try:
+                            routed = {
+                                "internal_milestone_route": "missing",
+                                "terminal_route": "missing",
+                                "input_route": "missing",
+                                "revision_route": "missing",
+                            }
+                            with sqlite3.connect(routing_path) as routed_conn:
+                                routed_conn.row_factory = sqlite3.Row
+                                if not _table(routed_conn, "kanban_notify_subs"):
+                                    return {}
+                                internal_control = False
+                                control_task_id = next(iter(affinity_tasks), requested_task_id)
+                                try:
+                                    append_event = getattr(kanban_db, "_append_event")
+                                    routed_conn.execute(
+                                        """INSERT OR IGNORE INTO kanban_notify_subs
+                                           (task_id, platform, chat_id, thread_id,
+                                            created_at, last_event_id)
+                                           VALUES (?, 'e2e16-probe', 'control', '', 0, 0)""",
+                                        (control_task_id,),
+                                    )
+                                    append_event(
+                                        routed_conn, control_task_id, "completed",
+                                        {"control": "internal-milestone"},
+                                    )
+                                    append_event(
+                                        routed_conn, control_task_id, "origin_signal",
+                                        {"origin_signal": "input", "control": True},
+                                    )
+                                    append_event(
+                                        routed_conn, control_task_id, "origin_signal",
+                                        {"origin_signal": "revision", "control": True},
+                                    )
+                                    append_event(
+                                        routed_conn, control_task_id, "flow_terminal",
+                                        {"flow_id": flow_id, "control": True},
+                                    )
+                                    routed_conn.commit()
+                                    internal_control = True
+                                except Exception:
+                                    routed_conn.rollback()
+                                calls = 0
+                                for task_id in affinity_tasks:
+                                    sub = routed_conn.execute(
+                                        "SELECT * FROM kanban_notify_subs WHERE task_id = ? LIMIT 1",
+                                        (task_id,),
+                                    ).fetchone()
+                                    if sub is None or not sub["platform"] or not sub["chat_id"]:
+                                        continue
+                                    sub_columns = set(sub.keys())
+                                    if "last_event_id" not in sub_columns:
+                                        continue
+                                    routed_conn.execute(
+                                        """UPDATE kanban_notify_subs SET last_event_id = 0
+                                           WHERE task_id = ? AND platform = ? AND chat_id = ?""",
+                                        (task_id, sub["platform"], sub["chat_id"]),
+                                    )
+                                    routed_conn.commit()
+                                    try:
+                                        _old, _cursor, claimed = kanban_db.claim_unseen_events_for_sub(
+                                            routed_conn,
+                                            task_id=task_id,
+                                            platform=sub["platform"],
+                                            chat_id=sub["chat_id"],
+                                            thread_id=sub["thread_id"] if "thread_id" in sub_columns else "",
+                                            kinds=("origin_signal", "flow_terminal"),
+                                        )
+                                    except Exception:
+                                        continue
+                                    calls += 1
+                                    returned = []
+                                    for event in claimed:
+                                        kind = getattr(event, "kind", None)
+                                        payload = getattr(event, "payload", None) or {}
+                                        returned.append((kind, payload if isinstance(payload, dict) else {}))
+                                    if any(row[0] == "flow_terminal" for row in returned):
+                                        routed["terminal_route"] = "flow_terminal"
+                                    for kind, payload in returned:
+                                        signal = payload.get("origin_signal")
+                                        if kind == "origin_signal" and signal in {"input", "revision"}:
+                                            routed[signal + "_route"] = signal
+                                    if (internal_events or internal_control) and not any(
+                                        kind in internal_kinds for kind, _payload in returned
+                                    ):
+                                        routed["internal_milestone_route"] = "suppressed"
+                            return routed if calls else {}
+                        finally:
+                            try:
+                                os.unlink(routing_path)
+                            except OSError:
+                                pass
+
+                    routed_controls = native_routing_probe()
+                    if routed_controls:
+                        controls.update(routed_controls)
+
+                    review_tasks = {
+                        row["task_id"] for row in event_rows
+                        if row["kind"] == "review_requested"
+                    }
+                    controls["review_integration_observed"] = any(
+                        row["task_id"] in review_tasks
+                        and row["kind"] in {"completed", "flow_terminal"}
+                        for row in event_rows
+                    )
+                    # Route classes are set only by ``native_routing_probe``
+                    # above.  Merely seeing an event in SQLite is not evidence
+                    # that the native notifier selected or delivered it.
+
+                    stale_path = _copy_board()
+                    try:
+                        with sqlite3.connect(stale_path) as stale:
+                            stale.row_factory = sqlite3.Row
+                            stale_row = stale.execute(
+                                """SELECT * FROM kanban_session_affinity
+                                   WHERE board = ? AND project_id = ? AND flow_id = ?
+                                     AND assignee = 'supervisor'""",
+                                (main["board"], project_id, flow_id),
+                            ).fetchone()
+                            if stale_row is not None and int(stale_row["generation"] or 0) > first_generation:
+                                cursor = stale.execute(
+                                    """UPDATE kanban_session_affinity SET session_id = ?
+                                       WHERE board = ? AND project_id = ? AND flow_id = ?
+                                         AND assignee = 'supervisor' AND generation = ?
+                                         AND session_id = ?""",
+                                    ("stale-probe", main["board"], project_id, flow_id,
+                                     first_generation, first_session),
+                                )
+                                stale.commit()
+                                controls["stale_generation_rejected"] = cursor.rowcount == 0
+                    finally:
+                        try:
+                            os.unlink(stale_path)
+                        except OSError:
+                            pass
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        pass
+
+def _state_tool_evidence(database, session_id):
+    if not _session(session_id) or not os.path.isfile(database):
+        return False
+    try:
+        with sqlite3.connect(database) as conn:
+            if not _table(conn, "messages"):
+                return False
+            columns = _columns(conn, "messages")
+            predicates = []
+            if "tool_name" in columns:
+                predicates.append("(tool_name IS NOT NULL AND trim(tool_name) != '')")
+            if "tool_calls" in columns:
+                predicates.append("(tool_calls IS NOT NULL AND trim(tool_calls) != '')")
+            if not predicates:
+                return False
+            return conn.execute(
+                "SELECT 1 FROM messages WHERE session_id = ? AND ("
+                + " OR ".join(predicates) + ") LIMIT 1", (session_id,)
+            ).fetchone() is not None
     except sqlite3.Error:
-        return controls
-    allowed = {
-        "other_flow_rejected", "other_project_rejected", "other_role_rejected",
-        "stale_generation_rejected", "internal_milestone_route", "terminal_route",
-        "input_route", "revision_route", "other_flow_session_id",
-        "other_project_session_id", "other_profile_session_id",
-    }
-    for row in rows:
+        return False
+
+
+def _state_role_binding(database, session_id):
+    if not _session(session_id) or not os.path.isfile(database):
+        return False
+    try:
+        with sqlite3.connect(database) as conn:
+            conn.row_factory = sqlite3.Row
+            if not _table(conn, "sessions"):
+                return False
+            columns = _columns(conn, "sessions")
+            if "source" not in columns:
+                return False
+            row = conn.execute(
+                "SELECT * FROM sessions WHERE id = ? LIMIT 1", (session_id,)
+            ).fetchone()
+            if row is None or row["source"] != "kanban":
+                return False
+            if "profile_name" in columns:
+                return str(row["profile_name"] or "").casefold() == "supervisor"
+            return True
+    except sqlite3.Error:
+        return False
+
+
+controls["prior_tool_evidence_observed"] = _state_tool_evidence(
+    supervisor_db, first_session
+)
+controls["role_binding_ok"] = _state_role_binding(supervisor_db, first_session)
+controls["implementer_session_ids"] = []
+try:
+    with sqlite3.connect(implementer_db) as conn:
+        if _table(conn, "sessions"):
+            controls["implementer_session_ids"] = [
+                str(row[0]) for row in conn.execute(
+                    "SELECT id FROM sessions WHERE source = 'kanban' "
+                    "AND id IS NOT NULL AND trim(id) != '' ORDER BY started_at"
+                ).fetchall()
+            ]
+except sqlite3.Error:
+    pass
+
+print(json.dumps(controls, separators=(",", ":")))
+'''
+
+
+def _native_python(hermes: Path | None) -> Path:
+    """Resolve the interpreter belonging to the caller-supplied Hermes binary."""
+    if hermes and hermes.is_file():
         try:
-            metadata = json.loads(row[0])
-        except (TypeError, json.JSONDecodeError):
-            continue
-        if not isinstance(metadata, dict):
-            continue
-        candidate = metadata.get("affinity_controls")
-        if not isinstance(candidate, dict) or candidate.get("flow_id") != flow_id:
-            continue
-        for key in allowed:
-            value = candidate.get(key)
-            if isinstance(value, bool) or isinstance(value, str):
-                controls[key] = value
-    return controls
+            launcher = hermes.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            launcher = ""
+        first_line = launcher.splitlines()[0].strip() if launcher else ""
+        if first_line.startswith("#!") and first_line[2:].split():
+            candidate = Path(first_line[2:].split()[0])
+            if candidate.name != "env" and candidate.is_file():
+                return candidate
+        for line in launcher.splitlines():
+            match = re.search(r"\bexec\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))", line)
+            if not match:
+                continue
+            candidate = Path(next(value for value in match.groups() if value))
+            if candidate.is_file():
+                return candidate
+    return Path(sys.executable)
+
+
+def _observe_native_affinity_controls(
+    *,
+    board: Path,
+    supervisor_db: Path,
+    implementer_db: Path,
+    flow_id: str,
+    project_id: str,
+    first_session_id: str | None,
+    resumed_session_id: str | None,
+    first_generation: int,
+    workspace_path: str,
+    hermes: Path | None = None,
+    task_id: str | None = None,
+) -> dict[str, object]:
+    """Observe native Hermes DB/process controls in a separate process.
+
+    This intentionally never reads ``task_runs.metadata``.  Session IDs,
+    generation fences, routing events, profile sessions, and workspace identity
+    are read from the native board/state databases.  The child also exercises
+    Hermes's released registration guard with wrong flow/project/role leases.
+    Missing native observations stay missing and are rejected by qualification.
+    """
+    command = [
+        str(_native_python(hermes)), "-c", _NATIVE_AFFINITY_OBSERVER,
+        str(board), str(supervisor_db), str(implementer_db), flow_id, project_id,
+        first_session_id or "", resumed_session_id or "", str(first_generation),
+        workspace_path, task_id or "", str(board.parent / "affinity-probes"),
+    ]
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=30,
+            cwd=str(board.parent), check=False,
+        )
+        if result.returncode != 0:
+            return {}
+        value = json.loads(result.stdout.strip())
+        return value if isinstance(value, dict) else {}
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, TypeError):
+        return {}
 
 
 def _affinity_record(
@@ -820,15 +1494,16 @@ def _live_affinity_lane(
     worker: tuple[int, str, str] | None = None
     deadline = time.monotonic() + min(15.0, max(2.0, scenario.timeout_seconds))
     while time.monotonic() < deadline and worker is None:
-        worker = _running_supervisor_worker(board)
+        worker = _running_supervisor_worker(board, flow_id)
         if worker is None:
             time.sleep(0.1)
     first_row = _board_affinity_row(board, flow_id) or first_row
     first_session = str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
     first_generation = _affinity_generation(first_row)
     terminated = False
-    reclaim_succeeded = False
+    reclaim_command_succeeded = False
     task_id = worker[1] if worker else None
+    authorized_workspace = worker[2] if worker else ""
     if worker is not None:
         pid = worker[0]
         try:
@@ -839,14 +1514,14 @@ def _live_affinity_lane(
         if task_id:
             while _pid_alive(pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
-            reclaimed = run_command(
+            reclaim_result = run_command(
                 hermes_argv(
                     hermes, "morfeo", "kanban", "reclaim", task_id,
                     "--reason", "e2e-16 disposable process-boundary probe",
                 ),
                 cwd=repo, env=env, log_path=commands, timeout_seconds=30,
             )
-            reclaim_succeeded = reclaimed.returncode == 0
+            reclaim_command_succeeded = reclaim_result.returncode == 0
 
     board_state = dispatch_until_settled(
         hermes, cwd=repo, env=env, commands_log=commands, evidence_dir=evidence,
@@ -855,16 +1530,27 @@ def _live_affinity_lane(
     final_tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
     final_row = _board_affinity_row(board, flow_id)
     resumed_session = str(final_row.get("session_id")) if final_row and final_row.get("session_id") else None
-    controls = _affinity_control_metadata(board, flow_id)
     supervisor_db = hermes_root / "profiles" / "supervisor" / "state.db"
     implementer_db = hermes_root / "profiles" / "implementer" / "state.db"
-    implementer_sessions = _role_session_ids(implementer_db)
-    task_workspaces = {
-        str(task.get("workspace_path"))
-        for task in final_tasks
-        if task.get("workspace_path")
-    }
-    workspace = str(final_row.get("workspace_path")) if final_row else ""
+    controls = _observe_native_affinity_controls(
+        board=board,
+        supervisor_db=supervisor_db,
+        implementer_db=implementer_db,
+        flow_id=flow_id,
+        project_id=project_id or "",
+        first_session_id=first_session,
+        resumed_session_id=resumed_session,
+        first_generation=first_generation,
+        workspace_path=authorized_workspace,
+        hermes=hermes,
+        task_id=task_id,
+    )
+    raw_implementer_sessions = controls.get("implementer_session_ids")
+    implementer_sessions = [
+        str(session)
+        for session in raw_implementer_sessions
+        if session
+    ] if isinstance(raw_implementer_sessions, list) else []
     receipt = {
         "runtime_available": runtime_available,
         "flow_id": flow_id,
@@ -875,15 +1561,19 @@ def _live_affinity_lane(
         "other_project_session_id": controls.get("other_project_session_id"),
         "other_profile_session_id": controls.get("other_profile_session_id"),
         "first_process_exit": -signal.SIGTERM if terminated else None,
-        "resumed_process_exit": 0 if board_state.successful else 1,
-        "resume_invoked": bool(first_session and resumed_session),
-        "workspace_pinned": bool(workspace and workspace in task_workspaces),
-        "prior_tool_evidence_observed": bool(
-            first_session and _session_message_count(supervisor_db, first_session) > 0
+        "resumed_process_exit": (
+            controls["resumed_process_exit"]
+            if isinstance(controls.get("resumed_process_exit"), int)
+            and not isinstance(controls.get("resumed_process_exit"), bool)
+            else 125
         ),
+        "resume_invoked": controls.get("resume_observed") is True,
+        "workspace_pinned": controls.get("workspace_pinned") is True,
+        "prior_tool_evidence_observed": controls.get("prior_tool_evidence_observed") is True,
         "reconstructed_input_sent": False,
         "stale_generation_rejected": controls.get("stale_generation_rejected") is True,
         "implementer_fresh": bool(implementer_sessions)
+        and len(set(implementer_sessions)) == len(implementer_sessions)
         and all(session not in {first_session, resumed_session} for session in implementer_sessions),
         "internal_milestone_route": controls.get("internal_milestone_route", "missing"),
         "terminal_route": controls.get("terminal_route", "missing"),
@@ -891,16 +1581,17 @@ def _live_affinity_lane(
         "revision_route": controls.get("revision_route", "missing"),
         "flow_binding_ok": bool(final_row and final_row.get("flow_id") == flow_id),
         "project_binding_ok": bool(final_row and final_row.get("project_id") == project_id),
-        "profile_binding_ok": bool(final_row and final_row.get("assignee") == "supervisor"),
+        "profile_binding_ok": controls.get("role_binding_ok") is True
+        and bool(final_row and final_row.get("assignee") == "supervisor"),
         "other_flow_rejected": controls.get("other_flow_rejected") is True,
         "other_project_rejected": controls.get("other_project_rejected") is True,
         "other_role_rejected": controls.get("other_role_rejected") is True,
-        "review_integration_observed": _review_integration_observed(final_tasks),
-        "reclaim_succeeded": reclaim_succeeded
-        or bool(
-            final_row
-            and _affinity_generation(final_row) > first_generation
+        "native_control_lifecycle_observed": (
+            controls.get("native_control_lifecycle_observed") is True
         ),
+        "review_integration_observed": controls.get("review_integration_observed") is True,
+        "reclaim_succeeded": controls.get("reclaim_observed") is True
+        and reclaim_command_succeeded,
     }
     qualification = qualify_affinity_evidence(receipt)
     acceptance_passed = _run_acceptance(scenario, repo, env, commands, evidence, "final")

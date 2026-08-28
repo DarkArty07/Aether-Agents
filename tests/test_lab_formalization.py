@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 import json
+import os
+import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -337,6 +341,7 @@ def test_affinity_qualification_requires_real_resume_and_all_negative_controls()
             "other_flow_rejected": True,
             "other_project_rejected": True,
             "other_role_rejected": True,
+            "native_control_lifecycle_observed": True,
             "review_integration_observed": True,
             "reclaim_succeeded": True,
         }
@@ -350,12 +355,89 @@ def test_affinity_qualification_requires_real_resume_and_all_negative_controls()
     lab.validate_evidence(evidence)
 
 
+def test_affinity_qualification_rejects_claims_without_observed_other_sessions() -> None:
+    result = affinity.qualify_affinity_evidence(
+        {
+            "flow_id": "aether.flow.v1:" + "d" * 64,
+            "first_supervisor_session_id": "supervisor-session",
+            "resumed_supervisor_session_id": "supervisor-session",
+            "implementer_session_ids": ["implementer-session"],
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": True,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "runtime_available": True,
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+            "native_control_lifecycle_observed": True,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+        }
+    )
+
+    assert result.status == "FAIL"
+    assert result.qualified is False
+    assert result.to_evidence()["affinity"]["controls_passed"] is False
+    lab.validate_evidence(result.to_evidence())
+
+
 def test_affinity_qualification_reports_capability_wall_without_runtime() -> None:
     result = affinity.qualify_affinity_evidence({"runtime_available": False})
     assert result.status == "CAPABILITY_WALL"
     assert result.reason == "runtime_prerequisite_unavailable"
     assert result.qualified is False
     lab.validate_evidence(result.to_evidence())
+
+
+def test_affinity_qualification_rejects_manual_control_ids_without_native_lifecycle() -> None:
+    result = affinity.qualify_affinity_evidence(
+        {
+            "runtime_available": True,
+            "flow_id": "aether.flow.v1:" + "b" * 64,
+            "first_supervisor_session_id": "supervisor-session",
+            "resumed_supervisor_session_id": "supervisor-session",
+            "implementer_session_ids": ["implementer-session"],
+            "other_flow_session_id": "copied-flow-session",
+            "other_project_session_id": "copied-project-session",
+            "other_role_session_id": "copied-role-session",
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": True,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+            "native_control_lifecycle_observed": False,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+        }
+    )
+    assert result.status == "FAIL"
+    assert result.qualified is False
+    assert result.to_evidence()["affinity"]["controls_passed"] is False
 
 
 def test_affinity_qualification_never_passes_when_a_generation_fence_control_fails() -> None:
@@ -387,6 +469,7 @@ def test_affinity_qualification_never_passes_when_a_generation_fence_control_fai
             "other_flow_rejected": True,
             "other_project_rejected": True,
             "other_role_rejected": True,
+            "native_control_lifecycle_observed": True,
             "review_integration_observed": True,
             "reclaim_succeeded": True,
         }
@@ -404,6 +487,233 @@ def test_affinity_sqlite_fixture_uses_real_process_boundaries(tmp_path: Path) ->
     assert receipt["same_session"] is True
     assert receipt["prior_tool_evidence_observed"] is True
     assert receipt["stale_generation_rejected"] is True
+
+
+def test_native_affinity_observer_does_not_qualify_copied_control_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    board = tmp_path / "kanban.db"
+    flow_id = "aether.flow.v1:" + "e" * 64
+    workspace = str(tmp_path / "workspace")
+    with sqlite3.connect(board) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE kanban_session_affinity (
+                board TEXT, project_id TEXT, flow_id TEXT, assignee TEXT,
+                session_id TEXT, generation INTEGER, lease_token TEXT,
+                owner_task_id TEXT, owner_run_id INTEGER, owner_claim_lock TEXT,
+                workspace_path TEXT, updated_at INTEGER,
+                PRIMARY KEY (board, project_id, flow_id, assignee)
+            );
+            CREATE TABLE tasks (
+                id TEXT PRIMARY KEY, assignee TEXT, status TEXT, project_id TEXT,
+                session_affinity TEXT, workspace_path TEXT, current_run_id INTEGER
+            );
+            CREATE TABLE task_runs (
+                id INTEGER PRIMARY KEY, task_id TEXT, outcome TEXT, metadata TEXT
+            );
+            CREATE TABLE task_events (
+                id INTEGER PRIMARY KEY, task_id TEXT, kind TEXT, payload TEXT
+            );
+            CREATE TABLE kanban_notify_subs (
+                task_id TEXT, platform TEXT, chat_id TEXT, thread_id TEXT,
+                last_event_id INTEGER
+            );
+            INSERT INTO task_runs VALUES (
+                1, 't_worker', 'completed',
+                '{"affinity_controls": {"other_flow_session_id": "forged"}}'
+            );
+            """
+        )
+        connection.executemany(
+            """INSERT INTO kanban_session_affinity
+               (board, project_id, flow_id, assignee, session_id, generation,
+                lease_token, owner_task_id, owner_run_id, owner_claim_lock,
+                workspace_path, updated_at)
+               VALUES (?, ?, ?, ?, ?, 1, 'copied-token', 't_worker', 1,
+                       'copied-lock', ?, 0)""",
+            (
+                ("copied-board", "project-main", flow_id, "supervisor", "main-session", workspace),
+                ("copied-board", "project-main", flow_id + ":copied", "supervisor", "copied-flow", workspace),
+                ("copied-board", "project-main:copied", flow_id, "supervisor", "copied-project", workspace),
+                ("copied-board", "project-main", flow_id, "implementer", "copied-role", workspace),
+            ),
+        )
+
+    monkeypatch.delenv("HERMES_HOME", raising=False)
+    controls = runner._observe_native_affinity_controls(
+        board=board,
+        supervisor_db=tmp_path / "missing-supervisor.db",
+        implementer_db=tmp_path / "missing-implementer.db",
+        flow_id=flow_id,
+        project_id="project-main",
+        first_session_id="main-session",
+        resumed_session_id="main-session",
+        first_generation=1,
+        workspace_path=workspace,
+    )
+
+    assert controls["other_flow_session_id"] == "copied-flow"
+    assert controls["other_project_session_id"] == "copied-project"
+    assert controls["other_role_session_id"] == "copied-role"
+    assert controls["native_control_lifecycle_observed"] is False
+    assert controls["other_flow_rejected"] is False
+    assert controls["other_project_rejected"] is False
+    assert controls["other_role_rejected"] is False
+    qualification = affinity.qualify_affinity_evidence(
+        {
+            "runtime_available": True,
+            "flow_id": flow_id,
+            "first_supervisor_session_id": "main-session",
+            "resumed_supervisor_session_id": "main-session",
+            "implementer_session_ids": ["implementer-session"],
+            "first_process_exit": -15,
+            "resumed_process_exit": 0,
+            "resume_invoked": True,
+            "workspace_pinned": True,
+            "prior_tool_evidence_observed": True,
+            "reconstructed_input_sent": False,
+            "stale_generation_rejected": True,
+            "implementer_fresh": True,
+            "internal_milestone_route": "suppressed",
+            "terminal_route": "flow_terminal",
+            "input_route": "input",
+            "revision_route": "revision",
+            "flow_binding_ok": True,
+            "project_binding_ok": True,
+            "profile_binding_ok": True,
+            "review_integration_observed": True,
+            "reclaim_succeeded": True,
+            **controls,
+            "other_flow_rejected": True,
+            "other_project_rejected": True,
+            "other_role_rejected": True,
+        }
+    )
+    assert qualification.status == "FAIL"
+
+
+@pytest.mark.integration
+def test_native_affinity_observer_controls_are_created_by_native_lifecycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hermes = shutil.which("hermes")
+    if hermes is None or importlib.util.find_spec("hermes_cli") is None:
+        pytest.skip("exact Hermes runtime is unavailable")
+    native_python = Path(sys.executable)
+    source_home = tmp_path / "source-home"
+    board = tmp_path / "main.db"
+    workspace = tmp_path / "workspace"
+    source_home.mkdir()
+    workspace.mkdir()
+    bootstrap = r'''
+import json
+import sys
+from pathlib import Path
+
+from hermes_cli import kanban_db, projects_db
+from hermes_state import SessionDB
+
+source_home, board, workspace = map(Path, sys.argv[1:])
+flow_id = "aether.flow.v1:" + "f" * 64
+with projects_db.connect_closing(db_path=source_home / "projects.db") as projects:
+    project_id = projects_db.create_project(
+        projects,
+        name="Native observer fixture",
+        slug="native-observer-fixture",
+        primary_path=str(workspace),
+        allow_duplicate_path=True,
+    )
+kanban_db.init_db(db_path=board)
+with kanban_db.connect(db_path=board) as connection:
+    task_id = kanban_db.create_task(
+        connection,
+        title="native observer main fixture",
+        assignee="supervisor",
+        workspace_kind="dir",
+        workspace_path=str(workspace),
+        project_id=project_id,
+        session_affinity={"flow_id": flow_id},
+    )
+    task = kanban_db.claim_task(connection, task_id, claimer="fixture")
+    lease = kanban_db.reserve_session_affinity(connection, task, board="main")
+    state = SessionDB(db_path=source_home / "main-state.db")
+    state.create_session(
+        "main-supervisor-session",
+        "kanban",
+        cwd=str(workspace),
+        profile_name="supervisor",
+        model="fixture",
+    )
+    state.append_message(
+        "main-supervisor-session",
+        "tool",
+        content="native fixture evidence",
+        tool_name="fixture_tool",
+        observed=True,
+    )
+    kanban_db.register_session_affinity(
+        connection, task, lease, session_id="main-supervisor-session"
+    )
+    state.close()
+print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_id}))
+'''
+    env = os.environ.copy()
+    env.update(
+        {
+            "HERMES_HOME": str(source_home),
+            "HERMES_KANBAN_DB": str(board),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
+    bootstrapped = subprocess.run(
+        [str(native_python), "-c", bootstrap, str(source_home), str(board), str(workspace)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert bootstrapped.returncode == 0, bootstrapped.stderr
+    fixture = json.loads(bootstrapped.stdout)
+    monkeypatch.setenv("HERMES_HOME", str(source_home))
+    controls = runner._observe_native_affinity_controls(
+        board=board,
+        supervisor_db=tmp_path / "missing-supervisor.db",
+        implementer_db=tmp_path / "missing-implementer.db",
+        flow_id=fixture["flow_id"],
+        project_id=fixture["project_id"],
+        first_session_id="main-supervisor-session",
+        resumed_session_id="main-supervisor-session",
+        first_generation=1,
+        workspace_path=str(workspace),
+        hermes=native_python,
+        task_id=fixture["task_id"],
+    )
+
+    assert controls["native_control_lifecycle_observed"] is True
+    assert controls["other_flow_session_id"] != "unavailable"
+    assert controls["other_project_session_id"] != "unavailable"
+    assert controls["other_role_session_id"] != "unavailable"
+    assert len(
+        {
+            controls["other_flow_session_id"],
+            controls["other_project_session_id"],
+            controls["other_role_session_id"],
+        }
+    ) == 3
+
+
+def test_native_python_resolves_shell_launcher_interpreter(tmp_path: Path) -> None:
+    interpreter = tmp_path / "native-python"
+    interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+    launcher = tmp_path / "hermes"
+    launcher.write_text(
+        "#!/usr/bin/env bash\n"
+        f'exec "{interpreter}" "/tmp/hermes" "$@"\n',
+        encoding="utf-8",
+    )
+
+    assert runner._native_python(launcher) == interpreter
 
 
 def test_e2e16_affinity_evidence_survives_runner_compaction() -> None:
@@ -435,6 +745,7 @@ def test_e2e16_affinity_evidence_survives_runner_compaction() -> None:
             "other_flow_rejected": True,
             "other_project_rejected": True,
             "other_role_rejected": True,
+            "native_control_lifecycle_observed": True,
             "review_integration_observed": True,
             "reclaim_succeeded": True,
         }
