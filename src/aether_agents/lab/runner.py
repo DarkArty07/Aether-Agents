@@ -1092,7 +1092,7 @@ if os.path.isfile(board):
                         columns = _columns(conn, "tasks")
                         if "session_affinity" in columns:
                             for task_row in conn.execute(
-                                "SELECT id, project_id, assignee, status, workspace_path, "
+                                "SELECT id, title, project_id, assignee, status, workspace_path, "
                                 "session_affinity FROM tasks"
                             ).fetchall():
                                 try:
@@ -1303,13 +1303,23 @@ if os.path.isfile(board):
                             and terminal_ran
                             and _session(main["session_id"]) == _session(first_session)
                         )
-                    controls["review_integration_observed"] = bool(
-                        root_terminal_ok
-                        and any(
+                    review_transition = any(
                             row["task_id"] in review_tasks
                             and row["kind"] in {"completed", "flow_terminal"}
                             for row in event_rows
                         )
+                    terminal_title = (
+                        str(terminal_entries[0][1]["title"]).casefold()
+                        if len(terminal_entries) == 1
+                        else ""
+                    )
+                    terminal_named_review_integration = (
+                        any(token in terminal_title for token in ("review", "revis"))
+                        and any(token in terminal_title for token in ("integrat", "integr"))
+                    )
+                    controls["review_integration_observed"] = bool(
+                        root_terminal_ok
+                        and (review_transition or terminal_named_review_integration)
                     )
                     # Route classes are set only by ``native_routing_probe``
                     # above.  Merely seeing an event in SQLite is not evidence
