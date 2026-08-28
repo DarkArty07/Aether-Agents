@@ -1444,6 +1444,7 @@ def _observe_native_affinity_controls(
     resumed_session_id: str | None,
     first_generation: int,
     workspace_path: str,
+    hermes_home: Path | None = None,
     hermes: Path | None = None,
     task_id: str | None = None,
 ) -> dict[str, object]:
@@ -1462,9 +1463,19 @@ def _observe_native_affinity_controls(
         workspace_path, task_id or "", str(board.parent / "affinity-probes"),
     ]
     try:
+        observer_env = os.environ.copy()
+        if hermes_home is not None:
+            observer_env.update(
+                {
+                    "HERMES_HOME": str(hermes_home),
+                    "HERMES_KANBAN_DB": str(board),
+                    "HERMES_KANBAN_HOME": str(board.parent),
+                }
+            )
+            observer_env.pop("HERMES_KANBAN_BOARD", None)
         result = subprocess.run(
             command, capture_output=True, text=True, timeout=30,
-            cwd=str(board.parent), check=False,
+            cwd=str(board.parent), env=observer_env, check=False,
         )
         if result.returncode != 0:
             return {}
@@ -1641,6 +1652,7 @@ def _live_affinity_lane(
         resumed_session_id=resumed_session,
         first_generation=first_generation,
         workspace_path=authorized_workspace,
+        hermes_home=hermes_root,
         hermes=hermes,
         task_id=task_id,
     )

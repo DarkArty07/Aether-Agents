@@ -702,7 +702,7 @@ print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_
     )
     assert bootstrapped.returncode == 0, bootstrapped.stderr
     fixture = json.loads(bootstrapped.stdout)
-    monkeypatch.setenv("HERMES_HOME", str(source_home))
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hostile-outer-home"))
     controls = runner._observe_native_affinity_controls(
         board=board,
         supervisor_db=tmp_path / "missing-supervisor.db",
@@ -713,6 +713,7 @@ print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_
         resumed_session_id="main-supervisor-session",
         first_generation=1,
         workspace_path=str(workspace),
+        hermes_home=source_home,
         hermes=native_python,
         task_id=fixture["task_id"],
     )
