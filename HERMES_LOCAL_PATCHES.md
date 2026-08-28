@@ -31,6 +31,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-198` | `#198` | el primer spawn de un worktree recibe la rama efectiva ya resuelta | issue `NousResearch/hermes-agent#89677`; PR `#89688` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-204` | `#204`, `#205` | límites asimétricos por perfil aplicados de forma compartida a ready/review; topología inicial Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | sin issue/PR nuevo; `#209` conserva sólo la traza downstream previa | los directorios detectados por el walker no se tratan como scripts inseguros; dispositivos y scripts reales siguen fail-closed | issue upstream `#86753`; commit integrado `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
+| `HLP-211` | `#211` | afinidad opt-in reanuda una sesión worker exacta dentro de un Project/flow/perfil y un workspace canónico, con lease/generation fencing y retorno terminal al origen | Hermes `#75830`, `#59855`, `#68779`, `#71175`; PR `#75951` cubre sólo block→unblock de la misma card | `RELOAD_PENDING / UPSTREAM_PARTIAL` |
 | `HLP-226` | `#226` | un hijo cross-profile con `workspace_kind=worktree` hereda el Project canónico del worker y recibe worktree propio | commit upstream `b9b5481d6`; PR previo `#89363` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 | `HLP-246` | `#246` | attachments validan identidad pre-transporte y readback; persisten tamaño y SHA-256 calculados | sin equivalente localizado en `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
@@ -130,6 +131,26 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Upstream:** issue cerrado <https://github.com/NousResearch/hermes-agent/issues/86753>; corrección integrada en `origin/main` mediante commit <https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702>. La revisión upstream inspeccionada `a86569bd1134867e46b49f7cef1988083d7666d8` pasó la sonda equivalente: directorio inocuo permitido, script real de lifecycle y `/dev/null` bloqueados. No se necesita nuevo issue ni PR upstream.
 - **Validación runtime pendiente:** la recarga del servicio está verificada; falta recuperar humanamente la escalación de B0, mover la misma tarjeta a `review`, repetir por la ruta ordinaria la validación que originó el falso positivo y confirmar que los controles negativos siguen bloqueados.
 - **Gate de retirada:** en una futura revisión de Hermes sin el hunk local, ejecutar la regresión exacta, toda `test_gateway_restart_loop.py` y la sonda runtime post-reinicio; sólo entonces retirar el backport y marcar `RETIRED`.
+
+## HLP-211 — continuidad de sesión worker por flujo
+
+- **Motivo:** cada card Supervisor abría una sesión nueva; descomposición, review e integración perdían historial y prompt cache aun perteneciendo al mismo Objective Contract. La corrección mantiene una sesión lógica por `(board, Project, flow_id, perfil)` y un único workspace Supervisor canónico por flujo; los Implementers conservan sesiones/worktrees independientes.
+- **Archivos activos principales:**
+  - `hermes_cli/kanban_affinity.py`
+  - `hermes_cli/kanban_db.py`
+  - `hermes_cli/kanban.py`
+  - `hermes_cli/main.py`
+  - `run_agent.py`
+  - `tui_gateway/server.py`
+  - `tools/kanban_tools.py`
+  - `gateway/kanban_watchers.py`
+  - `tests/hermes_cli/test_kanban_session_affinity.py`
+- **Semántica local:** `session_affinity={flow_id, terminal}` es opt-in; sólo cards del mismo Project, perfil, flow y workspace pueden compartir sesión. El dispatcher reserva una lease generacional antes del spawn, registra la sesión real, usa `--resume --no-restore-cwd --in <workspace>` en procesos posteriores y rechaza leases/sesiones/workspaces obsoletos. Un hijo same-profile hereda flow y workspace; hijos cross-profile no heredan sesión. Sólo `origin_signal` (`input|revision`) y `flow_terminal` despiertan el origen.
+- **Aether:** `prepare_handoff` deriva un `flow_id` determinista; Morfeo lo pasa a la raíz Supervisor, y la review/integración terminal conserva la misma affinity/workspace. La política específica permanece en Aether, no en Hermes core.
+- **Evidencia local:** pruebas focalizadas Hermes de afinidad/dispatcher/gateway y Aether E2E-16; el canary usa procesos y SQLite desechables y exige raíz + card terminal Supervisor con la misma sesión y workspace, controles nativos cross-flow/Project/role, fencing y routing. El registro final de comandos/exit codes se añade al completar la activación.
+- **Upstream:** <https://github.com/NousResearch/hermes-agent/pull/75951> reanuda sólo la misma card después de block→unblock y no cubre afinidad multi-card, Project/workspace, fencing generacional ni routing terminal. Issues relacionados: `#59855`, `#68779`, `#71175`.
+- **Estado de activación:** `RELOAD_PENDING`; procesos nuevos ejecutados desde el checkout ven el código, pero el dispatcher embebido del gateway requiere recarga controlada después de build, quiescencia y backup.
+- **Gate de retirada:** sobre una revisión upstream objetivo sin HLP-211, ejecutar E2E-16 completo y demostrar misma sesión entre raíz/review/integración en un workspace Supervisor canónico, Implementer fresco, aislamiento cross-flow/Project/profile, rechazo de generation obsoleta, `--resume --no-restore-cwd --in`, y entrega exclusiva de `input|revision|flow_terminal`. Retirar sólo los hunks equivalentes; la política Aether no se retira con Hermes.
 
 ## HLP-226 — herencia canónica de Project en hijos worktree
 
