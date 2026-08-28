@@ -9,6 +9,7 @@ import subprocess
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -378,6 +379,77 @@ def test_prepare_handoff_requires_final_bytes_in_git_head(
         store.prepare_handoff(project_id=PROJECT_A, contract_id=started["contract_id"], version=1)
 
 
+def test_prepare_handoff_returns_stable_distinct_opaque_flow_ids(
+    tmp_path: Path,
+) -> None:
+    store, registry = _store(tmp_path)
+    alpha = _project(tmp_path, registry, PROJECT_A, "alpha")
+    beta = _project(tmp_path, registry, PROJECT_B, "beta")
+
+    def ready(project_id: str, project: Path, title: str) -> dict[str, Any]:
+        subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True)
+        subprocess.run(("git", "config", "user.name", "Test"), cwd=project, check=True)
+        started = store.begin(project_id=project_id, title=title, session_id="s1")
+        revision = _complete(store, project_id, started["contract_id"], 1)
+        final = store.finalize(
+            project_id=project_id,
+            contract_id=started["contract_id"],
+            expected_revision=revision,
+            session_id="s1",
+        )
+        subprocess.run(("git", "add", "."), cwd=project, check=True)
+        subprocess.run(("git", "commit", "-qm", "test: contract"), cwd=project, check=True)
+        return store.prepare_handoff(
+            project_id=project_id,
+            contract_id=final["contract_id"],
+            version=final["version"],
+        )
+
+    alpha_first = ready(PROJECT_A, alpha, "Alpha")
+    alpha_second = store.prepare_handoff(
+        project_id=PROJECT_A,
+        contract_id=alpha_first["contract_id"],
+        version=alpha_first["version"],
+    )
+    beta_handoff = ready(PROJECT_B, beta, "Beta")
+
+    assert alpha_first["flow_id"] == alpha_second["flow_id"]
+    assert alpha_first["flow_id"] != beta_handoff["flow_id"]
+    assert re.fullmatch(r"aether\.flow\.v1:[0-9a-f]{64}", alpha_first["flow_id"])
+    assert PROJECT_A not in alpha_first["flow_id"]
+    assert alpha_first["contract_id"] not in alpha_first["flow_id"]
+
+
+def test_prepare_handoff_keeps_flow_id_out_of_short_envelope_and_body(
+    tmp_path: Path,
+) -> None:
+    store, registry = _store(tmp_path)
+    project = _project(tmp_path, registry, PROJECT_A, "alpha")
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=project, check=True)
+    started = store.begin(project_id=PROJECT_A, title="Alpha", session_id="s1")
+    revision = _complete(store, PROJECT_A, started["contract_id"], 1)
+    final = store.finalize(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision,
+        session_id="s1",
+    )
+    subprocess.run(("git", "add", "."), cwd=project, check=True)
+    subprocess.run(("git", "commit", "-qm", "test: contract"), cwd=project, check=True)
+
+    handoff = store.prepare_handoff(
+        project_id=PROJECT_A,
+        contract_id=final["contract_id"],
+        version=final["version"],
+    )
+
+    assert handoff["flow_id"]
+    assert handoff["flow_id"] not in handoff["envelope"]
+    assert "session_affinity" not in handoff["envelope"]
+    assert "flow_id" not in handoff["envelope"]
+
+
 def test_validate_reports_missing_then_complete_without_finalizing(tmp_path: Path) -> None:
     store, registry = _store(tmp_path)
     _project(tmp_path, registry, PROJECT_A, "alpha")
@@ -544,3 +616,30 @@ def test_product_resources_enable_authoring_only_for_morfeo() -> None:
     supervisor_soul = (profiles / "supervisor" / "SOUL.md").read_text(encoding="utf-8")
     assert "Never assign Implementer a unit whose acceptance requires creating" in supervisor_soul
     assert "finalized, checkpointed contract read-only" in supervisor_soul
+
+
+def test_product_resources_bind_contract_flows_without_widening_role_sessions() -> None:
+    root = Path(__file__).parents[1]
+    profiles = root / "src" / "aether_agents" / "resources" / "profiles"
+    morfeo_soul = (profiles / "morfeo" / "SOUL.md").read_text(encoding="utf-8")
+    supervisor_soul = (profiles / "supervisor" / "SOUL.md").read_text(encoding="utf-8")
+    implementer_soul = (profiles / "implementer" / "SOUL.md").read_text(encoding="utf-8")
+
+    assert "`flow_id`" in morfeo_soul
+    assert "`session_affinity`" in morfeo_soul
+    assert "`terminal=false`" in morfeo_soul
+    assert "envelope or child bodies" in morfeo_soul
+    assert "root_idempotency_key" in morfeo_soul
+
+    assert "same-profile Supervisor" in supervisor_soul
+    assert "Implementer cards" in supervisor_soul
+    assert "fresh session" in supervisor_soul
+    assert "`terminal=true`" in supervisor_soul
+    assert "root and all implementation units" in supervisor_soul
+    assert "needs-owner" in supervisor_soul
+    assert "needs-contract-revision" in supervisor_soul
+    assert "internal" in supervisor_soul
+    assert "do not signal the origin" in supervisor_soul
+
+    assert "session_affinity" not in implementer_soul
+    assert "same-profile Supervisor" not in implementer_soul

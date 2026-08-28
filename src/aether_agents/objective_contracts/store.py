@@ -34,6 +34,7 @@ _CONTRACT_ID_RE: Final = re.compile(r"^oc_[a-f0-9]{16}$", re.ASCII)
 _TRACE_ID_RE: Final = re.compile(r"^ctr_[a-f0-9]{32}$", re.ASCII)
 _SESSION_RE: Final = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 _TRUNCATION_RE: Final = re.compile(r"(?:\.\.\.)?\[truncated\]", re.IGNORECASE)
+_FLOW_ID_PREFIX: Final = "aether.flow.v1:"
 _PROJECT_SCHEMA_PACKAGED: Final = (
     Path(__file__).resolve().parent.parent / "resources" / "schemas" / "project.schema.json"
 )
@@ -286,6 +287,16 @@ class ObjectiveContractStore:
         if not isinstance(value, str) or _CONTRACT_ID_RE.fullmatch(value) is None:
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-ID-INVALID", "contract_id is invalid")
         return value
+
+    @staticmethod
+    def _flow_id(project_id: str, contract_id: str, version: int) -> str:
+        """Derive a portable opaque identity for one finalized contract flow."""
+        material = json.dumps(
+            [project_id, contract_id, version],
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("ascii")
+        return _FLOW_ID_PREFIX + hashlib.sha256(material).hexdigest()
 
     @staticmethod
     def _draft_path(root: Path, contract_id: str) -> Path:
@@ -745,6 +756,7 @@ class ObjectiveContractStore:
             "project_id": project_id,
             "contract_id": contract_id,
             "version": version,
+            "flow_id": self._flow_id(project_id, contract_id, version),
             "relative_path": relative,
             "sha256": digest,
             "base_commit": base_commit,
