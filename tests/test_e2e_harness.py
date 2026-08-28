@@ -107,7 +107,8 @@ def _fake_profile_root(tmp_path: Path) -> Path:
             "    - matcher: .*\n"
             f"      command: /private/{role}/hooks/aether_pre_tool_policy.py\n"
             "      timeout: 5\n"
-            "      fail_closed: true\n",
+            "      fail_closed: true\n"
+            "hooks_auto_accept: false\n",
             encoding="utf-8",
         )
         (profile / "sessions").mkdir()
@@ -135,6 +136,7 @@ def test_profile_preparation_copies_only_config_tracked_soul_and_candidate_hook(
         config = (target / "config.yaml").read_text(encoding="utf-8")
         assert "/private/" not in config
         assert str(target / "hooks" / "aether_pre_tool_policy.py") in config
+        assert "hooks_auto_accept: true" in config
         assert "SECRET-RUNTIME-STATE" not in "\n".join(
             path.read_text(encoding="utf-8", errors="ignore")
             for path in target.rglob("*")

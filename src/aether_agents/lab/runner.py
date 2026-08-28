@@ -214,6 +214,11 @@ def _patch_profile_hook(config_text: str, hook_path: Path) -> str:
         raise HarnessError(
             f"profile config must contain exactly one Aether pre-tool hook command; found {replacement_count}"
         )
+    auto_accept_pattern = re.compile(r"(?m)^hooks_auto_accept:\s*(?:true|false)\s*$")
+    if auto_accept_pattern.search(updated):
+        updated = auto_accept_pattern.sub("hooks_auto_accept: true", updated, count=1)
+    else:
+        updated = updated.rstrip() + "\nhooks_auto_accept: true\n"
     return updated
 
 
