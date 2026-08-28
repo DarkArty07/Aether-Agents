@@ -231,12 +231,30 @@ def test_hermes_env_pins_runtime_and_scrubs_ambient_cwd(
     exact = tmp_path / "candidate" / "hermes"
     exact.parent.mkdir()
     exact.write_text("#!/bin/sh\n", encoding="utf-8")
+    inherited_worker = {
+        "HERMES_KANBAN_TASK": "t_outer",
+        "HERMES_KANBAN_RUN_ID": "99",
+        "HERMES_KANBAN_WORKSPACE": "/private/outer-workspace",
+        "HERMES_KANBAN_BRANCH": "outer/branch",
+        "HERMES_KANBAN_BOARD": "outer-board",
+        "HERMES_KANBAN_CLAIM_LOCK": "outer-claim",
+        "HERMES_KANBAN_GOAL_MODE": "1",
+        "HERMES_KANBAN_AFFINITY_TOKEN": "outer-token",
+        "HERMES_KANBAN_AFFINITY_GENERATION": "7",
+        "HERMES_KANBAN_AFFINITY_FLOW_ID": "outer-flow",
+        "HERMES_KANBAN_AFFINITY_PROJECT_ID": "outer-project",
+        "HERMES_SESSION_ID": "outer-session",
+        "HERMES_SESSION_SOURCE": "kanban",
+    }
     monkeypatch.setenv("TERMINAL_CWD", "/private/tui-cwd")
     monkeypatch.setenv("HERMES_CWD", "/private/hermes-cwd")
+    for name, value in inherited_worker.items():
+        monkeypatch.setenv(name, value)
     env = e2e_run._hermes_env(tmp_path / "run", tmp_path / "home", exact)
     assert env["HERMES_BIN"] == str(exact.resolve())
     assert "TERMINAL_CWD" not in env
     assert "HERMES_CWD" not in env
+    assert inherited_worker.keys().isdisjoint(env)
 
 
 def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
