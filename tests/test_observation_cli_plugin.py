@@ -25,6 +25,7 @@ from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, complete_tra
 from aether_agents.cli import main
 from aether_agents.commands.observe import run_observe
 from aether_agents.observation import query, report
+from aether_agents.observation.brief import observe as observe_brief
 from aether_agents.observation.capture.journal import JournalWriter, list_segments, read_segment
 from aether_agents.observation.context import ProjectRegistry
 from aether_agents.observation.contracts import (
@@ -34,6 +35,7 @@ from aether_agents.observation.contracts import (
 )
 from aether_agents.observation.identity import correlation_token
 from aether_agents.observation.privacy import assert_clean, safe_error_class
+from aether_agents.observation.reduce.ingest import ingest_pending, reduce_trace
 from aether_agents.observation.reduce.reducer import ReductionInput, reduce_events
 from aether_agents.paths import ObservationPaths
 
@@ -189,6 +191,79 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
     assert {event.get("contract_id") for event in events if event["event_type"] == "trace.opened"} == {
         contract_id
     }
+
+
+def test_objective_contract_result_resolves_project_outside_project_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from aether_agents.observation.capture import hermes_plugin
+
+    project, paths = _install_project(monkeypatch, tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.chdir(outside)
+    monkeypatch.delenv("AETHER_PROJECT_ID", raising=False)
+    monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    contract_id = "oc_1234567890abcdef"
+    trace_id = "ctr_abcdef0123456789abcdef0123456789"
+
+    context.hooks["post_tool_call"][0](
+        tool_name="objective_contract",
+        tool_call_id="finalize-outside-project",
+        session_id="session-contract",
+        status="success",
+        args={"action": "finalize", "project_id": PROJECT_ID},
+        result={
+            "project_id": PROJECT_ID,
+            "contract_id": contract_id,
+            "version": 1,
+            "status": "final",
+            "relative_path": ".aether/objective-contracts/oc_1234567890abcdef/v1.md",
+            "sha256": "a" * 64,
+            "observation_trace_id": trace_id,
+        },
+    )
+    context.hooks["post_tool_call"][0](
+        tool_name="objective_contract",
+        tool_call_id="prepare-outside-project",
+        session_id="session-contract",
+        status="success",
+        args={"action": "prepare_handoff", "project_id": PROJECT_ID},
+        result={
+            "project_id": PROJECT_ID,
+            "contract_id": contract_id,
+            "version": 1,
+            "observation_trace_id": trace_id,
+        },
+    )
+    context.hooks["post_tool_call"][0](
+        tool_name="kanban_create",
+        tool_call_id="root-outside-project",
+        session_id="session-contract",
+        status="success",
+        args={"idempotency_key": correlation_token(trace_id, "root")},
+        result={"ok": True, "task_id": "t_87654321", "project_id": PROJECT_ID},
+    )
+    context.unload_callbacks[-1]()
+
+    events = _journal_events(paths)
+    assert {event["event_type"] for event in events} >= {
+        "trace.opened",
+        "contract.persisted",
+    }
+    assert {event["trace_id"] for event in events} == {trace_id}
+    assert project != outside
+    assert ingest_pending(paths).events_inserted == len(events)
+    reduce_trace(paths, trace_id)
+    for ref in (trace_id, contract_id, "t_87654321"):
+        result = observe_brief(
+            {"action": "status", "project": str(project), "ref": ref},
+            profile_name="morfeo",
+        )
+        assert result["state"] != "empty"
+        assert result["trace_id"] == trace_id
 
 
 def test_observe_empty_human_and_json_share_one_discriminated_representation(

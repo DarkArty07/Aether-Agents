@@ -795,6 +795,37 @@ class _Observer:
         )
         self._emit_compatibility_diagnostics(collector, trace_id)
 
+    @staticmethod
+    def _objective_contract_project_hint(hook: str, payload: dict[str, Any]) -> str | None:
+        """Return the validated Project carried by a terminal contract result.
+
+        Morfeo may author a contract from outside its repository. In that case
+        the tool result is the first exact Project binding available to the
+        observer, so collector resolution must consume it before projecting
+        the terminal hook. Other tools and non-terminal contract calls retain
+        the normal session/task/environment resolution path.
+        """
+        if hook != "post_tool_call":
+            return None
+        name = safe_ref(_pick(payload, "tool_name", "name"))
+        args = _pick(payload, "args", "arguments")
+        result = _pick(payload, "result", "tool_result")
+        if "objective_contract" not in (name or "") or not isinstance(args, dict):
+            return None
+        if args.get("action") not in {"finalize", "prepare_handoff"}:
+            return None
+        status, _ = normalize_native_status(_pick(payload, "status", "outcome"))
+        if status != "completed":
+            return None
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (TypeError, ValueError):
+                return None
+        if not isinstance(result, dict):
+            return None
+        return canonical_project_id(result.get("project_id"))
+
     def _resolve_collector(self, payload: dict[str, Any]) -> Collector | None:
         """Resolve exact project context; ambiguity writes no project event."""
         raw_candidates = (
@@ -1839,7 +1870,16 @@ class _Observer:
         handler = getattr(self, f"_on_{hook}", None)
         if handler is None:
             return
-        collector = self._resolve_collector(payload)
+        resolution_payload = payload
+        project_hint = self._objective_contract_project_hint(hook, payload)
+        if project_hint is not None:
+            existing = _pick(payload, "aether_project_id")
+            if existing not in (None, ""):
+                if canonical_project_id(existing) != project_hint:
+                    return
+            else:
+                resolution_payload = {**payload, "aether_project_id": project_hint}
+        collector = self._resolve_collector(resolution_payload)
         if collector is not None:
             self._record_native_payload_identity_rejections(collector, hook, payload)
             handler(collector, payload)
