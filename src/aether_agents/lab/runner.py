@@ -50,6 +50,7 @@ VERSION_FILE = ROOT / "VERSION"
 from .affinity import qualify_affinity_evidence  # noqa: E402
 from .collect import git_diff, git_snapshot, run_command, write_json  # noqa: E402
 from .dispatch import board_list, dispatch_until_settled, hermes_argv, snapshot_board  # noqa: E402
+from .persistent import qualify_persistent_evidence  # noqa: E402
 from .synthetic_owner import Scenario, ScenarioError, load_scenario, matching_reply  # noqa: E402
 from .validation import validate_evidence  # noqa: E402
 
@@ -67,6 +68,20 @@ HOOK_COMMAND_RE = re.compile(
 
 class HarnessError(RuntimeError):
     pass
+
+
+def _qualify_e2e15_record(
+    record: Mapping[str, Any], receipts: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Apply the strict persistent receipt policy before E2E-15 can pass or count."""
+    qualified = qualify_persistent_evidence(receipts)
+    result = dict(record)
+    result["persistent_autonomous_wake_qualified"] = qualified.qualified
+    result["rolling_reliability_counted"] = qualified.qualified
+    if not qualified.qualified:
+        result["status"] = qualified.status
+        result["reason"] = qualified.reason
+    return result
 
 
 def _scenario_path(value: str) -> Path:
@@ -1957,6 +1972,14 @@ def live_run(
             "hermes_project_id": runtime_project_id,
             "rolling_reliability_counted": True,
         }
+        if scenario.id == "e2e-15":
+            record = _qualify_e2e15_record(
+                record,
+                {
+                    "continuation_source": "one-shot",
+                    "native_surface": hermes.name,
+                },
+            )
         write_json(evidence / "run.json", _compact_run_record(record))
         return record
 
@@ -2079,6 +2102,14 @@ def live_run(
         "persistent_autonomous_wake_qualified": False,
         "rolling_reliability_counted": True,
     }
+    if scenario.id == "e2e-15":
+        record = _qualify_e2e15_record(
+            record,
+            {
+                "continuation_source": "one-shot",
+                "native_surface": hermes.name,
+            },
+        )
     write_json(evidence / "run.json", _compact_run_record(record))
     return record
 

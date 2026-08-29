@@ -71,6 +71,10 @@ def score_history(records: list[dict[str, Any]]) -> dict[str, Any]:
         and record.get("kind") != "observation"
         and record.get("suite") != "observation"
         and record.get("rolling_reliability_counted", True) is not False
+        and (
+            record.get("scenario") != "e2e-15"
+            or record.get("persistent_autonomous_wake_qualified") is True
+        )
     ]
     window = live[-20:]
     last_ten = live[-10:]
