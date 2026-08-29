@@ -170,6 +170,7 @@ jobs:
           src/aether_agents/observation/retention.py
           src/aether_agents/observation/storage.py
           src/aether_agents/paths.py
+          src/aether_agents/project_marker.py
           src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/observer-requirements.txt
           src/aether_agents/resources/profiles/implementer/config.yaml
@@ -185,7 +186,9 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py
+          tests/test_e2e15_qualification.py
           tests/test_e2e_matrix.py
           tests/test_lab_formalization.py
           tests/test_objective_contracts.py
@@ -201,6 +204,7 @@ jobs:
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py
+          tests/test_project_marker_validation.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
           uv.lock
