@@ -757,10 +757,6 @@ class _Observer:
         return max(1, fallback)
 
     @staticmethod
-    def _run_id(payload: dict[str, Any]) -> int | None:
-        return native_run_id(_pick(payload, "run_id"))
-
-    @staticmethod
     def _metadata_task_for_trace(collector: Collector, trace: str, task_ref: Any) -> str | None:
         task = native_kanban_task_ref(task_ref)
         return task if task is not None and collector.binder.trace_for(task) == trace else None

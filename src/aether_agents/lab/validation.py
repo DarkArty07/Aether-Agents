@@ -49,10 +49,6 @@ def _validate(value: Any, schema: str, label: str) -> None:
         raise ValueError(f"{label} failed schema validation")
 
 
-def validate_scenario(value: Any) -> None:
-    _validate(value, "scenario", "scenario")
-
-
 def validate_fixture_manifest(value: Any) -> None:
     _validate(value, "fixture-manifest", "fixture manifest")
 

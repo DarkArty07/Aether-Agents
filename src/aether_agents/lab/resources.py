@@ -44,10 +44,5 @@ def scenario_resource(identifier: str) -> bytes:
     return resource_bytes(f"scenarios/{filename}")
 
 
-def schema_resource(name: str) -> bytes:
-    filename = name if name.endswith(".schema.json") else f"{name}.schema.json"
-    return resource_bytes(f"schemas/{filename}")
-
-
 def fixture_manifest_resource() -> bytes:
     return resource_bytes("fixtures/manifest.json")
