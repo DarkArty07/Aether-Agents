@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -9,6 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 SCANNER = ROOT / "scripts" / "check_public_artifacts.py"
+ROOT_REPORTS = ("INTEGRATIONS.md", "INCOMPLETE_IMPLEMENTATIONS.md")
+INTEGRATIONS_SHA256 = "3bd701dd544e7fa843717ee03181b693047fd657956dfc73888345993f1383a6"
 
 
 def _run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -23,6 +27,29 @@ def _run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
 
 def test_tracked_public_surface_contains_no_operator_paths() -> None:
     completed = _run("--root", str(ROOT))
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_root_reports_are_tracked_immutable_and_privacy_safe(tmp_path: Path) -> None:
+    tracked = subprocess.run(
+        ("git", "ls-files", "--error-unmatch", *ROOT_REPORTS),
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tracked.returncode == 0, tracked.stderr
+
+    integrations = ROOT / "INTEGRATIONS.md"
+    assert integrations.stat().st_size == 8028
+    assert hashlib.sha256(integrations.read_bytes()).hexdigest() == INTEGRATIONS_SHA256
+
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    for report in ROOT_REPORTS:
+        shutil.copyfile(ROOT / report, tmp_path / report)
+    subprocess.run(("git", "add", *ROOT_REPORTS), cwd=tmp_path, check=True)
+
+    completed = _run("--root", str(tmp_path), cwd=tmp_path)
     assert completed.returncode == 0, completed.stderr
 
 

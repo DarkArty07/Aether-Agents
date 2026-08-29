@@ -25,45 +25,125 @@ jobs:
           spec_manifest=$(mktemp)
           trap 'rm -f "$expected" "$actual" "$spec_manifest"' EXIT
           cat >"$expected" <<'EOF'
-          .github/ISSUE_TEMPLATE/bug_report.md
-          .github/ISSUE_TEMPLATE/feature_request.md
-          .github/PULL_REQUEST_TEMPLATE.md
-          .github/dependabot.yml
-          .github/workflows/policy.yml
-          .github/workflows/release.yml
-          .gitignore
+          .aether/objective-contracts/oc_184c251953c157ec/v1.md
+          .aether/objective-contracts/oc_281059d9a540201f/v1.md
+          .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
+          .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
+          .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
+          .aether/objective-contracts/oc_537e9a8701b4aac7/v2.md
+          .aether/objective-contracts/oc_8b7b84c924ba0d71/v1.md
+          .aether/objective-contracts/oc_8b7b84c924ba0d71/v2.md
+          .aether/objective-contracts/oc_8b7b84c924ba0d71/v3.md
+          .aether/objective-contracts/oc_916909aee68c3473/v1.md
+          .aether/objective-contracts/oc_924b2054e774ca5b/v1.md
+          .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
+          .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+          .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
+          .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
+          .aether/project.toml
           AGENTS.md
           CHANGELOG.md
           CODE_OF_CONDUCT.md
           CONTRIBUTING.md
           DESIGN.md
+          .github/dependabot.yml
+          .github/ISSUE_TEMPLATE/bug_report.md
+          .github/ISSUE_TEMPLATE/feature_request.md
+          .github/PULL_REQUEST_TEMPLATE.md
+          .github/workflows/policy.yml
+          .github/workflows/release.yml
+          .gitignore
           HERMES_LOCAL_PATCHES.md
-          LICENSE
-          README.md
-          ROADMAP.md
-          SECURITY.md
-          VERSION
+          home/config.yaml.template
           home/.env.example
           home/SOUL.md
-          home/config.yaml.template
-          policy/hooks/README.md
+          INCOMPLETE_IMPLEMENTATIONS.md
+          INTEGRATIONS.md
+          lab/fixtures/manifest.json
+          lab/fixtures/sandbox/brownfield/AGENTS.md
+          lab/fixtures/sandbox/brownfield/message.py
+          lab/fixtures/sandbox/brownfield/sentinel.txt
+          lab/fixtures/sandbox/brownfield/verify.py
+          lab/fixtures/sandbox/concurrent/alpha.py
+          lab/fixtures/sandbox/concurrent/beta.py
+          lab/fixtures/sandbox/concurrent/gamma.py
+          lab/fixtures/sandbox/concurrent/verify.py
+          lab/fixtures/sandbox/direct-bug/calc.py
+          lab/fixtures/sandbox/direct-bug/verify.py
+          lab/fixtures/sandbox/direct-text/greeting.txt
+          lab/fixtures/sandbox/direct-text/verify.py
+          lab/fixtures/sandbox/local-choice/formatter.py
+          lab/fixtures/sandbox/local-choice/verify.py
+          lab/fixtures/sandbox/product-decision/config.py
+          lab/fixtures/sandbox/product-decision/verify.py
+          lab/fixtures/sandbox/safety/sentinel.txt
+          lab/fixtures/sandbox/safety/verify.py
+          lab/fixtures/sandbox/two-component-feature/app.py
+          lab/fixtures/sandbox/two-component-feature/normalize.py
+          lab/fixtures/sandbox/two-component-feature/render.py
+          lab/fixtures/sandbox/two-component-feature/verify.py
+          lab/README.md
+          lab/scenarios/e2e-01.json
+          lab/scenarios/e2e-02.json
+          lab/scenarios/e2e-03.json
+          lab/scenarios/e2e-04.json
+          lab/scenarios/e2e-05.json
+          lab/scenarios/e2e-06.json
+          lab/scenarios/e2e-07.json
+          lab/scenarios/e2e-08.json
+          lab/scenarios/e2e-09.json
+          lab/scenarios/e2e-10.json
+          lab/scenarios/e2e-11.json
+          lab/scenarios/e2e-12.json
+          lab/scenarios/e2e-13.json
+          lab/scenarios/e2e-14.json
+          lab/scenarios/e2e-15.json
+          lab/scenarios/e2e-16.json
+          lab/schemas/evidence.schema.json
+          lab/schemas/fixture-manifest.schema.json
+          lab/schemas/scenario.schema.json
+          LICENSE
           policy/hooks/aether_pre_tool_policy.py
+          policy/hooks/README.md
           pyproject.toml
+          README.md
+          ROADMAP.md
           scripts/aether_tui.py
           scripts/check_public_artifacts.py
+          scripts/e2e/README.md
+          scripts/e2e/collect.py
+          scripts/e2e/dispatch.py
+          scripts/e2e/matrix.py
+          scripts/e2e/run.py
+          scripts/e2e/scenarios
+          scripts/e2e/synthetic_owner.py
           scripts/qualify_observation.py
           scripts/sync_policy_hooks.py
-          src/aether_agents/__init__.py
+          SECURITY.md
           src/aether_agents/cli.py
           src/aether_agents/commands/__init__.py
           src/aether_agents/commands/observe.py
+          src/aether_agents/__init__.py
+          src/aether_agents/lab/affinity.py
+          src/aether_agents/lab/collect.py
+          src/aether_agents/lab/dispatch.py
+          src/aether_agents/lab/__init__.py
+          src/aether_agents/lab/matrix.py
+          src/aether_agents/lab/observation.py
+          src/aether_agents/lab/persistent.py
+          src/aether_agents/lab/resources.py
+          src/aether_agents/lab/runner.py
+          src/aether_agents/lab/synthetic_owner.py
+          src/aether_agents/lab/validation.py
           src/aether_agents/lifecycle.py
-          src/aether_agents/observation/__init__.py
+          src/aether_agents/objective_contracts/__init__.py
+          src/aether_agents/objective_contracts/hermes_plugin.py
+          src/aether_agents/objective_contracts/store.py
           src/aether_agents/observation/brief.py
-          src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/collector.py
           src/aether_agents/observation/capture/flusher.py
           src/aether_agents/observation/capture/hermes_plugin.py
+          src/aether_agents/observation/capture/__init__.py
           src/aether_agents/observation/capture/journal.py
           src/aether_agents/observation/capture/projectors.py
           src/aether_agents/observation/checkpoint.py
@@ -72,14 +152,15 @@ jobs:
           src/aether_agents/observation/correlation.py
           src/aether_agents/observation/fingerprints.py
           src/aether_agents/observation/identity.py
+          src/aether_agents/observation/__init__.py
           src/aether_agents/observation/locking.py
           src/aether_agents/observation/privacy.py
           src/aether_agents/observation/projection_transition.py
           src/aether_agents/observation/query.py
-          src/aether_agents/observation/reduce/__init__.py
           src/aether_agents/observation/reduce/attribution.py
           src/aether_agents/observation/reduce/flow.py
           src/aether_agents/observation/reduce/ingest.py
+          src/aether_agents/observation/reduce/__init__.py
           src/aether_agents/observation/reduce/process.py
           src/aether_agents/observation/reduce/reconciliation.py
           src/aether_agents/observation/reduce/reducer.py
@@ -89,89 +170,41 @@ jobs:
           src/aether_agents/observation/retention.py
           src/aether_agents/observation/storage.py
           src/aether_agents/paths.py
+          src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/observer-requirements.txt
           src/aether_agents/resources/profiles/implementer/config.yaml
+          src/aether_agents/resources/profiles/morfeo/SOUL.md
           src/aether_agents/resources/profiles/morfeo/config.yaml
+          src/aether_agents/resources/profiles/supervisor/SOUL.md
           src/aether_agents/resources/profiles/supervisor/config.yaml
+          src/aether_agents/resources/lab
           src/aether_agents/result.py
+          tests/fixtures/e2e
           tests/fixtures/observation/complete-summary.json
           tests/fixtures/observation/performance-baseline.json
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
-          tests/test_observation_cli_plugin.py
+          tests/test_e2e_harness.py
+          tests/test_e2e_matrix.py
+          tests/test_lab_formalization.py
+          tests/test_objective_contracts.py
           tests/test_observation_brief_tool.py
+          tests/test_observation_cli_plugin.py
           tests/test_observation_contracts.py
           tests/test_observation_journal_storage.py
           tests/test_observation_lifecycle.py
           tests/test_observation_packaging.py
           tests/test_observation_path_confinement.py
           tests/test_observation_performance.py
-          tests/test_projection_transition_runner.py
           tests/test_observation_qualification.py
           tests/test_observation_reducer.py
           tests/test_policy_hooks.py
+          tests/test_projection_transition_runner.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
-          .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
-          .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
-          .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
-          .aether/objective-contracts/oc_537e9a8701b4aac7/v2.md
-          .aether/objective-contracts/oc_924b2054e774ca5b/v1.md
-          .aether/project.toml
-          scripts/e2e/README.md
-          scripts/e2e/collect.py
-          scripts/e2e/dispatch.py
-          scripts/e2e/matrix.py
-          scripts/e2e/run.py
-          scripts/e2e/scenarios/e2e-01.json
-          scripts/e2e/scenarios/e2e-02.json
-          scripts/e2e/scenarios/e2e-03.json
-          scripts/e2e/scenarios/e2e-04.json
-          scripts/e2e/scenarios/e2e-05.json
-          scripts/e2e/scenarios/e2e-06.json
-          scripts/e2e/scenarios/e2e-07.json
-          scripts/e2e/scenarios/e2e-08.json
-          scripts/e2e/scenarios/e2e-09.json
-          scripts/e2e/scenarios/e2e-10.json
-          scripts/e2e/scenarios/e2e-11.json
-          scripts/e2e/scenarios/e2e-12.json
-          scripts/e2e/scenarios/e2e-13.json
-          scripts/e2e/scenarios/e2e-14.json
-          scripts/e2e/scenarios/e2e-15.json
-          scripts/e2e/synthetic_owner.py
-          src/aether_agents/objective_contracts/__init__.py
-          src/aether_agents/objective_contracts/hermes_plugin.py
-          src/aether_agents/objective_contracts/store.py
-          src/aether_agents/resources/profiles/implementer/SOUL.md
-          src/aether_agents/resources/profiles/morfeo/SOUL.md
-          src/aether_agents/resources/profiles/supervisor/SOUL.md
-          tests/fixtures/e2e/brownfield/AGENTS.md
-          tests/fixtures/e2e/brownfield/message.py
-          tests/fixtures/e2e/brownfield/sentinel.txt
-          tests/fixtures/e2e/brownfield/verify.py
-          tests/fixtures/e2e/concurrent/alpha.py
-          tests/fixtures/e2e/concurrent/beta.py
-          tests/fixtures/e2e/concurrent/gamma.py
-          tests/fixtures/e2e/concurrent/verify.py
-          tests/fixtures/e2e/direct-bug/calc.py
-          tests/fixtures/e2e/direct-bug/verify.py
-          tests/fixtures/e2e/direct-text/greeting.txt
-          tests/fixtures/e2e/direct-text/verify.py
-          tests/fixtures/e2e/local-choice/formatter.py
-          tests/fixtures/e2e/local-choice/verify.py
-          tests/fixtures/e2e/product-decision/config.py
-          tests/fixtures/e2e/product-decision/verify.py
-          tests/fixtures/e2e/safety/sentinel.txt
-          tests/fixtures/e2e/safety/verify.py
-          tests/fixtures/e2e/two-component-feature/app.py
-          tests/fixtures/e2e/two-component-feature/normalize.py
-          tests/fixtures/e2e/two-component-feature/render.py
-          tests/fixtures/e2e/two-component-feature/verify.py
-          tests/test_e2e_harness.py
-          tests/test_e2e_matrix.py
-          tests/test_objective_contracts.py
           uv.lock
+          VERSION
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
