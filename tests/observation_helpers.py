@@ -22,6 +22,22 @@ BASE = datetime(2026, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
 PSEUDONYM_KEY_EPOCH = "fpk_" + "4" * 32
 
 
+def project_marker(project_id: str, *, name: str = "Observation fixture") -> str:
+    """Return the complete canonical local-forge marker required by active readers."""
+    return "\n".join(
+        (
+            "schema_version = 1",
+            f'project_id = "{project_id}"',
+            f'name = "{name}"',
+            'initialized_by = "1.0.0"',
+            'forge = "local"',
+            'contract_root = "specs"',
+            'default_branch = "main"',
+            "",
+        )
+    )
+
+
 def native_pseudonym(kind: str, value: str) -> str:
     """Stable, syntactically valid keyed-identity fixture (never production HMAC)."""
     if native_pseudonym_ref(value, kind=kind) is not None:

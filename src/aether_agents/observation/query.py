@@ -19,6 +19,7 @@ from typing import Any, Callable, Iterator
 
 from aether_agents.observation.privacy import safe_error_class
 from aether_agents.paths import ObservationPaths, UnsafeObservationPath, read_private_bytes
+from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 
 __all__ = [
     "ObservationQueryError",
@@ -81,9 +82,6 @@ class SummaryNotFoundError(ObservationQueryError):
 # Project resolution (OBS-FR-077 / OBS-D-022)
 # ------------------------------------------------------------------------------------
 
-_PROJECT_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-
-
 @dataclass(frozen=True, slots=True)
 class ProjectResolution:
     """The canonical lower-case project UUID plus the directory it was read from."""
@@ -101,9 +99,12 @@ def _read_project_toml(candidate: Path) -> ProjectResolution | None:
             data = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError):
         return None
-    project_id = data.get("project_id")
-    if not isinstance(project_id, str) or not _PROJECT_UUID_RE.fullmatch(project_id):
+    try:
+        marker = validate_project_marker(data)
+    except ProjectMarkerValidationError:
         return None
+    project_id = marker["project_id"]
+    assert isinstance(project_id, str)
     return ProjectResolution(project_id=project_id, project_root=candidate)
 
 

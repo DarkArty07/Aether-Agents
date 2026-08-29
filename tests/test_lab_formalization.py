@@ -83,7 +83,8 @@ def test_prepare_only_emits_schema_valid_compact_evidence(tmp_path: Path) -> Non
 
 
 def test_observation_prepare_only_calls_registered_tool_for_each_action(tmp_path: Path) -> None:
-    result = lab.prepare_observation_only(tmp_path / "observation")
+    run_root = tmp_path / "observation"
+    result = lab.prepare_observation_only(run_root)
     assert result["status"] == "PREPARED"
     assert result["suite"] == "observation"
     assert result["registered_tool"] == "aether_observe"
@@ -93,6 +94,9 @@ def test_observation_prepare_only_calls_registered_tool_for_each_action(tmp_path
     assert result["calls"][1]["bytes"] <= 2048
     assert result["calls"][2]["bytes"] <= 4096
     lab.validate_evidence(result)
+    registry = run_root / "state" / "aether" / "projects" / "registry.json"
+    assert registry.is_file()
+    assert list((run_root / "state").rglob("registry.json")) == [registry]
 
 
 def test_live_observation_invokes_supplied_runtime_once_after_spend_acknowledgement(

@@ -62,11 +62,23 @@ def _seed_trace(root: Path) -> tuple[Path, ObservationPaths, str, str]:
     project = root / "project"
     (project / ".aether").mkdir(parents=True, exist_ok=True)
     (project / ".aether" / "project.toml").write_text(
-        f'project_id = "{project_id}"\n', encoding="utf-8"
+        "\n".join(
+            (
+                "schema_version = 1",
+                f'project_id = "{project_id}"',
+                'name = "Aether observation laboratory"',
+                f'initialized_by = "{product_version()}"',
+                'forge = "local"',
+                'contract_root = "specs"',
+                'default_branch = "main"',
+                "",
+            )
+        ),
+        encoding="utf-8",
     )
     state = root / "state"
     paths = ObservationPaths.for_project(project_id, root=state / "aether")
-    ProjectRegistry(root=state / "aether" / "projects").register(project_id, project, "lab")
+    ProjectRegistry(root=state / "aether").register(project_id, project, "lab")
     builder = EventBuilder(
         trace_id=trace_id,
         project_id=project_id,

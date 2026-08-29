@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from observation_helpers import PROJECT_ID, TRACE_ID
+from observation_helpers import PROJECT_ID, TRACE_ID, project_marker
 
 from aether_agents.lifecycle import HERMES_BASELINE, IntegrityError, verify_clean_checkout
 from aether_agents.observation.capture.journal import list_segments, read_segment
@@ -96,7 +96,7 @@ def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes" / "profiles" / "morfeo"))

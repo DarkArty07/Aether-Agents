@@ -14,7 +14,7 @@ from pathlib import Path
 from time import perf_counter, perf_counter_ns
 from typing import Any
 
-from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory
+from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, project_marker
 
 from aether_agents.observation.capture import hermes_plugin
 from aether_agents.observation.context import ProjectRegistry
@@ -93,7 +93,7 @@ def test_native_plugin_callback_latency_includes_projection_validation_and_appen
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(state))
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes" / "profiles" / "morfeo"))

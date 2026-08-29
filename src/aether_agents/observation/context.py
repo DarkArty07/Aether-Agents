@@ -37,6 +37,7 @@ from aether_agents.paths import (
     read_private_bytes,
     state_root,
 )
+from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 
 __all__ = [
     "HealthCounters",
@@ -77,11 +78,10 @@ def read_project_marker(project_path: Path | str) -> dict[str, Any] | None:
         data = tomllib.loads(marker.read_text(encoding="utf-8"))
     except (OSError, ValueError, ImportError):
         return None
-    if not isinstance(data, dict):
+    try:
+        return validate_project_marker(data)
+    except ProjectMarkerValidationError:
         return None
-    if canonical_project_id(data.get("project_id")) is None:
-        return None
-    return data
 
 
 @dataclass(frozen=True, slots=True)

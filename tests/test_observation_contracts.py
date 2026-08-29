@@ -17,6 +17,7 @@ from observation_helpers import (
     EventFactory,
     complete_trace,
     native_pseudonym,
+    project_marker,
 )
 
 from aether_agents import paths as paths_module
@@ -995,7 +996,7 @@ def _registered_project(tmp_path, project_id: str = PROJECT_ID):
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{project_id}"\n', encoding="utf-8")
+    marker.write_text(project_marker(project_id), encoding="utf-8")
     registry = ProjectRegistry(state)
     assert registry.register(project_id, project, "fixture")
     return state, project, registry
@@ -1006,9 +1007,7 @@ def test_project_resolution_requires_verified_sources_and_detects_conflicts(tmp_
     second = "22222222-2222-4222-8222-222222222222"
     project2 = tmp_path / "project2"
     (project2 / ".aether").mkdir(parents=True)
-    (project2 / ".aether" / "project.toml").write_text(
-        f'project_id = "{second}"\n', encoding="utf-8"
-    )
+    (project2 / ".aether" / "project.toml").write_text(project_marker(second), encoding="utf-8")
     assert registry.register(second, project2, "fixture2")
     health = HealthCounters(state)
     resolver = ObservationContextResolver(registry=registry, health=health)

@@ -24,7 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace
+from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace, project_marker
 
 import aether_agents.cli as cli_module
 import aether_agents.lifecycle as lifecycle
@@ -2863,7 +2863,7 @@ def test_exact_public_lifecycle_uses_real_plugin_profiles_query_and_recovery(
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     assert ProjectRegistry().register(PROJECT_ID, project, "lifecycle-exact")
 
     hook_results = {
@@ -3073,7 +3073,7 @@ def test_disposable_public_install_capture_query_update_rollback_uninstall_purge
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     assert ProjectRegistry().register(PROJECT_ID, project, "lifecycle-e2e")
     paths = ObservationPaths.for_project(PROJECT_ID)
     fixture = complete_trace()

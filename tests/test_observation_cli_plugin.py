@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, complete_trace
+from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, complete_trace, project_marker
 
 from aether_agents.cli import main
 from aether_agents.commands.observe import run_observe
@@ -62,7 +62,7 @@ def _install_project(
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
     registry = ProjectRegistry()
     assert registry.register(PROJECT_ID, project, "fixture")

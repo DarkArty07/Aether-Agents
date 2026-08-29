@@ -8,12 +8,12 @@ import os
 import re
 import sys
 import tomllib
+import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
 REQUIRED_TOOLSETS = frozenset({"file", "kanban"})
-_PROJECT_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _RESERVED_ARGS = frozenset(
     {
         "--cli",
@@ -36,6 +36,171 @@ class ActivationError(RuntimeError):
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+class _UnsupportedProjectSchema(ValueError):
+    """The direct-launch adapter cannot safely evaluate a changed canonical schema."""
+
+
+_SCHEMA_KEYWORDS = frozenset(
+    {
+        "$id",
+        "$schema",
+        "additionalProperties",
+        "allOf",
+        "const",
+        "else",
+        "enum",
+        "format",
+        "if",
+        "maxLength",
+        "minLength",
+        "not",
+        "pattern",
+        "properties",
+        "required",
+        "then",
+        "title",
+        "type",
+    }
+)
+
+
+def _schema_matches(value: object, schema: object) -> bool:
+    """Evaluate every JSON Schema keyword used by the canonical project marker schema.
+
+    This intentionally small adapter keeps the direct source launcher stdlib-only. It
+    loads the same canonical schema as the package validator and fails closed if the
+    schema gains a keyword this adapter cannot evaluate.
+    """
+    if isinstance(schema, bool):
+        return schema
+    if not isinstance(schema, dict):
+        raise _UnsupportedProjectSchema("schema node must be an object or boolean")
+    unknown = set(schema) - _SCHEMA_KEYWORDS
+    if unknown:
+        raise _UnsupportedProjectSchema("schema contains unsupported validation keywords")
+
+    expected_type = schema.get("type")
+    if expected_type is not None:
+        if expected_type == "object":
+            if not isinstance(value, dict):
+                return False
+        elif expected_type == "string":
+            if not isinstance(value, str):
+                return False
+        else:
+            raise _UnsupportedProjectSchema("schema contains an unsupported type")
+
+    if "const" in schema and value != schema["const"]:
+        return False
+    if "enum" in schema:
+        allowed = schema["enum"]
+        if not isinstance(allowed, list):
+            raise _UnsupportedProjectSchema("schema enum must be an array")
+        if value not in allowed:
+            return False
+
+    if isinstance(value, str):
+        minimum = schema.get("minLength")
+        maximum = schema.get("maxLength")
+        if not isinstance(minimum, int) or isinstance(minimum, bool):
+            if minimum is not None:
+                raise _UnsupportedProjectSchema("schema minLength must be an integer")
+        elif len(value) < minimum:
+            return False
+        if not isinstance(maximum, int) or isinstance(maximum, bool):
+            if maximum is not None:
+                raise _UnsupportedProjectSchema("schema maxLength must be an integer")
+        elif len(value) > maximum:
+            return False
+        pattern = schema.get("pattern")
+        if pattern is not None:
+            if not isinstance(pattern, str):
+                raise _UnsupportedProjectSchema("schema pattern must be a string")
+            try:
+                if re.search(pattern, value) is None:
+                    return False
+            except re.error as exc:
+                raise _UnsupportedProjectSchema("schema pattern is invalid") from exc
+        format_name = schema.get("format")
+        if format_name is not None:
+            if format_name != "uuid":
+                raise _UnsupportedProjectSchema("schema contains an unsupported format")
+            try:
+                uuid.UUID(value)
+            except ValueError:
+                return False
+
+    if isinstance(value, dict):
+        if "required" in schema:
+            required = schema["required"]
+            if not isinstance(required, list) or not all(
+                isinstance(name, str) for name in required
+            ):
+                raise _UnsupportedProjectSchema("schema required must be an array of strings")
+            if any(name not in value for name in required):
+                return False
+        properties: dict[object, object] = {}
+        if "properties" in schema:
+            candidate_properties = schema["properties"]
+            if not isinstance(candidate_properties, dict):
+                raise _UnsupportedProjectSchema("schema properties must be an object")
+            properties = candidate_properties
+            for name, child_schema in properties.items():
+                if not isinstance(name, str):
+                    raise _UnsupportedProjectSchema("schema property name must be a string")
+                if name in value and not _schema_matches(value[name], child_schema):
+                    return False
+        additional = schema.get("additionalProperties", True)
+        if additional is not True and additional is not False:
+            raise _UnsupportedProjectSchema("schema additionalProperties must be boolean")
+        if additional is False and any(name not in properties for name in value):
+            return False
+
+    if "allOf" in schema:
+        all_of = schema["allOf"]
+        if not isinstance(all_of, list):
+            raise _UnsupportedProjectSchema("schema allOf must be an array")
+        if any(not _schema_matches(value, child_schema) for child_schema in all_of):
+            return False
+    if "if" in schema:
+        condition = _schema_matches(value, schema["if"])
+        branch = schema.get("then") if condition else schema.get("else")
+        if branch is not None and not _schema_matches(value, branch):
+            return False
+    if "not" in schema and _schema_matches(value, schema["not"]):
+        return False
+    return True
+
+
+def _validate_project_marker(payload: object) -> dict[str, object]:
+    """Validate the marker directly against its canonical source schema.
+
+    The launcher remains usable with only the standard library, unlike the packaged
+    validator. Its adapter is schema-driven and fails closed if it cannot maintain
+    complete parity with the canonical policy.
+    """
+    try:
+        schema_path = (
+            _repo_root()
+            / "specs"
+            / "001-aether-v1-productization"
+            / "contracts"
+            / "project.schema.json"
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ActivationError("portable Aether project marker schema is unavailable") from exc
+    try:
+        valid = _schema_matches(payload, schema)
+    except _UnsupportedProjectSchema as exc:
+        raise ActivationError("portable Aether project marker schema is unsupported") from exc
+    if not isinstance(payload, dict) or not valid:
+        raise ActivationError(
+            "portable Aether project marker does not conform to the canonical schema"
+        )
+    return payload
 
 
 def _top_level_toolsets(config: Path) -> set[str]:
@@ -66,8 +231,9 @@ def _portable_project_id(repo: Path) -> str:
         payload = tomllib.loads(marker.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
         raise ActivationError("portable Aether project marker is unreadable") from exc
-    project_id = payload.get("project_id") if isinstance(payload, dict) else None
-    if not isinstance(project_id, str) or _PROJECT_UUID_RE.fullmatch(project_id) is None:
+    validated = _validate_project_marker(payload)
+    project_id = validated["project_id"]
+    if not isinstance(project_id, str):  # schema validation proves this; preserve a typed boundary.
         raise ActivationError("portable Aether project marker has no valid project_id")
     return project_id
 

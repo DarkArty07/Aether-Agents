@@ -499,7 +499,21 @@ def measure_callbacks(call_pairs: int = 500) -> dict[str, Any]:
         project = root / "project"
         marker = project / ".aether" / "project.toml"
         marker.parent.mkdir(parents=True)
-        marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+        marker.write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    f'project_id = "{PROJECT_ID}"',
+                    'name = "Observation qualification"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
         previous_environment = {
             key: os.environ.get(key)
             for key in ("XDG_STATE_HOME", "AETHER_PROJECT_ID", "HERMES_HOME")

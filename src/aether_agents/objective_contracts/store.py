@@ -13,11 +13,8 @@ import threading
 import tomllib
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Final, Iterator
-
-from jsonschema import Draft202012Validator
 
 from aether_agents.observation.context import ProjectRegistry, canonical_project_id
 from aether_agents.observation.privacy import contains_secret_shape
@@ -29,22 +26,13 @@ from aether_agents.paths import (
     ensure_private_dir,
     read_private_bytes,
 )
+from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 
 _CONTRACT_ID_RE: Final = re.compile(r"^oc_[a-f0-9]{16}$", re.ASCII)
 _TRACE_ID_RE: Final = re.compile(r"^ctr_[a-f0-9]{32}$", re.ASCII)
 _SESSION_RE: Final = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 _TRUNCATION_RE: Final = re.compile(r"(?:\.\.\.)?\[truncated\]", re.IGNORECASE)
 _FLOW_ID_PREFIX: Final = "aether.flow.v1:"
-_PROJECT_SCHEMA_PACKAGED: Final = (
-    Path(__file__).resolve().parent.parent / "resources" / "schemas" / "project.schema.json"
-)
-_PROJECT_SCHEMA_SOURCE: Final = (
-    Path(__file__).resolve().parents[3]
-    / "specs"
-    / "001-aether-v1-productization"
-    / "contracts"
-    / "project.schema.json"
-)
 _PROCESS_LOCKS: dict[str, threading.RLock] = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 
@@ -53,17 +41,6 @@ def _git_environment() -> dict[str, str]:
     environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     environment["GIT_TERMINAL_PROMPT"] = "0"
     return environment
-
-
-@lru_cache(maxsize=1)
-def _project_schema_validator() -> Draft202012Validator:
-    path = _PROJECT_SCHEMA_PACKAGED if _PROJECT_SCHEMA_PACKAGED.is_file() else _PROJECT_SCHEMA_SOURCE
-    try:
-        schema = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ContractError("PROJECT-MARKER-INVALID", "project schema is unavailable") from exc
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
 
 
 @contextmanager
@@ -263,9 +240,13 @@ class ObjectiveContractStore:
                 os.close(descriptor)
             if directory_fd >= 0:
                 os.close(directory_fd)
-        errors = sorted(_project_schema_validator().iter_errors(marker), key=lambda error: list(error.path))
-        if errors:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID", errors[0].message)
+        try:
+            validate_project_marker(marker)
+        except ProjectMarkerValidationError as exc:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID",
+                "project marker does not conform to the canonical schema",
+            ) from exc
         marker_id = canonical_project_id(marker.get("project_id"))
         if marker_id != canonical:
             raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "registry and .aether/project.toml do not identify the same project")
@@ -730,10 +711,11 @@ class ObjectiveContractStore:
             committed_marker = tomllib.loads(marker.stdout.decode("utf-8"))
         except (UnicodeError, tomllib.TOMLDecodeError):
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
-        if (
-            list(_project_schema_validator().iter_errors(committed_marker))
-            or canonical_project_id(committed_marker.get("project_id")) != project_id
-        ):
+        try:
+            validate_project_marker(committed_marker)
+        except ProjectMarkerValidationError:
+            return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
+        if canonical_project_id(committed_marker.get("project_id")) != project_id:
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
         current_head = self._git(root, "rev-parse", "--verify", "HEAD^{commit}")
         if current_head.returncode != 0 or current_head.stdout.decode("ascii").strip() != base_commit:

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace
+from observation_helpers import PROJECT_ID, TRACE_ID, complete_trace, project_marker
 
 from aether_agents.observation import brief, query
 from aether_agents.observation.capture.journal import JournalWriter
@@ -21,7 +21,7 @@ def _project(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Obs
     project = tmp_path / "project"
     marker = project / ".aether" / "project.toml"
     marker.parent.mkdir(parents=True)
-    marker.write_text(f'project_id = "{PROJECT_ID}"\n', encoding="utf-8")
+    marker.write_text(project_marker(PROJECT_ID), encoding="utf-8")
     assert ProjectRegistry().register(PROJECT_ID, project, "brief")
     return project, ObservationPaths.for_project(PROJECT_ID)
 
