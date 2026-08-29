@@ -381,13 +381,6 @@ def _run_transition(args: argparse.Namespace, *, rollback: bool) -> int:
     manager = _lifecycle_manager()
     try:
         executing_manager = manager.executing_active_manager()
-        # Rollback is deliberately available when the active Hermes runtime is
-        # broken.  Structural store recovery is Hermes-free; the selected rollback
-        # target is fully revalidated by activate_existing before the pointer moves.
-        if rollback:
-            manager.recover_for_rollback()
-        else:
-            manager.recover()
         local_wheel = getattr(args, "wheel", None)
         local_checkout = getattr(args, "hermes_checkout", None)
         local_release_lock = getattr(args, "release_lock", None)
@@ -400,25 +393,28 @@ def _run_transition(args: argparse.Namespace, *, rollback: bool) -> int:
             raise IntegrityError(
                 "local update requires --wheel, --hermes-checkout and --release-lock"
             )
-        current = manager.store.active()
-        assert current is not None
-        candidate = None
-        target = None
-        if local_wheel is not None:
-            candidate = manager.inspect_candidate(
-                wheel=local_wheel,
-                hermes_checkout=local_checkout,
-                release_lock=local_release_lock,
-            )
-            if args.version is not None and candidate["version"] != args.version:
-                raise IntegrityError("requested version differs from candidate wheel")
-            target_version = candidate["version"]
-            target_release_id = f"{target_version}-{candidate['wheel_sha256'][:16]}"
-        else:
-            target = _select_release(manager, args.version, rollback=rollback)
-            target_version = target.version
-            target_release_id = target.release_id
+        # A dry-run and the ordinary confirmation prompt are plans, not recovery
+        # requests.  Reading the coherent active record and target must therefore
+        # complete before any lifecycle mutation is considered.
         if args.dry_run or not args.yes:
+            current = manager.store.active()
+            assert current is not None
+            if local_wheel is not None:
+                assert local_checkout is not None
+                assert local_release_lock is not None
+                candidate = manager.inspect_candidate(
+                    wheel=local_wheel,
+                    hermes_checkout=local_checkout,
+                    release_lock=local_release_lock,
+                )
+                if args.version is not None and candidate["version"] != args.version:
+                    raise IntegrityError("requested version differs from candidate wheel")
+                target_version = candidate["version"]
+                target_release_id = f"{target_version}-{candidate['wheel_sha256'][:16]}"
+            else:
+                target = _select_release(manager, args.version, rollback=rollback)
+                target_version = target.version
+                target_release_id = target.release_id
             envelope = Envelope(
                 command=command,
                 result="planned",
@@ -441,6 +437,33 @@ def _run_transition(args: argparse.Namespace, *, rollback: bool) -> int:
                 json_mode=args.json,
                 human=f"planned {command}: {current.version} -> {target_version}",
             )
+        # Rollback is deliberately available when the active Hermes runtime is
+        # broken.  Structural store recovery is Hermes-free; the selected rollback
+        # target is fully revalidated by activate_existing before the pointer moves.
+        if rollback:
+            manager.recover_for_rollback()
+        else:
+            manager.recover()
+        current = manager.store.active()
+        assert current is not None
+        candidate = None
+        target = None
+        if local_wheel is not None:
+            assert local_checkout is not None
+            assert local_release_lock is not None
+            candidate = manager.inspect_candidate(
+                wheel=local_wheel,
+                hermes_checkout=local_checkout,
+                release_lock=local_release_lock,
+            )
+            if args.version is not None and candidate["version"] != args.version:
+                raise IntegrityError("requested version differs from candidate wheel")
+            target_version = candidate["version"]
+            target_release_id = f"{target_version}-{candidate['wheel_sha256'][:16]}"
+        else:
+            target = _select_release(manager, args.version, rollback=rollback)
+            target_version = target.version
+            target_release_id = target.release_id
         if candidate is not None:
             selected = manager.update(
                 wheel=local_wheel,

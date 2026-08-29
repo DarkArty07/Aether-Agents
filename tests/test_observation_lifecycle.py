@@ -2710,6 +2710,97 @@ def test_purge_refuses_ownership_marker_swapped_after_symlink_check(
     assert external.read_bytes() == external_bytes
 
 
+@pytest.mark.parametrize(
+    ("command", "arguments"),
+    [
+        pytest.param("update", ["1.0.2", "--dry-run", "--json"], id="update-dry-run"),
+        pytest.param("update", ["1.0.2", "--json"], id="update-confirmation-plan"),
+        pytest.param("rollback", ["--dry-run", "--json"], id="rollback-dry-run"),
+        pytest.param("rollback", ["--json"], id="rollback-confirmation-plan"),
+    ],
+)
+def test_cli_transition_plans_do_not_recover_or_mutate_persistent_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    arguments: list[str],
+) -> None:
+    store = ReleaseStore(tmp_path / "data" / "aether", state_root=tmp_path / "state" / "aether")
+    first = store.activate(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    second = store.activate(_prepared_release(tmp_path / "r2", "1.0.1", b"wheel-two"))
+    third = store.register(_prepared_release(tmp_path / "r3", "1.0.2", b"wheel-three"))
+    pending = store.begin_transition(
+        kind="update",
+        from_release_id=second.release_id,
+        to_release_id=third.release_id,
+    )
+    incomplete = store.releases / ".partial-release"
+    incomplete.mkdir()
+    (incomplete / "partial").write_bytes(b"candidate-only")
+    pointer_temp = store.root / ".active.json.123.tmp"
+    pointer_temp.write_bytes(b"partial pointer")
+
+    def persistent_files() -> dict[str, bytes]:
+        return {
+            str(path.relative_to(tmp_path)): path.read_bytes()
+            for root in (store.root, store.state_root)
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+        }
+
+    before = persistent_files()
+    active_pointer_before = store.active_pointer.read_bytes()
+    pending_before = pending.read_bytes()
+    recovery_calls: list[str] = []
+
+    class FakeManager:
+        def __init__(self) -> None:
+            self.store = store
+
+        def executing_active_manager(self):
+            return self.store.active()
+
+        def recover(self) -> dict[str, int]:
+            recovery_calls.append("recover")
+            pytest.fail("update planning must not invoke lifecycle recovery")
+
+        def recover_for_rollback(self) -> dict[str, int]:
+            recovery_calls.append("recover_for_rollback")
+            pytest.fail("rollback planning must not invoke lifecycle recovery")
+
+        def update(self, **_kwargs):
+            pytest.fail("update planning must not execute a lifecycle transition")
+
+        def activate_existing(self, *_args, **_kwargs):
+            pytest.fail("transition planning must not activate a release")
+
+        def rollback(self, **_kwargs):
+            pytest.fail("rollback planning must not execute a lifecycle transition")
+
+    monkeypatch.setattr(cli_module, "_lifecycle_manager", FakeManager)
+    monkeypatch.setattr(cli_module, "_dispatch_stateful_to_active", lambda *_args, **_kwargs: None)
+
+    assert main([command, *arguments]) == 0
+
+    planned = json.loads(capsys.readouterr().out)
+    expected_target = third if command == "update" else first
+    assert planned["result"] == "planned"
+    assert planned["data"]["current_release_id"] == second.release_id
+    assert planned["data"]["target_release_id"] == expected_target.release_id
+    assert planned["data"]["target_version"] == expected_target.version
+    if "--dry-run" in arguments:
+        assert planned["warnings"] == []
+    else:
+        assert planned["warnings"][0]["code"] == "CONFIRMATION_REQUIRED"
+    assert recovery_calls == []
+    assert store.active_pointer.read_bytes() == active_pointer_before
+    assert pending.read_bytes() == pending_before
+    assert incomplete.is_dir()
+    assert pointer_temp.exists()
+    assert persistent_files() == before
+
+
 def test_cli_setup_requires_explicit_opt_in_before_local_install(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
