@@ -274,7 +274,10 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
         self.assertIn("zero hooks after unload", self.observation)
         self.assertIn("antecedent only and is non-qualifying", self.research)
         self.assertIn("#195` — curated semantic progress: **CLOSED", self.roadmap)
-        self.assertIn("observation lane was executed separately", self.roadmap)
+        self.assertIn(
+            "Deterministic implementation evidence did not substitute for controlled runtime evidence",
+            self.roadmap,
+        )
 
 
 if __name__ == "__main__":
