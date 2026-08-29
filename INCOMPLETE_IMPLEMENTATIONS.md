@@ -78,16 +78,23 @@ byte-locked and both report contents must pass the tracked public-artifact scann
 ### Triage-to-origin wake
 
 - **Current behavior:** the reliability/release reconciliation records an open flow that
-  can stall in triage without waking the originating Morfeo flow.
+  can stall in triage without waking the originating Morfeo flow. A controlled local
+  execution on 2026-08-29 reproduced the gap: the first ordinary local guard denial was
+  automatically retried, the second denial triggered block-loop escalation to triage and
+  emitted an origin signal, but the originating Morfeo TUI did not receive a turn. The
+  flow remained gated until a later owner message independently opened that session.
 - **Missing boundary:** a verified native lifecycle signal from triage to the originating
-  flow, with clear ownership and retry semantics.
+  flow, with clear ownership and retry semantics, that creates a Morfeo turn without a
+  second owner message and preserves the original objective context.
 - **Dependencies and risks:** depends on Hermes lifecycle behavior and must not be
   replaced with an unqualified second message or polling workaround. Incorrect routing
-  can silently strand owner work.
-- **Evidence:** `ROADMAP.md`, `HERMES_LOCAL_PATCHES.md`, and
-  `specs/r7-supervision-and-convergence/spec.md`.
-- **Deferred owner decision:** decide whether to carry this as a product requirement and
-  authorize the native fix or upstream/downstream qualification separately.
+  can silently strand owner work while the board incorrectly appears to have escalated it.
+- **Evidence:** `ROADMAP.md`, `HERMES_LOCAL_PATCHES.md`,
+  `specs/r7-supervision-and-convergence/spec.md`, and the durable Kanban run/block-loop
+  events for the 2026-08-29 cleanup objective.
+- **Deferred owner decision:** retain this as a required autonomy boundary and separately
+  authorize the native wake/routing fix and same-path qualification. Do not treat an
+  origin-signal row alone as proof that Morfeo actually woke.
 
 ## 4. Dormant optional maintenance retained intentionally
 
