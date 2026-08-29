@@ -109,16 +109,19 @@ Liveness, semantic progress, and termination are separate. Failure retries, resu
 
 ## 7. Open release-visible limitations
 
-Read-only GitHub inspection on 2026-08-21 found:
+Current issue reconciliation on 2026-08-29 found:
 
+- `#192` — retry/resumption/lifecycle accounting: **CLOSED**;
 - `#195` — curated semantic progress: **CLOSED after bounded provider-backed observation qualification**;
-- `#211` — per-flow Morfeo/Supervisor session affinity: **OPEN**;
+- `#211` — per-flow Morfeo/Supervisor session affinity: **CLOSED after live same-session qualification and post-restart activation**;
+- `#212` — TUI subscription delivery defect: **CLOSED**;
+- `#256` — an open flow can stall in triage without waking origin Morfeo: **OPEN**;
 - `#220` — protected remote CI qualification for Contract Observation: **OPEN**; and
 - `#242` — immutable Hermes/Aether runtime set: **OPEN**.
 
 Issue `#198` is closed for the owner-authorized local repair, but the selected public Hermes tag still exhibits the first-spawn branch defect; that public behavior remains a transitional patch gate. An issue or upstream merge is not qualification by itself.
 
-Deterministic implementation evidence did not substitute for the controlled real trace: the observation lane was executed separately and #195 is closed. Aether 1.0 is still not called complete, release-ready, or production-ready while the PD-74 rolling gate, native persistent wake, protected CI (#220), and immutable runtime (#242) remain open.
+Deterministic implementation evidence did not substitute for controlled runtime evidence: #195 and #211 were each closed only after their live qualification and activation gates passed. Aether 1.0 is still not called complete, release-ready, or production-ready while the PD-74 rolling gate, triage-to-origin wake defect (#256), protected CI (#220), and immutable runtime (#242) remain open.
 
 ## 8. Change and regression
 

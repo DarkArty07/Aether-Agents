@@ -145,7 +145,7 @@ Preregister the scenario, realistic Git fixture, owner acceptance command, exact
 4. verify the running deliverable by the preregistered command; and
 5. retain redacted evidence that distinguishes liveness, activity, semantic progress, waiting, anomalies, termination, retries, resumptions, redispatches, reviews, and lifecycle corrections.
 
-Heartbeat alone is never progress. Issue `#192` remains an open limitation until its own acceptance matrix passes. Under PD-68, issue `#195` is a stable-1.0 prerequisite satisfied only by the deterministic and controlled-real-trace matrix in `../002-aether-contract-observation/`. Issues `#211` and `#212` separately keep per-flow session affinity and the invalid TUI notification path visible; no RC may claim automatic TUI return while `platform=tui` subscriptions are discarded.
+Heartbeat alone is never progress. Issues `#192`, `#195`, `#211`, and `#212` now retain completed qualification evidence. Issue `#256` separately keeps triage-to-origin wake visible; no RC may claim complete automatic owner return while an open flow can stall without an explicit `input`, `revision`, or `flow_terminal` event.
 
 ## 4. Dependency phases and exit gates
 

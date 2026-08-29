@@ -22,9 +22,9 @@ The whole design follows from that split. Every rule about handoffs, evidence, a
 |---|---|---|---|
 | **Morfeo** | Yes — the only one | Constitution, specification, clarification, technical plan, and bounded direct operational stewardship | Frontier |
 | **Supervisor** | No | Task breakdown, executability analysis, review, decisions, convergence, integration | Capable |
-| **Implementer** | No | Writing the code. Many run concurrently | Inexpensive |
+| **Implementer** | No | Writing the code. Many run concurrently | Capable |
 
-Every role is a real operating-system process with its own Hermes profile: its own configuration, credentials, memory, skills, and model. Two agent processes never share a profile.
+Every role is a real operating-system process. Each role has its own Hermes profile with separate configuration, credentials, memory, skills, and model; replicated Implementer processes share the Implementer profile while retaining independent sessions, cards, and worktrees.
 
 Roles are never added to solve an execution problem. Fresh context, a card-pinned skill, or a per-card model override are tried first; a fourth role requires an explicit owner decision.
 
@@ -60,6 +60,12 @@ Morfeo chooses between the two routes by reasoning over the owner's complete obj
 The coordination substrate is Hermes's durable board: a SQLite table where each row is one unit of work, plus a dispatcher loop that launches the assigned profile as a process. Nothing in Aether queues, retries, reclaims, or audits — all of that already exists.
 
 **Nobody administers the board.** Routing lives in the dependency graph, state lives in the table, execution lives in short-lived processes. No agent holds two of the three, which is what keeps the architecture from collapsing back into the hub-and-spoke shape that failed before.
+
+### Session continuity
+
+Process lifetime is not conversation lifetime. Morfeo keeps the owner-facing session that originated the flow. For pipeline work, `prepare_handoff` derives an opaque deterministic `flow_id`; all Supervisor phases for that Objective Contract reuse one exact Hermes session and one canonical Supervisor workspace, even though decomposition, review, and integration run in separate operating-system processes. Each Implementer card still receives a fresh session and its own worktree.
+
+Hermes enforces the binding over `(board, Project, flow_id, profile)` with an exclusive generation-fenced lease. A later Supervisor process resumes with `--resume`, pins the accepted flow workspace with `--no-restore-cwd --in`, and cannot replace a live or stale-mismatched writer. Internal milestones remain silent; only explicit `input`, `revision`, or `flow_terminal` events return to the owner-facing origin.
 
 ## Escalation is proportional
 

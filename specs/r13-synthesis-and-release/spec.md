@@ -122,7 +122,7 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 11. explicitly authorized stable release.
 
 - **FR-1341**: Supervisor MUST settle package/version/schema/API shapes before fan-out and carry each decision into every dependent card.
-- **FR-1342**: Open limitations remain visible until evidence closes them. Aether issues `#192` (retry/resumption/lifecycle accounting), `#211` (per-flow session affinity), and `#212` (discarded TUI notification subscriptions) may remain release-visible under their accepted limitation contracts. Under PD-68, `#195` (semantic progress beyond heartbeat) is a 1.0 release prerequisite and cannot pass as an open limitation. No RC may claim automatic TUI return while the configured notifier rejects `platform=tui`.
+- **FR-1342**: Open limitations remain visible until evidence closes them. Issues `#192`, `#195`, `#211`, and `#212` are closed after their accepted evidence gates. Issue `#256` now carries the remaining flow-return limitation: an open flow may stall when a dependency escalates to triage without producing `input`, `revision`, or `flow_terminal`. No RC may claim complete unattended owner return while #256 remains open.
 - **FR-1343**: Each implementation unit has explicit inputs, outputs, tests, dependency parents, authority, and external-effect boundary. Product-scale work is performed by Implementers and independently reviewed.
 - **FR-1344**: No phase consumes an unbuilt moving branch, a private editable runtime, or a worker's conversational claim as release evidence.
 
@@ -157,7 +157,7 @@ Each external/destructive effect requires the exact gate named by the A1 contrac
 - **SC-1304**: Aether reuses native Hermes profile, Project, board, worktree, review, and lifecycle primitives instead of duplicating them.
 - **SC-1305**: Morfeo, Supervisor and Implementer perform representative local/reversible work without policy false positives; contract authoring stays attributable/reviewable without PD-67 board/run/worktree micro-authorization, while every PD-71 protected edge control remains denied.
 - **SC-1306**: Update/rollback/uninstall fault tests preserve coherent active state and unrelated Hermes/user data.
-- **SC-1307**: Issues `#192`, `#211`, and `#212` are either evidenced against their acceptance criteria or explicitly remain open release limitations; issue `#195` is evidenced and closed before stable 1.0. No report equates heartbeat with progress, zero technical failures with zero logical retries, or a stored TUI subscription with actual delivery.
+- **SC-1307**: Issues `#192`, `#195`, `#211`, and `#212` retain their closure evidence; issue `#256` is either evidenced against its acceptance criteria or explicitly remains an open release limitation. No report equates heartbeat with progress, zero technical failures with zero logical retries, a stored subscription with actual delivery, or a same-flow identifier with proof of an origin wake.
 - **SC-1308**: Deterministic and live RC matrices retain machine-readable evidence bound to exact commits, versions, artifacts, platforms, scenarios, budgets, and exit status.
 - **SC-1309**: No public or destructive external effect occurs without its explicit owner gate.
 - **SC-1310**: Before A1 feature/release expansion resumes, the latest 20 representative E2E runs contain at least 19 passes, the latest 10 pass consecutively, and there are zero guard-caused manual recoveries or protected-edge violations.

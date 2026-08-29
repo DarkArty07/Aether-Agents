@@ -6,6 +6,7 @@
 **Amended**: 2026-08-18 — scoped explicitly to work Morfeo dispatches under PD-44
 **Amended**: 2026-08-21 — asymmetric starting capacity accepted: one Supervisor and three Implementers
 **Reopened**: 2026-08-26 — local reversible judgement and integration repair are no longer forced through decision-card/guard ceremony
+**Amended**: 2026-08-29 — one flow-bound Supervisor session/workspace accepted and live-qualified
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -64,6 +65,14 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 - **FR-712b**: A single Supervisor owns decomposition, review, convergence, and integration for one contract. Throughput is increased by releasing independent Implementer units; Aether MUST NOT duplicate Supervisors merely to consume more concurrency.
 - **FR-713**: FR-712's numbers are calibration starting points, not derived constants. They MUST be revised from observed contract duration, idle time, worker occupancy, collision rate, integration cost, provider rate limiting, and host saturation; the revision MUST be recorded.
 - **FR-714**: Units that would each edit the same file MUST NOT be dispatched concurrently. Independence in the breakdown means file-level independence, not merely logical separability.
+
+### Flow-bound Supervisor continuity
+
+- **FR-714a**: A pipeline root MUST carry the opaque `flow_id` returned by Objective Contract handoff preparation as `session_affinity={flow_id, terminal=false}`. The identifier is routing side data, not contract prose or product authority.
+- **FR-714b**: All same-flow Supervisor phases MUST reuse one exact Hermes session and one canonical Supervisor workspace. Separate operating-system processes resume that session; they MUST NOT create a fresh task-keyed Supervisor worktree for review or integration.
+- **FR-714c**: A same-flow same-profile child inherits the flow and shared workspace as `workspace_kind=dir`; a cross-profile child MUST NOT inherit Supervisor affinity. Every Implementer card receives a fresh session and its own project worktree.
+- **FR-714d**: The runtime MUST fence the binding by board, Project, flow, profile, workspace, generation and lease. Resume MUST use the exact stored session with `--no-restore-cwd --in <canonical-workspace>` and reject missing, closed, corrupt, cross-profile, cross-Project, cross-flow, or stale-generation state.
+- **FR-714e**: Exactly one terminal Supervisor card uses `terminal=true`. Ordinary decomposition, implementation, review and rework milestones remain silent to the origin; only explicit `input`, `revision`, or `flow_terminal` routing returns to Morfeo's owner-facing session.
 
 ## 5. Escalation — local judgement first, durable escalation when material
 
