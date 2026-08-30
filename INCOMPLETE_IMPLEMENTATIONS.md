@@ -81,7 +81,7 @@ byte-locked and both report contents must pass the tracked public-artifact scann
   release gate and, if so, authorize a separately scoped native-surface investigation and
   controlled live qualification. Do not implement or activate wake in this objective.
 
-### Triage-to-origin wake
+### Triage-to-origin wake — repaired and live-qualified locally
 
 - **Current behavior:** the reliability/release reconciliation records an open flow that
   can stall in triage without waking the originating Morfeo flow. A controlled local
@@ -109,9 +109,11 @@ byte-locked and both report contents must pass the tracked public-artifact scann
   `specs/r7-supervision-and-convergence/spec.md`, the durable Kanban subscription/event
   rows for the 2026-08-29 cleanup objective, `tools/kanban_tools.py`,
   `hermes_cli/kanban_db.py`, `gateway/kanban_watchers.py`, and `tui_gateway/server.py`.
-- **Deferred owner decision:** retain this as a required autonomy boundary and separately
-  authorize the native wake/routing fix and same-path qualification. Do not treat an
-  origin-signal row alone as proof that Morfeo actually woke.
+- **Qualified resolution:** HLP-211b now routes blocked Implementers to the existing
+  terminal Supervisor controller and adds typed `recovery` escalation. Live canary
+  `e2e-17-20260829-231107-c50462c6` proved two attentions, Supervisor recovery attempt,
+  Morfeo wake without owner input, hook restoration and terminal verification. Keep the
+  item only as a transitional upstream/local-patch retirement concern.
 
 ## 4. Dormant optional maintenance retained intentionally
 
