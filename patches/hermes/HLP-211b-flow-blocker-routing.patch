@@ -1,18 +1,18 @@
 --- a/hermes_cli/kanban_db.py
 +++ b/hermes_cli/kanban_db.py
 @@ -111,7 +111,7 @@
- 
+
  VALID_STATUSES = {"triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"}
  VALID_INITIAL_STATUSES = {"running", "blocked"}
 -VALID_ORIGIN_SIGNALS = {"input", "revision"}
 +VALID_ORIGIN_SIGNALS = {"input", "revision", "recovery"}
- 
+
  # Typed block reasons. Distinguishes the two fundamentally different things a
  # worker (or human) means by "blocked", so each can be routed differently
 @@ -5381,6 +5381,140 @@
      ).fetchone() is None
- 
- 
+
+
 +def _pending_flow_attentions(
 +    conn: sqlite3.Connection, controller_id: str
 +) -> list[dict[str, Any]]:
@@ -710,13 +710,13 @@
 +    finally:
 +        conn.close()
 +    assert after == before
- 
- 
+
+
  def test_link_happy_path(worker_env):
 @@ -901,6 +1148,46 @@
      assert subs[0]["delivery_mode"] == "notify"
- 
- 
+
+
 +def test_nonterminal_affinity_root_keeps_silent_tui_origin_route(
 +    monkeypatch, worker_env, tmp_path
 +):
@@ -762,8 +762,8 @@
      _maybe_auto_subscribe returns False and no row is written."""
 @@ -980,6 +1267,81 @@
  # ---------------------------------------------------------------------------
- 
- 
+
+
 +def _qualification_tar_gz_payload() -> bytes:
 +    import io
 +    import random
