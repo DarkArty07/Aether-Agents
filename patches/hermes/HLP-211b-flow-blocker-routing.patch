@@ -1,0 +1,511 @@
+# HLP-211b — flow blocker routing and recovery
+# Generated from the pre-patch backup recorded in HERMES_LOCAL_PATCHES.md.
+# Apply only to the locked Hermes revision after verifying context; this is not a release artifact.
+
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -111,7 +111,7 @@
+ 
+ VALID_STATUSES = {"triage", "todo", "scheduled", "ready", "running", "blocked", "review", "done", "archived"}
+ VALID_INITIAL_STATUSES = {"running", "blocked"}
+-VALID_ORIGIN_SIGNALS = {"input", "revision"}
++VALID_ORIGIN_SIGNALS = {"input", "revision", "recovery"}
+ 
+ # Typed block reasons. Distinguishes the two fundamentally different things a
+ # worker (or human) means by "blocked", so each can be routed differently
+@@ -5381,6 +5381,140 @@
+     ).fetchone() is None
+ 
+ 
++def _pending_flow_attentions(
++    conn: sqlite3.Connection, controller_id: str
++) -> list[dict[str, Any]]:
++    """Return unresolved blocker-attention payloads in causal order."""
++    pending: dict[str, dict[str, Any]] = {}
++    for row in conn.execute(
++        "SELECT id, kind, payload FROM task_events "
++        "WHERE task_id = ? AND kind IN ('flow_attention', 'flow_attention_resolved') "
++        "ORDER BY id",
++        (controller_id,),
++    ).fetchall():
++        try:
++            payload = json.loads(row["payload"]) if row["payload"] else {}
++        except (TypeError, json.JSONDecodeError):
++            continue
++        blocked_task_id = payload.get("blocked_task_id")
++        if not isinstance(blocked_task_id, str) or not blocked_task_id:
++            continue
++        if row["kind"] == "flow_attention":
++            pending[blocked_task_id] = {**payload, "event_id": int(row["id"])}
++        else:
++            pending.pop(blocked_task_id, None)
++    return sorted(pending.values(), key=lambda item: item["event_id"])
++
++
++def _wake_terminal_flow_controller(
++    conn: sqlite3.Connection,
++    blocked_task_id: str,
++    *,
++    reason: Optional[str],
++    kind: Optional[str],
++    origin_signal: Optional[str],
++) -> Optional[str]:
++    """Wake one direct terminal-affinity child to handle a blocked parent.
++
++    The terminal child is the flow's existing Supervisor/controller card.  No
++    new task, session, table, or polling loop is introduced.  Ambiguous graphs
++    fail closed and preserve the legacy origin route.
++    """
++    blocked = conn.execute(
++        "SELECT project_id, session_affinity FROM tasks WHERE id = ?",
++        (blocked_task_id,),
++    ).fetchone()
++    if blocked is None or blocked["session_affinity"]:
++        return None
++    candidates = []
++    for row in conn.execute(
++        "SELECT child.id, child.project_id, child.status, child.session_affinity "
++        "FROM task_links link JOIN tasks child ON child.id = link.child_id "
++        "WHERE link.parent_id = ? AND child.status IN ('todo', 'ready', 'running', 'blocked')",
++        (blocked_task_id,),
++    ).fetchall():
++        if row["project_id"] != blocked["project_id"] or not row["session_affinity"]:
++            continue
++        try:
++            affinity = normalize_session_affinity(json.loads(row["session_affinity"]))
++        except (TypeError, ValueError, json.JSONDecodeError):
++            continue
++        if affinity and affinity["terminal"]:
++            candidates.append(row)
++    if len(candidates) != 1:
++        return None
++    controller = candidates[0]
++    controller_id = str(controller["id"])
++    if any(
++        item["blocked_task_id"] == blocked_task_id
++        for item in _pending_flow_attentions(conn, controller_id)
++    ):
++        return controller_id
++    _append_event(
++        conn,
++        controller_id,
++        "flow_attention",
++        {
++            "blocked_task_id": blocked_task_id,
++            "kind": kind,
++            "reason": reason,
++            "requested_origin_signal": origin_signal,
++        },
++    )
++    if controller["status"] == "todo":
++        conn.execute(
++            "UPDATE tasks SET status = 'ready' WHERE id = ? AND status = 'todo'",
++            (controller_id,),
++        )
++    return controller_id
++
++
++def _resolve_flow_attention(conn: sqlite3.Connection, controller_id: str) -> bool:
++    """Resume the oldest blocked parent after its controller resolves it."""
++    pending = _pending_flow_attentions(conn, controller_id)
++    if not pending:
++        return False
++    attention = pending[0]
++    blocked_task_id = attention["blocked_task_id"]
++    row = conn.execute(
++        "SELECT status FROM tasks WHERE id = ?", (blocked_task_id,)
++    ).fetchone()
++    if row is not None and row["status"] in ("blocked", "triage"):
++        prior_status = str(row["status"])
++        resume_status = _resume_status_from_events(conn, blocked_task_id)
++        landing_status = _landing_status_after_parents(conn, blocked_task_id)
++        new_status = (
++            "review"
++            if landing_status == "ready" and resume_status == "review"
++            else landing_status
++        )
++        conn.execute(
++            "UPDATE tasks SET status = ?, current_run_id = NULL, "
++            "consecutive_failures = 0, last_failure_error = NULL "
++            "WHERE id = ? AND status IN ('blocked', 'triage')",
++            (new_status, blocked_task_id),
++        )
++        _append_event(
++            conn,
++            blocked_task_id,
++            "unblocked",
++            {
++                "status": new_status,
++                "resume_status": resume_status,
++                "flow_controller": controller_id,
++            },
++        )
++        if prior_status == "triage":
++            _append_event(conn, blocked_task_id, "triage_escalation_recovered")
++    _append_event(
++        conn,
++        controller_id,
++        "flow_attention_resolved",
++        {"blocked_task_id": blocked_task_id},
++    )
++    return True
++
++
+ def claim_task(
+     conn: sqlite3.Connection,
+     task_id: str,
+@@ -5411,7 +5545,7 @@
+             "WHERE l.child_id = ? AND p.status NOT IN ('done', 'archived') LIMIT 1",
+             (task_id,),
+         ).fetchone()
+-        if undone:
++        if undone and not _pending_flow_attentions(conn, task_id):
+             conn.execute(
+                 "UPDATE tasks SET status = 'todo' "
+                 "WHERE id = ? AND status = 'ready'",
+@@ -7087,6 +7221,13 @@
+                 },
+                 run_id=run_id,
+             )
++            _resolve_flow_attention(conn, task_id)
++            if _pending_flow_attentions(conn, task_id):
++                conn.execute(
++                    "UPDATE tasks SET status = 'ready' WHERE id = ? AND status = 'todo'",
++                    (task_id,),
++                )
++                _append_event(conn, task_id, "flow_attention_requeued")
+             _blocked_task = get_task(conn, task_id)
+             _fire_kanban_lifecycle_hook(
+                 "kanban_task_blocked",
+@@ -7136,7 +7277,15 @@
+                 run_id = _synthesize_ended_run(
+                     conn, task_id, outcome="blocked", summary=reason,
+                 )
+-            if origin_signal:
++            controller_id = _wake_terminal_flow_controller(
++                conn,
++                task_id,
++                reason=reason,
++                kind=kind,
++                origin_signal=origin_signal,
++            )
++            effective_origin_signal = None if controller_id else origin_signal
++            if effective_origin_signal:
+                 _inherit_origin_signal_subs(conn, task_id)
+             _append_event(
+                 conn, task_id, "block_loop_detected",
+@@ -7146,7 +7295,8 @@
+                     "recurrences": recurrences,
+                     "limit": BLOCK_RECURRENCE_LIMIT,
+                     "source_status": source_status,
+-                    "origin_signal": origin_signal,
++                    "origin_signal": effective_origin_signal,
++                    "flow_controller": controller_id,
+                 },
+                 run_id=run_id,
+             )
+@@ -7197,16 +7347,27 @@
+                     outcome="blocked",
+                     summary=reason,
+                 )
+-            if origin_signal:
++            controller_id = _wake_terminal_flow_controller(
++                conn,
++                task_id,
++                reason=reason,
++                kind=kind,
++                origin_signal=origin_signal,
++            )
++            effective_origin_signal = None if controller_id else origin_signal
++            if effective_origin_signal:
+                 _inherit_origin_signal_subs(conn, task_id)
+             _append_event(
+-                conn, task_id, "origin_signal" if origin_signal else "blocked",
++                conn,
++                task_id,
++                "origin_signal" if effective_origin_signal else "blocked",
+                 {
+                     "reason": reason,
+                     "kind": kind,
+                     "recurrences": recurrences,
+                     "source_status": source_status,
+-                    "origin_signal": origin_signal,
++                    "origin_signal": effective_origin_signal,
++                    "flow_controller": controller_id,
+                 },
+                 run_id=run_id,
+             )
+@@ -11725,6 +11886,24 @@
+     if task.tenant:
+         lines.append(f"Tenant:   {task.tenant}")
+     lines.append(f"Workspace: {task.workspace_kind} @ {task.workspace_path or '(unresolved)'}")
++    pending_attention = _pending_flow_attentions(conn, task.id)
++    if pending_attention:
++        blocked_task_id = pending_attention[0]["blocked_task_id"]
++        lines.append("")
++        lines.append("## Flow recovery attention")
++        lines.append(
++            f"Blocked task: `{blocked_task_id}`. Inspect and resolve this blocker "
++            "inside the existing contract before ordinary terminal integration."
++        )
++        lines.append(
++            "If resolved, call `kanban_block(kind=\"dependency\")` on this controller; "
++            "Hermes resumes the blocked task and returns this controller to dependency wait."
++        )
++        lines.append(
++            "If bounded runtime recovery cannot succeed, call "
++            "`kanban_block(kind=\"capability\", origin_signal=\"recovery\")` "
++            "so the originating agent resumes the flow."
++        )
+     if task.max_runtime_seconds is not None:
+         terminal_timeout = _worker_terminal_timeout_env(
+             task.max_runtime_seconds,
+--- a/tools/kanban_tools.py
++++ b/tools/kanban_tools.py
+@@ -1669,7 +1669,7 @@
+         _task = _kb.get_task(conn, task_id)
+         if _task and _task.session_affinity:
+             _affinity = _kb.normalize_session_affinity(_task.session_affinity)
+-            if not _affinity or not _affinity["terminal"]:
++            if not _affinity:
+                 return False
+     except Exception:
+         # Subscription bookkeeping is best-effort, but a malformed affinity
+@@ -2037,7 +2037,7 @@
+                 "type": "string",
+                 "enum": [
+                     "dependency", "needs_input", "capability", "transient",
+-                    "input", "revision",
++                    "input", "revision", "recovery",
+                 ],
+                 "description": (
+                     "Why you're blocked. 'dependency' waits in todo and "
+@@ -2047,11 +2047,13 @@
+             },
+             "origin_signal": {
+                 "type": "string",
+-                "enum": ["input", "revision"],
++                "enum": ["input", "revision", "recovery"],
+                 "description": (
+                     "Optional explicit signal for the trusted originating "
+                     "subscription. Use 'input' when a human answer is needed "
+-                    "or 'revision' when the work needs a changed spec. This "
++                    "or 'revision' when the work needs a changed spec; use "
++                    "'recovery' when the flow controller cannot repair a "
++                    "runtime/infrastructure blocker. This "
+                     "is the only non-terminal worker event routed to the "
+                     "origin; ordinary internal blockers stay internal."
+                 ),
+--- a/tests/hermes_cli/test_kanban_session_affinity.py
++++ b/tests/hermes_cli/test_kanban_session_affinity.py
+@@ -574,3 +574,162 @@
+         assert any(event.kind == "flow_terminal" for event in kb.list_events(conn, task_id))
+     finally:
+         conn.close()
++
++
++def _blocked_flow_with_terminal_controller(conn, project_id, workspace):
++    root = kb.create_task(
++        conn,
++        title="decompose",
++        assignee="supervisor",
++        project_id=project_id,
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++        session_affinity={"flow_id": "flow-7"},
++    )
++    assert kb.claim_task(conn, root) is not None
++    assert kb.complete_task(conn, root)
++    unit = kb.create_task(
++        conn,
++        title="implement",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(root,),
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++    )
++    controller = kb.create_task(
++        conn,
++        title="integrate",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(root, unit),
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++        session_affinity={"flow_id": "flow-7", "terminal": True},
++    )
++    return unit, controller
++
++
++def test_blocked_unit_wakes_terminal_flow_controller(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _blocked_flow_with_terminal_controller(
++            conn, project_id, tmp_path
++        )
++        assert kb.claim_task(conn, unit) is not None
++        assert kb.block_task(conn, unit, reason="local guard regression", kind="capability")
++        blocked = kb.get_task(conn, unit)
++        ready_controller = kb.get_task(conn, controller)
++        assert blocked is not None and blocked.status == "blocked"
++        assert ready_controller is not None and ready_controller.status == "ready"
++        attention = [
++            event for event in kb.list_events(conn, controller)
++            if event.kind == "flow_attention"
++        ]
++        assert len(attention) == 1
++        assert attention[0].payload is not None
++        assert attention[0].payload["blocked_task_id"] == unit
++        context = kb.build_worker_context(conn, controller)
++        assert "## Flow recovery attention" in context
++        assert f"Blocked task: `{unit}`" in context
++        assert "origin_signal=\"recovery\"" in context
++        assert kb.claim_task(conn, controller) is not None
++    finally:
++        conn.close()
++
++
++def test_controller_dependency_block_resolves_attention_and_retries_unit(
++    tmp_path, monkeypatch
++):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _blocked_flow_with_terminal_controller(
++            conn, project_id, tmp_path
++        )
++        assert kb.claim_task(conn, unit) is not None
++        assert kb.block_task(conn, unit, reason="local guard regression", kind="capability")
++        assert kb.claim_task(conn, controller) is not None
++        assert kb.block_task(
++            conn,
++            controller,
++            reason="runtime recovered; resume implementation",
++            kind="dependency",
++        )
++        resumed = kb.get_task(conn, unit)
++        waiting_controller = kb.get_task(conn, controller)
++        assert resumed is not None and resumed.status == "ready"
++        assert waiting_controller is not None and waiting_controller.status == "todo"
++        assert any(
++            event.kind == "flow_attention_resolved"
++            and event.payload is not None
++            and event.payload["blocked_task_id"] == unit
++            for event in kb.list_events(conn, controller)
++        )
++    finally:
++        conn.close()
++
++
++def test_controller_can_escalate_recovery_to_origin(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _blocked_flow_with_terminal_controller(
++            conn, project_id, tmp_path
++        )
++        kb.add_notify_sub(
++            conn, task_id=controller, platform="tui", chat_id="origin-session"
++        )
++        assert kb.claim_task(conn, unit) is not None
++        assert kb.block_task(conn, unit, reason="local guard regression", kind="capability")
++        assert kb.claim_task(conn, controller) is not None
++        assert kb.block_task(
++            conn,
++            controller,
++            reason="runtime recovery failed",
++            kind="capability",
++            origin_signal="recovery",
++        )
++        _, events = kb.unseen_events_for_sub(
++            conn,
++            task_id=controller,
++            platform="tui",
++            chat_id="origin-session",
++            kinds=("origin_signal", "flow_terminal"),
++        )
++        assert [event.kind for event in events] == ["origin_signal"]
++        assert events[0].payload is not None
++        assert events[0].payload["origin_signal"] == "recovery"
++        blocked = kb.get_task(conn, unit)
++        assert blocked is not None and blocked.status == "blocked"
++    finally:
++        conn.close()
++
++
++def test_controller_requeues_when_a_second_attention_is_pending(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        first, controller = _blocked_flow_with_terminal_controller(conn, project_id, tmp_path)
++        second = kb.create_task(conn, title="second implementer", assignee="implementer", project_id=project_id, workspace_kind="dir", workspace_path=str(tmp_path))
++        kb.link_tasks(conn, parent_id=second, child_id=controller)
++        assert kb.claim_task(conn, first) is not None
++        assert kb.claim_task(conn, second) is not None
++        assert kb.block_task(conn, first, reason="first", kind="capability")
++        assert kb.block_task(conn, second, reason="second", kind="capability")
++        assert kb.claim_task(conn, controller) is not None
++        assert kb.block_task(conn, controller, reason="first fixed", kind="dependency")
++        requeued = kb.get_task(conn, controller)
++        assert requeued is not None and requeued.status == "ready"
++        assert len(kb._pending_flow_attentions(conn, controller)) == 1
++        assert any(event.kind == "flow_attention_requeued" for event in kb.list_events(conn, controller))
++    finally:
++        conn.close()
+--- a/tests/tools/test_kanban_tools.py
++++ b/tests/tools/test_kanban_tools.py
+@@ -1148,6 +1148,45 @@
+     assert subs[0]["delivery_mode"] == "notify"
+ 
+ 
++def test_nonterminal_affinity_root_keeps_silent_tui_origin_route(
++    monkeypatch, worker_env, tmp_path
++):
++    """A nonterminal flow root keeps provenance for later explicit signals.
++
++    Affinity notification filters still suppress ordinary root lifecycle
++    milestones; retaining the subscription only makes ``origin_signal`` and
++    ``flow_terminal`` deliverable.
++    """
++    from hermes_cli import projects_db
++    from tools import kanban_tools as kt
++
++    monkeypatch.delenv("HERMES_KANBAN_TASK", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_PLATFORM", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_CHAT_ID", raising=False)
++    monkeypatch.setenv("HERMES_SESSION_KEY", "tui-origin-flow")
++    with projects_db.connect_closing() as project_conn:
++        project_id = projects_db.create_project(
++            project_conn, name="Flow project", primary_path=str(tmp_path)
++        )
++
++    out = kt._handle_create(
++        {
++            "title": "flow root",
++            "assignee": "supervisor",
++            "project": project_id,
++            "workspace_kind": "dir",
++            "workspace_path": str(tmp_path),
++            "session_affinity": {"flow_id": "flow-7", "terminal": False},
++        }
++    )
++    result = json.loads(out)
++    assert result["ok"] is True
++    assert result["subscribed"] is True
++    subs = _sub_index(_list_subs_for_task(result["task_id"]))
++    assert [(sub["platform"], sub["chat_id"]) for sub in subs] == [
++        ("tui", "tui-origin-flow")
++    ]
++
+ 
+ def test_create_does_not_subscribe_in_cli_session(monkeypatch, worker_env):
+     """CLI / cron / test sessions have no persistent delivery channel.

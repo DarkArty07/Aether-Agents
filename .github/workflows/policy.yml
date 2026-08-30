@@ -59,6 +59,7 @@ jobs:
           home/SOUL.md
           INCOMPLETE_IMPLEMENTATIONS.md
           INTEGRATIONS.md
+          patches/hermes/HLP-211b-flow-blocker-routing.patch
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py
