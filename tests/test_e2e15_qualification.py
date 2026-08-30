@@ -134,6 +134,7 @@ session_db, board_db = sys.argv[1:]
 sys.stdout.write("\\x1b[?2004h\\x1b]2;Hermes\\x07/help for commands")
 sys.stdout.flush()
 message = sys.stdin.readline().rstrip("\\r\\n")
+message = message.removeprefix("\\x1b[200~").removesuffix("\\x1b[201~")
 with sqlite3.connect(session_db) as db:
     db.execute(
         "CREATE TABLE sessions (id TEXT, source TEXT, archived INTEGER, last_activity_at REAL)"

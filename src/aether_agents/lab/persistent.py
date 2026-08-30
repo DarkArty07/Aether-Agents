@@ -182,7 +182,10 @@ def run_persistent_session(
             # Exactly one owner write. No continuation, slash command, or synthetic
             # wake is sent after this point. Prompt-toolkit binds submit to CR; LF
             # is reserved for multiline input under the default Hermes config.
-            os.write(master, owner_message.encode("utf-8") + b"\r")
+            os.write(
+                master,
+                b"\x1b[200~" + owner_message.encode("utf-8") + b"\x1b[201~\r",
+            )
         while tui_ready and process.poll() is None and time.monotonic() - started < timeout_seconds:
             session_state = _session_state(session_path, session_ids_before, owner_message)
             if observed_session is None and len(session_state["candidates"]) == 1:
