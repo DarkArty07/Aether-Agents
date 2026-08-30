@@ -264,6 +264,7 @@ def _prepared_release_with_target_manager(
     manager = prepared.stage / "manager"
     shutil.rmtree(manager)
     environment = lifecycle._isolated_subprocess_environment()
+    environment["UV_LINK_MODE"] = "copy"
     subprocess.run(
         ["uv", "--no-config", "venv", "--python", sys.executable, str(manager)],
         check=True,
