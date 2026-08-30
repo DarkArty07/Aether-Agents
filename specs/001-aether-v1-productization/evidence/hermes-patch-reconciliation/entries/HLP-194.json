@@ -1,0 +1,72 @@
+{
+  "id": "HLP-194",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:30,75-90",
+  "components": [
+    "agent/conversation_loop.py",
+    "agent/kanban_stop.py",
+    "agent/turn_finalizer.py",
+    "cli.py",
+    "hermes_cli/kanban_db.py",
+    "hermes_cli/kanban_exit_codes.py",
+    "tests/agent/test_kanban_stop.py",
+    "tests/hermes_cli/test_kanban_protocol_exit.py",
+    "tests/run_agent/test_kanban_terminal_guard_integration.py"
+  ],
+  "required_behavior": "A worker must have exactly one successful durable terminal handoff. Receipt validation and outcomes must distinguish protocol violation, crash, signal, and timeout, with protocol failure mapped to EX_PROTOCOL=76.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/91220",
+        "state": "open"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "source_inspection",
+        "locator": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/kanban_stop.py#L20-L108",
+        "finding": "The stop guard considers only the presence of kanban_complete or kanban_block tool names. It has no post-commit receipt, task/run identity, duplicate, conflict, or rejection validation."
+      },
+      {
+        "kind": "source_inspection",
+        "locator": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/conversation_loop.py#L8504-L8576",
+        "finding": "After the nudge budget is exhausted, the conversation loop permits normal text-turn exit; it does not produce a structured terminal-handoff failure."
+      },
+      {
+        "kind": "source_inspection",
+        "locator": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L8792-L8956",
+        "finding": "The dispatcher later detects only clean exit with a still-running task and records a generic protocol violation; the inspected tree has no kanban_exit_codes module or EX_PROTOCOL mapping."
+      },
+      {
+        "kind": "public_reference",
+        "locator": "https://github.com/NousResearch/hermes-agent/pull/91220",
+        "finding": "The linked PR is open and describes receipt validation, exactly-one semantics, and EX_PROTOCOL=76; open state was not used as equivalence evidence."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Run the complete terminal-handoff matrix for no handoff, valid receipt, rejected or forged receipt, duplicate or conflicting receipt, exception, signal, timeout, and quiet CLI exit-code mapping.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "execution_limitation",
+        "result": "The full multi-process terminal-handoff matrix was not executed against the disposable checkout; no behavioral pass was recorded."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "No versioned patches/hermes artifact is referenced for HLP-194 in HERMES_LOCAL_PATCHES.md."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The full receipt and process-outcome matrix was not executed.",
+    "Source inspection demonstrates that a successful retirement gate cannot be inferred from the current stop nudge and dispatcher backstop."
+  ],
+  "summary": "Upstream has a name-based stop nudge and a clean-exit backstop, but it lacks durable exactly-one receipt validation and EX_PROTOCOL=76. The local terminal-handoff guarantee remains required."
+}
