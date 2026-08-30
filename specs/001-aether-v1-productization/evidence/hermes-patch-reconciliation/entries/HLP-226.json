@@ -1,0 +1,68 @@
+{
+  "id": "HLP-226",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-170",
+  "components": [
+    "tools/kanban_tools.py",
+    "hermes_cli/kanban_db.py",
+    "tests/tools/test_kanban_tools.py"
+  ],
+  "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_VERIFIED (ledger)",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "commit",
+        "url": "https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872",
+        "ancestor_of_inspected_revision": true
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/89363",
+        "state": "open",
+        "head_revision": "ce1c41f9b3f3baf26096d18fa358b0a065d52571"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "target_source",
+        "location": "hermes_cli/kanban_db.py:3292-3358",
+        "finding": "The integrated ancestor commit provides cross-profile routing from a canonical source task when a Project has already been inherited."
+      },
+      {
+        "kind": "target_source",
+        "location": "tools/kanban_tools.py:1387-1435",
+        "finding": "The target inherits a worker Project only when workspace_kind is omitted, so an explicit worktree request bypasses inheritance and conflict rejection."
+      },
+      {
+        "kind": "linked_pr_diff",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
+        "finding": "The open PR changes inheritance to depend only on an omitted workspace path and rejects a conflicting explicit Project."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "With an empty worker Projects registry, verify a cross-profile explicit worktree child preserves the canonical Project, gets a real distinct worktree and branch, and rejects a conflicting Project.",
+    "status": "failed",
+    "evidence": [
+      {
+        "command": "disposable target behavioral gate",
+        "result": "The omitted-workspace control inherited the Project and received a fresh workspace, but an explicit worktree child did not inherit or get a fresh project workspace and a conflicting Project was not rejected."
+      },
+      {
+        "command": "public-source inspection of the linked commit and PR",
+        "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree and conflict behavior required for retirement; the completing upstream PR remains open.",
+  "summary": "Retain HLP-226. The target contains the integrated routing foundation but fails the explicit-worktree and conflicting-Project portions of the recorded behavioral gate."
+}

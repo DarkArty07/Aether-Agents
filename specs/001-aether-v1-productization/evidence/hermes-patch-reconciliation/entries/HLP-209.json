@@ -1,0 +1,66 @@
+{
+  "id": "HLP-209",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:123-134",
+  "components": [
+    "cron/lifecycle_guard.py",
+    "tests/hermes_cli/test_gateway_restart_loop.py"
+  ],
+  "required_behavior": "Referenced directories are treated as nothing to scan rather than unsafe lifecycle scripts, while real lifecycle scripts and non-directory non-regular inputs remain fail-closed.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_VERIFIED",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/NousResearch/hermes-agent/issues/86753",
+        "state": "closed"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/86848",
+        "state": "merged",
+        "merge_revision": "9ac1e65b0ae4e83dced9d5c8a406cc57cb589702"
+      },
+      {
+        "kind": "commit",
+        "url": "https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702",
+        "ancestor_of_inspected_revision": true
+      }
+    ],
+    "disposition": "upstream_verified",
+    "evidence": [
+      {
+        "kind": "target_source",
+        "location": "cron/lifecycle_guard.py:945-955",
+        "finding": "The exact target returns nothing-to-scan for directories and continues to fail closed for other non-regular inputs."
+      },
+      {
+        "kind": "commit_ancestry",
+        "finding": "The merged fix commit 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702 is an ancestor of the inspected revision."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "At a revision without the local hunk, run the exact regression, the full gateway-restart-loop test file, and the post-restart runtime probe before retiring the backport.",
+    "status": "partial",
+    "evidence": [
+      {
+        "command": "disposable target behavioral gate",
+        "result": "Passed: sourced configuration with a directory was allowed; a lifecycle script and /dev/null remained blocked."
+      },
+      {
+        "command": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+        "result": "301 passed, including 297 passing tests in test_gateway_restart_loop.py."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": "The required post-restart runtime probe and ordinary review-path validation were not run because this unit may not mutate the effective runtime or service; retain until the full recorded gate passes.",
+  "summary": "The exact upstream target contains and behaviorally passes the HLP-209 directory exemption, but the recorded runtime retirement gate remains incomplete."
+}
