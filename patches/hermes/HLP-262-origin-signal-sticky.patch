@@ -1,0 +1,61 @@
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -5217,10 +5217,10 @@
+       finish, transient infra error clears).
+
+     The cheapest signal that distinguishes the two is the most recent
+-    ``"blocked"`` / ``"unblocked"`` event for the task.  If the most
+-    recent one is ``"blocked"`` (or there is a ``"blocked"`` event and
+-    no ``"unblocked"`` event has fired since), the task is sticky and
+-    ``recompute_ready`` must *not* auto-promote it.
++    ``"blocked"`` / ``"origin_signal"`` / ``"unblocked"`` event for the
++    task.  ``origin_signal`` is emitted instead of ``blocked`` when a true
++    non-dependency block is also routed to the originating session, so both
++    kinds are sticky until an explicit ``unblocked`` event fires.
+
+     Returns ``False`` when there is no such event at all (e.g. the task
+     was set to ``status='blocked'`` by the circuit breaker or by direct
+@@ -5233,7 +5233,7 @@
+         "ORDER BY id DESC LIMIT 1",
+         (task_id,),
+     ).fetchone()
+-    return bool(row) and row["kind"] == "blocked"
++    return bool(row) and row["kind"] in {"blocked", "origin_signal"}
+
+
+ def _resume_status_from_events(conn: sqlite3.Connection, task_id: str) -> str:
+--- a/tests/hermes_cli/test_kanban_blocked_sticky.py
++++ b/tests/hermes_cli/test_kanban_blocked_sticky.py
+@@ -82,6 +82,32 @@
+             assert _task_status(conn, tid) == "blocked"
+
+
++def test_origin_signal_revision_block_is_sticky_until_explicit_unblock(
++    kanban_home: Path,
++) -> None:
++    """A revision signal is still a true block, not dependency-wait work."""
++    with kb.connect() as conn:
++        tid = kb.create_task(conn, title="contract revision required")
++        claimed = kb.claim_task(conn, tid)
++        assert claimed is not None
++        assert kb.block_task(
++            conn,
++            tid,
++            reason="revise the canonical contract before retrying",
++            kind="needs_input",
++            origin_signal="revision",
++            expected_run_id=claimed.current_run_id,
++        )
++        assert _task_status(conn, tid) == "blocked"
++        assert kb._has_sticky_block(conn, tid) is True
++
++        for _ in range(3):
++            assert kb.recompute_ready(conn) == 0
++            assert _task_status(conn, tid) == "blocked"
++
++        assert kb.unblock_task(conn, tid)
++        assert _task_status(conn, tid) == "ready"
++
+
+ # ---------------------------------------------------------------------------
+ # initial_status=blocked must be sticky from creation (#91178 / Aether #188)

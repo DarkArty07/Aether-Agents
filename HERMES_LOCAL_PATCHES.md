@@ -34,6 +34,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-211` | `#211` | afinidad opt-in reanuda una sesión worker exacta dentro de un Project/flow/perfil y un workspace canónico, con lease/generation fencing, control Supervisor de blockers y retorno terminal/escalado al origen | Hermes `#75830`, `#59855`, `#68779`, `#71175`; PR `#75951` cubre sólo block→unblock de la misma card; extensión local `HLP-211b` aún sin issue/PR | `ACTIVE_LOCAL + HLP-211b CANDIDATE / UPSTREAM_PARTIAL` |
 | `HLP-226` | `#226` | un hijo cross-profile con `workspace_kind=worktree` hereda el Project canónico del worker y recibe worktree propio | commit upstream `b9b5481d6`; PR previo `#89363` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 | `HLP-246` | `#246` | attachments validan identidad pre-transporte y readback; persisten tamaño y SHA-256 calculados | sin equivalente localizado en `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-262` | `#262` | un bloqueo no-dependency que emite `origin_signal` permanece sticky hasta una resolución/desbloqueo explícito | sin equivalente en `NousResearch/hermes-agent@4f2254350` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
 ## HLP-188 — `initial_status=blocked` sticky
 
@@ -195,6 +196,18 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Upstream:** `NousResearch/hermes-agent@main` verificado **no corregido** (mismo gate `("done","archived")`, mismo `_has_sticky_block`, `archive_task` sigue llamando a `recompute_ready`). Aether #247. Sin PR upstream todavía.
 - **Estado de activación:** `ACTIVE_LOCAL`.
 - **Gate de retirada:** sobre una revisión upstream objetivo sin este hunk, repetir las tres regresiones; retirar sólo si el hijo `blocked` sigue bloqueado al archivar el padre, el hijo `todo` sí se libera y el hijo no-sticky con padre `done` sí se promueve.
+
+## HLP-262 — `origin_signal` sticky hasta resolución explícita
+
+- **Motivo:** `block_task(..., origin_signal="revision|recovery|input")` persiste estado `blocked` pero emite un evento `origin_signal` en lugar de `blocked`. `_has_sticky_block()` consultaba ese evento pero sólo devolvía verdadero para `blocked`; el siguiente `recompute_ready()` promovía una raíz sin padres y la despachaba otra vez sin contrato nuevo, `unblock` ni resolución de Morfeo. Reproducción real: `t_2548a58b` fue promovida 33 s después de `origin_signal=revision`; `t_0701d31b` repitió el defecto 37 s después de `origin_signal=recovery`; ambas terminaron en un segundo block-loop/triage.
+- **Archivos activos:** `hermes_cli/kanban_db.py` y `tests/hermes_cli/test_kanban_blocked_sticky.py`.
+- **Cambio mínimo:** el evento más reciente `origin_signal` cuenta como sticky igual que `blocked`; `unblocked` continúa siendo la única salida explícita para esta ruta. Dependency waits, circuit-breaker recovery y flow-controller routing no cambian.
+- **Upstream inspeccionado:** `NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7` conserva `_has_sticky_block()` limitado a `blocked|unblocked`; no contiene semántica equivalente para `origin_signal`.
+- **RED/GREEN:** regresión exacta `test_origin_signal_revision_block_is_sticky_until_explicit_unblock`: RED `1 failed` (`False is True`); GREEN `10 passed` en `test_kanban_blocked_sticky.py`; suites Kanban afectadas `86 passed`; Ruff check sin errores. La sonda SQLite/proceso desechable produjo `PASS`: tres recomputaciones `0`, estado `blocked` las tres veces, y sólo `unblock_task` movió a `ready`.
+- **Backup pre-cambio:** `.aether/backups/hlp262-origin-signal-sticky-20260830T133410-0600`; SHA-256 previos: `kanban_db.py` `2a71e14e2e5abb9d354bd7dcd2175d5683f8eafb708632542db37c82a8bc9c8d`; test `5d50b67c3386364e8ca147b9bc8daff496ad923e762d95d9f25c2a0a2e224ba2`.
+- **Artefacto portable:** `patches/hermes/HLP-262-origin-signal-sticky.patch`, SHA-256 `abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a`; requiere `git apply --check`, reconstrucción byte a byte y canaria post-recarga antes de marcar `ACTIVE_LOCAL`.
+- **Activación:** gateway Morfeo recargado el 2026-08-30 13:38 CST de PID `359325` a `475712`; la canaria post-recarga en proceso/SQLite desechables repitió `PASS` con tres recomputaciones sin promoción y salida única por `unblock_task`. Estado `ACTIVE_LOCAL`.
+- **Gate de retirada:** en una revisión upstream sin este hunk, ejecutar `block_task` con cada `origin_signal=input|revision|recovery`, cerrar/reabrir SQLite, ejecutar varias recomputaciones y demostrar cero promociones; después comprobar que `unblock_task` o la resolución nativa del controller sí reanuda exactamente una vez.
 
 ## Procedimiento obligatorio antes de actualizar Hermes
 
