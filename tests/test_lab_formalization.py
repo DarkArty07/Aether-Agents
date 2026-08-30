@@ -804,6 +804,7 @@ def test_persistent_probe_rejects_one_shot_and_reports_native_capability_wall() 
     assert one_shot.status == "CAPABILITY_WALL"
     assert one_shot.reason == "one_shot_continuation_non_qualifying"
     assert one_shot.qualified is False
+    assert one_shot.to_evidence()["continuation_source"] == "harness"
     lab.validate_evidence(one_shot.to_evidence())
 
     absent = persistent.qualify_persistent_evidence(

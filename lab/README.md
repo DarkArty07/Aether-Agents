@@ -40,7 +40,7 @@ Preparation seeds a real local Contract Observation journal and calls the plugin
 
 ## Persistent E2E-15 prerequisite
 
-The persistent lane must use a native Hermes CLI, TUI, or gateway surface under a PTY. A pass requires the same Morfeo session to wake from the native terminal board event, report from durable state, and show exactly one owner message. A harness continuation or one-shot resume is not proof. When no supported native surface demonstrates that capability, the result is `CAPABILITY_WALL` with the bounded reason `native_same_session_wake_unobserved`; no notifier substitute is created.
+The persistent lane uses the native Hermes CLI/TUI under a PTY, sends the scenario's sole owner message once, and observes `state.db` plus the disposable Kanban DB while the process is still alive. A pass requires a post-baseline `flow_terminal` event whose durable task/session relation resolves to the same Morfeo session, a later non-empty assistant report persisted in `state.db`, and exactly one durable owner message matching the supplied input. PTY output is never evidence and no harness continuation is sent. If any native observation is unavailable, the result remains `CAPABILITY_WALL` with the bounded reason `native_same_session_wake_unobserved`; no notifier substitute is created.
 
 ## Per-flow E2E-16 qualification lane
 
@@ -48,4 +48,4 @@ E2E-16 is the serial persistent-session qualification lane. The live runner invo
 
 ## Evidence
 
-`run.json`, `matrix.json`, and observation/persistent reports use the compact `aether.lab.evidence.v1` schema. They record statuses, counts, route classes, bounded booleans, and safe action metadata only. Legacy wrapper filenames are retained where callers already depend on them, but their contents are redacted metadata rather than command output, transcripts, raw events, or diffs. The bounded provider-backed observation lane has passed with real `status`, `changes`, and `diagnose` calls and zero fallback; it remains separate from PD-74. Native E2E-15 currently reports the explicit `native_same_session_wake_unobserved` capability wall, so persistent wake and the rolling reliability gate remain pending.
+`run.json`, `matrix.json`, and observation/persistent reports use the compact `aether.lab.evidence.v1` schema. They record statuses, counts, route classes, bounded booleans, and safe action metadata only. Legacy wrapper filenames are retained where callers already depend on them, but their contents are redacted metadata rather than command output, transcripts, raw events, or diffs. The provider-backed observation lane remains separate from PD-74. The native E2E-15 runner now uses the persistent PTY lane and records the explicit capability wall when its database proof is unavailable; it never upgrades a one-shot or synthetic continuation to persistent wake, so persistent wake and the rolling reliability gate remain pending until a live native proof passes.

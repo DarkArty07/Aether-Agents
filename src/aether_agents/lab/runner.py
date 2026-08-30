@@ -50,7 +50,10 @@ VERSION_FILE = ROOT / "VERSION"
 from .affinity import qualify_affinity_evidence  # noqa: E402
 from .collect import git_diff, git_snapshot, run_command, write_json  # noqa: E402
 from .dispatch import board_list, dispatch_until_settled, hermes_argv, snapshot_board  # noqa: E402
-from .persistent import qualify_persistent_evidence  # noqa: E402
+from .persistent import (  # noqa: E402
+    qualify_persistent_evidence,
+    run_persistent_session,
+)
 from .synthetic_owner import Scenario, ScenarioError, load_scenario, matching_reply  # noqa: E402
 from .validation import validate_evidence  # noqa: E402
 
@@ -1827,7 +1830,8 @@ def _compact_run_record(record: Mapping[str, Any]) -> dict[str, Any]:
         "fault_recovered", "missing_required_paths", "present_forbidden_paths", "board_task_count",
         "board_settled", "board_successful", "persistent_autonomous_wake_qualified",
         "parallel", "parallel_peak", "isolation_verified", "rolling_reliability_counted",
-        "reason", "affinity",
+        "reason", "affinity", "native_same_session_wake", "durable_report", "owner_messages",
+        "same_session", "continuation_source",
     }
     compact = {key: record[key] for key in allowed if key in record}
     compact.update({"schema_version": "aether.lab.evidence.v1", "kind": "run"})
@@ -1856,6 +1860,99 @@ def prepare_only(scenario: Scenario, run_root: Path) -> dict[str, Any]:
         "expected_route": scenario.expected_route,
         "rolling_reliability_counted": False,
     }
+    write_json(evidence / "run.json", _compact_run_record(record))
+    return record
+
+
+def _live_persistent_lane(
+    scenario: Scenario,
+    *,
+    hermes: Path,
+    hermes_root: Path,
+    repo: Path,
+    env: dict[str, str],
+    commands: Path,
+    evidence: Path,
+    aether_project_id: str,
+    hermes_project_id: str,
+    baseline_acceptance: bool,
+    source_status_before: str,
+    known_good_hook: Path | None,
+) -> dict[str, Any]:
+    """Run E2E-15 through a real native TUI and no harness continuation."""
+    receipt = run_persistent_session(
+        hermes_argv(hermes, "morfeo", "--tui", "--in", str(repo)),
+        owner_message=scenario.owner_message,
+        cwd=repo,
+        env=env,
+        timeout_seconds=scenario.timeout_seconds,
+        session_db=hermes_root / "profiles" / "morfeo" / "state.db",
+        kanban_db=Path(env["HERMES_KANBAN_DB"]),
+    )
+    tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
+    statuses = {str(task.get("status", "")).casefold() for task in tasks}
+    board_settled = not tasks or statuses <= {"done", "archived", "blocked"}
+    board_successful = not tasks or statuses <= {"done", "archived"}
+    route = _detect_route(tasks, repo)
+    acceptance_passed = _run_acceptance(scenario, repo, env, commands, evidence, "final")
+    missing_paths, forbidden_paths = _check_paths(repo, scenario)
+    source_status_after = _source_status(commands, env)
+    aether_self_modification = source_status_after != source_status_before
+    observed_denial_codes = _denial_codes(evidence / "hook-denials.jsonl")
+    guard_denials_ok = set(scenario.expected_guard_denial_codes) <= set(observed_denial_codes)
+    protected_edge_probe_violation = _protected_edge_probe_violated(
+        scenario, repo.parent, repo, env, commands
+    )
+    fault_recovered = _fault_recovered(known_good_hook)
+    route_ok = route == scenario.expected_route
+    owner_interventions_ok = scenario.expected_owner_interventions == 0
+    passed = (
+        receipt.get("status") == "PASS"
+        and acceptance_passed
+        and route_ok
+        and board_settled
+        and board_successful
+        and owner_interventions_ok
+        and guard_denials_ok
+        and not missing_paths
+        and not forbidden_paths
+        and not aether_self_modification
+        and not protected_edge_probe_violation
+        and fault_recovered
+    )
+    record: dict[str, Any] = {
+        "scenario": scenario.id,
+        "status": "PASS" if passed else "FAIL",
+        "mode": "live-persistent",
+        "expected_route": scenario.expected_route,
+        "observed_route": route,
+        "route_ok": route_ok,
+        "acceptance_passed": acceptance_passed,
+        "baseline_acceptance_passed": baseline_acceptance,
+        "owner_interventions": 0,
+        "expected_owner_interventions": scenario.expected_owner_interventions,
+        "owner_interventions_ok": owner_interventions_ok,
+        "harness_continuations": 0,
+        "guard_denials_ok": guard_denials_ok,
+        "observed_protected_edge_violation": protected_edge_probe_violation,
+        "aether_self_modification": aether_self_modification,
+        "fault_recovered": fault_recovered,
+        "missing_required_paths": missing_paths,
+        "present_forbidden_paths": forbidden_paths,
+        "aether_project_id": aether_project_id,
+        "hermes_project_id": hermes_project_id,
+        "board_task_count": len(tasks),
+        "board_settled": board_settled,
+        "board_successful": board_successful,
+        "persistent_autonomous_wake_qualified": False,
+        "rolling_reliability_counted": False,
+        "native_same_session_wake": receipt.get("native_same_session_wake") is True,
+        "durable_report": receipt.get("durable_report") is True,
+        "owner_messages": receipt.get("owner_messages", 0),
+        "same_session": receipt.get("same_session") is True,
+        "continuation_source": "native",
+    }
+    record = _qualify_e2e15_record(record, receipt)
     write_json(evidence / "run.json", _compact_run_record(record))
     return record
 
@@ -1894,6 +1991,22 @@ def live_run(
         hermes, hermes_root, repo, scenario, env, commands
     )
     known_good_hook = _apply_fault_injection(scenario, hermes_root, evidence)
+
+    if scenario.id == "e2e-15":
+        return _live_persistent_lane(
+            scenario,
+            hermes=hermes,
+            hermes_root=hermes_root,
+            repo=repo,
+            env=env,
+            commands=commands,
+            evidence=evidence,
+            aether_project_id=aether_project_id,
+            hermes_project_id=runtime_project_id,
+            baseline_acceptance=baseline_acceptance,
+            source_status_before=source_status_before,
+            known_good_hook=known_good_hook,
+        )
 
     initial_query = scenario.owner_message
     turns: list[tuple[str, str]] = [("Owner (synthetic)", scenario.owner_message)]
