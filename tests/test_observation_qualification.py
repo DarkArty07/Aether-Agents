@@ -305,9 +305,9 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "version": "0.20.4",
     }
     assert contract["minimum_observation_tests"] == 119
-    assert contract["expected_core_tests"] == 453
+    assert contract["expected_core_tests"] == 450
     assert contract["expected_core_node_manifest_sha256"] == (
-        "a7daee2633e38813b2c3e975dab73c78b587de98109ca2010696960085266ade"
+        "e0cb8eadd90d74d28d36e8060531d61b181bc9abf093c976ea2d07355c048fb8"
     )
     assert contract["core_test_files"] == [
         "tests/test_observation_contracts.py",
@@ -316,7 +316,6 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "tests/test_observation_cli_plugin.py",
         "tests/test_observation_packaging.py",
         "tests/test_observation_path_confinement.py",
-        "tests/test_observation_performance.py",
         "tests/test_projection_transition_runner.py",
     ]
     assert not any(

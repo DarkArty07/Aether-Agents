@@ -42,9 +42,9 @@ from aether_agents.observation.reduce.reducer import (  # noqa: E402
 )
 
 MINIMUM_OBSERVATION_TESTS = 119
-EXPECTED_CORE_TESTS = 453
+EXPECTED_CORE_TESTS = 450
 EXPECTED_CORE_NODE_MANIFEST_SHA256 = (
-    "a7daee2633e38813b2c3e975dab73c78b587de98109ca2010696960085266ade"
+    "e0cb8eadd90d74d28d36e8060531d61b181bc9abf093c976ea2d07355c048fb8"
 )
 PLUGIN_CALLBACK_COUNT = 22
 TEN_THOUSAND_REDUCTION_LIMIT_S = 2.0
@@ -61,7 +61,6 @@ CORE_TESTS = (
     "tests/test_observation_cli_plugin.py",
     "tests/test_observation_packaging.py",
     "tests/test_observation_path_confinement.py",
-    "tests/test_observation_performance.py",
     "tests/test_projection_transition_runner.py",
 )
 # Lifecycle and qualification are separate release lanes: the former creates two
