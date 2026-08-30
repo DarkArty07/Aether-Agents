@@ -1114,3 +1114,117 @@ to the separate `max_retries` qualification and is not Aether repository content
 The local `CLAUDE.md` adapter remains non-canonical and ignored. Its reconciliation was attempted during
 consolidation, but the protected instruction-file approval prompt expired without a user response. The write
 was not retried or bypassed; Aether issue #193 therefore remains open.
+
+## 17. Phase 6 formal qualification gate closed by owner instruction
+
+**Decided**: 2026-08-20, in conversation with Christopher. Asked explicitly whether the §11 Phase 6
+qualification gate should be treated as closed or postponed, Christopher chose closure: he is validating
+the system through his own direct, ongoing use rather than through a formal analytical packet, and does
+not want further work gated on producing one.
+
+**What closes.** The §11 contract (FR-1343 through FR-1351) — claim ledger, provisional-value review, cost
+account, contradiction review, debt register, and a `READY`/`HOLD` recommendation — will not be produced.
+§13's pre-run `HOLD` packet and §14's Phase 5 candidate evidence remain the permanent, truthful record of
+what was actually observed; neither is retroactively rewritten into a completed qualification, because none
+was produced. Phase 6's terminal state is **closed**, not `READY` and not `HOLD` — the gate itself ended,
+rather than being resolved through it.
+
+**What does not close.**
+
+- **No claim is promoted.** The three EC1 claims (convergence/exhaustion, wake delivery, acceptance
+  evidence) keep the disposition §14.2 already recorded — candidate evidence from one live run, not a
+  qualified verification. FR-1336's rule still applies: an unrun promotion step must not be treated as
+  having silently promoted anything, and closing the gate does not change that.
+- **No provisional value is revised.** Model tiers, retry/turn/wall-clock budgets, and concurrency limits
+  (spec.md §4) remain provisional under R12-FR-1219 until an owner decision revises them by some other
+  route.
+- **No cost correlation, cutover, product activation, publication, deployment, or Hermes-to-Morfeo switch
+  is authorized by this closure.** PD-09's separation of design, build, and activation is unaffected;
+  closing an evidence-qualification gate is not an activation decision.
+- **R4–R12's accepted claims are not reopened.** This is a decision about whether to keep running a
+  post-hoc qualification process, not a finding that contradicts any accepted requirement, so FR-1339's
+  reopen-the-owning-stage rule does not apply here.
+
+**Reason.** Christopher judges his own direct use of the proportional-Morfeo surface — the same standard
+already applied to close issue #196 (§16) — sufficient for his purposes, and does not want the design to
+keep gating further work on a packet that would duplicate a judgement he has already made informally and
+repeatedly.
+
+**Alternative considered.** Deferral (keep Phase 6 as a still-required, merely postponed step) was offered
+explicitly and declined in favor of closure.
+
+**Impact.**
+
+- `spec.md` §5's pre-run baseline note and §11's Phase 6 contract are marked closed; the FRs remain as a
+  historical record of what a formal qualification would have required, not as live obligations.
+- `plan.md`'s Phase 6 phase is marked closed with the same disposition.
+- `ROADMAP.md` §6 and §8, and `README.md`'s status section, no longer name Phase 6 re-qualification as the
+  next protected gate — there is no next protected evidence gate; the design's remaining protected
+  boundary is PD-09 itself (no build authorization is granted by this closure, and no activation is
+  authorized without separate explicit instruction).
+
+## 18. A1 canonical reconciliation and public release entry (2026-08-21)
+
+### 18.1 Trigger and authority
+
+PD-48–PD-64 reopened the private-local R13 entry. Christopher then approved PD-65 through PD-67: the Hermes fork is transitional, guard precision is qualified on ordinary work as well as negative controls, and Morfeo may author canonical contracts in an exact board-verifiable linked worktree through structured file tools. The A1-C0 board contract authorized reconciliation of R4 and R8–R13 plus ROADMAP/AGENTS only; it authorized no product code, runtime/profile mutation, publication, credential/spend, live run, or cutover.
+
+The prior EC1 plan was not deleted as history: §§1–17 above and Git preserve its rationale, observed run, owner closure, local patch experience, and evidence limitations. What changed is its status. It is no longer the current implementation-entry plan and `tasks.md` is explicitly historical rather than an A1 queue.
+
+### 18.2 Source evidence and baseline correction
+
+Direct GitHub inspection resolved `NousResearch/hermes-agent` release `v2026.8.18` as annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74` pointing to commit `e624e9fde561e1add9388384012b295fde669ade`. `pyproject.toml:3-15` records `hermes-agent` `0.20.4` and Python `>=3.11,<3.14`. The source archive fetched during inspection was 66,313,931 bytes with SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`.
+
+The handoff's `9f13bb131670169467d9b2453ae2e8848814ff6e` does not exist in the public repository. Because Christopher selected the named release/version and the tag unambiguously dereferences, R13 records the real annotated tag object and commit rather than carrying an unusable lock coordinate. This is a factual correction, not a new product decision.
+
+Current source changed the adaptation boundary materially:
+
+- `hermes_cli/projects_db.py:1-21,57-96,235-261`, `projects_cmd.py:22-104`, and project/board tests provide first-class Projects, board binding, primary repos, and deterministic task worktrees/branches. Aether owns portable identity/mapping/policy and reuses these mechanisms.
+- `provider_catalog.py:1-33,83-140` derives providers from Hermes's canonical/plugin-backed registry. Public Aether owns no private provider list.
+- `website/docs/user-guide/features/hooks.md:9-18,438-445,528-554` exposes plugin and shell `pre_tool_call` control; precision and actual payload/dispatcher behavior still require execution.
+- `tools/kanban_tools.py:467-480,2132-2140,2455-2462` still exposes card creation in board mode, so role containment remains Aether policy rather than a false structural claim.
+- `kanban_db.py:10230-10265` still spawns with the stale claimed task after branch persistence, and selected-tag schemas/config still lack five other indispensable guarantees recorded in R4 research §13.
+
+### 18.3 Release-mode decision
+
+**Decision**: enter implementation in `transitional_fork` mode.
+
+**Assumption**: all six accepted workflow guarantees remain required, and no qualified plugin/profile-only adaptation currently supplies them on the exact selected upstream artifact. Phase 2 may switch to `upstream` before publication only if that exact artifact passes every behavior gate without carrying a downstream core patch.
+
+**Reasons**:
+
+1. Calling the candidate `upstream` while silently dropping guarantees would weaken PD-65 rather than comply with it.
+2. Open PR heads and the private editable checkout are moving/unpublished inputs and cannot enter a release lock.
+3. The six lines are existing, generally useful workflow repairs with upstream disposition and retirement gates; no new Aether-only core feature is authorized.
+4. The seventh historical lifecycle-guard patch is already an ancestor of the selected tag and is omitted by default, subject to its exact regression.
+
+**Rejected alternatives**:
+
+- permanent fork: contradicts PD-65 and creates avoidable maintenance/security ownership;
+- upstream-only with weaker behavior: contradicts accepted guarantees and the release test standard;
+- vendor or import Hermes: duplicates framework plumbing and makes manager diagnosis/rollback depend on a working runtime;
+- pin an open PR or local checkout: not an immutable public release path;
+- build a new project/board/worktree layer: duplicates selected Hermes capabilities.
+
+**Impact**:
+
+- The A1 release-lock schema was corrected to version `2` after PD-65 and advanced to version `3` through PD-69/70. It retains conditional `upstream|transitional_fork` semantics and now binds the single `aether-agents` distribution, official observer entry point, event/summary/segment-manifest read/write versions, and projection schema version; the final wheel digest stays in external provenance and local transition records to avoid a circular self-digest. Phase 1 must implement and validate that accepted schema before generating a lock.
+- Phase 2 reconciles only six patch lines, preserves original `hermes-agent` identity/license/history, and produces public provenance/digests under a separate publication gate.
+- Every upstream release is requalified patch by patch; a patch retires only on released-artifact behavior evidence.
+- Public role resources and setup contain user-selected binding placeholders only. Private model/provider/router identifiers and ignored runtime state cannot be package inputs.
+
+### 18.4 Evidence and limitation status
+
+Read-only GitHub inspection on 2026-08-21 found Aether issue `#192` (retry/resumption/lifecycle accounting) OPEN and issue `#195` (semantic progress beyond heartbeat) OPEN, both last updated 2026-08-19. Selected-source heartbeat bridging demonstrates liveness/activity, not useful objective progress. Both issues remain release-visible until their own acceptance criteria produce machine-readable evidence; no newer source observation silently closes them. Later direct runtime/database inspection also opened `#211` for per-flow Morfeo/Supervisor session affinity and `#212` because auto-created `platform=tui` subscriptions are rejected by the notifier's platform enum and their cursors are advanced without delivery. Those findings are not silently converted into a custom controller: R6 owns the truthful terminal/persistent-session contract, and exact upstream or product behavior must qualify before an RC claims automatic TUI return.
+
+Issue `#198` is CLOSED as completed for the owner-authorized local repair, but the selected public tag still exhibits the stale first-spawn branch object. Therefore the local issue's closure is not public-upstream qualification and the behavior remains one of the transitional patch gates. Issue `#210` remains OPEN while this candidate goes through independent review/integration; PD-67 is the accepted policy that makes this exact task-bound structured-write context valid.
+
+### 18.5 Contract-observation release decision
+
+On 2026-08-21 Christopher changed issue `#195` from a future-minor limitation to a stable-1.0 prerequisite. PD-68 and `../002-aether-contract-observation/` own the replacement design. The accepted boundary is a local metadata-only projection over public Hermes hooks and native identifiers, not a second task-status authority and not remote telemetry. Stable 1.0 now requires deterministic fixture evidence and one controlled real contract trace; the previous #195 limitation status remains above as historical evidence, not current release policy.
+
+### 18.6 Current implementation-entry replacement
+
+`spec.md` now owns the portable role contracts, public manager/runtime boundary, exact Hermes base, transitional adaptation, dependency order, release qualification, external gates, and success criteria. `plan.md` now owns package/version/schema decisions, XDG layout, native adaptation, patch inventory, explicit release testing standard, eleven implementation phases after Phase 0, authority ledger, risks/rollback, and the single Supervisor handoff.
+
+No implementation unit was created by Morfeo. The pre-created C0 review and integration children remain the only downstream graph for this documentation objective.

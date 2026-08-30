@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Exact Hermes evidence lane restored
+
+- Fixed the `hermes_exact` lane resolving its checkout from the *installed* Hermes runtime (#234). Under the declared `transitional_fork` mode that runtime always carries the local patch set and a newer commit, so it could never satisfy the locked baseline and the lane failed permanently on an environment fact that said nothing about Aether. The runner already documents that it "never consults a private/editable Hermes installation"; the tests now follow the same rule.
+- Lanes that only read the Hermes tree honour `AETHER_EXACT_HERMES_CHECKOUT`; lanes that import the installed plugin skip with the baseline they need instead of failing.
+- Reconciled the locked qualification manifest with the collected suite (#228): `core_test_files` now matches the runner's `CORE_TESTS`, which had gained `test_observation_path_confinement.py` and `test_projection_transition_runner.py` in the same checkpoint without the assertion following.
+- Reproduce with `python scripts/qualify_observation.py checkout --path <dir>`, then run pytest with `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=<dir> AETHER_EXACT_HERMES_CHECKOUT=<dir>`.
+
+### Retired shell-text classification in the pre-tool policy
+
+- Retired the generic command-text filesystem confinement for Implementer `terminal`/`execute_code` (#233). It could not enforce anything — an allowed interpreter derives its destination internally, so no path appears in argv — while denying legitimate work whose argv merely named a workspace-local venv launcher symlinked to a managed interpreter.
+- Retired the Supervisor and Implementer contract-ownership checks that classified shell command text (#237), which read the `>` inside a quoted Git pretty-format such as `<%ae>` as redirection toward a contract path.
+- Contract ownership, workspace ownership, branch/history, external-effect, credential, Kanban and Git integration guards are unchanged; ownership is enforced on structured file tools where the target is a typed argument.
+- Added regressions for both blocked real commands and for contract ownership still denying a typed `write_file` against an owned artifact.
+
+### Objective Contract prose boundary
+
+- Separated Objective Contract secret-shape rejection from the observation metadata scanner so UTF-8, multiline and long contract prose remains authorable while recognized credential values stay denied.
+- Added source and built-wheel regressions for the pipeline-blocking `#236` case.
+
 ### Reproducible Morfeo TUI activation
 
 - Added a versioned, standard-library launcher that binds Morfeo to the repository-local profile and project directory.

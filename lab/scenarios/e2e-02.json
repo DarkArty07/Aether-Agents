@@ -1,0 +1,13 @@
+{
+  "id": "e2e-02",
+  "fixture": "direct-bug",
+  "owner_message": "Corrige el bug de calc.total: debe sumar sus dos operandos. Reproduce con verify.py, aplica el arreglo mínimo y vuelve a ejecutar la verificación.",
+  "expected_route": "direct",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 300,
+  "max_dispatch_passes": 10,
+  "scripted_replies": [],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": [],
+  "live_requires_spend": true
+}

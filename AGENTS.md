@@ -1,14 +1,18 @@
 # Aether Agents repository
 
-This repository contains the versioned policy and reproducible configuration for Aether Agents.
+This repository contains Aether's public product source, versioned policy, canonical specifications, and reproducible configuration. The current build target is the Aether 1.0 contract in `specs/001-aether-v1-productization/`; a design decision or local candidate is not evidence that a package, release candidate, public service, or stable release exists.
 
 `DESIGN.md` is the canonical conceptual design for the current redesign. It defines the intended roles, authority boundaries and fixed high-level product decisions. Technology choices not explicitly fixed there remain undecided and must not be inferred or implemented without Christopher's direction.
 
-The live Hermes profile is local state under `home/` and must not be committed. Keep credentials, sessions, databases, memories and other runtime state private.
+Live Hermes profiles and other runtime state under `home/` are local evidence only and must not be committed. Keep credentials, sessions, databases, memories, logs, boards, repositories, owner identifiers, machine paths, and private provider/model/router bindings out of public artifacts.
 
-The current runtime may remain a single Hermes profile while the redesign is being specified. Do not treat the conceptual multi-agent design as authorization to create profiles, workers, schedulers, coordination runtimes or other implementation mechanisms before their technical design is explicitly decided.
+The accepted product has three roles: Morfeo, supervision, and implementation. Implementation is replicable in parallel instances. The accepted design and A1 contract still grant no authority by themselves to create or activate profiles, start workers or services, invoke models, acquire credentials, publish, deploy, cut over an installation, or perform another protected external effect.
 
-Only Morfeo currently has a proper agent name. The other two agent identities are role descriptions only: supervision and implementation. The implementation role is intended to be replicable in parallel instances. Hermes Framework and GitHub Spec Kit are selected foundations. A2A is only the preferred communication candidate until its fit and scope are evaluated; no integration mechanism should be inferred from framework availability.
+**Current stabilization authority (PD-71 through PD-74, 2026-08-26):** ordinary local/reversible work is governed by scope, worktrees, Git, tests, review and rollback rather than role micro-permissions. The pre-tool hook is restricted to high-confidence secrets/credentials, credential acquisition/widening, unauthorized remote/external mutation, and clearly destructive irreversible effects. Morfeo recovery is rollback-first and bounded; Implementer owns local technical judgement; Supervisor may make small integration repairs. Feature expansion and nonessential Hermes changes remain frozen until the rolling E2E reliability gate passes.
+
+Only Morfeo has a proper agent name; supervision and implementation remain role descriptions. Hermes Agent and GitHub Spec Kit are selected foundations. Aether reuses native Hermes profiles, Projects, boards, worktrees, review, and lifecycle where they qualify. A2A remains available but unused under R6; framework availability never authorizes an integration mechanism.
+
+The selected public Hermes baseline is `NousResearch/hermes-agent` release `v2026.8.18`: annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, dereferenced commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`. A1 starts in `transitional_fork` mode under PD-65 only for indispensable qualified fixes; no new Aether capability may depend on a downstream-only core change, and each patch retires when an exact released upstream artifact passes its behavior gate.
 
 ## How Aether is built: borrow the thinking, write our own workflow
 
@@ -40,7 +44,7 @@ This is not permission to weaken Spec-Driven Development. Adaptations may redist
 
 Worked examples of this method live in `specs/r2-contract-and-handoff/research.md`, which records what upstream already solved, the three gaps that remained, and why.
 
-This principle belongs in Aether's future constitution. Until that artifact exists, it lives here.
+This principle is owned canonically by `specs/r0-design-governance/spec.md` and is materialized locally for Spec Kit at the ignored `.specify/memory/constitution.md`; the local copy is not a second authority.
 
 ## External research sources
 
@@ -48,15 +52,16 @@ Research checkouts stay outside this repository. They are evidence sources, not 
 
 - **GitHub Spec Kit**
   - Upstream: `https://github.com/github/spec-kit.git`
-  - Local checkout: `/home/darkarty/Desktop/agentes/aether-research/spec-kit`
+  - Local checkout used for the historical comparison: `<private-spec-kit-checkout>`
   - Baseline inspected for the current design research: `bf88c9f9a82fa370c7a7257aa2b3cf10b457b65c`
   - Verified 2026-08-17: exactly one Spec Kit tree exists on this machine, its HEAD equals `origin/main`, and Spec Kit is not installed as a package — so unlike Hermes there is no second authoritative tree to confuse it with.
 
 - **Hermes Agent**
   - Upstream: `https://github.com/NousResearch/hermes-agent.git`
-  - **The source Aether runs:** `home/.venv-hermes/src/hermes-agent` — version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. The profile installs Hermes as an editable package pointing here.
-  - **Not this one:** `/home/darkarty/.hermes/hermes-agent` is a different, older checkout (0.19.1). It is not what the Aether profile loads. Reading it produced a false finding once already.
-  - Read; never modify either tree as part of Aether design work.
+  - **Selected public release evidence:** release `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`.
+  - **The source the private Aether installation currently runs:** `home/.venv-hermes/src/hermes-agent` — version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. It is historical/runtime evidence for that installation, not the selected public release source or a distributable dependency.
+  - **Not this one:** `<legacy-hermes-checkout>` is a different, older checkout (0.19.1). It is not what the Aether profile loads. Reading it produced a false finding once already.
+  - Research checkouts and the loaded private tree are read-only evidence during canonical design work. A separately authorized downstream implementation must use an isolated candidate based on the exact selected public release and must not copy private editable state.
   - The live profile under `home/` is runtime evidence about what is initialized. It is not documentation of intent, and its contents are not adopted by being present.
 
 > **Verify a claim in code before an accepted decision rests on it.** Documentation states intent; the registry states what is actually exposed. R5 claimed role containment was structural in both directions until the tool gating was read, which showed card creation is available to every worker. Where a decision depends on something being impossible, read the gate — not the guide.

@@ -2,7 +2,7 @@
 
 **You design and decide once, well. Then agents build for hours without you.**
 
-Aether is a multi-agent software-engineering method. It is not a framework and it ships no runtime: it is a role model, a contract, and a configuration layered on top of two existing systems — [Hermes Agent](https://github.com/NousResearch/hermes-agent) for the runtime and [GitHub Spec Kit](https://github.com/github/spec-kit) for the method.
+Aether is a multi-agent software-engineering product and method built around two existing systems — [Hermes Agent](https://github.com/NousResearch/hermes-agent) for the agent/runtime substrate and [GitHub Spec Kit](https://github.com/github/spec-kit) for the specification method. Aether owns the three-role contract, portable profile/policy resources, project/release management, and reliability qualification; it does not replace Hermes's board, worker lifecycle, worktrees, retries, review, or tools.
 
 The owner states intent once, in conversation. From that point the system works unattended: it turns intent into a specification, breaks the specification into units of work, executes those units in parallel as separate operating-system processes, reviews and integrates them, and reports back at the end. The owner is not asked to approve steps along the way, and nothing waits on his attention unless the work genuinely cannot proceed without a decision he alone can make.
 
@@ -22,9 +22,9 @@ The whole design follows from that split. Every rule about handoffs, evidence, a
 |---|---|---|---|
 | **Morfeo** | Yes — the only one | Constitution, specification, clarification, technical plan, and bounded direct operational stewardship | Frontier |
 | **Supervisor** | No | Task breakdown, executability analysis, review, decisions, convergence, integration | Capable |
-| **Implementer** | No | Writing the code. Many run concurrently | Inexpensive |
+| **Implementer** | No | Writing the code. Many run concurrently | Capable |
 
-Every role is a real operating-system process with its own Hermes profile: its own configuration, credentials, memory, skills, and model. Two agent processes never share a profile.
+Every role is a real operating-system process. Each role has its own Hermes profile with separate configuration, credentials, memory, skills, and model; replicated Implementer processes share the Implementer profile while retaining independent sessions, cards, and worktrees.
 
 Roles are never added to solve an execution problem. Fresh context, a card-pinned skill, or a per-card model override are tried first; a fourth role requires an explicit owner decision.
 
@@ -61,17 +61,23 @@ The coordination substrate is Hermes's durable board: a SQLite table where each 
 
 **Nobody administers the board.** Routing lives in the dependency graph, state lives in the table, execution lives in short-lived processes. No agent holds two of the three, which is what keeps the architecture from collapsing back into the hub-and-spoke shape that failed before.
 
-## Escalation has exactly two tiers
+### Session continuity
 
-This is the part most systems get wrong, and Aether's answer is verified against the runtime rather than assumed.
+Process lifetime is not conversation lifetime. Morfeo keeps the owner-facing session that originated the flow. For pipeline work, `prepare_handoff` derives an opaque deterministic `flow_id`; all Supervisor phases for that Objective Contract reuse one exact Hermes session and one canonical Supervisor workspace, even though decomposition, review, and integration run in separate operating-system processes. Each Implementer card still receives a fresh session and its own worktree.
 
-**Tier 1 — the system resolves it.** An implementer that hits a question the contract does not answer does *not* stop and does *not* wake anyone. It creates a decision card addressed to the supervisor and links that card as a parent of its own. The link alone moves its own card back to waiting. A fresh supervisor process picks up the decision card, decides with the whole contract in view, and completes. The implementer's card then promotes itself automatically and re-spawns with the decision delivered verbatim in its context.
+Hermes enforces the binding over `(board, Project, flow_id, profile)` with an exclusive generation-fenced lease. A later Supervisor process resumes with `--resume`, pins the accepted flow workspace with `--no-restore-cwd --in`, and cannot replace a live or stale-mismatched writer. Internal milestones remain silent; only explicit `input`, `revision`, or `flow_terminal` events return to the owner-facing origin.
 
-No human is involved, no privileged tool is required, and the block-loop counter is never touched.
+## Escalation is proportional
 
-**Tier 2 — the contract is genuinely defective.** If the supervisor finds the answer is not derivable from the contract, it blocks the decision card as needing input. That surfaces to Morfeo, who is the only role permitted to revise a contract, and who asks the owner. Work on every unrelated unit continues untouched.
+Aether no longer treats every unspecified technical detail as a coordination event.
 
-The rule that separates the tiers: **a question the contract can answer is never escalated to a human; a question the contract cannot answer is never invented by an agent.**
+**Tier 0 — Implementer decides.** A reversible technical choice stays with Implementer when it preserves scope, acceptance criteria, shared interfaces, sibling independence, and authority. Naming, internal organization, equivalent implementation approaches, local test arrangement, and similar details do not create decision-card ceremony.
+
+**Tier 1 — Supervisor decides a material shared question.** When a choice affects shared execution and the canonical contract settles it, the verified decision-card/dependency pattern remains available: the unit waits, Supervisor answers durably, and the unit resumes without waking the owner.
+
+**Tier 2 — product intent is genuinely missing.** If the material answer is not derivable from the contract, it returns through Morfeo to the owner. Unrelated units continue.
+
+The separation rule is: **local implementation judgement stays local; shared contract judgement belongs to Supervisor; genuinely missing product intent belongs to the owner.**
 
 ## Where Hermes ends and Aether begins
 
@@ -80,10 +86,10 @@ The rule that separates the tiers: **a question the contract can answer is never
 | Conversation loop, tools, terminal backends | Which roles exist and what each is for |
 | The durable board, dispatcher, retries, reclaim | Which Spec Kit phase each role performs |
 | Worktrees, attempt history, audit trail | The contract and what makes it complete |
-| Convergence judging, steering, hooks | The instructions that make each role behave |
+| Convergence judging, steering, hook dispatcher | Role responsibilities, contracts, review rules, and the small edge-effect policy |
 | Profiles, memory, skills, scheduling | Quality standards and evidence expectations |
 
-Aether does not fork, vendor, or patch Hermes. It expresses itself through profiles, configuration, skills, prompts, and a versioned policy-hook template installed into those profiles. Where Hermes enforces something structurally that Aether specified as an instruction, the structural guarantee is primary and the instruction is reinforcement.
+Aether reuses Hermes first and carries a documented transitional downstream only while indispensable runtime defects remain. Role behavior lives primarily in contracts, prompts, worktree isolation, tests and review. The versioned pre-tool hook is deliberately narrow: it protects secrets/credentials, credential widening, unauthorized remote/external mutation, and clearly destructive irreversible effects; it does not try to encode the role chart or interpret ordinary local work.
 
 ## The method
 
@@ -96,21 +102,72 @@ Aether does not invent a software process. It distributes Spec Kit's across thre
 | `tasks`, `analyze`, `checklist`, `converge` | Supervisor |
 | `implement` | Implementers |
 
-The contract is the Spec Kit artifact set — `spec.md`, `plan.md`, `tasks.md`, and friends — carried in the project's own repository. Aether adds no competing contract artifact; it adds an execution envelope inside `plan.md` (authority, budget, brownfield boundary) that upstream has no reason to carry.
+Spec Kit remains the canonical project specification method. For a pipeline objective, Morfeo additionally finalizes one small Aether **Objective Contract** that binds the owner-approved outcome, scope, authority, acceptance, testing and stop conditions to the relevant Spec Kit/project artifacts; it references those artifacts rather than duplicating them. Supervisor owns decomposition and `tasks.md`.
 
 ## Status
 
-**Design R0–R13 and build Phases 0–4 are complete. The explicitly authorized Phase 5 EC1 run completed on 2026-08-18.** Morfeo, Supervisor, and Implementer exist as separate profiles with configured hooks; the checkpoint used live models, a shared durable board, an isolated worktree, independent review, and one local integration in a sacrificial repository unrelated to product delivery.
+**Aether is in operational reliability stabilization under PD-71 through PD-74.** Repeated end-to-end failures and guard false positives reopened R7, R8, R10 and R13 on 2026-08-26. Feature expansion, Hermes upgrades, nonessential downstream patches, observation expansion and release qualification are frozen until the reliability gate passes.
 
-Phase 5 produced candidate evidence for the three previously assumed runtime claims:
+The stabilization work has four priorities:
 
-- A converged goal-mode unit reached same-card review and final completion; a separate impossible unit exhausted `2/2` turns and was durably blocked without a false success or file mutation.
-- Terminal board events resumed the same live Morfeo TUI session, including a final turn that assembled its report from board state.
-- A real Implementer changed only `result.txt`; Supervisor independently reviewed and integrated it; `python3 verify.py` passes in the canonical fixture with `PASS: EC1 result is exact`.
+1. keep local/reversible work permissive and move safety to worktrees, Git, tests, review and rollback;
+2. reduce the pre-tool hook to the irreversible/external edge;
+3. make Morfeo recovery rollback-first and bounded instead of an invitation to redesign Aether;
+4. prove behavior through a disposable E2E harness that starts with an owner message and measures the real Morfeo → Supervisor → Implementer → review → integration path.
 
-The run also exposed material lifecycle findings: `initial_status: blocked` auto-promoted, worker-side creation omitted the retry field, `needs_input` entered triage and redispatched without an unblock, and one same-card goal needed distinct Implementer and Supervisor predicates. These findings and the complete task/session/commit trace are recorded in [`R13 research §14`](specs/r13-synthesis-and-release/research.md).
+Historical EC1/live evidence remains useful evidence in [`R13 research`](specs/r13-synthesis-and-release/research.md), but it no longer substitutes for the new rolling reliability gate. A paid/provider-backed real matrix still requires its explicit credential/spend authority; deterministic harness and policy qualification do not grant it.
 
-**Phase 6 has not been rerun after EC1.** Its earlier `HOLD` packet remains the historical pre-run qualification; no runtime claim has been formally promoted and no `READY`, product activation, publication, deployment, or Hermes-to-Morfeo cutover is authorized. The next protected step is Phase 6 evidence re-qualification, not another Phase 5 run.
+### Formal qualification laboratory
+
+The disposable qualification harness is now a formal, Hermes-free Python package in
+`src/aether_agents/lab`, exposed as `aether_agents.lab`. The historical commands under
+`scripts/e2e/` remain compatibility wrappers and retain their documented arguments:
+
+```bash
+python3 scripts/e2e/run.py e2e-01 --prepare-only --run-root /tmp/aether-e2e-01
+python3 scripts/e2e/matrix.py --suite full --prepare-only --parallel 2 \
+  --matrix-root /tmp/aether-e2e-full --history /tmp/aether-e2e-history.jsonl
+```
+
+Preparation creates distinct disposable repository, profile, board, XDG-state, and
+evidence roots; independent runs use at most two workers, while E2E-15 and shared
+Morfeo-session lanes are serial. `PREPARED` is never counted in the rolling live
+reliability window. `--live` remains spend-gated by the exact Hermes executable,
+candidate profiles, and explicit `--allow-model-spend` acknowledgement; no live run
+or provider call is implied by the deterministic lane.
+
+The separate `observation` suite seeds a local trace and invokes the registered
+`aether_observe` tool's `status`, `changes`, and `diagnose` actions. Its bounded
+provider-backed lane has passed with zero terminal/file/raw fallback. It is excluded
+from the PD-74 score and writes only schema-validated metadata under the disposable
+evidence root. The persistent E2E-15 prerequisite is a native Hermes
+CLI/TUI/gateway surface under PTY that wakes the same Morfeo session from the terminal
+board event, reports durable state, and uses no second owner message; a one-shot
+harness continuation is explicitly non-qualifying. The current native probe reports
+`CAPABILITY_WALL/native_same_session_wake_unobserved`; no notifier substitute was
+created. The rolling 20-run reliability gate and native persistent wake remain pending.
+
+### Implemented product surface
+
+The current `0.24.0` package is a **beta stabilization build, not a release candidate**. Its implemented public surface is:
+
+- the `aether` CLI for `--version`, `observe`, `doctor`, verified local `setup`/`update`, `rollback`, and `uninstall`;
+- the Contract Observer and Objective Contract Hermes plugins;
+- Morfeo-only `aether_observe` with bounded `status`, `changes`, and `diagnose` views over validated summaries (no logs, prompts, commands, outputs, diffs, or raw events);
+- the portable Morfeo, Supervisor, and Implementer profile bundle;
+- release-lock validation, isolated manager/runtime staging, and deterministic qualification.
+
+The operational `init`, `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders until the immutable runtime set and activation semantics are completed. Public OIDC release publication and the owner-authorized live reliability matrix are also pending. The CLI returns an unsupported/error result rather than pretending those effects occurred.
+
+Non-destructive candidate inspection:
+
+```bash
+aether --version
+aether observe --help
+aether doctor --json
+```
+
+`doctor` may return a non-zero readiness result in a clean environment with no installed release; that is the expected truthful response, not a failed installation attempt.
 
 ## Canonical Morfeo TUI activation
 
@@ -125,20 +182,20 @@ python3 scripts/aether_tui.py
 
 A short user-local `aether` command may delegate to this versioned script. The wrapper itself remains local because machine paths and profile state are not repository artifacts.
 
-On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. This does not replace Phase 6 or close the remaining runtime/debt issues.
+On 2026-08-20, amended PD-44 and PD-45 were mechanically delivered to the stopped local profiles. Morfeo now has the accepted proportional direct-execution surface with CLI/Telegram parity; Supervisor and Implementer retain their separate authority. Christopher accepted the active direct-execution experience as sufficient functional validation for #196 and closed that issue. That same standard led him to separately close the Phase 6 qualification gate the same day, rather than have it re-run against the EC1 evidence — see above. Neither closure closes the remaining runtime/debt issues.
 
 ## For whoever implements this
 
 Read in this order: this file, then [`DESIGN.md`](DESIGN.md) for the accepted product decisions, then [`ROADMAP.md`](ROADMAP.md) as the index of design areas, then the specification of the area you are about to build. [`AGENTS.md`](AGENTS.md) states the working method and is not optional — in particular, the rule that upstream is read before anything is designed, and that a capability claim must cite the tree the runtime actually loads.
 
-Implementation order that the design supports:
+Current implementation order during stabilization:
 
-1. Create three profiles, one per role, each with its own description.
-2. Apply the configuration in [R12](specs/r12-models-and-economics/spec.md) (model tiers) and [R7](specs/r7-supervision-and-convergence/spec.md) (concurrency, budgets, and the defaults that must be turned off).
-3. Write the three system prompts to the behavioural specifications in [R1](specs/r1-authority-and-interaction/spec.md), [R7](specs/r7-supervision-and-convergence/spec.md), and [R13](specs/r13-synthesis-and-release/spec.md). Writing the wording is build, not design, and is deliberately left open.
-4. Install the enforcement hooks in [R10](specs/r10-security-and-authority/spec.md).
-5. Run the walking-skeleton checkpoint described in [`ROADMAP.md`](ROADMAP.md) before trusting any runtime claim this design labels as assumed.
-6. Qualify the checkpoint evidence through [R13 Phase 6](specs/r13-synthesis-and-release/plan.md): promote or retain claims, revisit provisional values, correlate cost, record debt, and return `READY` or `HOLD`. This step never performs cutover or product activation.
+1. Keep `DESIGN.md`, R7/R8/R10/A1/R13 and the three portable role identities aligned on PD-71 through PD-74.
+2. Install and qualify the minimal edge hook in isolated profile homes; never patch the live hook in place to chase a false positive.
+3. Build the disposable E2E canary and fixtures without adding a daemon, database, dashboard or mandatory evaluator model.
+4. Run deterministic positive/negative policy and harness tests after each infrastructure change.
+5. Once the existing credential/spend gate is explicitly opened, run the real model-backed canary and rolling reliability matrix.
+6. Resume A1 feature/release work only after the reliability gate passes.
 
 Two defaults must be changed before the first unattended run, and both are recorded with their reasons in [R7](specs/r7-supervision-and-convergence/spec.md). Leaving them alone produces a system that quietly reassigns work the contract never authorised.
 
@@ -159,7 +216,7 @@ Two defaults must be changed before the first unattended run, and both are recor
 1. **Read upstream before designing.** Most of the thinking already exists. A long gap list means the reading was too shallow.
 2. **Resolve which source the runtime actually loads before reading it.** Recording a revision proves what was read, not that the right thing was read. This mistake has already cost this project a full stage.
 3. **Verify in code what a decision rests on.** Documentation states intent; the registry states what is actually exposed.
-4. **Never re-concentrate roles.** The previous architecture failed by role overload. Every convenience that moves work back toward one agent is the beginning of that failure.
+4. **Do not re-concentrate product responsibility.** Morfeo recovery and Supervisor integration glue are bounded exceptions for restoring/combining work, not permission to absorb feature implementation. Judge role separation by who owns product decisions and deliverables, not by forbidding every local tool action.
 5. **Do not build what the runtime already provides.** No queue, no state machine, no retry, no reclaim, no audit trail.
 6. **Design and build are separate authorities.** Accepting a design authorises nothing to run.
 

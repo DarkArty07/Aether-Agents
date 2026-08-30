@@ -1,0 +1,13 @@
+{
+  "id": "e2e-07",
+  "fixture": "direct-text",
+  "owner_message": "Inspecciona Git y la prueba existente, cambia Hello por Hola y verifica. Puedes usar comandos de lectura, ramas o herramientas locales normales si ayudan; no conviertas esas operaciones reversibles en un problema de permisos.",
+  "expected_route": "direct",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 300,
+  "max_dispatch_passes": 10,
+  "scripted_replies": [],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": [],
+  "live_requires_spend": true
+}

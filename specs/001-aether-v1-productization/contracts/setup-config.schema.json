@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DarkArty07/Aether-Agents/blob/main/specs/001-aether-v1-productization/contracts/setup-config.schema.json",
+  "title": "Aether declarative setup configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "models"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["morfeo", "supervisor", "implementer"],
+      "properties": {
+        "morfeo": {"$ref": "#/$defs/model_binding"},
+        "supervisor": {"$ref": "#/$defs/model_binding"},
+        "implementer": {"$ref": "#/$defs/model_binding"}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start_after_setup": {"type": "boolean", "default": false},
+        "enable_at_login": {"type": "boolean", "default": false}
+      }
+    },
+    "project_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "forge": {"enum": ["local", "github"], "default": "local"}
+      }
+    }
+  },
+  "$defs": {
+    "model_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1, "maxLength": 128},
+        "model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "context_length": {"type": "integer", "minimum": 4096}
+      }
+    }
+  }
+}

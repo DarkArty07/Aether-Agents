@@ -2,11 +2,11 @@
 
 **Purpose**: Evidence for the Hermes capability classification and for the three gaps.  
 **Upstream repository**: `https://github.com/NousResearch/hermes-agent.git`  
-**Local checkout**: `/home/darkarty/.hermes/hermes-agent`  
+**Local checkout**: `<legacy-hermes-checkout>`
 **Inspected revision**: `9ceb0858abfd1d3c3b32bd6f76e98d14ed7a2fbd`  
 **Version**: `hermes-agent` 0.19.1 (`pyproject.toml`)  
 **Checkout state**: clean except a modified `package-lock.json`, which does not affect any claim below.  
-**Live profile inspected**: `/home/darkarty/Desktop/agentes/aether/home/` — local runtime state, evidence only, never committed.
+**Live profile inspected**: `<private-aether-home>/` — local runtime state, evidence only, never committed.
 
 ## 1. Research Question
 
@@ -125,7 +125,7 @@ A different agent protocol adapter **is** present natively as a first-class modu
 
 ## 7. Live Profile Observations
 
-The live profile at `Desktop/agentes/aether/home/` shows subsystems present and initialized: session and state databases, a project database, curated memories, skills, plugins, a gateway with recorded state, sandboxes, agent hooks and a shell-hooks allowlist, messaging platforms and a channel directory, cron, an LSP integration, and a verification-evidence database.
+The live profile at `<private-aether-home>/` shows subsystems present and initialized: session and state databases, a project database, curated memories, skills, plugins, a gateway with recorded state, sandboxes, agent hooks and a shell-hooks allowlist, messaging platforms and a channel directory, cron, an LSP integration, and a verification-evidence database.
 
 Two observations matter for Aether:
 
@@ -186,7 +186,7 @@ The capability table in `spec.md` marks the two rows that depend on unread sourc
 
 ## 11. Correction — Hermes Ships A2A, and the Method Failure That Hid It
 
-**Verified in the source Aether actually runs**: `/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/src/hermes-agent`, version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. The Aether profile installs Hermes as an editable package pointing at that tree.
+**Verified in the source Aether actually runs**: `<private-aether-home>/.venv-hermes/src/hermes-agent`, version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. The Aether profile installs Hermes as an editable package pointing at that tree.
 
 ### What is actually there
 
@@ -293,3 +293,49 @@ Only durability survives, and only for delegation. A running delegated child doe
 - Every other capability claim in R4 describes 0.19.1 and is **unverified**, not necessarily wrong. R4 is reopened until re-checked against 0.20.1.
 - `DESIGN.md` §10 and the R6 roadmap entry were rewritten on the false finding and are restored.
 - R5 was designed on the premise that profiles cannot exchange work. That premise is void, and the stage was deleted rather than patched — Christopher had also stated he wanted separate profiles, which the false premise had ruled out.
+
+## 13. A1 public-baseline reconciliation (2026-08-21)
+
+### 13.1 Source resolution and factual correction
+
+The release selected for A1 was `NousResearch/hermes-agent` `v2026.8.18`. Direct GitHub inspection showed that this is an **annotated tag**: ref `refs/tags/v2026.8.18` points to tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, which dereferences to commit `e624e9fde561e1add9388384012b295fde669ade`. `pyproject.toml:3-15` at that commit records distribution version `0.20.4` and Python `>=3.11,<3.14`.
+
+The Phase 0 handoff supplied `9f13bb131670169467d9b2453ae2e8848814ff6e` as the commit. GitHub returned “No commit found” for that object. The owner selected the named release and its version; the release's actual annotated-tag object and commit are therefore the controlling technical identity. This correction changes no product decision and is recorded prominently because an unresolvable commit cannot be a release lock.
+
+The GitHub-generated archive fetched from `https://github.com/NousResearch/hermes-agent/archive/refs/tags/v2026.8.18.tar.gz` during this inspection was `66,313,931` bytes with SHA-256 `1e3d39d3638ec15fa9d31af262568a953e9272090deb1c50c44cd401175f5b80`. Phase 2 must either lock that exact byte stream or produce and lock its own immutable public artifact; a mutable branch is never an acceptable substitute.
+
+### 13.2 What changed since the loaded 0.20.1 evidence
+
+The selected release materially expands native surfaces that Aether should reuse:
+
+- `hermes_cli/projects_db.py:1-21,57-96,235-261` defines per-profile first-class Projects with stable IDs/slugs, folders, primary paths, and optional board binding.
+- `hermes_cli/projects_cmd.py:1-10,22-104` exposes create/list/show/folder/primary/use/archive/restore/board-binding commands.
+- `tests/hermes_cli/test_kanban_project_link.py:29-64` and `test_kanban_board_project.py:40-87` prove project-linked deterministic worktrees/branches and board-project inheritance.
+- `hermes_cli/provider_catalog.py:1-33,83-140` derives provider membership from Hermes's canonical/plugin-backed registry, so Aether needs no private provider list.
+- `website/docs/user-guide/features/hooks.md:9-18,438-445,528-554` documents plugin and shell `pre_tool_call` interception and fail-closed approval behavior.
+
+These findings narrow Aether's gap: `aether init` owns portable project identity, local mapping, validation, and policy, but it adapts Hermes Project/board/worktree primitives rather than implementing them again.
+
+### 13.3 Downstream patch disposition
+
+PD-65 makes the fork transitional rather than permanent. The selected upstream tag was compared with the active patch ledger and current upstream issue/PR state on 2026-08-21:
+
+| Patch guarantee | Selected-tag finding | Upstream disposition at inspection | A1 disposition | Retirement gate |
+|---|---|---|---|---|
+| Sticky `initial_status=blocked` | Tag creates the status but no durable sticky block event; readiness recomputation can still promote it | PR `#91180` open | Carry in transitional fork | Exact released upstream artifact passes initial-block and negative promotion regressions |
+| Agent-facing `max_retries` | `KANBAN_CREATE_SCHEMA` contains no `max_retries` | PR `#89590` open | Carry | Schema, validation, forwarding, omission, and invalid-input matrix pass on an exact upstream release |
+| Human-gated needs-input escalation | Required escalation provenance/recovery contract absent | PR `#91211` open | Carry | Exact upstream release preserves human gate through recovery and passes the Aether lifecycle matrix |
+| One durable terminal handoff | Selected tag has protocol-violation retries but not the accepted unique durable terminal-receipt rule | PR `#91220` open | Carry | Exact upstream release passes same-card phase handoff and duplicate/missing-terminal controls |
+| First-spawn branch propagation | `kanban_db.py:10230-10265` persists the derived branch, then passes the stale claimed task to spawn | issue `#89677` and PR `#89688` open | Carry | First ready and review spawns receive the exact persisted branch; scratch/dir controls receive none |
+| Per-profile cap overrides | Tag exposes one uniform `max_in_progress_per_profile`, not an asymmetric role map | issue `#91259` and PR `#91266` open | Carry | Ready/review/CLI/gateway paths pass against an exact upstream release with Aether's 1/3 profile allocation |
+| Directory-versus-script gateway lifecycle guard | Commit `9ac1e65…` is an ancestor of the selected tag | upstream issue `#86753` closed | Do not carry by default | Reproduce the original directory false positive plus real script/process controls on the exact selected artifact |
+
+**Decision.** A1 enters build work in `transitional_fork` mode, based on the assumption that the accepted workflow guarantees above remain mandatory and no qualified non-core adaptation currently satisfies them. This is delegated release-mode selection within PD-65, not authority to create or publish the fork.
+
+**Rejected alternatives.** (1) Declare `upstream` now and silently drop guarantees: rejected because it weakens accepted behavior. (2) Treat open PR heads or the local editable checkout as the release dependency: rejected because neither is an immutable public release. (3) make the fork permanent: rejected by PD-65. (4) carry every historical patch regardless of upstream: rejected because the lifecycle-guard fix is already contained and patches retire on qualification evidence.
+
+**Impact.** Phase 2 must reconcile only the six carried lines onto the selected base, build public artifacts, produce provenance/digests, and request a separate publication gate. No new downstream-only feature is allowed. Each later Hermes release is reviewed line by line and can move Aether back to `upstream` only after the exact release artifact passes all retirement gates.
+
+### 13.4 Current Aether issue state
+
+Read-only GitHub inspection on 2026-08-21 found Aether issues `#192` (retry/resumption/lifecycle accounting) and `#195` (semantic progress beyond heartbeat) still **OPEN**, both last updated 2026-08-19. Issue `#192` remains release-visible under its accepted limitation contract. PD-68 later changed `#195` into a stable-1.0 prerequisite governed by `../002-aether-contract-observation/`; an upstream tag does not close either Aether acceptance criterion without its required evidence.

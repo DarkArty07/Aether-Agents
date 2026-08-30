@@ -1,12 +1,10 @@
 # Reproducible Aether policy hooks
 
-`aether_pre_tool_policy.py` is the canonical, sanitized source for the fail-closed
-pre-tool policy installed in the Morfeo, Supervisor, and Implementer Hermes
-profiles. The script derives its role from its installed path, so the same bytes
-must be installed for all three profiles.
+`aether_pre_tool_policy.py` is the canonical, sanitized **minimal edge guard** installed in the Morfeo, Supervisor, and Implementer Hermes profiles. The same bytes are installed for all three roles; the role name is used only in diagnostics.
 
-The canonical source contains policy only. It contains no credentials, sessions,
-memories, profile configuration, databases, logs, or other runtime state.
+The guard is intentionally narrow. Ordinary local/reversible work is allowed and governed by scope, Git, tests, review, and rollback. The hook blocks only high-confidence secrets/credentials, credential acquisition or widening, unauthorized remote/external mutation, clearly destructive irreversible operations, plus malformed hook invocation. It does not open Kanban/SQLite, execute Git, infer role ownership, parse task size, or enforce direct-versus-pipeline routing.
+
+The canonical source contains policy only. It contains no credentials, sessions, memories, profile configuration, databases, logs, or other runtime state.
 
 ## Verify an installation
 

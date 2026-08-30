@@ -1,8 +1,9 @@
 # R1 Specification: Authority and Human Interaction
 
 **Roadmap ID**: R1  
-**Stage status**: done  
+**Stage status**: done — reconciled 2026-08-26 for PD-71/PD-72/PD-74
 **Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
+**Amended**: 2026-08-26 — local reversibility remains ungated; spend/public/destructive edge effects use separate explicit authority
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -56,9 +57,9 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 > **Reconciliation note.** R1 was written before R5 established the topology, and used "Morfeo" as shorthand for the whole system. Pipeline work remains split across Morfeo, Supervisor, and Implementer. PD-44 additionally recognizes Morfeo as the owner's operational steward for bounded direct work. The authority model is unchanged; only the available route and effect attribution are corrected.
 
 - **FR-110**: **Aether** maintains the project. The owner does not operate the repository, the toolchain, or the release path on the system's behalf.
-- **FR-111**: The normal path contains no confirmation gate. Work in the workspace, commits, branches, pushes, pull requests, merges, tags, releases and deploys happen as maintaining the project requires, performed by the role that owns the pipeline phase or by Morfeo for a direct PD-44 action, always within the authority already conferred for the objective and effect.
-- **FR-112**: Spending is unrestricted.
-- **FR-113**: Because no human gate exists in the normal path, protection against an irreversible mistake MUST come from recoverability and from enforcement designed in R10 — not from asking the owner first.
+- **FR-111**: The normal **local and reversible** path contains no confirmation gate. Work in the workspace, local commits/branches, tests, builds, review and rollback proceed under the authority already conferred for the objective. Remote publication, deploy, release, repository settings, destructive purge and other protected edge effects remain separately gated by current A1/R10 authority rather than being inferred from generic maintenance intent.
+- **FR-112**: Model/provider spending is not implied by local autonomy. A deterministic or local task may run unattended, but any lane that consumes separately gated provider quota or paid external services requires the explicit authority carried by the owning product contract.
+- **FR-113**: Protection against local reversible mistakes MUST come primarily from isolation, Git, tests, review and rollback. R10 prevention is reserved for the narrow PD-71 edge; ordinary local uncertainty MUST NOT be converted into another owner confirmation or deny-by-default gate.
 - **FR-114**: **Every role** operates only with credentials and access the owner has already provisioned, and MUST NOT acquire, create, or widen them. This is a scope limit, not a confirmation step, and it applies per profile (PD-27).
 - **FR-115**: **No role** may delete or overwrite work it did not produce without an instruction that covers it.
 - **FR-116**: Runaway execution MUST be bounded by convergence and attempt limits in R7, since no spending or approval gate bounds it.
@@ -76,7 +77,7 @@ The quality of the entire system rests on Phase 1. There is no second chance to 
 
 ### Recoverability
 
-Recoverability replaces the confirmation gate. It is the only thing standing between an unattended mistake and a fatal one, so it carries weight it would not carry in a gated system.
+Recoverability replaces confirmation for ordinary local work. Worktree isolation, Git, tests and review keep most mistakes cheap; the small R10 edge guard is reserved for effects whose damage is not practically reversible. When Aether/Hermes itself is degraded, PD-72 recovery restores the last green E2E before any separate hardening work.
 
 - **FR-125**: Errors discovered after Phase 1 MUST be correctable by small adjustment. A single wrong unit of work MUST NOT invalidate the rest.
 - **FR-126**: Every change MUST be individually reversible after the fact when Git applies, with history preserved. Pipeline integration is performed by the supervising role (PD-20); Morfeo manages the rollback of its own direct PD-44 change without inventing an integration card.
@@ -91,7 +92,10 @@ Recoverability replaces the confirmation gate. It is the only thing standing bet
 
 ### Universality and role boundaries
 
-- **FR-132**: Morfeo's instructions MUST address the project owner generically and MUST NOT hardcode Christopher, a stack, a domain, or a project type.
+- **FR-132**: Morfeo's instructions MUST identify the project owner generically as the decision authority and MUST NOT hardcode Christopher, a stack, a domain, or a project type. In direct conversation, Morfeo MUST use a known user preference for personal address; without one, it MUST speak naturally and neutrally without inventing an identity or requiring the authority role as a vocative.
+  - **Known-user scenario**: a remembered, inspectable form of address may be used naturally and does not become project doctrine.
+  - **Unknown-user scenario**: Morfeo uses no invented name and no mandatory `owner`/`propietario` vocative.
+  - **Contract scenario**: canonical artifacts continue to identify `owner` as the role holding project authority.
 - **FR-133**: Morfeo MUST NOT absorb supervision or implementation as permanent responsibilities, per PD-13. Punctual direct stewardship under PD-44 is distinct from becoming Aether's general Implementer.
 - **FR-133a**: Morfeo MUST choose between direct execution and the pipeline by reasoning about the complete objective the owner requested. No classifier, risk score, numeric threshold, special workflow, or external gate may make or enforce that selection.
 - **FR-133b**: Morfeo SHOULD execute directly when the objective is understood and bounded, consequences are readily inspectable, correction or reversal is reasonably simple, decomposition or parallel context is unnecessary, and independent review adds no proportionate value. It MUST NOT create a contract and wake the pipeline merely because the maximum process exists.
@@ -101,8 +105,8 @@ Recoverability replaces the confirmation gate. It is the only thing standing bet
 
 ### Automation
 
-- **FR-134**: Two behaviors require automated support, because instructions alone cannot guarantee them: test evidence, and reversibility of integrated changes. Spend accounting is retained for visibility, not control.
-- **FR-135**: Every other behavior in this specification MUST be achieved through instructions **or by a native runtime guarantee**. R4 and R5 established that several rules R1 expected to enforce by instruction are enforced structurally by the framework; where that is so, the structural guarantee is primary (PD-25).
+- **FR-134**: Automated support is required where instructions alone cannot provide reliable evidence or prevention: test/acceptance evidence, reversibility of integrated changes, and the narrow PD-71 protected-edge guard. Spend usage remains observable, while actual model/provider spend follows the explicit authority of the owning product contract rather than being inferred from local autonomy.
+- **FR-135**: Every other behavioral responsibility in this specification MUST be achieved through instructions, review/evidence, **or a native runtime guarantee**. R4 and R5 established that some operational restrictions are structural in Hermes; where that is useful, the native guarantee is primary. Aether MUST NOT add a second pre-tool restriction merely to make a semantic role responsibility look structural.
 
 ## 4. Requirements Inherited by Later Stages
 

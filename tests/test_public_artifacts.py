@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+import hashlib
+import shutil
+import subprocess
+import sys
+import tarfile
+import tomllib
+import zipfile
+from pathlib import Path
+
+ROOT = Path(__file__).parents[1]
+SCANNER = ROOT / "scripts" / "check_public_artifacts.py"
+ROOT_REPORTS = ("INTEGRATIONS.md", "INCOMPLETE_IMPLEMENTATIONS.md")
+INTEGRATIONS_SHA256 = "3bd701dd544e7fa843717ee03181b693047fd657956dfc73888345993f1383a6"
+
+
+def _run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCANNER), *arguments],
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_tracked_public_surface_contains_no_operator_paths() -> None:
+    completed = _run("--root", str(ROOT))
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_root_reports_are_tracked_immutable_and_privacy_safe(tmp_path: Path) -> None:
+    tracked = subprocess.run(
+        ("git", "ls-files", "--error-unmatch", *ROOT_REPORTS),
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert tracked.returncode == 0, tracked.stderr
+
+    integrations = ROOT / "INTEGRATIONS.md"
+    assert integrations.stat().st_size == 8028
+    assert hashlib.sha256(integrations.read_bytes()).hexdigest() == INTEGRATIONS_SHA256
+
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    for report in ROOT_REPORTS:
+        shutil.copyfile(ROOT / report, tmp_path / report)
+    subprocess.run(("git", "add", *ROOT_REPORTS), cwd=tmp_path, check=True)
+
+    completed = _run("--root", str(tmp_path), cwd=tmp_path)
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_scanner_rejects_user_home_and_private_desktop_layout(tmp_path: Path) -> None:
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    private = "/" + "home" + "/operator/" + "Desk" + "top/" + "agentes/product"
+    (tmp_path / "README.md").write_text(f"private evidence: {private}\n", encoding="utf-8")
+    subprocess.run(("git", "add", "README.md"), cwd=tmp_path, check=True)
+
+    completed = _run("--root", str(tmp_path), cwd=tmp_path)
+    assert completed.returncode == 1
+    assert "absolute-user-home" in completed.stderr
+    assert "operator-desktop-layout" in completed.stderr
+
+
+def test_scanner_checks_wheel_and_sdist_members(tmp_path: Path) -> None:
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    (tmp_path / "README.md").write_text("portable\n", encoding="utf-8")
+    subprocess.run(("git", "add", "README.md"), cwd=tmp_path, check=True)
+    private = "/" + "home" + "/operator/private-runtime"
+
+    wheel = tmp_path / "candidate.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr("package/metadata.txt", "portable\n")
+    sdist = tmp_path / "candidate.tar.gz"
+    payload = tmp_path / "evidence.txt"
+    payload.write_text(private + "\n", encoding="utf-8")
+    with tarfile.open(sdist, "w:gz") as archive:
+        archive.add(payload, arcname="candidate/evidence.txt")
+
+    completed = _run(
+        "--root",
+        str(tmp_path),
+        "--artifact",
+        str(wheel),
+        "--artifact",
+        str(sdist),
+        cwd=tmp_path,
+    )
+    assert completed.returncode == 1
+    assert "candidate.tar.gz!candidate/evidence.txt: absolute-user-home" in completed.stderr
+
+
+def test_readme_and_package_metadata_describe_the_current_beta_product() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert "multi-agent software-engineering product" in readme
+    assert "Objective Contract" in readme
+    assert "documented transitional downstream" in readme
+    assert "beta stabilization build, not a release candidate" in readme
+    assert "remain explicit unsupported placeholders" in readme
+    assert project["name"] == "aether-agents"
+    assert "multi-agent software-engineering method" in project["description"]
+    assert set(project["entry-points"]["hermes_agent.plugins"]) == {
+        "aether-contract-observer",
+        "aether-objective-contracts",
+    }

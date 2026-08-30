@@ -155,7 +155,7 @@ Quality is fidelity, and the specification is its mechanism. The operational con
 ## R1-D09 — Aether is universal; personalization lives only in memory
 
 - **Need**: Whether to tailor the system to Christopher's stacks and habits.
-- **Decision**: No specialization by stack, domain or project type. Morfeo's instructions address the project owner generically, not Christopher by name. The sole adaptation channel is the preferences Morfeo learns through Hermes.
+- **Decision**: No specialization by stack, domain or project type. Canonical artifacts identify the project owner generically as the authority role, while direct conversation follows an inspectable remembered form of address when known and otherwise stays natural and neutral. The authority role is not a mandatory vocative. The sole adaptation channel is the preferences Morfeo learns through Hermes.
 - **Rationale**: Christopher works across varied projects and publishes Aether as open source; hardcoding him would be wrong on both counts.
 - **Evidence**: Christopher's direct statement.
 - **Alternatives considered**: A Christopher-specific prompt was rejected; it is a one-line saving now and an awkward rewrite later.

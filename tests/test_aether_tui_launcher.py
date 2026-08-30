@@ -27,6 +27,23 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         (self.root / "home" / "profiles" / "morfeo").mkdir(parents=True)
         (self.root / "home" / ".venv-hermes" / "bin").mkdir(parents=True)
         (self.root / "AGENTS.md").write_text("fixture\n", encoding="utf-8")
+        marker = self.root / ".aether" / "project.toml"
+        marker.parent.mkdir(parents=True)
+        marker.write_text(
+            "\n".join(
+                (
+                    "schema_version = 1",
+                    'project_id = "12027989-a08f-41cd-a82c-54ff1bfb6b03"',
+                    'name = "Aether launcher fixture"',
+                    'initialized_by = "1.0.0"',
+                    'forge = "local"',
+                    'contract_root = "specs"',
+                    'default_branch = "main"',
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
         (self.root / "home" / "profiles" / "morfeo" / "SOUL.md").write_text(
             "# Morfeo\n", encoding="utf-8"
         )
@@ -38,6 +55,17 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         hermes.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         hermes.chmod(0o755)
         shutil.copy2(LAUNCHER, self.root / "scripts" / LAUNCHER.name)
+        schema = (
+            self.root
+            / "specs"
+            / "001-aether-v1-productization"
+            / "contracts"
+            / "project.schema.json"
+        )
+        schema.parent.mkdir(parents=True)
+        shutil.copy2(
+            ROOT / "specs" / "001-aether-v1-productization" / "contracts" / schema.name, schema
+        )
         self.launcher = self.root / "scripts" / LAUNCHER.name
 
     def tearDown(self) -> None:
@@ -78,6 +106,7 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
             str((self.root / "home" / "profiles" / "morfeo").resolve()),
         )
         self.assertEqual(report["cwd"], str(self.root.resolve()))
+        self.assertEqual(report["project_id"], "12027989-a08f-41cd-a82c-54ff1bfb6b03")
         self.assertEqual(report["required_toolsets"], ["file", "kanban"])
         self.assertEqual(
             report["command"],
@@ -98,6 +127,20 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertEqual(result.stdout, "")
         self.assertIn("missing required Morfeo toolsets: kanban", result.stderr)
+
+    def test_check_validates_the_source_schema_without_an_installed_package(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-S", str(self.launcher), "--check"],
+            cwd=self.root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads(result.stdout)["project_id"], "12027989-a08f-41cd-a82c-54ff1bfb6b03"
+        )
 
     def test_check_fails_visibly_when_profile_or_executable_is_missing(self) -> None:
         profile = self.root / "home" / "profiles" / "morfeo"
@@ -131,7 +174,9 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         with (
             patch.object(module.os, "environ", dirty_env),
             patch.object(module.os, "chdir") as chdir,
-            patch.object(module.os, "execve", side_effect=RuntimeError("exec intercepted")) as execve,
+            patch.object(
+                module.os, "execve", side_effect=RuntimeError("exec intercepted")
+            ) as execve,
             self.assertRaisesRegex(RuntimeError, "exec intercepted"),
         ):
             module.main(["--resume", "latest"])
@@ -150,10 +195,23 @@ class MorfeoTuiLauncherTests(unittest.TestCase):
         self.assertEqual(called_command, command)
         self.assertEqual(called_env["HERMES_HOME"], str(expected_home))
         self.assertEqual(called_env["PWD"], str(expected_root))
+        self.assertEqual(called_env["AETHER_PROJECT_ID"], "12027989-a08f-41cd-a82c-54ff1bfb6b03")
         self.assertEqual(called_env["KEEP_ME"], "yes")
         self.assertNotIn("HERMES_PROFILE", called_env)
         self.assertNotIn("PYTHONPATH", called_env)
         self.assertNotIn("PYTHONHOME", called_env)
+
+    def test_check_rejects_missing_or_invalid_project_marker(self) -> None:
+        marker = self.root / ".aether" / "project.toml"
+        marker.unlink()
+        result = self.run_check(self.root)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("portable Aether project marker", result.stderr)
+
+        marker.write_text('project_id = "not-a-uuid"\n', encoding="utf-8")
+        result = self.run_check(self.root)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("canonical schema", result.stderr)
 
     def test_reserved_binding_arguments_are_rejected(self) -> None:
         for argument in (

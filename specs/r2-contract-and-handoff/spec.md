@@ -2,7 +2,7 @@
 
 **Roadmap ID**: R2  
 **Stage status**: done  
-**Amended**: 2026-08-18 — handoff requirements scoped to the PD-44 pipeline route
+**Amended**: 2026-08-24 — Objective Contract identity/materialization added after #227; prior 2026-08-18 pipeline scoping retained
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -32,7 +32,7 @@ Section 5 makes that test measurable rather than a judgement call.
 
 ## 3. What the Contract Is
 
-The contract is the Spec Kit artifact set governed by the constitution. No Aether-specific contract artifact is created, because a second source of obligations would compete with the first and violate R0-FR-004.
+The normative obligation set remains the Spec Kit artifact set governed by the constitution. An Aether **Objective Contract** now gives that set one durable, project-bound, versioned handoff identity and may state only objective-level bindings that have no other owning artifact. It references canonical Spec Kit obligations rather than copying or contradicting them. This amendment is specified by `../003-objective-contracts/spec.md` and was required by the demonstrated transport failure in #227.
 
 | Artifact | What it owns in the handoff |
 |---|---|
@@ -44,7 +44,10 @@ The contract is the Spec Kit artifact set governed by the constitution. No Aethe
 | `quickstart.md` | The runnable end-to-end validation the owner uses to review. Required by R1-FR-118. |
 | `tasks.md` | Ordered executable work, and the only artifact the executing side may append to. |
 
-- **FR-201**: The contract MUST be the Spec Kit artifact set. Aether MUST NOT introduce a competing contract artifact.
+- **FR-201**: The normative obligation set MUST remain the Spec Kit artifact set. An Objective Contract MUST provide only durable handoff identity, provenance, project binding and objective-level content without contradicting an existing owning artifact.
+- **FR-201a**: Every Morfeo → Supervisor pipeline handoff MUST reference one finalized, versioned Objective Contract. Bounded direct Morfeo work creates none.
+- **FR-201b**: The Kanban body MUST be a short Contract Handoff Envelope and MUST NOT substitute for or duplicate the full Objective Contract.
+- **FR-201c**: The authoring capability MUST bind every Objective Contract to one explicitly verified portable project UUID; unresolved or conflicting identity causes zero write and zero dispatch.
 - **FR-202**: Optional artifacts MUST be created only when they have content.
 - **FR-203**: A contract MUST include `quickstart.md`, since delivery is reviewed by running the product. This is the contract-level runnable validation the owner uses; per-unit verification evidence is a separate, narrower record produced at each unit's completion.
 - **FR-204**: A decided technical choice is a filled field; an open one is explicitly marked as needing clarification. Absence MUST NOT be read as freedom.

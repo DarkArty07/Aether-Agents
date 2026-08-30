@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DarkArty07/Aether-Agents/blob/main/specs/001-aether-v1-productization/contracts/release-lock.schema.json",
+  "title": "Aether release dependency lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "aether", "hermes", "profile_bundle"],
+  "properties": {
+    "schema_version": {"const": 3},
+    "aether": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "package_version", "distribution", "git_tag", "git_commit", "python_requires", "observer", "wheel_sha256", "observer_requirements_sha256", "observation_compatibility"],
+      "properties": {
+        "version": {"$ref": "#/$defs/semver"},
+        "package_version": {"type": "string", "minLength": 1},
+        "distribution": {"const": "aether-agents"},
+        "git_tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"},
+        "git_commit": {"$ref": "#/$defs/git_commit"},
+        "python_requires": {"const": ">=3.11,<3.14"},
+        "observer": {"$ref": "#/$defs/observer_entry_point"},
+        "wheel_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Trusted SHA-256 of the Aether wheel authorized for the declared Git commit, verified before inspection or installation."
+        },
+        "observer_requirements_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "Digest of the hash-bound observer runtime dependency closure packaged in the candidate wheel; distinct from the final wheel digest."
+        },
+        "observation_compatibility": {"$ref": "#/$defs/observation_compatibility"}
+      }
+    },
+    "hermes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_mode",
+        "repository",
+        "version",
+        "tag",
+        "commit",
+        "python_requires",
+        "source_tree_sha256",
+        "artifacts"
+      ],
+      "properties": {
+        "source_mode": {"enum": ["upstream", "transitional_fork"]},
+        "repository": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/"},
+        "version": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "commit": {"$ref": "#/$defs/git_commit"},
+        "python_requires": {"type": "string", "minLength": 1},
+        "source_tree_sha256": {
+          "$ref": "#/$defs/sha256",
+          "description": "SHA-256 of the deterministic path-and-file-byte projection of the exact Git commit materialized locally; this is distinct from every externally published artifact digest."
+        },
+        "upstream_base": {"$ref": "#/$defs/upstream_base"},
+        "residual_patches": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/artifact"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"source_mode": {"const": "upstream"}},
+            "required": ["source_mode"]
+          },
+          "then": {
+            "properties": {
+              "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
+              "residual_patches": {"maxItems": 0},
+              "artifacts": {
+                "contains": {
+                  "properties": {"kind": {"const": "source"}},
+                  "required": ["kind"]
+                },
+                "minContains": 1,
+                "maxContains": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"source_mode": {"const": "transitional_fork"}},
+            "required": ["source_mode"]
+          },
+          "then": {
+            "required": ["upstream_base", "residual_patches"],
+            "properties": {
+              "repository": {"const": "https://github.com/DarkArty07/hermes-agent"},
+              "residual_patches": {"minItems": 1},
+              "artifacts": {
+                "minItems": 2,
+                "allOf": [
+                  {"contains": {"properties": {"kind": {"const": "wheel"}}, "required": ["kind"]}},
+                  {"contains": {"properties": {"kind": {"const": "sdist"}}, "required": ["kind"]}}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "profile_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256", "roles"],
+      "properties": {
+        "version": {"const": "2"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "roles": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "morfeo"},
+            {"const": "supervisor"},
+            {"const": "implementer"}
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "git_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "upstream_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "commit"],
+      "properties": {
+        "repository": {"const": "https://github.com/NousResearch/hermes-agent"},
+        "tag": {"type": "string", "minLength": 1},
+        "commit": {"$ref": "#/$defs/git_commit"}
+      }
+    },
+    "observer_entry_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin_name", "group", "target"],
+      "properties": {
+        "plugin_name": {"const": "aether-contract-observer"},
+        "group": {"const": "hermes_agent.plugins"},
+        "target": {"const": "aether_agents.observation.capture.hermes_plugin"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "filename", "url", "sha256", "provenance_url"],
+      "properties": {
+        "kind": {"enum": ["source", "wheel", "sdist"]},
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "provenance_url": {"type": "string", "format": "uri", "pattern": "^https://"}
+      }
+    },
+    "observation_compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_write_version",
+        "event_read_versions",
+        "summary_write_version",
+        "summary_read_versions",
+        "segment_manifest_write_version",
+        "segment_manifest_read_versions",
+        "projection_schema_version"
+      ],
+      "properties": {
+        "event_write_version": {
+          "const": "aether.observation.event.v1"
+        },
+        "event_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.event\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.event.v1"}
+        },
+        "summary_write_version": {
+          "const": "aether.observation.summary.v1"
+        },
+        "summary_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.summary\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.summary.v1"}
+        },
+        "segment_manifest_write_version": {
+          "const": "aether.observation.segment-manifest.v1"
+        },
+        "segment_manifest_read_versions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^aether\\.observation\\.segment-manifest\\.v[1-9][0-9]*$"
+          },
+          "contains": {"const": "aether.observation.segment-manifest.v1"}
+        },
+        "projection_schema_version": {
+          "type": "string",
+          "pattern": "^aether\\.observation\\.projection\\.v[1-9][0-9]*$"
+        }
+      }
+    }
+  }
+}

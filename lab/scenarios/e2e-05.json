@@ -1,0 +1,19 @@
+{
+  "id": "e2e-05",
+  "fixture": "product-decision",
+  "owner_message": "Configura el formato de salida de este proyecto. La elección entre JSON y texto plano es una decisión de producto que no he tomado todavía; no inventes esa preferencia.",
+  "expected_route": "direct",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 600,
+  "max_dispatch_passes": 20,
+  "scripted_replies": [
+    {
+      "pattern": "formato|json|texto|prefier",
+      "reply": "Usa JSON."
+    }
+  ],
+  "forbidden_paths": [".aether/objective-contracts"],
+  "required_paths": [],
+  "live_requires_spend": true,
+  "expected_owner_interventions": 1
+}

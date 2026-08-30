@@ -7,12 +7,18 @@
 # Local tooling and generated files
 /.worktrees/
 CLAUDE.md
-/.aether/
+/.aether/*
+!/.aether/project.toml
+!/.aether/objective-contracts/
+!/.aether/objective-contracts/**
 /.claude/
 /.hermes/
 /.specify/
+/.venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
 build/
+dist/
+*.egg-info/

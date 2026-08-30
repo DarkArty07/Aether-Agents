@@ -1,0 +1,13 @@
+{
+  "id": "e2e-13",
+  "fixture": "concurrent",
+  "owner_message": "Implementa alpha(), beta() y gamma() para devolver A, B y C respectivamente. Son tres unidades independientes en archivos distintos: usa el pipeline y paraleliza donde sea útil, después revisa e integra y deja verify.py pasando.",
+  "expected_route": "pipeline",
+  "acceptance_command": ["python3", "verify.py"],
+  "timeout_seconds": 1200,
+  "max_dispatch_passes": 100,
+  "scripted_replies": [],
+  "forbidden_paths": [],
+  "required_paths": [".aether/objective-contracts"],
+  "live_requires_spend": true
+}
