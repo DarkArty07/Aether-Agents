@@ -22,6 +22,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -73,9 +74,7 @@ class HarnessError(RuntimeError):
     pass
 
 
-def _qualify_e2e15_record(
-    record: Mapping[str, Any], receipts: Mapping[str, Any]
-) -> dict[str, Any]:
+def _qualify_e2e15_record(record: Mapping[str, Any], receipts: Mapping[str, Any]) -> dict[str, Any]:
     """Apply the strict persistent receipt policy before E2E-15 can pass or count."""
     qualified = qualify_persistent_evidence(receipts)
     result = dict(record)
@@ -1485,10 +1484,20 @@ def _observe_native_affinity_controls(
     Missing native observations stay missing and are rejected by qualification.
     """
     command = [
-        str(_native_python(hermes)), "-c", _NATIVE_AFFINITY_OBSERVER,
-        str(board), str(supervisor_db), str(implementer_db), flow_id, project_id,
-        first_session_id or "", resumed_session_id or "", str(first_generation),
-        workspace_path, task_id or "", str(board.parent / "affinity-probes"),
+        str(_native_python(hermes)),
+        "-c",
+        _NATIVE_AFFINITY_OBSERVER,
+        str(board),
+        str(supervisor_db),
+        str(implementer_db),
+        flow_id,
+        project_id,
+        first_session_id or "",
+        resumed_session_id or "",
+        str(first_generation),
+        workspace_path,
+        task_id or "",
+        str(board.parent / "affinity-probes"),
     ]
     try:
         observer_env = os.environ.copy()
@@ -1502,8 +1511,13 @@ def _observe_native_affinity_controls(
             )
             observer_env.pop("HERMES_KANBAN_BOARD", None)
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=30,
-            cwd=str(board.parent), env=observer_env, check=False,
+            command,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=str(board.parent),
+            env=observer_env,
+            check=False,
         )
         if result.returncode != 0:
             return {}
@@ -1535,8 +1549,11 @@ def _affinity_record(
         or bool(missing_paths)
         or bool(forbidden_paths)
         or aether_self_modification
-        or not (board_state and getattr(board_state, "settled", False)
-                and getattr(board_state, "successful", False))
+        or not (
+            board_state
+            and getattr(board_state, "settled", False)
+            and getattr(board_state, "successful", False)
+        )
     ):
         record["status"] = "FAIL"
         record["reason"] = "e2e_acceptance_failed"
@@ -1552,7 +1569,9 @@ def _affinity_record(
             "present_forbidden_paths": forbidden_paths,
             "board_task_count": len(getattr(board_state, "tasks", ())) if board_state else 0,
             "board_settled": bool(getattr(board_state, "settled", False)) if board_state else False,
-            "board_successful": bool(getattr(board_state, "successful", False)) if board_state else False,
+            "board_successful": bool(getattr(board_state, "successful", False))
+            if board_state
+            else False,
             "aether_self_modification": aether_self_modification,
             "persistent_autonomous_wake_qualified": False,
             "rolling_reliability_counted": False,
@@ -1591,11 +1610,17 @@ def _live_affinity_lane(
     if flow_id is None:
         qualification = qualify_affinity_evidence({"runtime_available": False})
         return _affinity_record(
-            scenario, qualification, evidence=evidence,
+            scenario,
+            qualification,
+            evidence=evidence,
             baseline_acceptance=baseline_acceptance,
-            aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
-            observed_route=_detect_route(initial_tasks, repo), acceptance_passed=False,
-            missing_paths=[], forbidden_paths=[], board_state=None,
+            aether_project_id=aether_project_id,
+            hermes_project_id=hermes_project_id,
+            observed_route=_detect_route(initial_tasks, repo),
+            acceptance_passed=False,
+            missing_paths=[],
+            forbidden_paths=[],
+            board_state=None,
             aether_self_modification=False,
         )
 
@@ -1603,16 +1628,25 @@ def _live_affinity_lane(
     first_row = _board_affinity_row(board, flow_id)
     dispatch = run_command(
         hermes_argv(hermes, "morfeo", "kanban", "dispatch", "--json", "--max", "1"),
-        cwd=repo, env=env, log_path=commands, timeout_seconds=min(60, scenario.timeout_seconds),
+        cwd=repo,
+        env=env,
+        log_path=commands,
+        timeout_seconds=min(60, scenario.timeout_seconds),
     )
     if dispatch.returncode != 0:
         qualification = qualify_affinity_evidence({"runtime_available": runtime_available})
         return _affinity_record(
-            scenario, qualification, evidence=evidence,
+            scenario,
+            qualification,
+            evidence=evidence,
             baseline_acceptance=baseline_acceptance,
-            aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
-            observed_route="pipeline", acceptance_passed=False,
-            missing_paths=[], forbidden_paths=[], board_state=None,
+            aether_project_id=aether_project_id,
+            hermes_project_id=hermes_project_id,
+            observed_route="pipeline",
+            acceptance_passed=False,
+            missing_paths=[],
+            forbidden_paths=[],
+            board_state=None,
             aether_self_modification=False,
         )
 
@@ -1623,7 +1657,9 @@ def _live_affinity_lane(
         if worker is None:
             time.sleep(0.1)
     first_row = _board_affinity_row(board, flow_id) or first_row
-    first_session = str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
+    first_session = (
+        str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
+    )
     # The dispatcher makes the task visible as running before the worker's CLI
     # has created and registered its durable Hermes session. Killing at that
     # intermediate point leaves a generation with ``session_id=NULL`` that is
@@ -1633,9 +1669,7 @@ def _live_affinity_lane(
         time.sleep(0.05)
         first_row = _board_affinity_row(board, flow_id) or first_row
         first_session = (
-            str(first_row.get("session_id"))
-            if first_row and first_row.get("session_id")
-            else None
+            str(first_row.get("session_id")) if first_row and first_row.get("session_id") else None
         )
     first_generation = _affinity_generation(first_row)
     terminated = False
@@ -1654,20 +1688,35 @@ def _live_affinity_lane(
                 time.sleep(0.05)
             reclaim_result = run_command(
                 hermes_argv(
-                    hermes, "morfeo", "kanban", "reclaim", task_id,
-                    "--reason", "e2e-16 disposable process-boundary probe",
+                    hermes,
+                    "morfeo",
+                    "kanban",
+                    "reclaim",
+                    task_id,
+                    "--reason",
+                    "e2e-16 disposable process-boundary probe",
                 ),
-                cwd=repo, env=env, log_path=commands, timeout_seconds=30,
+                cwd=repo,
+                env=env,
+                log_path=commands,
+                timeout_seconds=30,
             )
             reclaim_command_succeeded = reclaim_result.returncode == 0
 
     board_state = dispatch_until_settled(
-        hermes, cwd=repo, env=env, commands_log=commands, evidence_dir=evidence,
-        max_passes=scenario.max_dispatch_passes, timeout_seconds=scenario.timeout_seconds,
+        hermes,
+        cwd=repo,
+        env=env,
+        commands_log=commands,
+        evidence_dir=evidence,
+        max_passes=scenario.max_dispatch_passes,
+        timeout_seconds=scenario.timeout_seconds,
     )
     final_tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
     final_row = _board_affinity_row(board, flow_id)
-    resumed_session = str(final_row.get("session_id")) if final_row and final_row.get("session_id") else None
+    resumed_session = (
+        str(final_row.get("session_id")) if final_row and final_row.get("session_id") else None
+    )
     supervisor_db = hermes_root / "profiles" / "supervisor" / "state.db"
     implementer_db = hermes_root / "profiles" / "implementer" / "state.db"
     controls = _observe_native_affinity_controls(
@@ -1685,11 +1734,11 @@ def _live_affinity_lane(
         task_id=task_id,
     )
     raw_implementer_sessions = controls.get("implementer_session_ids")
-    implementer_sessions = [
-        str(session)
-        for session in raw_implementer_sessions
-        if session
-    ] if isinstance(raw_implementer_sessions, list) else []
+    implementer_sessions = (
+        [str(session) for session in raw_implementer_sessions if session]
+        if isinstance(raw_implementer_sessions, list)
+        else []
+    )
     receipt = {
         "runtime_available": runtime_available,
         "flow_id": flow_id,
@@ -1713,7 +1762,9 @@ def _live_affinity_lane(
         "stale_generation_rejected": controls.get("stale_generation_rejected") is True,
         "implementer_fresh": bool(implementer_sessions)
         and len(set(implementer_sessions)) == len(implementer_sessions)
-        and all(session not in {first_session, resumed_session} for session in implementer_sessions),
+        and all(
+            session not in {first_session, resumed_session} for session in implementer_sessions
+        ),
         "internal_milestone_route": controls.get("internal_milestone_route", "missing"),
         "terminal_route": controls.get("terminal_route", "missing"),
         "input_route": controls.get("input_route", "missing"),
@@ -1729,20 +1780,25 @@ def _live_affinity_lane(
             controls.get("native_control_lifecycle_observed") is True
         ),
         "review_integration_observed": controls.get("review_integration_observed") is True,
-        "reclaim_succeeded": controls.get("reclaim_observed") is True
-        and reclaim_command_succeeded,
+        "reclaim_succeeded": controls.get("reclaim_observed") is True and reclaim_command_succeeded,
     }
     qualification = qualify_affinity_evidence(receipt)
     acceptance_passed = _run_acceptance(scenario, repo, env, commands, evidence, "final")
     missing_paths, forbidden_paths = _check_paths(repo, scenario)
     source_status_after = _source_status(commands, env)
     return _affinity_record(
-        scenario, qualification, evidence=evidence,
+        scenario,
+        qualification,
+        evidence=evidence,
         baseline_acceptance=baseline_acceptance,
-        aether_project_id=aether_project_id, hermes_project_id=hermes_project_id,
-        observed_route=_detect_route(final_tasks, repo), acceptance_passed=acceptance_passed,
-        missing_paths=missing_paths, forbidden_paths=forbidden_paths,
-        board_state=board_state, aether_self_modification=source_status_after != source_status_before,
+        aether_project_id=aether_project_id,
+        hermes_project_id=hermes_project_id,
+        observed_route=_detect_route(final_tasks, repo),
+        acceptance_passed=acceptance_passed,
+        missing_paths=missing_paths,
+        forbidden_paths=forbidden_paths,
+        board_state=board_state,
+        aether_self_modification=source_status_after != source_status_before,
     )
 
 
@@ -1823,15 +1879,39 @@ def _write_transcript(path: Path, turns: list[tuple[str, str]]) -> None:
 def _compact_run_record(record: Mapping[str, Any]) -> dict[str, Any]:
     """Return only bounded fields allowed in exported run evidence."""
     allowed = {
-        "scenario", "status", "mode", "expected_route", "observed_route", "route_ok",
-        "acceptance_passed", "baseline_acceptance_passed", "owner_interventions",
-        "expected_owner_interventions", "owner_interventions_ok", "harness_continuations",
-        "guard_denials_ok", "observed_protected_edge_violation", "aether_self_modification",
-        "fault_recovered", "missing_required_paths", "present_forbidden_paths", "board_task_count",
-        "board_settled", "board_successful", "persistent_autonomous_wake_qualified",
-        "parallel", "parallel_peak", "isolation_verified", "rolling_reliability_counted",
-        "reason", "affinity", "native_same_session_wake", "durable_report", "owner_messages",
-        "same_session", "continuation_source",
+        "scenario",
+        "status",
+        "mode",
+        "expected_route",
+        "observed_route",
+        "route_ok",
+        "acceptance_passed",
+        "baseline_acceptance_passed",
+        "owner_interventions",
+        "expected_owner_interventions",
+        "owner_interventions_ok",
+        "harness_continuations",
+        "guard_denials_ok",
+        "observed_protected_edge_violation",
+        "aether_self_modification",
+        "fault_recovered",
+        "missing_required_paths",
+        "present_forbidden_paths",
+        "board_task_count",
+        "board_settled",
+        "board_successful",
+        "persistent_autonomous_wake_qualified",
+        "parallel",
+        "parallel_peak",
+        "isolation_verified",
+        "rolling_reliability_counted",
+        "reason",
+        "affinity",
+        "native_same_session_wake",
+        "durable_report",
+        "owner_messages",
+        "same_session",
+        "continuation_source",
     }
     compact = {key: record[key] for key in allowed if key in record}
     compact.update({"schema_version": "aether.lab.evidence.v1", "kind": "run"})
@@ -1880,6 +1960,35 @@ def _live_persistent_lane(
     known_good_hook: Path | None,
 ) -> dict[str, Any]:
     """Run E2E-15 through a real native TUI and no harness continuation."""
+    dispatch_result: dict[str, Any] = {}
+
+    def _dispatch_after_root() -> None:
+        deadline = time.monotonic() + scenario.timeout_seconds
+        while time.monotonic() < deadline:
+            tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
+            if tasks:
+                try:
+                    dispatch_result["state"] = dispatch_until_settled(
+                        hermes,
+                        cwd=repo,
+                        env=env,
+                        commands_log=commands,
+                        evidence_dir=evidence,
+                        max_passes=scenario.max_dispatch_passes,
+                        timeout_seconds=scenario.timeout_seconds,
+                    )
+                except Exception as exc:  # surfaced after persistent cleanup
+                    dispatch_result["error"] = f"{type(exc).__name__}: {exc}"
+                return
+            time.sleep(0.25)
+        dispatch_result["error"] = "root task did not materialize before timeout"
+
+    dispatch_thread = threading.Thread(
+        target=_dispatch_after_root,
+        daemon=True,
+        name="e2e15-persistent-dispatch",
+    )
+    dispatch_thread.start()
     receipt = run_persistent_session(
         hermes_argv(hermes, "morfeo", "--tui", "--in", str(repo)),
         owner_message=scenario.owner_message,
@@ -1889,6 +1998,9 @@ def _live_persistent_lane(
         session_db=hermes_root / "profiles" / "morfeo" / "state.db",
         kanban_db=Path(env["HERMES_KANBAN_DB"]),
     )
+    dispatch_thread.join(timeout=5)
+    if dispatch_thread.is_alive():
+        dispatch_result["error"] = "persistent dispatcher did not stop"
     tasks = board_list(hermes, cwd=repo, env=env, commands_log=commands)
     statuses = {str(task.get("status", "")).casefold() for task in tasks}
     board_settled = not tasks or statuses <= {"done", "archived", "blocked"}
@@ -1908,6 +2020,7 @@ def _live_persistent_lane(
     owner_interventions_ok = scenario.expected_owner_interventions == 0
     passed = (
         receipt.get("status") == "PASS"
+        and "error" not in dispatch_result
         and acceptance_passed
         and route_ok
         and board_settled

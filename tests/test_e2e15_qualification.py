@@ -280,7 +280,16 @@ def test_e2e15_runner_uses_tui_without_one_shot_or_harness_continuation(
         }
 
     monkeypatch.setattr(runner, "run_persistent_session", fake_persistent)
-    monkeypatch.setattr(runner, "board_list", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        runner,
+        "board_list",
+        lambda *args, **kwargs: [{"id": "task", "status": "done"}],
+    )
+    monkeypatch.setattr(
+        runner,
+        "dispatch_until_settled",
+        lambda *args, **kwargs: object(),
+    )
     monkeypatch.setattr(runner, "_run_acceptance", lambda *args, **kwargs: True)
     monkeypatch.setattr(runner, "_check_paths", lambda *args, **kwargs: ([], []))
     monkeypatch.setattr(runner, "_source_status", lambda *args, **kwargs: "unchanged")
