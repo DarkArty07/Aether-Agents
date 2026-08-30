@@ -265,6 +265,8 @@ def test_e2e15_runner_uses_tui_without_one_shot_or_harness_continuation(
 ) -> None:
     scenario = runner.load_scenario("e2e-15")
     repo = tmp_path / "repo"
+    terminal_workspace = repo / ".worktrees" / "root"
+    terminal_workspace.mkdir(parents=True)
     (repo / ".aether" / "objective-contracts").mkdir(parents=True)
     (repo / ".aether" / "objective-contracts" / "report.md").write_text("ok")
     evidence = tmp_path / "evidence"
@@ -287,14 +289,27 @@ def test_e2e15_runner_uses_tui_without_one_shot_or_harness_continuation(
     monkeypatch.setattr(
         runner,
         "board_list",
-        lambda *args, **kwargs: [{"id": "task", "status": "done"}],
+        lambda *args, **kwargs: [
+            {
+                "id": "task",
+                "status": "done",
+                "assignee": "supervisor",
+                "workspace_path": str(terminal_workspace),
+                "session_affinity": {"flow_id": "flow", "terminal": True},
+            }
+        ],
     )
     monkeypatch.setattr(
         runner,
         "dispatch_until_settled",
         lambda *args, **kwargs: object(),
     )
-    monkeypatch.setattr(runner, "_run_acceptance", lambda *args, **kwargs: True)
+
+    def fake_acceptance(*args, **kwargs):
+        captured["acceptance_repo"] = args[1]
+        return True
+
+    monkeypatch.setattr(runner, "_run_acceptance", fake_acceptance)
     monkeypatch.setattr(runner, "_check_paths", lambda *args, **kwargs: ([], []))
     monkeypatch.setattr(runner, "_source_status", lambda *args, **kwargs: "unchanged")
     monkeypatch.setattr(runner, "_denial_codes", lambda *args, **kwargs: [])
@@ -323,5 +338,113 @@ def test_e2e15_runner_uses_tui_without_one_shot_or_harness_continuation(
     assert "-q" not in argv
     assert "-Q" not in argv
     assert captured["owner_message"] == scenario.owner_message
+    assert captured["acceptance_repo"] == terminal_workspace.resolve()
     assert record["status"] == "PASS"
+    assert record["acceptance_source"] == "terminal_workspace"
     assert record["harness_continuations"] == 0
+
+
+def test_terminal_acceptance_repo_selects_unique_terminal_supervisor_workspace(
+    tmp_path: Path,
+) -> None:
+    repo = tmp_path / "repo"
+    terminal_workspace = repo / ".worktrees" / "root"
+    terminal_workspace.mkdir(parents=True)
+    tasks = [
+        {
+            "assignee": "supervisor",
+            "workspace_path": str(terminal_workspace),
+            "session_affinity": {"flow_id": "flow", "terminal": False},
+        },
+        {
+            "assignee": "supervisor",
+            "workspace_path": str(terminal_workspace),
+            "session_affinity": {"flow_id": "flow", "terminal": True},
+        },
+    ]
+
+    candidate, source = runner._terminal_acceptance_repo(tasks, repo)
+
+    assert candidate == terminal_workspace.resolve()
+    assert source == "terminal_workspace"
+
+
+@pytest.mark.parametrize(
+    ("tasks", "reason"),
+    [
+        ([], "terminal_candidate_missing"),
+        (
+            [
+                {
+                    "assignee": "supervisor",
+                    "workspace_path": "first",
+                    "session_affinity": {"flow_id": "flow", "terminal": True},
+                },
+                {
+                    "assignee": "supervisor",
+                    "workspace_path": "second",
+                    "session_affinity": {"flow_id": "flow", "terminal": True},
+                },
+            ],
+            "terminal_candidate_ambiguous",
+        ),
+    ],
+)
+def test_terminal_acceptance_repo_fails_closed_without_one_authoritative_candidate(
+    tmp_path: Path, tasks: list[dict[str, object]], reason: str
+) -> None:
+    candidate, source = runner._terminal_acceptance_repo(tasks, tmp_path / "repo")
+
+    assert candidate is None
+    assert source == reason
+
+
+def test_terminal_acceptance_repo_fails_closed_on_invalid_workspace(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    loop = repo / "loop"
+    loop.symlink_to(loop.name)
+    tasks = [
+        {
+            "assignee": "supervisor",
+            "workspace_path": str(loop),
+            "session_affinity": {"flow_id": "flow", "terminal": True},
+        }
+    ]
+
+    candidate, source = runner._terminal_acceptance_repo(tasks, repo)
+
+    assert candidate is None
+    assert source == "terminal_workspace_invalid"
+
+
+def test_terminal_acceptance_repo_rejects_root_checkout(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    tasks = [
+        {
+            "assignee": "supervisor",
+            "workspace_path": str(repo),
+            "session_affinity": {"flow_id": "flow", "terminal": True},
+        }
+    ]
+
+    candidate, source = runner._terminal_acceptance_repo(tasks, repo)
+
+    assert candidate is None
+    assert source == "terminal_workspace_invalid"
+
+
+def test_terminal_acceptance_repo_fails_closed_on_malformed_path(tmp_path: Path) -> None:
+    tasks = [
+        {
+            "assignee": "supervisor",
+            "workspace_path": "malformed\x00workspace",
+            "session_affinity": {"flow_id": "flow", "terminal": True},
+        }
+    ]
+
+    candidate, source = runner._terminal_acceptance_repo(tasks, tmp_path / "repo")
+
+    assert candidate is None
+    assert source == "terminal_workspace_invalid"
