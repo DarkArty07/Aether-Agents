@@ -1375,11 +1375,17 @@ def test_native_session_reconciliation_rejects_aliased_or_non_regular_database(
         for event in events
     )
     assert health.get("NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE") == 2
-    summary = query.load_summary(paths, TRACE_ID)
-    assert any(
-        gap["reason_code"] == "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE"
-        for gap in summary["coverage"]["gaps"]
-    )
+    deadline = time.monotonic() + 5.0
+    while True:
+        summary = query.load_summary(paths, TRACE_ID)
+        if any(
+            gap["reason_code"] == "NATIVE_HERMES_SESSION_PROVENANCE_UNAVAILABLE"
+            for gap in summary["coverage"]["gaps"]
+        ):
+            break
+        if time.monotonic() >= deadline:
+            raise AssertionError("native session provenance gap did not reach summary")
+        time.sleep(0.01)
     if external_bytes is not None:
         assert external.read_bytes() == external_bytes
 
