@@ -3488,3 +3488,15 @@ def test_cli_doctor_rollback_and_uninstall_use_the_stable_json_contract(
     assert uninstall["result"] == "error"
     assert uninstall["errors"][0]["code"] == "ACTIVE_MANAGER_AUTHORITY_REQUIRED"
     assert retained.read_bytes() == b"unknown newer bytes"
+
+
+def test_run_uv_forces_copy_link_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs)
+        return subprocess.CompletedProcess(args[0], 0, "", "")
+
+    monkeypatch.setattr(lifecycle.subprocess, "run", fake_run)
+    LifecycleManager._run_uv("--version", cwd=tmp_path)
+    assert captured["env"]["UV_LINK_MODE"] == "copy"

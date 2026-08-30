@@ -3741,6 +3741,8 @@ for name, target in expected.items():
     def _run_uv(*arguments: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         if cwd is not None and (not cwd.is_absolute() or cwd.is_symlink() or not cwd.is_dir()):
             raise IntegrityError("candidate environment working directory is unsafe")
+        environment = _isolated_subprocess_environment()
+        environment["UV_LINK_MODE"] = "copy"
         try:
             completed = subprocess.run(
                 ["uv", *arguments],
@@ -3748,7 +3750,7 @@ for name, target in expected.items():
                 check=False,
                 capture_output=True,
                 text=True,
-                env=_isolated_subprocess_environment(),
+                env=environment,
             )
         except OSError as error:
             raise IntegrityError("candidate environment tool is unavailable") from error
