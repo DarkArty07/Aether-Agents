@@ -168,14 +168,21 @@ def run_persistent_session(
     assistant_at_event = 0
     nonempty_assistant_at_event = 0
     native_event = False
+    event_created_at: float | None = None
     durable_report = False
     same_session = False
     try:
-        # Exactly one owner write. No continuation, slash command, or synthetic
-        # wake is sent after this point. Prompt-toolkit binds submit to CR; LF
-        # is reserved for multiline input under the default Hermes config.
-        os.write(master, owner_message.encode("utf-8") + b"\r")
-        while process.poll() is None and time.monotonic() - started < timeout_seconds:
+        tui_ready = _wait_for_tui_ready(
+            master,
+            process,
+            timeout_seconds=min(30.0, timeout_seconds),
+        )
+        if tui_ready:
+            # Exactly one owner write. No continuation, slash command, or synthetic
+            # wake is sent after this point. Prompt-toolkit binds submit to CR; LF
+            # is reserved for multiline input under the default Hermes config.
+            os.write(master, owner_message.encode("utf-8") + b"\r")
+        while tui_ready and process.poll() is None and time.monotonic() - started < timeout_seconds:
             session_state = _session_state(session_path, session_ids_before, owner_message)
             if observed_session is None and len(session_state["candidates"]) == 1:
                 observed_session = session_state["candidates"][0]
@@ -200,21 +207,24 @@ def run_persistent_session(
                         observed_session, 0
                     )
                     native_event = True
+                    event_created_at = event.get("created_at")
                     same_session = event["session_id"] == observed_session
 
             if observed_session is not None and native_event:
                 current = _session_state(session_path, session_ids_before, owner_message)
                 owner_messages = current["owner_messages"].get(observed_session, 0)
-                durable_report = (
-                    current["assistant_messages"].get(observed_session, 0) > assistant_at_event
-                    and current["nonempty_assistant_messages"].get(observed_session, 0)
-                    > nonempty_assistant_at_event
+                durable_report = _durable_report_after_event(
+                    current,
+                    observed_session,
+                    event_created_at=event_created_at,
+                    assistant_at_event=assistant_at_event,
+                    nonempty_assistant_at_event=nonempty_assistant_at_event,
                 )
                 if same_session and owner_messages == 1 and durable_report:
                     break
 
-            ready, _, _ = select.select([master], [], [], 0.1)
-            if ready:
+            read_ready, _, _ = select.select([master], [], [], 0.1)
+            if read_ready:
                 try:
                     os.read(master, 4096)
                 except OSError:
@@ -240,14 +250,16 @@ def run_persistent_session(
                     observed_session, 0
                 )
             native_event = True
+            event_created_at = event.get("created_at")
             same_session = event["session_id"] == observed_session
         current = _session_state(session_path, session_ids_before, owner_message)
         owner_messages = current["owner_messages"].get(observed_session, 0)
-        durable_report = (
-            native_event
-            and current["assistant_messages"].get(observed_session, 0) > assistant_at_event
-            and current["nonempty_assistant_messages"].get(observed_session, 0)
-            > nonempty_assistant_at_event
+        durable_report = native_event and _durable_report_after_event(
+            current,
+            observed_session,
+            event_created_at=event_created_at,
+            assistant_at_event=assistant_at_event,
+            nonempty_assistant_at_event=nonempty_assistant_at_event,
         )
 
     if process.poll() is None:
@@ -272,6 +284,28 @@ def run_persistent_session(
     return result.to_evidence()
 
 
+def _wait_for_tui_ready(
+    master: int,
+    process: subprocess.Popen[bytes],
+    *,
+    timeout_seconds: float,
+) -> bool:
+    """Wait until prompt-toolkit rendered its input-ready surface."""
+    deadline = time.monotonic() + timeout_seconds
+    recent = b""
+    while process.poll() is None and time.monotonic() < deadline:
+        ready, _, _ = select.select([master], [], [], 0.1)
+        if not ready:
+            continue
+        try:
+            recent = (recent + os.read(master, 65536))[-131072:]
+        except OSError:
+            return False
+        if b"\x1b[?2004h" in recent and b"\x1b]2;" in recent and b"/help for commands" in recent:
+            return True
+    return False
+
+
 def _connect_read_only(path: Path | None) -> sqlite3.Connection | None:
     """Open an existing SQLite file without creating or mutating it."""
     if path is None or not path.is_file():
@@ -282,6 +316,24 @@ def _connect_read_only(path: Path | None) -> sqlite3.Connection | None:
         return connection
     except sqlite3.Error:
         return None
+
+
+def _durable_report_after_event(
+    state: Mapping[str, Any],
+    session_id: str,
+    *,
+    event_created_at: float | None,
+    assistant_at_event: int,
+    nonempty_assistant_at_event: int,
+) -> bool:
+    """Require a non-empty assistant row durably ordered after the event."""
+    latest = state["latest_nonempty_assistant_at"].get(session_id)
+    if isinstance(event_created_at, (int, float)) and isinstance(latest, (int, float)):
+        return float(latest) > float(event_created_at)
+    return (
+        state["assistant_messages"].get(session_id, 0) > assistant_at_event
+        and state["nonempty_assistant_messages"].get(session_id, 0) > nonempty_assistant_at_event
+    )
 
 
 def _table_columns(connection: sqlite3.Connection, table: str) -> set[str]:
@@ -319,6 +371,7 @@ def _session_state(
         "owner_messages": {},
         "assistant_messages": {},
         "nonempty_assistant_messages": {},
+        "latest_nonempty_assistant_at": {},
     }
     connection = _connect_read_only(path)
     if connection is None:
@@ -343,29 +396,39 @@ def _session_state(
         ):
             return state
         content = "content" in message_columns
-        select_content = ", content" if content else ""
+        timestamp = "timestamp" in message_columns
+        selected = ["session_id", "role"]
+        if content:
+            selected.append("content")
+        if timestamp:
+            selected.append("timestamp")
         placeholders = ",".join("?" for _ in sessions)
         rows = []
         if sessions:
             rows = connection.execute(
-                f"SELECT session_id, role{select_content} FROM messages "
-                f"WHERE session_id IN ({placeholders})",
+                f"SELECT {', '.join(selected)} FROM messages WHERE session_id IN ({placeholders})",
                 sessions,
             ).fetchall()
         for session_id in sessions:
             state["owner_messages"][session_id] = 0
             state["assistant_messages"][session_id] = 0
             state["nonempty_assistant_messages"][session_id] = 0
+            state["latest_nonempty_assistant_at"][session_id] = None
         for row in rows:
-            session_id = str(row[0])
-            role = str(row[1]).casefold()
+            session_id = str(row["session_id"])
+            role = str(row["role"]).casefold()
             if role == "user":
-                if owner_message is None or (content and row[2] == owner_message):
+                if owner_message is None or (content and row["content"] == owner_message):
                     state["owner_messages"][session_id] += 1
             elif role == "assistant":
                 state["assistant_messages"][session_id] += 1
-                if not content or (isinstance(row[2], str) and row[2].strip()):
+                if not content or (isinstance(row["content"], str) and row["content"].strip()):
                     state["nonempty_assistant_messages"][session_id] += 1
+                    if timestamp and isinstance(row["timestamp"], (int, float)):
+                        state["latest_nonempty_assistant_at"][session_id] = max(
+                            state["latest_nonempty_assistant_at"][session_id] or float("-inf"),
+                            float(row["timestamp"]),
+                        )
         state["candidates"] = [
             session_id
             for session_id in sessions
@@ -396,7 +459,7 @@ def _native_event_for_session(
     path: Path | None,
     cursor: int,
     session_id: str,
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     """Find a post-cursor native terminal event tied to ``session_id``."""
     connection = _connect_read_only(path)
     if connection is None:
@@ -405,22 +468,35 @@ def _native_event_for_session(
         event_columns = _table_columns(connection, "task_events")
         if not {"id", "task_id", "kind"}.issubset(event_columns):
             return None
-        payload_column = ", payload" if "payload" in event_columns else ""
+        selected = ["id", "task_id", "kind"]
+        if "payload" in event_columns:
+            selected.append("payload")
+        if "created_at" in event_columns:
+            selected.append("created_at")
         events = connection.execute(
-            f"SELECT id, task_id, kind{payload_column} FROM task_events "
+            f"SELECT {', '.join(selected)} FROM task_events "
             "WHERE id > ? AND kind = 'flow_terminal' ORDER BY id ASC",
             (cursor,),
         ).fetchall()
         for row in events:
-            task_id = str(row[1])
-            payload = _json_object(row[3]) if "payload" in event_columns else {}
+            task_id = str(row["task_id"])
+            payload = _json_object(row["payload"]) if "payload" in event_columns else {}
+            result = {
+                "session_id": session_id,
+                "event_id": str(row["id"]),
+                "created_at": (
+                    float(row["created_at"])
+                    if "created_at" in event_columns and isinstance(row["created_at"], (int, float))
+                    else None
+                ),
+            }
             payload_session = _payload_session(payload)
             if payload_session is not None and payload_session != session_id:
                 continue
             if payload_session == session_id:
-                return {"session_id": session_id, "event_id": str(row[0])}
+                return result
             if session_id in _task_session_ids(connection, task_id, payload):
-                return {"session_id": session_id, "event_id": str(row[0])}
+                return result
         return None
     except sqlite3.Error:
         return None

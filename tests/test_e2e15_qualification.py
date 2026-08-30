@@ -131,19 +131,29 @@ import sys
 import time
 
 session_db, board_db = sys.argv[1:]
+sys.stdout.write("\\x1b[?2004h\\x1b]2;Hermes\\x07/help for commands")
+sys.stdout.flush()
 message = sys.stdin.readline().rstrip("\\r\\n")
 with sqlite3.connect(session_db) as db:
     db.execute(
         "CREATE TABLE sessions (id TEXT, source TEXT, archived INTEGER, last_activity_at REAL)"
     )
-    db.execute("CREATE TABLE messages (session_id TEXT, role TEXT, content TEXT)")
+    db.execute(
+        "CREATE TABLE messages (session_id TEXT, role TEXT, content TEXT, timestamp REAL)"
+    )
     db.execute("INSERT INTO sessions VALUES ('sid-native', 'tui', 0, 1.0)")
-    db.execute("INSERT INTO messages VALUES ('sid-native', 'user', ?)", (message,))
+    db.execute(
+        "INSERT INTO messages VALUES ('sid-native', 'user', ?, ?)",
+        (message, time.time()),
+    )
     db.commit()
 with sqlite3.connect(board_db) as db:
     db.execute("CREATE TABLE kanban_session_affinity (session_id TEXT, owner_task_id TEXT)")
     db.execute("CREATE TABLE tasks (id TEXT, session_id TEXT)")
-    db.execute("CREATE TABLE task_events (id INTEGER PRIMARY KEY, task_id TEXT, kind TEXT, payload TEXT)")
+    db.execute(
+        "CREATE TABLE task_events "
+        "(id INTEGER PRIMARY KEY, task_id TEXT, kind TEXT, payload TEXT, created_at INTEGER)"
+    )
     db.execute("INSERT INTO tasks VALUES ('task-native', 'sid-native')")
     db.execute("INSERT INTO kanban_session_affinity VALUES ('worker-session', 'task-native')")
     db.commit()
@@ -152,14 +162,20 @@ time.sleep(0.15)
 if %s:
     with sqlite3.connect(board_db) as db:
         db.execute(
-            "INSERT INTO task_events VALUES (1, 'task-native', 'flow_terminal', ?)",
-            ('{"flow_id":"flow-native"}',),
+            "INSERT INTO task_events VALUES (1, 'task-native', 'flow_terminal', ?, ?)",
+            ('{"flow_id":"flow-native"}', int(time.time())),
         )
         db.commit()
     time.sleep(0.15)
     with sqlite3.connect(session_db) as db:
-        db.execute("INSERT INTO messages VALUES ('sid-native', 'user', 'internal native wake')")
-        db.execute("INSERT INTO messages VALUES ('sid-native', 'assistant', 'durable report')")
+        db.execute(
+            "INSERT INTO messages VALUES ('sid-native', 'user', 'internal native wake', ?)",
+            (time.time(),),
+        )
+        db.execute(
+            "INSERT INTO messages VALUES ('sid-native', 'assistant', 'durable report', ?)",
+            (time.time(),),
+        )
         db.execute("UPDATE sessions SET last_activity_at = 2.0 WHERE id = 'sid-native'")
         db.commit()
 time.sleep(2)
