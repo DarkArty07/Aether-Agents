@@ -137,6 +137,9 @@ session_db, board_db = sys.argv[1:]
 assert os.environ["HERMES_HOME"] == str(Path(session_db).parent)
 assert "HERMES_SESSION_KEY" not in os.environ
 assert "HERMES_UI_SESSION_ID" not in os.environ
+assert "HERMES_GATEWAY_SESSION" not in os.environ
+assert "HERMES_CRON_SESSION" not in os.environ
+assert "HERMES_TUI_ACTIVE_SESSION_FILE" not in os.environ
 print(json.dumps({"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready"}}), flush=True)
 create = json.loads(sys.stdin.readline())
 assert create["method"] == "session.create"

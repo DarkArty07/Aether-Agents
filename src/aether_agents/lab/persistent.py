@@ -144,6 +144,9 @@ def run_persistent_session(
     child_env = dict(env) if env is not None else os.environ.copy()
     child_env.pop("HERMES_DELEGATED_CHILD_CONTEXT", None)
     child_env.pop("HERMES_UI_SESSION_ID", None)
+    child_env.pop("HERMES_GATEWAY_SESSION", None)
+    child_env.pop("HERMES_CRON_SESSION", None)
+    child_env.pop("HERMES_TUI_ACTIVE_SESSION_FILE", None)
     for key in tuple(child_env):
         if key.startswith("HERMES_SESSION_"):
             child_env.pop(key, None)
