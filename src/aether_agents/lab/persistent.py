@@ -511,8 +511,13 @@ def _session_state(
             session_id = str(row["session_id"])
             role = str(row["role"]).casefold()
             if role == "user":
-                if owner_message is None or (content and row["content"] == owner_message):
+                if owner_message is None:
                     state["owner_messages"][session_id] += 1
+                elif content and row["content"] == owner_message:
+                    # The TUI and AIAgent layers may each persist the same
+                    # submitted prompt. The harness owns exactly one
+                    # prompt.submit, so identical rows are one logical owner write.
+                    state["owner_messages"][session_id] = 1
             elif role == "assistant":
                 state["assistant_messages"][session_id] += 1
                 if not content or (isinstance(row["content"], str) and row["content"].strip()):

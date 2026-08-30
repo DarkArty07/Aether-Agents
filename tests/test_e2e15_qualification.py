@@ -174,6 +174,10 @@ with sqlite3.connect(session_db) as db:
         "INSERT INTO messages VALUES ('sid-native', 'user', ?, ?)",
         (message, time.time()),
     )
+    db.execute(
+        "INSERT INTO messages VALUES ('sid-native', 'user', ?, ?)",
+        (message, time.time()),
+    )
     db.commit()
 with sqlite3.connect(board_db) as db:
     db.execute("CREATE TABLE kanban_session_affinity (session_id TEXT, owner_task_id TEXT)")
