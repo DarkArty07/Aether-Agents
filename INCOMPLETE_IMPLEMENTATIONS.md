@@ -62,6 +62,12 @@ byte-locked and both report contents must pass the tracked public-artifact scann
 - **Current behavior:** deterministic preparation is available, but the native probe
   reports `CAPABILITY_WALL/native_same_session_wake_unobserved`. A one-shot harness
   continuation is recorded as harness input and is explicitly non-qualifying.
+- **Live reproduction:** authorized Sol/Terra run
+  `e2e-15-20260829-200042-6466bb1c` invoked Morfeo through the one-shot path. Morfeo
+  polled the disposable board inside that turn until the fixed 900-second timeout returned
+  `rc=124`. Root Supervisor and two Implementers completed and the terminal Supervisor
+  started before runner cleanup interrupted it. No persistent TUI session or native wake
+  was created, so the result proves the laboratory capability wall rather than HLP-211b.
 - **Missing boundary:** a supported native CLI, TUI, or gateway surface must wake the
   same persistent Morfeo session from a terminal board event without a second owner
   message.
