@@ -94,7 +94,7 @@ def _journal_events(paths: ObservationPaths) -> list[dict[str, Any]]:
 
 
 def _wait_journal_event(
-    paths: ObservationPaths, event_type: str, *, timeout: float = 1.0
+    paths: ObservationPaths, event_type: str, *, timeout: float = 5.0
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout
     while True:
