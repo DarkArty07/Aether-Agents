@@ -83,10 +83,12 @@ markers = [
 dev = [
   # Reproducible build backend; build/dev only, never a wheel runtime dependency.
   "hatchling==1.27.0",
+  "httpx>=0.28,<1",
   "pytest>=8.3",
   # Required only by the release-locked Hermes checkout used in adapter tests.
   "PyYAML>=6.0",
   # Static gate only; never installed into the manager/runtime wheel.
+  "requests>=2.32,<3",
   "ruff>=0.12.10",
 ]
 

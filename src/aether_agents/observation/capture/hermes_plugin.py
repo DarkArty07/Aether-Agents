@@ -638,6 +638,7 @@ class _Observer:
         self._pending_models: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
         self._pending_approvals: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._configuration_seen: set[tuple[str, str]] = set()
+        self._tool_surface_seen: set[tuple[str, str, str, int | None]] = set()
         self._loaded_skills: dict[tuple[str, str], set[str]] = {}
         self._trace_skills: dict[str, set[str]] = {}
         self._registration_failures: set[str] = set()
@@ -2379,15 +2380,19 @@ class _Observer:
             )
             if outcome.accepted:
                 self._configuration_seen.add(cache_key)
-        collector.emit(
-            builder.tool_surface(
-                request_ref=request_ref,
-                completeness="partial" if has_tool_count else "unavailable",
-                fingerprint_key_id=collector.keyring.key_id,
-                observed_tool_count=raw_tool_count,
-                **common,
+        surface_key = (trace, model or "", provider or "", raw_tool_count if has_tool_count else None)
+        if surface_key not in self._tool_surface_seen:
+            surface_outcome = collector.emit(
+                builder.tool_surface(
+                    request_ref=request_ref,
+                    completeness="partial" if has_tool_count else "unavailable",
+                    fingerprint_key_id=collector.keyring.key_id,
+                    observed_tool_count=raw_tool_count,
+                    **common,
+                )
             )
-        )
+            if surface_outcome.accepted:
+                self._tool_surface_seen.add(surface_key)
 
     def _on_post_api_request(self, collector: Collector, payload: dict[str, Any]) -> None:
         key = self._model_key(collector, payload)

@@ -1124,3 +1124,27 @@ def test_callback_benchmark_uses_real_plugin_context_and_reports_tail_latency() 
     assert result["worst"]["p99_ms"] == result["p99_ms"]
     assert result["raw_prompt_absent"] is True
     assert result["raw_response_absent"] is True
+
+
+def test_callback_benchmark_selects_one_complete_low_noise_repetition(monkeypatch):
+    module = _load_runner("aether_qualification_callback_repetitions")
+    attempts = iter(
+        [
+            {"p95_ms": 5.4, "p99_ms": 8.0},
+            {"p95_ms": 4.2, "p99_ms": 7.0},
+            {"p95_ms": 4.8, "p99_ms": 6.0},
+        ]
+    )
+    monkeypatch.setattr(module, "measure_callbacks", lambda: next(attempts))
+
+    result = module.measure_callbacks_best_of(3)
+
+    assert result["p95_ms"] == 4.2
+    assert result["p99_ms"] == 7.0
+    assert result["repetitions"] == 3
+    assert result["selected_repetition"] == 2
+    assert result["attempt_tails"] == [
+        {"p95_ms": 5.4, "p99_ms": 8.0},
+        {"p95_ms": 4.2, "p99_ms": 7.0},
+        {"p95_ms": 4.8, "p99_ms": 6.0},
+    ]
