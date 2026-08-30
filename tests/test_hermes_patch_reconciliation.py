@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,9 +23,36 @@ SCHEMA_PATH = (
 )
 SCRIPT = ROOT / "scripts" / "validate_hermes_patch_reconciliation.py"
 LEDGER_PATH = ROOT / "HERMES_LOCAL_PATCHES.md"
+ENTRIES_PATH = (
+    ROOT
+    / "specs"
+    / "001-aether-v1-productization"
+    / "evidence"
+    / "hermes-patch-reconciliation"
+    / "entries"
+)
 UPSTREAM_REPOSITORY = "https://github.com/NousResearch/hermes-agent"
 UPSTREAM_REVISION = "a" * 40
+INSPECTED_UPSTREAM_REVISION = "4f22543509d1b91dc45bcb369447126c5eb14fb7"
 OBSERVED_AT = "2026-08-30T20:00:00Z"
+EXPECTED_ACTIVE_IDS = (
+    "HLP-188",
+    "HLP-189",
+    "HLP-191",
+    "HLP-194",
+    "HLP-198",
+    "HLP-204",
+    "HLP-209",
+    "HLP-211",
+    "HLP-226",
+    "HLP-246",
+    "HLP-247",
+    "HLP-262",
+)
+PATCH_DIGESTS = {
+    "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+    "HLP-262": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+}
 
 
 def _load_validator():
@@ -114,6 +142,21 @@ def _write_fixture(root: Path, records: list[dict[str, Any]]) -> tuple[Path, Pat
     return ledger, entries
 
 
+def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
+    """Copy only the portable ledger inputs needed for repository-set controls."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    ledger = root / "HERMES_LOCAL_PATCHES.md"
+    shutil.copy2(LEDGER_PATH, ledger)
+    entries = root / "entries"
+    shutil.copytree(ENTRIES_PATH, entries)
+    patches = root / "patches" / "hermes"
+    patches.mkdir(parents=True)
+    for identifier in ("HLP-211b-flow-blocker-routing.patch", "HLP-262-origin-signal-sticky.patch"):
+        shutil.copy2(ROOT / "patches" / "hermes" / identifier, patches / identifier)
+    return ledger, entries
+
+
 def _reconcile(
     tmp_path: Path,
     records: list[dict[str, Any]],
@@ -140,20 +183,52 @@ def test_reconciliation_contract_and_validator_are_present() -> None:
 def test_active_detailed_ledger_ids_include_hlp247_not_in_summary_table() -> None:
     validator = _load_validator()
 
-    assert validator.active_detailed_ledger_ids(LEDGER_PATH) == (
-        "HLP-188",
-        "HLP-189",
-        "HLP-191",
-        "HLP-194",
-        "HLP-198",
-        "HLP-204",
-        "HLP-209",
-        "HLP-211",
-        "HLP-226",
-        "HLP-246",
-        "HLP-247",
-        "HLP-262",
+    assert validator.active_detailed_ledger_ids(LEDGER_PATH) == EXPECTED_ACTIVE_IDS
+
+
+def test_repository_fragments_cover_active_ledger_and_bind_patch_digests() -> None:
+    validator = _load_validator()
+
+    aggregate = validator.reconcile(
+        repository_root=ROOT,
+        ledger_path=LEDGER_PATH,
+        entries_dir=ENTRIES_PATH,
+        schema_path=SCHEMA_PATH,
+        observed_at_utc=OBSERVED_AT,
+        upstream_repository=UPSTREAM_REPOSITORY,
+        upstream_revision=INSPECTED_UPSTREAM_REVISION,
     )
+
+    assert tuple(record["id"] for record in aggregate["records"]) == EXPECTED_ACTIVE_IDS
+    records = {record["id"]: record for record in aggregate["records"]}
+    for identifier, digest in PATCH_DIGESTS.items():
+        artifact = next(
+            item
+            for item in records[identifier]["artifact_verification"]["artifacts"]
+            if item["kind"] == "patch"
+        )
+        assert artifact["ledger_sha256"] == digest
+        assert artifact["computed_sha256"] == digest
+        assert artifact["checksum_status"] == "passed"
+        assert artifact["parse_status"] == "passed"
+        assert records[identifier]["artifact_verification"]["status"] == "unavailable"
+
+
+def test_repository_fragments_reject_hlp262_omission(tmp_path: Path) -> None:
+    validator = _load_validator()
+    ledger, entries = _copy_repository_evidence(tmp_path)
+    (entries / "HLP-262.json").unlink()
+
+    with pytest.raises(ValueError, match="missing ledger IDs: HLP-262"):
+        validator.reconcile(
+            repository_root=tmp_path,
+            ledger_path=ledger,
+            entries_dir=entries,
+            schema_path=SCHEMA_PATH,
+            observed_at_utc=OBSERVED_AT,
+            upstream_repository=UPSTREAM_REPOSITORY,
+            upstream_revision=INSPECTED_UPSTREAM_REVISION,
+        )
 
 
 def test_reconcile_sorts_records_binds_provenance_and_writes_deterministic_outputs(
@@ -293,6 +368,27 @@ def test_reconcile_rejects_stale_artifact_hashes(tmp_path: Path) -> None:
         "blocker": None,
     }
     with pytest.raises(ValueError, match="artifact digest mismatch"):
+        _reconcile(tmp_path, records)
+
+
+@pytest.mark.parametrize("artifact_result", ("failed", "unavailable"))
+def test_reconcile_rejects_passed_artifact_status_with_nonpassing_artifact(
+    tmp_path: Path, artifact_result: str
+) -> None:
+    records = [_record("HLP-211"), _record("HLP-247")]
+    records[0]["artifact_verification"] = {
+        "status": "passed",
+        "artifacts": [
+            {
+                "kind": "reconstruction_input",
+                "reference": "documented ignored reconstruction input",
+                "result": artifact_result,
+            }
+        ],
+        "blocker": None,
+    }
+
+    with pytest.raises(ValueError, match="cannot be passed"):
         _reconcile(tmp_path, records)
 
 

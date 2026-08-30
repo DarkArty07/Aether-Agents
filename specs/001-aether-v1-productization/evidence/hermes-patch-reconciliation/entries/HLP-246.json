@@ -12,17 +12,37 @@
     "linked_refs": [],
     "disposition": "upstream_missing",
     "evidence": [
-      "At the inspected revision, tools/kanban_tools.py requires only filename and content_base64 for kanban_attach; expected_size and expected_sha256 are absent from the tool schema.",
-      "hermes_cli/kanban_db.py stores the supplied bytes and size but the task_attachments schema and Attachment model contain no SHA-256 field or post-write identity verification.",
-      "A disposable source gate sent a valid-base64 16-byte truncation of a 23-byte synthetic payload. The upstream handler accepted it, reported and stored 16 bytes, and exposed neither integrity claims nor a SHA-256 attachment field."
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py",
+        "result": "At the inspected revision, tools/kanban_tools.py requires only filename and content_base64 for kanban_attach; expected_size and expected_sha256 are absent from the tool schema."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "hermes_cli/kanban_db.py stores the supplied bytes and size but the task_attachments schema and Attachment model contain no SHA-256 field or post-write identity verification."
+      },
+      {
+        "kind": "test",
+        "reference": "disposable exact-target attachment-identity gate",
+        "result": "A disposable source gate sent a valid-base64 16-byte truncation of a 23-byte synthetic payload. The upstream handler accepted it, reported and stored 16 bytes, and exposed neither integrity claims nor a SHA-256 attachment field."
+      }
     ]
   },
   "retirement_gate": {
     "summary": "The required attachment-identity gate fails on the inspected upstream revision before a full multi-process tarball run: inline truncated valid base64 is accepted without transport claims or durable SHA-256 identity.",
     "status": "failed",
     "evidence": [
-      "Executed disposable handler/database gate: accepted_truncated_valid_base64=true, schema_requires_integrity_claims=false, attachment_has_sha256=false, stored_bytes_match_truncated=true.",
-      "The full three-process tarball qualification was not needed after the required pre-transport and persistence conditions demonstrably failed."
+      {
+        "kind": "test",
+        "reference": "disposable exact-target attachment-identity gate",
+        "result": "Executed disposable handler/database gate: accepted_truncated_valid_base64=true, schema_requires_integrity_claims=false, attachment_has_sha256=false, stored_bytes_match_truncated=true."
+      },
+      {
+        "kind": "test",
+        "reference": "HERMES_LOCAL_PATCHES.md:185",
+        "result": "The full three-process tarball qualification was not needed after the required pre-transport and persistence conditions demonstrably failed."
+      }
     ]
   },
   "artifact_verification": {

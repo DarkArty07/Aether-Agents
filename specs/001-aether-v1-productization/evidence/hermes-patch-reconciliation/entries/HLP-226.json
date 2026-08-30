@@ -15,7 +15,7 @@
       {
         "kind": "commit",
         "url": "https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872",
-        "ancestor_of_inspected_revision": true
+        "state": "ancestor of inspected revision"
       },
       {
         "kind": "pull_request",
@@ -27,19 +27,19 @@
     "disposition": "upstream_partial",
     "evidence": [
       {
-        "kind": "target_source",
-        "location": "hermes_cli/kanban_db.py:3292-3358",
-        "finding": "The integrated ancestor commit provides cross-profile routing from a canonical source task when a Project has already been inherited."
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3292-L3358",
+        "result": "The integrated ancestor commit provides cross-profile routing from a canonical source task when a Project has already been inherited."
       },
       {
-        "kind": "target_source",
-        "location": "tools/kanban_tools.py:1387-1435",
-        "finding": "The target inherits a worker Project only when workspace_kind is omitted, so an explicit worktree request bypasses inheritance and conflict rejection."
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py#L1387-L1435",
+        "result": "The target inherits a worker Project only when workspace_kind is omitted, so an explicit worktree request bypasses inheritance and conflict rejection."
       },
       {
-        "kind": "linked_pr_diff",
+        "kind": "api",
         "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
-        "finding": "The open PR changes inheritance to depend only on an omitted workspace path and rejects a conflicting explicit Project."
+        "result": "The open PR changes inheritance to depend only on an omitted workspace path and rejects a conflicting explicit Project."
       }
     ]
   },
@@ -48,11 +48,13 @@
     "status": "failed",
     "evidence": [
       {
-        "command": "disposable target behavioral gate",
+        "kind": "test",
+        "reference": "disposable target behavioral gate",
         "result": "The omitted-workspace control inherited the Project and received a fresh workspace, but an explicit worktree child did not inherit or get a fresh project workspace and a conflicting Project was not rejected."
       },
       {
-        "command": "public-source inspection of the linked commit and PR",
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
         "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
       }
     ]

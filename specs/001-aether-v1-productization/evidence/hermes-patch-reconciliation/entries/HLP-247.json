@@ -12,15 +12,27 @@
     "linked_refs": [],
     "disposition": "upstream_missing",
     "evidence": [
-      "At the inspected revision, recompute_ready considers both todo and blocked children and accepts parent statuses done or archived; archive_task immediately invokes recompute_ready.",
-      "A disposable three-control gate produced blocked_child_after_parent_archive=ready, todo_child_after_parent_archive=ready, and nonsticky_child_after_parent_done=ready. The first result violates the required behavior while the two compatibility controls retain their historical outcomes."
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "At the inspected revision, recompute_ready considers both todo and blocked children and accepts parent statuses done or archived; archive_task immediately invokes recompute_ready."
+      },
+      {
+        "kind": "test",
+        "reference": "disposable exact-target archived-parent three-control gate",
+        "result": "A disposable three-control gate produced blocked_child_after_parent_archive=ready, todo_child_after_parent_archive=ready, and nonsticky_child_after_parent_done=ready. The first result violates the required behavior while the two compatibility controls retain their historical outcomes."
+      }
     ]
   },
   "retirement_gate": {
     "summary": "The three-control archived-parent gate was executed in a disposable upstream database and failed because an eventless blocked child was promoted to ready when its parent was archived.",
     "status": "failed",
     "evidence": [
-      "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: blocked child after archived parent=ready (required blocked); todo child after archived parent=ready; non-sticky blocked child after done parent=ready."
+      {
+        "kind": "test",
+        "reference": "disposable exact-target archived-parent three-control gate",
+        "result": "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: blocked child after archived parent=ready (required blocked); todo child after archived parent=ready; non-sticky blocked child after done parent=ready."
+      }
     ]
   },
   "artifact_verification": {

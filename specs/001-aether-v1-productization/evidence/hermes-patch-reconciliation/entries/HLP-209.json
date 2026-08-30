@@ -19,25 +19,25 @@
       {
         "kind": "pull_request",
         "url": "https://github.com/NousResearch/hermes-agent/pull/86848",
-        "state": "merged",
-        "merge_revision": "9ac1e65b0ae4e83dced9d5c8a406cc57cb589702"
+        "state": "merged; merge revision 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702"
       },
       {
         "kind": "commit",
         "url": "https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702",
-        "ancestor_of_inspected_revision": true
+        "state": "ancestor of inspected revision"
       }
     ],
     "disposition": "upstream_verified",
     "evidence": [
       {
-        "kind": "target_source",
-        "location": "cron/lifecycle_guard.py:945-955",
-        "finding": "The exact target returns nothing-to-scan for directories and continues to fail closed for other non-regular inputs."
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/lifecycle_guard.py#L945-L955",
+        "result": "The exact target returns nothing-to-scan for directories and continues to fail closed for other non-regular inputs."
       },
       {
-        "kind": "commit_ancestry",
-        "finding": "The merged fix commit 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702 is an ancestor of the inspected revision."
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702",
+        "result": "The merged fix commit 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702 is an ancestor of the inspected revision."
       }
     ]
   },
@@ -46,11 +46,13 @@
     "status": "partial",
     "evidence": [
       {
-        "command": "disposable target behavioral gate",
+        "kind": "test",
+        "reference": "disposable target behavioral gate",
         "result": "Passed: sourced configuration with a directory was allowed; a lifecycle script and /dev/null remained blocked."
       },
       {
-        "command": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+        "kind": "test",
+        "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
         "result": "301 passed, including 297 passing tests in test_gateway_restart_loop.py."
       }
     ]

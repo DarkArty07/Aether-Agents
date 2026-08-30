@@ -312,7 +312,16 @@ def _validate_retirement_candidacy(record: dict[str, Any]) -> None:
 
 
 def _validate_artifacts(record: dict[str, Any], root: Path) -> None:
-    for artifact in record["artifact_verification"]["artifacts"]:
+    verification = record["artifact_verification"]
+    artifacts = verification["artifacts"]
+    if verification["status"] == "passed" and any(
+        artifact["result"] in {"failed", "unavailable"} for artifact in artifacts
+    ):
+        raise ReconciliationError(
+            f"{record['id']} artifact verification status cannot be passed with "
+            "a failed or unavailable declared artifact"
+        )
+    for artifact in artifacts:
         if artifact["kind"] != "patch":
             continue
         reference = artifact["reference"]
