@@ -625,6 +625,35 @@ def _decode_task_affinity(value: object) -> dict[str, object] | None:
     return decoded if isinstance(decoded, dict) else None
 
 
+def _terminal_acceptance_repo(
+    tasks: list[dict[str, object]], repo: Path
+) -> tuple[Path | None, str]:
+    """Resolve the one terminal Supervisor workspace that owns final acceptance."""
+    terminal = []
+    for task in tasks:
+        if str(task.get("assignee", "")).casefold() != "supervisor":
+            continue
+        affinity = _decode_task_affinity(task.get("session_affinity"))
+        if affinity and affinity.get("terminal") is True:
+            terminal.append(task)
+    if not terminal:
+        return None, "terminal_candidate_missing"
+    if len(terminal) != 1:
+        return None, "terminal_candidate_ambiguous"
+
+    workspace = terminal[0].get("workspace_path")
+    if not isinstance(workspace, str) or not workspace.strip():
+        return None, "terminal_workspace_invalid"
+    try:
+        candidate = Path(workspace).expanduser().resolve()
+        resolved_repo = repo.resolve()
+    except (OSError, RuntimeError, ValueError):
+        return None, "terminal_workspace_invalid"
+    if not candidate.is_dir() or candidate.parent != resolved_repo / ".worktrees":
+        return None, "terminal_workspace_invalid"
+    return candidate, "terminal_workspace"
+
+
 def _supervisor_flow_id(tasks: list[dict[str, object]]) -> str | None:
     for task in tasks:
         if str(task.get("assignee", "")).casefold() != "supervisor":
@@ -1896,6 +1925,7 @@ def _compact_run_record(record: Mapping[str, Any]) -> dict[str, Any]:
         "observed_route",
         "route_ok",
         "acceptance_passed",
+        "acceptance_source",
         "baseline_acceptance_passed",
         "owner_interventions",
         "expected_owner_interventions",
@@ -1969,7 +1999,7 @@ def _live_persistent_lane(
     source_status_before: str,
     known_good_hook: Path | None,
 ) -> dict[str, Any]:
-    """Run E2E-15 through a real native TUI and no harness continuation."""
+    """Run a persistent pipeline scenario through a real native TUI."""
     dispatch_result: dict[str, Any] = {}
 
     def _dispatch_after_root() -> None:
@@ -2016,8 +2046,15 @@ def _live_persistent_lane(
     board_settled = not tasks or statuses <= {"done", "archived", "blocked"}
     board_successful = not tasks or statuses <= {"done", "archived"}
     route = _detect_route(tasks, repo)
-    acceptance_passed = _run_acceptance(scenario, repo, env, commands, evidence, "final")
-    missing_paths, forbidden_paths = _check_paths(repo, scenario)
+    acceptance_repo, acceptance_source = _terminal_acceptance_repo(tasks, repo)
+    if acceptance_repo is None:
+        acceptance_passed = False
+        missing_paths, forbidden_paths = [], []
+    else:
+        acceptance_passed = _run_acceptance(
+            scenario, acceptance_repo, env, commands, evidence, "final"
+        )
+        missing_paths, forbidden_paths = _check_paths(acceptance_repo, scenario)
     source_status_after = _source_status(commands, env)
     aether_self_modification = source_status_after != source_status_before
     observed_denial_codes = _denial_codes(evidence / "hook-denials.jsonl")
@@ -2051,6 +2088,7 @@ def _live_persistent_lane(
         "observed_route": route,
         "route_ok": route_ok,
         "acceptance_passed": acceptance_passed,
+        "acceptance_source": acceptance_source,
         "baseline_acceptance_passed": baseline_acceptance,
         "owner_interventions": 0,
         "expected_owner_interventions": scenario.expected_owner_interventions,
@@ -2075,6 +2113,8 @@ def _live_persistent_lane(
         "same_session": receipt.get("same_session") is True,
         "continuation_source": "native",
     }
+    if acceptance_repo is None:
+        record["reason"] = acceptance_source
     record = _qualify_e2e15_record(record, receipt)
     write_json(evidence / "run.json", _compact_run_record(record))
     return record

@@ -16,6 +16,15 @@
     "observed_route": {"type": "string", "enum": ["direct", "pipeline", "safety", "recovery"]},
     "route_ok": {"type": "boolean"},
     "acceptance_passed": {"type": "boolean"},
+    "acceptance_source": {
+      "type": "string",
+      "enum": [
+        "terminal_workspace",
+        "terminal_candidate_missing",
+        "terminal_candidate_ambiguous",
+        "terminal_workspace_invalid"
+      ]
+    },
     "baseline_acceptance_passed": {"type": "boolean"},
     "owner_interventions": {"type": "integer", "minimum": 0},
     "expected_owner_interventions": {"type": "integer", "minimum": 0},
