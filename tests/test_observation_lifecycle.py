@@ -439,11 +439,7 @@ def _build_wheel(
     a1_contracts.mkdir(parents=True)
     for schema_name in ("release-lock.schema.json", "project.schema.json"):
         shutil.copy2(
-            repository
-            / "specs"
-            / "001-aether-v1-productization"
-            / "contracts"
-            / schema_name,
+            repository / "specs" / "001-aether-v1-productization" / "contracts" / schema_name,
             a1_contracts / schema_name,
         )
     output = root / f"dist-{version}"
@@ -1230,10 +1226,7 @@ def test_prepare_release_rejects_untrusted_wheel_before_staging(
             hermes_checkout=checkout,
             release_lock=release_lock,
         )
-    assert (
-        not manager.store.releases.exists()
-        or list(manager.store.releases.iterdir()) == []
-    )
+    assert not manager.store.releases.exists() or list(manager.store.releases.iterdir()) == []
 
 
 @pytest.mark.parametrize(

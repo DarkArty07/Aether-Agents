@@ -139,7 +139,9 @@ def _seed_trace(root: Path) -> tuple[Path, ObservationPaths, str, str]:
     return project, paths, project_id, trace_id
 
 
-def _invoke_registered_tool(project: Path, trace_id: str, paths: ObservationPaths) -> dict[str, Any]:
+def _invoke_registered_tool(
+    project: Path, trace_id: str, paths: ObservationPaths
+) -> dict[str, Any]:
     from aether_agents.observation.capture import hermes_plugin
 
     context = _ToolContext()
@@ -220,7 +222,11 @@ def prepare_observation_only(run_root: Path) -> dict[str, Any]:
     record["trace_seeded"] = True
     record["project_registered"] = True
     # Keep only fields in the canonical schema in exported evidence.
-    compact = {key: value for key, value in record.items() if key not in {"trace_seeded", "project_registered"}}
+    compact = {
+        key: value
+        for key, value in record.items()
+        if key not in {"trace_seeded", "project_registered"}
+    }
     validate_evidence(compact)
     evidence = run_root / "evidence"
     evidence.mkdir(parents=True, exist_ok=True)
@@ -392,12 +398,16 @@ def _live_call_evidence(
     compact_calls: list[dict[str, Any]] = []
     for action in _LIVE_ACTIONS:
         entries = observed[action]
-        compact_calls.append(entries[0] if entries else {
-            "action": action,
-            "success": False,
-            "bytes": 0,
-            "limit": _LIVE_LIMITS[action],
-        })
+        compact_calls.append(
+            entries[0]
+            if entries
+            else {
+                "action": action,
+                "success": False,
+                "bytes": 0,
+                "limit": _LIVE_LIMITS[action],
+            }
+        )
     return compact_calls, sum(len(entries) for entries in observed.values()), fallback
 
 
@@ -468,8 +478,12 @@ def live_observation(
     paths: ObservationPaths | None = None
     project_id: str | None = None
     trace_id: str | None = None
-    usage = {"model": "unavailable", "provider": "unavailable", "api_calls": 0,
-             "provider_operationally_exercised": False}
+    usage = {
+        "model": "unavailable",
+        "provider": "unavailable",
+        "api_calls": 0,
+        "provider_operationally_exercised": False,
+    }
     calls: list[dict[str, Any]] = [
         {"action": action, "success": False, "bytes": 0, "limit": _LIVE_LIMITS[action]}
         for action in _LIVE_ACTIONS
@@ -524,7 +538,9 @@ def live_observation(
         for target in (hermes_root, project, paths.root if paths is not None else None)
     )
     all_calls_succeeded = all(call["success"] for call in calls)
-    source_changed = source_before is not None and source_after is not None and source_before != source_after
+    source_changed = (
+        source_before is not None and source_after is not None and source_before != source_after
+    )
     status = (
         "PASS"
         if invocation_completed

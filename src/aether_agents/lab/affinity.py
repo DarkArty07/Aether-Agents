@@ -71,7 +71,7 @@ def opaque_flow_id(project_id: str, contract_id: str, version: int) -> str:
     return "aether.flow.v1:" + hashlib.sha256(material).hexdigest()
 
 
-_SQLITE_FIXTURE_WORKER = r'''
+_SQLITE_FIXTURE_WORKER = r"""
 import json
 import os
 import sqlite3
@@ -118,7 +118,7 @@ with sqlite3.connect(database, timeout=10) as connection:
     else:
         raise SystemExit("unknown fixture phase")
 print(json.dumps({"pid": os.getpid(), "mode": mode}, sort_keys=True))
-'''
+"""
 
 
 def run_sqlite_boundary_fixture(root: Path) -> dict[str, Any]:
@@ -136,7 +136,15 @@ def run_sqlite_boundary_fixture(root: Path) -> dict[str, Any]:
     process_ids: list[int] = []
     for mode in ("first", "resume", "stale"):
         completed = subprocess.run(
-            [sys.executable, "-c", _SQLITE_FIXTURE_WORKER, str(database), mode, flow_id, session_id],
+            [
+                sys.executable,
+                "-c",
+                _SQLITE_FIXTURE_WORKER,
+                str(database),
+                mode,
+                flow_id,
+                session_id,
+            ],
             cwd=root,
             text=True,
             capture_output=True,
@@ -162,12 +170,8 @@ def run_sqlite_boundary_fixture(root: Path) -> dict[str, Any]:
         "process_ids": process_ids,
         "same_session": bool(affinity_row and affinity_row[0] == session_id),
         "generation": affinity_row[1] if affinity_row else None,
-        "prior_tool_evidence_observed": bool(
-            observations and observations[0][0] == "initial"
-        ),
-        "stale_generation_rejected": bool(
-            observations and observations[-1][0] == "stale-rejected"
-        ),
+        "prior_tool_evidence_observed": bool(observations and observations[0][0] == "initial"),
+        "stale_generation_rejected": bool(observations and observations[-1][0] == "stale-rejected"),
     }
 
 
@@ -231,8 +235,10 @@ def _facts(receipts: Mapping[str, Any]) -> dict[str, Any]:
         "first_supervisor_session_id": first or "unavailable",
         "resumed_supervisor_session_id": resumed or "unavailable",
         "implementer_session_ids": implementers,
-        "other_flow_session_id": _observed_session(receipts, "other_flow_session_id") or "unavailable",
-        "other_project_session_id": _observed_session(receipts, "other_project_session_id") or "unavailable",
+        "other_flow_session_id": _observed_session(receipts, "other_flow_session_id")
+        or "unavailable",
+        "other_project_session_id": _observed_session(receipts, "other_project_session_id")
+        or "unavailable",
         "other_role_session_id": (
             _observed_session(receipts, "other_role_session_id")
             or _observed_session(receipts, "other_profile_session_id")

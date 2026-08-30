@@ -122,6 +122,7 @@ def _exclusive_private_write(path: Path, data: bytes) -> None:
             pass
         os.close(directory_fd)
 
+
 REQUIRED_SECTIONS: Final = (
     "owner_intent",
     "objective",
@@ -193,13 +194,18 @@ class ObjectiveContractStore:
     @staticmethod
     def _session(value: str) -> str:
         if not isinstance(value, str) or _SESSION_RE.fullmatch(value) is None:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-SESSION-INVALID", "Hermes session id is missing or invalid")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-SESSION-INVALID",
+                "Hermes session id is missing or invalid",
+            )
         return value
 
     def _now(self) -> tuple[str, str]:
         current = self.clock()
         if current.tzinfo is None or current.utcoffset() is None:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-CLOCK-INVALID", "system clock must be timezone-aware")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-CLOCK-INVALID", "system clock must be timezone-aware"
+            )
         local = current.isoformat(timespec="seconds")
         utc = current.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         return utc, local
@@ -207,15 +213,26 @@ class ObjectiveContractStore:
     def _project(self, project_id: str) -> tuple[str, Path]:
         canonical = canonical_project_id(project_id)
         if canonical is None:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-INVALID", "project_id must be a canonical UUID")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-INVALID", "project_id must be a canonical UUID"
+            )
         root = self.registry.project_path(canonical)
         if root is None or not self.registry.knows(canonical):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "registry and .aether/project.toml do not identify the same project")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "registry and .aether/project.toml do not identify the same project",
+            )
         if root.is_symlink():
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "registered project root cannot be a symlink")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "registered project root cannot be a symlink",
+            )
         resolved = root.expanduser().resolve()
         if not resolved.is_dir():
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-UNRESOLVED", "registered project root is unavailable")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-UNRESOLVED",
+                "registered project root is unavailable",
+            )
 
         marker_path = resolved / ".aether" / "project.toml"
         directory_fd = -1
@@ -234,7 +251,10 @@ class ObjectiveContractStore:
                 marker_bytes += chunk
             marker = tomllib.loads(marker_bytes.decode("utf-8"))
         except (OSError, UnicodeError, tomllib.TOMLDecodeError, UnsafeObservationPath) as exc:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID", "project marker is missing, unsafe, or malformed") from exc
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID",
+                "project marker is missing, unsafe, or malformed",
+            ) from exc
         finally:
             if descriptor >= 0:
                 os.close(descriptor)
@@ -249,7 +269,10 @@ class ObjectiveContractStore:
             ) from exc
         marker_id = canonical_project_id(marker.get("project_id"))
         if marker_id != canonical:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "registry and .aether/project.toml do not identify the same project")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "registry and .aether/project.toml do not identify the same project",
+            )
 
         git_root = subprocess.run(
             ("git", "rev-parse", "--show-toplevel"),
@@ -260,7 +283,10 @@ class ObjectiveContractStore:
             env=_git_environment(),
         )
         if git_root.returncode != 0 or Path(git_root.stdout.strip()).resolve() != resolved:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-GIT-ROOT", "registered project root is not exactly one Git repository root")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-GIT-ROOT",
+                "registered project root is not exactly one Git repository root",
+            )
         return canonical, resolved
 
     @staticmethod
@@ -293,7 +319,9 @@ class ObjectiveContractStore:
 
     @staticmethod
     def _write_json(path: Path, value: dict[str, Any]) -> None:
-        atomic_private_write(path, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8"))
+        atomic_private_write(
+            path, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        )
 
     def begin(self, *, project_id: str, title: str, session_id: str) -> dict[str, Any]:
         project_id, root = self._project(project_id)
@@ -305,7 +333,10 @@ class ObjectiveContractStore:
             or _TRUNCATION_RE.search(title)
             or contains_secret_shape(title)
         ):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-TITLE-INVALID", "title is empty, too long, truncated, or secret-shaped")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-TITLE-INVALID",
+                "title is empty, too long, truncated, or secret-shaped",
+            )
         with _contract_lock(root, "begin"):
             utc, local = self._now()
             for _attempt in range(8):
@@ -314,7 +345,10 @@ class ObjectiveContractStore:
                 if not path.exists():
                     break
             else:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-ID-COLLISION", "could not allocate a unique contract id")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-ID-COLLISION",
+                    "could not allocate a unique contract id",
+                )
             draft = {
                 "schema_version": 1,
                 "artifact_type": "aether.objective-contract.draft.v1",
@@ -343,26 +377,36 @@ class ObjectiveContractStore:
                 "created_in_session": session_id,
             }
 
-    def _load_draft(self, root: Path, project_id: str, contract_id: str) -> tuple[Path, dict[str, Any]]:
+    def _load_draft(
+        self, root: Path, project_id: str, contract_id: str
+    ) -> tuple[Path, dict[str, Any]]:
         contract_id = self._contract_id(contract_id)
         path = self._draft_path(root, contract_id)
         try:
             value = json.loads(read_private_bytes(path).decode("utf-8"))
         except (OSError, UnicodeError, ValueError) as exc:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-DRAFT-MISSING", "draft is missing or unreadable") from exc
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-DRAFT-MISSING", "draft is missing or unreadable"
+            ) from exc
         if (
             not isinstance(value, dict)
             or value.get("project_id") != project_id
             or value.get("contract_id") != contract_id
             or value.get("status") != "draft"
         ):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "draft identity does not match the explicit project")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "draft identity does not match the explicit project",
+            )
         return path, value
 
     @staticmethod
     def _expect_revision(draft: dict[str, Any], expected_revision: int) -> None:
         if not isinstance(expected_revision, int) or draft.get("revision") != expected_revision:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-REVISION-CONFLICT", "expected_revision does not match persisted draft")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-REVISION-CONFLICT",
+                "expected_revision does not match persisted draft",
+            )
 
     def set_section(
         self,
@@ -381,14 +425,23 @@ class ObjectiveContractStore:
             path, draft = self._load_draft(root, project_id, contract_id)
             self._expect_revision(draft, expected_revision)
             if section not in _SECTION_TITLES:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECTION-INVALID", "section is not part of the Objective Contract schema")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-SECTION-INVALID",
+                    "section is not part of the Objective Contract schema",
+                )
             content = content.strip() if isinstance(content, str) else ""
             if not content:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECTION-EMPTY", "section content is empty")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-SECTION-EMPTY", "section content is empty"
+                )
             if _TRUNCATION_RE.search(content):
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "section contains a truncation sentinel")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "section contains a truncation sentinel"
+                )
             if contains_secret_shape(content):
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "section contains secret-shaped content")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-SECRET", "section contains secret-shaped content"
+                )
             sections = dict(draft.get("sections") or {})
             sections[section] = content
             draft["sections"] = sections
@@ -422,7 +475,18 @@ class ObjectiveContractStore:
                 except (OSError, UnicodeError, ValueError):
                     continue
                 if value.get("project_id") == project_id and value.get("status") == "draft":
-                    drafts.append({key: value.get(key) for key in ("contract_id", "title", "revision", "target_version", "status")})
+                    drafts.append(
+                        {
+                            key: value.get(key)
+                            for key in (
+                                "contract_id",
+                                "title",
+                                "revision",
+                                "target_version",
+                                "status",
+                            )
+                        }
+                    )
         finalized: list[dict[str, Any]] = []
         final_root = root / ".aether" / "objective-contracts"
         if final_root.is_dir() and not final_root.is_symlink():
@@ -432,7 +496,12 @@ class ObjectiveContractStore:
                 except ContractError:
                     continue
                 if metadata.get("project_id") == project_id:
-                    finalized.append({key: metadata.get(key) for key in ("contract_id", "title", "version", "status")})
+                    finalized.append(
+                        {
+                            key: metadata.get(key)
+                            for key in ("contract_id", "title", "version", "status")
+                        }
+                    )
         return {"project_id": project_id, "drafts": drafts, "finalized": finalized}
 
     @staticmethod
@@ -448,14 +517,18 @@ class ObjectiveContractStore:
             for key in REQUIRED_SECTIONS
             if not isinstance(sections.get(key), str) or not sections[key].strip()
         ]
-        if any(_TRUNCATION_RE.search(value) for value in sections.values() if isinstance(value, str)):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "contract contains a truncation sentinel")
         if any(
-            contains_secret_shape(value)
-            for value in sections.values()
-            if isinstance(value, str)
+            _TRUNCATION_RE.search(value) for value in sections.values() if isinstance(value, str)
         ):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "contract contains secret-shaped content")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-TRUNCATED", "contract contains a truncation sentinel"
+            )
+        if any(
+            contains_secret_shape(value) for value in sections.values() if isinstance(value, str)
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-SECRET", "contract contains secret-shaped content"
+            )
         return sections, missing
 
     def validate(self, *, project_id: str, contract_id: str) -> dict[str, Any]:
@@ -474,7 +547,9 @@ class ObjectiveContractStore:
             }
 
     @staticmethod
-    def _render_final(draft: dict[str, Any], *, finalized_utc: str, finalized_local: str, session_id: str) -> bytes:
+    def _render_final(
+        draft: dict[str, Any], *, finalized_utc: str, finalized_local: str, session_id: str
+    ) -> bytes:
         metadata = {
             "artifact_type": "aether.objective-contract.v1",
             "project_id": draft["project_id"],
@@ -494,7 +569,9 @@ class ObjectiveContractStore:
             "observation_trace_id": "ctr_" + secrets.token_hex(16),
         }
         lines = ["---"]
-        lines.extend(f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in metadata.items())
+        lines.extend(
+            f"{key}: {json.dumps(value, ensure_ascii=False)}" for key, value in metadata.items()
+        )
         lines.extend(("---", "", f"# Objective Contract: {draft['title']}", ""))
         sections = draft["sections"]
         for key in REQUIRED_SECTIONS:
@@ -506,9 +583,13 @@ class ObjectiveContractStore:
         try:
             text = read_private_bytes(path).decode("utf-8")
         except (OSError, UnicodeError) as exc:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-MISSING", "final contract is unreadable") from exc
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-MISSING", "final contract is unreadable"
+            ) from exc
         if not text.startswith("---\n") or "\n---\n" not in text[4:]:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is malformed")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is malformed"
+            )
         front, body = text[4:].split("\n---\n", 1)
         metadata: dict[str, Any] = {}
         try:
@@ -516,7 +597,9 @@ class ObjectiveContractStore:
                 key, raw = line.split(": ", 1)
                 metadata[key] = json.loads(raw)
         except (ValueError, json.JSONDecodeError) as exc:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is malformed") from exc
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is malformed"
+            ) from exc
         sections: dict[str, str] = {}
         matches = list(re.finditer(r"^## (.+)$", body, flags=re.MULTILINE))
         for index, match in enumerate(matches):
@@ -531,14 +614,36 @@ class ObjectiveContractStore:
     @staticmethod
     def _validate_final(metadata: dict[str, Any], sections: dict[str, str]) -> None:
         if any(key not in metadata for key in _FINAL_REQUIRED_METADATA):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is incomplete")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract metadata is incomplete"
+            )
         if any(not sections.get(key, "").strip() for key in REQUIRED_SECTIONS):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract sections are incomplete")
-        if metadata["artifact_type"] != "aether.objective-contract.v1" or metadata["status"] != "final":
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract type or status is invalid")
-        text_fields = ("title", "created_at_utc", "created_at_local", "finalized_at_utc", "finalized_at_local", "created_in_session", "finalized_in_session")
-        if metadata["author_profile"] != "morfeo" or any(not isinstance(metadata[key], str) or not metadata[key].strip() for key in text_fields):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract provenance is invalid")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract sections are incomplete"
+            )
+        if (
+            metadata["artifact_type"] != "aether.objective-contract.v1"
+            or metadata["status"] != "final"
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID",
+                "final contract type or status is invalid",
+            )
+        text_fields = (
+            "title",
+            "created_at_utc",
+            "created_at_local",
+            "finalized_at_utc",
+            "finalized_at_local",
+            "created_in_session",
+            "finalized_in_session",
+        )
+        if metadata["author_profile"] != "morfeo" or any(
+            not isinstance(metadata[key], str) or not metadata[key].strip() for key in text_fields
+        ):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract provenance is invalid"
+            )
         trace_id = metadata.get("observation_trace_id")
         if trace_id is not None and (
             not isinstance(trace_id, str) or _TRACE_ID_RE.fullmatch(trace_id) is None
@@ -551,7 +656,9 @@ class ObjectiveContractStore:
             _TRUNCATION_RE.search(value) or contains_secret_shape(value)
             for value in sections.values()
         ):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract content is unsafe")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "final contract content is unsafe"
+            )
 
     def finalize(
         self,
@@ -569,17 +676,27 @@ class ObjectiveContractStore:
             self._expect_revision(draft, expected_revision)
             _sections, missing = self._draft_validation(draft)
             if missing:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-INCOMPLETE", "missing required sections: " + ", ".join(missing))
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-INCOMPLETE",
+                    "missing required sections: " + ", ".join(missing),
+                )
             version = draft.get("target_version")
             if not isinstance(version, int) or version < 1:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-VERSION-INVALID", "target version is invalid")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-VERSION-INVALID", "target version is invalid"
+                )
             final_path = self._final_path(root, contract_id, version)
             utc, local = self._now()
-            data = self._render_final(draft, finalized_utc=utc, finalized_local=local, session_id=session_id)
+            data = self._render_final(
+                draft, finalized_utc=utc, finalized_local=local, session_id=session_id
+            )
             _exclusive_private_write(final_path, data)
             persisted = read_private_bytes(final_path)
             if persisted != data:
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-WRITE-MISMATCH", "final bytes differ after persistence")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-WRITE-MISMATCH",
+                    "final bytes differ after persistence",
+                )
             digest = hashlib.sha256(persisted).hexdigest()
             metadata, _ = self._parse_final(final_path)
             draft_path.unlink()
@@ -608,12 +725,18 @@ class ObjectiveContractStore:
         contract_id = self._contract_id(contract_id)
         session_id = self._session(session_id)
         if not isinstance(version, int) or version < 1:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-VERSION-INVALID", "source version is invalid")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-VERSION-INVALID", "source version is invalid"
+            )
         reason = change_reason.strip() if isinstance(change_reason, str) else ""
         if not reason or _TRUNCATION_RE.search(reason):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-CHANGE-INVALID", "change reason is empty or truncated")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-CHANGE-INVALID", "change reason is empty or truncated"
+            )
         if contains_secret_shape(reason):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-SECRET", "change reason contains secret-shaped content")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-SECRET", "change reason contains secret-shaped content"
+            )
         with _contract_lock(root, contract_id):
             source = self._final_path(root, contract_id, version)
             metadata, sections = self._parse_final(source)
@@ -623,12 +746,21 @@ class ObjectiveContractStore:
                 or metadata.get("version") != version
                 or metadata.get("status") != "final"
             ):
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "source contract identity does not match")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                    "source contract identity does not match",
+                )
             if any(key not in sections for key in REQUIRED_SECTIONS):
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID", "source contract is missing required sections")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-FINAL-INVALID",
+                    "source contract is missing required sections",
+                )
             draft_path = self._draft_path(root, contract_id)
             if draft_path.exists() or self._final_path(root, contract_id, version + 1).exists():
-                raise ContractError("AETHER-OBJECTIVE-CONTRACT-AMENDMENT-EXISTS", "a draft or target version already exists")
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-AMENDMENT-EXISTS",
+                    "a draft or target version already exists",
+                )
             utc, local = self._now()
             draft = {
                 "schema_version": 1,
@@ -690,7 +822,10 @@ class ObjectiveContractStore:
             or metadata.get("version") != version
             or metadata.get("status") != "final"
         ):
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT", "final contract identity does not match")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "final contract identity does not match",
+            )
         head = self._git(root, "rev-parse", "--verify", "HEAD^{commit}")
         if head.returncode != 0:
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
@@ -718,7 +853,10 @@ class ObjectiveContractStore:
         if canonical_project_id(committed_marker.get("project_id")) != project_id:
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
         current_head = self._git(root, "rev-parse", "--verify", "HEAD^{commit}")
-        if current_head.returncode != 0 or current_head.stdout.decode("ascii").strip() != base_commit:
+        if (
+            current_head.returncode != 0
+            or current_head.stdout.decode("ascii").strip() != base_commit
+        ):
             return {"handoff_ready": False, "reason": "NOT_IN_BASE"}
         digest = hashlib.sha256(committed.stdout).hexdigest()
         trace_id = metadata.get("observation_trace_id")

@@ -105,7 +105,7 @@ def test_live_observation_invokes_supplied_runtime_once_after_spend_acknowledgem
     invoked = tmp_path / "hermes-invoked.json"
     fake_hermes = tmp_path / "hermes"
     fake_hermes.write_text(
-        f'''#!/usr/bin/env python3
+        f"""#!/usr/bin/env python3
 import json, os, sqlite3, sys
 from pathlib import Path
 
@@ -133,7 +133,7 @@ with sqlite3.connect(database) as connection:
             ("tool", json.dumps(result), "aether_observe", None),
         )
 print("aether_observe status changes diagnose completed")
-''',
+""",
         encoding="utf-8",
     )
     fake_hermes.chmod(0o755)
@@ -193,7 +193,7 @@ print("aether_observe status changes diagnose completed")
 def test_live_observation_rejects_missing_usage_and_forbidden_fallbacks(tmp_path: Path) -> None:
     fake_hermes = tmp_path / "hermes"
     fake_hermes.write_text(
-        '''#!/usr/bin/env python3
+        """#!/usr/bin/env python3
 import json, os, sqlite3, sys
 from pathlib import Path
 
@@ -214,7 +214,7 @@ with sqlite3.connect(database) as connection:
             ("tool", json.dumps(result), name, None),
         )
 print("completed without a verifiable usage report")
-''',
+""",
         encoding="utf-8",
     )
     fake_hermes.chmod(0o755)
@@ -538,8 +538,22 @@ def test_native_affinity_observer_does_not_qualify_copied_control_rows(
                        'copied-lock', ?, 0)""",
             (
                 ("copied-board", "project-main", flow_id, "supervisor", "main-session", workspace),
-                ("copied-board", "project-main", flow_id + ":copied", "supervisor", "copied-flow", workspace),
-                ("copied-board", "project-main:copied", flow_id, "supervisor", "copied-project", workspace),
+                (
+                    "copied-board",
+                    "project-main",
+                    flow_id + ":copied",
+                    "supervisor",
+                    "copied-flow",
+                    workspace,
+                ),
+                (
+                    "copied-board",
+                    "project-main:copied",
+                    flow_id,
+                    "supervisor",
+                    "copied-project",
+                    workspace,
+                ),
                 ("copied-board", "project-main", flow_id, "implementer", "copied-role", workspace),
             ),
         )
@@ -616,7 +630,7 @@ def test_native_affinity_observer_controls_are_created_by_native_lifecycle(
     workspace = tmp_path / "workspace"
     source_home.mkdir()
     workspace.mkdir()
-    bootstrap = r'''
+    bootstrap = r"""
 import json
 import sys
 from pathlib import Path
@@ -694,7 +708,7 @@ with kanban_db.connect(db_path=board) as connection:
     state.close()
 print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_id,
                   "terminal_id": terminal_id}))
-'''
+"""
     env = os.environ.copy()
     env.update(
         {
@@ -735,13 +749,16 @@ print(json.dumps({"flow_id": flow_id, "project_id": project_id, "task_id": task_
     assert controls["other_flow_session_id"] != "unavailable"
     assert controls["other_project_session_id"] != "unavailable"
     assert controls["other_role_session_id"] != "unavailable"
-    assert len(
-        {
-            controls["other_flow_session_id"],
-            controls["other_project_session_id"],
-            controls["other_role_session_id"],
-        }
-    ) == 3
+    assert (
+        len(
+            {
+                controls["other_flow_session_id"],
+                controls["other_project_session_id"],
+                controls["other_role_session_id"],
+            }
+        )
+        == 3
+    )
 
 
 def test_native_python_resolves_shell_launcher_interpreter(tmp_path: Path) -> None:
@@ -749,8 +766,7 @@ def test_native_python_resolves_shell_launcher_interpreter(tmp_path: Path) -> No
     interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
     launcher = tmp_path / "hermes"
     launcher.write_text(
-        "#!/usr/bin/env bash\n"
-        f'exec "{interpreter}" "/tmp/hermes" "$@"\n',
+        f'#!/usr/bin/env bash\nexec "{interpreter}" "/tmp/hermes" "$@"\n',
         encoding="utf-8",
     )
 

@@ -82,6 +82,7 @@ class SummaryNotFoundError(ObservationQueryError):
 # Project resolution (OBS-FR-077 / OBS-D-022)
 # ------------------------------------------------------------------------------------
 
+
 @dataclass(frozen=True, slots=True)
 class ProjectResolution:
     """The canonical lower-case project UUID plus the directory it was read from."""

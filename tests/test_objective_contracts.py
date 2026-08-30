@@ -55,7 +55,9 @@ def _store(tmp_path: Path) -> tuple[ObjectiveContractStore, ProjectRegistry]:
     return ObjectiveContractStore(registry=registry, clock=lambda: FIXED), registry
 
 
-def _complete(store: ObjectiveContractStore, project_id: str, contract_id: str, revision: int) -> int:
+def _complete(
+    store: ObjectiveContractStore, project_id: str, contract_id: str, revision: int
+) -> int:
     for section in REQUIRED_SECTIONS:
         result = store.set_section(
             project_id=project_id,
@@ -95,9 +97,12 @@ def test_contract_sections_accept_unicode_multiline_prose_beyond_observation_met
     )
 
     assert updated["revision"] == 2
-    assert store.show(project_id=PROJECT_A, contract_id=started["contract_id"])["sections"][
-        "owner_intent"
-    ] == content.strip()
+    assert (
+        store.show(project_id=PROJECT_A, contract_id=started["contract_id"])["sections"][
+            "owner_intent"
+        ]
+        == content.strip()
+    )
 
 
 def test_begin_binds_project_and_records_system_provenance(tmp_path: Path) -> None:
@@ -280,7 +285,12 @@ def test_supersede_rejects_secret_change_reason(tmp_path: Path) -> None:
     _project(tmp_path, registry, PROJECT_A, "alpha")
     started = store.begin(project_id=PROJECT_A, title="Alpha", session_id="s1")
     revision = _complete(store, PROJECT_A, started["contract_id"], 1)
-    store.finalize(project_id=PROJECT_A, contract_id=started["contract_id"], expected_revision=revision, session_id="s1")
+    store.finalize(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision,
+        session_id="s1",
+    )
     with pytest.raises(ContractError, match="SECRET"):
         store.supersede(
             project_id=PROJECT_A,
@@ -334,7 +344,9 @@ def test_prepare_handoff_requires_final_bytes_in_git_head(
     )
     assert not_ready == {"handoff_ready": False, "reason": "NOT_IN_BASE"}
 
-    subprocess.run(("git", "add", ".aether/project.toml", final["relative_path"]), cwd=project, check=True)
+    subprocess.run(
+        ("git", "add", ".aether/project.toml", final["relative_path"]), cwd=project, check=True
+    )
     subprocess.run(("git", "commit", "-qm", "test: contract"), cwd=project, check=True)
     calls: list[tuple[str, ...]] = []
     original_git = store._git
@@ -354,19 +366,22 @@ def test_prepare_handoff_requires_final_bytes_in_git_head(
     assert ready["sha256"] == final["sha256"]
     assert ready["relative_path"] == final["relative_path"]
     assert ready["observation_trace_id"] == final["observation_trace_id"]
-    assert ready["root_idempotency_key"] == (
-        f"aether.obs.v1:{final['observation_trace_id']}:root"
-    )
+    assert ready["root_idempotency_key"] == (f"aether.obs.v1:{final['observation_trace_id']}:root")
     monkeypatch.delenv("GIT_DIR")
-    assert ready["base_commit"] == subprocess.check_output(
-        ("git", "rev-parse", "HEAD"), cwd=project, text=True
-    ).strip()
+    assert (
+        ready["base_commit"]
+        == subprocess.check_output(("git", "rev-parse", "HEAD"), cwd=project, text=True).strip()
+    )
     assert len(ready["envelope"]) < 1000
     assert ("rev-parse", "--verify", "HEAD^{commit}") in calls
     assert not any(args[0] == "show" and args[1].startswith("HEAD:") for args in calls)
     marker = project / ".aether" / "project.toml"
-    marker.write_text(marker.read_text().replace('name = "alpha"', 'name = "drifted"'), encoding="utf-8")
-    drifted = store.prepare_handoff(project_id=PROJECT_A, contract_id=started["contract_id"], version=1)
+    marker.write_text(
+        marker.read_text().replace('name = "alpha"', 'name = "drifted"'), encoding="utf-8"
+    )
+    drifted = store.prepare_handoff(
+        project_id=PROJECT_A, contract_id=started["contract_id"], version=1
+    )
     assert drifted == {"handoff_ready": False, "reason": "NOT_IN_BASE"}
     monkeypatch.delenv("GIT_DIR", raising=False)
     subprocess.run(("git", "checkout", "--", ".aether/project.toml"), cwd=project, check=True)
@@ -387,7 +402,9 @@ def test_prepare_handoff_returns_stable_distinct_opaque_flow_ids(
     beta = _project(tmp_path, registry, PROJECT_B, "beta")
 
     def ready(project_id: str, project: Path, title: str) -> dict[str, Any]:
-        subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True)
+        subprocess.run(
+            ("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True
+        )
         subprocess.run(("git", "config", "user.name", "Test"), cwd=project, check=True)
         started = store.begin(project_id=project_id, title=title, session_id="s1")
         revision = _complete(store, project_id, started["contract_id"], 1)
@@ -600,9 +617,7 @@ def test_product_resources_enable_authoring_only_for_morfeo() -> None:
 
     assert "aether-objective-contracts" in morfeo["plugins"]["enabled"]
     assert (
-        morfeo["plugins"]["entries"]["aether-objective-contracts"]["settings"][
-            "author_profile"
-        ]
+        morfeo["plugins"]["entries"]["aether-objective-contracts"]["settings"]["author_profile"]
         == "morfeo"
     )
     assert "aether-objective-contracts" not in supervisor["plugins"]["enabled"]

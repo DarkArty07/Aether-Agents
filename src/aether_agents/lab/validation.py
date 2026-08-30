@@ -11,12 +11,35 @@ from jsonschema import Draft202012Validator
 from .resources import fixture_manifest_resource, resource_bytes, resource_json, scenario_resource
 
 _FORBIDDEN_KEYS = {
-    "environment", "credentials", "prompt", "response", "command", "stdout", "stderr",
-    "files", "diff", "logs", "events", "raw", "transcript", "terminal_output",
+    "environment",
+    "credentials",
+    "prompt",
+    "response",
+    "command",
+    "stdout",
+    "stderr",
+    "files",
+    "diff",
+    "logs",
+    "events",
+    "raw",
+    "transcript",
+    "terminal_output",
 }
 _FORBIDDEN_KEY_PARTS = (
-    "credential", "secret", "prompt", "response", "stdout", "stderr", "command",
-    "event", "file", "diff", "log", "transcript", "token",
+    "credential",
+    "secret",
+    "prompt",
+    "response",
+    "stdout",
+    "stderr",
+    "command",
+    "event",
+    "file",
+    "diff",
+    "log",
+    "transcript",
+    "token",
 )
 _ALLOWED_FALLBACK_KEYS = {"terminal", "file", "raw_logs_events"}
 
@@ -30,11 +53,11 @@ def _assert_no_forbidden_keys(value: Any, *, parent_key: str | None = None) -> N
     if isinstance(value, dict):
         for key, nested in value.items():
             normalized = str(key).casefold()
-            if (
-                not (
-                    parent_key == "forbidden_fallback_counts" and normalized in _ALLOWED_FALLBACK_KEYS
-                )
-                and (normalized in _FORBIDDEN_KEYS or any(part in normalized for part in _FORBIDDEN_KEY_PARTS))
+            if not (
+                parent_key == "forbidden_fallback_counts" and normalized in _ALLOWED_FALLBACK_KEYS
+            ) and (
+                normalized in _FORBIDDEN_KEYS
+                or any(part in normalized for part in _FORBIDDEN_KEY_PARTS)
             ):
                 raise ValueError("evidence contains a forbidden content field")
             _assert_no_forbidden_keys(nested, parent_key=normalized)
@@ -67,7 +90,11 @@ def validate_evidence(value: Any) -> None:
 
 def schema_bytes(name: str) -> bytes:
     filename = name if name.endswith(".schema.json") else f"{name}.schema.json"
-    if filename not in {"scenario.schema.json", "fixture-manifest.schema.json", "evidence.schema.json"}:
+    if filename not in {
+        "scenario.schema.json",
+        "fixture-manifest.schema.json",
+        "evidence.schema.json",
+    }:
         raise ValueError("unknown laboratory schema")
     return resource_bytes(f"schemas/{filename}")
 

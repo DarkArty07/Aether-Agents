@@ -91,7 +91,9 @@ def _handle(
                 version=_required(args, "version"),
             )
         else:
-            raise ContractError("AETHER-OBJECTIVE-CONTRACT-ACTION-INVALID", "action is not supported")
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-ACTION-INVALID", "action is not supported"
+            )
         return json.dumps(result, ensure_ascii=False)
     except ContractError as exc:
         return json.dumps(

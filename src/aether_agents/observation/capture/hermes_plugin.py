@@ -2233,7 +2233,7 @@ class _Observer:
                 actor_kind="agent",
                 actor_id=self._profile(payload) or "unknown",
                 profile=self._profile(payload),
-            )
+            ),
         )
 
     # -- model/configuration ----------------------------------------------------

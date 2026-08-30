@@ -146,13 +146,31 @@ def build_parser() -> argparse.ArgumentParser:
 def _compact_result(payload: dict[str, Any], *, number: int, suite: str) -> dict[str, Any]:
     """Drop paths, IDs, and all non-contract fields from one matrix row."""
     allowed = {
-        "scenario", "status", "mode", "expected_route", "observed_route", "route_ok",
-        "acceptance_passed", "baseline_acceptance_passed", "owner_interventions",
-        "expected_owner_interventions", "owner_interventions_ok", "harness_continuations",
-        "guard_denials_ok", "observed_protected_edge_violation", "aether_self_modification",
-        "fault_recovered", "missing_required_paths", "present_forbidden_paths", "board_task_count",
-        "board_settled", "board_successful", "persistent_autonomous_wake_qualified",
-        "rolling_reliability_counted", "reason", "affinity",
+        "scenario",
+        "status",
+        "mode",
+        "expected_route",
+        "observed_route",
+        "route_ok",
+        "acceptance_passed",
+        "baseline_acceptance_passed",
+        "owner_interventions",
+        "expected_owner_interventions",
+        "owner_interventions_ok",
+        "harness_continuations",
+        "guard_denials_ok",
+        "observed_protected_edge_violation",
+        "aether_self_modification",
+        "fault_recovered",
+        "missing_required_paths",
+        "present_forbidden_paths",
+        "board_task_count",
+        "board_settled",
+        "board_successful",
+        "persistent_autonomous_wake_qualified",
+        "rolling_reliability_counted",
+        "reason",
+        "affinity",
     }
     result = {key: payload[key] for key in allowed if key in payload}
     result.setdefault("scenario", f"e2e-{number:02d}")
@@ -174,7 +192,14 @@ def _run_scenario(
     profile_root: Path | None,
 ) -> dict[str, Any]:
     run_root = matrix_root / f"{index:02d}-e2e-{number:02d}"
-    command = [sys.executable, "-m", RUNNER_MODULE, f"e2e-{number:02d}", "--run-root", str(run_root)]
+    command = [
+        sys.executable,
+        "-m",
+        RUNNER_MODULE,
+        f"e2e-{number:02d}",
+        "--run-root",
+        str(run_root),
+    ]
     if prepare:
         command.append("--prepare-only")
     else:
@@ -241,8 +266,13 @@ def _run_parallel_batch(
     if len(batch) == 1:
         results = [
             _run_scenario(
-                batch[0][1], index=batch[0][0], suite=suite, matrix_root=matrix_root,
-                prepare=prepare, hermes=hermes, profile_root=profile_root,
+                batch[0][1],
+                index=batch[0][0],
+                suite=suite,
+                matrix_root=matrix_root,
+                prepare=prepare,
+                hermes=hermes,
+                profile_root=profile_root,
             )
         ]
     else:
@@ -321,17 +351,25 @@ def main(argv: list[str] | None = None) -> int:
                 if batch:
                     results.extend(
                         _run_parallel_batch(
-                            batch, suite=args.suite, matrix_root=matrix_root,
-                            prepare=args.prepare_only, hermes=args.hermes,
-                            profile_root=args.profile_root, parallel=args.parallel,
+                            batch,
+                            suite=args.suite,
+                            matrix_root=matrix_root,
+                            prepare=args.prepare_only,
+                            hermes=args.hermes,
+                            profile_root=args.profile_root,
+                            parallel=args.parallel,
                         )
                     )
                     batch = []
                 results.extend(
                     _run_parallel_batch(
-                        [(index, number)], suite=args.suite, matrix_root=matrix_root,
-                        prepare=args.prepare_only, hermes=args.hermes,
-                        profile_root=args.profile_root, parallel=1,
+                        [(index, number)],
+                        suite=args.suite,
+                        matrix_root=matrix_root,
+                        prepare=args.prepare_only,
+                        hermes=args.hermes,
+                        profile_root=args.profile_root,
+                        parallel=1,
                     )
                 )
                 if args.stop_on_failure and results[-1].get("status") not in {"PASS", "PREPARED"}:
@@ -341,9 +379,13 @@ def main(argv: list[str] | None = None) -> int:
             if len(batch) == args.parallel:
                 results.extend(
                     _run_parallel_batch(
-                        batch, suite=args.suite, matrix_root=matrix_root,
-                        prepare=args.prepare_only, hermes=args.hermes,
-                        profile_root=args.profile_root, parallel=args.parallel,
+                        batch,
+                        suite=args.suite,
+                        matrix_root=matrix_root,
+                        prepare=args.prepare_only,
+                        hermes=args.hermes,
+                        profile_root=args.profile_root,
+                        parallel=args.parallel,
                     )
                 )
                 batch = []
@@ -354,9 +396,13 @@ def main(argv: list[str] | None = None) -> int:
         if batch:
             results.extend(
                 _run_parallel_batch(
-                    batch, suite=args.suite, matrix_root=matrix_root,
-                    prepare=args.prepare_only, hermes=args.hermes,
-                    profile_root=args.profile_root, parallel=args.parallel,
+                    batch,
+                    suite=args.suite,
+                    matrix_root=matrix_root,
+                    prepare=args.prepare_only,
+                    hermes=args.hermes,
+                    profile_root=args.profile_root,
+                    parallel=args.parallel,
                 )
             )
 
@@ -364,8 +410,14 @@ def main(argv: list[str] | None = None) -> int:
     history = _read_history(args.history)
     gate = score_history(history)
     mode = "prepare-only" if args.prepare_only else "live-oneshot"
-    status = "PREPARED" if args.prepare_only and all(item.get("status") == "PREPARED" for item in results) else (
-        "PASS" if not args.prepare_only and all(item.get("status") == "PASS" for item in results) else "FAIL"
+    status = (
+        "PREPARED"
+        if args.prepare_only and all(item.get("status") == "PREPARED" for item in results)
+        else (
+            "PASS"
+            if not args.prepare_only and all(item.get("status") == "PASS" for item in results)
+            else "FAIL"
+        )
     )
     report = {
         "schema_version": "aether.lab.evidence.v1",

@@ -3851,9 +3851,7 @@ print(json.dumps({
             identity = json.loads(completed.stdout)
         except (json.JSONDecodeError, UnicodeError) as error:
             raise IntegrityError("installed Aether identity is malformed") from error
-        expected = [
-            [name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())
-        ]
+        expected = [[name, target] for name, target in sorted(AETHER_PLUGIN_ENTRY_POINTS.items())]
         if not isinstance(identity, dict):
             raise IntegrityError("installed Aether identity is malformed")
         installed_entrypoints = identity.get("entrypoints")
@@ -3865,14 +3863,14 @@ print(json.dumps({
         ):
             raise IntegrityError("installed Aether plugin entry-point set mismatch")
         installed_plugins = {item[0]: item[1] for item in installed_entrypoints}
-        if installed_plugins.get(OBSERVER_ENTRY_POINT["plugin_name"]) != OBSERVER_ENTRY_POINT[
-            "target"
-        ]:
-            raise IntegrityError("installed observer entry point mismatch")
         if (
-            installed_entrypoints != expected
-            or identity.get("console_scripts") != [["aether", "aether_agents.cli:main"]]
+            installed_plugins.get(OBSERVER_ENTRY_POINT["plugin_name"])
+            != OBSERVER_ENTRY_POINT["target"]
         ):
+            raise IntegrityError("installed observer entry point mismatch")
+        if installed_entrypoints != expected or identity.get("console_scripts") != [
+            ["aether", "aether_agents.cli:main"]
+        ]:
             raise IntegrityError("installed Aether plugin entry-point set mismatch")
         version = identity.get("version")
         fingerprint = identity.get("fingerprint")

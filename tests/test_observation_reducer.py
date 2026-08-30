@@ -2636,9 +2636,7 @@ def test_late_independent_assignee_conflict_invalidates_prior_review_approval() 
     for summary in summaries:
         [unit] = summary["work_graph"]["units"]
         assert unit["review_state"] == "pending"
-        [review_step] = [
-            step for step in summary["process"]["steps"] if step["kind"] == "review"
-        ]
+        [review_step] = [step for step in summary["process"]["steps"] if step["kind"] == "review"]
         assert review_step["outcome"] == "unverified"
         assert review_step["semantic_delta"] is None
         assert review_step["coverage"] == "partial"

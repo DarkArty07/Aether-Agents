@@ -202,9 +202,9 @@ def test_objective_contract_finalize_materializes_trace_and_root_create_binds(
         "work_unit.bound",
     }
     assert {event["trace_id"] for event in events} == {trace_id}
-    assert {event.get("contract_id") for event in events if event["event_type"] == "trace.opened"} == {
-        contract_id
-    }
+    assert {
+        event.get("contract_id") for event in events if event["event_type"] == "trace.opened"
+    } == {contract_id}
 
 
 def test_objective_contract_result_resolves_project_outside_project_cwd(
@@ -1534,12 +1534,15 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
         if event["event_type"] == "work_unit.bound"
     }
     assert {"t_11111111", "t_22222222"} <= bindings
-    assert sum(
-        1
-        for event in events
-        if event["event_type"] == "work_unit.bound"
-        and event["work_unit"]["task_ref"] == "t_11111111"
-    ) == 1
+    assert (
+        sum(
+            1
+            for event in events
+            if event["event_type"] == "work_unit.bound"
+            and event["work_unit"]["task_ref"] == "t_11111111"
+        )
+        == 1
+    )
     assert all(event["project_id"] == PROJECT_ID for event in events)
     assert "EVENT_IDENTITY_COLLISION" not in health
 
