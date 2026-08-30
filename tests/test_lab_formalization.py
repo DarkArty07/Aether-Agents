@@ -604,6 +604,12 @@ def test_native_affinity_observer_controls_are_created_by_native_lifecycle(
     hermes = shutil.which("hermes")
     if hermes is None or importlib.util.find_spec("hermes_cli") is None:
         pytest.skip("exact Hermes runtime is unavailable")
+    import inspect
+
+    from hermes_cli import kanban_db as native_kanban_db
+
+    if "session_affinity" not in inspect.signature(native_kanban_db.create_task).parameters:
+        pytest.skip("exact Hermes runtime lacks session affinity")
     native_python = Path(sys.executable)
     source_home = tmp_path / "source-home"
     board = tmp_path / "main.db"
