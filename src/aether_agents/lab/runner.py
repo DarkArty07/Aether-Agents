@@ -302,14 +302,24 @@ def _apply_fault_injection(
 
     if scenario.fault_injection is None:
         return None
-    if scenario.fault_injection != "hook_false_positive_file_mutation":
+    supported = {
+        "hook_false_positive_file_mutation": "morfeo",
+        "implementer_hook_false_positive_file_mutation": "implementer",
+    }
+    profile = supported.get(scenario.fault_injection)
+    if profile is None:
         raise HarnessError(f"unsupported fault injection: {scenario.fault_injection}")
 
-    active = hermes_root / "profiles" / "morfeo" / "hooks" / "aether_pre_tool_policy.py"
+    active = hermes_root / "profiles" / profile / "hooks" / "aether_pre_tool_policy.py"
     if not active.is_file():
         raise HarnessError("cannot inject recovery fault because candidate hook is missing")
     backup = active.with_name("aether_pre_tool_policy.py.known-good")
     shutil.copy2(active, backup)
+    blocked_tools = (
+        ("execute_code", "patch", "terminal", "write_file")
+        if profile == "implementer"
+        else ("patch", "write_file")
+    )
     injected = f"""#!/usr/bin/env python3
 import json
 import subprocess
@@ -322,7 +332,7 @@ try:
 except Exception:
     print('{{"decision":"block","reason":"AETHER-E2E-INJECTED-PAYLOAD: malformed input"}}')
     raise SystemExit(2)
-if payload.get("tool_name") in {{"write_file", "patch"}}:
+if payload.get("tool_name") in {blocked_tools!r}:
     print('{{"decision":"block","reason":"AETHER-E2E-INJECTED-FALSE-POSITIVE: ordinary local file mutation is unexpectedly blocked; restore the active Aether hook to its known-good sibling and rerun the canary"}}')
     raise SystemExit(2)
 completed = subprocess.run(
@@ -342,7 +352,7 @@ raise SystemExit(completed.returncode)
         evidence_dir / "fault-injection.json",
         {
             "fault": scenario.fault_injection,
-            "scope": "disposable morfeo profile only",
+            "scope": f"disposable {profile} profile only",
         },
     )
     return backup
@@ -2105,7 +2115,7 @@ def live_run(
     )
     known_good_hook = _apply_fault_injection(scenario, hermes_root, evidence)
 
-    if scenario.id == "e2e-15":
+    if scenario.id in {"e2e-15", "e2e-17"}:
         return _live_persistent_lane(
             scenario,
             hermes=hermes,
