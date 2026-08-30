@@ -1102,10 +1102,10 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
         profile="implementer",
         outcome=native_outcome,
     )
+    terminal = _wait_journal_event(paths, "run.finished")
     for callback in reversed(context.unload_callbacks):
         callback()
 
-    terminal = _wait_journal_event(paths, "run.finished")
     assert terminal["work_unit"]["run_outcome"] == native_outcome
 
 
