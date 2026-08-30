@@ -143,6 +143,10 @@ def run_persistent_session(
     event_cursor = _event_cursor(board_path)
     child_env = dict(env) if env is not None else os.environ.copy()
     child_env.pop("HERMES_DELEGATED_CHILD_CONTEXT", None)
+    child_env.pop("HERMES_UI_SESSION_ID", None)
+    for key in tuple(child_env):
+        if key.startswith("HERMES_SESSION_"):
+            child_env.pop(key, None)
     profile = _profile_from_argv(argv)
     if profile:
         child_env["HERMES_PROFILE"] = profile
