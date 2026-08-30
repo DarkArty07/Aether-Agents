@@ -2380,7 +2380,12 @@ class _Observer:
             )
             if outcome.accepted:
                 self._configuration_seen.add(cache_key)
-        surface_key = (trace, model or "", provider or "", raw_tool_count if has_tool_count else None)
+        surface_key = (
+            trace,
+            model or "",
+            provider or "",
+            raw_tool_count if has_tool_count else None,
+        )
         if surface_key not in self._tool_surface_seen:
             surface_outcome = collector.emit(
                 builder.tool_surface(
