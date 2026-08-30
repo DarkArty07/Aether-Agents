@@ -127,17 +127,21 @@ def _persistent_fixture(tmp_path: Path, *, terminal_event: bool) -> tuple[Path, 
     script.write_text(
         """
 import json
+import os
 import sqlite3
 import sys
 import time
+from pathlib import Path
 
 session_db, board_db = sys.argv[1:]
+assert os.environ["HERMES_HOME"] == str(Path(session_db).parent)
 print(json.dumps({"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready"}}), flush=True)
 create = json.loads(sys.stdin.readline())
 assert create["method"] == "session.create"
-print(json.dumps({"jsonrpc":"2.0","id":create["id"],"result":{"session_id":"sid-native"}}), flush=True)
+print(json.dumps({"jsonrpc":"2.0","id":create["id"],"result":{"session_id":"rpc-native","stored_session_id":"sid-native"}}), flush=True)
 submit = json.loads(sys.stdin.readline())
 assert submit["method"] == "prompt.submit"
+assert submit["params"]["session_id"] == "rpc-native"
 message = submit["params"]["text"]
 print(json.dumps({"jsonrpc":"2.0","id":submit["id"],"result":{"status":"streaming"}}), flush=True)
 with sqlite3.connect(session_db) as db:

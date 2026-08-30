@@ -146,6 +146,8 @@ def run_persistent_session(
     profile = _profile_from_argv(argv)
     if profile:
         child_env["HERMES_PROFILE"] = profile
+    if session_path is not None:
+        child_env["HERMES_HOME"] = str(session_path.parent)
     command = _tui_gateway_command(argv)
     process = subprocess.Popen(
         command,
@@ -165,6 +167,7 @@ def run_persistent_session(
     native_event = False
     durable_report = False
     same_session = False
+    rpc_handle_id: str | None = None
     rpc_session_id: str | None = None
     try:
         ready = _rpc_wait(
@@ -198,16 +201,18 @@ def run_persistent_session(
                 timeout_seconds=min(30.0, timeout_seconds),
             )
             result = (created or {}).get("result") or {}
-            value = result.get("session_id") if isinstance(result, dict) else None
-            rpc_session_id = value if isinstance(value, str) and value else None
-        if rpc_session_id is not None:
+            handle = result.get("session_id") if isinstance(result, dict) else None
+            stored = result.get("stored_session_id") if isinstance(result, dict) else None
+            rpc_handle_id = handle if isinstance(handle, str) and handle else None
+            rpc_session_id = stored if isinstance(stored, str) and stored else rpc_handle_id
+        if rpc_handle_id is not None:
             _rpc_write(
                 process,
                 {
                     "jsonrpc": "2.0",
                     "id": "e2e15-submit",
                     "method": "prompt.submit",
-                    "params": {"session_id": rpc_session_id, "text": owner_message},
+                    "params": {"session_id": rpc_handle_id, "text": owner_message},
                 },
             )
             _rpc_wait(
