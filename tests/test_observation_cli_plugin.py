@@ -12,6 +12,7 @@ import secrets
 import sqlite3
 import subprocess
 import tarfile
+import time
 import zipfile
 from argparse import Namespace
 from copy import deepcopy
@@ -90,6 +91,19 @@ def _journal_events(paths: ObservationPaths) -> list[dict[str, Any]]:
         for line in read_segment(segment.path).lines:
             events.append(json.loads(line))
     return events
+
+
+def _wait_journal_event(
+    paths: ObservationPaths, event_type: str, *, timeout: float = 1.0
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while True:
+        for event in _journal_events(paths):
+            if event["event_type"] == event_type:
+                return event
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"journal event not observed: {event_type}")
+        time.sleep(0.01)
 
 
 def test_observe_human_and_json_share_the_same_canonical_summary(
@@ -1091,9 +1105,7 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
     for callback in reversed(context.unload_callbacks):
         callback()
 
-    terminal = next(
-        event for event in _journal_events(paths) if event["event_type"] == "run.finished"
-    )
+    terminal = _wait_journal_event(paths, "run.finished")
     assert terminal["work_unit"]["run_outcome"] == native_outcome
 
 
