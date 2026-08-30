@@ -83,15 +83,26 @@ byte-locked and both report contents must pass the tracked public-artifact scann
   automatically retried, the second denial triggered block-loop escalation to triage and
   emitted an origin signal, but the originating Morfeo TUI did not receive a turn. The
   flow remained gated until a later owner message independently opened that session.
-- **Missing boundary:** a verified native lifecycle signal from triage to the originating
-  flow, with clear ownership and retry semantics, that creates a Morfeo turn without a
-  second owner message and preserves the original objective context.
+- **Verified routing cause:** the nonterminal affinity root intentionally returned
+  `subscribed=false`; ordinary affinity children inherited no TUI subscription. When the
+  Implementer emitted `origin_signal`, Hermes could only copy an existing subscription
+  belonging to the same creator session, so it created no route. The replacement terminal
+  card did have a TUI subscription, but its later ordinary `blocked` event carried no
+  `origin_signal`; the TUI affinity poller accepts only `origin_signal` and `flow_terminal`,
+  so that block also produced no Morfeo turn. The eventual `flow_terminal` event matched
+  the filter and explains why the final notification was delivered successfully.
+- **Missing boundary:** explicit origin signals must be able to bootstrap a trusted route
+  from the originating TUI session even when the nonterminal root was intentionally silent;
+  terminal-flow blockers must either emit an explicit origin signal or have an equivalent
+  terminal-block wake contract. Both paths need clear ownership, retry semantics, preserved
+  objective context, and proof that a Morfeo turn was actually created.
 - **Dependencies and risks:** depends on Hermes lifecycle behavior and must not be
   replaced with an unqualified second message or polling workaround. Incorrect routing
   can silently strand owner work while the board incorrectly appears to have escalated it.
 - **Evidence:** `ROADMAP.md`, `HERMES_LOCAL_PATCHES.md`,
-  `specs/r7-supervision-and-convergence/spec.md`, and the durable Kanban run/block-loop
-  events for the 2026-08-29 cleanup objective.
+  `specs/r7-supervision-and-convergence/spec.md`, the durable Kanban subscription/event
+  rows for the 2026-08-29 cleanup objective, `tools/kanban_tools.py`,
+  `hermes_cli/kanban_db.py`, `gateway/kanban_watchers.py`, and `tui_gateway/server.py`.
 - **Deferred owner decision:** retain this as a required autonomy boundary and separately
   authorize the native wake/routing fix and same-path qualification. Do not treat an
   origin-signal row alone as proof that Morfeo actually woke.
