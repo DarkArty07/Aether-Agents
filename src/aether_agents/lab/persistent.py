@@ -336,7 +336,11 @@ def _tui_gateway_command(argv: Sequence[str]) -> tuple[str, ...]:
         first = ""
     if not first.startswith("#!"):
         raise ValueError("Hermes executable has no Python interpreter shebang")
-    return (first[2:].strip(), "-m", "tui_gateway.entry")
+    return (
+        first[2:].strip(),
+        "-c",
+        "import model_tools; from tui_gateway.entry import main; main()",
+    )
 
 
 def _rpc_write(process: subprocess.Popen[bytes], payload: Mapping[str, Any]) -> None:

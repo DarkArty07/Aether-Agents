@@ -122,6 +122,18 @@ def test_e2e15_rejects_an_explicitly_failed_same_session_wake() -> None:
     assert result.reason == "same_session_or_owner_message_requirement_failed"
 
 
+def test_real_hermes_command_preloads_tools_before_tui_gateway(tmp_path: Path) -> None:
+    hermes = tmp_path / "hermes"
+    hermes.write_text("#!/venv/bin/python3\n", encoding="utf-8")
+
+    command = persistent._tui_gateway_command((str(hermes), "-p", "morfeo", "--tui"))
+
+    assert command[0] == "/venv/bin/python3"
+    assert command[1] == "-c"
+    assert "import model_tools" in command[2]
+    assert "tui_gateway.entry" in command[2]
+
+
 def _persistent_fixture(tmp_path: Path, *, terminal_event: bool) -> tuple[Path, Path, Path]:
     script = tmp_path / "fake-native-hermes.py"
     script.write_text(
