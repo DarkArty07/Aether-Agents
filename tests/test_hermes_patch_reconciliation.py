@@ -51,6 +51,7 @@ EXPECTED_ACTIVE_IDS = (
 )
 PATCH_DIGESTS = {
     "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+    "HLP-226": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
     "HLP-262": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
 }
 
@@ -152,7 +153,11 @@ def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
     shutil.copytree(ENTRIES_PATH, entries)
     patches = root / "patches" / "hermes"
     patches.mkdir(parents=True)
-    for identifier in ("HLP-211b-flow-blocker-routing.patch", "HLP-262-origin-signal-sticky.patch"):
+    for identifier in (
+        "HLP-211b-flow-blocker-routing.patch",
+        "HLP-226b-affinity-terminal-project-inheritance.patch",
+        "HLP-262-origin-signal-sticky.patch",
+    ):
         shutil.copy2(ROOT / "patches" / "hermes" / identifier, patches / identifier)
     return ledger, entries
 
@@ -201,6 +206,7 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests() -> No
 
     assert tuple(record["id"] for record in aggregate["records"]) == EXPECTED_ACTIVE_IDS
     records = {record["id"]: record for record in aggregate["records"]}
+    assert records["HLP-226"]["components"] == ["HLP-226", "HLP-226b"]
     for identifier, digest in PATCH_DIGESTS.items():
         artifact = next(
             item
@@ -220,6 +226,51 @@ def test_repository_fragments_reject_hlp262_omission(tmp_path: Path) -> None:
     (entries / "HLP-262.json").unlink()
 
     with pytest.raises(ValueError, match="missing ledger IDs: HLP-262"):
+        validator.reconcile(
+            repository_root=tmp_path,
+            ledger_path=ledger,
+            entries_dir=entries,
+            schema_path=SCHEMA_PATH,
+            observed_at_utc=OBSERVED_AT,
+            upstream_repository=UPSTREAM_REPOSITORY,
+            upstream_revision=INSPECTED_UPSTREAM_REVISION,
+        )
+
+
+def test_repository_fragments_reject_hlp226_without_hlp226b_component(tmp_path: Path) -> None:
+    validator = _load_validator()
+    ledger, entries = _copy_repository_evidence(tmp_path)
+    entry_path = entries / "HLP-226.json"
+    record = json.loads(entry_path.read_text(encoding="utf-8"))
+    record["components"] = ["HLP-226"]
+    entry_path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="HLP-226b"):
+        validator.reconcile(
+            repository_root=tmp_path,
+            ledger_path=ledger,
+            entries_dir=entries,
+            schema_path=SCHEMA_PATH,
+            observed_at_utc=OBSERVED_AT,
+            upstream_repository=UPSTREAM_REPOSITORY,
+            upstream_revision=INSPECTED_UPSTREAM_REVISION,
+        )
+
+
+def test_repository_fragments_reject_hlp226b_digest_drift(tmp_path: Path) -> None:
+    validator = _load_validator()
+    ledger, entries = _copy_repository_evidence(tmp_path)
+    entry_path = entries / "HLP-226.json"
+    record = json.loads(entry_path.read_text(encoding="utf-8"))
+    patch = next(
+        artifact
+        for artifact in record["artifact_verification"]["artifacts"]
+        if artifact["kind"] == "patch"
+    )
+    patch["computed_sha256"] = "0" * 64
+    entry_path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="artifact digest mismatch for HLP-226"):
         validator.reconcile(
             repository_root=tmp_path,
             ledger_path=ledger,
