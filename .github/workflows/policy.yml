@@ -307,7 +307,7 @@ jobs:
           assert fr == [f'{i:03d}' for i in range(1, len(fr) + 1)]
           assert sc == [f'{i:03d}' for i in range(1, len(sc) + 1)]
           assert decisions == [f'{i:02d}' for i in range(1, len(decisions) + 1)]
-          assert len(re.findall(r'^\| \*\*R\d+\*\* \|', roadmap, re.M)) == 14
+          assert len(re.findall(r'^\| R\d+ \|', roadmap, re.M)) == 14
           assert '001-r0-design-governance' not in '\n'.join(
               p.read_text(errors='ignore') for p in root.rglob('*.md')
           )
