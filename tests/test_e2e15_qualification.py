@@ -138,6 +138,7 @@ assert os.environ["HERMES_HOME"] == str(Path(session_db).parent)
 print(json.dumps({"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready"}}), flush=True)
 create = json.loads(sys.stdin.readline())
 assert create["method"] == "session.create"
+assert "profile" not in create["params"]
 print(json.dumps({"jsonrpc":"2.0","id":create["id"],"result":{"session_id":"rpc-native","stored_session_id":"sid-native"}}), flush=True)
 submit = json.loads(sys.stdin.readline())
 assert submit["method"] == "prompt.submit"

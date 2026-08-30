@@ -169,6 +169,7 @@ def run_persistent_session(
     same_session = False
     rpc_handle_id: str | None = None
     rpc_session_id: str | None = None
+    submit_accepted = False
     try:
         ready = _rpc_wait(
             process,
@@ -190,7 +191,6 @@ def run_persistent_session(
                         "cols": 120,
                         "cwd": str(cwd) if cwd is not None else "",
                         "source": "tui",
-                        "profile": profile or "morfeo",
                     },
                 },
             )
@@ -215,14 +215,21 @@ def run_persistent_session(
                     "params": {"session_id": rpc_handle_id, "text": owner_message},
                 },
             )
-            _rpc_wait(
+            submitted = _rpc_wait(
                 process,
                 rpc_buffer,
                 lambda item: item.get("id") == "e2e15-submit",
                 timeout_seconds=min(30.0, timeout_seconds),
             )
+            submit_result = (submitted or {}).get("result") or {}
+            submit_accepted = (
+                isinstance(submit_result, dict)
+                and submit_result.get("status") == "streaming"
+                and not (submitted or {}).get("error")
+            )
         while (
-            rpc_session_id is not None
+            submit_accepted
+            and rpc_session_id is not None
             and process.poll() is None
             and time.monotonic() - started < timeout_seconds
         ):
