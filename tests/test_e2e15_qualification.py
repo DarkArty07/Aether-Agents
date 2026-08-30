@@ -126,15 +126,20 @@ def _persistent_fixture(tmp_path: Path, *, terminal_event: bool) -> tuple[Path, 
     script = tmp_path / "fake-native-hermes.py"
     script.write_text(
         """
+import json
 import sqlite3
 import sys
 import time
 
 session_db, board_db = sys.argv[1:]
-sys.stdout.write("\\x1b[?2004h\\x1b]2;Hermes\\x07/help for commands")
-sys.stdout.flush()
-message = sys.stdin.readline().rstrip("\\r\\n")
-message = message.removeprefix("\\x1b[200~").removesuffix("\\x1b[201~")
+print(json.dumps({"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready"}}), flush=True)
+create = json.loads(sys.stdin.readline())
+assert create["method"] == "session.create"
+print(json.dumps({"jsonrpc":"2.0","id":create["id"],"result":{"session_id":"sid-native"}}), flush=True)
+submit = json.loads(sys.stdin.readline())
+assert submit["method"] == "prompt.submit"
+message = submit["params"]["text"]
+print(json.dumps({"jsonrpc":"2.0","id":submit["id"],"result":{"status":"streaming"}}), flush=True)
 with sqlite3.connect(session_db) as db:
     db.execute(
         "CREATE TABLE sessions (id TEXT, source TEXT, archived INTEGER, last_activity_at REAL)"

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import pty
 import select
 import sqlite3
 import subprocess
@@ -123,15 +122,12 @@ def run_persistent_session(
     kanban_db: Path | None = None,
     poll_seconds: float = 0.25,
 ) -> dict[str, Any]:
-    """Run one native Hermes turn under PTY and reconcile its durable wake.
+    """Run one native TUI-gateway session and reconcile its durable wake.
 
-    The PTY is only the input transport.  Qualification never parses terminal output:
-    it selects the newly-created Morfeo session from ``state.db``, records the event
-    cursor in the Kanban DB, and accepts only a later ``flow_terminal`` event whose
-    task affinity points to that same session and whose later assistant report is
-    durable in ``state.db``.  Once that proof is present the native process is
-    terminated without sending a second input.  Missing or malformed observations
-    fail closed as a capability wall.
+    The visual TUI is a JSON-RPC client of ``tui_gateway.entry``. The laboratory uses
+    that same native contract directly: wait for ``gateway.ready``, call
+    ``session.create`` once, and submit exactly one owner prompt. Qualification parses
+    no model/terminal text; it accepts only SessionDB and Kanban evidence.
     """
     if not argv:
         raise ValueError("native surface command is required")
@@ -145,64 +141,100 @@ def run_persistent_session(
     board_path = Path(kanban_db) if kanban_db is not None else None
     session_ids_before = _session_ids(session_path)
     event_cursor = _event_cursor(board_path)
-    master, slave = pty.openpty()
     child_env = dict(env) if env is not None else os.environ.copy()
-    # The harness itself may run inside an agent delegation context. The
-    # persistent PTY is the new owner-facing root session, not a delegated
-    # worker; leaking this marker would make its native Kanban mutations fail.
     child_env.pop("HERMES_DELEGATED_CHILD_CONTEXT", None)
-    child_env.setdefault("TERM", "xterm-256color")
+    profile = _profile_from_argv(argv)
+    if profile:
+        child_env["HERMES_PROFILE"] = profile
+    command = _tui_gateway_command(argv)
     process = subprocess.Popen(
-        [str(item) for item in argv],
-        stdin=slave,
-        stdout=slave,
-        stderr=slave,
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
         cwd=cwd,
         env=child_env,
         close_fds=True,
     )
-    os.close(slave)
     started = time.monotonic()
+    rpc_buffer = bytearray()
     observed_session: str | None = None
     owner_messages = 0
     assistant_at_event = 0
     nonempty_assistant_at_event = 0
     native_event = False
-    event_created_at: float | None = None
     durable_report = False
     same_session = False
+    rpc_session_id: str | None = None
     try:
-        tui_ready = _wait_for_tui_ready(
-            master,
+        ready = _rpc_wait(
             process,
+            rpc_buffer,
+            lambda item: (
+                item.get("method") == "event"
+                and (item.get("params") or {}).get("type") == "gateway.ready"
+            ),
             timeout_seconds=min(30.0, timeout_seconds),
-            settle_seconds=min(3.0, max(0.1, timeout_seconds / 10.0)),
         )
-        if tui_ready:
-            # Exactly one owner write. No continuation, slash command, or synthetic
-            # wake is sent after this point. Prompt-toolkit binds submit to CR; LF
-            # is reserved for multiline input under the default Hermes config.
-            os.write(
-                master,
-                b"\x1b[200~" + owner_message.encode("utf-8") + b"\x1b[201~\r",
+        if ready is not None:
+            _rpc_write(
+                process,
+                {
+                    "jsonrpc": "2.0",
+                    "id": "e2e15-create",
+                    "method": "session.create",
+                    "params": {
+                        "cols": 120,
+                        "cwd": str(cwd) if cwd is not None else "",
+                        "source": "tui",
+                        "profile": profile or "morfeo",
+                    },
+                },
             )
-        while tui_ready and process.poll() is None and time.monotonic() - started < timeout_seconds:
+            created = _rpc_wait(
+                process,
+                rpc_buffer,
+                lambda item: item.get("id") == "e2e15-create",
+                timeout_seconds=min(30.0, timeout_seconds),
+            )
+            result = (created or {}).get("result") or {}
+            value = result.get("session_id") if isinstance(result, dict) else None
+            rpc_session_id = value if isinstance(value, str) and value else None
+        if rpc_session_id is not None:
+            _rpc_write(
+                process,
+                {
+                    "jsonrpc": "2.0",
+                    "id": "e2e15-submit",
+                    "method": "prompt.submit",
+                    "params": {"session_id": rpc_session_id, "text": owner_message},
+                },
+            )
+            _rpc_wait(
+                process,
+                rpc_buffer,
+                lambda item: item.get("id") == "e2e15-submit",
+                timeout_seconds=min(30.0, timeout_seconds),
+            )
+        while (
+            rpc_session_id is not None
+            and process.poll() is None
+            and time.monotonic() - started < timeout_seconds
+        ):
+            _rpc_read(process, rpc_buffer, timeout_seconds=0.0)
             session_state = _session_state(session_path, session_ids_before, owner_message)
-            if observed_session is None and len(session_state["candidates"]) == 1:
-                observed_session = session_state["candidates"][0]
-                owner_messages = session_state["owner_messages"][observed_session]
-                # The pre-event assistant count is captured only when the native
-                # event is first observed. This prevents a report written before
-                # that event from satisfying the post-event proof.
-            elif observed_session is not None:
+            if observed_session is None:
+                if rpc_session_id in session_state["candidates"]:
+                    observed_session = rpc_session_id
+                elif len(session_state["candidates"]) == 1:
+                    observed_session = session_state["candidates"][0]
+                if observed_session is not None:
+                    owner_messages = session_state["owner_messages"][observed_session]
+            else:
                 owner_messages = session_state["owner_messages"].get(observed_session, 0)
 
             if observed_session is not None and not native_event:
-                event = _native_event_for_session(
-                    board_path,
-                    event_cursor,
-                    observed_session,
-                )
+                event = _native_event_for_session(board_path, event_cursor, observed_session)
                 if event is not None:
                     assistant_at_event = session_state["assistant_messages"].get(
                         observed_session, 0
@@ -211,72 +243,52 @@ def run_persistent_session(
                         observed_session, 0
                     )
                     native_event = True
-                    event_created_at = event.get("created_at")
                     same_session = event["session_id"] == observed_session
 
             if observed_session is not None and native_event:
                 current = _session_state(session_path, session_ids_before, owner_message)
                 owner_messages = current["owner_messages"].get(observed_session, 0)
-                durable_report = _durable_report_after_event(
-                    current,
-                    observed_session,
-                    event_created_at=event_created_at,
-                    assistant_at_event=assistant_at_event,
-                    nonempty_assistant_at_event=nonempty_assistant_at_event,
+                durable_report = (
+                    current["assistant_messages"].get(observed_session, 0) > assistant_at_event
+                    and current["nonempty_assistant_messages"].get(observed_session, 0)
+                    > nonempty_assistant_at_event
                 )
                 if same_session and owner_messages == 1 and durable_report:
                     break
-
-            read_ready, _, _ = select.select([master], [], [], 0.1)
-            if read_ready:
-                try:
-                    os.read(master, 4096)
-                except OSError:
-                    break
+            time.sleep(poll_seconds)
     finally:
-        os.close(master)
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
 
-    # The final read is deliberately database-only.  A native surface may have
-    # flushed its last assistant row just as it exits or just after the PTY loop
-    # notices EOF, so reconcile one more time before deciding.
     if observed_session is None:
-        session_state = _session_state(session_path, session_ids_before, owner_message)
-        if len(session_state["candidates"]) == 1:
-            observed_session = session_state["candidates"][0]
-            owner_messages = session_state["owner_messages"][observed_session]
+        state = _session_state(session_path, session_ids_before, owner_message)
+        if rpc_session_id in state["candidates"]:
+            observed_session = rpc_session_id
+        elif len(state["candidates"]) == 1:
+            observed_session = state["candidates"][0]
+        if observed_session is not None:
+            owner_messages = state["owner_messages"][observed_session]
     if observed_session is not None:
         event = _native_event_for_session(board_path, event_cursor, observed_session)
         if event is not None:
-            current = _session_state(session_path, session_ids_before, owner_message)
-            if not native_event:
-                assistant_at_event = current["assistant_messages"].get(observed_session, 0)
-                nonempty_assistant_at_event = current["nonempty_assistant_messages"].get(
-                    observed_session, 0
-                )
             native_event = True
-            event_created_at = event.get("created_at")
             same_session = event["session_id"] == observed_session
         current = _session_state(session_path, session_ids_before, owner_message)
         owner_messages = current["owner_messages"].get(observed_session, 0)
-        durable_report = native_event and _durable_report_after_event(
-            current,
-            observed_session,
-            event_created_at=event_created_at,
-            assistant_at_event=assistant_at_event,
-            nonempty_assistant_at_event=nonempty_assistant_at_event,
+        durable_report = native_event and (
+            current["assistant_messages"].get(observed_session, 0) > assistant_at_event
+            and current["nonempty_assistant_messages"].get(observed_session, 0)
+            > nonempty_assistant_at_event
         )
-
-    if process.poll() is None:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=2)
-    result = qualify_persistent_evidence(
+    return qualify_persistent_evidence(
         {
             "continuation_source": "native",
-            "native_surface": Path(str(argv[0])).name,
+            "native_surface": "tui-rpc",
             "native_board_event": native_event,
             "native_same_session_wake": native_event and same_session,
             "durable_report": durable_report,
@@ -284,37 +296,84 @@ def run_persistent_session(
             "session_id": observed_session,
             "wake_session_id": observed_session if same_session else None,
         }
-    )
-    return result.to_evidence()
+    ).to_evidence()
 
 
-def _wait_for_tui_ready(
-    master: int,
+def _profile_from_argv(argv: Sequence[str]) -> str | None:
+    for index, item in enumerate(argv[:-1]):
+        if item in {"-p", "--profile"}:
+            value = str(argv[index + 1]).strip()
+            return value or None
+    return None
+
+
+def _tui_gateway_command(argv: Sequence[str]) -> tuple[str, ...]:
+    executable = Path(str(argv[0]))
+    if executable.name.startswith("python"):
+        return tuple(str(item) for item in argv)
+    try:
+        first = executable.read_text(encoding="utf-8", errors="replace").splitlines()[0]
+    except (OSError, IndexError):
+        first = ""
+    if not first.startswith("#!"):
+        raise ValueError("Hermes executable has no Python interpreter shebang")
+    return (first[2:].strip(), "-m", "tui_gateway.entry")
+
+
+def _rpc_write(process: subprocess.Popen[bytes], payload: Mapping[str, Any]) -> None:
+    if process.stdin is None:
+        raise RuntimeError("TUI gateway stdin is unavailable")
+    process.stdin.write((json.dumps(dict(payload), separators=(",", ":")) + "\n").encode())
+    process.stdin.flush()
+
+
+def _rpc_read(
     process: subprocess.Popen[bytes],
+    buffer: bytearray,
     *,
     timeout_seconds: float,
-    settle_seconds: float,
-) -> bool:
-    """Wait until prompt-toolkit rendered its input-ready surface."""
-    deadline = time.monotonic() + timeout_seconds
-    recent = b""
-    detected_at: float | None = None
-    while process.poll() is None and time.monotonic() < deadline:
-        ready, _, _ = select.select([master], [], [], 0.1)
+) -> dict[str, Any] | None:
+    if process.stdout is None:
+        return None
+    deadline = time.monotonic() + max(0.0, timeout_seconds)
+    while True:
+        if b"\n" in buffer:
+            raw, _, remainder = buffer.partition(b"\n")
+            buffer[:] = remainder
+            try:
+                value = json.loads(raw.decode("utf-8"))
+            except (UnicodeError, json.JSONDecodeError):
+                continue
+            return value if isinstance(value, dict) else None
+        wait = max(0.0, deadline - time.monotonic())
+        if timeout_seconds <= 0:
+            wait = 0.0
+        ready, _, _ = select.select([process.stdout.fileno()], [], [], wait)
         if not ready:
-            if detected_at is not None and time.monotonic() - detected_at >= settle_seconds:
-                return True
-            continue
-        try:
-            recent = (recent + os.read(master, 65536))[-131072:]
-        except OSError:
-            return False
-        if b"\x1b[?2004h" in recent and b"\x1b]2;" in recent and b"/help for commands" in recent:
-            if detected_at is None:
-                detected_at = time.monotonic()
-            if time.monotonic() - detected_at >= settle_seconds:
-                return True
-    return False
+            return None
+        chunk = os.read(process.stdout.fileno(), 65536)
+        if not chunk:
+            return None
+        buffer.extend(chunk)
+
+
+def _rpc_wait(
+    process: subprocess.Popen[bytes],
+    buffer: bytearray,
+    predicate,
+    *,
+    timeout_seconds: float,
+) -> dict[str, Any] | None:
+    deadline = time.monotonic() + timeout_seconds
+    while process.poll() is None and time.monotonic() < deadline:
+        item = _rpc_read(
+            process,
+            buffer,
+            timeout_seconds=min(0.5, max(0.0, deadline - time.monotonic())),
+        )
+        if item is not None and predicate(item):
+            return item
+    return None
 
 
 def _connect_read_only(path: Path | None) -> sqlite3.Connection | None:
