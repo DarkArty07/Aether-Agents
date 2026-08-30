@@ -176,6 +176,7 @@ def run_persistent_session(
             master,
             process,
             timeout_seconds=min(30.0, timeout_seconds),
+            settle_seconds=min(3.0, max(0.1, timeout_seconds / 10.0)),
         )
         if tui_ready:
             # Exactly one owner write. No continuation, slash command, or synthetic
@@ -289,20 +290,27 @@ def _wait_for_tui_ready(
     process: subprocess.Popen[bytes],
     *,
     timeout_seconds: float,
+    settle_seconds: float,
 ) -> bool:
     """Wait until prompt-toolkit rendered its input-ready surface."""
     deadline = time.monotonic() + timeout_seconds
     recent = b""
+    detected_at: float | None = None
     while process.poll() is None and time.monotonic() < deadline:
         ready, _, _ = select.select([master], [], [], 0.1)
         if not ready:
+            if detected_at is not None and time.monotonic() - detected_at >= settle_seconds:
+                return True
             continue
         try:
             recent = (recent + os.read(master, 65536))[-131072:]
         except OSError:
             return False
         if b"\x1b[?2004h" in recent and b"\x1b]2;" in recent and b"/help for commands" in recent:
-            return True
+            if detected_at is None:
+                detected_at = time.monotonic()
+            if time.monotonic() - detected_at >= settle_seconds:
+                return True
     return False
 
 
