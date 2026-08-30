@@ -32,7 +32,14 @@
     "forbidden_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "required_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "live_requires_spend": {"type": "boolean"},
-    "fault_injection": {"type": ["string", "null"], "enum": [null, "hook_false_positive_file_mutation"]},
+    "fault_injection": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "hook_false_positive_file_mutation",
+        "implementer_hook_false_positive_file_mutation"
+      ]
+    },
     "expected_owner_interventions": {"type": "integer", "minimum": 0},
     "expected_guard_denial_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
   }

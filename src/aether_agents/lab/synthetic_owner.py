@@ -147,7 +147,11 @@ def load_scenario(path: Path | str) -> Scenario:
         raise ScenarioError("max_dispatch_passes must be 1..500")
 
     fault_injection = raw.get("fault_injection")
-    if fault_injection not in {None, "hook_false_positive_file_mutation"}:
+    if fault_injection not in {
+        None,
+        "hook_false_positive_file_mutation",
+        "implementer_hook_false_positive_file_mutation",
+    }:
         raise ScenarioError("unsupported fault_injection")
     expected_owner_interventions = raw.get("expected_owner_interventions", 0)
     if (
