@@ -1,0 +1,39 @@
+{
+  "id": "HLP-246",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:172-186",
+  "components": [
+    "HLP-246"
+  ],
+  "required_behavior": "Require caller-declared byte length and SHA-256 for inline attachments before transport; compare those claims with decoded bytes, re-read and verify persisted bytes before metadata insertion, persist and return the computed identity, and leave legacy attachment rows uncertified.",
+  "local_status": "ACTIVE_LOCAL",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [],
+    "disposition": "upstream_missing",
+    "evidence": [
+      "At the inspected revision, tools/kanban_tools.py requires only filename and content_base64 for kanban_attach; expected_size and expected_sha256 are absent from the tool schema.",
+      "hermes_cli/kanban_db.py stores the supplied bytes and size but the task_attachments schema and Attachment model contain no SHA-256 field or post-write identity verification.",
+      "A disposable source gate sent a valid-base64 16-byte truncation of a 23-byte synthetic payload. The upstream handler accepted it, reported and stored 16 bytes, and exposed neither integrity claims nor a SHA-256 attachment field."
+    ]
+  },
+  "retirement_gate": {
+    "summary": "The required attachment-identity gate fails on the inspected upstream revision before a full multi-process tarball run: inline truncated valid base64 is accepted without transport claims or durable SHA-256 identity.",
+    "status": "failed",
+    "evidence": [
+      "Executed disposable handler/database gate: accepted_truncated_valid_base64=true, schema_requires_integrity_claims=false, attachment_has_sha256=false, stored_bytes_match_truncated=true.",
+      "The full three-process tarball qualification was not needed after the required pre-transport and persistence conditions demonstrably failed."
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": null
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "No linked upstream issue or PR was located for equivalent attachment identity behavior.",
+    "A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient."
+  ],
+  "summary": "Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification."
+}
