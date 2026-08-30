@@ -1,12 +1,12 @@
 # Plan de corrección, simplificación operacional y confiabilidad E2E de Aether Agents
 
-**Plan ID:** 004  
-**Estado:** implementación integrada en `main`; E2E live y cutover de runtime pendientes  
-**Fecha:** 2026-08-26  
-**Autoridad de producto:** Christopher  
-**Propósito:** recuperar una ejecución autónoma confiable antes de continuar ampliando Aether 1.0  
-**Baseline inspeccionado:** rama `feat/002-contract-observation`, HEAD `17108ff`, producto `0.24.0`  
-**Hermes actualmente cargado:** árbol privado `home/.venv-hermes/src/hermes-agent`, con parches locales registrados en `HERMES_LOCAL_PATCHES.md`  
+**Plan ID:** 004
+**Estado:** implementación integrada en `main`; E2E live y cutover de runtime pendientes
+**Fecha:** 2026-08-26
+**Autoridad de producto:** Christopher
+**Propósito:** recuperar una ejecución autónoma confiable antes de continuar ampliando Aether 1.0
+**Baseline inspeccionado:** rama `feat/002-contract-observation`, HEAD `17108ff`, producto `0.24.0`
+**Hermes actualmente cargado:** árbol privado `home/.venv-hermes/src/hermes-agent`, con parches locales registrados en `HERMES_LOCAL_PATCHES.md`
 
 > Este plan es una transición de simplificación, no una nueva capa permanente, un workflow engine, un cuarto rol ni una ampliación de observabilidad.
 
