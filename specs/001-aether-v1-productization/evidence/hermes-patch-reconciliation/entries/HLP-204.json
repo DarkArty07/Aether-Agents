@@ -1,0 +1,70 @@
+{
+  "id": "HLP-204",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:102-121",
+  "components": [
+    "hermes_cli/kanban_db.py",
+    "hermes_cli/kanban.py",
+    "hermes_cli/config_defaults.py",
+    "gateway/kanban_watchers.py",
+    "tests/hermes_cli/test_kanban_per_profile_cap.py",
+    "tests/hermes_cli/test_kanban_per_profile_overrides.py",
+    "tests/hermes_cli/test_kanban_cli_dispatch_passthrough.py",
+    "tests/gateway/test_kanban_watchers_mixin.py"
+  ],
+  "required_behavior": "Per-profile override limits take precedence over the scalar fallback and apply consistently across ready and review dispatch, existing running tasks, dry runs, CLI, gateway, invalid-value normalization, effective configuration, and restart qualification.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/NousResearch/hermes-agent/issues/91259",
+        "state": "open"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/91266",
+        "state": "open",
+        "head_revision": "4168a08226b1d956098e2b7d9a73462ab52bba86"
+      }
+    ],
+    "disposition": "upstream_open",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L10089-L10349",
+        "result": "The target has only one scalar per-profile cap shared by ready and review; it has no override-map parser or dispatcher argument."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/91266",
+        "result": "The open PR adds override normalization, per-assignee precedence, and CLI, gateway, and default-config propagation."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Configure the asymmetric Supervisor=1 and Implementer=3 topology, exercise ready/review with running and dry-run cases, CLI/gateway passthrough, invalid normalization, effective configuration, and post-restart qualification.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable target behavioral gate",
+        "result": "The target has no shared override normalizer and dispatch_once rejects max_in_progress_per_profile_overrides as an unexpected keyword, so the required topology cannot be configured."
+      },
+      {
+        "kind": "test",
+        "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+        "result": "301 passed; the target scalar-cap file contributed 2 passing existing tests but does not qualify override behavior."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": "The broader gate was not executable because its prerequisite override-map interface is absent at the exact target; the linked upstream PR remains open.",
+  "summary": "Retain HLP-204. The target retains only the uniform cap, while the required asymmetric override interface remains solely in an open upstream PR."
+}

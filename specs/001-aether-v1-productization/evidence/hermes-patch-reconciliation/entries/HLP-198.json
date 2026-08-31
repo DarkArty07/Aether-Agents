@@ -1,0 +1,64 @@
+{
+  "id": "HLP-198",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:92-100",
+  "components": [
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_db.py"
+  ],
+  "required_behavior": "The first ready or review worktree spawn receives the effective branch that the dispatcher resolved and persisted; directory and scratch workspaces remain branchless.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/NousResearch/hermes-agent/issues/89677",
+        "state": "open"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/89688",
+        "state": "open",
+        "head_revision": "25838b1af540d01ed684b03d027b0405b8bcc1bd"
+      }
+    ],
+    "disposition": "upstream_open",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L10245-L10388",
+        "result": "Both dispatch lanes persist a resolved worktree branch but spawn the unchanged claimed task object; the default spawner exports the branch only from that object."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/89688",
+        "result": "The open PR assigns the resolved branch back to the claimed task in both lanes and adds first-spawn regression coverage."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Repeat the first-spawn regression in ready and review lanes with directory and scratch controls at the target revision.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable target behavioral gate",
+        "result": "Ready and review persisted the expected branch but both first spawns observed no branch; directory and scratch controls remained branchless."
+      },
+      {
+        "kind": "test",
+        "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+        "result": "301 passed; the target worktree-isolation file contributed 2 passing existing tests and does not cover this failed first-spawn contract."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": "No material uncertainty remains for the target: both required lanes fail before a valid retirement gate can pass, and the linked upstream PR is still open.",
+  "summary": "Retain HLP-198. Exact-target source and a disposable behavioral gate reproduce the stale claimed-task branch mismatch in ready and review dispatch."
+}

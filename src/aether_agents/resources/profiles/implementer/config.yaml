@@ -1,3 +1,5 @@
 plugins:
   enabled:
     - aether-contract-observer
+approvals:
+  mode: "off"

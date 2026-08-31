@@ -1,0 +1,49 @@
+{
+  "id": "HLP-247",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:188-198",
+  "components": [
+    "HLP-247"
+  ],
+  "required_behavior": "Do not treat an archived parent as completed for a child already in blocked status. Preserve historical archived-parent promotion for todo children and preserve promotion of a non-sticky blocked child after an actual done parent.",
+  "local_status": "ACTIVE_LOCAL",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "At the inspected revision, recompute_ready considers both todo and blocked children and accepts parent statuses done or archived; archive_task immediately invokes recompute_ready."
+      },
+      {
+        "kind": "test",
+        "reference": "disposable exact-target archived-parent three-control gate",
+        "result": "A disposable three-control gate produced blocked_child_after_parent_archive=ready, todo_child_after_parent_archive=ready, and nonsticky_child_after_parent_done=ready. The first result violates the required behavior while the two compatibility controls retain their historical outcomes."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "The three-control archived-parent gate was executed in a disposable upstream database and failed because an eventless blocked child was promoted to ready when its parent was archived.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable exact-target archived-parent three-control gate",
+        "result": "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: blocked child after archived parent=ready (required blocked); todo child after archived parent=ready; non-sticky blocked child after done parent=ready."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": null
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "No linked upstream issue or PR was located for the archived-parent dependency distinction.",
+    "The active detailed ledger section is reconciled independently even though it is absent from the active summary table."
+  ],
+  "summary": "Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable."
+}

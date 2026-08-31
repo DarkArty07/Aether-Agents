@@ -1,0 +1,60 @@
+{
+  "id": "HLP-188",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:27,39-47",
+  "components": [
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_blocked_sticky.py"
+  ],
+  "required_behavior": "A task created with initial_status=blocked remains blocked through dependency resolution, recomputation, and database reopen until an explicit unblock.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/91180",
+        "state": "open"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3451-L3569",
+        "result": "create_task persists status=blocked but appends only a created event; it does not append the blocked event required by the existing sticky-block predicate."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L4454-L4569",
+        "result": "_has_sticky_block reads only the most recent blocked or unblocked event, so an initially blocked task with no blocked event is eligible for recompute_ready promotion."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/91180",
+        "result": "The linked PR is open and describes adding the missing create-time blocked event; open state was not used as equivalence evidence."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Create an initially blocked task after its dependency is resolved, reopen the isolated database, recompute readiness, and require an explicit unblock as the only transition to ready.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "isolated behavioral probe with an isolated HERMES_HOME",
+        "result": "The task was created with status=blocked and event_kinds=[created]. After reopening and recompute_ready, promoted=1, status=ready, and event_kinds=[created,promoted]."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "not_applicable",
+    "artifacts": [],
+    "blocker": "No versioned patches/hermes artifact is referenced for HLP-188 in HERMES_LOCAL_PATCHES.md."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The direct isolated probe establishes the failing prerequisite; the separate-process dispatcher-spawn portion of the recorded matrix was not run."
+  ],
+  "summary": "Exact upstream source has the initial blocked status but not the durable sticky event. The isolated behavioral probe showed auto-promotion without unblock, so the local guarantee remains required."
+}

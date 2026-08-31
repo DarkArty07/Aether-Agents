@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/DarkArty07/Aether-Agents/blob/main/specs/001-aether-v1-productization/contracts/hermes-patch-reconciliation.schema.json",
+  "title": "Aether Hermes patch reconciliation entry",
+  "$ref": "#/$defs/entry",
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "ledger_locator",
+        "components",
+        "required_behavior",
+        "local_status",
+        "upstream",
+        "retirement_gate",
+        "artifact_verification",
+        "retirement_recommendation",
+        "blocking_uncertainty",
+        "summary"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/ledger_id"},
+        "ledger_locator": {"$ref": "#/$defs/nonempty_string"},
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/nonempty_string"}
+        },
+        "required_behavior": {"$ref": "#/$defs/nonempty_string"},
+        "local_status": {"$ref": "#/$defs/nonempty_string"},
+        "upstream": {"$ref": "#/$defs/upstream"},
+        "retirement_gate": {"$ref": "#/$defs/retirement_gate"},
+        "artifact_verification": {"$ref": "#/$defs/artifact_verification"},
+        "retirement_recommendation": {
+          "enum": ["retain", "partial_retirement_candidate", "retirement_candidate"]
+        },
+        "blocking_uncertainty": {
+          "oneOf": [
+            {"$ref": "#/$defs/nonempty_string"},
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/nonempty_string"}
+            }
+          ]
+        },
+        "summary": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "observed_at_utc",
+        "upstream",
+        "source_ledger_sha256",
+        "records",
+        "overall_blockers"
+      ],
+      "properties": {
+        "schema_version": {"const": "aether.hermes-patch-reconciliation.v1"},
+        "observed_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "upstream": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "inspected_revision"],
+          "properties": {
+            "repository": {"$ref": "#/$defs/public_repository"},
+            "inspected_revision": {"$ref": "#/$defs/git_revision"}
+          }
+        },
+        "source_ledger_sha256": {"$ref": "#/$defs/sha256"},
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/entry"}
+        },
+        "overall_blockers": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/overall_blocker"}
+        }
+      }
+    },
+    "artifact_verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "artifacts", "blocker"],
+      "properties": {
+        "status": {"enum": ["passed", "failed", "unavailable", "not_applicable"]},
+        "artifacts": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact"}
+        },
+        "blocker": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/nonempty_string"}]
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "result"],
+      "properties": {
+        "kind": {"enum": ["patch", "reconstruction_input", "reconstruction"]},
+        "reference": {"$ref": "#/$defs/nonempty_string"},
+        "result": {"enum": ["passed", "failed", "unavailable", "not_applicable"]},
+        "ledger_sha256": {"$ref": "#/$defs/sha256"},
+        "computed_sha256": {"$ref": "#/$defs/sha256"},
+        "checksum_status": {"enum": ["passed", "failed", "unavailable"]},
+        "parse_status": {"enum": ["passed", "failed", "unavailable"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "patch"}}, "required": ["kind"]},
+          "then": {
+            "required": [
+              "ledger_sha256",
+              "computed_sha256",
+              "checksum_status",
+              "parse_status"
+            ]
+          }
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "result"],
+      "properties": {
+        "kind": {"enum": ["source", "test", "api", "artifact"]},
+        "reference": {"$ref": "#/$defs/nonempty_string"},
+        "result": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "git_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+    },
+    "ledger_id": {"type": "string", "pattern": "^HLP-[0-9]+$"},
+    "linked_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "url"],
+      "properties": {
+        "kind": {"enum": ["issue", "pull_request", "commit", "release"]},
+        "url": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "state": {"$ref": "#/$defs/nonempty_string"},
+        "head_revision": {"$ref": "#/$defs/git_revision"}
+      }
+    },
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "overall_blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "detail"],
+      "properties": {
+        "id": {"$ref": "#/$defs/ledger_id"},
+        "kind": {"enum": ["retirement_gate", "artifact", "uncertainty"]},
+        "detail": {"$ref": "#/$defs/nonempty_string"}
+      }
+    },
+    "public_repository": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://github\\.com/"
+    },
+    "retirement_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "status", "evidence"],
+      "properties": {
+        "summary": {"$ref": "#/$defs/nonempty_string"},
+        "status": {"enum": ["passed", "failed", "partial", "not_executed"]},
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/evidence"}
+        }
+      }
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "inspected_revision",
+        "linked_refs",
+        "disposition",
+        "evidence"
+      ],
+      "properties": {
+        "repository": {"$ref": "#/$defs/public_repository"},
+        "inspected_revision": {"$ref": "#/$defs/git_revision"},
+        "linked_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/linked_ref"}
+        },
+        "disposition": {
+          "enum": [
+            "upstream_open",
+            "upstream_verified",
+            "upstream_partial",
+            "upstream_missing"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/evidence"}
+        }
+      }
+    }
+  }
+}

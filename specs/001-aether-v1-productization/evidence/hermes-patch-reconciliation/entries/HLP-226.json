@@ -1,0 +1,103 @@
+{
+  "id": "HLP-226",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
+  "components": [
+    "HLP-226",
+    "HLP-226b"
+  ],
+  "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root.",
+  "local_status": "ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/226",
+        "state": "reopened"
+      },
+      {
+        "kind": "commit",
+        "url": "https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872",
+        "state": "ancestor of inspected revision"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/89363",
+        "state": "open",
+        "head_revision": "ce1c41f9b3f3baf26096d18fa358b0a065d52571"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3292-L3358",
+        "result": "The integrated ancestor commit provides cross-profile routing from a canonical source task when a Project has already been inherited."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py#L1387-L1435",
+        "result": "The target inherits a worker Project only when workspace_kind is omitted, so an explicit worktree request bypasses inheritance and conflict rejection; it has no affinity-terminal workspace_kind=dir source variant."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
+        "result": "The open PR changes inheritance to depend only on an omitted workspace path and rejects a conflicting explicit Project."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable target behavioral gate",
+        "result": "The omitted-workspace control inherited the Project and received a fresh workspace, but an explicit worktree child did not inherit or get a fresh project workspace and a conflicting Project was not rejected. The exact revision also has no affinity-terminal dir source variant."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
+        "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
+      },
+      {
+        "kind": "artifact",
+        "reference": "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
+        "result": "SHA-256 matched and git apply --stat parsed the two-file patch. git apply --check against this Aether repository cannot find the Hermes target files, so it is not an application or reconstruction pass."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
+        "result": "passed",
+        "ledger_sha256": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
+        "computed_sha256": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "documented private backup reconstruction input (existence check approval-denied under #264)",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "full HLP-226b patch byte reconstruction against the documented backup input",
+        "result": "unavailable"
+      }
+    ],
+    "blocker": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.",
+    "Issue #226 is reopened, and the completing upstream PR remains open.",
+    "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded."
+  ],
+  "summary": "Retain HLP-226 and HLP-226b. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable."
+}

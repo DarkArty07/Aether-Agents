@@ -38,6 +38,10 @@ jobs:
           .aether/objective-contracts/oc_924b2054e774ca5b/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+          .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
+          .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
+          .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
+          .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
           .aether/project.toml
@@ -60,6 +64,8 @@ jobs:
           INCOMPLETE_IMPLEMENTATIONS.md
           INTEGRATIONS.md
           patches/hermes/HLP-211b-flow-blocker-routing.patch
+          patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-262-origin-signal-sticky.patch
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py
@@ -111,6 +117,7 @@ jobs:
           ROADMAP.md
           scripts/aether_tui.py
           scripts/check_public_artifacts.py
+          scripts/validate_hermes_patch_reconciliation.py
           scripts/e2e/README.md
           scripts/e2e/collect.py
           scripts/e2e/dispatch.py
@@ -192,6 +199,7 @@ jobs:
           tests/test_e2e15_qualification.py
           tests/test_e2e_matrix.py
           tests/test_lab_formalization.py
+          tests/test_hermes_patch_reconciliation.py
           tests/test_objective_contracts.py
           tests/test_observation_brief_tool.py
           tests/test_observation_cli_plugin.py
@@ -401,9 +409,9 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
-          uv run --frozen ruff check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
-          uv run --frozen ruff format --check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py
+          uv run --frozen python -m compileall -q src tests scripts/qualify_observation.py scripts/check_public_artifacts.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff format --check src tests scripts/qualify_observation.py scripts/check_public_artifacts.py scripts/validate_hermes_patch_reconciliation.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
       - name: Reject operator-specific paths in public artifacts

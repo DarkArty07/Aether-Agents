@@ -1,0 +1,176 @@
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -3783,22 +3783,55 @@
+             # the source task's literal worktree path.
+             source_task = get_task(conn, str(project_source_task_id))
++            source_anchor = source_task
+             if (
+                 source_task is not None
+                 and source_task.project_id == project_id
+-                and source_task.workspace_kind == "worktree"
++                and source_task.workspace_kind == "dir"
+                 and source_task.workspace_path
++                and source_task.session_affinity
+             ):
+-                source_path = Path(source_task.workspace_path)
++                # A terminal affinity Supervisor intentionally persists the
++                # shared root worktree as ``dir``. Resolve that root task as
++                # the canonical anchor rather than rejecting the Project
++                # merely because the terminal task id differs from the
++                # worktree leaf. Every field below must agree, so an arbitrary
++                # directory can never become a Project source.
++                shared_path = Path(source_task.workspace_path)
++                root_task = (
++                    get_task(conn, shared_path.name)
++                    if shared_path.is_absolute()
++                    and shared_path.parent.name == ".worktrees"
++                    else None
++                )
++                source_affinity = source_task.session_affinity
++                root_affinity = root_task.session_affinity if root_task else None
++                if (
++                    root_task is not None
++                    and root_task.project_id == project_id
++                    and root_task.assignee == source_task.assignee
++                    and root_task.workspace_kind == "worktree"
++                    and root_task.workspace_path == source_task.workspace_path
++                    and root_affinity
++                    and root_affinity.get("flow_id") == source_affinity.get("flow_id")
++                ):
++                    source_anchor = root_task
++            if (
++                source_anchor is not None
++                and source_anchor.project_id == project_id
++                and source_anchor.workspace_kind == "worktree"
++                and source_anchor.workspace_path
++            ):
++                source_path = Path(source_anchor.workspace_path)
+                 if (
+                     source_path.is_absolute()
+-                    and source_path.name == source_task.id
++                    and source_path.name == source_anchor.id
+                     and source_path.parent.name == ".worktrees"
+                 ):
+                     project_slug = None
+-                    if source_task.branch_name:
+-                        prefix, separator, leaf = source_task.branch_name.partition("/")
++                    if source_anchor.branch_name:
++                        prefix, separator, leaf = source_anchor.branch_name.partition("/")
+                         if separator and (
+-                            leaf == source_task.id
+-                            or leaf.startswith(f"{source_task.id}-")
++                            leaf == source_anchor.id
++                            or leaf.startswith(f"{source_anchor.id}-")
+                         ):
+                             try:
+--- a/tests/tools/test_kanban_tools.py
++++ b/tests/tools/test_kanban_tools.py
+@@ -584,4 +584,108 @@
+
+
++def test_create_cross_profile_child_from_affinity_terminal_shared_workspace(
++    monkeypatch, tmp_path,
++):
++    """A terminal Supervisor's shared root worktree remains a canonical Project source."""
++    from pathlib import Path as _Path
++
++    from hermes_cli import kanban_db as kb
++    from hermes_cli import projects_db as pdb
++    from tools import kanban_tools as kt
++
++    profile_a = tmp_path / "profiles" / "creator"
++    profile_b = tmp_path / "profiles" / "supervisor"
++    profile_a.mkdir(parents=True)
++    profile_b.mkdir(parents=True)
++    repo = tmp_path / "repo"
++    repo.mkdir()
++    shared_db = tmp_path / "shared-kanban.db"
++
++    monkeypatch.setattr(_Path, "home", lambda: tmp_path)
++    monkeypatch.setenv("HERMES_KANBAN_DB", str(shared_db))
++    monkeypatch.setenv("HERMES_HOME", str(profile_a))
++    monkeypatch.setenv("HERMES_PROFILE", "creator")
++    kb._INITIALIZED_PATHS.clear()
++    kb.init_db()
++    with pdb.connect_closing() as project_conn:
++        project_id = pdb.create_project(
++            project_conn, name="Affinity Project", folders=[str(repo)],
++        )
++    flow_id = "aether.flow.v1:" + "a" * 64
++    with kb.connect() as conn:
++        root_id = kb.create_task(
++            conn,
++            title="root supervisor",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="worktree",
++            session_affinity={"flow_id": flow_id, "terminal": False},
++        )
++        root = kb.get_task(conn, root_id)
++        assert root is not None and root.workspace_path
++        terminal_id = kb.create_task(
++            conn,
++            title="terminal supervisor",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=root.workspace_path,
++            session_affinity={"flow_id": flow_id, "terminal": True},
++        )
++
++    monkeypatch.setenv("HERMES_HOME", str(profile_b))
++    monkeypatch.setenv("HERMES_PROFILE", "supervisor")
++    monkeypatch.setenv("HERMES_KANBAN_TASK", terminal_id)
++    assert not (profile_b / "projects.db").exists()
++
++    created = json.loads(kt._handle_create({
++        "title": "fresh implementer rework",
++        "assignee": "implementer",
++        "parents": [root_id],
++        "workspace_kind": "worktree",
++    }))
++
++    assert created["ok"] is True
++    with kb.connect() as conn:
++        child = kb.get_task(conn, created["task_id"])
++    assert child is not None
++    assert child.project_id == project_id
++    assert child.workspace_kind == "worktree"
++    assert child.workspace_path == str(repo / ".worktrees" / child.id)
++    assert child.branch_name is not None
++    assert child.branch_name.startswith(f"affinity-project/{child.id}")
++
++    # A same-Project ``dir`` outside the canonical .worktrees root must not
++    # become a source merely because it carries affinity metadata.
++    arbitrary = repo / "shared"
++    arbitrary.mkdir()
++    monkeypatch.setenv("HERMES_HOME", str(profile_a))
++    monkeypatch.setenv("HERMES_PROFILE", "creator")
++    with kb.connect() as conn:
++        arbitrary_id = kb.create_task(
++            conn,
++            title="noncanonical terminal",
++            assignee="supervisor",
++            project_id=project_id,
++            workspace_kind="dir",
++            workspace_path=str(arbitrary),
++            session_affinity={"flow_id": flow_id, "terminal": True},
++        )
++    monkeypatch.setenv("HERMES_HOME", str(profile_b))
++    monkeypatch.setenv("HERMES_PROFILE", "supervisor")
++    monkeypatch.setenv("HERMES_KANBAN_TASK", arbitrary_id)
++    rejected_source = json.loads(kt._handle_create({
++        "title": "must stay unresolved",
++        "assignee": "implementer",
++        "parents": [root_id],
++        "workspace_kind": "worktree",
++    }))
++    with kb.connect() as conn:
++        unresolved = kb.get_task(conn, rejected_source["task_id"])
++    assert unresolved is not None
++    assert unresolved.project_id is None
++    assert unresolved.workspace_path is None
++
++
+ def test_create_schema_exposes_optional_max_retries():
+     from tools import kanban_tools as kt

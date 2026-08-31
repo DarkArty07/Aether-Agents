@@ -1,0 +1,108 @@
+{
+  "id": "HLP-211",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:136-157",
+  "components": [
+    "HLP-211",
+    "HLP-211b"
+  ],
+  "required_behavior": "Provide opt-in, fenced worker-session continuity for the same Project, flow, profile, and canonical workspace; preserve fresh Implementer isolation. When a blocked non-terminal flow task has exactly one terminal-affinity controller child, create one internal flow attention, let dependency resolution resume the blocked task, and allow only an explicit recovery origin signal to escape the flow.",
+  "local_status": "ACTIVE_LOCAL_E2E_QUALIFIED",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "url": "https://github.com/NousResearch/hermes-agent/issues/59855",
+        "kind": "issue",
+        "state": "open"
+      },
+      {
+        "url": "https://github.com/NousResearch/hermes-agent/issues/68779",
+        "kind": "issue",
+        "state": "open"
+      },
+      {
+        "url": "https://github.com/NousResearch/hermes-agent/issues/71175",
+        "kind": "issue",
+        "state": "open"
+      },
+      {
+        "url": "https://github.com/NousResearch/hermes-agent/issues/75830",
+        "kind": "issue",
+        "state": "open"
+      },
+      {
+        "url": "https://github.com/NousResearch/hermes-agent/pull/75951",
+        "kind": "pull_request",
+        "state": "open",
+        "head_revision": "570be2e25930453444d61b8389486b00272fd46c"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "At the inspected revision, hermes_cli/kanban_db.py has no session_affinity parameter on create_task, no _pending_flow_attentions helper, and no origin_signal argument on block_task."
+      },
+      {
+        "kind": "test",
+        "reference": "disposable exact-target source prerequisite gate",
+        "result": "A disposable source gate confirmed that session_affinity and recovery origin-signal calls are rejected and that no flow-attention helper exists."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/NousResearch/hermes-agent/pull/75951",
+        "result": "The current public PR 75951 is open. Its GitHub file list contains 48 additions in hermes_cli/kanban_db.py and a 179-line blocked-task session-resume test; its patch resumes a prior session for the same task after respawn. It does not establish the multi-card affinity, Project/workspace fencing, terminal controller routing, or recovery behavior required here."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "The full gate requires E2E-16 plus the terminal-controller blocker canary on an unpatched upstream revision. A disposable source-level prerequisite gate was executed first and failed because the required affinity and blocker-routing interfaces are absent.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable exact-target source prerequisite gate",
+        "result": "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: create_task(session_affinity=...) rejected, block_task(..., origin_signal='recovery') rejected, create_task has no session_affinity parameter, and _pending_flow_attentions is absent."
+      },
+      {
+        "kind": "test",
+        "reference": "HERMES_LOCAL_PATCHES.md:153",
+        "result": "The spend-gated live E2E-16 and blocker canary were not executed: this unit authorizes neither model spend nor runtime/service mutation. Their absence does not weaken the failed prerequisite result."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-211b-flow-blocker-routing.patch",
+        "result": "passed",
+        "ledger_sha256": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+        "computed_sha256": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "documented ignored backup reconstruction input",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "read-only effective-source byte reconstruction",
+        "result": "passed"
+      }
+    ],
+    "blocker": "Backup-based reconstruction is unavailable because the documented ignored backup inputs are absent; the independent read-only effective-checkout reconstruction passed."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "PR 75951 remains open and only covers same-task session respawn, not the combined HLP-211/HLP-211b behavior.",
+    "No linked upstream issue or PR covers HLP-211b terminal-controller flow routing.",
+    "The full live retirement canary remains unexecuted under this unit's no-spend and no-runtime-mutation constraints."
+  ],
+  "summary": "Retain both HLP-211 and HLP-211b. The exact public snapshot lacks prerequisite runtime interfaces, and the linked open PR is a narrower same-task resumption change. The tracked HLP-211b patch checksum, parser check, and read-only effective-checkout byte reconstruction passed; only the ignored backup input remains unavailable."
+}

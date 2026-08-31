@@ -1,0 +1,81 @@
+{
+  "id": "HLP-262",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:202-212",
+  "components": [
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_blocked_sticky.py"
+  ],
+  "required_behavior": "A non-dependency block that emits origin_signal=input, revision, or recovery remains blocked through repeated readiness recomputation until an explicit unblock or native controller resolution resumes it exactly once.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/262"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L4454-L4489",
+        "result": "The exact upstream _has_sticky_block predicate considers only blocked and unblocked events; it contains no origin_signal semantics."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L6257-L6482",
+        "result": "The exact upstream block_task API has no origin_signal argument and emits blocked for a true block, so it lacks the prerequisite origin-signal route as well as sticky handling for that route."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "At the exact upstream revision, first require the origin_signal block API and sticky predicate; then run the input, revision, and recovery reopen/recompute regression with explicit unblock or native-controller resolution as the only resume path.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable exact-target source prerequisite control",
+        "result": "The prerequisite failed: block_task has no origin_signal argument and _has_sticky_block queries only blocked and unblocked events, so the full origin-signal behavioral regression cannot begin on this revision."
+      },
+      {
+        "kind": "artifact",
+        "reference": "patches/hermes/HLP-262-origin-signal-sticky.patch against exact upstream",
+        "result": "SHA-256 matched and git apply --stat parsed the patch; full git apply --check and reverse --check did not apply because the exact upstream test and API lack the earlier origin-signal prerequisite. No equivalence or reconstruction pass was inferred."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-262-origin-signal-sticky.patch",
+        "result": "passed",
+        "ledger_sha256": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+        "computed_sha256": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "documented pre-change reconstruction input",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "full-patch byte reconstruction against the documented input",
+        "result": "unavailable"
+      }
+    ],
+    "blocker": "The documented reconstruction input is unavailable, and the exact upstream lacks the origin-signal prerequisite needed to apply the full patch; checksum and parser controls do not establish a reconstruction pass."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.",
+    "The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.",
+    "The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded."
+  ],
+  "summary": "Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs."
+}
