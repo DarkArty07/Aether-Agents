@@ -82,7 +82,7 @@ Before v4 integration, the effective Hermes checkout identity was commit `0b2889
 ## Integrated verification
 
 - Focused validator/public-boundary run: 23 passed. The validator-only run: 18 passed.
-- Complete locked suite with the effective Hermes checkout supplied read-only: 736 passed, 4 skipped, 107 subtests passed in 89.29 seconds. The skips are the suite's documented platform/live exclusions; there were no failures.
+- Complete locked suite with the effective Hermes checkout supplied read-only: 736 passed, 4 skipped, 107 subtests passed in 89.29 seconds. A second `-rs` run reproduced the counts in 95.15 seconds and identified the skips exactly: three require the selected clean Hermes baseline `v2026.8.18@e624e9fde561`, while one 100k qualification runs only in the direct Python 3.11 CI gate. There were no failures.
 - Compileall passed. CI-equivalent Ruff check passed; Ruff format check reported 83 files already formatted.
 - Package build produced one wheel and one source distribution. The tracked surface plus both built artifacts passed the operator-path/public-boundary scanner.
 - Canonical manifest and spec boundary passed with 193 non-spec paths and 56 spec paths. The policy workflow was mechanically updated to include the recovery artifacts, validator/test, v1-v4 contract rows, and the validator in compileall/Ruff gates.
