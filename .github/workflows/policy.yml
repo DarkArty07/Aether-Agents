@@ -387,9 +387,11 @@ jobs:
               --output "${RUNNER_TEMP}/observation-tests-python-${{ matrix.python-version }}.json" \
               --json
       - name: Run exact-Hermes test bootstrap
+        env:
+          AETHER_EXACT_HERMES_CHECKOUT: "${RUNNER_TEMP}/hermes-exact"
         run: >-
           uv run --frozen python scripts/run_tests.py
-          --checkout "${RUNNER_TEMP}/hermes-exact" -- tests/test_hermes_baseline.py -q
+          -- tests/test_hermes_baseline.py -q
       - name: Enforce integrated coverage floor
         shell: bash
         run: |

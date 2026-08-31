@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src"
@@ -20,6 +20,34 @@ from aether_agents.lifecycle import (  # noqa: E402
     IntegrityError,
     verify_clean_checkout,
 )
+
+
+def checkout_exact(path: Path) -> dict[str, Any]:
+    """Create and authenticate an exact checkout through the qualification bootstrap."""
+
+    from qualify_observation import checkout_exact as qualify_checkout_exact
+
+    return qualify_checkout_exact(path)
+
+
+def _default_checkout() -> Path:
+    cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return cache_home / "aether-agents" / "hermes" / HERMES_BASELINE.tag
+
+
+def resolve_checkout(checkout: Path | None) -> Path:
+    """Use an explicit or configured checkout, otherwise create the bounded cache entry."""
+
+    if checkout is not None:
+        return checkout.expanduser()
+    configured = os.environ.get("AETHER_EXACT_HERMES_CHECKOUT")
+    if configured:
+        return Path(configured).expanduser()
+    target = _default_checkout()
+    if target.exists():
+        return target
+    result = checkout_exact(target)
+    return Path(result["path"])
 
 
 def _environment(checkout: Path) -> dict[str, str]:
@@ -54,7 +82,7 @@ def run_tests(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkout", required=True, type=Path, help="clean exact Hermes checkout")
+    parser.add_argument("--checkout", type=Path, help="clean exact Hermes checkout")
     parser.add_argument(
         "pytest_arguments", nargs=argparse.REMAINDER, help="arguments forwarded to pytest"
     )
@@ -67,8 +95,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
     if pytest_arguments[:1] == ["--"]:
         pytest_arguments = pytest_arguments[1:]
     try:
-        completed = run_tests(args.checkout, pytest_arguments)
-    except (IntegrityError, OSError) as error:
+        completed = run_tests(resolve_checkout(args.checkout), pytest_arguments)
+    except (IntegrityError, OSError, RuntimeError) as error:
         print(f"exact Hermes test bootstrap failed: {error}", file=sys.stderr)
         return 1
     return completed.returncode
