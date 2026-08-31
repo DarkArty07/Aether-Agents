@@ -622,6 +622,9 @@ def test_product_resources_enable_authoring_only_for_morfeo() -> None:
     )
     assert "aether-objective-contracts" not in supervisor["plugins"]["enabled"]
     assert "aether-objective-contracts" not in implementer["plugins"]["enabled"]
+    assert supervisor["approvals"]["mode"] == "off"
+    assert implementer["approvals"]["mode"] == "off"
+    assert morfeo.get("approvals", {}).get("mode") != "off"
 
     soul = (profiles / "morfeo" / "SOUL.md").read_text(encoding="utf-8")
     assert "For every pipeline handoff" in soul
