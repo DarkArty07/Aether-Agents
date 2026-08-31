@@ -713,6 +713,101 @@ def test_run_failure_reports_bounded_content_free_stdout_and_stderr_tails(
     assert "/private/path" not in message
 
 
+def test_run_failure_retains_only_sanitized_pytest_failed_and_error_node_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_runner("qualify_observation_safe_failure_nodes")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["pytest"],
+            1,
+            "\n".join(
+                (
+                    "FAILED tests/test_safe.py::test_gate[operator=darkarty] - "
+                    "assert PRIVATE_ASSERTION_DETAIL",
+                    "ERROR tests/test_setup.py::TestSetup::test_boot[database=/private/operator.db] - "
+                    "RuntimeError: PRIVATE_EXCEPTION_MESSAGE",
+                    "FAILED /private/operator/tests/test_bad.py::test_bad - RAW_ABSOLUTE_PATH",
+                )
+            ),
+            "PRIVATE_STDERR_PATH=/private/operator/stderr\n",
+        ),
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        module._run(["pytest"])
+
+    message = str(captured.value)
+    assert (
+        "pytest-failure-nodes("
+        "tests/test_safe.py::test_gate,tests/test_setup.py::TestSetup::test_boot)" in message
+    )
+    for private_value in (
+        "operator=darkarty",
+        "database=/private/operator.db",
+        "PRIVATE_ASSERTION_DETAIL",
+        "PRIVATE_EXCEPTION_MESSAGE",
+        "RAW_ABSOLUTE_PATH",
+        "PRIVATE_STDERR_PATH",
+        "/private/operator",
+    ):
+        assert private_value not in message
+
+
+def test_run_failure_node_evidence_deduplicates_and_truncates_to_bounded_safe_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_runner("qualify_observation_bounded_failure_nodes")
+    assert module.MAX_FAILURE_NODE_IDS == 4
+    assert module.MAX_FAILURE_NODE_ID_CHARS == 160
+    overlong_node = "tests/test_bound.py::test_" + "a" * 200
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["pytest"],
+            1,
+            "\n".join(
+                (
+                    "FAILED tests/test_bound.py::test_delta - PRIVATE_DELTA",
+                    "FAILED tests/test_bound.py::test_alpha[first] - PRIVATE_ALPHA_FIRST",
+                    "FAILED tests/test_bound.py::test_epsilon - PRIVATE_EPSILON",
+                    "FAILED tests/test_bound.py::test_beta - PRIVATE_BETA",
+                    "FAILED tests/test_bound.py::test_alpha[second] - PRIVATE_ALPHA_SECOND",
+                    "FAILED tests/test_bound.py::test_gamma - PRIVATE_GAMMA",
+                    f"FAILED {overlong_node} - PRIVATE_OVERLONG",
+                )
+            ),
+            "",
+        ),
+    )
+
+    with pytest.raises(RuntimeError) as captured:
+        module._run(["pytest"])
+
+    message = str(captured.value)
+    assert (
+        "pytest-failure-nodes("
+        "tests/test_bound.py::test_alpha,tests/test_bound.py::test_beta,"
+        "tests/test_bound.py::test_delta,tests/test_bound.py::test_epsilon)" in message
+    )
+    assert message.count("tests/test_bound.py::test_alpha") == 1
+    assert "tests/test_bound.py::test_gamma" not in message
+    assert overlong_node not in message
+    for private_value in (
+        "PRIVATE_ALPHA_FIRST",
+        "PRIVATE_ALPHA_SECOND",
+        "PRIVATE_BETA",
+        "PRIVATE_DELTA",
+        "PRIVATE_EPSILON",
+        "PRIVATE_GAMMA",
+        "PRIVATE_OVERLONG",
+    ):
+        assert private_value not in message
+
+
 @pytest.mark.hermes_exact
 def test_qualification_subprocess_environment_excludes_source_and_ambient_pythonpath(
     monkeypatch: pytest.MonkeyPatch,

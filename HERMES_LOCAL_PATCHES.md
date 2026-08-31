@@ -20,7 +20,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - `RELOAD_PENDING`: el código y la configuración locales están escritos y probados en proceso nuevo, pero el proceso de servicio aún no los ha recargado.
 - `RETIRED`: el parche local fue retirado después de comprobar equivalencia upstream y revalidar el runtime efectivo.
 
-## Registro activo
+## Registro operativo (activo y pendiente de recarga)
 
 | ID | Issue Aether | Corrección local | Seguimiento upstream | Estado |
 |---|---|---|---|---|
@@ -35,6 +35,7 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 | `HLP-226` | `#226` | un hijo cross-profile con `workspace_kind=worktree` hereda el Project canónico del worker y recibe worktree propio, incluso desde una card terminal de afinidad que comparte el worktree raíz como `dir` | commit upstream `b9b5481d6` cubre la fuente worktree directa; extensión local `HLP-226b` sin equivalente | `ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL` |
 | `HLP-246` | `#246` | attachments validan identidad pre-transporte y readback; persisten tamaño y SHA-256 calculados | sin equivalente localizado en `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-262` | `#262` | un bloqueo no-dependency que emite `origin_signal` permanece sticky hasta una resolución/desbloqueo explícito | sin equivalente en `NousResearch/hermes-agent@4f2254350` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-263` | `#263` | los guards terminal y CLI directo usan titularidad real de gateway supervisado, no marcadores heredados | PR `NousResearch/hermes-agent#93267`, issue `#92560`, tip `aa9aaaa6cb31753c3b274db6825fbd0af5f27120` | `RELOAD_PENDING / UPSTREAM_VERIFIED` |
 
 ## HLP-188 — `initial_status=blocked` sticky
 
@@ -210,6 +211,17 @@ Este archivo evita que una actualización de Hermes elimine silenciosamente corr
 - **Artefacto portable:** `patches/hermes/HLP-262-origin-signal-sticky.patch`, SHA-256 `abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a`; requiere `git apply --check`, reconstrucción byte a byte y canaria post-recarga antes de marcar `ACTIVE_LOCAL`.
 - **Activación:** gateway Morfeo recargado el 2026-08-30 13:38 CST de PID `359325` a `475712`; la canaria post-recarga en proceso/SQLite desechables repitió `PASS` con tres recomputaciones sin promoción y salida única por `unblock_task`. Estado `ACTIVE_LOCAL`.
 - **Gate de retirada:** en una revisión upstream sin este hunk, ejecutar `block_task` con cada `origin_signal=input|revision|recovery`, cerrar/reabrir SQLite, ejecutar varias recomputaciones y demostrar cero promociones; después comprobar que `unblock_task` o la resolución nativa del controller sí reanuda exactamente una vez.
+
+## Candidatos pendientes de recarga
+
+### HLP-263 — identidad real de gateway supervisado
+
+- **Motivo y alcance exacto:** los guards de lifecycle trataban `_HERMES_GATEWAY=1` como identidad del proceso. El marcador se hereda por CLI/TUI y también aparece tras importar `gateway.run`; por tanto podía bloquear una sesión externa que debía gestionar el gateway. Este candidato porta exclusivamente los hunks acumulados de `NousResearch/hermes-agent#93267` en el tip `aa9aaaa6cb31753c3b274db6825fbd0af5f27120`: `tools/terminal_tool.py`, `hermes_cli/gateway.py` y `tests/hermes_cli/test_gateway_restart_loop.py`. Excluye el mapeo de correo de contribuidor y cualquier otro cambio upstream. El guard cron no cambia.
+- **Cambio mínimo:** los tres guards de lifecycle (terminal, `gateway stop` y `gateway restart`) consultan `tools.process_registry._is_supervised_gateway_process()` en vez del marcador heredable. Así, un gateway realmente supervisado sigue denegado, mientras una CLI/TUI externa con marcadores heredados y sonda falsa alcanza la ejecución. Una ejecución de foreground sin supervisor también pasa: no existe KeepAlive que convierta el stop/restart en loop.
+- **Identidad pre-parche y backup reversible:** revisión activa pre-parche `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`; `status --porcelain=v1` tenía `28` entradas modificadas y `5` sin seguimiento (SHA-256 del listado `0bc1f45145ea3463423bd27f46faab0924086750aa73b4cc9fefff509523491f`). Entre los tres destinos, sólo el test estaba modificado (`+44/-8`) antes de este hunk. SHA-256 pre-parche: `tools/terminal_tool.py` `2a6e3260f42e1bb992b167d294544197d8320b28a7e79067e95f7e186f659d19`; `hermes_cli/gateway.py` `760da366030f65b671f735a0138fa4b7a53992ca4aee5fe28e3e8fe879788ce7`; `tests/hermes_cli/test_gateway_restart_loop.py` `1fe5a7dd249fa6297d6d1a71c7a8fdf60edbb127639c8435e1016eeb72c17117`. Esos tres hashes son el backup verificable; las copias privadas no se versionan.
+- **Artefacto portable y reconstrucción:** `patches/hermes/HLP-263-gateway-process-ownership.patch`, SHA-256 `b70f5436d2fbe63ffaa9d62adce97c6361622255b2b6768fa6bbe2874393664b`. En una copia desechable del árbol activo ya sucio, `git apply --check` pasó antes de aplicar. Aplicar el parche y reconstruir de nuevo desde la copia pre-parche produjo byte a byte los tres archivos parcheados; SHA-256 de `cron/lifecycle_guard.py` fue idéntico antes/después (`702e88957840c64d6669122ca42f3246d013bee4a8730ec1f2c6357a18bb8914`) y todos los bytes fuente no destino se preservaron.
+- **RED/GREEN y controles:** RED de `test_cli_agent_session_not_blocked_by_inherited_env`: `1 failed`, exactamente `assert 1 == 0`, al aplicar primero sólo el hunk de regresión. GREEN: la regresión, el guard CLI directo y los nueve lifecycle commands supervisados dieron `12 passed`; la suite focal real completa `tests/hermes_cli/test_gateway_restart_loop.py` dio `127 passed`; `py_compile`, Ruff y `git diff --check` pasaron. El help no mutante `python -m hermes_cli.main gateway restart --help` terminó `0` y mostró sólo opciones. La prueba upstream directa ejercita la denegación de `stop` bajo sonda supervisada; el hunk de `restart` usa la misma sonda/condición. Un intento separado de sonda CLI inline fue denegado por el hardline externo al contener un literal lifecycle; no se reintentó ni se evitó ese control.
+- **Activación y retirada:** `runtime_activation_performed=false`. Antes de aplicar al runtime, Morfeo debe respaldar los tres bytes contra los hashes anteriores, ejecutar `git apply --check`, aplicar sólo este parche, repetir las pruebas focales/reconstrucción y la canaria aislada post-recarga. Sólo Morfeo puede recargar el gateway tras integración verde. Para retirar, primero demostrar la misma matriz sobre una revisión upstream que contenga equivalencia; después ejecutar `git apply --check -R` y revertir únicamente estos hunks, comprobar los hashes pre-parche y repetir las pruebas/canaria antes de cualquier recarga. Nunca restaurar el archivo test completo ni tocar el guard cron.
 
 ## Procedimiento obligatorio antes de actualizar Hermes
 
