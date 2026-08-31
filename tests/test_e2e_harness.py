@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from aether_agents import lab
+
 ROOT = Path(__file__).resolve().parents[1]
 E2E = ROOT / "scripts" / "e2e"
 SCENARIOS = E2E / "scenarios"
@@ -228,13 +230,13 @@ def test_live_mode_refuses_model_spend_before_invoking_hermes(tmp_path: Path) ->
     assert not invoked.exists()
 
 
-def test_hermes_env_pins_runtime_and_scrubs_ambient_cwd(
+def test_public_isolated_hermes_env_scrubs_all_outer_identity_from_native_kanban(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     exact = tmp_path / "candidate" / "hermes"
     exact.parent.mkdir()
     exact.write_text("#!/bin/sh\n", encoding="utf-8")
-    inherited_worker = {
+    outer_identity = {
         "HERMES_KANBAN_TASK": "t_outer",
         "HERMES_KANBAN_RUN_ID": "99",
         "HERMES_KANBAN_WORKSPACE": "/private/outer-workspace",
@@ -246,18 +248,110 @@ def test_hermes_env_pins_runtime_and_scrubs_ambient_cwd(
         "HERMES_KANBAN_AFFINITY_GENERATION": "7",
         "HERMES_KANBAN_AFFINITY_FLOW_ID": "outer-flow",
         "HERMES_KANBAN_AFFINITY_PROJECT_ID": "outer-project",
+        "HERMES_KANBAN_FUTURE_FIELD": "outer-future-kanban",
         "HERMES_SESSION_ID": "outer-session",
         "HERMES_SESSION_SOURCE": "kanban",
+        "HERMES_SESSION_FUTURE_FIELD": "outer-future-session",
     }
     monkeypatch.setenv("TERMINAL_CWD", "/private/tui-cwd")
     monkeypatch.setenv("HERMES_CWD", "/private/hermes-cwd")
-    for name, value in inherited_worker.items():
+    monkeypatch.setenv("AETHER_UNRELATED_CONFIGURATION", "preserved")
+    for name, value in outer_identity.items():
         monkeypatch.setenv(name, value)
-    env = e2e_run._hermes_env(tmp_path / "run", tmp_path / "home", exact)
+    run_root = tmp_path / "run"
+    hermes_root = tmp_path / "home"
+
+    env = lab.isolated_hermes_env(run_root, hermes_root, exact)
+
+    assert lab.isolated_hermes_env is e2e_run.isolated_hermes_env
     assert env["HERMES_BIN"] == str(exact.resolve())
+    assert env["HERMES_HOME"] == str(hermes_root)
+    assert env["HERMES_KANBAN_DB"] == str(run_root / "kanban.db")
+    assert env["HERMES_KANBAN_WORKSPACES_ROOT"] == str(run_root / "worktrees")
+    assert env["XDG_STATE_HOME"] == str(run_root / "xdg-state")
+    assert env["XDG_DATA_HOME"] == str(run_root / "xdg-data")
     assert "TERMINAL_CWD" not in env
     assert "HERMES_CWD" not in env
-    assert inherited_worker.keys().isdisjoint(env)
+    assert all(env.get(name) != sentinel for name, sentinel in outer_identity.items())
+    assert env["AETHER_UNRELATED_CONFIGURATION"] == "preserved"
+
+    native_hermes = shutil.which("hermes")
+    if native_hermes is None:
+        pytest.skip("native Hermes runtime is unavailable")
+    native_python = e2e_run._native_python(Path(native_hermes))
+    native = r"""
+import json
+import os
+import sys
+from pathlib import Path
+
+from hermes_cli import kanban_db
+
+run_root = Path(sys.argv[1]).resolve()
+board = Path(os.environ["HERMES_KANBAN_DB"]).resolve()
+workspaces = Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve()
+identity = {
+    name: value
+    for name, value in os.environ.items()
+    if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_"))
+    or name in {"TERMINAL_CWD", "HERMES_CWD"}
+}
+expected_identity = {
+    "HERMES_KANBAN_DB": str(run_root / "kanban.db"),
+    "HERMES_KANBAN_WORKSPACES_ROOT": str(run_root / "worktrees"),
+}
+assert identity == expected_identity, identity
+assert board == run_root / "kanban.db"
+assert workspaces == run_root / "worktrees"
+
+kanban_db.init_db(db_path=board)
+with kanban_db.connect(db_path=board) as connection:
+    parent = kanban_db.create_task(
+        connection,
+        title="HLP-188 disposable root",
+        assignee="implementer",
+        workspace_kind="dir",
+        workspace_path=str(workspaces / "root"),
+    )
+    child = kanban_db.create_task(
+        connection,
+        title="HLP-188 disposable child",
+        assignee="supervisor",
+        parents=(parent,),
+        workspace_kind="dir",
+        workspace_path=str(workspaces / "child"),
+    )
+    kanban_db.add_comment(connection, child, "fixture", "disposable cleanup: child first")
+    assert kanban_db.archive_task(connection, child)
+    kanban_db.add_comment(connection, parent, "fixture", "disposable cleanup: parent second")
+    assert kanban_db.archive_task(connection, parent)
+    archived = [kanban_db.get_task(connection, task_id).status for task_id in (child, parent)]
+    task_count = connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    event_count = connection.execute("SELECT COUNT(*) FROM task_events").fetchone()[0]
+
+print(json.dumps({
+    "board": str(board),
+    "workspaces": str(workspaces),
+    "archived": archived,
+    "task_count": task_count,
+    "event_count": event_count,
+}))
+"""
+    completed = subprocess.run(
+        [str(native_python), "-c", native, str(run_root)],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads(completed.stdout)
+    assert receipt["board"] == str((run_root / "kanban.db").resolve())
+    assert receipt["workspaces"] == str((run_root / "worktrees").resolve())
+    assert receipt["archived"] == ["archived", "archived"]
+    assert receipt["task_count"] == 2
+    assert receipt["event_count"] >= 4
+    assert not (tmp_path / "kanban.db").exists()
 
 
 def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
