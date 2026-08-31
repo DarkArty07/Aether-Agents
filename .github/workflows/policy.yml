@@ -45,6 +45,7 @@ jobs:
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
+          .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/project.toml
           AGENTS.md
           CHANGELOG.md
