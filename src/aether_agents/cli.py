@@ -19,6 +19,7 @@ query`, only once ``observe`` is the selected subcommand and its handler runs.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -33,7 +34,6 @@ __all__ = ["main"]
 #: cli.md section 2: every documented command this build does not implement. The bare
 #: `aether` launch (no subcommand) is handled the same way, just outside this tuple.
 _UNSUPPORTED_COMMANDS = (
-    "init",
     "start",
     "stop",
     "restart",
@@ -60,6 +60,10 @@ def _build_parser() -> argparse.ArgumentParser:
     from aether_agents.commands.observe import build_subparser as build_observe_subparser
 
     build_observe_subparser(subparsers)
+
+    from aether_agents.commands.init import build_subparser as build_init_subparser
+
+    build_init_subparser(subparsers)
 
     version_parser = subparsers.add_parser("version", help="Report the Aether product version.")
     version_parser.add_argument("--json", action="store_true")
@@ -156,6 +160,23 @@ def _run_unsupported(command: str, *, json_mode: bool) -> int:
     )
     envelope.fail("COMMAND_NOT_IMPLEMENTED", message)
     return _emit(envelope, json_mode=json_mode, human=f"error: {message}")
+
+
+def _run_launch(argv: Sequence[str]) -> int:
+    """Hand a bare ``aether`` invocation to the canonical Morfeo launcher.
+
+    cli.md section 2 documents the bare command as the project launch, so the installed
+    console script and the source entry point must behave identically here. The launcher
+    replaces this process; a missing launcher is reported, never silently ignored.
+    """
+    launcher = Path(__file__).resolve().parents[2] / "scripts" / "aether_tui.py"
+    if not launcher.is_file():
+        return _run_unsupported("aether", json_mode=False)
+    try:
+        os.execv(sys.executable, [sys.executable, str(launcher), *argv])
+    except OSError:
+        return _run_unsupported("aether", json_mode=False)
+    return 0  # pragma: no cover - execv does not return
 
 
 def _lifecycle_manager():
@@ -621,7 +642,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.version:
             print(f"aether {product_version()}")
             return 0
-        return _run_unsupported("aether", json_mode=args.json)
+        if args.json:
+            # cli.md documents `--json` here as a launch *plan*; this build does not
+            # model that plan, so it stays visibly unsupported instead of guessing.
+            return _run_unsupported("aether", json_mode=True)
+        return _run_launch(args_list)
+
+    if args.command == "init":
+        from aether_agents.commands.init import run_init
+
+        envelope = run_init(args)
+        human = (
+            f"error: {envelope.errors[0].message}"
+            if envelope.errors
+            else f"{envelope.result}: Aether project {envelope.data.get('project_id')}"
+        )
+        return _emit(envelope, json_mode=args.json, human=human)
 
     if args.command == "observe":
         from aether_agents.commands.observe import run_observe

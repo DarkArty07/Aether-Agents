@@ -147,6 +147,7 @@ jobs:
           SECURITY.md
           src/aether_agents/cli.py
           src/aether_agents/commands/__init__.py
+          src/aether_agents/commands/init.py
           src/aether_agents/commands/observe.py
           src/aether_agents/__init__.py
           src/aether_agents/lab/affinity.py
@@ -234,6 +235,7 @@ jobs:
           tests/test_policy_hooks.py
           tests/test_projection_transition_runner.py
           tests/test_project_marker_validation.py
+          tests/test_project_init.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
           uv.lock

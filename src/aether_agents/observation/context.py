@@ -154,13 +154,26 @@ class ProjectRegistry:
         marker = read_project_marker(location)
         return marker is not None and canonical_project_id(marker.get("project_id")) == canonical
 
-    def register(self, project_id: str, project_path: Path | str, name: str = "") -> bool:
-        """Record a project. Used by ``aether init``/``setup`` and by tests."""
+    def register(
+        self,
+        project_id: str,
+        project_path: Path | str,
+        name: str = "",
+        hermes_project_id: str | None = None,
+    ) -> bool:
+        """Record a project. Used by ``aether init``/``setup`` and by tests.
+
+        ``hermes_project_id`` is the FR-1334 mapping to one native Hermes Project. It is
+        local identity: it stays in this registry and never enters the portable marker.
+        """
         canonical = canonical_project_id(project_id)
         if canonical is None:
             return False
         projects = self._load()
-        projects[canonical] = {"path": str(Path(project_path).resolve()), "name": name}
+        entry: dict[str, Any] = {"path": str(Path(project_path).resolve()), "name": name}
+        if hermes_project_id:
+            entry["hermes_project_id"] = hermes_project_id
+        projects[canonical] = entry
         ensure_private_dir(self.path.parent)
         atomic_private_write(
             self.path,
