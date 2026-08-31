@@ -1594,9 +1594,17 @@ def test_exact_classification_never_rebinds_a_native_unbound_unit(
     ),
 )
 def test_checkpoint_sink_rejects_conflicting_durable_review_evidence(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     conflict: str,
 ) -> None:
+    # This test exercises checkpoint authority conflict handling, not journal
+    # durability. Keep each short-lived Collector synchronous so its background
+    # flusher cannot race a sibling Collector for the shared writer lock.
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.collector.Flusher.start",
+        lambda _self, _spawn_task=None: None,
+    )
     state_root = tmp_path / "aether"
     _activate_test_release(state_root, tmp_path)
     paths = ObservationPaths.for_project(PROJECT_ID, root=state_root)
