@@ -68,7 +68,7 @@ The v1 root `t_2548a58b` stopped before decomposition because its immutability l
 
 ## Normal-work immutability boundary
 
-Before v4 integration, the effective Hermes checkout identity was commit `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`, tree `b433de234467cfa91f74b3b8427b57f93449be3a`, with tracked-delta digest `ff612990209143809b80f38b61f62cf9317f5409cf7be3ab82142f0e388747ab`. Secret-safe profile/config, credential-file metadata, memory/session-directory metadata, and gateway-process identity were captured without reading credential contents. A post-integration comparison is required before terminal completion. Objective-created board events, worktrees, Git commits, tests, PR/CI records, and versioned evidence are expected deltas; no further effective-runtime, service, profile, credential, memory, or unrelated user-data mutation is authorized.
+Before v4 integration, the effective Hermes checkout identity was commit `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`, tree `b433de234467cfa91f74b3b8427b57f93449be3a`, with tracked-delta digest `ff612990209143809b80f38b61f62cf9317f5409cf7be3ab82142f0e388747ab`. Secret-safe profile/config, credential-file metadata, memory/session-directory metadata, and gateway-process identity were captured without reading credential contents. The post-integration comparison matched the effective commit, tree, tracked delta/status, every Supervisor/Implementer/Morfeo config hash and mode, credential-file metadata, environment-file metadata, and memory/session-directory metadata. Morfeo gateway PID `475712` retained its existing 2026-08-30 13:38:45 local start identity; no service restart occurred. Only objective-owned Supervisor/Morfeo session databases changed while this worker and board flow recorded expected session/events. Objective-created board events, worktrees, Git commits, tests, PR/CI records, and versioned evidence are expected deltas; no further effective-runtime, service, profile, credential, memory, or unrelated user-data mutation occurred.
 
 ## Generated product evidence
 
@@ -79,6 +79,17 @@ Before v4 integration, the effective Hermes checkout identity was commit `0b2889
 - Artifact verification: 9 not applicable, 3 unavailable. All three referenced portable patches pass checksum and parser controls; unavailable reconstruction inputs remain explicit.
 - The fixed-input generator was run twice at `2026-08-31T02:01:37Z`; JSON and Markdown were byte-identical.
 
+## Integrated verification
+
+- Focused validator/public-boundary run: 23 passed. The validator-only run: 18 passed.
+- Complete locked suite with the effective Hermes checkout supplied read-only: 736 passed, 4 skipped, 107 subtests passed in 89.29 seconds. The skips are the suite's documented platform/live exclusions; there were no failures.
+- Compileall passed. CI-equivalent Ruff check passed; Ruff format check reported 83 files already formatted.
+- Package build produced one wheel and one source distribution. The tracked surface plus both built artifacts passed the operator-path/public-boundary scanner.
+- Canonical manifest and spec boundary passed with 193 non-spec paths and 56 spec paths. The policy workflow was mechanically updated to include the recovery artifacts, validator/test, v1-v4 contract rows, and the validator in compileall/Ruff gates.
+- All 20 linked public issues, pull requests, and commits were queried directly. Recorded open/closed/merged states and every recorded PR head/commit identity matched current public API results; the inspected upstream commit resolved to tree `2bd2e91bcb64f0ecd04711c92aaa2ad52861c5d7`.
+- Exact-upstream checksum/parser/apply controls were repeated for HLP-211b, HLP-226b, and HLP-262. The digests matched. Forward apply remained failed where exact upstream lacks prerequisites/test context; active-checkout reverse checks passed for HLP-226b and HLP-262. HLP-211b retains its earlier independent byte reconstruction and unavailable documented backup input; no failed apply was promoted to equivalence.
+- A detached clean checkout at integrated commit `a2f78781cf445c4e4511b117d5a091ffe7023d31` reproduced 23 focused passes, byte-identical generation, compileall/Ruff/format success, package build, public-boundary success, and manifest/spec validation with a clean final status.
+
 ## Acceptance A–K map at the evidence cutoff
 
 - **A — PASS:** the validator derives 12 detailed ledger sections, rejects omissions/duplicates/unknown IDs, and generated output contains each exactly once.
@@ -86,15 +97,15 @@ Before v4 integration, the effective Hermes checkout identity was commit `0b2889
 - **C — PASS WITH EXPLICIT UNAVAILABLE RESULTS:** checksums and parser controls pass for HLP-211b, HLP-226b, and HLP-262. Apply/reconstruction outcomes and missing inputs are recorded without silent success.
 - **D — PASS:** fixed timestamp/revision/input reruns are byte-identical and path/secret checks reject non-portable content.
 - **E — PASS:** all 12 entries retain local behavior; the validator rejects retirement candidacy without a passed exact-revision test gate.
-- **F — PENDING FINAL POST-COMPARISON:** #262, #226b, and #264 are separately evidenced authorized recoveries. No further normal-work runtime delta is permitted; final identity comparison remains part of terminal closeout.
+- **F — PASS:** #262, #226b, and #264 are separately evidenced authorized recoveries. The post-integration comparison proves no further effective-runtime/service/config/credential/memory/unrelated-user-data delta.
 - **G — PASS TO CUTOFF:** no release, tag, package publication, deploy, credential change, service restart/activation, or final baseline choice occurred.
-- **H — PASS TO CUTOFF:** implementation used RED→GREEN tests and deterministic generation; complete integrated quality/build verification remains in the terminal lane.
+- **H — PASS:** implementation used RED→GREEN tests and deterministic generation; focused, full-suite, compileall, Ruff, format, build, public-boundary, manifest/spec, and clean-checkout verification all pass.
 - **I — PASS FOR NEW DEFECTS:** #262 and #264 have issue-first and durable owner-notification evidence. #226 was a pre-existing owner-visible issue; its terminal recurrence was appended before the bounded HLP-226b repair.
 - **J — PASS:** this report records timings, exact Project/worktree strategy, unit sizes, review/rework, stop/recovery events, reuse, current terminal state, and residual administrative rows.
 - **K — PENDING REMOTE CLOSEOUT:** protected PR/check/merge evidence and the #261 comment are terminal steps. Issue #261 must remain open.
 
 ## Terminal and residual-card state at cutoff
 
-The v4 terminal card `t_dc150162` is the sole runnable integration/closeout lane. Local integration and deterministic generation are complete, but full verification, protected PR checks/merge, the #261 update, final post-identity comparison, and final residual audit remain pending; their final results belong in the durable terminal handoff.
+The v4 terminal card `t_dc150162` is the sole runnable integration/closeout lane. Local integration, deterministic generation, full verification, and the post-identity comparison are complete. Protected PR checks/merge, the #261 update, and the final post-merge residual audit remain pending; their final results belong in the durable terminal handoff.
 
 Known residual rows are intentionally non-runnable administrative evidence: superseded v1 root `t_2548a58b`, superseded v2 terminal `t_e729952b`, superseded v3 terminal `t_a2cfb68b`, and unbound orphan `t_21b8341a`. They must remain triage/blocked rather than being resumed. Completed v2 units and reworks are immutable handoff history, not residual work.
