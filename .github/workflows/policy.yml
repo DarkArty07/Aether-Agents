@@ -44,6 +44,7 @@ jobs:
           .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
+          .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
           .aether/project.toml
           AGENTS.md
           CHANGELOG.md
@@ -56,6 +57,7 @@ jobs:
           .github/PULL_REQUEST_TEMPLATE.md
           .github/workflows/policy.yml
           .github/workflows/release.yml
+          .gitattributes
           .gitignore
           HERMES_LOCAL_PATCHES.md
           home/config.yaml.template
@@ -66,6 +68,7 @@ jobs:
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
+          patches/hermes/HLP-263-gateway-process-ownership.patch
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py
