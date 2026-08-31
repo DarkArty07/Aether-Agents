@@ -85,6 +85,7 @@ def _write_events(paths: ObservationPaths, fixture: EventFactory) -> None:
         writer.close()
 
 
+@pytest.fixture(autouse=True)
 def _disable_background_flusher(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "aether_agents.observation.capture.collector.Flusher.start",
@@ -888,7 +889,6 @@ def test_native_callbacks_reject_unproven_identities_with_content_free_diagnosti
     _, paths = _install_project(monkeypatch, tmp_path)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
-    _disable_background_flusher(monkeypatch)
     context = FakePluginContext()
     hermes_plugin.register(context)
     token = correlation_token(TRACE_ID, "root")
@@ -1092,7 +1092,6 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
     _, paths = _install_project(monkeypatch, tmp_path)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
-    _disable_background_flusher(monkeypatch)
     context = FakePluginContext()
     hermes_plugin.register(context)
     observer = context.unload_callbacks[-1].__self__
