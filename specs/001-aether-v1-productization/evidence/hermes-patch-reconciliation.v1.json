@@ -1,0 +1,1075 @@
+{
+  "observed_at_utc": "2026-08-31T02:01:37Z",
+  "overall_blockers": [
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-188",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The direct isolated probe establishes the failing prerequisite; the separate-process dispatcher-spawn portion of the recorded matrix was not run.",
+      "id": "HLP-188",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-189",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The full schema-to-separate-process persistence gate was not executed.",
+      "id": "HLP-189",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Source inspection shows the required agent-facing interface is absent at the inspected revision, but source inspection is not substituted for a retirement pass.",
+      "id": "HLP-189",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-191",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The complete reconnect, reassignment, and auto-decompose behavioral matrix was not executed.",
+      "id": "HLP-191",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The ledger's additional explicit-recovery CLI surface is not represented by the linked upstream PR and remains unqualified independently.",
+      "id": "HLP-191",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-194",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The full receipt and process-outcome matrix was not executed.",
+      "id": "HLP-194",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Source inspection demonstrates that a successful retirement gate cannot be inferred from the current stop nudge and dispatcher backstop.",
+      "id": "HLP-194",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-198",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "No material uncertainty remains for the target: both required lanes fail before a valid retirement gate can pass, and the linked upstream PR is still open.",
+      "id": "HLP-198",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-204",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The broader gate was not executable because its prerequisite override-map interface is absent at the exact target; the linked upstream PR remains open.",
+      "id": "HLP-204",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is partial.",
+      "id": "HLP-209",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The required post-restart runtime probe and ordinary review-path validation were not run because this unit may not mutate the effective runtime or service; retain until the full recorded gate passes.",
+      "id": "HLP-209",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Backup-based reconstruction is unavailable because the documented ignored backup inputs are absent; the independent read-only effective-checkout reconstruction passed.",
+      "id": "HLP-211",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-211",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "PR 75951 remains open and only covers same-task session respawn, not the combined HLP-211/HLP-211b behavior.",
+      "id": "HLP-211",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "No linked upstream issue or PR covers HLP-211b terminal-controller flow routing.",
+      "id": "HLP-211",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The full live retirement canary remains unexecuted under this unit's no-spend and no-runtime-mutation constraints.",
+      "id": "HLP-211",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence.",
+      "id": "HLP-226",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-226",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.",
+      "id": "HLP-226",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Issue #226 is reopened, and the completing upstream PR remains open.",
+      "id": "HLP-226",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.",
+      "id": "HLP-226",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-246",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "No linked upstream issue or PR was located for equivalent attachment identity behavior.",
+      "id": "HLP-246",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient.",
+      "id": "HLP-246",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-247",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "No linked upstream issue or PR was located for the archived-parent dependency distinction.",
+      "id": "HLP-247",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The active detailed ledger section is reconciled independently even though it is absent from the active summary table.",
+      "id": "HLP-247",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented reconstruction input is unavailable, and the exact upstream lacks the origin-signal prerequisite needed to apply the full patch; checksum and parser controls do not establish a reconstruction pass.",
+      "id": "HLP-262",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-262",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.",
+      "id": "HLP-262",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.",
+      "id": "HLP-262",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded.",
+      "id": "HLP-262",
+      "kind": "uncertainty"
+    }
+  ],
+  "records": [
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "No versioned patches/hermes artifact is referenced for HLP-188 in HERMES_LOCAL_PATCHES.md.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "The direct isolated probe establishes the failing prerequisite; the separate-process dispatcher-spawn portion of the recorded matrix was not run."
+      ],
+      "components": [
+        "hermes_cli/kanban_db.py",
+        "tests/hermes_cli/test_kanban_blocked_sticky.py"
+      ],
+      "id": "HLP-188",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:27,39-47",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "A task created with initial_status=blocked remains blocked through dependency resolution, recomputation, and database reopen until an explicit unblock.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "isolated behavioral probe with an isolated HERMES_HOME",
+            "result": "The task was created with status=blocked and event_kinds=[created]. After reopening and recompute_ready, promoted=1, status=ready, and event_kinds=[created,promoted]."
+          }
+        ],
+        "status": "failed",
+        "summary": "Create an initially blocked task after its dependency is resolved, reopen the isolated database, recompute readiness, and require an explicit unblock as the only transition to ready."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Exact upstream source has the initial blocked status but not the durable sticky event. The isolated behavioral probe showed auto-promotion without unblock, so the local guarantee remains required.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3451-L3569",
+            "result": "create_task persists status=blocked but appends only a created event; it does not append the blocked event required by the existing sticky-block predicate."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L4454-L4569",
+            "result": "_has_sticky_block reads only the most recent blocked or unblocked event, so an initially blocked task with no blocked event is eligible for recompute_ready promotion."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/91180",
+            "result": "The linked PR is open and describes adding the missing create-time blocked event; open state was not used as equivalence evidence."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/91180"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "No versioned patches/hermes artifact is referenced for HLP-189 in HERMES_LOCAL_PATCHES.md.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "The full schema-to-separate-process persistence gate was not executed.",
+        "Source inspection shows the required agent-facing interface is absent at the inspected revision, but source inspection is not substituted for a retirement pass."
+      ],
+      "components": [
+        "tools/kanban_tools.py",
+        "tests/tools/test_kanban_tools.py"
+      ],
+      "id": "HLP-189",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:28,49-57",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "The agent-facing kanban_create schema exposes max_retries as an integer with minimum 1, validates it, forwards it to task creation, and preserves the value across database reopen.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "planned disposable behavioral probe",
+            "result": "The planned disposable behavioral probe was guard-denied before execution; no behavioral pass was recorded."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Verify the agent-facing schema minimum, handler validation and forwarding, then observe max_retries persisted by a separate process after task creation."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Upstream already supports max_retries in the database layer but does not expose or forward it through kanban_create. With no executed full gate, the local interface guarantee remains required.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py#L1343-L1481",
+            "result": "_handle_create reads neither max_retries nor forwards it to create_task."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py#L2132-L2310",
+            "result": "KANBAN_CREATE_SCHEMA has no max_retries property or minimum constraint."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3169-L3539",
+            "result": "The database layer already accepts and persists max_retries, so the missing portion is the worker-facing tool interface and forwarding path."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/89590",
+            "result": "The linked PR is open and describes the absent schema, validation, and forwarding behavior; open state was not used as equivalence evidence."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/89590"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "No versioned patches/hermes artifact is referenced for HLP-191 in HERMES_LOCAL_PATCHES.md.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "The complete reconnect, reassignment, and auto-decompose behavioral matrix was not executed.",
+        "The ledger's additional explicit-recovery CLI surface is not represented by the linked upstream PR and remains unqualified independently."
+      ],
+      "components": [
+        "gateway/kanban_watchers.py",
+        "hermes_cli/kanban_db.py",
+        "hermes_cli/kanban_decompose.py",
+        "hermes_cli/kanban.py",
+        "tests/hermes_cli/test_kanban_decompose.py",
+        "tests/hermes_cli/test_kanban_cli.py",
+        "tests/gateway/test_kanban_auto_decompose_recovery.py"
+      ],
+      "id": "HLP-191",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:29,59-73",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "A loop-escalated needs_input task remains human-gated across reconnect, reassignment, and auto-decompose ticks. Premature recovery while triage must be rejected; only explicit routing followed by durable recovery may resume work without autonomous redispatch.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "planned disposable SQLite behavioral probe",
+            "result": "The planned disposable SQLite behavioral probe was guard-denied before execution; no behavioral pass was recorded."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Exercise loop escalation through reconnect, reassignment, and auto-decompose; reject recovery while still in triage; then require explicit routing and a durable recovery event before any resume without autonomous redispatch."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Upstream can escalate repeated blocks to triage but still treats all triage tasks as auto-decomposition candidates and lacks the durable recovery boundary. The local human gate must remain.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L6257-L6479",
+            "result": "block_task detects repeated blocks and routes to triage with block_loop_detected, but the inspected source contains no durable active-escalation predicate or recovery event."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/gateway/kanban_watchers.py#L1692-L1767",
+            "result": "The auto-decomposer lists every triage task and invokes decompose_task without excluding loop escalations before automatic work."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L7200-L7288",
+            "result": "specify_triage_task promotes any triage task to todo and recomputes readiness; it has no escalation-specific recovery control or durable triage_escalation_recovered event."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/91211",
+            "result": "The linked PR is open and describes the missing active-escalation and auto-decomposer protections; open state was not used as equivalence evidence."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/91211"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "No versioned patches/hermes artifact is referenced for HLP-194 in HERMES_LOCAL_PATCHES.md.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "The full receipt and process-outcome matrix was not executed.",
+        "Source inspection demonstrates that a successful retirement gate cannot be inferred from the current stop nudge and dispatcher backstop."
+      ],
+      "components": [
+        "agent/conversation_loop.py",
+        "agent/kanban_stop.py",
+        "agent/turn_finalizer.py",
+        "cli.py",
+        "hermes_cli/kanban_db.py",
+        "hermes_cli/kanban_exit_codes.py",
+        "tests/agent/test_kanban_stop.py",
+        "tests/hermes_cli/test_kanban_protocol_exit.py",
+        "tests/run_agent/test_kanban_terminal_guard_integration.py"
+      ],
+      "id": "HLP-194",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:30,75-90",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "A worker must have exactly one successful durable terminal handoff. Receipt validation and outcomes must distinguish protocol violation, crash, signal, and timeout, with protocol failure mapped to EX_PROTOCOL=76.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "full multi-process terminal-handoff matrix",
+            "result": "The full multi-process terminal-handoff matrix was not executed against the disposable checkout; no behavioral pass was recorded."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "Run the complete terminal-handoff matrix for no handoff, valid receipt, rejected or forged receipt, duplicate or conflicting receipt, exception, signal, timeout, and quiet CLI exit-code mapping."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Upstream has a name-based stop nudge and a clean-exit backstop, but it lacks durable exactly-one receipt validation and EX_PROTOCOL=76. The local terminal-handoff guarantee remains required.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/kanban_stop.py#L20-L108",
+            "result": "The stop guard considers only the presence of kanban_complete or kanban_block tool names. It has no post-commit receipt, task/run identity, duplicate, conflict, or rejection validation."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/agent/conversation_loop.py#L8504-L8576",
+            "result": "After the nudge budget is exhausted, the conversation loop permits normal text-turn exit; it does not produce a structured terminal-handoff failure."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L8792-L8956",
+            "result": "The dispatcher later detects only clean exit with a still-running task and records a generic protocol violation; the inspected tree has no kanban_exit_codes module or EX_PROTOCOL mapping."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/91220",
+            "result": "The linked PR is open and describes receipt validation, exactly-one semantics, and EX_PROTOCOL=76; open state was not used as equivalence evidence."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/91220"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": "No material uncertainty remains for the target: both required lanes fail before a valid retirement gate can pass, and the linked upstream PR is still open.",
+      "components": [
+        "hermes_cli/kanban_db.py",
+        "tests/hermes_cli/test_kanban_db.py"
+      ],
+      "id": "HLP-198",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:92-100",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "The first ready or review worktree spawn receives the effective branch that the dispatcher resolved and persisted; directory and scratch workspaces remain branchless.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable target behavioral gate",
+            "result": "Ready and review persisted the expected branch but both first spawns observed no branch; directory and scratch controls remained branchless."
+          },
+          {
+            "kind": "test",
+            "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+            "result": "301 passed; the target worktree-isolation file contributed 2 passing existing tests and does not cover this failed first-spawn contract."
+          }
+        ],
+        "status": "failed",
+        "summary": "Repeat the first-spawn regression in ready and review lanes with directory and scratch controls at the target revision."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-198. Exact-target source and a disposable behavioral gate reproduce the stale claimed-task branch mismatch in ready and review dispatch.",
+      "upstream": {
+        "disposition": "upstream_open",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L10245-L10388",
+            "result": "Both dispatch lanes persist a resolved worktree branch but spawn the unchanged claimed task object; the default spawner exports the branch only from that object."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/89688",
+            "result": "The open PR assigns the resolved branch back to the claimed task in both lanes and adds first-spawn regression coverage."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/89677"
+          },
+          {
+            "head_revision": "25838b1af540d01ed684b03d027b0405b8bcc1bd",
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/89688"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": "The broader gate was not executable because its prerequisite override-map interface is absent at the exact target; the linked upstream PR remains open.",
+      "components": [
+        "hermes_cli/kanban_db.py",
+        "hermes_cli/kanban.py",
+        "hermes_cli/config_defaults.py",
+        "gateway/kanban_watchers.py",
+        "tests/hermes_cli/test_kanban_per_profile_cap.py",
+        "tests/hermes_cli/test_kanban_per_profile_overrides.py",
+        "tests/hermes_cli/test_kanban_cli_dispatch_passthrough.py",
+        "tests/gateway/test_kanban_watchers_mixin.py"
+      ],
+      "id": "HLP-204",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:102-121",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_OPEN",
+      "required_behavior": "Per-profile override limits take precedence over the scalar fallback and apply consistently across ready and review dispatch, existing running tasks, dry runs, CLI, gateway, invalid-value normalization, effective configuration, and restart qualification.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable target behavioral gate",
+            "result": "The target has no shared override normalizer and dispatch_once rejects max_in_progress_per_profile_overrides as an unexpected keyword, so the required topology cannot be configured."
+          },
+          {
+            "kind": "test",
+            "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+            "result": "301 passed; the target scalar-cap file contributed 2 passing existing tests but does not qualify override behavior."
+          }
+        ],
+        "status": "failed",
+        "summary": "Configure the asymmetric Supervisor=1 and Implementer=3 topology, exercise ready/review with running and dry-run cases, CLI/gateway passthrough, invalid normalization, effective configuration, and post-restart qualification."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-204. The target retains only the uniform cap, while the required asymmetric override interface remains solely in an open upstream PR.",
+      "upstream": {
+        "disposition": "upstream_open",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L10089-L10349",
+            "result": "The target has only one scalar per-profile cap shared by ready and review; it has no override-map parser or dispatcher argument."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/91266",
+            "result": "The open PR adds override normalization, per-assignee precedence, and CLI, gateway, and default-config propagation."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/91259"
+          },
+          {
+            "head_revision": "4168a08226b1d956098e2b7d9a73462ab52bba86",
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/91266"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": "This ledger entry references no versioned patches/hermes artifact; live runtime files were intentionally not inspected.",
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": "The required post-restart runtime probe and ordinary review-path validation were not run because this unit may not mutate the effective runtime or service; retain until the full recorded gate passes.",
+      "components": [
+        "cron/lifecycle_guard.py",
+        "tests/hermes_cli/test_gateway_restart_loop.py"
+      ],
+      "id": "HLP-209",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:123-134",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_VERIFIED",
+      "required_behavior": "Referenced directories are treated as nothing to scan rather than unsafe lifecycle scripts, while real lifecycle scripts and non-directory non-regular inputs remain fail-closed.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable target behavioral gate",
+            "result": "Passed: sourced configuration with a directory was allowed; a lifecycle script and /dev/null remained blocked."
+          },
+          {
+            "kind": "test",
+            "reference": "scripts/run_tests.sh tests/hermes_cli/test_kanban_worktree_isolation.py tests/hermes_cli/test_kanban_per_profile_cap.py tests/hermes_cli/test_gateway_restart_loop.py -q",
+            "result": "301 passed, including 297 passing tests in test_gateway_restart_loop.py."
+          }
+        ],
+        "status": "partial",
+        "summary": "At a revision without the local hunk, run the exact regression, the full gateway-restart-loop test file, and the post-restart runtime probe before retiring the backport."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "The exact upstream target contains and behaviorally passes the HLP-209 directory exemption, but the recorded runtime retirement gate remains incomplete.",
+      "upstream": {
+        "disposition": "upstream_verified",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/lifecycle_guard.py#L945-L955",
+            "result": "The exact target returns nothing-to-scan for directories and continues to fail closed for other non-regular inputs."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702",
+            "result": "The merged fix commit 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702 is an ancestor of the inspected revision."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "closed",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/86753"
+          },
+          {
+            "kind": "pull_request",
+            "state": "merged; merge revision 9ac1e65b0ae4e83dced9d5c8a406cc57cb589702",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/86848"
+          },
+          {
+            "kind": "commit",
+            "state": "ancestor of inspected revision",
+            "url": "https://github.com/NousResearch/hermes-agent/commit/9ac1e65b0ae4e83dced9d5c8a406cc57cb589702"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+            "kind": "patch",
+            "ledger_sha256": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-211b-flow-blocker-routing.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "documented ignored backup reconstruction input",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "read-only effective-source byte reconstruction",
+            "result": "passed"
+          }
+        ],
+        "blocker": "Backup-based reconstruction is unavailable because the documented ignored backup inputs are absent; the independent read-only effective-checkout reconstruction passed.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "PR 75951 remains open and only covers same-task session respawn, not the combined HLP-211/HLP-211b behavior.",
+        "No linked upstream issue or PR covers HLP-211b terminal-controller flow routing.",
+        "The full live retirement canary remains unexecuted under this unit's no-spend and no-runtime-mutation constraints."
+      ],
+      "components": [
+        "HLP-211",
+        "HLP-211b"
+      ],
+      "id": "HLP-211",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:136-157",
+      "local_status": "ACTIVE_LOCAL_E2E_QUALIFIED",
+      "required_behavior": "Provide opt-in, fenced worker-session continuity for the same Project, flow, profile, and canonical workspace; preserve fresh Implementer isolation. When a blocked non-terminal flow task has exactly one terminal-affinity controller child, create one internal flow attention, let dependency resolution resume the blocked task, and allow only an explicit recovery origin signal to escape the flow.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target source prerequisite gate",
+            "result": "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: create_task(session_affinity=...) rejected, block_task(..., origin_signal='recovery') rejected, create_task has no session_affinity parameter, and _pending_flow_attentions is absent."
+          },
+          {
+            "kind": "test",
+            "reference": "HERMES_LOCAL_PATCHES.md:153",
+            "result": "The spend-gated live E2E-16 and blocker canary were not executed: this unit authorizes neither model spend nor runtime/service mutation. Their absence does not weaken the failed prerequisite result."
+          }
+        ],
+        "status": "failed",
+        "summary": "The full gate requires E2E-16 plus the terminal-controller blocker canary on an unpatched upstream revision. A disposable source-level prerequisite gate was executed first and failed because the required affinity and blocker-routing interfaces are absent."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain both HLP-211 and HLP-211b. The exact public snapshot lacks prerequisite runtime interfaces, and the linked open PR is a narrower same-task resumption change. The tracked HLP-211b patch checksum, parser check, and read-only effective-checkout byte reconstruction passed; only the ignored backup input remains unavailable.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "At the inspected revision, hermes_cli/kanban_db.py has no session_affinity parameter on create_task, no _pending_flow_attentions helper, and no origin_signal argument on block_task."
+          },
+          {
+            "kind": "test",
+            "reference": "disposable exact-target source prerequisite gate",
+            "result": "A disposable source gate confirmed that session_affinity and recovery origin-signal calls are rejected and that no flow-attention helper exists."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/75951",
+            "result": "The current public PR 75951 is open. Its GitHub file list contains 48 additions in hermes_cli/kanban_db.py and a 179-line blocked-task session-resume test; its patch resumes a prior session for the same task after respawn. It does not establish the multi-card affinity, Project/workspace fencing, terminal controller routing, or recovery behavior required here."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/59855"
+          },
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/68779"
+          },
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/71175"
+          },
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/issues/75830"
+          },
+          {
+            "head_revision": "570be2e25930453444d61b8389486b00272fd46c",
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/75951"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
+            "kind": "patch",
+            "ledger_sha256": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "documented private backup reconstruction input (existence check approval-denied under #264)",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "full HLP-226b patch byte reconstruction against the documented backup input",
+            "result": "unavailable"
+          }
+        ],
+        "blocker": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.",
+        "Issue #226 is reopened, and the completing upstream PR remains open.",
+        "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded."
+      ],
+      "components": [
+        "HLP-226",
+        "HLP-226b"
+      ],
+      "id": "HLP-226",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
+      "local_status": "ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL",
+      "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable target behavioral gate",
+            "result": "The omitted-workspace control inherited the Project and received a fresh workspace, but an explicit worktree child did not inherit or get a fresh project workspace and a conflicting Project was not rejected. The exact revision also has no affinity-terminal dir source variant."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
+            "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
+          },
+          {
+            "kind": "artifact",
+            "reference": "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
+            "result": "SHA-256 matched and git apply --stat parsed the two-file patch. git apply --check against this Aether repository cannot find the Hermes target files, so it is not an application or reconstruction pass."
+          }
+        ],
+        "status": "failed",
+        "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-226 and HLP-226b. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable.",
+      "upstream": {
+        "disposition": "upstream_partial",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L3292-L3358",
+            "result": "The integrated ancestor commit provides cross-profile routing from a canonical source task when a Project has already been inherited."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py#L1387-L1435",
+            "result": "The target inherits a worker Project only when workspace_kind is omitted, so an explicit worktree request bypasses inheritance and conflict rejection; it has no affinity-terminal workspace_kind=dir source variant."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
+            "result": "The open PR changes inheritance to depend only on an omitted workspace path and rejects a conflicting explicit Project."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "reopened",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/226"
+          },
+          {
+            "kind": "commit",
+            "state": "ancestor of inspected revision",
+            "url": "https://github.com/NousResearch/hermes-agent/commit/b9b5481d6236edb3ec8aae32cc4b5c661569b872"
+          },
+          {
+            "head_revision": "ce1c41f9b3f3baf26096d18fa358b0a065d52571",
+            "kind": "pull_request",
+            "state": "open",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/89363"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": null,
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "No linked upstream issue or PR was located for equivalent attachment identity behavior.",
+        "A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient."
+      ],
+      "components": [
+        "HLP-246"
+      ],
+      "id": "HLP-246",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:172-186",
+      "local_status": "ACTIVE_LOCAL",
+      "required_behavior": "Require caller-declared byte length and SHA-256 for inline attachments before transport; compare those claims with decoded bytes, re-read and verify persisted bytes before metadata insertion, persist and return the computed identity, and leave legacy attachment rows uncertified.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target attachment-identity gate",
+            "result": "Executed disposable handler/database gate: accepted_truncated_valid_base64=true, schema_requires_integrity_claims=false, attachment_has_sha256=false, stored_bytes_match_truncated=true."
+          },
+          {
+            "kind": "test",
+            "reference": "HERMES_LOCAL_PATCHES.md:185",
+            "result": "The full three-process tarball qualification was not needed after the required pre-transport and persistence conditions demonstrably failed."
+          }
+        ],
+        "status": "failed",
+        "summary": "The required attachment-identity gate fails on the inspected upstream revision before a full multi-process tarball run: inline truncated valid base64 is accepted without transport claims or durable SHA-256 identity."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py",
+            "result": "At the inspected revision, tools/kanban_tools.py requires only filename and content_base64 for kanban_attach; expected_size and expected_sha256 are absent from the tool schema."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "hermes_cli/kanban_db.py stores the supplied bytes and size but the task_attachments schema and Attachment model contain no SHA-256 field or post-write identity verification."
+          },
+          {
+            "kind": "test",
+            "reference": "disposable exact-target attachment-identity gate",
+            "result": "A disposable source gate sent a valid-base64 16-byte truncation of a 23-byte synthetic payload. The upstream handler accepted it, reported and stored 16 bytes, and exposed neither integrity claims nor a SHA-256 attachment field."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [],
+        "blocker": null,
+        "status": "not_applicable"
+      },
+      "blocking_uncertainty": [
+        "No linked upstream issue or PR was located for the archived-parent dependency distinction.",
+        "The active detailed ledger section is reconciled independently even though it is absent from the active summary table."
+      ],
+      "components": [
+        "HLP-247"
+      ],
+      "id": "HLP-247",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:188-198",
+      "local_status": "ACTIVE_LOCAL",
+      "required_behavior": "Do not treat an archived parent as completed for a child already in blocked status. Preserve historical archived-parent promotion for todo children and preserve promotion of a non-sticky blocked child after an actual done parent.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target archived-parent three-control gate",
+            "result": "Executed against 4f22543509d1b91dc45bcb369447126c5eb14fb7: blocked child after archived parent=ready (required blocked); todo child after archived parent=ready; non-sticky blocked child after done parent=ready."
+          }
+        ],
+        "status": "failed",
+        "summary": "The three-control archived-parent gate was executed in a disposable upstream database and failed because an eventless blocked child was promoted to ready when its parent was archived."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "At the inspected revision, recompute_ready considers both todo and blocked children and accepts parent statuses done or archived; archive_task immediately invokes recompute_ready."
+          },
+          {
+            "kind": "test",
+            "reference": "disposable exact-target archived-parent three-control gate",
+            "result": "A disposable three-control gate produced blocked_child_after_parent_archive=ready, todo_child_after_parent_archive=ready, and nonsticky_child_after_parent_done=ready. The first result violates the required behavior while the two compatibility controls retain their historical outcomes."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+            "kind": "patch",
+            "ledger_sha256": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-262-origin-signal-sticky.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "documented pre-change reconstruction input",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "full-patch byte reconstruction against the documented input",
+            "result": "unavailable"
+          }
+        ],
+        "blocker": "The documented reconstruction input is unavailable, and the exact upstream lacks the origin-signal prerequisite needed to apply the full patch; checksum and parser controls do not establish a reconstruction pass.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.",
+        "The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.",
+        "The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded."
+      ],
+      "components": [
+        "hermes_cli/kanban_db.py",
+        "tests/hermes_cli/test_kanban_blocked_sticky.py"
+      ],
+      "id": "HLP-262",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:202-212",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "A non-dependency block that emits origin_signal=input, revision, or recovery remains blocked through repeated readiness recomputation until an explicit unblock or native controller resolution resumes it exactly once.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target source prerequisite control",
+            "result": "The prerequisite failed: block_task has no origin_signal argument and _has_sticky_block queries only blocked and unblocked events, so the full origin-signal behavioral regression cannot begin on this revision."
+          },
+          {
+            "kind": "artifact",
+            "reference": "patches/hermes/HLP-262-origin-signal-sticky.patch against exact upstream",
+            "result": "SHA-256 matched and git apply --stat parsed the patch; full git apply --check and reverse --check did not apply because the exact upstream test and API lack the earlier origin-signal prerequisite. No equivalence or reconstruction pass was inferred."
+          }
+        ],
+        "status": "failed",
+        "summary": "At the exact upstream revision, first require the origin_signal block API and sticky predicate; then run the input, revision, and recovery reopen/recompute regression with explicit unblock or native-controller resolution as the only resume path."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L4454-L4489",
+            "result": "The exact upstream _has_sticky_block predicate considers only blocked and unblocked events; it contains no origin_signal semantics."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py#L6257-L6482",
+            "result": "The exact upstream block_task API has no origin_signal argument and emits blocked for a true block, so it lacks the prerequisite origin-signal route as well as sticky handling for that route."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/262"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    }
+  ],
+  "schema_version": "aether.hermes-patch-reconciliation.v1",
+  "source_ledger_sha256": "82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d556db6c1e6",
+  "upstream": {
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}
