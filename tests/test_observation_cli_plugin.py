@@ -85,6 +85,13 @@ def _write_events(paths: ObservationPaths, fixture: EventFactory) -> None:
         writer.close()
 
 
+def _disable_background_flusher(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.collector.Flusher.start",
+        lambda _self, _spawn_task=None: None,
+    )
+
+
 def _journal_events(paths: ObservationPaths) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for segment in list_segments(paths):
@@ -881,6 +888,7 @@ def test_native_callbacks_reject_unproven_identities_with_content_free_diagnosti
     _, paths = _install_project(monkeypatch, tmp_path)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+    _disable_background_flusher(monkeypatch)
     context = FakePluginContext()
     hermes_plugin.register(context)
     token = correlation_token(TRACE_ID, "root")
@@ -921,6 +929,9 @@ def test_native_callbacks_reject_unproven_identities_with_content_free_diagnosti
         args={"command": "raw command/output/error text"},
     )
     observer = context.unload_callbacks[-1].__self__
+    collector = observer._collector
+    assert collector is not None
+    assert collector.flusher._thread is None
     pending_bytes = repr(observer._pending_spans).encode()
     assert all(value not in pending_bytes for value in hostile_values)
     context.hooks["post_tool_call"][0](
@@ -962,6 +973,8 @@ def test_native_callbacks_reject_unproven_identities_with_content_free_diagnosti
     )
     for callback in reversed(context.unload_callbacks):
         callback()
+    assert collector.flusher.stats.final_flush_attempted
+    assert collector.writer._segment_fd is None
 
     events = _journal_events(paths)
     for event in events:
@@ -1079,8 +1092,13 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
     _, paths = _install_project(monkeypatch, tmp_path)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setattr(hermes_plugin._NativeReconciliationWorker, "start", lambda self: None)
+    _disable_background_flusher(monkeypatch)
     context = FakePluginContext()
     hermes_plugin.register(context)
+    observer = context.unload_callbacks[-1].__self__
+    collector = observer._collector
+    assert collector is not None
+    assert collector.flusher._thread is None
     token = correlation_token(TRACE_ID, "root")
     context.hooks["pre_tool_call"][0](
         tool_name="kanban_create",
@@ -1105,6 +1123,8 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
     terminal = _wait_journal_event(paths, "run.finished")
     for callback in reversed(context.unload_callbacks):
         callback()
+    assert collector.flusher.stats.final_flush_attempted
+    assert collector.writer._segment_fd is None
 
     assert terminal["work_unit"]["run_outcome"] == native_outcome
 

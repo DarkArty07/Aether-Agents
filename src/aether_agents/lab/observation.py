@@ -461,10 +461,10 @@ def live_observation(
 
     from .runner import (
         HarnessError,
-        _hermes_env,
         _invoke_morfeo,
         _safe_run_root,
         _source_status,
+        isolated_hermes_env,
         prepare_profiles,
     )
 
@@ -497,7 +497,7 @@ def live_observation(
     try:
         project, paths, project_id, trace_id = _seed_trace(run_root)
         hermes_root = prepare_profiles(profile_root, run_root, command_log)
-        env = _hermes_env(run_root, hermes_root, hermes)
+        env = isolated_hermes_env(run_root, hermes_root, hermes)
         env.update(
             {
                 "XDG_STATE_HOME": str(run_root / "state"),

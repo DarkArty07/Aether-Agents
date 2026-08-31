@@ -72,6 +72,16 @@ _PYTEST_OUTCOME_RE = re.compile(
     r"(?P<outcome>passed|failed|skipped|deselected|xfailed|xpassed|errors?|rerun)",
     re.ASCII,
 )
+_PYTEST_FAILURE_NODE_RE = re.compile(
+    r"^(?:FAILED|ERROR) "
+    r"(?P<node>tests/(?:[A-Za-z0-9][A-Za-z0-9_.-]*/)*"
+    r"[A-Za-z0-9][A-Za-z0-9_.-]*\.py"
+    r"(?:::[A-Za-z_][A-Za-z0-9_]*)+)"
+    r"(?=\[|\s|$)",
+    re.ASCII,
+)
+MAX_FAILURE_NODE_IDS = 4
+MAX_FAILURE_NODE_ID_CHARS = 160
 
 
 def contract() -> dict[str, Any]:
@@ -131,7 +141,12 @@ def _content_free_stream_tail(stream: str | None) -> str:
     tail = stream[-8192:]
     lines = tail.splitlines()[-8:]
     described: list[str] = []
+    failure_nodes = _safe_pytest_failure_nodes(lines)
+    if failure_nodes:
+        described.append(f"pytest-failure-nodes({','.join(failure_nodes)})")
     for line in lines:
+        if _safe_pytest_failure_node(line) is not None:
+            continue
         outcomes: dict[str, int] = {}
         for match in _PYTEST_OUTCOME_RE.finditer(line):
             outcome = match.group("outcome")
@@ -145,6 +160,24 @@ def _content_free_stream_tail(stream: str | None) -> str:
             f"line(chars={len(line)},sha256={hashlib.sha256(encoded).hexdigest()[:16]})"
         )
     return "[" + ",".join(described or ["empty"]) + "]"
+
+
+def _safe_pytest_failure_node(line: str) -> str | None:
+    """Return only a bounded repository-relative pytest module and test symbol."""
+    match = _PYTEST_FAILURE_NODE_RE.match(line)
+    if match is None:
+        return None
+    node = match.group("node")
+    if len(node) > MAX_FAILURE_NODE_ID_CHARS:
+        return None
+    return node
+
+
+def _safe_pytest_failure_nodes(lines: Sequence[str]) -> list[str]:
+    """Produce deterministic bounded failure identities without pytest payload text."""
+    return sorted(
+        {node for line in lines if (node := _safe_pytest_failure_node(line)) is not None}
+    )[:MAX_FAILURE_NODE_IDS]
 
 
 def _require_single_passed_harness(completed: subprocess.CompletedProcess[str]) -> None:

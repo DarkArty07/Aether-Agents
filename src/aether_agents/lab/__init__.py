@@ -25,6 +25,7 @@ _LANE_EXPORTS = {
     "run_sqlite_boundary_fixture": (".affinity", "run_sqlite_boundary_fixture"),
     "HarnessError": (".runner", "HarnessError"),
     "ScenarioError": (".runner", "ScenarioError"),
+    "isolated_hermes_env": (".runner", "isolated_hermes_env"),
     "live_run": (".runner", "live_run"),
     "prepare_only": (".runner", "prepare_only"),
     "Scenario": (".synthetic_owner", "Scenario"),

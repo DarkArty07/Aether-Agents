@@ -365,29 +365,19 @@ def _fault_recovered(known_good: Path | None) -> bool:
     return active.is_file() and active.read_bytes() == known_good.read_bytes()
 
 
-def _hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
+def isolated_hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
+    """Return the disposable Hermes environment shared by laboratory lanes."""
+
     env = dict(os.environ)
     # The laboratory's --in directory is authoritative. Ambient cwd and
     # dispatcher-worker identity belong to the outer process; carrying either
     # into the isolated home/board would make the canary act on a foreign task.
-    for name in (
-        "TERMINAL_CWD",
-        "HERMES_CWD",
-        "HERMES_KANBAN_TASK",
-        "HERMES_KANBAN_RUN_ID",
-        "HERMES_KANBAN_WORKSPACE",
-        "HERMES_KANBAN_BRANCH",
-        "HERMES_KANBAN_BOARD",
-        "HERMES_KANBAN_CLAIM_LOCK",
-        "HERMES_KANBAN_GOAL_MODE",
-        "HERMES_KANBAN_AFFINITY_TOKEN",
-        "HERMES_KANBAN_AFFINITY_GENERATION",
-        "HERMES_KANBAN_AFFINITY_FLOW_ID",
-        "HERMES_KANBAN_AFFINITY_PROJECT_ID",
-        "HERMES_SESSION_ID",
-        "HERMES_SESSION_SOURCE",
-    ):
-        env.pop(name, None)
+    for name in tuple(env):
+        if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_")) or name in {
+            "TERMINAL_CWD",
+            "HERMES_CWD",
+        }:
+            env.pop(name)
     env.update(
         {
             "HERMES_HOME": str(hermes_root),
@@ -2147,7 +2137,7 @@ def live_run(
     baseline_acceptance = _run_acceptance(scenario, repo, git_env, commands, evidence, "baseline")
 
     hermes_root = prepare_profiles(profile_root, run_root, commands)
-    env = _hermes_env(run_root, hermes_root, hermes)
+    env = isolated_hermes_env(run_root, hermes_root, hermes)
     env["AETHER_HOOK_DENIAL_AUDIT_PATH"] = str(evidence / "hook-denials.jsonl")
     source_status_before = _source_status(commands, env)
     runtime_project_id = _initialize_runtime_project(

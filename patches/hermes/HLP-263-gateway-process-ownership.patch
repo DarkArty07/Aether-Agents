@@ -1,0 +1,156 @@
+diff --git a/hermes_cli/gateway.py b/hermes_cli/gateway.py
+index 64417c323f0043f09075351eb9d7238768f2c6d7..faea143083715033058433c9ab42d96c25a95dec 100644
+--- a/hermes_cli/gateway.py
++++ b/hermes_cli/gateway.py
+@@ -8045,7 +8045,13 @@ def _gateway_command_inner(args):
+     elif subcmd == "stop":
+         # Defense: refuse self-targeting gateway stop from inside the gateway.
+         # Prevents agent-initiated kill loops when combined with supervisor KeepAlive.
+-        if os.getenv("_HERMES_GATEWAY") == "1":
++        # The supervised probe also PASSES a plain foreground `hermes gateway run`
++        # (env set, PID owned, but no supervisor): that is intentional and
++        # harmless — with no supervisor there is no KeepAlive, so a self-stop is
++        # a one-shot exit rather than a respawn loop.
++        from tools.process_registry import _is_supervised_gateway_process
++
++        if _is_supervised_gateway_process():
+             print_error(
+                 "Refusing to stop the gateway from inside the gateway process.\n"
+                 "This command was blocked to prevent restart loops.\n"
+@@ -8138,7 +8144,13 @@ def _gateway_command_inner(args):
+     elif subcmd == "restart":
+         # Defense: refuse self-targeting gateway restart from inside the gateway.
+         # Prevents agent-initiated kill loops when combined with supervisor KeepAlive.
+-        if os.getenv("_HERMES_GATEWAY") == "1":
++        # The supervised probe also PASSES a plain foreground `hermes gateway run`
++        # (env set, PID owned, but no supervisor): that is intentional and
++        # harmless — with no supervisor there is no KeepAlive, so a self-restart
++        # is a single relaunch rather than a respawn loop.
++        from tools.process_registry import _is_supervised_gateway_process
++
++        if _is_supervised_gateway_process():
+             print_error(
+                 "Refusing to restart the gateway from inside the gateway process.\n"
+                 "This command was blocked to prevent restart loops.\n"
+diff --git a/tests/hermes_cli/test_gateway_restart_loop.py b/tests/hermes_cli/test_gateway_restart_loop.py
+index acf6b99d8c0b042c6fbe5f65ddc9ec25d6dd4ca1..b50d5f3b24c4ce81e8c377ed60523cd3ed01f700 100644
+--- a/tests/hermes_cli/test_gateway_restart_loop.py
++++ b/tests/hermes_cli/test_gateway_restart_loop.py
+@@ -200,7 +200,10 @@ class TestGatewaySelfTargetingGuard:
+     """Verify hermes gateway stop/restart refuse when _HERMES_GATEWAY=1."""
+ 
+     def test_stop_refuses_inside_gateway(self, monkeypatch):
+-        monkeypatch.setenv("_HERMES_GATEWAY", "1")
++        from tools import process_registry
++        monkeypatch.setattr(
++            process_registry, "_is_supervised_gateway_process", lambda: True
++        )
+         from hermes_cli.gateway import gateway_command
+         args = Namespace(gateway_command="stop", all=False, system=False)
+         with pytest.raises(SystemExit) as exc_info:
+@@ -254,15 +257,16 @@ class TestTerminalToolGatewayLifecycleGuard:
+ 
+     def _patch_env(self, monkeypatch, fake_env, *, inside_gateway: bool):
+         import tools.terminal_tool as tt
++        from tools import process_registry
+         eid = "default"
+         monkeypatch.setattr(tt, "_active_environments", {eid: fake_env})
+         monkeypatch.setattr(tt, "_last_activity", {eid: 0.0})
+         monkeypatch.setattr(tt, "_task_env_overrides", {})
+         monkeypatch.setattr(tt, "_get_env_config", self._minimal_config)
+-        if inside_gateway:
+-            monkeypatch.setenv("_HERMES_GATEWAY", "1")
+-        else:
+-            monkeypatch.delenv("_HERMES_GATEWAY", raising=False)
++        monkeypatch.setattr(
++            process_registry, "_is_supervised_gateway_process",
++            lambda: inside_gateway,
++        )
+ 
+     @pytest.mark.parametrize("cmd", [
+         "systemctl restart hermes-gateway",
+@@ -372,6 +376,39 @@ class TestTerminalToolGatewayLifecycleGuard:
+         assert result["exit_code"] == 0
+         assert calls == [command]
+ 
++    def test_cli_agent_session_not_blocked_by_inherited_env(
++        self, monkeypatch
++    ):
++        """#92560: CLI/TUI agent sessions inherit _HERMES_GATEWAY=1 from the
++        gateway but are NOT the gateway supervisor.  The env gate must not
++        fire for them — only for the actual gateway process (PID-file owner).
++        """
++        import tools.terminal_tool as tt
++
++        calls = []
++
++        class _FakeEnv:
++            env = {}
++
++            def execute(self, cmd, **kwargs):
++                calls.append(cmd)
++                return {"output": "", "returncode": 0}
++
++        # Simulate a CLI agent session: _HERMES_GATEWAY=1 is in the
++        # environment (inherited from the gateway), but
++        # _is_supervised_gateway_process() returns False because the
++        # process does not own the gateway PID file.
++        self._patch_env(monkeypatch, _FakeEnv(), inside_gateway=False)
++        monkeypatch.setenv("_HERMES_GATEWAY", "1")
++        monkeypatch.setattr(
++            tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True}
++        )
++
++        result = json.loads(tt.terminal_tool(command="hermes gateway restart"))
++
++        assert result["exit_code"] == 0
++        assert calls == ["hermes gateway restart"]
++
+     def test_blocks_launchctl_submit_hidden_in_referenced_script(
+         self, monkeypatch, tmp_path
+     ):
+@@ -1165,15 +1202,16 @@ class TestTerminalToolGatewayLifecycleGuardRemote:
+ 
+     def _patch_env(self, monkeypatch, fake_env, *, inside_gateway: bool):
+         import tools.terminal_tool as tt
++        from tools import process_registry
+         eid = "default"
+         monkeypatch.setattr(tt, "_active_environments", {eid: fake_env})
+         monkeypatch.setattr(tt, "_last_activity", {eid: 0.0})
+         monkeypatch.setattr(tt, "_task_env_overrides", {})
+         monkeypatch.setattr(tt, "_get_env_config", lambda: {"env_type": "local", "cwd": "/tmp", "timeout": 60, "lifetime_seconds": 3600})
+-        if inside_gateway:
+-            monkeypatch.setenv("_HERMES_GATEWAY", "1")
+-        else:
+-            monkeypatch.delenv("_HERMES_GATEWAY", raising=False)
++        monkeypatch.setattr(
++            process_registry, "_is_supervised_gateway_process",
++            lambda: inside_gateway,
++        )
+ 
+     def test_remote_backend_script_read_uses_env_execute(self, monkeypatch, tmp_path):
+         import tools.terminal_tool as tt
+
+diff --git a/tools/terminal_tool.py b/tools/terminal_tool.py
+index b0ec8ff39e6e71021aad27185f7c5d7e08a40665..32ae32259b1ed4c4d89c5f1dba8a63a290cb1486 100644
+--- a/tools/terminal_tool.py
++++ b/tools/terminal_tool.py
+@@ -2876,7 +2876,17 @@ def terminal_tool(
+         # never restart. This mirrors the `hermes gateway restart` guard in
+         # hermes_cli/gateway.py and the cron-path guard in hermes_cli/cron.py,
+         # but applies unconditionally (force=True cannot help here).
+-        if os.environ.get("_HERMES_GATEWAY") == "1":
++        # Gate on the SUPERVISED-gateway probe, not the raw _HERMES_GATEWAY
++        # marker: gateway.run sets it at import time, so it leaks into every
++        # process that merely imports gateway.run (hermes serve --isolated,
++        # CLI, web server) which are NOT the gateway and must be able to
++        # restart it. A plain foreground `hermes gateway run` (env set, PID
++        # owned, no supervisor) now also PASSES this guard: intentional and
++        # harmless, since without a supervisor there is no KeepAlive to turn a
++        # self-restart into a respawn loop.
++        from tools.process_registry import _is_supervised_gateway_process
++
++        if _is_supervised_gateway_process():
+             from cron.lifecycle_guard import (
+                 _MAX_REFERENCED_SCRIPT_BYTES,
+                 contains_gateway_lifecycle_command_or_referenced_script,
