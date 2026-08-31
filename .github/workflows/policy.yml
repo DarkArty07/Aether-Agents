@@ -34,6 +34,7 @@ jobs:
           cat >"$expected" <<'EOF'
           .aether/objective-contracts/oc_184c251953c157ec/v1.md
           .aether/objective-contracts/oc_281059d9a540201f/v1.md
+          .aether/objective-contracts/oc_3879332591e50500/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v2.md
           .aether/objective-contracts/oc_537e9a8701b4aac7/v1.md
@@ -57,6 +58,7 @@ jobs:
           .aether/project.toml
           AGENTS.md
           CHANGELOG.md
+          CLAUDE.md
           CODE_OF_CONDUCT.md
           CONTRIBUTING.md
           DESIGN.md
@@ -68,6 +70,7 @@ jobs:
           .github/workflows/release.yml
           .gitattributes
           .gitignore
+          .mailmap
           HERMES_LOCAL_PATCHES.md
           home/config.yaml.template
           home/.env.example
