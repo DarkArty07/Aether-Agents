@@ -151,13 +151,15 @@ created. The rolling 20-run reliability gate and native persistent wake remain p
 
 The current `0.24.0` package is a **beta stabilization build, not a release candidate**. Its implemented public surface is:
 
-- the `aether` CLI for `--version`, `observe`, `doctor`, verified local `setup`/`update`, `rollback`, and `uninstall`;
+- the `aether` CLI for `--version`, `observe`, `doctor`, `init`, verified local `setup`/`update`, `rollback`, and `uninstall`;
 - the Contract Observer and Objective Contract Hermes plugins;
 - Morfeo-only `aether_observe` with bounded `status`, `changes`, and `diagnose` views over validated summaries (no logs, prompts, commands, outputs, diffs, or raw events);
 - the portable Morfeo, Supervisor, and Implementer profile bundle;
 - release-lock validation, isolated manager/runtime staging, and deterministic qualification.
 
-The operational `init`, `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders until the immutable runtime set and activation semantics are completed. Public OIDC release publication and the owner-authorized live reliability matrix are also pending. The CLI returns an unsupported/error result rather than pretending those effects occurred.
+`aether init` initializes an existing Git repository root as an Aether Project: it writes the portable `.aether/project.toml` marker validated against `project.schema.json`, and maps that UUID to exactly one native Hermes Project matched by **exact primary path**. It never creates, modifies, or archives a Hermes Project, never matches by name or approximate path, and never overwrites an existing marker; ambiguous, mismatched, or conflicting identity is refused. Initializing Git in an empty greenfield directory is not performed by this build: `init` requires an existing repository root.
+
+The operational `start`, `stop`, `restart`, `status`, and `reconcile` commands remain explicit unsupported placeholders until the immutable runtime set and activation semantics are completed. Public OIDC release publication and the owner-authorized live reliability matrix are also pending. The CLI returns an unsupported/error result rather than pretending those effects occurred.
 
 Non-destructive candidate inspection:
 
