@@ -625,6 +625,9 @@ def test_product_resources_enable_authoring_only_for_morfeo() -> None:
     assert supervisor["approvals"]["mode"] == "off"
     assert implementer["approvals"]["mode"] == "off"
     assert morfeo.get("approvals", {}).get("mode") != "off"
+    assert supervisor["security"]["protected_instruction_files"] is False
+    assert implementer["security"]["protected_instruction_files"] is False
+    assert morfeo.get("security", {}).get("protected_instruction_files", True) is True
 
     soul = (profiles / "morfeo" / "SOUL.md").read_text(encoding="utf-8")
     assert "For every pipeline handoff" in soul
