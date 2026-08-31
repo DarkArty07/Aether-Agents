@@ -297,12 +297,12 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
     )
     contract = json.loads(completed.stdout)
     assert contract["hermes"] == {
-        "repository": "https://github.com/NousResearch/hermes-agent.git",
-        "tag": "v2026.8.18",
-        "tag_object": "9f13bbbf8423427e159c78066356ca0e27ca6b74",
-        "commit": "e624e9fde561e1add9388384012b295fde669ade",
-        "distribution": "hermes-agent",
-        "version": "0.20.4",
+        "repository": HERMES_BASELINE.repository,
+        "tag": HERMES_BASELINE.tag,
+        "tag_object": HERMES_BASELINE.tag_object,
+        "commit": HERMES_BASELINE.commit,
+        "distribution": HERMES_BASELINE.distribution,
+        "version": HERMES_BASELINE.version,
     }
     assert contract["minimum_observation_tests"] == 119
     assert contract["expected_core_tests"] == 450
@@ -331,6 +331,11 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "qualify_observation.py checkout" in workflow
+    assert "check_hermes_baseline_drift.py --json" in workflow
+    assert "scripts/run_tests.py" in workflow
+    assert "coverage run -m pytest" in workflow
+    assert "coverage report --format=total" in workflow
+    assert "mypy src/aether_agents" in workflow
     assert "python-version: ['3.11', '3.12', '3.13']" in workflow
     assert "ruff check" in workflow
     assert "ruff format --check" in workflow
@@ -355,9 +360,10 @@ def test_qualification_runner_and_ci_execute_instead_of_trusting_a_fixture() -> 
         "path: ${{ runner.temp }}/observation-tests-python-${{ matrix.python-version }}.json"
         in workflow
     )
-    exact_pythonpath = 'PYTHONPATH="${RUNNER_TEMP}/hermes-v2026.8.18"'
+    exact_pythonpath = 'PYTHONPATH="${RUNNER_TEMP}/hermes-exact"'
     assert exact_pythonpath in workflow
     assert f'{exact_pythonpath[:-1]}:${{PWD}}/src:${{PWD}}/tests"' not in workflow
+    assert "hermes-v2026.8.18" not in workflow
     assert workflow.count("qualify_observation.py benchmark") == 1
     assert 'AETHER_RUN_DEEP_QUALIFICATION: "0"' in workflow
 

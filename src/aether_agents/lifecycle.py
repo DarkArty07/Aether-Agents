@@ -33,6 +33,7 @@ from typing import Any, Iterator
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from aether_agents.hermes_baseline import HermesBaseline, load_hermes_baseline
 from aether_agents.observation.checkpoint import AuthorityContext
 from aether_agents.observation.contracts import (
     EVENT_SCHEMA_VERSION,
@@ -78,30 +79,9 @@ class IntegrityError(RuntimeError):
     """A candidate or local transition cannot be proven coherent."""
 
 
-@dataclass(frozen=True, slots=True)
-class HermesBaseline:
-    repository: str
-    tag: str
-    tag_object: str
-    commit: str
-    distribution: str
-    version: str
-    python_requires: str
-    observer_entry_point: str
-
-
-HERMES_BASELINE = HermesBaseline(
-    repository="https://github.com/NousResearch/hermes-agent.git",
-    tag="v2026.8.18",
-    tag_object="9f13bbbf8423427e159c78066356ca0e27ca6b74",
-    commit="e624e9fde561e1add9388384012b295fde669ade",
-    distribution="hermes-agent",
-    version="0.20.4",
-    python_requires=">=3.11,<3.14",
-    observer_entry_point=(
-        "aether-contract-observer=aether_agents.observation.capture.hermes_plugin"
-    ),
-)
+# Compatibility export for callers which historically imported the release tuple
+# from this module.  The package resource remains its sole source of values.
+HERMES_BASELINE = load_hermes_baseline()
 
 
 OBSERVER_ENTRY_POINT: dict[str, str] = {

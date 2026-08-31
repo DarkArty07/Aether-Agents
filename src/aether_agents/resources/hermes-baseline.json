@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "baseline": {
+    "repository": "https://github.com/NousResearch/hermes-agent.git",
+    "tag": "v2026.8.18",
+    "tag_object": "9f13bbbf8423427e159c78066356ca0e27ca6b74",
+    "commit": "e624e9fde561e1add9388384012b295fde669ade",
+    "distribution": "hermes-agent",
+    "version": "0.20.4",
+    "python_requires": ">=3.11,<3.14",
+    "observer_entry_point": "aether-contract-observer=aether_agents.observation.capture.hermes_plugin"
+  },
+  "derived_documents": [
+    {
+      "path": "AGENTS.md",
+      "fields": ["tag", "tag_object", "commit", "distribution", "version", "python_requires"]
+    },
+    {
+      "path": "DESIGN.md",
+      "fields": ["version"]
+    },
+    {
+      "path": "ROADMAP.md",
+      "fields": ["tag", "tag_object", "commit", "distribution", "version", "python_requires"]
+    },
+    {
+      "path": "specs/r4-hermes-boundary/spec.md",
+      "fields": ["tag", "tag_object", "commit", "version", "python_requires"]
+    },
+    {
+      "path": "specs/r8-workspaces-and-integration/spec.md",
+      "fields": ["tag", "commit", "version"]
+    },
+    {
+      "path": "specs/r9-state-and-recovery/spec.md",
+      "fields": ["tag", "commit", "version"]
+    },
+    {
+      "path": "specs/r10-security-and-authority/spec.md",
+      "fields": ["tag", "tag_object", "commit", "version"]
+    },
+    {
+      "path": "specs/r11-evidence-and-observability/spec.md",
+      "fields": ["tag", "commit", "version"]
+    },
+    {
+      "path": "specs/r12-models-and-economics/spec.md",
+      "fields": ["tag", "tag_object", "commit", "version"]
+    },
+    {
+      "path": "specs/r13-synthesis-and-release/plan.md",
+      "fields": ["tag", "tag_object", "commit", "distribution", "version", "python_requires"]
+    },
+    {
+      "path": "specs/r13-synthesis-and-release/spec.md",
+      "fields": ["tag", "tag_object", "commit", "version", "python_requires"]
+    }
+  ],
+  "historical_snapshots": [
+    {
+      "path": "AGENTS.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "HERMES_LOCAL_PATCHES.md",
+      "classification": "transitional_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/001-aether-v1-productization/research.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r4-hermes-boundary/research.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r5-topology-and-isolation/research.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r5-topology-and-isolation/spec.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r6-protocol-and-communication/spec.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r7-supervision-and-convergence/spec.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r13-synthesis-and-release/research.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    },
+    {
+      "path": "specs/r13-synthesis-and-release/tasks.md",
+      "classification": "historical_runtime_evidence",
+      "version": "0.20.1",
+      "commit": "411903b6fa258f81afcc3869eb615f6218e1776a"
+    }
+  ]
+}

@@ -1,20 +1,118 @@
 # Contributing
 
-Keep changes within Aether's versioned design, design-stage specifications, repository policy, and reproducible Hermes profile templates.
+Thank you for improving Aether Agents. Keep every contribution within the versioned
+design, the owning specification or contract, repository policy, and the current
+authority for the effect being performed. A design or test result is not authority to
+activate a runtime, acquire credentials, publish, deploy, or release.
 
-- Write canonical documentation and durable system prompts in English.
-- Update the artifact that owns a decision before reconciling derived artifacts.
-- Keep `ROADMAP.md` shallow; detailed stage content belongs under `specs/<stage>/`.
-- Do not commit local configuration, credentials, databases, sessions, memories, logs, caches, or generated runtime state.
-- Do not treat design acceptance as authority to implement or activate the design.
+## Prerequisites
 
-Before proposing a change:
+- Git and [uv](https://docs.astral.sh/uv/) must be available.
+- Use a Python version supported by `pyproject.toml` (currently 3.11 through 3.13).
+- Do not place credentials, local profile state, databases, sessions, memories, logs,
+  caches, machine-specific paths, or generated runtime material under version control.
 
-1. Run the same canonical-manifest and R0 baseline checks defined in `.github/workflows/policy.yml`.
-2. Run `python3 -m unittest discover -s tests -p 'test_policy_hooks.py' -v` for policy-hook changes.
-3. Run `python3 -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v` for Morfeo launcher changes.
-4. Validate YAML, Markdown links, file modes, and `git diff --check`.
-5. Inspect the complete staged diff and confirm no local runtime state is tracked.
-6. Record evidence, alternatives, and change impact for material design decisions.
+## Start from a fresh clone
 
-Publication and release are protected external effects and require current authority.
+Run the following from a new clone. `uv sync --frozen` creates the locked development
+environment without changing the lockfile.
+
+```bash
+git clone https://github.com/DarkArty07/Aether-Agents.git
+cd Aether-Agents
+uv sync --frozen
+```
+
+Read `AGENTS.md` before designing or changing an area. Then read `README.md`,
+`DESIGN.md`, `ROADMAP.md`, and the relevant material under `specs/`. `CLAUDE.md` adds
+guidance for coding assistants but does not replace these repository rules.
+
+## Test with the locked Hermes baseline
+
+The full exact-Hermes suite is run through the repository bootstrap. It recreates and
+verifies the selected public Hermes source and supplies it to the tests, so do not set
+`PYTHONPATH` by hand:
+
+```bash
+uv run --frozen python scripts/run_tests.py
+```
+
+The initial run needs network access to obtain the selected public source. A focused
+test that does not need the exact-Hermes fixture can run directly; replace the example
+with the narrowest relevant test path or node:
+
+```bash
+uv run --frozen pytest -q tests/test_objective_contracts.py
+```
+
+Run focused tests while iterating and the full bootstrap before handoff. Do not remove,
+skip, or weaken a test to obtain a green result.
+
+## Quality checks
+
+Run the checks relevant to every changed Python path. The examples below cover the
+repository's Python source, tests, and scripts:
+
+```bash
+uv run --frozen ruff check src/aether_agents tests scripts
+uv run --frozen ruff format --check src/aether_agents tests scripts
+uv run --frozen mypy src/aether_agents
+uv run --frozen pytest -q --cov=aether_agents --cov-report=term-missing
+uv build
+```
+
+Apply formatting only when you intend to modify files, then rerun the format check and
+inspect the resulting diff:
+
+```bash
+uv run --frozen ruff format src/aether_agents tests scripts
+uv run --frozen ruff format --check src/aether_agents tests scripts
+```
+
+For policy-hook changes, also run the focused policy and launcher suites:
+
+```bash
+uv run --frozen python -m unittest discover -s tests -p 'test_policy_hooks.py' -v
+uv run --frozen python -m unittest discover -s tests -p 'test_aether_tui_launcher.py' -v
+```
+
+Use the repository runner for exact-Hermes integration coverage even if the ordinary
+focused test or coverage command passes. The committed configuration enforces the
+current coverage floor; do not lower it to make a contribution pass.
+
+## Prepare a contribution
+
+1. Make one scoped change and update the artifact that owns any decision before updating
+   a derived artifact. Canonical documentation and durable system prompts are English.
+2. Keep `ROADMAP.md` shallow; detailed stage material belongs under `specs/<stage>/`.
+3. Check Markdown links, YAML, file modes, and the complete diff. For a change intended
+   for commit, run:
+
+   ```bash
+   git diff --check
+   git diff --cached --check
+   git status --short
+   ```
+
+4. Review the staged diff for local runtime state and unrelated changes. Record the
+   commands actually run, their results, and remaining material risk.
+5. Create one logical commit with a Conventional Commit message. Follow
+   [the pull-request template](.github/PULL_REQUEST_TEMPLATE.md) when opening a pull
+   request, including validation and manifest evidence.
+
+Remote pushes, pull requests, merges, tags, publication, release, and deployment are
+external effects. Perform them only when the current task and repository authority
+permit them; this guide does not grant that authority.
+
+## Maintain the repository
+
+- Keep `pyproject.toml` and `uv.lock` consistent. When a dependency change is in scope,
+  regenerate the lockfile deliberately and confirm `uv sync --frozen` succeeds.
+- If a change affects policy, canonical manifests, packaging, or public artifacts, read
+  the corresponding checks in `.github/workflows/policy.yml` and run the applicable
+  local commands before handoff.
+- Preserve accepted decisions and historical evidence. Update an owning artifact when a
+  decision changes; do not silently rewrite history or treat local runtime state as
+  documentation.
+- Report security issues privately as described in `SECURITY.md`, without committing
+  sensitive material.

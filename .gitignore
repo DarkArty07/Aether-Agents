@@ -6,7 +6,6 @@
 
 # Local tooling and generated files
 /.worktrees/
-CLAUDE.md
 /.aether/*
 !/.aether/project.toml
 !/.aether/objective-contracts/
