@@ -3,5 +3,3 @@ plugins:
     - aether-contract-observer
 approvals:
   mode: "off"
-security:
-  protected_instruction_files: false
