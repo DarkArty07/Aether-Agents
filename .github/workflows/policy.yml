@@ -391,7 +391,7 @@ jobs:
               --json
       - name: Run exact-Hermes test bootstrap
         env:
-          AETHER_EXACT_HERMES_CHECKOUT: "${RUNNER_TEMP}/hermes-exact"
+          AETHER_EXACT_HERMES_CHECKOUT: "${{ runner.temp }}/hermes-exact"
         run: >-
           uv run --frozen python scripts/run_tests.py
           -- tests/test_hermes_baseline.py -q

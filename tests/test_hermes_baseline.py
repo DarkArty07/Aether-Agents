@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import yaml
+
 ROOT = Path(__file__).parents[1]
 DRIFT_CHECKER = ROOT / "scripts" / "check_hermes_baseline_drift.py"
 TEST_BOOTSTRAP = ROOT / "scripts" / "run_tests.py"
@@ -280,14 +282,18 @@ def test_main_fails_closed_on_an_invalid_cached_checkout(
 
 
 def test_ci_exercises_the_no_argument_bootstrap_against_the_checkout_it_created() -> None:
-    workflow = POLICY_WORKFLOW.read_text(encoding="utf-8")
-    bootstrap_step = workflow.split("      - name: Run exact-Hermes test bootstrap\n", 1)[1].split(
-        "      - name:", 1
-    )[0]
-
-    assert 'AETHER_EXACT_HERMES_CHECKOUT: "${RUNNER_TEMP}/hermes-exact"' in bootstrap_step
-    assert (
-        "uv run --frozen python scripts/run_tests.py\n          -- tests/test_hermes_baseline.py -q"
-        in bootstrap_step
+    workflow = yaml.safe_load(POLICY_WORKFLOW.read_text(encoding="utf-8"))
+    bootstrap_step = next(
+        step
+        for step in workflow["jobs"]["observation-qualification"]["steps"]
+        if step.get("name") == "Run exact-Hermes test bootstrap"
     )
-    assert "--checkout" not in bootstrap_step
+
+    configured_checkout = bootstrap_step["env"]["AETHER_EXACT_HERMES_CHECKOUT"]
+    assert configured_checkout == "${{ runner.temp }}/hermes-exact"
+    assert configured_checkout != "${RUNNER_TEMP}/hermes-exact"
+    assert (
+        bootstrap_step["run"]
+        == "uv run --frozen python scripts/run_tests.py -- tests/test_hermes_baseline.py -q"
+    )
+    assert "--checkout" not in bootstrap_step["run"]
