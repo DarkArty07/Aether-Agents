@@ -125,7 +125,6 @@ REMOTE_MUTATION_RE = re.compile(
 DESTRUCTIVE_OPERATION_RE = re.compile(
     r"(?is)(?:"
     r"\bgit\s+clean\b[^\n;&|]*(?:-[A-Za-z]*f[A-Za-z]*d[A-Za-z]*x|-[A-Za-z]*x[A-Za-z]*d[A-Za-z]*f|--force[^\n;&|]*--ignored)|"
-    r"\bgit\s+reset\b[^\n;&|]*--hard\b|"
     r"\b(?:mkfs(?:\.[A-Za-z0-9_-]+)?|wipefs|blkdiscard|shred)\b|"
     r"\bdd\b[^\n;&|]*\bof=/dev/|"
     r"\brm\b[^\n;&|]*(?:-[A-Za-z]*r[A-Za-z]*f|-[A-Za-z]*f[A-Za-z]*r)[^\n;&|]*(?:\s|^)(?:/|~|\$HOME)(?:/[*]?)?(?:\s|$)"

@@ -246,6 +246,7 @@ class MinimalPolicyContractTests(unittest.TestCase):
             ("terminal", {"command": "git commit -am 'local change'"}),
             ("terminal", {"command": "git rebase main"}),
             ("terminal", {"command": "git merge feature/local"}),
+            ("terminal", {"command": "git reset --hard reviewed-commit"}),
             ("terminal", {"command": "git tag local-checkpoint"}),
             ("terminal", {"command": "rm -rf build/"}),
             ("terminal", {"command": "alembic upgrade head"}),
@@ -342,7 +343,6 @@ class MinimalPolicyContractTests(unittest.TestCase):
 
     def test_only_high_confidence_local_destruction_is_blocked(self) -> None:
         commands = [
-            "git reset --hard HEAD",
             "git clean -fdx",
             "rm -rf /",
             "wipefs -a /dev/sdz",
