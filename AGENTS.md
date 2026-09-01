@@ -2,7 +2,7 @@
 
 This repository contains Aether's public product source, versioned policy, canonical specifications, and reproducible configuration. The current build target is the Aether 1.0 contract in `specs/001-aether-v1-productization/`; a design decision or local candidate is not evidence that a package, release candidate, public service, or stable release exists.
 
-`DESIGN.md` is the canonical conceptual design for the current redesign. It defines the intended roles, authority boundaries and fixed high-level product decisions. Technology choices not explicitly fixed there remain undecided and must not be inferred or implemented without Christopher's direction.
+`DESIGN.md` is the canonical conceptual design for the current redesign. It defines the intended roles, authority boundaries and fixed high-level product decisions. Technology choices not explicitly fixed there remain undecided and must not be inferred or implemented without an owner decision.
 
 Live Hermes profiles and other runtime state under `home/` are local evidence only and must not be committed. Keep credentials, sessions, databases, memories, logs, boards, repositories, owner identifiers, machine paths, and private provider/model/router bindings out of public artifacts.
 
@@ -54,15 +54,14 @@ Research checkouts stay outside this repository. They are evidence sources, not 
   - Upstream: `https://github.com/github/spec-kit.git`
   - Local checkout used for the historical comparison: `<private-spec-kit-checkout>`
   - Baseline inspected for the current design research: `bf88c9f9a82fa370c7a7257aa2b3cf10b457b65c`
-  - Verified 2026-08-17: exactly one Spec Kit tree exists on this machine, its HEAD equals `origin/main`, and Spec Kit is not installed as a package — so unlike Hermes there is no second authoritative tree to confuse it with.
+  - This is historical research evidence, not a claim about the currently installed or checked-out tree. Refresh and identify the source before relying on current Spec Kit behavior.
 
 - **Hermes Agent**
   - Upstream: `https://github.com/NousResearch/hermes-agent.git`
   - **Selected public release evidence:** release `v2026.8.18`, annotated tag object `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`, distribution `hermes-agent` `0.20.4`, Python `>=3.11,<3.14`.
-  - **The source the private Aether installation currently runs:** `home/.venv-hermes/src/hermes-agent` — version 0.20.1, revision `411903b6fa258f81afcc3869eb615f6218e1776a`. It is historical/runtime evidence for that installation, not the selected public release source or a distributable dependency.
-  - **Not this one:** `<legacy-hermes-checkout>` is a different, older checkout (0.19.1). It is not what the Aether profile loads. Reading it produced a false finding once already.
-  - Research checkouts and the loaded private tree are read-only evidence during canonical design work. A separately authorized downstream implementation must use an isolated candidate based on the exact selected public release and must not copy private editable state.
-  - The live profile under `home/` is runtime evidence about what is initialized. It is not documentation of intent, and its contents are not adopted by being present.
+  - A locally loaded editable Hermes tree, its path, and its observed revision are runtime evidence only. They are not the selected public release, a distributable dependency, or manually maintained durable documentation.
+  - Resolve the source actually loaded, its version, and its revision at investigation time before making a runtime claim. Research checkouts and live local state remain read-only evidence during canonical design work; an authorized downstream candidate must start from the exact selected public release and must not copy private editable state.
+  - The live profile under `home/` is evidence of what is initialized, not documentation of intent; its contents are never adopted merely by being present.
 
 > **Verify a claim in code before an accepted decision rests on it.** Documentation states intent; the registry states what is actually exposed. R5 claimed role containment was structural in both directions until the tool gating was read, which showed card creation is available to every worker. Where a decision depends on something being impossible, read the gate — not the guide.
 

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Current beta project and documentation surface
+
+- Added the user-visible `aether init` path for an existing Git repository root: it writes the portable project marker, preserves the required ignore boundary, and binds exactly one existing native Hermes Project by exact primary path; `--hermes-project ID` resolves an otherwise ambiguous exact match without creating or changing a native Project.
+- Added the Morfeo-only Objective Contract authoring surface, including draft `validate`, immutable final versions, Git-base verification, and `prepare_handoff` routing data for one isolated execution board per `(project_id, contract_id, version)`.
+- Added project-scoped execution-board routing, per-flow Supervisor session continuity, and isolated Implementer worktrees; board and Hermes Project identifiers remain local routing data rather than portable contract content.
+- Added the bounded Contract Observer surface and deterministic observation summaries, including the read-only `aether observe` path and Morfeo-only observation views.
+- Established maintainable current documentation and capability traceability: `docs/` owns current behavior and `docs/capabilities.toml` owns implementation status, while this changelog records deltas and root reports link rather than compete.
+
+These entries describe Unreleased beta work only. They do not claim package publication, release qualification, public availability, or activation of any protected external effect.
+
 ### Routine GitHub lifecycle no longer deadlocks the pipeline
 
 - Fixed #281 by removing normal branch/tag push, pull-request lifecycle, issue reconciliation, and non-destructive GitHub Release creation/edit/upload from the common pre-tool denial path. These operations are owner-preauthorized for already provisioned project repositories; Supervisor still owns pipeline publication after independent review, while role ownership remains a contract/review responsibility rather than a shell-text permission.
