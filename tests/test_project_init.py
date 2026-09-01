@@ -482,6 +482,28 @@ def test_init_leaves_other_aether_content_ignored(
     assert _ignored(repository, ".aether/locks/lock")
 
 
+def test_init_does_not_unignore_nested_aether_directories(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The appended block is anchored: only the repository root's .aether/ is affected.
+
+    `!.aether/` is unanchored by necessity — it must neutralize an unanchored directory
+    exclusion — so this pins that it re-includes the *directory entry* only, and never
+    exposes a sub-project's ignored `.aether/` content.
+    """
+    repository, envelope = _init_with_ignore(tmp_path, registry, monkeypatch, "**/.aether/**")
+    assert envelope.result == "changed", envelope.errors
+
+    nested = repository / "sub" / "mod" / ".aether"
+    nested.mkdir(parents=True)
+    (nested / "aether.db").write_text("local\n", encoding="utf-8")
+    (nested / "project.toml").write_text("local\n", encoding="utf-8")
+
+    assert not _ignored(repository, ".aether/project.toml")
+    assert _ignored(repository, "sub/mod/.aether/aether.db")
+    assert _ignored(repository, "sub/mod/.aether/project.toml")
+
+
 def test_init_does_not_touch_an_already_correct_ignore_policy(
     tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
 ) -> None:
