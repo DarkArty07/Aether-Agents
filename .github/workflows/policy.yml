@@ -164,6 +164,7 @@ jobs:
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
           src/aether_agents/objective_contracts/__init__.py
+          src/aether_agents/objective_contracts/execution_boards.py
           src/aether_agents/objective_contracts/hermes_plugin.py
           src/aether_agents/objective_contracts/store.py
           src/aether_agents/observation/brief.py

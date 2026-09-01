@@ -47,11 +47,19 @@ The capability—not the model—records RFC 3339 UTC and local-offset creation/
 
 ## Responsibility boundary
 
-The separate authoring plugin owns project resolution, incremental persistence, validation, finalization, versioning, provenance, digest generation, listing and envelope preparation. It is enabled only for Morfeo.
+The separate authoring plugin owns project resolution, incremental persistence, validation, finalization, versioning, provenance, digest generation, listing, envelope preparation and local execution-board provisioning. It is enabled only for Morfeo.
 
 It does not infer owner decisions, auto-commit, dispatch Kanban, widen authority, modify finalized versions or join the observer plugin. Supervisor and Implementers receive read-only contract access.
 
 `prepare_handoff` succeeds only when both `.aether/project.toml` and the exact final contract bytes are reachable from Git `HEAD`. Morfeo separately creates the Kanban card. Supervisor independently verifies project, path, digest and base commit before creating children.
+
+## Execution-board isolation
+
+A ready `prepare_handoff` provisions exactly one local Hermes board for the complete executable identity `(project_id, contract_id, version)`. The deterministic slug encodes every identity byte and the local `board.json` repeats the exact Aether tuple for fail-closed readback; retries and concurrent Morfeo sessions converge on the same board, while another project, contract or version resolves to a different board and SQLite database.
+
+Provisioning occurs only after Git/base verification succeeds. It resolves exactly one non-archived Hermes Project whose primary repository equals the same verified Aether project root passed directly by the store, scopes the board to that runtime Project and reads the metadata/database back before returning. Missing, ambiguous, archived, path-conflicting, raw-DB-override, symlinked or identity-conflicting state stops handoff before board mutation and never falls back to the current/default board.
+
+`execution_board` and `hermes_project_id` are local root-card side data. They never enter the portable Objective Contract, Contract Handoff Envelope, child bodies or opaque flow/idempotency identities. Morfeo passes them unchanged as the Supervisor root card's `board` and `project`; the plugin provisions no card and performs no dispatch. Hermes pins every spawned worker to that board, so unrelated contract flows cannot read or mutate each other's task graph, claims, logs or workspaces. Project-linked worktrees still isolate repository writes; source-level overlap remains an integration concern rather than a Kanban concern.
 
 ## Pragmatic version-1 exclusions
 
@@ -69,6 +77,10 @@ No dashboard, semantic search, outcome artifact, multi-repository project, autom
 8. A real fresh Supervisor worktree reads and verifies the same contract bytes before decomposition.
 9. The blocked telemetry qualification is recreated from a short envelope and proceeds to the next real bug.
 10. Unicode, multiline and long contract prose round-trips unchanged except for documented outer whitespace normalization, while recognized credential value shapes remain denied.
+11. A ready handoff provisions one deterministic project-scoped board; a retry, including a concurrent retry, reuses it.
+12. Different projects, contracts and finalized versions resolve to distinct board databases whose tasks are invisible to each other.
+13. No board is created before Git/base verification succeeds, and existing archived/path/project identity conflicts fail closed without using `default`.
+14. The execution board and runtime Hermes Project are returned only as root-card side data and remain absent from contract bytes and the short envelope.
 
 ## Bootstrap
 

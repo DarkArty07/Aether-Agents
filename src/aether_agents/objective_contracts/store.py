@@ -14,7 +14,7 @@ import tomllib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Final, Iterator
+from typing import Any, Callable, Final, Iterator, Mapping
 
 from aether_agents.observation.context import ProjectRegistry, canonical_project_id
 from aether_agents.observation.privacy import contains_secret_shape
@@ -27,6 +27,8 @@ from aether_agents.paths import (
     read_private_bytes,
 )
 from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
+
+from .execution_boards import execution_board_slug
 
 _CONTRACT_ID_RE: Final = re.compile(r"^oc_[a-f0-9]{16}$", re.ASCII)
 _TRACE_ID_RE: Final = re.compile(r"^ctr_[a-f0-9]{32}$", re.ASCII)
@@ -808,6 +810,7 @@ class ObjectiveContractStore:
         project_id: str,
         contract_id: str,
         version: int,
+        on_ready: Callable[[dict[str, Any], Path], Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         project_id, root = self._project(project_id)
         contract_id = self._contract_id(contract_id)
@@ -871,12 +874,13 @@ class ObjectiveContractStore:
                 "Verify project binding, artifact digest and base commit before decomposition; block before creating children on any mismatch.",
             )
         )
-        return {
+        result: dict[str, Any] = {
             "handoff_ready": True,
             "project_id": project_id,
             "contract_id": contract_id,
             "version": version,
             "flow_id": self._flow_id(project_id, contract_id, version),
+            "execution_board": execution_board_slug(project_id, contract_id, version),
             "relative_path": relative,
             "sha256": digest,
             "base_commit": base_commit,
@@ -884,3 +888,13 @@ class ObjectiveContractStore:
             "root_idempotency_key": token,
             "envelope": envelope,
         }
+        if on_ready is not None:
+            side_data = dict(on_ready(dict(result), root))
+            reserved = set(result) & set(side_data)
+            if reserved:
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-HANDOFF-SIDE-DATA-CONFLICT",
+                    "handoff provisioner attempted to replace canonical result fields",
+                )
+            result.update(side_data)
+        return result

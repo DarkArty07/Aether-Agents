@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
+import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -436,6 +438,15 @@ def test_prepare_handoff_returns_stable_distinct_opaque_flow_ids(
     assert PROJECT_A not in alpha_first["flow_id"]
     assert alpha_first["contract_id"] not in alpha_first["flow_id"]
 
+    # One executable contract version gets one deterministic, inspectable board.
+    # Different projects/contracts cannot share it, and runtime routing stays outside
+    # the portable Contract Handoff Envelope.
+    assert alpha_first["execution_board"] == alpha_second["execution_board"]
+    assert alpha_first["execution_board"] != beta_handoff["execution_board"]
+    assert re.fullmatch(r"oc-[0-9a-f]{32}-[0-9a-f]{16}-v[0-9a-f]+", alpha_first["execution_board"])
+    assert len(alpha_first["execution_board"]) <= 64
+    assert alpha_first["execution_board"] not in alpha_first["envelope"]
+
 
 def test_prepare_handoff_keeps_flow_id_out_of_short_envelope_and_body(
     tmp_path: Path,
@@ -542,6 +553,441 @@ def test_concurrent_expected_revision_has_one_winner(tmp_path: Path) -> None:
     assert outcomes.count("ok") == 1
     assert outcomes.count("AETHER-OBJECTIVE-CONTRACT-REVISION-CONFLICT") == 1
     assert store.show(project_id=PROJECT_A, contract_id=started["contract_id"])["revision"] == 2
+
+
+def test_execution_board_identity_keeps_hermes_imports_lazy() -> None:
+    root = Path(__file__).parents[1]
+    script = """
+import sys
+import aether_agents.cli
+from aether_agents.objective_contracts import ObjectiveContractStore
+from aether_agents.objective_contracts.execution_boards import execution_board_slug
+execution_board_slug('11111111-1111-4111-8111-111111111111', 'oc_aaaaaaaaaaaaaaaa', 1)
+assert not any(name == 'hermes_cli' or name.startswith('hermes_cli.') for name in sys.modules)
+"""
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(root / "src")
+    completed = subprocess.run(
+        (sys.executable, "-c", script),
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_execution_board_refuses_missing_runtime_project_without_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db
+
+    from aether_agents.objective_contracts.execution_boards import (
+        ExecutionBoardError,
+        execution_board_slug,
+    )
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _provision_execution_board as provision_execution_board,
+    )
+
+    project = tmp_path / "unregistered"
+    project.mkdir()
+    slug = execution_board_slug(PROJECT_A, "oc_eeeeeeeeeeeeeeee", 1)
+    with pytest.raises(ExecutionBoardError) as missing:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id="oc_eeeeeeeeeeeeeeee",
+            version=1,
+        )
+    assert missing.value.code == "AETHER-EXECUTION-BOARD-PROJECT-MISSING"
+    assert not kanban_db.kanban_db_path(slug).exists()
+    assert not kanban_db.board_metadata_path(slug).exists()
+
+    from hermes_cli import projects_db
+
+    with projects_db.connect_closing() as connection:
+        connection.execute(
+            "INSERT INTO projects (id, slug, name, primary_path, created_at, archived) "
+            "VALUES ('p_folder_only', 'folder-only', 'Folder only', NULL, 0, 0)"
+        )
+        connection.execute(
+            "INSERT INTO project_folders (project_id, path, is_primary, added_at) "
+            "VALUES ('p_folder_only', ?, 1, 0)",
+            (str(project),),
+        )
+        connection.commit()
+    with pytest.raises(ExecutionBoardError) as no_explicit_primary:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id="oc_eeeeeeeeeeeeeeee",
+            version=1,
+        )
+    assert no_explicit_primary.value.code == "AETHER-EXECUTION-BOARD-PROJECT-MISSING"
+    assert not kanban_db.kanban_db_path(slug).exists()
+
+    with projects_db.connect_closing() as connection:
+        connection.execute("DELETE FROM project_folders WHERE project_id = 'p_folder_only'")
+        connection.execute("DELETE FROM projects WHERE id = 'p_folder_only'")
+        connection.commit()
+        for index in (1, 2):
+            connection.execute(
+                "INSERT INTO projects (id, slug, name, primary_path, created_at, archived) "
+                "VALUES (?, ?, ?, ?, ?, 0)",
+                (f"p_duplicate_{index}", f"duplicate-{index}", "Duplicate", str(project), index),
+            )
+        connection.commit()
+    with pytest.raises(ExecutionBoardError) as duplicate:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id="oc_eeeeeeeeeeeeeeee",
+            version=1,
+        )
+    assert duplicate.value.code == "AETHER-EXECUTION-BOARD-PROJECT-CONFLICT"
+    assert not kanban_db.kanban_db_path(slug).exists()
+
+
+def test_execution_board_rejects_raw_db_override_and_symlink_redirection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.delenv("HERMES_KANBAN_BOARD", raising=False)
+    monkeypatch.delenv("HERMES_KANBAN_HOME", raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+
+    from aether_agents.objective_contracts.execution_boards import (
+        ExecutionBoardError,
+        execution_board_slug,
+    )
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _provision_execution_board as provision_execution_board,
+    )
+
+    project = tmp_path / "repo"
+    project.mkdir()
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Repo", primary_path=str(project)
+        )
+
+    contract_id = "oc_1212121212121212"
+    slug = execution_board_slug(PROJECT_A, contract_id, 1)
+    expected_db = kanban_db.board_dir(slug) / "kanban.db"
+    override = tmp_path / "shared.db"
+    override.write_bytes(b"shared-board-sentinel")
+    monkeypatch.setenv("HERMES_KANBAN_DB", str(override))
+    with pytest.raises(ExecutionBoardError) as raw_override:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id=contract_id,
+            version=1,
+        )
+    assert raw_override.value.code == "AETHER-EXECUTION-BOARD-RAW-DB-OVERRIDE"
+    assert override.read_bytes() == b"shared-board-sentinel"
+    assert not expected_db.exists()
+
+    monkeypatch.delenv("HERMES_KANBAN_DB")
+    kanban_db.write_board_metadata(
+        slug,
+        default_workdir=str(project.resolve()),
+        project_id=runtime_project_id,
+    )
+    target = tmp_path / "unrelated.db"
+    target.write_bytes(b"unrelated-sentinel")
+    expected_db.symlink_to(target)
+    with pytest.raises(ExecutionBoardError) as symlink:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id=contract_id,
+            version=1,
+        )
+    assert symlink.value.code == "AETHER-EXECUTION-BOARD-UNSAFE-PATH"
+    assert target.read_bytes() == b"unrelated-sentinel"
+
+
+def test_execution_boards_isolate_contracts_and_reject_identity_conflicts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two contract flows get distinct DBs; an occupied identity is never adopted."""
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+
+    from aether_agents.objective_contracts.execution_boards import (
+        ExecutionBoardError,
+        execution_board_slug,
+    )
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _provision_execution_board as provision_execution_board,
+    )
+
+    project = tmp_path / "repo"
+    project.mkdir()
+    subprocess.run(("git", "init", "-q"), cwd=project, check=True)
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Repo", primary_path=str(project)
+        )
+
+    first = provision_execution_board(
+        project_id=PROJECT_A,
+        project_root=project,
+        contract_id="oc_aaaaaaaaaaaaaaaa",
+        version=1,
+    )
+    second = provision_execution_board(
+        project_id=PROJECT_A,
+        project_root=project,
+        contract_id="oc_bbbbbbbbbbbbbbbb",
+        version=1,
+    )
+    amended = provision_execution_board(
+        project_id=PROJECT_A,
+        project_root=project,
+        contract_id="oc_aaaaaaaaaaaaaaaa",
+        version=2,
+    )
+
+    assert len({first["slug"], second["slug"], amended["slug"]}) == 3
+    paths = {kanban_db.kanban_db_path(value["slug"]) for value in (first, second, amended)}
+    assert len(paths) == 3
+    assert all(path.is_file() for path in paths)
+    assert all(
+        kanban_db.read_board_metadata(value["slug"])["project_id"] == runtime_project_id
+        for value in (first, second, amended)
+    )
+
+    import aether_agents.objective_contracts.hermes_plugin as board_plugin
+
+    partial_contract = "oc_ffffffffffffffff"
+    partial_slug = execution_board_slug(PROJECT_A, partial_contract, 1)
+    partial_dir = kanban_db.board_dir(partial_slug)
+    partial_dir.mkdir(parents=True)
+    assert board_plugin._create_metadata_exclusive(
+        partial_dir / "board.json",
+        slug=partial_slug,
+        project_root=project.resolve(),
+        runtime_project_id=runtime_project_id,
+        aether_project_id=PROJECT_A,
+        contract_id=partial_contract,
+        version=1,
+    )
+    assert not kanban_db.kanban_db_path(partial_slug).exists()
+    recovered = provision_execution_board(
+        project_id=PROJECT_A,
+        project_root=project,
+        contract_id="oc_ffffffffffffffff",
+        version=1,
+    )
+    assert recovered["slug"] == partial_slug
+    assert kanban_db.kanban_db_path(partial_slug).is_file()
+
+    first_db = kanban_db.connect(board=first["slug"])
+    second_db = kanban_db.connect(board=second["slug"])
+    try:
+        task_id = kanban_db.create_task(first_db, title="first-flow", board=first["slug"])
+        assert kanban_db.get_task(first_db, task_id) is not None
+        assert kanban_db.get_task(second_db, task_id) is None
+    finally:
+        first_db.close()
+        second_db.close()
+
+    occupied = execution_board_slug(PROJECT_B, "oc_cccccccccccccccc", 1)
+    kanban_db.create_board(
+        occupied,
+        default_workdir=str(project.resolve()),
+        project_id="p_wrong",
+    )
+    with pytest.raises(ExecutionBoardError) as conflict:
+        provision_execution_board(
+            project_id=PROJECT_B,
+            project_root=project,
+            contract_id="oc_cccccccccccccccc",
+            version=1,
+        )
+    assert conflict.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"
+
+    # Simulate a non-cooperating native writer winning exactly after Aether's
+    # exists=False check. Exclusive creation must not overwrite its metadata.
+
+    raced_contract = "oc_3434343434343434"
+    raced_slug = execution_board_slug(PROJECT_A, raced_contract, 1)
+    original_create = board_plugin._create_metadata_exclusive
+
+    def native_wins(metadata_path: Path, **_kwargs: object) -> bool:
+        kanban_db.write_board_metadata(
+            raced_slug,
+            name="Native winner",
+            default_workdir=str(project.resolve()),
+            project_id="p_wrong",
+        )
+        return original_create(
+            metadata_path,
+            slug=raced_slug,
+            project_root=project.resolve(),
+            runtime_project_id=runtime_project_id,
+            aether_project_id=PROJECT_A,
+            contract_id=raced_contract,
+            version=1,
+        )
+
+    monkeypatch.setattr(board_plugin, "_create_metadata_exclusive", native_wins)
+    with pytest.raises(ExecutionBoardError) as raced:
+        provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id=raced_contract,
+            version=1,
+        )
+    assert raced.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"
+    assert kanban_db.read_board_metadata(raced_slug)["project_id"] == "p_wrong"
+
+
+def test_execution_board_provisioning_is_concurrently_idempotent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _provision_execution_board as provision_execution_board,
+    )
+
+    project = tmp_path / "repo"
+    project.mkdir()
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Repo", primary_path=str(project)
+        )
+
+    barrier = threading.Barrier(3)
+    results: list[dict[str, str]] = []
+    failures: list[BaseException] = []
+
+    def provision() -> None:
+        barrier.wait()
+        try:
+            results.append(
+                provision_execution_board(
+                    project_id=PROJECT_A,
+                    project_root=project,
+                    contract_id="oc_dddddddddddddddd",
+                    version=1,
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted empty below.
+            failures.append(exc)
+
+    threads = [threading.Thread(target=provision) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    barrier.wait()
+    for thread in threads:
+        thread.join()
+
+    assert failures == []
+    assert len(results) == 2
+    assert results[0] == results[1]
+    matching = [board for board in kanban_db.list_boards() if board["slug"] == results[0]["slug"]]
+    assert len(matching) == 1
+    assert matching[0]["project_id"] == runtime_project_id
+
+
+def test_plugin_prepare_handoff_provisions_one_project_scoped_board_idempotently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Hermes plugin turns one ready contract version into one isolated queue."""
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    # Import after the isolated home is selected: these are Hermes runtime APIs, not
+    # dependencies of Aether's portable store.
+    from hermes_cli import kanban_db, projects_db
+
+    registry = ProjectRegistry()
+    project = _project(tmp_path, registry, PROJECT_A, "alpha")
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Alpha", primary_path=str(project)
+        )
+
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=project, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=project, check=True)
+    store = ObjectiveContractStore(registry=registry, clock=lambda: FIXED)
+    started = store.begin(project_id=PROJECT_A, title="Alpha", session_id="s1")
+    revision = _complete(store, PROJECT_A, started["contract_id"], 1)
+    final = store.finalize(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision,
+        session_id="s1",
+    )
+
+    from aether_agents.objective_contracts import hermes_plugin
+    from aether_agents.objective_contracts.execution_boards import execution_board_slug
+
+    args = {
+        "action": "prepare_handoff",
+        "project_id": PROJECT_A,
+        "contract_id": final["contract_id"],
+        "version": 1,
+    }
+    planned_slug = execution_board_slug(PROJECT_A, final["contract_id"], 1)
+    not_ready = json.loads(
+        hermes_plugin._handle(args, session_id="session-zero", author_profile="morfeo")
+    )
+    assert not_ready == {"handoff_ready": False, "reason": "NOT_IN_BASE"}
+    assert not kanban_db.kanban_db_path(planned_slug).exists()
+
+    subprocess.run(("git", "add", "."), cwd=project, check=True)
+    subprocess.run(("git", "commit", "-qm", "test: contract"), cwd=project, check=True)
+
+    first = json.loads(
+        hermes_plugin._handle(args, session_id="session-one", author_profile="morfeo")
+    )
+    second = json.loads(
+        hermes_plugin._handle(args, session_id="session-two", author_profile="morfeo")
+    )
+
+    assert first["handoff_ready"] is True
+    assert first["execution_board"] == second["execution_board"]
+    assert first["hermes_project_id"] == runtime_project_id
+    metadata = kanban_db.read_board_metadata(first["execution_board"])
+    assert metadata["project_id"] == runtime_project_id
+    assert metadata["aether_project_id"] == PROJECT_A
+    assert metadata["aether_contract_id"] == final["contract_id"]
+    assert metadata["aether_contract_version"] == 1
+    assert metadata["default_workdir"] == str(project.resolve())
+    assert Path(metadata["db_path"]).is_file()
+    assert first["execution_board"] not in first["envelope"]
+    assert runtime_project_id not in first["envelope"]
 
 
 def test_plugin_registers_one_morfeo_only_transactional_tool(
@@ -651,6 +1097,10 @@ def test_product_resources_bind_contract_flows_without_widening_role_sessions() 
     assert "`terminal=false`" in morfeo_soul
     assert "envelope or child bodies" in morfeo_soul
     assert "root_idempotency_key" in morfeo_soul
+    assert "`execution_board`" in morfeo_soul
+    assert "`hermes_project_id`" in morfeo_soul
+    assert "root card's `board` and `project`" in morfeo_soul
+    assert "current/default board" in morfeo_soul
 
     assert "same-profile Supervisor" in supervisor_soul
     assert "Implementer cards" in supervisor_soul

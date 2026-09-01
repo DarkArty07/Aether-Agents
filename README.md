@@ -67,6 +67,8 @@ Process lifetime is not conversation lifetime. Morfeo keeps the owner-facing ses
 
 Hermes enforces the binding over `(board, Project, flow_id, profile)` with an exclusive generation-fenced lease. A later Supervisor process resumes with `--resume`, pins the accepted flow workspace with `--no-restore-cwd --in`, and cannot replace a live or stale-mismatched writer. Internal milestones remain silent; only explicit `input`, `revision`, or `flow_terminal` events return to the owner-facing origin.
 
+Each ready Objective Contract version also gets one automatically provisioned, project-scoped Hermes board. The identity is deterministic over `(project_id, contract_id, version)`: concurrent retries reuse it, while two objectives—even in the same repository—receive separate task databases, claims, logs and Kanban workspaces. Morfeo passes the returned board and exact Hermes Project only as root-card routing data; neither enters portable contract bytes or the short handoff envelope. Existing historical work stays on its original board; only new ready handoffs use this isolation boundary.
+
 ## Escalation is proportional
 
 Aether no longer treats every unspecified technical detail as a coordination event.
