@@ -1840,7 +1840,10 @@ def test_import_boundary_is_static_and_manager_modules_import_without_hermes() -
                     name == root or name.startswith(root + ".") for root in forbidden_roots
                 ):
                     forbidden_plugin_imports.append(name)
-    assert set(hermes_importers) <= {"observation/capture/hermes_plugin.py"}
+    assert set(hermes_importers) <= {
+        "observation/capture/hermes_plugin.py",
+        "objective_contracts/hermes_plugin.py",
+    }
     assert forbidden_plugin_imports == []
 
     # These imports must remain independent of an installed/running Hermes runtime.
