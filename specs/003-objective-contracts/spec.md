@@ -33,7 +33,7 @@ The tool must never infer identity from cwd, last-used repository, profile, repo
     <contract-id>/v<N>.md
 ```
 
-Actions are `begin`, `set_section`, `show`, `list`, `finalize`, `supersede` and `prepare_handoff`. Accepted content is persisted one section at a time with optimistic `expected_revision`; a complete contract is never transported in one tool argument.
+Actions are `begin`, `set_section`, `show`, `list`, `validate`, `finalize`, `supersede` and `prepare_handoff`. `validate` reports required-section completeness for the current draft without finalizing or mutating it. Accepted content is persisted one section at a time with optimistic `expected_revision`; a complete contract is never transported in one tool argument.
 
 Objective Contract prose is UTF-8 and may be multiline or longer than observation metadata. The authoring boundary rejects truncation sentinels and recognized credential value shapes, but it does not apply observation-only ASCII, length, URI, email or machine-path restrictions to contract prose.
 
@@ -51,7 +51,7 @@ The separate authoring plugin owns project resolution, incremental persistence, 
 
 It does not infer owner decisions, auto-commit, dispatch Kanban, widen authority, modify finalized versions or join the observer plugin. Supervisor and Implementers receive read-only contract access.
 
-`prepare_handoff` succeeds only when both `.aether/project.toml` and the exact final contract bytes are reachable from Git `HEAD`. Morfeo separately creates the Kanban card. Supervisor independently verifies project, path, digest and base commit before creating children.
+`prepare_handoff` succeeds only when both `.aether/project.toml` and the exact final contract bytes are reachable from Git `HEAD`. A ready handoff provisions or reuses one isolated board for the complete executable identity `(project_id, contract_id, version)` and resolves the exact-path native Hermes Project. It returns the board and Hermes Project only as local root-card routing side data; neither belongs in portable contract bytes or the short envelope. Morfeo separately creates the Kanban card. Supervisor independently verifies project, path, digest and base commit before creating children.
 
 ## Execution-board isolation
 

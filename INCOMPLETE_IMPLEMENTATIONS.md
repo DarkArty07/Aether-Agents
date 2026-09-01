@@ -1,20 +1,27 @@
-# Incomplete implementation report
+# Historical snapshot — incomplete implementation report (2026-08-31)
 
-## Purpose and decision boundary
+> **Non-authority notice:** This is a dated historical snapshot, retained as evidence of
+> findings and decisions at capture time. It does not state the current implementation
+> status, authorize work or activation, or replace the current documentation. For current
+> behavior and traceability, use the [documentation index](docs/index.md) and the sole
+> [capability registry](docs/capabilities.toml); for future work use
+> [`ROADMAP.md`](ROADMAP.md) and [Issues](https://github.com/DarkArty07/Aether-Agents/issues).
 
-This report records verified incomplete or disconnected product seams in the current
-repository. It is a decision aid for a later owner decision, not a roadmap replacement,
-implementation authorization, activation instruction, or release claim. The accepted
-cleanup objective permits only the limited repair and documentation work described here.
-Nothing in this report authorizes setup, profile activation, service management, model
-use, credential handling, publication, deployment, or completion of an item below.
+## Snapshot purpose and decision boundary
 
-Evidence paths are repository-relative and identify the source that establishes the
-current behavior. “Deferred owner decision” means a later contract must decide whether
-the capability remains required, define its acceptance boundary, and explicitly authorize
-any protected or live effect.
+This snapshot records verified incomplete or disconnected product seams as they were
+assessed through 2026-08-31. It is a historical decision aid, not a roadmap replacement,
+implementation authorization, activation instruction, release claim, or current status
+report. Nothing in this snapshot authorizes setup, profile activation, service management,
+model use, credential handling, publication, deployment, or completion of an item below.
 
-## Classification summary
+Evidence paths are repository-relative and identify the sources consulted at capture time.
+“Deferred owner decision” means a later contract must decide whether the capability remains
+required, define its acceptance boundary, and explicitly authorize any protected or live
+effect. References to “Current behavior” below retain the snapshot's original wording and
+must not be read as current-build claims.
+
+## Snapshot classification
 
 | Class | Meaning in this objective | Disposition |
 |---|---|---|
@@ -199,10 +206,13 @@ byte-locked and both report contents must pass the tracked public-artifact scann
 - **Deferred owner decision:** decide when the setup phase may be completed and authorize
   the clean-environment qualification; do not run setup or activate a profile here.
 
-### Project initialization and launch
+### Project initialization and launch (init finding superseded)
 
-- **Current behavior:** `init` and bare launch are explicit unsupported results rather
-  than hidden mutations.
+- **Historical finding:** this snapshot originally described `init` and bare launch as
+  explicit unsupported results rather than hidden mutations.
+- **Supersession:** that statement no longer describes `init`. Consult the current
+  [project-initialization guide](docs/guides/project-initialization.md) and capability
+  registry rather than treating this historical finding as an implementation-status claim.
 - **Missing boundary:** greenfield/brownfield handling, constitution confirmation,
   portable project identity, native Project/board mapping, workspace isolation, and
   unsupported platform controls.

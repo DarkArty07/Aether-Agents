@@ -36,15 +36,16 @@ a filename, remote artifact digest, or wheel digest.
 ### `aether init`
 
 ```text
-aether init [PATH] [--name NAME] [--forge local|github] [--dry-run] [--json]
+aether init [PATH] [--name NAME] [--forge local|github] [--hermes-project ID] [--dry-run] [--json]
 ```
 
-- Defaults `PATH` to the current directory.
-- May initialize Git in an empty greenfield directory because `init` is explicit.
+- Defaults `PATH` to the current directory and requires it to be an existing Git repository root.
+- Does not initialize Git or support an empty greenfield directory in this build.
 - Never creates a remote, GitHub repository, issue, pull request, commit, or push.
 - Preserves a brownfield repository and refuses conflicting Aether identity.
 - Writes `.aether/project.toml` conforming to `project.schema.json` plus only the minimum portable contract/bootstrap artifacts approved by the specification.
-- Creates local board/workspace mappings outside tracked project content.
+- Resolves exactly one non-archived native Hermes Project whose primary path exactly matches the repository root. It never creates, modifies, archives, or matches a Hermes Project by name, slug, current directory, or approximate path. When more than one exact match exists, `--hermes-project ID` selects one of those matches; a missing or mismatched ID is refused.
+- Records the local Aether Project mapping outside tracked project content. Execution boards are provisioned later by a ready Objective Contract handoff, not by `init`.
 
 ### `aether`
 

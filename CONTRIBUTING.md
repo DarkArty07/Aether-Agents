@@ -82,6 +82,18 @@ current coverage floor; do not lower it to make a contribution pass.
 
 ## Prepare a contribution
 
+### Documentation impact
+
+A change to a public or user-visible surface must update the applicable current page and
+`docs/capabilities.toml`, including its generated reference. If no update is applicable,
+provide a specific non-applicability rationale in the pull request. Behavior-preserving internal refactors
+do not require ceremonial documentation churn. Before handing off a change that updates
+the registry or current pages, run:
+
+```bash
+uv run --frozen python scripts/check_documentation.py
+```
+
 1. Make one scoped change and update the artifact that owns any decision before updating
    a derived artifact. Canonical documentation and durable system prompts are English.
 2. Keep `ROADMAP.md` shallow; detailed stage material belongs under `specs/<stage>/`.

@@ -93,14 +93,19 @@ def test_scanner_checks_wheel_and_sdist_members(tmp_path: Path) -> None:
     assert "candidate.tar.gz!candidate/evidence.txt: absolute-user-home" in completed.stderr
 
 
-def test_readme_and_package_metadata_describe_the_current_beta_product() -> None:
+def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    incomplete = (ROOT / "INCOMPLETE_IMPLEMENTATIONS.md").read_text(encoding="utf-8")
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert "multi-agent software-engineering product" in readme
-    assert "Objective Contract" in readme
+    assert "[documentation index](docs/index.md)" in readme
+    assert "`docs/capabilities.toml`](docs/capabilities.toml)" in readme
+    assert "sole current implementation-status and traceability registry" in readme
     assert "documented transitional downstream" in readme
     assert "beta stabilization build, not a release candidate" in readme
     assert "remain explicit unsupported placeholders" in readme
+    assert "Historical snapshot" in incomplete
+    assert "does not state the current implementation" in incomplete
     assert project["name"] == "aether-agents"
     assert "multi-agent software-engineering method" in project["description"]
     assert set(project["entry-points"]["hermes_agent.plugins"]) == {
