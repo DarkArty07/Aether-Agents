@@ -176,7 +176,7 @@ def _validate_execution_metadata(
 @contextmanager
 def _runtime_project_lock(project_root: Path) -> Iterator[Any]:
     """Resolve one live exact Project while excluding concurrent registry writers."""
-    from hermes_cli import projects_db  # type: ignore[import-untyped]
+    from hermes_cli import projects_db  # type: ignore[import-untyped,import-not-found]
 
     root = project_root.expanduser().resolve()
     try:
@@ -213,7 +213,7 @@ def _runtime_project_lock(project_root: Path) -> Iterator[Any]:
 @contextmanager
 def _provision_lock(board_slug: str) -> Iterator[None]:
     """Serialize idempotent board creation across threads and local processes."""
-    from hermes_cli import kanban_db  # type: ignore[import-untyped]
+    from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
 
     with _THREAD_LOCKS_GUARD:
         thread_lock = _THREAD_LOCKS.setdefault(board_slug, threading.Lock())
@@ -290,7 +290,7 @@ def _provision_execution_board(
     *, project_id: str, project_root: Path, contract_id: str, version: int
 ) -> dict[str, str]:
     """Create or verify the one Hermes board for an executable contract version."""
-    from hermes_cli import kanban_db  # type: ignore[import-untyped]
+    from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
 
     if os.environ.get("HERMES_KANBAN_DB", "").strip():
         raise ExecutionBoardError(
