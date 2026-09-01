@@ -91,7 +91,7 @@ The separation rule is: **local implementation judgement stays local; shared con
 | Convergence judging, steering, hook dispatcher | Role responsibilities, contracts, review rules, and the small edge-effect policy |
 | Profiles, memory, skills, scheduling | Quality standards and evidence expectations |
 
-Aether reuses Hermes first and carries a documented transitional downstream only while indispensable runtime defects remain. Role behavior lives primarily in contracts, prompts, worktree isolation, tests and review. The versioned pre-tool hook is deliberately narrow: it protects secrets/credentials, credential widening, unauthorized remote/external mutation, and clearly destructive irreversible effects; it does not try to encode the role chart or interpret ordinary local work.
+Aether reuses Hermes first and carries a documented transitional downstream only while indispensable runtime defects remain. Role behavior lives primarily in contracts, prompts, worktree isolation, tests and review. The versioned pre-tool hook is deliberately narrow: it protects secrets/credentials, credential widening, remote history/check bypass, destructive or arbitrary external mutation, deployment/package publication, and clearly destructive irreversible effects; it permits the owner-preauthorized routine GitHub lifecycle and does not try to encode the role chart or interpret ordinary local work.
 
 ## The method
 

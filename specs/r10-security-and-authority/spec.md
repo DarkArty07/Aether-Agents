@@ -4,6 +4,7 @@
 **Stage status**: in-progress — operational simplification amendment under PD-71/PD-72/PD-73/PD-74
 **Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Reopened**: 2026-08-26 — Christopher rejected the accumulated strict enforcement after repeated E2E failures and authorized simplification
+**Amended**: 2026-09-01 — routine GitHub collaboration is preauthorized; the protected remote edge is narrowed to destructive, bypass, deployment, credential/spend, package and arbitrary-API effects
 **Decision authority**: Christopher
 **Depends on**: R1, R5, R7, R8, R9, `DESIGN.md`
 **May affect**: R11, R13, A1
@@ -88,13 +89,13 @@ This list is intentionally short. Adding another family is a design change, not 
 |---|---|
 | Secret persistence/exposure | Credential-shaped material entering durable fields or obvious outbound/mutation payloads |
 | Credential acquisition/widening | Login/provision/key-generation/secret-store operations that create or enlarge access |
-| Remote/external mutation | Push, PR/release publication, package publication, deploy, infrastructure mutation, destructive HTTP writes and equivalent obvious remote effects |
+| Protected remote/external mutation | Remote history/tag rewrite or deletion, hook/check/branch-protection bypass, destructive Release/repository mutation, arbitrary mutating API calls, package/container publication, deploy, infrastructure/provider/spend mutation and equivalent obvious protected effects; the routine GitHub lifecycle is not in this family |
 | Clearly destructive irreversible local operation | Root/home/device wiping, destructive disk operations, hard cleanup that destroys unknown local state, and similarly unambiguous loss |
 | Structurally provable isolation escape | Only a typed/structured target whose boundary can be checked without interpreting arbitrary program behavior; if no such boundary is configured, the hook makes no confinement claim |
 
 - **FR-1013**: The table above is the definitive protected-effect enumeration for the stabilization baseline.
 - **FR-1013a**: Contract ownership, card shape, local branch choice, local commit workflow, ordinary file paths, technical design decisions, review decisions and routing are NOT protected effects.
-- **FR-1013b**: During stabilization, remote publication/deploy/external mutation is blocked by default. Public release/cutover later requires the explicit external gate owned by A1/R13; this branch does not invent a new bypass token.
+- **FR-1013b**: The routine GitHub lifecycle named by R8-FR-824 is preauthorized and MUST NOT depend on another availability gate. Protected variants remain fail-closed: remote history/tag rewrite or unreviewed deletion, hook/check/branch-protection bypass, destructive Release/repository mutation, arbitrary mutating API calls, package/container publication, deploy/cutover, infrastructure/provider/spend mutation, and credential acquisition/widening.
 - **FR-1013c**: A destructive-operation detector MUST prefer a small high-confidence list over broad command semantics. A false negative that remains local/reversible is handled by isolation/review; a false positive that blocks ordinary work is a regression.
 - **FR-1014**: A denied edge effect MUST be visible in the E2E evidence.
 - **FR-1015**: Repeated attempts to perform the same genuine denied edge effect are reportable; ordinary false positives trigger recovery rather than more denials.
@@ -109,11 +110,11 @@ This list is intentionally short. Adding another family is a design change, not 
 
 ## 7. External authority
 
-Aether's normal unattended local workflow does not imply authority to publish or spend.
+Aether's normal unattended workflow carries the owner-preauthorized routine GitHub authority from R8-FR-824, but does not imply authority for other publication, deployment, credential or spend effects.
 
-- **FR-1016**: Push, PR, tag, release, deploy, package upload, repository settings, public announcement, paid live qualification, credential changes and destructive purge remain separate external gates.
-- **FR-1017**: This stabilization candidate blocks obvious remote mutations rather than trying to infer authorization from prose, cards or shell context.
-- **FR-1018**: A later public activation mechanism MUST carry explicit external-effect authority through a bounded product surface before the guard can permit that effect; absence of such a surface is deny, not a reason to parse conversational text.
+- **FR-1016**: Deployment/cutover, package or container publication, repository settings/protection mutation, public announcements outside routine Release notes, paid live qualification, provider/spend changes, credential changes, destructive purge and arbitrary mutating API calls remain separate protected gates.
+- **FR-1017**: This stabilization candidate permits the fixed routine GitHub lifecycle without parsing conversational prose, cards or shell context, and blocks only high-confidence protected variants.
+- **FR-1018**: A later bounded product surface MAY carry authority for rare protected effects, but it MUST NOT sit on the critical path for the routine GitHub lifecycle.
 - **FR-1019**: Local technical capability never self-grants an external effect.
 - **FR-1020**: Christopher's current explicit instruction outranks older artifacts; the owning artifact must be updated rather than silently bypassed.
 
@@ -148,13 +149,13 @@ Before this amendment, focused policy/A1/launcher tests passed `58 passed, 46 su
 
 ## 11. Success criteria
 
-- **SC-1001**: Representative local/reversible work for all three roles is not blocked by policy.
-- **SC-1002**: Secret/credential, credential-acquisition, obvious remote mutation and clearly destructive controls are denied with a precise reason.
+- **SC-1001**: Representative local/reversible work and the routine GitHub lifecycle for all three roles are not blocked by policy.
+- **SC-1002**: Secret/credential, credential-acquisition, protected remote mutation and clearly destructive controls are denied with a precise reason.
 - **SC-1003**: The guard contains no SQLite/Kanban dependency and performs no Git subprocess invocation.
 - **SC-1004**: The guard does not classify contract ownership, decision-card shape, task size or direct/pipeline routing.
-- **SC-1005**: A complete three-role canary needs zero guard-caused manual recovery.
+- **SC-1005**: A complete three-role canary, including Supervisor publication, needs zero guard-caused manual recovery.
 - **SC-1006**: No release-visible artifact contains private owner state.
-- **SC-1007**: No external publication/destructive effect occurs without its separate gate.
+- **SC-1007**: No protected external/destructive effect occurs without its separate gate; the routine GitHub lifecycle is not misclassified as protected.
 - **SC-1008**: A false-positive recovery restores a known-good canary before any hardening work begins.
 
 ## 12. Done when
