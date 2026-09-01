@@ -1,0 +1,202 @@
+# Current implementation-status and traceability registry.
+# This file is not a behavioral or design authority; see docs/authority.md.
+schema_version = 1
+generated_reference = "docs/reference/capabilities.md"
+
+[[capabilities]]
+id = "cli.aether-launch"
+status = "partial"
+summary = "The bare command exposes version reporting and a source-tree Morfeo launcher, but the packaged project-aware launch contract is not fully qualified."
+surfaces = ["cli.command.aether", "cli.option.aether.json", "cli.option.aether.project", "cli.option.aether.version"]
+documents = ["docs/getting-started.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md"]
+implementation = ["src/aether_agents/cli.py", "scripts/aether_tui.py"]
+verification = ["tests/test_aether_tui_launcher.py", "tests/test_observation_lifecycle.py"]
+notes = "The source-tree launcher requires local managed prerequisites; this build does not provide the complete installed project-aware launch path."
+
+[[capabilities]]
+id = "cli.doctor"
+status = "partial"
+summary = "The CLI diagnoses lifecycle coherence without importing Hermes, but it does not yet implement the full project-aware diagnostic contract."
+surfaces = ["cli.command.doctor", "cli.option.doctor.json", "cli.option.doctor.project"]
+documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "A clean environment with no active Aether release truthfully reports an integrity error; project-specific diagnostics remain unfinished."
+
+[[capabilities]]
+id = "cli.init"
+status = "implemented"
+summary = "Initializes an existing Git repository root as an Aether Project using a validated portable marker and exact-path native Hermes Project binding."
+surfaces = ["cli.argument.init.path", "cli.command.init", "cli.option.init.dry-run", "cli.option.init.forge", "cli.option.init.hermes-project", "cli.option.init.json", "cli.option.init.name"]
+documents = ["docs/guides/project-initialization.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/commands/init.py", "src/aether_agents/project_marker.py"]
+verification = ["tests/test_project_init.py", "tests/test_project_marker_validation.py"]
+notes = ""
+
+[[capabilities]]
+id = "cli.observe"
+status = "implemented"
+summary = "Reads one deterministic contract-observation review brief or JSON envelope without mutating state or calling a provider."
+surfaces = ["cli.argument.observe.ref", "cli.command.observe", "cli.option.observe.json", "cli.option.observe.project", "cli.option.observe.since", "cli.option.observe.watch"]
+documents = ["docs/guides/observation.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/002-aether-contract-observation/spec.md"]
+implementation = ["src/aether_agents/commands/observe.py", "src/aether_agents/observation/query.py", "src/aether_agents/observation/report.py"]
+verification = ["tests/test_observation_cli_plugin.py", "tests/test_observation_reducer.py"]
+notes = ""
+
+[[capabilities]]
+id = "cli.reconcile"
+status = "unsupported"
+summary = "The public command name is reserved but currently returns an explicit unsupported result."
+surfaces = ["cli.command.reconcile", "cli.option.reconcile.json"]
+documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "Manager/product mismatch reconciliation is not implemented in the current CLI build."
+
+[[capabilities]]
+id = "cli.rollback"
+status = "transitional"
+summary = "Selects a previously coherent staged release with planning and confirmation paths in the local lifecycle candidate."
+surfaces = ["cli.argument.rollback.version", "cli.command.rollback", "cli.option.rollback.dry-run", "cli.option.rollback.json", "cli.option.rollback.yes"]
+documents = ["docs/guides/policy-and-recovery.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "The lifecycle candidate is locally tested, but public install/runtime qualification is still pending."
+
+[[capabilities]]
+id = "cli.service-lifecycle"
+status = "unsupported"
+summary = "Service lifecycle command names are reserved and return explicit unsupported results."
+surfaces = ["cli.command.restart", "cli.command.start", "cli.command.status", "cli.command.stop", "cli.option.restart.json", "cli.option.start.json", "cli.option.status.json", "cli.option.stop.json"]
+documents = ["docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "No Aether-managed user service is activated or controlled by this build."
+
+[[capabilities]]
+id = "cli.setup"
+status = "transitional"
+summary = "Plans or stages one locally supplied wheel, Hermes checkout, and release lock after explicit confirmation."
+surfaces = ["cli.command.setup", "cli.option.setup.dry-run", "cli.option.setup.hermes-checkout", "cli.option.setup.json", "cli.option.setup.release-lock", "cli.option.setup.wheel", "cli.option.setup.yes"]
+documents = ["docs/getting-started.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "This is a local candidate setup interface, not the complete guided/declarative public installation experience."
+
+[[capabilities]]
+id = "cli.uninstall"
+status = "partial"
+summary = "Plans or performs candidate release removal while preserving state by default and requiring confirmation for purge."
+surfaces = ["cli.command.uninstall", "cli.option.uninstall.dry-run", "cli.option.uninstall.export", "cli.option.uninstall.json", "cli.option.uninstall.purge", "cli.option.uninstall.yes"]
+documents = ["docs/guides/policy-and-recovery.md", "docs/reference/cli.md", "docs/reference/limitations-and-troubleshooting.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "State export is explicitly unavailable; complete installed-product uninstall qualification remains pending."
+
+[[capabilities]]
+id = "cli.update"
+status = "transitional"
+summary = "Plans or activates one fully staged, verified local release candidate."
+surfaces = ["cli.argument.update.version", "cli.command.update", "cli.option.update.dry-run", "cli.option.update.hermes-checkout", "cli.option.update.json", "cli.option.update.prerelease", "cli.option.update.release-lock", "cli.option.update.wheel", "cli.option.update.yes"]
+documents = ["docs/guides/policy-and-recovery.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/cli.py", "src/aether_agents/lifecycle.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "Candidate update logic is not evidence of a released update channel or public artifact qualification."
+
+[[capabilities]]
+id = "cli.version"
+status = "partial"
+summary = "Reports the installed package version without importing Hermes."
+surfaces = ["cli.command.version", "cli.option.version.json"]
+documents = ["docs/getting-started.md", "docs/reference/cli.md"]
+specifications = ["specs/001-aether-v1-productization/contracts/cli.md"]
+implementation = ["src/aether_agents/__init__.py", "src/aether_agents/cli.py"]
+verification = ["tests/test_observation_lifecycle.py"]
+notes = "The current result intentionally warns that managed Hermes source and profile-policy details are unavailable."
+
+[[capabilities]]
+id = "lifecycle.execution-board-handoff"
+status = "implemented"
+summary = "A ready finalized Objective Contract deterministically provisions or verifies an isolated Hermes execution board for its project and version."
+surfaces = ["lifecycle.execution-board-isolation"]
+documents = ["docs/guides/execution.md", "docs/guides/objective-contracts.md"]
+specifications = ["specs/003-objective-contracts/spec.md", "specs/r5-topology-and-isolation/spec.md"]
+implementation = ["src/aether_agents/objective_contracts/execution_boards.py", "src/aether_agents/objective_contracts/hermes_plugin.py", "src/aether_agents/objective_contracts/store.py"]
+verification = ["tests/test_objective_contracts.py", "tests/test_project_init.py"]
+notes = ""
+
+[[capabilities]]
+id = "lifecycle.qualification-laboratory"
+status = "partial"
+summary = "The Hermes-free disposable qualification laboratory and compatibility wrappers prepare deterministic evidence; live qualification remains separately gated."
+surfaces = ["lifecycle.qualification-laboratory"]
+documents = ["docs/guides/observation.md", "docs/reference/limitations-and-troubleshooting.md"]
+specifications = ["specs/004-operational-simplification-and-e2e-reliability/plan.md", "specs/r11-evidence-and-observability/spec.md"]
+implementation = ["lab/README.md", "scripts/e2e/README.md", "src/aether_agents/lab/__init__.py", "src/aether_agents/lab/runner.py"]
+verification = ["tests/test_lab_formalization.py", "tests/test_e2e_harness.py", "tests/test_e2e_matrix.py"]
+notes = "Prepared deterministic runs are not live reliability or release qualification; model/provider execution needs a separate authorized gate."
+
+[[capabilities]]
+id = "lifecycle.session-affinity-and-review"
+status = "partial"
+summary = "A handoff carries an opaque Supervisor flow identity while Implementers remain fresh-session workers in isolated worktrees and use Hermes review lifecycle."
+surfaces = ["lifecycle.session-affinity", "lifecycle.worktrees-and-review"]
+documents = ["docs/guides/execution.md", "docs/guides/lifecycle.md"]
+specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r7-supervision-and-convergence/spec.md"]
+implementation = ["src/aether_agents/objective_contracts/store.py", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
+verification = ["tests/test_lab_formalization.py", "tests/test_objective_contracts.py"]
+notes = "Aether passes the binding contract; public end-to-end runtime qualification remains outside this repository-only documentation change."
+
+[[capabilities]]
+id = "observation.contract-observer"
+status = "partial"
+summary = "The observer plugin records bounded metadata and offers a curated Morfeo read tool without exposing logs, prompts, or raw events."
+surfaces = ["plugin.aether-contract-observer", "tool.aether-observe", "tool_action.aether-observe.changes", "tool_action.aether-observe.diagnose", "tool_action.aether-observe.status"]
+documents = ["docs/guides/observation.md", "docs/reference/plugins-and-tools.md"]
+specifications = ["specs/002-aether-contract-observation/spec.md"]
+implementation = ["src/aether_agents/observation/brief.py", "src/aether_agents/observation/capture/hermes_plugin.py", "src/aether_agents/resources/profiles/morfeo/config.yaml"]
+verification = ["tests/test_observation_brief_tool.py", "tests/test_observation_cli_plugin.py", "tests/test_observation_packaging.py"]
+notes = "The entry point and provider-free behavior are tested, but managed-profile activation and the full live observation lifecycle are not release-qualified."
+
+[[capabilities]]
+id = "objective-contract.authoring"
+status = "implemented"
+summary = "Morfeo-only transactional Objective Contract authoring supports incremental drafts, validation, immutable finalization, supersession, and handoff preparation."
+surfaces = ["plugin.aether-objective-contracts", "tool.objective-contract", "tool_action.objective-contract.begin", "tool_action.objective-contract.finalize", "tool_action.objective-contract.list", "tool_action.objective-contract.prepare-handoff", "tool_action.objective-contract.set-section", "tool_action.objective-contract.show", "tool_action.objective-contract.supersede", "tool_action.objective-contract.validate"]
+documents = ["docs/guides/objective-contracts.md", "docs/reference/plugins-and-tools.md"]
+specifications = ["specs/003-objective-contracts/spec.md"]
+implementation = ["src/aether_agents/objective_contracts/hermes_plugin.py", "src/aether_agents/objective_contracts/store.py", "src/aether_agents/resources/profiles/morfeo/config.yaml"]
+verification = ["tests/test_objective_contracts.py", "tests/test_project_init.py"]
+notes = ""
+
+[[capabilities]]
+id = "policy.edge-effect-guard"
+status = "implemented"
+summary = "One portable pre-tool policy permits ordinary reversible local work while blocking high-confidence credential, protected external, and clearly destructive effects."
+surfaces = ["policy.pre-tool-edge-guard"]
+documents = ["docs/guides/policy-and-recovery.md", "docs/roles-and-authority.md"]
+specifications = ["specs/r10-security-and-authority/spec.md"]
+implementation = ["policy/hooks/aether_pre_tool_policy.py", "scripts/sync_policy_hooks.py"]
+verification = ["tests/test_policy_hooks.py", "tests/test_hermes_baseline.py"]
+notes = ""
+
+[[capabilities]]
+id = "roles.portable-profile-bundle"
+status = "partial"
+summary = "The package carries portable Morfeo, Supervisor, and Implementer role resources with separate responsibilities and plugin configuration."
+surfaces = ["role.implementer", "role.morfeo", "role.supervisor"]
+documents = ["docs/product-boundary.md", "docs/roles-and-authority.md"]
+specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r10-security-and-authority/spec.md"]
+implementation = ["src/aether_agents/resources/profiles/implementer/SOUL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
+verification = ["tests/test_objective_contracts.py", "tests/test_observation_lifecycle.py"]
+notes = "Portable resources are versioned candidate bytes; clean installed-profile activation and public qualification remain pending."
