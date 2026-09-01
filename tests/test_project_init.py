@@ -419,3 +419,220 @@ def test_objective_contract_accepts_the_initialized_project_and_rejects_others(
             session_id="s_canary_0002",
         )
     assert "PROJECT" in str(getattr(unknown.value, "code", ""))
+
+
+# --- Ignore policy (issue #278) -------------------------------------------------
+#
+# `.aether/project.toml` and `.aether/objective-contracts/` are canonically tracked and
+# `.aether/drafts/` is canonically ignored (specs/003-objective-contracts/spec.md).
+# Initialization that leaves the marker excluded produces a project that looks healthy
+# but can never reach `prepare_handoff`, which requires both in Git HEAD.
+
+
+def _ignored(root: Path, relative: str) -> bool:
+    return (
+        subprocess.run(
+            ("git", "check-ignore", "-q", relative), cwd=root, capture_output=True
+        ).returncode
+        == 0
+    )
+
+
+def _init_with_ignore(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch, rule: str, **kw
+):
+    repository = _git_repository(tmp_path / "repo")
+    (repository / ".gitignore").write_text(f"node_modules/\n{rule}\n", encoding="utf-8")
+    subprocess.run(("git", "add", "-A"), cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ("git", "commit", "-m", "ignore policy"), cwd=repository, check=True, capture_output=True
+    )
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+    return repository, run_init(_args(repository, **kw), registry=registry)
+
+
+@pytest.mark.parametrize("rule", [".aether/", ".aether/*", "**/.aether/**", "/.aether"])
+def test_init_makes_the_marker_trackable_under_pre_existing_ignore_rules(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch, rule: str
+) -> None:
+    """A pre-existing rule must not yield a successful-but-unusable project."""
+    repository, envelope = _init_with_ignore(tmp_path, registry, monkeypatch, rule)
+
+    assert envelope.result == "changed", envelope.errors
+    assert envelope.data["ignore_policy"] == "update"
+    assert not _ignored(repository, ".aether/project.toml")
+    assert not _ignored(repository, ".aether/objective-contracts/")
+    assert not _ignored(repository, ".aether/objective-contracts/oc_abc/v1.md")
+    # Drafts stay local, and unrelated project policy is untouched.
+    assert _ignored(repository, ".aether/drafts/x.json")
+    assert _ignored(repository, "node_modules/pkg/index.js")
+    assert "node_modules/" in (repository / ".gitignore").read_text(encoding="utf-8")
+
+
+def test_init_leaves_other_aether_content_ignored(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repositories that already hid local state in .aether/ must keep hiding it."""
+    repository, envelope = _init_with_ignore(tmp_path, registry, monkeypatch, ".aether/")
+
+    assert envelope.result == "changed", envelope.errors
+    assert _ignored(repository, ".aether/aether.db")
+    assert _ignored(repository, ".aether/locks/lock")
+
+
+def test_init_does_not_unignore_nested_aether_directories(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The appended block is anchored: only the repository root's .aether/ is affected.
+
+    `!.aether/` is unanchored by necessity — it must neutralize an unanchored directory
+    exclusion — so this pins that it re-includes the *directory entry* only, and never
+    exposes a sub-project's ignored `.aether/` content.
+    """
+    repository, envelope = _init_with_ignore(tmp_path, registry, monkeypatch, "**/.aether/**")
+    assert envelope.result == "changed", envelope.errors
+
+    nested = repository / "sub" / "mod" / ".aether"
+    nested.mkdir(parents=True)
+    (nested / "aether.db").write_text("local\n", encoding="utf-8")
+    (nested / "project.toml").write_text("local\n", encoding="utf-8")
+
+    assert not _ignored(repository, ".aether/project.toml")
+    assert _ignored(repository, "sub/mod/.aether/aether.db")
+    assert _ignored(repository, "sub/mod/.aether/project.toml")
+
+
+def test_init_does_not_touch_an_already_correct_ignore_policy(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = _git_repository(tmp_path / "repo")
+    policy = (
+        "node_modules/\n/.aether/*\n!/.aether/project.toml\n"
+        "!/.aether/objective-contracts/\n!/.aether/objective-contracts/**\n"
+    )
+    (repository / ".gitignore").write_text(policy, encoding="utf-8")
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    envelope = run_init(_args(repository), registry=registry)
+
+    assert envelope.result == "changed", envelope.errors
+    assert envelope.data["ignore_policy"] == "already_correct"
+    assert (repository / ".gitignore").read_text(encoding="utf-8") == policy
+
+
+def test_dry_run_reports_the_ignore_effect_without_mutating(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, envelope = _init_with_ignore(
+        tmp_path, registry, monkeypatch, ".aether/", dry_run=True
+    )
+
+    assert envelope.result == "planned"
+    assert envelope.changed is False
+    assert envelope.data["ignore_policy"] == "update"
+    assert (repository / ".gitignore").read_text(encoding="utf-8") == "node_modules/\n.aether/\n"
+    assert not (repository / ".aether" / "project.toml").exists()
+    assert _ignored(repository, ".aether/project.toml")
+
+
+def test_repairing_the_ignore_policy_alone_is_reported_as_a_change(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An already-initialized project whose marker is ignored must still be repaired."""
+    repository, first = _init_with_ignore(tmp_path, registry, monkeypatch, ".aether/")
+    assert first.result == "changed", first.errors
+    project_id = first.data["project_id"]
+
+    # Re-introduce the exclusion the way the original defect left it.
+    (repository / ".gitignore").write_text("node_modules/\n.aether/\n", encoding="utf-8")
+    assert _ignored(repository, ".aether/project.toml")
+
+    repaired = run_init(_args(repository), registry=registry)
+
+    assert repaired.result == "changed", repaired.errors
+    assert repaired.data["ignore_policy"] == "update"
+    assert repaired.data["project_id"] == project_id
+    assert not _ignored(repository, ".aether/project.toml")
+
+
+def test_idempotent_rerun_preserves_marker_bytes_and_ignore_file(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository, first = _init_with_ignore(tmp_path, registry, monkeypatch, ".aether/")
+    assert first.result == "changed", first.errors
+    marker_bytes = (repository / ".aether" / "project.toml").read_bytes()
+    ignore_bytes = (repository / ".gitignore").read_bytes()
+
+    second = run_init(_args(repository), registry=registry)
+
+    assert second.result == "no_change"
+    assert second.data["ignore_policy"] == "already_correct"
+    assert (repository / ".aether" / "project.toml").read_bytes() == marker_bytes
+    assert (repository / ".gitignore").read_bytes() == ignore_bytes
+
+
+def test_prepare_handoff_is_ready_after_init_authoring_and_an_ordinary_commit(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The #278 end-to-end canary: no `git add -f`, no manual marker or registry edit."""
+    repository, envelope = _init_with_ignore(tmp_path, registry, monkeypatch, ".aether/")
+    assert envelope.result == "changed", envelope.errors
+    project_id = envelope.data["project_id"]
+
+    store = ObjectiveContractStore(registry=registry)
+    started = store.begin(project_id=project_id, title="Handoff canary", session_id="s_canary_0278")
+    contract_id = started["contract_id"]
+    revision = started["revision"]
+    for section in (
+        "owner_intent",
+        "objective",
+        "decisions_and_assumptions",
+        "in_scope",
+        "out_of_scope",
+        "authority",
+        "deliverables",
+        "acceptance_criteria",
+        "testing_standard",
+        "stop_conditions",
+        "canonical_references",
+    ):
+        result = store.set_section(
+            project_id=project_id,
+            contract_id=contract_id,
+            section=section,
+            content=f"Canary content for {section}.",
+            expected_revision=revision,
+            session_id="s_canary_0278",
+        )
+        revision = result["revision"]
+    final = store.finalize(
+        project_id=project_id,
+        contract_id=contract_id,
+        expected_revision=revision,
+        session_id="s_canary_0278",
+    )
+    final_relative = f".aether/objective-contracts/{contract_id}/v{final['version']}.md"
+
+    # The ordinary workflow: plain `git add`, no force.
+    subprocess.run(("git", "add", "-A"), cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ("git", "commit", "-m", "aether: project identity and contract"),
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    tracked = subprocess.run(
+        ("git", "ls-files", ".aether"), cwd=repository, capture_output=True, text=True, check=True
+    ).stdout.split()
+    assert ".aether/project.toml" in tracked
+    assert final_relative in tracked
+    assert not any(entry.startswith(".aether/drafts/") for entry in tracked)
+
+    handoff = store.prepare_handoff(
+        project_id=project_id, contract_id=contract_id, version=final["version"]
+    )
+    assert handoff["handoff_ready"] is True, handoff

@@ -291,6 +291,77 @@ def _write_marker(marker_path: Path, marker: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
+_TRACKED_PATHS = (".aether/project.toml", ".aether/objective-contracts/")
+_IGNORED_PATHS = (".aether/drafts/",)
+
+_IGNORE_BLOCK = """
+# Aether project identity and finalized Objective Contracts (managed by `aether init`).
+# Local drafts and every other .aether/ entry stay ignored.
+!.aether/
+/.aether/*
+!/.aether/project.toml
+!/.aether/objective-contracts/
+!/.aether/objective-contracts/**
+"""
+
+
+def _is_ignored(root: Path, relative: str) -> bool:
+    """Report whether Git currently excludes ``relative`` inside ``root``."""
+    return _git(root, "check-ignore", "-q", relative) is not None
+
+
+def _ignore_policy_satisfied(root: Path) -> bool:
+    """The canonical layout requires tracked marker/finals and ignored drafts."""
+    return not any(_is_ignored(root, path) for path in _TRACKED_PATHS) and all(
+        _is_ignored(root, path) for path in _IGNORED_PATHS
+    )
+
+
+def _apply_ignore_policy(root: Path) -> None:
+    """Append the canonical block so the marker and finalized contracts are trackable.
+
+    Only ever appends: existing rules are never edited or removed, so unrelated project
+    policy is preserved and other ``.aether/`` content stays ignored. The result is then
+    verified with Git itself; if the policy is still unsatisfied the file is restored
+    byte-for-byte and the caller refuses rather than reporting a usable project.
+    """
+    path = root / ".gitignore"
+    original: bytes | None = None
+    if path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise InitError(
+                "AETHER-INIT-IGNORE-POLICY-UNSAFE",
+                ".gitignore is not a regular file; refusing to modify it",
+                failure_kind="integrity_failure",
+            )
+        original = path.read_bytes()
+
+    separator = b"" if original is None or original.endswith(b"\n") else b"\n"
+    try:
+        with path.open("ab") as handle:
+            handle.write(separator + _IGNORE_BLOCK.encode("utf-8"))
+    except OSError as exc:
+        raise InitError(
+            "AETHER-INIT-IGNORE-POLICY-UNWRITABLE",
+            "could not update .gitignore to make the Aether marker trackable",
+            failure_kind="runtime_failure",
+        ) from exc
+
+    if _ignore_policy_satisfied(root):
+        return
+    if original is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.write_bytes(original)
+    raise InitError(
+        "AETHER-INIT-IGNORE-POLICY-CONFLICT",
+        "existing Git ignore rules keep .aether/project.toml or "
+        ".aether/objective-contracts/ excluded and cannot be corrected by appending; "
+        "adjust the ignore policy so both are trackable, then re-run init",
+        failure_kind="blocked",
+    )
+
+
 def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> dict[str, Any]:
     """Compute the full init decision without writing anything."""
     marker_path = root / ".aether" / "project.toml"
@@ -384,6 +455,7 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
 
     action = plan["action"]
     marker_path = root / ".aether" / "project.toml"
+    ignore_fix_required = not _ignore_policy_satisfied(root)
     envelope.data = {
         "project_id": plan["project_id"],
         "project_path": str(root),
@@ -392,6 +464,7 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
         "marker_path": str(marker_path),
         "hermes_project_id": plan["native"]["id"],
         "hermes_project_slug": plan["native"]["slug"],
+        "ignore_policy": "update" if ignore_fix_required else "already_correct",
     }
 
     if args.dry_run:
@@ -399,9 +472,20 @@ def run_init(args: argparse.Namespace, *, registry: ProjectRegistry | None = Non
         envelope.data["action"] = action
         return envelope
 
-    if action == "none":
+    if action == "none" and not ignore_fix_required:
         envelope.result = "no_change"
         return envelope
+
+    # The ignore policy is corrected before the marker is written so the file never
+    # lands in an excluded path, and a refusal here leaves the repository untouched.
+    if ignore_fix_required:
+        try:
+            _apply_ignore_policy(root)
+        except InitError as error:
+            envelope.result = "error"
+            envelope.failure_kind = error.failure_kind
+            envelope.fail(error.code, error.message)
+            return envelope
 
     if action == "create":
         _write_marker(marker_path, plan["marker"])
