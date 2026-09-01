@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-08-31T02:01:37Z`
+Observation timestamp: `2026-09-01T19:13:25Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d556db6c1e6`
+Source ledger SHA-256: `eb8aba2d48fa5b2cf700918c235d97895d8675878295e3c1e50a402b029f001b`
 
 ## Remaining local guarantees
 
@@ -20,6 +20,7 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-246`: Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.
 - `HLP-247`: Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.
 - `HLP-262`: Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.
+- `HLP-280`: Retain the reviewed HLP-280 candidate pending activation. The portable patch reconstructs the isolated exact-active-byte candidate and the active runtime remains unchanged.
 
 ## Qualified upstream equivalents
 
@@ -65,6 +66,9 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-262` (uncertainty): The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.
 - `HLP-262` (uncertainty): The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.
 - `HLP-262` (uncertainty): The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded.
+- `HLP-280` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-280` (uncertainty): The candidate is not activated; backup, reload, PID/state, live no-watcher canaries, and rollback facts remain pending for the second evidence-only PR.
+- `HLP-280` (uncertainty): No upstream issue or pull request is proposed for the downstream HLP-280 candidate.
 
 ## Artifact integrity
 
@@ -80,6 +84,7 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-246`: not_applicable
 - `HLP-247`: not_applicable
 - `HLP-262`: unavailable
+- `HLP-280`: passed
 
 ## Safe next decisions
 

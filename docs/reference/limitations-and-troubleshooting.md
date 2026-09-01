@@ -16,6 +16,7 @@ This page records current limits plainly. It does not turn a candidate interface
 | State export | `uninstall --export` returns `EXPORT_NOT_IMPLEMENTED`. | Preserve state; do not claim an export occurred. |
 | Portable profiles | Resources are versioned candidate bytes, not proof of live profile activation. | Avoid copying private profile state into project artifacts. |
 | Live reliability/release evidence | Provider-backed model execution, persistent-session wake, protected CI, immutable runtime, and public release qualification remain outside this local build. | Use deterministic tests as local evidence only; do not invoke providers or publish. |
+| HLP-280 affinity-flow repair | The exact-byte candidate and portable patch are qualified in isolation, but the active Hermes runtime has not been changed. Backup, reload, no-watcher canaries, rollback, and factual evidence remain `RELOAD_PENDING`. | Do not infer activation from the candidate. The authorized activation lane must recheck active hashes, use a reversible backup, and record only bounded factual evidence afterward. |
 
 ## Provider-free diagnostics
 

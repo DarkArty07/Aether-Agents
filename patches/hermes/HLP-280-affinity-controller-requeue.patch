@@ -1,0 +1,496 @@
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -4319,2 +4319,12 @@
+         return False
++    payload = {
++        "reason": str(reason)[:500],
++        "outcome": str(outcome),
++        "flow_id": task.session_affinity.get("flow_id"),
++    }
++    if any(
++        event.kind == "flow_terminal" and event.payload == payload
++        for event in list_events(conn, task_id)
++    ):
++        return True
+     with write_txn(conn):
+@@ -4325,7 +4335,3 @@
+             "flow_terminal",
+-            {
+-                "reason": str(reason)[:500],
+-                "outcome": str(outcome),
+-                "flow_id": task.session_affinity.get("flow_id"),
+-            },
++            payload,
+         )
+@@ -5456,3 +5462,3 @@
+     blocked = conn.execute(
+-        "SELECT project_id, session_affinity FROM tasks WHERE id = ?",
++        "SELECT project_id, session_id, session_affinity FROM tasks WHERE id = ?",
+         (blocked_task_id,),
+@@ -5461,5 +5467,30 @@
+         return None
++    flow_id = None
++    if blocked["session_id"]:
++        flow_ids = set()
++        for ancestor in conn.execute(
++            "WITH RECURSIVE ancestors(id) AS ("
++            " SELECT parent_id FROM task_links WHERE child_id = ?"
++            " UNION SELECT link.parent_id FROM task_links link"
++            " JOIN ancestors ON link.child_id = ancestors.id"
++            ") SELECT task.session_affinity FROM ancestors"
++            " JOIN tasks task ON task.id = ancestors.id"
++            " WHERE task.project_id = ? AND task.session_id = ?"
++            " AND task.session_affinity IS NOT NULL",
++            (blocked_task_id, blocked["project_id"], blocked["session_id"]),
++        ).fetchall():
++            try:
++                affinity = normalize_session_affinity(
++                    json.loads(ancestor["session_affinity"])
++                )
++            except (TypeError, ValueError, json.JSONDecodeError):
++                continue
++            if affinity:
++                flow_ids.add(affinity["flow_id"])
++        if len(flow_ids) != 1:
++            return None
++        flow_id = next(iter(flow_ids))
+     candidates = []
+     for row in conn.execute(
+-        "SELECT child.id, child.project_id, child.status, child.session_affinity "
++        "SELECT child.id, child.project_id, child.status, child.session_id, child.session_affinity "
+         "FROM task_links link JOIN tasks child ON child.id = link.child_id "
+@@ -5468,3 +5499,7 @@
+     ).fetchall():
+-        if row["project_id"] != blocked["project_id"] or not row["session_affinity"]:
++        if (
++            row["project_id"] != blocked["project_id"]
++            or (blocked["session_id"] and row["session_id"] != blocked["session_id"])
++            or not row["session_affinity"]
++        ):
+             continue
+@@ -5474,3 +5509,7 @@
+             continue
+-        if affinity and affinity["terminal"]:
++        if (
++            affinity
++            and affinity["terminal"]
++            and (flow_id is None or affinity["flow_id"] == flow_id)
++        ):
+             candidates.append(row)
+@@ -7195,2 +7234,13 @@
+         raise ValueError("origin_signal cannot be used for dependency blocks")
++    task = get_task(conn, task_id)
++    if (
++        task is not None
++        and task.session_affinity
++        and task.session_affinity.get("terminal")
++        and kind != "dependency"
++        and origin_signal is None
++    ):
++        raise ValueError(
++            "terminal-affinity blocks require an input, revision, or recovery origin_signal"
++        )
+     recurrences = 0
+@@ -7860,3 +7910,4 @@
+         # Re-gate on parent completion before restoring the source phase.
+-        landing_status = _landing_status_after_parents(conn, task_id)
++        pending_attention = bool(_pending_flow_attentions(conn, task_id))
++        landing_status = "ready" if pending_attention else _landing_status_after_parents(conn, task_id)
+         new_status = (
+@@ -7892,2 +7943,4 @@
+         )
++        if pending_attention:
++            _append_event(conn, task_id, "flow_attention_requeued")
+         return True
+@@ -9485,6 +9538,3 @@
+             )
+-            if tripped:
+-                _route_affinity_terminal(
+-                    conn, tid, reason=failure_error, outcome="failed"
+-                )
++
+     return timed_out
+@@ -10075,5 +10125,2 @@
+                     auto_blocked.append(tid)
+-                    _route_affinity_terminal(
+-                        conn, tid, reason=error_text, outcome="failed"
+-                    )
+                 continue
+@@ -10092,5 +10139,2 @@
+                 auto_blocked.append(tid)
+-                _route_affinity_terminal(
+-                    conn, tid, reason=error_text, outcome="failed"
+-                )
+     # Stash auto-blocked ids on the function for the dispatch loop to pick up.
+@@ -10301,2 +10345,14 @@
+             # Timeout/crash path's caller already emitted its own event.
++    if blocked:
++        task = get_task(conn, task_id)
++        if (
++            task is not None
++            and task.session_affinity
++            and task.session_affinity.get("terminal")
++        ):
++            _route_affinity_terminal(conn, task_id, reason=error, outcome="failed")
++        else:
++            _wake_terminal_flow_controller(
++                conn, task_id, reason=error, kind=None, origin_signal=None
++            )
+     return blocked
+diff --git a/tests/hermes_cli/test_kanban_affinity_controller_requeue.py b/tests/hermes_cli/test_kanban_affinity_controller_requeue.py
+new file mode 100644
+--- /dev/null
++++ b/tests/hermes_cli/test_kanban_affinity_controller_requeue.py
+@@ -0,0 +1,351 @@
++"""HLP-280 regression coverage for affinity controller liveness."""
++
++from __future__ import annotations
++
++import pytest
++
++from hermes_cli import kanban_db as kb
++from hermes_cli import projects_db
++
++
++def _project(tmp_path):
++    with projects_db.connect_closing() as project_conn:
++        return projects_db.create_project(
++            project_conn,
++            name=f"Project {tmp_path.name}",
++            primary_path=str(tmp_path),
++        )
++
++
++def _flow(conn, project_id, workspace, *, controller_status="running"):
++    root = kb.create_task(
++        conn,
++        title="root",
++        assignee="supervisor",
++        project_id=project_id,
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++        session_affinity={"flow_id": "flow-280", "terminal": False},
++    )
++    assert kb.claim_task(conn, root) is not None
++    assert kb.complete_task(conn, root)
++    unit = kb.create_task(
++        conn,
++        title="unit",
++        assignee="implementer",
++        project_id=project_id,
++        parents=(root,),
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++    )
++    controller = kb.create_task(
++        conn,
++        title="controller",
++        assignee="supervisor",
++        project_id=project_id,
++        parents=(root, unit),
++        session_id="origin-session",
++        workspace_kind="dir",
++        workspace_path=str(workspace),
++        session_affinity={"flow_id": "flow-280", "terminal": True},
++        initial_status=controller_status,
++    )
++    return unit, controller
++
++
++def _attention_events(conn, task_id):
++    return [
++        event
++        for event in kb.list_events(conn, task_id)
++        if event.kind == "flow_attention"
++    ]
++
++
++def test_external_unblock_makes_pending_controller_claimable(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(
++            conn, project_id, tmp_path, controller_status="blocked"
++        )
++        assert kb.claim_task(conn, unit) is not None
++        assert kb.block_task(conn, unit, reason="recover", kind="capability")
++        assert len(_attention_events(conn, controller)) == 1
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "blocked"
++        assert kb.recompute_ready(conn) == 0
++
++        assert kb.unblock_task(conn, controller)
++
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "ready"
++        assert kb.claim_task(conn, controller) is not None
++        assert (
++            len([
++                event
++                for event in kb.list_events(conn, controller)
++                if event.kind == "flow_attention_requeued"
++            ])
++            == 1
++        )
++    finally:
++        conn.close()
++
++
++def test_terminal_failure_of_non_affinity_unit_wakes_controller(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            "worker crashed",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        unit_task = kb.get_task(conn, unit)
++        controller_task = kb.get_task(conn, controller)
++        assert unit_task is not None and unit_task.status == "blocked"
++        assert controller_task is not None and controller_task.status == "ready"
++        assert len(_attention_events(conn, controller)) == 1
++    finally:
++        conn.close()
++
++
++def test_failure_does_not_cross_to_a_different_affinity_flow(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++        conn.execute(
++            "UPDATE tasks SET session_affinity = ? WHERE id = ?",
++            ('{"flow_id":"other-flow","terminal":true}', controller),
++        )
++        conn.commit()
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            "worker crashed",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "todo"
++        assert not _attention_events(conn, controller)
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize(
++    "outcome", ("spawn_failed", "crashed", "timed_out", "protocol_violation")
++)
++def test_terminal_failure_outcomes_wake_one_controller(tmp_path, monkeypatch, outcome):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            f"{outcome} terminal failure",
++            outcome=outcome,
++            failure_limit=1,
++        )
++
++        assert len(_attention_events(conn, controller)) == 1
++        assert not [
++            event
++            for event in kb.list_events(conn, unit)
++            if event.kind == "origin_signal"
++        ]
++    finally:
++        conn.close()
++
++
++def test_below_threshold_failure_does_not_wake_controller(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++
++        assert not kb._record_task_failure(
++            conn,
++            unit,
++            "first crash",
++            outcome="crashed",
++            failure_limit=2,
++        )
++
++        unit_task = kb.get_task(conn, unit)
++        controller_task = kb.get_task(conn, controller)
++        assert unit_task is not None and unit_task.status == "ready"
++        assert controller_task is not None and controller_task.status == "todo"
++        assert not _attention_events(conn, controller)
++    finally:
++        conn.close()
++
++
++@pytest.mark.parametrize(
++    ("column", "value"),
++    (
++        ("session_id", "other-session"),
++        ("session_affinity", "{malformed"),
++    ),
++)
++def test_invalid_controller_boundaries_do_not_wake(
++    tmp_path, monkeypatch, column, value
++):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++        conn.execute(f"UPDATE tasks SET {column} = ? WHERE id = ?", (value, controller))
++        conn.commit()
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            "terminal failure",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "todo"
++        assert not _attention_events(conn, controller)
++    finally:
++        conn.close()
++
++
++def test_failure_does_not_cross_to_a_different_project(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    other_project_id = _project(tmp_path / "other-project")
++    conn = kb.connect()
++    try:
++        unit, controller = _flow(conn, project_id, tmp_path)
++        conn.execute(
++            "UPDATE tasks SET project_id = ? WHERE id = ?",
++            (other_project_id, controller),
++        )
++        conn.commit()
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            "terminal failure",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "todo"
++        assert not _attention_events(conn, controller)
++    finally:
++        conn.close()
++
++
++def test_ambiguous_terminal_controllers_do_not_wake(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        unit, first_controller = _flow(conn, project_id, tmp_path)
++        second_controller = kb.create_task(
++            conn,
++            title="second controller",
++            assignee="supervisor",
++            project_id=project_id,
++            parents=(unit,),
++            session_id="origin-session",
++            workspace_kind="dir",
++            workspace_path=str(tmp_path),
++            session_affinity={"flow_id": "flow-280", "terminal": True},
++        )
++
++        assert kb._record_task_failure(
++            conn,
++            unit,
++            "terminal failure",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        assert not _attention_events(conn, first_controller)
++        assert not _attention_events(conn, second_controller)
++    finally:
++        conn.close()
++
++
++def test_terminal_affinity_failure_emits_one_flow_terminal(tmp_path, monkeypatch):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        controller = kb.create_task(
++            conn,
++            title="terminal controller",
++            assignee="supervisor",
++            project_id=project_id,
++            session_id="origin-session",
++            workspace_kind="dir",
++            workspace_path=str(tmp_path),
++            session_affinity={"flow_id": "flow-280", "terminal": True},
++        )
++
++        assert kb._record_task_failure(
++            conn,
++            controller,
++            "terminal failure",
++            outcome="crashed",
++            failure_limit=1,
++        )
++
++        events = kb.list_events(conn, controller)
++        assert len([event for event in events if event.kind == "flow_terminal"]) == 1
++        assert not _attention_events(conn, controller)
++    finally:
++        conn.close()
++
++
++def test_silent_terminal_controller_block_is_rejected_before_mutation(
++    tmp_path, monkeypatch
++):
++    monkeypatch.setenv("HERMES_KANBAN_HOME", str(tmp_path / "kanban"))
++    project_id = _project(tmp_path)
++    conn = kb.connect()
++    try:
++        controller = kb.create_task(
++            conn,
++            title="terminal controller",
++            assignee="supervisor",
++            project_id=project_id,
++            session_id="origin-session",
++            workspace_kind="dir",
++            workspace_path=str(tmp_path),
++            session_affinity={"flow_id": "flow-280", "terminal": True},
++        )
++        claimed = kb.claim_task(conn, controller)
++        assert claimed is not None
++
++        with pytest.raises(ValueError, match="terminal-affinity"):
++            kb.block_task(conn, controller, reason="silent", kind="capability")
++
++        controller_task = kb.get_task(conn, controller)
++        assert controller_task is not None and controller_task.status == "running"
++    finally:
++        conn.close()

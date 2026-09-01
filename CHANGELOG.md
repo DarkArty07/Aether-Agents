@@ -4,6 +4,7 @@
 
 ### Current beta project and documentation surface
 
+- Added the reviewed-but-unactivated HLP-280 downstream Hermes candidate for affinity-flow liveness. It keeps recovery on existing Kanban affinity/attention and failure-accounting surfaces, adds no gateway/TUI or public tool surface, and is recorded with an independently reconstructible patch. Runtime backup, reload, canary, rollback, and activation evidence remain explicitly `RELOAD_PENDING` for the subsequent authorized activation and evidence-only lanes.
 - Added the user-visible `aether init` path for an existing Git repository root: it writes the portable project marker, preserves the required ignore boundary, and binds exactly one existing native Hermes Project by exact primary path; `--hermes-project ID` resolves an otherwise ambiguous exact match without creating or changing a native Project.
 - Added the Morfeo-only Objective Contract authoring surface, including draft `validate`, immutable final versions, Git-base verification, and `prepare_handoff` routing data for one isolated execution board per `(project_id, contract_id, version)`.
 - Added project-scoped execution-board routing, per-flow Supervisor session continuity, and isolated Implementer worktrees; board and Hermes Project identifiers remain local routing data rather than portable contract content.

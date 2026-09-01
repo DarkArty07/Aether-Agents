@@ -7,10 +7,10 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 ## Reference runtime
 
 - Hermes: `0.20.1`
-- Base revision: `411903b6fa258f81afcc3869eb615f6218e1776a`
+- Active committed revision: `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`
 - Editable source loaded by Aether: `home/.venv-hermes/src/hermes-agent`
 - Service that must be reloaded after modifying the runtime: `hermes-gateway.service`
-- Last reconciliation of this index: `2026-08-21 UTC`
+- Last reconciliation of this index: `2026-09-01 UTC` (HLP-280 pre-activation candidate)
 
 ## States
 
@@ -31,10 +31,12 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-198` | `#198` | the first worktree spawn receives the already-resolved effective branch | issue `NousResearch/hermes-agent#89677`; PR `#89688` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-204` | `#204`, `#205` | shared profile-asymmetric limits applied to ready/review; initial topology Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | no new issue/PR; `#209` retains only the prior downstream trace | directories discovered by the walker are not treated as unsafe scripts; devices and actual scripts remain fail-closed | upstream issue `#86753`; integrated commit `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
-| `HLP-211` | `#211` | opt-in affinity resumes an exact worker session within a Project/flow/profile and canonical workspace, with lease/generation fencing, Supervisor control of blockers, and terminal/escalated return to the origin | Hermes `#75830`, `#59855`, `#68779`, `#71175`; PR `#75951` covers only block→unblock of the same card; local `HLP-211b` extension still has no issue/PR | `ACTIVE_LOCAL + HLP-211b CANDIDATE / UPSTREAM_PARTIAL` |
+| `HLP-211` | `#211` | opt-in affinity resumes an exact worker session within a Project/flow/profile and canonical workspace, with lease/generation fencing, Supervisor control of blockers, and terminal/escalated return to the origin | Hermes `#75830`, `#59855`, `#68779`, `#71175`; PR `#75951` covers only block→unblock of the same card; local `HLP-211b` extension still has no issue/PR | `ACTIVE_LOCAL_E2E_QUALIFIED / UPSTREAM_PARTIAL` |
 | `HLP-226` | `#226` | a cross-profile child with `workspace_kind=worktree` inherits the worker's canonical Project and receives its own worktree, even from a terminal affinity card that shares the root worktree as `dir` | upstream commit `b9b5481d6` covers the direct worktree source; local `HLP-226b` extension has no equivalent | `ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL` |
 | `HLP-246` | `#246` | attachments validate identity before transport and readback; they persist the computed size and SHA-256 | no equivalent found in `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-247` | `#247` | an archived parent does not complete a blocked child; ordinary todo and done-parent recovery remain unchanged | no linked upstream issue or PR recorded | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-262` | `#262` | a non-dependency block that emits `origin_signal` remains sticky until explicit resolution/unblock | no equivalent in `NousResearch/hermes-agent@4f2254350` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-280` | `#280` | pending controller recovery and automatic non-affinity terminal failures route through the existing affinity attention boundary | no upstream issue or PR; downstream candidate only | `RELOAD_PENDING` |
 | `HLP-263` | `#263` | terminal and direct CLI guards use actual supervised-gateway ownership, not inherited markers | PR `NousResearch/hermes-agent#93267`, issue `#92560`, tip `aa9aaaa6cb31753c3b274db6825fbd0af5f27120` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 
 ## HLP-188 — sticky `initial_status=blocked`
@@ -239,8 +241,17 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 9. Repeat post-restart runtime probes using temporary databases, never the real Aether board for destructive qualification.
 10. Update this index with effective commit, results, date, and status. Only then mark an entry `RETIRED`.
 
+## HLP-280 — affinity-controller requeue candidate
+
+- **Status:** `RELOAD_PENDING`; PR1 records only an isolated, exact-active-byte candidate. No active Hermes source, service, PID, backup, reload, canary, or owner-facing delivery was changed by this record.
+- **Scope:** `hermes_cli/kanban_db.py` adds guarded controller requeue for pending attention, rejects silent terminal-controller blocks, and routes the existing automatic terminal-failure boundary to one valid controller. The candidate reuses existing events and notification routing; it adds no gateway/TUI behavior, tool, CLI verb, table, status, service, watcher, or plugin.
+- **Exact candidate provenance:** active `hermes-agent` `0.20.1` at committed `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`; target pre-hashes were `58d97754650280db9fd1e7ad545b9af151b86d83d73d653dd84fb531f34a29b3` (`hermes_cli/kanban_db.py`) and `0acc517f72c670aa7c8e18b21ab5f9cc30e9b5ac1fbe37bd851bf23ef11d5ec7` (`tools/kanban_tools.py`). Candidate `kanban_db.py` hash is `9e386ce1b076c76d5895d2ade5adbc069f1c433b856c0967b23bd03e85aa4111`; production patch delta is `+76/-20` (96 changed lines) in that file and zero tool production lines.
+- **Portable artifact:** `patches/hermes/HLP-280-affinity-controller-requeue.patch`, SHA-256 `54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e`; forward/reverse apply and byte reconstruction passed, while activation and independent review remain pending.
+- **Evidence:** isolated RED reproduced blocked external recovery, absent automatic controller attention, and silent terminal controller blocking. GREEN covers explicit unblock, todo requeue, sticky blocked preservation, unique attention/claim, malformed/ambiguous/cross-Project/flow/session isolation, terminal `flow_terminal`, below-threshold retry, and representative failure outcomes. Activation and live no-watcher canaries remain pending.
+- **Retirement gate:** no upstream retirement is proposed. Preserve this candidate until a separately selected upstream revision passes the complete explicit- and automatic-failure matrix without the downstream patch.
+
 ## Hotspot and unclassified changes
 
-`hermes_cli/kanban_db.py` contains hunks from `HLP-188`, `HLP-191`, `HLP-194`, `HLP-198`, and `HLP-204`. Never restore the complete file to retire one patch; reconcile by behavior and hunk.
+`hermes_cli/kanban_db.py` contains hunks from `HLP-188`, `HLP-191`, `HLP-194`, `HLP-198`, `HLP-204`, `HLP-211b`, `HLP-247`, and the `HLP-280` candidate. Never restore the complete file to retire or activate one patch; reconcile by behavior and exact hunk.
 
 The active checkout also has a change in `package-lock.json` generated by `peer` metadata. It is not attributed to a functional repair in this record. It must be preserved and reconciled separately; it must not be confused with an accepted Hermes patch or discarded during an update.

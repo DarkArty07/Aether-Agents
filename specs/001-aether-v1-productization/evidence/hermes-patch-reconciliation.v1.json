@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-08-31T02:01:37Z",
+  "observed_at_utc": "2026-09-01T19:13:25Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -189,6 +189,21 @@
     {
       "detail": "The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded.",
       "id": "HLP-262",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Retirement gate status is not_executed.",
+      "id": "HLP-280",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The candidate is not activated; backup, reload, PID/state, live no-watcher canaries, and rollback facts remain pending for the second evidence-only PR.",
+      "id": "HLP-280",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "No upstream issue or pull request is proposed for the downstream HLP-280 candidate.",
+      "id": "HLP-280",
       "kind": "uncertainty"
     }
   ],
@@ -1064,10 +1079,74 @@
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
       }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e",
+            "kind": "patch",
+            "ledger_sha256": "54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-280-affinity-controller-requeue.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "isolated forward/reverse apply and byte reconstruction",
+            "result": "passed"
+          }
+        ],
+        "blocker": null,
+        "status": "passed"
+      },
+      "blocking_uncertainty": [
+        "The candidate is not activated; backup, reload, PID/state, live no-watcher canaries, and rollback facts remain pending for the second evidence-only PR.",
+        "No upstream issue or pull request is proposed for the downstream HLP-280 candidate."
+      ],
+      "components": [
+        "HLP-280"
+      ],
+      "id": "HLP-280",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:244-250",
+      "local_status": "RELOAD_PENDING",
+      "required_behavior": "A pending valid terminal controller is claimable after explicit recovery without weakening ordinary parent gating; a silent non-dependency terminal-controller block is rejected before mutation; and a terminal automatic failure of a non-affinity child routes one internal attention only when Project, flow, session, and controller uniqueness are valid. Terminal-affinity failures retain flow_terminal and repairable paths remain owner-silent.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "isolated candidate regression suite",
+            "result": "Candidate-focused tests pass, but the separate upstream-without-patch retirement gate was not executed."
+          }
+        ],
+        "status": "not_executed",
+        "summary": "No upstream retirement is proposed. A future selected upstream revision must pass the complete explicit-recovery and automatic terminal-failure matrix without this patch."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain the reviewed HLP-280 candidate pending activation. The portable patch reconstructs the isolated exact-active-byte candidate and the active runtime remains unchanged.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "isolated exact-active-byte candidate",
+            "result": "The candidate changes only hermes_cli/kanban_db.py and adds focused tests; it reuses existing unblock, affinity-attention, failure-accounting, and notification surfaces."
+          },
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_affinity_controller_requeue.py",
+            "result": "Fourteen focused cases cover explicit recovery, sticky blocked preservation, automatic controller attention, flow/session/project/malformed/ambiguous isolation, below-threshold retry, terminal flow delivery, and silent-block rejection."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d556db6c1e6",
+  "source_ledger_sha256": "eb8aba2d48fa5b2cf700918c235d97895d8675878295e3c1e50a402b029f001b",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

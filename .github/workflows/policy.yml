@@ -33,6 +33,9 @@ jobs:
           trap 'rm -f "$expected" "$actual" "$spec_manifest"' EXIT
           cat >"$expected" <<'EOF'
           .aether/objective-contracts/oc_184c251953c157ec/v1.md
+          .aether/objective-contracts/oc_63345d36f393baf9/v1.md
+          .aether/objective-contracts/oc_63345d36f393baf9/v2.md
+          .aether/objective-contracts/oc_63345d36f393baf9/v3.md
           .aether/objective-contracts/oc_281059d9a540201f/v1.md
           .aether/objective-contracts/oc_3879332591e50500/v1.md
           .aether/objective-contracts/oc_43012cf8a80820a4/v1.md
@@ -98,6 +101,7 @@ jobs:
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
+          patches/hermes/HLP-280-affinity-controller-requeue.patch
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py

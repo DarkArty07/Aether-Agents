@@ -48,11 +48,13 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-246",
     "HLP-247",
     "HLP-262",
+    "HLP-280",
 )
 PATCH_DIGESTS = {
     "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
     "HLP-226": "a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040",
     "HLP-262": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
+    "HLP-280": "54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e",
 }
 
 
@@ -157,6 +159,7 @@ def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
         "HLP-211b-flow-blocker-routing.patch",
         "HLP-226b-affinity-terminal-project-inheritance.patch",
         "HLP-262-origin-signal-sticky.patch",
+        "HLP-280-affinity-controller-requeue.patch",
     ):
         shutil.copy2(ROOT / "patches" / "hermes" / identifier, patches / identifier)
     return ledger, entries
@@ -217,7 +220,9 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests() -> No
         assert artifact["computed_sha256"] == digest
         assert artifact["checksum_status"] == "passed"
         assert artifact["parse_status"] == "passed"
-        assert records[identifier]["artifact_verification"]["status"] == "unavailable"
+        assert records[identifier]["artifact_verification"]["status"] == (
+            "passed" if identifier == "HLP-280" else "unavailable"
+        )
 
 
 def test_repository_fragments_reject_hlp262_omission(tmp_path: Path) -> None:
