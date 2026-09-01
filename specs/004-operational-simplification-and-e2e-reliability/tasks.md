@@ -16,10 +16,10 @@ Preflight at the execution base established:
 - The contract bytes have SHA-256 `9baf9035956ba1f4c7b8735137447728baee569c6b221c79e2d73cfc892abbfa` and Git `HEAD` is the required execution base.
 - The loaded editable Hermes distribution still resolves from project-relative `home/.venv-hermes/src/hermes-agent`, reports `hermes-agent` `0.20.1`, and has committed `HEAD` `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`. Its dirty state is expected, shared, and must be preserved hunk-by-hunk.
 - The superseded v1 candidate commit `655b0cb0349e26cfaaf196849680ed83bed56067` is reachable and contains the unactivated explicit-recovery antecedent. It is evidence and a starting reference only; it is not an activatable candidate.
-- R7 requires one Supervisor per contract, fresh Implementer sessions/worktrees, same-card independent review, three attempts, and a two-hour attempt limit. R8/R9 require dependency-ordered integration, preservation of shared dirty state, and board/Git evidence rather than a second execution store.
+- R7 requires one Supervisor per contract, fresh Implementer sessions/worktrees, independent review, three attempts, and a two-hour attempt limit. Its normal same-card review shape cannot be combined with this execution's pre-created dependent review/release lanes; the injected board lifecycle requires exactly one dedicated review mechanism rather than both. R8/R9 require dependency-ordered integration, preservation of shared dirty state, and board/Git evidence rather than a second execution store.
 - The A1 and 004 stabilization freeze permits this indispensable E2E-liveness repair but no unrelated feature, framework upgrade, gateway/TUI behavior change, or broad cleanup.
 
-The objective is executable as four serial units. Behavior and evidence publication are separated by a live activation gate, so the contract's exactly-two-PR order is enforceable rather than aspirational.
+The objective is executable as six serial cards: two Implementer publication units, two independent Supervisor review units, one Supervisor activation unit, and one terminal Supervisor verification unit. Dedicated review cards are used because the review/activation lanes are pre-created dependents; mixing same-card review with a dependent review/release lane would duplicate the board lifecycle. Behavior and evidence publication are separated by a live activation gate, so the contract's exactly-two-PR order is enforceable rather than aspirational.
 
 ## 2. Shared decisions stamped into every affected unit
 
@@ -40,16 +40,16 @@ The objective is executable as four serial units. Behavior and evidence publicat
 
 ```text
 HLP280-01 — isolated behavior, tests, patch, ledger, and PR1 (Implementer)
-    → same-card independent Supervisor review, checks, and PR1 merge
-    → HLP280-02 — exact backup, activation, reload, and no-watcher canaries (Supervisor)
-        → HLP280-03 — factual evidence-only PR2 (Implementer)
-            → same-card independent Supervisor review, checks, and PR2 merge
-            → HLP280-04 — integrated verification, #280 closeout, cleanup report (terminal Supervisor)
+    → HLP280-01R — independent review, checks, and PR1 merge (Supervisor)
+        → HLP280-02 — exact backup, activation, reload, and no-watcher canaries (Supervisor)
+            → HLP280-03 — factual evidence-only PR2 (Implementer)
+                → HLP280-03R — independent review, checks, and PR2 merge (Supervisor)
+                    → HLP280-04 — integrated verification, #280 closeout, cleanup report (terminal Supervisor)
 ```
 
 The Supervisor activation and final units reuse the root flow/session/workspace. Each Implementer receives a fresh session and its own worktree. The graph is deliberately serial because PR2 facts do not exist before activation and the active Hermes targets are a shared hotspot.
 
-## 4. HLP280-01 — Build, qualify, publish, and merge PR1
+## 4. HLP280-01 — Build, qualify, and open PR1
 
 **Assignee:** `implementer`
 
@@ -59,7 +59,7 @@ The Supervisor activation and final units reuse the root flow/session/workspace.
 
 **Card settings:** `max_retries=3`; `max_runtime_seconds=7200`; goal mode disabled
 
-**Outputs:** reviewed and merged PR1; no runtime mutation
+**Outputs:** complete PR1 candidate and opened PR1 awaiting independent review; no runtime mutation
 
 ### Acceptance criteria
 
@@ -73,17 +73,33 @@ The Supervisor activation and final units reuse the root flow/session/workspace.
 8. Reconcile `HERMES_LOCAL_PATCHES.md`, the HLP-211 reconciliation entry/aggregate/preflight, HLP-247 summary visibility, status headings, hotspot text, CHANGELOG, limitations, issue/policy references, and CI policy allowlist. Every pre-activation fact must be truthful; activation/backup/PID/canary fields remain `RELOAD_PENDING` or explicitly pending.
 9. Run the complete Hermes and Aether gates required by §2 and the Objective Contract. Record exact commands/results and any baseline comparison for the sole permitted skip.
 10. Commit coherent, revertible changes; push the unit branch and open PR1 against the current default branch using existing authorization. The PR body must state the production count, patch digest, test evidence, no active mutation, and `RELOAD_PENDING` state.
-11. Request same-card Supervisor review with the PR URL, commit, changed paths, exact candidate/preimage hashes, patch identity/reconstruction evidence, production count, and check state. Do not merge, activate, close #280, or create PR2.
+11. Complete the unit with the PR URL, commit, changed paths, exact candidate/preimage hashes, patch identity/reconstruction evidence, production count, and check state. A pre-created independent review card consumes this handoff. Do not request same-card review, merge, activate, close #280, or create PR2.
 
-### Same-card Supervisor review gate
-
-The reviewing Supervisor cold-reads the patch/diff before the handoff narrative, independently reruns focused behavior plus patch reconstruction and Aether validators, verifies the active checkout is unchanged, verifies PR1 is the first and only objective PR and remains pre-activation, and waits for required checks. Correctable defects return through `kanban_request_changes`. Only after approval may the Supervisor approve and merge PR1 without bypass or force; card completion means PR1 is merged and its merge commit is recorded.
-
-## 5. HLP280-02 — Activate the reviewed bytes and prove both live paths
+## 5. HLP280-01R — Independently review and merge PR1
 
 **Assignee:** `supervisor`
 
-**Dependencies:** decomposition root and completed/merged HLP280-01
+**Dependencies:** decomposition root and completed HLP280-01
+
+**Workspace:** same flow-bound Supervisor workspace
+
+**Card settings:** `max_retries=3`; `max_runtime_seconds=7200`; goal mode disabled
+
+**Outputs:** independently reviewed and merged PR1; no runtime mutation
+
+### Acceptance criteria
+
+1. Inspect HLP280-01's actual branch, PR, diff, commits, and check state. Cold-read the patch/diff before relying on the handoff narrative.
+2. Independently rerun focused behavior, production-line counting, patch apply/reverse/reconstruction, Aether reconciliation/documentation/public-artifact validation, and the contract's required negative controls.
+3. Verify the active Hermes checkout is unchanged, PR1 is the first and only objective PR, every activation fact remains honestly pending, and the Objective Contract is unchanged.
+4. If a correctable implementation defect exists, create an Implementer rework child or return equivalent dependency-linked rework; do not edit behavior as reviewer and do not consume a human-visible block. The review card does not complete until the corrected candidate is independently reverified.
+5. Wait for required checks, approve, and merge PR1 without bypass, force, or activation. Complete with PR URL, reviewed commit, merge commit, checks, rerun evidence, patch digest, production count, and confirmation that the active runtime was not mutated.
+
+## 6. HLP280-02 — Activate the reviewed bytes and prove both live paths
+
+**Assignee:** `supervisor`
+
+**Dependencies:** completed HLP280-01R
 
 **Workspace:** same flow-bound Supervisor workspace
 
@@ -102,7 +118,7 @@ The reviewing Supervisor cold-reads the patch/diff before the handoff narrative,
 7. On any reload or canary failure, restore exact backup hunks, reload once, run the last-known-good canary, and stop. Do not attempt a third behavior variant and do not author behavioral changes here.
 8. Record non-secret factual evidence in the completion handoff: backup locator and manifest hash, pre/post target hashes, patch digest/merge commit, old/new PID and service state, commands/results, canary event/run/session facts, owner-delivery result, rollback command/result, active status, and residual risk. Do not edit repository behavior/docs, open PR2, or close #280.
 
-## 6. HLP280-03 — Publish factual evidence-only PR2
+## 7. HLP280-03 — Publish factual evidence-only PR2
 
 **Assignee:** `implementer`
 
@@ -112,7 +128,7 @@ The reviewing Supervisor cold-reads the patch/diff before the handoff narrative,
 
 **Card settings:** `max_retries=3`; `max_runtime_seconds=7200`; goal mode disabled
 
-**Outputs:** reviewed and merged evidence-only PR2
+**Outputs:** complete evidence-only candidate and opened PR2 awaiting independent review
 
 ### Acceptance criteria
 
@@ -123,17 +139,33 @@ The reviewing Supervisor cold-reads the patch/diff before the handoff narrative,
 5. Update truthful final HLP-280 status, complete the reconciliation entry/aggregate/preflight and CHANGELOG/limitations/issue evidence, and distinguish v1/v2/v3. Do not claim #280 closed before merge.
 6. Run all documentation, reconciliation, policy/public-artifact, focused, full `scripts/run_tests.py`, Ruff/format/mypy/build, and `git diff --check` gates applicable to the evidence-only change. Record exact results.
 7. Commit the evidence-only unit, push it, and open exactly PR2 against the default branch. The PR body must state that behavior/patch bytes are unchanged and cite the bounded activation/canary evidence.
-8. Request same-card Supervisor review with PR URL, commit, changed paths, behavior/patch hash comparison, evidence provenance, and check state. Do not merge or close #280.
+8. Complete with PR URL, commit, changed paths, behavior/patch hash comparison, evidence provenance, and check state. A pre-created independent review card consumes this handoff. Do not request same-card review, merge, or close #280.
 
-### Same-card Supervisor review gate
-
-The reviewing Supervisor verifies the actual activation facts against HLP280-02 and live readback, independently proves PR2 changes no behavior/patch bytes, reruns the evidence validators, and waits for required checks. Correctable defects return through `kanban_request_changes`. Only after approval may the Supervisor approve and merge PR2 without bypass or force; card completion means PR2 is merged and its merge commit is recorded.
-
-## 7. HLP280-04 — Terminal integrated verification and closeout
+## 8. HLP280-03R — Independently review and merge PR2
 
 **Assignee:** `supervisor`
 
-**Dependencies:** decomposition root, HLP280-01, HLP280-02, and HLP280-03
+**Dependencies:** completed HLP280-03
+
+**Workspace:** same flow-bound Supervisor workspace
+
+**Card settings:** `max_retries=3`; `max_runtime_seconds=7200`; goal mode disabled
+
+**Outputs:** independently reviewed and merged evidence-only PR2
+
+### Acceptance criteria
+
+1. Verify the actual activation facts against HLP280-02 and current bounded live readback before relying on the Implementer summary.
+2. Independently prove PR2 changes no behavior, behavior tests, policy allowlist, or HLP-280 patch bytes; recompute the patch and active-byte hashes and compare with merged PR1.
+3. Rerun reconciliation, documentation, policy/public-artifact, focused, full, Ruff/format/mypy/build, and diff checks required by the contract; wait for required GitHub checks.
+4. If correctable evidence defects exist, create an Implementer rework child or return equivalent dependency-linked rework; do not edit the candidate as reviewer and do not consume a human-visible block. Reverify the corrected candidate independently.
+5. Approve and merge PR2 without bypass or force. Complete with PR URL, reviewed commit, merge commit, checks, evidence-only proof, activation-readback comparison, and confirmation that #280 remains open for terminal verification.
+
+## 9. HLP280-04 — Terminal integrated verification and closeout
+
+**Assignee:** `supervisor`
+
+**Dependencies:** decomposition root, HLP280-01, HLP280-01R, HLP280-02, HLP280-03, and HLP280-03R
 
 **Workspace:** same flow-bound Supervisor workspace
 
