@@ -4,7 +4,7 @@
   "components": [
     "HLP-280"
   ],
-  "required_behavior": "A pending valid terminal controller is claimable after explicit recovery without weakening ordinary parent gating; a silent non-dependency terminal-controller block is rejected before mutation; and a terminal automatic failure of a non-affinity child routes one internal attention only when Project, flow, session, and controller uniqueness are valid. Terminal-affinity failures retain flow_terminal and repairable paths remain owner-silent.",
+  "required_behavior": "A pending terminal controller may bypass parent gating only when each use revalidates its current Project, flow, session, and unique-controller topology; explicit unblock and todo rediscovery requeue it without weakening ordinary gating or resolving stale attention; a silent non-dependency terminal-controller block is rejected before mutation; and a terminal automatic failure of a non-affinity child routes one internal attention only when Project, flow, session, and controller uniqueness are valid. Terminal-affinity failures retain flow_terminal and repairable paths remain owner-silent.",
   "local_status": "RELOAD_PENDING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
@@ -20,7 +20,7 @@
       {
         "kind": "test",
         "reference": "tests/hermes_cli/test_kanban_affinity_controller_requeue.py",
-        "result": "Fourteen focused cases cover explicit recovery, sticky blocked preservation, automatic controller attention, flow/session/project/malformed/ambiguous isolation, below-threshold retry, terminal flow delivery, and silent-block rejection."
+        "result": "Twenty-five focused cases cover external and todo recovery, sticky blocked preservation, validated stale attention rejection across flow/session/project/malformed/ambiguous controls, automatic controller attention, below-threshold retry, terminal flow delivery, and silent-block rejection."
       }
     ]
   },
@@ -42,8 +42,8 @@
         "kind": "patch",
         "reference": "patches/hermes/HLP-280-affinity-controller-requeue.patch",
         "result": "passed",
-        "ledger_sha256": "54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e",
-        "computed_sha256": "54e93c994280b8de1126d8e0ca458f009c2e478616140eda0c75a879bf93d87e",
+        "ledger_sha256": "ebe680e932a55b6316dadae5b4886ad06f877b6bf68b6d5c494d81c7370a3c47",
+        "computed_sha256": "ebe680e932a55b6316dadae5b4886ad06f877b6bf68b6d5c494d81c7370a3c47",
         "checksum_status": "passed",
         "parse_status": "passed"
       },

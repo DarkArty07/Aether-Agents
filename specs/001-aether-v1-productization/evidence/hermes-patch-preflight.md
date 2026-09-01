@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-01T19:13:25Z`
+Observation timestamp: `2026-09-01T19:51:46Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `eb8aba2d48fa5b2cf700918c235d97895d8675878295e3c1e50a402b029f001b`
+Source ledger SHA-256: `bbf0761468beede46e361371cc7f3e38bb51fcf797aed410f7c21e6c88df08c7`
 
 ## Remaining local guarantees
 
