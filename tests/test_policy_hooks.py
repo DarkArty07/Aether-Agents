@@ -340,6 +340,8 @@ class MinimalPolicyContractTests(unittest.TestCase):
             "gh --repo owner/project release create v1.2.3 --verify-tag --notes-file notes.md",
             "gh release edit v1.2.3 --notes-file notes.md",
             "gh release upload v1.2.3 artifact.whl",
+            "gh run rerun 33475024930",
+            "gh run rerun 33475024930 --failed",
         ]
         for role in PROFILES:
             for command in commands:
@@ -385,6 +387,8 @@ class MinimalPolicyContractTests(unittest.TestCase):
             "gh workflow enable deploy.yml",
             "gh workflow disable deploy.yml",
             "gh --repo owner/project workflow run deploy.yml",
+            "gh run cancel 33475024930",
+            "gh run delete 33475024930",
             "gh secret set TOKEN --body placeholder",
             "gh api --method POST /repos/example/project/issues -f title=test",
             "gh api --method 'POST' /repos/example/project/issues",

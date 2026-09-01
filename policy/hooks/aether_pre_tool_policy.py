@@ -121,7 +121,7 @@ PROTECTED_REMOTE_MUTATION_RE = re.compile(
     r"\bgh\s+[^\n;&|]*\brepo\s+(?:archive|create|delete|edit|fork|rename|sync|transfer|unarchive)\b|"
     r"\bgh\s+[^\n;&|]*\brepo\s+(?:autolink|deploy-key)\s+(?:add|create|delete)\b|"
     r"\bgh\s+[^\n;&|]*\bworkflow\s+(?:run|enable|disable)\b|"
-    r"\bgh\s+[^\n;&|]*\brun\s+(?:cancel|delete|rerun)\b|"
+    r"\bgh\s+[^\n;&|]*\brun\s+(?:cancel|delete)\b|"
     r"\bgh\s+[^\n;&|]*\b(?:secret|variable)\s+(?:delete|set)\b|"
     r"\bgh\s+[^\n;&|]*\bcache\s+delete\b|"
     r"\bgh\s+[^\n;&|]*\bapi\b[^\n;&|]*(?:(?:--method|-X)(?:\s+|=)?[\"']?(?:POST|PUT|PATCH|DELETE)[\"']?(?=\s|$|[;&|]))|"
