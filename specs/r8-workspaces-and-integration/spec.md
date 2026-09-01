@@ -5,6 +5,7 @@
 **Accepted baseline**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — direct PD-44 workspace, Git, and publication rules
 **Reopened**: 2026-08-26 — retired PD-67 micro-authorization and allowed bounded Supervisor integration repair
+**Amended**: 2026-09-01 — owner preauthorized the routine GitHub lifecycle and rejected a mandatory per-publication availability gate
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -101,7 +102,7 @@ Reversibility replaces the confirmation gate the owner removed. It carries the w
 
 Aether maintains the project end to end and the normal path contains no confirmation gate (PD-15). That authority is real but bounded.
 
-- **FR-824**: Pipeline publication actions — pushing, opening a pull request, tagging, releasing, deploying, uploading packages, changing repository settings, or publishing Pages/announcements — MUST be performed by the supervising role as part of integration and only behind the contract's explicit external gate, never by an implementer. For direct PD-44 work, Morfeo MAY perform one only when the current instruction already authorizes that exact effect; technical access is not publication authority.
+- **FR-824**: The routine GitHub lifecycle for an already provisioned project repository — normal branch push, pull-request creation, green-check merge without administrative bypass, merged-branch cleanup, an exact SemVer tag, non-destructive GitHub Release creation/edit/upload, and issue reconciliation — is owner-preauthorized without a per-action or per-contract runtime gate. Pipeline publication MUST be performed by the supervising role after independent review, never assigned to Implementer merely because the common hook permits the command. For direct PD-44 work, Morfeo MAY publish only when the current instruction authorizes that effect. Force/lease/mirror/history or tag rewrite, hook/check/branch-protection bypass, remote ref/tag deletion outside merged-branch cleanup, destructive Release/repository mutation, package/container publication, deployment, migration, credential/provider/spend changes, and arbitrary mutating API calls remain separate protected effects.
 - **FR-825**: Publication MUST stay inside the authority the contract conferred (R2-FR-205). Absence of a stated limit is not permission for an irreversible effect; FR-823 governs.
 - **FR-826**: When a pull request already exists for a unit, the runtime refuses to respawn that unit. Aether MUST treat that refusal as correct behaviour and MUST NOT defeat it by creating a duplicate card for the same unit.
 - **FR-827**: Credentials MUST be the ones the owner already provisioned on that profile. No role acquires, creates, or widens access (R1-FR-114).
