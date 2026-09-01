@@ -2,7 +2,9 @@
 
 `aether_pre_tool_policy.py` is the canonical, sanitized **minimal edge guard** installed in the Morfeo, Supervisor, and Implementer Hermes profiles. The same bytes are installed for all three roles; the role name is used only in diagnostics.
 
-The guard is intentionally narrow. Ordinary local/reversible work is allowed and governed by scope, Git, tests, review, and rollback. The hook blocks only high-confidence secrets/credentials, credential acquisition or widening, unauthorized remote/external mutation, clearly destructive irreversible operations, plus malformed hook invocation. It does not open Kanban/SQLite, execute Git, infer role ownership, parse task size, or enforce direct-versus-pipeline routing.
+The guard is intentionally narrow. Ordinary local/reversible work and the owner-preauthorized routine GitHub lifecycle are allowed and governed by scope, Git, tests, review, rollback, and project branch policy. That lifecycle includes normal work-branch/exact-tag push, PR creation/check/merge, merged-branch cleanup, issue reconciliation, and non-destructive GitHub Release creation/edit/upload. The hook blocks only high-confidence secrets/credentials, credential acquisition or widening, direct default-branch push, remote history rewrite or bypass, destructive publication/repository mutation, arbitrary remote API writes, package/deploy/infrastructure effects, clearly destructive irreversible operations, plus malformed hook invocation. It does not open Kanban/SQLite, execute Git, infer role ownership, parse task size, or enforce direct-versus-pipeline routing.
+
+Technical permission does not reassign work: Implementer produces local commits and evidence, Supervisor independently reviews and publishes pipeline work, and Morfeo publishes direct work only when the current owner instruction authorizes that exact effect. The hook deliberately does not encode those semantic responsibilities.
 
 The canonical source contains policy only. It contains no credentials, sessions, memories, profile configuration, databases, logs, or other runtime state.
 

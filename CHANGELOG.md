@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Routine GitHub lifecycle no longer deadlocks the pipeline
+
+- Fixed #281 by removing normal branch/tag push, pull-request lifecycle, issue reconciliation, and non-destructive GitHub Release creation/edit/upload from the common pre-tool denial path. These operations are owner-preauthorized for already provisioned project repositories; Supervisor still owns pipeline publication after independent review, while role ownership remains a contract/review responsibility rather than a shell-text permission.
+- Kept precise fail-closed controls for force/lease/mirror/history or tag rewrite, direct default-branch push, `--no-verify`, remote ref deletion, administrative PR merge, destructive Release/repository mutation, workflow dispatch/rerun, secret/variable mutation, arbitrary mutating APIs, package/container publication, deployment/infrastructure effects, credential widening, and irreversible destruction.
+- Added positive and negative three-role regressions, including global Git/GitHub flags and abbreviated force variants. Rollback is one Git revert plus restoration of the pre-install policy-hook backup; hook synchronization requires no process restart.
+
 ### Exact Hermes evidence lane restored
 
 - Fixed the `hermes_exact` lane resolving its checkout from the *installed* Hermes runtime (#234). Under the declared `transitional_fork` mode that runtime always carries the local patch set and a newer commit, so it could never satisfy the locked baseline and the lane failed permanently on an environment fact that said nothing about Aether. The runner already documents that it "never consults a private/editable Hermes installation"; the tests now follow the same rule.

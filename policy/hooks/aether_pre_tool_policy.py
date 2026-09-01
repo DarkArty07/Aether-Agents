@@ -88,7 +88,8 @@ BROAD_SECRET_PATTERNS = (
 # authority available to the local agent and therefore stay outside normal work.
 CREDENTIAL_OPERATION_RE = re.compile(
     r"(?is)(?:"
-    r"\b(?:gh|glab|gcloud|az|hermes|docker|npm|pnpm|yarn|pip|twine)\s+(?:auth\s+)?login\b|"
+    r"\bgh\b[^\n;&|]*\bauth\s+(?:login|refresh)\b|"
+    r"\b(?:glab|gcloud|az|hermes|docker|npm|pnpm|yarn|pip|twine)\s+(?:auth\s+)?login\b|"
     r"\baws\s+configure\b|"
     r"\bgit\s+credential\b|"
     r"\bssh-keygen\b|"
@@ -100,23 +101,47 @@ CREDENTIAL_OPERATION_RE = re.compile(
     r")"
 )
 
-# Obvious remote/public mutations. The policy deliberately omits local database
-# migrations, local branches/commits, package installation, builds, and tests.
-REMOTE_MUTATION_RE = re.compile(
+# Protected remote/public mutations. Routine owner-preauthorized GitHub
+# collaboration (normal branch/tag push, PR lifecycle, issue reconciliation,
+# and non-destructive release creation/edit/upload) is intentionally omitted.
+# Role ownership remains semantic: Supervisor publishes pipeline work after
+# review; the hook is the common edge floor, not the org chart.
+PROTECTED_REMOTE_MUTATION_RE = re.compile(
     r"(?is)(?:"
-    r"\bgit\s+(?:[^\n;&|]*\s)?push\b|"
-    r"\bgh\s+(?:pr\s+(?:create|merge|close)|release\s+(?:create|delete)|api\b[^\n;&|]*(?:(?:--method|-X)\s+(?:POST|PUT|PATCH|DELETE)\b))|"
+    r"\bgit\b[^\n;&|]*(?:--no-ver[a-z-]*|core\.hooksPath\s*=\s*(?:/dev/null|NUL))\b|"
+    r"\bgit\s+(?:[^\n;&|]*\s)?commit\b[^\n;&|]*(?-i:\s-[A-Za-z]*n[A-Za-z]*)(?:\s|$)|"
+    r"\bgit\s+(?:[^\n;&|]*\s)?push\b[^\n;&|]*(?:"
+    r"--for[a-z-]*(?:=[^\s;&|]+)?|(?-i:\s-[A-Za-z]*f[A-Za-z]*)|--mirror\b|--delete\b|"
+    r"--prune\b|--all\b|--tags\b|\s\+[^\s;&|]*|\s:(?:refs/)?[^\s;&|]+|"
+    r"(?:\s|:)(?:refs/heads/)?(?:main|master)\b)|"
+    r"\bgit\s+(?:[^\n;&|]*\s)?tag\b[^\n;&|]*(?:--force\b|(?-i:\s-[A-Za-z]*f[A-Za-z]*))|"
+    r"\bgh\s+[^\n;&|]*\bpr\s+merge\b[^\n;&|]*--admin\b|"
+    r"\bgh\s+[^\n;&|]*\brelease\s+(?:delete|delete-asset)\b|"
+    r"\bgh\s+[^\n;&|]*\brelease\s+upload\b[^\n;&|]*--clobber\b|"
+    r"\bgh\s+[^\n;&|]*\brepo\s+(?:archive|create|delete|edit|fork|rename|sync|transfer|unarchive)\b|"
+    r"\bgh\s+[^\n;&|]*\brepo\s+(?:autolink|deploy-key)\s+(?:add|create|delete)\b|"
+    r"\bgh\s+[^\n;&|]*\bworkflow\s+run\b|"
+    r"\bgh\s+[^\n;&|]*\brun\s+(?:cancel|delete|rerun)\b|"
+    r"\bgh\s+[^\n;&|]*\b(?:secret|variable)\s+(?:delete|set)\b|"
+    r"\bgh\s+[^\n;&|]*\bcache\s+delete\b|"
+    r"\bgh\s+[^\n;&|]*\bapi\b[^\n;&|]*(?:(?:--method|-X)(?:\s+|=)?(?:POST|PUT|PATCH|DELETE)\b)|"
+    r"\bgh\s+[^\n;&|]*\bapi\b[^\n;&|]*"
+    r"(?:(?-i:\s-[fF](?:=)?\S*)|\s(?:--field|--raw-field|--input)(?:\s+|=))|"
     r"\bglab\s+(?:mr\s+(?:create|merge|close)|release\s+create)|"
-    r"\b(?:npm|pnpm|yarn|cargo|gem)\s+publish\b|"
-    r"\b(?:twine\s+upload|dotnet\s+nuget\s+push|docker\s+push)\b|"
-    r"\b(?:kubectl\s+(?:apply|create|delete|patch|replace|scale|rollout)|helm\s+(?:install|upgrade|uninstall))\b|"
+    r"\b(?:npm|pnpm|yarn|cargo|gem|uv)\s+publish\b|"
+    r"\b(?:python(?:3(?:\.\d+)?)?\s+-m\s+twine\s+upload|twine\s+upload|dotnet\s+nuget\s+push|docker\s+push)\b|"
+    r"\b(?:kubectl\b[^\n;&|]*\b(?:apply|create|delete|patch|replace|scale|rollout)|"
+    r"helm\b[^\n;&|]*\b(?:install|upgrade|uninstall))\b|"
     r"\b(?:terraform|tofu)\s+(?:apply|destroy|import)\b|"
     r"\bpulumi\s+(?:up|destroy)\b|"
     r"\b(?:fly\s+deploy|vercel\s+(?:deploy|--prod)|netlify\s+deploy|railway\s+up)\b|"
-    r"\b(?:gcloud\s+(?:app|functions|run)\s+deploy|aws\s+cloudformation\s+(?:deploy|delete-stack)|az\s+deployment\s+)\b|"
-    r"\bcurl\b[^\n]*(?:\s-X\s*(?:POST|PUT|PATCH|DELETE)\b|--request\s+(?:POST|PUT|PATCH|DELETE)\b|(?:\s|^)(?:-d|--data|--data-raw|--data-binary)\s)|"
+    r"\b(?:gcloud\b[^\n;&|]*\b(?:app|functions|run)\s+deploy|"
+    r"aws\b[^\n;&|]*\bcloudformation\s+(?:deploy|delete-stack)|az\b[^\n;&|]*\bdeployment\s+)\b|"
+    r"\bcurl\b[^\n]*(?:\s-X(?:\s+|=)?(?:POST|PUT|PATCH|DELETE)\b|--request(?:\s+|=)(?:POST|PUT|PATCH|DELETE)\b|"
+    r"(?-i:\s-d\S*|\s-F\S*|\s-T\S*)|--(?:data|data-raw|data-binary|json|form|upload-file)(?:\s+|=))|"
+    r"\bcurl\b[^\n]*(?:(?-i:\s-K\S*)|--config(?:\s+|=)|--form-string(?:\s+|=))|"
     r"\bwget\b[^\n]*(?:--post-data|--post-file)\b|"
-    r"\bhttp(?:ie)?\s+(?:POST|PUT|PATCH|DELETE)\b"
+    r"\bhttp(?:ie)?\b[^\n;&|]*\b(?:POST|PUT|PATCH|DELETE)\b"
     r")"
 )
 
@@ -219,7 +244,7 @@ def _command_text(tool_name: str, args: dict[str, Any]) -> str | None:
     for key in ("command", "cmd"):
         value = args.get(key)
         if isinstance(value, str):
-            return value
+            return re.sub(r"\\\r?\n[ \t]*", " ", value)
     return None
 
 
@@ -259,10 +284,10 @@ def main() -> None:
     if command is not None:
         if CREDENTIAL_OPERATION_RE.search(command):
             _block("CREDENTIAL", "credential acquisition or widening is not authorized")
-        if REMOTE_MUTATION_RE.search(command):
+        if PROTECTED_REMOTE_MUTATION_RE.search(command):
             _block(
                 "EXTERNAL-EFFECT",
-                "remote publication, deploy, or external mutation requires an explicit gate",
+                "remote history rewrite, bypass, destructive publication, deploy, or arbitrary external mutation is not authorized",
             )
         if DESTRUCTIVE_OPERATION_RE.search(command):
             _block(

@@ -275,6 +275,7 @@ class MinimalPolicyContractTests(unittest.TestCase):
             "gh api /repos/example/project",
             "gh api --method GET /repos/example/project",
             "curl https://example.invalid/health",
+            "curl -D headers.txt https://example.invalid/health",
             "wget https://example.invalid/file",
         ):
             with self.subTest(command=command):
@@ -310,6 +311,7 @@ class MinimalPolicyContractTests(unittest.TestCase):
     def test_credential_acquisition_or_widening_is_blocked(self) -> None:
         commands = [
             "gh auth login",
+            "gh --hostname github.com auth login",
             "aws configure",
             "ssh-keygen -t ed25519",
             "kubectl create secret generic app-secret",
@@ -322,15 +324,89 @@ class MinimalPolicyContractTests(unittest.TestCase):
                         "CREDENTIAL",
                     )
 
-    def test_obvious_remote_mutation_is_blocked(self) -> None:
+    def test_owner_preauthorized_routine_github_lifecycle_is_allowed(self) -> None:
         commands = [
-            "git push origin HEAD",
-            "gh pr create --title test --body test",
+            "git push -u origin feature/test",
+            "git -c push.default=simple push origin feature/test",
+            "git push --follow-tags origin feature/test",
+            "git push origin v1.2.3",
+            "git tag -F notes.txt v1.2.3",
+            "gh pr create --base main --head feature/test --title test --body test",
+            "gh --repo owner/project pr create --base main --head feature/test --title test --body test",
+            "gh pr merge 12 --merge --match-head-commit deadbeef --delete-branch",
+            "gh pr close 12",
+            "gh issue close 109 --reason completed",
+            "gh release create v1.2.3 --verify-tag --notes-file notes.md",
+            "gh --repo owner/project release create v1.2.3 --verify-tag --notes-file notes.md",
+            "gh release edit v1.2.3 --notes-file notes.md",
+            "gh release upload v1.2.3 artifact.whl",
+        ]
+        for role in PROFILES:
+            for command in commands:
+                with self.subTest(role=role, command=command):
+                    self.assert_allowed(self.run_hook(role, "terminal", {"command": command}))
+
+    def test_protected_remote_mutation_is_blocked(self) -> None:
+        commands = [
+            "git push --force-with-lease origin main",
+            "git -c push.default=simple push --for origin main",
+            "git push -fu origin main",
+            "git push -uf origin main",
+            "git push --tags origin",
+            "git push --mirror origin",
+            "git push origin main",
+            "git push origin HEAD:main",
+            "git push origin refs/heads/main",
+            "git push origin --delete feature/test",
+            "git push --no-verify origin feature/test",
+            "git push origin +HEAD:refs/heads/main",
+            "git push origin :refs/tags/v1.2.3",
+            "git tag -f v1.2.3",
+            "git commit -n -m bypass",
+            "git -c core.hooksPath=/dev/null commit -m bypass",
+            "git push origin \\\n  --force",
+            "git \\\n  push origin --force",
+            "gh pr merge 12 --admin --merge",
+            "gh --repo owner/project pr merge 12 --admin --merge",
+            "gh release delete v1.2.3 --yes",
+            "gh release delete-asset v1.2.3 artifact.whl --yes",
+            "gh release upload v1.2.3 artifact.whl --clobber",
+            "gh repo edit --enable-issues=false",
+            "gh repo unarchive owner/project",
+            "gh repo deploy-key add key.pub",
+            "gh repo autolink create --key-prefix TICKET- --url-template https://example.invalid/<num>",
+            "gh workflow run deploy.yml",
+            "gh --repo owner/project workflow run deploy.yml",
+            "gh secret set TOKEN --body placeholder",
             "gh api --method POST /repos/example/project/issues -f title=test",
+            "gh api --method=POST /repos/example/project/issues -f title=test",
+            "gh api -XPOST /repos/example/project/issues -f title=test",
+            "gh api -f title=test /repos/example/project/issues",
+            "gh api -F ref=main /repos/example/project/actions/workflows/x/dispatches",
+            "gh api -ftitle=test /repos/example/project/issues",
+            "gh api -Fref=main /repos/example/project/actions/workflows/x/dispatches",
+            "gh api -f=title=test /repos/example/project/issues",
+            "gh api -F=ref=main /repos/example/project/actions/workflows/x/dispatches",
+            "gh api --method GET /repos/example/project -f per_page=1",
+            "gh api --method GET /repos/example/project -fper_page=1",
+            "gh api -f title=test --raw-field body='--method GET' /repos/example/project/issues",
+            "gh --repo owner/project \\\n  api --method POST /repos/owner/project/issues",
+            "curl --request=POST https://example.invalid/api",
+            "curl -XPOST https://example.invalid/api",
+            "curl -X=PATCH https://example.invalid/api",
+            "curl --data=foo https://example.invalid/api",
+            "curl -dfoo https://example.invalid/api",
+            "curl --form-string=field=value https://example.invalid/api",
+            "curl -Krequest.conf https://example.invalid/api",
+            "http --verify=no POST https://example.invalid/api",
             "npm publish",
+            "uv publish",
+            "python3 -m twine upload dist/pkg.whl",
             "docker push example/image:latest",
             "terraform apply -auto-approve",
             "kubectl apply -f deploy.yaml",
+            "kubectl --context prod apply -f deploy.yaml",
+            "gcloud --project p app deploy app.yaml",
             "curl -X POST https://example.invalid/api -d '{}';",
         ]
         for role in PROFILES:
