@@ -199,7 +199,7 @@ documents = ["docs/product-boundary.md", "docs/roles-and-authority.md"]
 specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r10-security-and-authority/spec.md"]
 implementation = ["src/aether_agents/resources/profiles/implementer/SOUL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
 verification = ["tests/test_objective_contracts.py", "tests/test_observation_lifecycle.py"]
-notes = "Portable resources are versioned candidate bytes; clean installed-profile activation and public qualification remain pending."
+notes = "Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending."
 
 [[capabilities]]
 id = "skills.aether-canonical-resources"
@@ -210,7 +210,7 @@ documents = ["docs/authority.md", "docs/guides/project-initialization.md"]
 specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r13-synthesis-and-release/spec.md"]
 implementation = ["src/aether_agents/lifecycle.py", "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md", "src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/skills/semver-release/SKILL.md"]
 verification = ["tests/test_observation_packaging.py", "tests/test_observation_lifecycle.py"]
-notes = "Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; full public release qualification remains separate."
+notes = "Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified."
 
 [[capabilities]]
 id = "skills.project-canonical-discovery"
@@ -221,4 +221,48 @@ documents = ["docs/authority.md", "docs/guides/project-initialization.md"]
 specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r13-synthesis-and-release/spec.md"]
 implementation = ["AGENTS.md", "docs/guides/project-initialization.md"]
 verification = ["tests/test_project_init.py"]
-notes = "Disposable-project discovery and brownfield guidance preservation are focused checks; release qualification is not implied."
+notes = "Disposable-project discovery and brownfield guidance preservation are focused checks; private live-profile activation and the public installed lifecycle remain separate, unqualified runtime boundaries."
+
+[[capabilities]]
+id = "lifecycle.git-github-terminal-closeout"
+status = "partial"
+summary = "Canonical procedure and current guides describe autonomous Git/GitHub terminal closeout for an authorized project, but terminal qualification is not established by this local documentation candidate."
+surfaces = ["lifecycle.git-github-terminal-closeout"]
+documents = ["docs/guides/lifecycle.md", "docs/guides/execution.md", "docs/roles-and-authority.md"]
+specifications = ["specs/r8-workspaces-and-integration/spec.md", "specs/r13-synthesis-and-release/spec.md", "specs/001-aether-v1-productization/spec.md"]
+implementation = ["src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md", "src/aether_agents/resources/profiles/implementer/SOUL.md"]
+verification = ["tests/test_documentation.py", "tests/test_objective_contracts.py", "tests/test_public_artifacts.py"]
+notes = "Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement is claimed."
+
+[[capabilities]]
+id = "lifecycle.semver-release-conclusions"
+status = "partial"
+summary = "The three independent SemVer/release conclusions are documented and procedurally guided, while release qualification remains separate from this local candidate."
+surfaces = ["lifecycle.semver-release-conclusions"]
+documents = ["docs/guides/lifecycle.md", "docs/guides/execution.md", "docs/roles-and-authority.md"]
+specifications = ["specs/r8-workspaces-and-integration/spec.md", "specs/r13-synthesis-and-release/spec.md", "specs/001-aether-v1-productization/spec.md"]
+implementation = ["src/aether_agents/resources/skills/semver-release/SKILL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md", "src/aether_agents/resources/profiles/implementer/SOUL.md"]
+verification = ["tests/test_documentation.py", "tests/test_objective_contracts.py", "tests/test_public_artifacts.py"]
+notes = "Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement or stable release is claimed."
+
+[[capabilities]]
+id = "lifecycle.root-agents-stewardship"
+status = "partial"
+summary = "The root AGENTS.md stewardship convention is documented and tested for preservation-first onboarding and closure coherence, but this unit does not claim terminal qualification."
+surfaces = ["lifecycle.root-agents-stewardship"]
+documents = ["docs/guides/project-initialization.md", "docs/guides/lifecycle.md", "docs/roles-and-authority.md", "docs/authority.md"]
+specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r8-workspaces-and-integration/spec.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["AGENTS.md", "docs/guides/project-initialization.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md", "src/aether_agents/resources/profiles/implementer/SOUL.md", "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md"]
+verification = ["tests/test_documentation.py", "tests/test_project_init.py", "tests/test_objective_contracts.py"]
+notes = "Root-guidance prompt/documentation and canonical governance procedure are present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement is claimed."
+
+[[capabilities]]
+id = "lifecycle.conditional-issue-intake-reconciliation"
+status = "partial"
+summary = "The lifecycle documents conditional, non-duplicate Issue intake and applicable close reconciliation, without treating Issue handling as ceremonial or universally required."
+surfaces = ["lifecycle.conditional-issue-intake-reconciliation"]
+documents = ["docs/guides/lifecycle.md", "docs/guides/execution.md", "docs/roles-and-authority.md"]
+specifications = ["specs/r8-workspaces-and-integration/spec.md", "specs/r13-synthesis-and-release/spec.md", "specs/001-aether-v1-productization/spec.md"]
+implementation = ["src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
+verification = ["tests/test_documentation.py", "tests/test_objective_contracts.py", "tests/test_public_artifacts.py"]
+notes = "Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective Issue #300 or cleanup reconciliation evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no duplicate or runtime-enforced Issue flow is claimed."

@@ -360,6 +360,39 @@ Reports the installed package version without importing Hermes.
 
 The current result intentionally warns that managed Hermes source and profile-policy details are unavailable.
 
+## `lifecycle.conditional-issue-intake-reconciliation`
+
+**Status:** `partial`
+
+The lifecycle documents conditional, non-duplicate Issue intake and applicable close reconciliation, without treating Issue handling as ceremonial or universally required.
+
+### Surfaces
+- `lifecycle.conditional-issue-intake-reconciliation`
+
+### Current documentation
+- [docs/guides/execution.md](../guides/execution.md)
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
+- [docs/roles-and-authority.md](../roles-and-authority.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/spec.md](../../specs/001-aether-v1-productization/spec.md)
+- [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
+- [specs/r8-workspaces-and-integration/spec.md](../../specs/r8-workspaces-and-integration/spec.md)
+
+### Implementation
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
+- [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
+- [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
+
+### Verification
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
+- [tests/test_public_artifacts.py](../../tests/test_public_artifacts.py)
+
+### Notes / current limits
+
+Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective Issue #300 or cleanup reconciliation evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no duplicate or runtime-enforced Issue flow is claimed.
+
 ## `lifecycle.execution-board-handoff`
 
 **Status:** `implemented`
@@ -389,6 +422,40 @@ A ready finalized Objective Contract deterministically provisions or verifies an
 ### Notes / current limits
 
 None.
+
+## `lifecycle.git-github-terminal-closeout`
+
+**Status:** `partial`
+
+Canonical procedure and current guides describe autonomous Git/GitHub terminal closeout for an authorized project, but terminal qualification is not established by this local documentation candidate.
+
+### Surfaces
+- `lifecycle.git-github-terminal-closeout`
+
+### Current documentation
+- [docs/guides/execution.md](../guides/execution.md)
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
+- [docs/roles-and-authority.md](../roles-and-authority.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/spec.md](../../specs/001-aether-v1-productization/spec.md)
+- [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
+- [specs/r8-workspaces-and-integration/spec.md](../../specs/r8-workspaces-and-integration/spec.md)
+
+### Implementation
+- [src/aether_agents/resources/profiles/implementer/SOUL.md](../../src/aether_agents/resources/profiles/implementer/SOUL.md)
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
+- [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
+- [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
+
+### Verification
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
+- [tests/test_public_artifacts.py](../../tests/test_public_artifacts.py)
+
+### Notes / current limits
+
+Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement is claimed.
 
 ## `lifecycle.qualification-laboratory`
 
@@ -421,6 +488,77 @@ The Hermes-free disposable qualification laboratory and compatibility wrappers p
 ### Notes / current limits
 
 Prepared deterministic runs are not live reliability or release qualification; model/provider execution needs a separate authorized gate.
+
+## `lifecycle.root-agents-stewardship`
+
+**Status:** `partial`
+
+The root AGENTS.md stewardship convention is documented and tested for preservation-first onboarding and closure coherence, but this unit does not claim terminal qualification.
+
+### Surfaces
+- `lifecycle.root-agents-stewardship`
+
+### Current documentation
+- [docs/authority.md](../authority.md)
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
+- [docs/guides/project-initialization.md](../guides/project-initialization.md)
+- [docs/roles-and-authority.md](../roles-and-authority.md)
+
+### Owning specifications
+- [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
+- [specs/r8-workspaces-and-integration/spec.md](../../specs/r8-workspaces-and-integration/spec.md)
+- [specs/r9-state-and-recovery/spec.md](../../specs/r9-state-and-recovery/spec.md)
+
+### Implementation
+- [AGENTS.md](../../AGENTS.md)
+- [docs/guides/project-initialization.md](../guides/project-initialization.md)
+- [src/aether_agents/resources/profiles/implementer/SOUL.md](../../src/aether_agents/resources/profiles/implementer/SOUL.md)
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
+- [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
+- [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
+
+### Verification
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
+- [tests/test_project_init.py](../../tests/test_project_init.py)
+
+### Notes / current limits
+
+Root-guidance prompt/documentation and canonical governance procedure are present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement is claimed.
+
+## `lifecycle.semver-release-conclusions`
+
+**Status:** `partial`
+
+The three independent SemVer/release conclusions are documented and procedurally guided, while release qualification remains separate from this local candidate.
+
+### Surfaces
+- `lifecycle.semver-release-conclusions`
+
+### Current documentation
+- [docs/guides/execution.md](../guides/execution.md)
+- [docs/guides/lifecycle.md](../guides/lifecycle.md)
+- [docs/roles-and-authority.md](../roles-and-authority.md)
+
+### Owning specifications
+- [specs/001-aether-v1-productization/spec.md](../../specs/001-aether-v1-productization/spec.md)
+- [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
+- [specs/r8-workspaces-and-integration/spec.md](../../specs/r8-workspaces-and-integration/spec.md)
+
+### Implementation
+- [src/aether_agents/resources/profiles/implementer/SOUL.md](../../src/aether_agents/resources/profiles/implementer/SOUL.md)
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
+- [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
+- [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
+
+### Verification
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
+- [tests/test_public_artifacts.py](../../tests/test_public_artifacts.py)
+
+### Notes / current limits
+
+Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective PR/check/Issue/cleanup evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no runtime enforcement or stable release is claimed.
 
 ## `lifecycle.session-affinity-and-review`
 
@@ -583,7 +721,7 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 
 ### Notes / current limits
 
-Portable resources are versioned candidate bytes; clean installed-profile activation and public qualification remain pending.
+Portable resources are versioned candidate bytes; private live-profile activation is runtime evidence only, and clean installed-profile activation and public qualification remain pending.
 
 ## `skills.aether-canonical-resources`
 
@@ -614,7 +752,7 @@ Three Aether Canonical Skills are packaged and materialized through the existing
 
 ### Notes / current limits
 
-Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; full public release qualification remains separate.
+Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 
@@ -642,4 +780,4 @@ Project Canonical Skills are discoverable by direct project-relative reads from 
 
 ### Notes / current limits
 
-Disposable-project discovery and brownfield guidance preservation are focused checks; release qualification is not implied.
+Disposable-project discovery and brownfield guidance preservation are focused checks; private live-profile activation and the public installed lifecycle remain separate, unqualified runtime boundaries.

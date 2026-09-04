@@ -326,3 +326,69 @@ def test_canonical_skill_capabilities_are_statused_and_traceable() -> None:
     assert ".aether/skills/<skill-name>/SKILL.md" in (ROOT / "AGENTS.md").read_text(
         encoding="utf-8"
     )
+
+
+def test_stewardship_capabilities_are_distinct_and_honest() -> None:
+    registry = tomllib.loads((ROOT / "docs/capabilities.toml").read_text(encoding="utf-8"))
+    records = {record["id"]: record for record in registry["capabilities"]}
+    expected = {
+        "lifecycle.git-github-terminal-closeout": "lifecycle.git-github-terminal-closeout",
+        "lifecycle.semver-release-conclusions": "lifecycle.semver-release-conclusions",
+        "lifecycle.root-agents-stewardship": "lifecycle.root-agents-stewardship",
+        "lifecycle.conditional-issue-intake-reconciliation": (
+            "lifecycle.conditional-issue-intake-reconciliation"
+        ),
+    }
+    traceability = {
+        "lifecycle.git-github-terminal-closeout": (
+            "src/aether_agents/resources/skills/git-github-closeout/SKILL.md",
+            "specs/r8-workspaces-and-integration/spec.md",
+        ),
+        "lifecycle.semver-release-conclusions": (
+            "src/aether_agents/resources/skills/semver-release/SKILL.md",
+            "specs/r13-synthesis-and-release/spec.md",
+        ),
+        "lifecycle.root-agents-stewardship": (
+            "AGENTS.md",
+            "specs/r5-topology-and-isolation/spec.md",
+        ),
+        "lifecycle.conditional-issue-intake-reconciliation": (
+            "src/aether_agents/resources/skills/git-github-closeout/SKILL.md",
+            "specs/001-aether-v1-productization/spec.md",
+        ),
+    }
+
+    assert set(expected) <= records.keys()
+    assert set(traceability) == set(expected)
+    assert {records[identifier]["status"] for identifier in expected} == {"partial"}
+    assert [records[identifier]["surfaces"][0] for identifier in expected] == list(
+        expected.values()
+    )
+    for identifier, (implementation, specification) in traceability.items():
+        assert implementation in records[identifier]["implementation"]
+        assert specification in records[identifier]["specifications"]
+    notes = "\n".join(records[identifier]["notes"] for identifier in expected)
+    for marker in (
+        "prompt/skill guidance",
+        "PR #299",
+        "current-objective",
+        "private live-profile activation",
+        "public installed lifecycle",
+    ):
+        assert marker in notes
+    assert "runtime enforcement" in notes or "runtime-enforced" in notes
+
+    assert (
+        "docs/guides/lifecycle.md" in records["lifecycle.git-github-terminal-closeout"]["documents"]
+    )
+    assert (
+        "docs/guides/execution.md" in records["lifecycle.semver-release-conclusions"]["documents"]
+    )
+    assert (
+        "docs/guides/project-initialization.md"
+        in records["lifecycle.root-agents-stewardship"]["documents"]
+    )
+    assert (
+        "docs/roles-and-authority.md"
+        in records["lifecycle.conditional-issue-intake-reconciliation"]["documents"]
+    )
