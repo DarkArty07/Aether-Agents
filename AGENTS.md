@@ -4,7 +4,7 @@ This repository contains Aether's public product source, versioned policy, canon
 
 `DESIGN.md` is the canonical conceptual design for the current redesign. It defines the intended roles, authority boundaries and fixed high-level product decisions. Technology choices not explicitly fixed there remain undecided and must not be inferred or implemented without an owner decision.
 
-Live Hermes profiles and other runtime state under `home/` are local evidence only and must not be committed. Keep credentials, sessions, databases, memories, logs, boards, repositories, owner identifiers, machine paths, and private provider/model/router bindings out of public artifacts.
+Live Hermes profiles and other runtime state under `home/` are local evidence only and must not be committed. Keep credentials, sessions, databases, memories, logs, boards, repositories, owner identifiers, machine paths, and private provider/model/router bindings out of public artifacts. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [`docs/authority.md`](docs/authority.md).
 
 The accepted product has three roles: Morfeo, supervision, and implementation. Implementation is replicable in parallel instances. The accepted design and A1 contract still grant no authority by themselves to create or activate profiles, start workers or services, invoke models, acquire credentials, publish, deploy, cut over an installation, or perform another protected external effect.
 

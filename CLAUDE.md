@@ -11,7 +11,8 @@ mandatory and take precedence; the contributing workflow is in
 2. Read `AGENTS.md` before designing or making a capability claim. It requires upstream
    research before new design work and evidence from the source a runtime actually loads.
 3. Keep changes within the relevant accepted specification or Objective Contract. Update
-   the artifact that owns a decision before a derived artifact.
+   the artifact that owns a decision before a derived artifact (see
+   [`docs/authority.md`](docs/authority.md)).
 
 ## Work safely and keep scope bounded
 

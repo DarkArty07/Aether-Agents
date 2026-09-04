@@ -24,8 +24,9 @@ uv sync --frozen
 ```
 
 Read `AGENTS.md` before designing or changing an area. Then read `README.md`,
-`DESIGN.md`, `ROADMAP.md`, and the relevant material under `specs/`. `CLAUDE.md` adds
-guidance for coding assistants but does not replace these repository rules.
+[`docs/authority.md`](docs/authority.md), `DESIGN.md`, `ROADMAP.md`, and the relevant
+material under `specs/`. `CLAUDE.md` adds guidance for coding assistants but does not
+replace these repository rules.
 
 ## Test with the locked Hermes baseline
 
@@ -95,7 +96,7 @@ uv run --frozen python scripts/check_documentation.py
 ```
 
 1. Make one scoped change and update the artifact that owns any decision before updating
-   a derived artifact. Canonical documentation and durable system prompts are English.
+   a derived artifact (see [`docs/authority.md`](docs/authority.md) for artifact ownership and conflict rules). Canonical documentation and durable system prompts are English.
 2. Keep `ROADMAP.md` shallow; detailed stage material belongs under `specs/<stage>/`.
 3. Check Markdown links, YAML, file modes, and the complete diff. For a change intended
    for commit, run:
