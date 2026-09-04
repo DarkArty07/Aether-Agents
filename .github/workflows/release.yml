@@ -3,7 +3,7 @@ name: Publish Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -25,18 +25,45 @@ jobs:
         with:
           fetch-depth: 0
       - name: Validate release tag
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$(cat VERSION)" == "${RELEASE_TAG#v}" ]]
-          git cat-file -e "$RELEASE_TAG^{tag}"
-          git fetch origin main
-          [[ "$(git rev-list -n 1 "$RELEASE_TAG")" == "$(git rev-parse origin/main)" ]]
-      - name: Create or reconcile GitHub Release
-        run: |
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" --generate-notes
+          if [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            release_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            release_prerelease=false
+          elif [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.([1-9][0-9]*)$ ]]; then
+            release_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}rc${BASH_REMATCH[4]}"
+            release_prerelease=true
           else
-            gh release create "$RELEASE_TAG" --verify-tag --generate-notes
+            echo "Unsupported release tag: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          [[ "$(<VERSION)" == "$release_version" ]]
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"
+          [[ "$(git cat-file -t "refs/tags/$RELEASE_TAG")" == "tag" ]]
+          git fetch --no-tags origin main
+          [[ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" == "$(git rev-parse refs/remotes/origin/main)" ]]
+          {
+            printf 'version=%s\n' "$release_version"
+            printf 'prerelease=%s\n' "$release_prerelease"
+          } >> "$GITHUB_OUTPUT"
+      - name: Create or reconcile GitHub Release
+        env:
+          RELEASE_VERSION: ${{ steps.validate.outputs.version }}
+          RELEASE_PRERELEASE: ${{ steps.validate.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if [[ "$RELEASE_PRERELEASE" == true ]]; then
+            prerelease_arg=--prerelease
+          elif [[ "$RELEASE_PRERELEASE" == false ]]; then
+            prerelease_arg=--prerelease=false
+          else
+            echo "Invalid prerelease state: $RELEASE_PRERELEASE" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" "$prerelease_arg"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes "$prerelease_arg"
           fi
