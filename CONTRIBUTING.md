@@ -113,6 +113,23 @@ uv run --frozen python scripts/check_documentation.py
    [the pull-request template](.github/PULL_REQUEST_TEMPLATE.md) when opening a pull
    request, including validation and manifest evidence.
 
+## Canonical skills
+
+Aether Canonical Skills are public, versioned, package-owned resources under
+`src/aether_agents/resources/skills/<skill-name>/SKILL.md`. Project Canonical Skills are
+tracked and portable under `.aether/skills/<skill-name>/SKILL.md`; root `AGENTS.md` is
+the discovery pointer, and agents read applicable files directly from the project
+worktree. Learned Profile Skills remain private, local, adaptive, and non-canonical.
+
+Skills own reusable procedure only. They are subordinate to owner instruction, the
+constitution, `DESIGN.md`, stage specifications, Objective Contracts, repository rules,
+and protected-effect policy; they cannot grant authority. A learned procedure may enter
+versioned source only after sanitization, generalization, focused verification,
+independent review, commit, and pull request. Do not copy private skill text, identities,
+machine paths, runtime state, providers, models, repository details, or credentials.
+
+## External effects
+
 Remote pushes, pull requests, merges, tags, publication, release, and deployment are
 external effects. Perform them only when the current task and repository authority
 permit them; this guide does not grant that authority.

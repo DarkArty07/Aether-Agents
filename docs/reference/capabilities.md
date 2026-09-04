@@ -584,3 +584,62 @@ The package carries portable Morfeo, Supervisor, and Implementer role resources 
 ### Notes / current limits
 
 Portable resources are versioned candidate bytes; clean installed-profile activation and public qualification remain pending.
+
+## `skills.aether-canonical-resources`
+
+**Status:** `implemented`
+
+Three Aether Canonical Skills are packaged and materialized through the existing native profile skill directories.
+
+### Surfaces
+- `lifecycle.aether-canonical-skills`
+
+### Current documentation
+- [docs/authority.md](../authority.md)
+- [docs/guides/project-initialization.md](../guides/project-initialization.md)
+
+### Owning specifications
+- [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
+- [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
+
+### Implementation
+- [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
+- [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
+- [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
+- [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
+
+### Verification
+- [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
+- [tests/test_observation_packaging.py](../../tests/test_observation_packaging.py)
+
+### Notes / current limits
+
+Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; full public release qualification remains separate.
+
+## `skills.project-canonical-discovery`
+
+**Status:** `implemented`
+
+Project Canonical Skills are discoverable by direct project-relative reads from the root AGENTS.md convention without a new loader or registry.
+
+### Surfaces
+- `lifecycle.project-canonical-skill-discovery`
+
+### Current documentation
+- [docs/authority.md](../authority.md)
+- [docs/guides/project-initialization.md](../guides/project-initialization.md)
+
+### Owning specifications
+- [specs/r13-synthesis-and-release/spec.md](../../specs/r13-synthesis-and-release/spec.md)
+- [specs/r5-topology-and-isolation/spec.md](../../specs/r5-topology-and-isolation/spec.md)
+
+### Implementation
+- [AGENTS.md](../../AGENTS.md)
+- [docs/guides/project-initialization.md](../guides/project-initialization.md)
+
+### Verification
+- [tests/test_project_init.py](../../tests/test_project_init.py)
+
+### Notes / current limits
+
+Disposable-project discovery and brownfield guidance preservation are focused checks; release qualification is not implied.

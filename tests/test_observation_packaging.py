@@ -6,6 +6,7 @@ import configparser
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -22,6 +23,11 @@ SCHEMA_NAMES = (
     "observation-segment-manifest.schema.json",
 )
 PROFILE_NAMES = ("morfeo", "supervisor", "implementer")
+CANONICAL_SKILLS = (
+    "git-github-closeout",
+    "semver-release",
+    "canonical-skill-governance",
+)
 
 
 def test_build_backend_is_exact_dev_only_and_locked() -> None:
@@ -324,3 +330,110 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
     with zipfile.ZipFile(wheel) as archive:
         uncompressed = b"".join(archive.read(name) for name in archive.namelist())
     assert wheel_digest.encode("ascii") not in uncompressed
+
+
+def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
+    built_distribution: tuple[Path, Path],
+) -> None:
+    wheel, sdist = built_distribution
+    source_root = ROOT / "src" / "aether_agents" / "resources" / "skills"
+
+    with zipfile.ZipFile(wheel) as wheel_archive, tarfile.open(sdist, "r:gz") as source_archive:
+        source_prefix = source_archive.getnames()[0].split("/", 1)[0]
+        for skill_name in CANONICAL_SKILLS:
+            relative = f"skills/{skill_name}/SKILL.md"
+            source = (source_root / skill_name / "SKILL.md").read_bytes()
+            wheel_bytes = wheel_archive.read(f"aether_agents/resources/{relative}")
+            member = source_archive.extractfile(
+                f"{source_prefix}/src/aether_agents/resources/{relative}"
+            )
+            assert member is not None
+            assert wheel_bytes == member.read() == source
+
+            text = source.decode("utf-8")
+            match = re.search(r"\A---\n(?P<frontmatter>.*?)\n---\n(?P<body>.*)\Z", text, re.S)
+            assert match is not None, skill_name
+            import yaml
+
+            frontmatter = yaml.safe_load(match.group("frontmatter"))
+            assert isinstance(frontmatter, dict)
+            assert re.fullmatch(r"[a-z0-9-]{1,64}", frontmatter["name"])
+            assert frontmatter["name"] == skill_name
+            assert isinstance(frontmatter["description"], str)
+            assert len(frontmatter["description"]) <= 60
+            assert frontmatter["description"].endswith(".")
+            assert frontmatter["version"] == "0.1.0"
+            assert isinstance(frontmatter["author"], str) and frontmatter["author"]
+            assert frontmatter["license"] == "MIT"
+            assert frontmatter["platforms"] == ["linux", "macos", "windows"]
+            metadata = frontmatter["metadata"]["hermes"]
+            assert isinstance(metadata["tags"], list) and metadata["tags"]
+            assert metadata["related_skills"] == []
+            body = match.group("body")
+            assert "## When to Use" in body
+            assert "Use when" in body or "Use for" in body
+            assert "## Pitfalls" in body
+            assert "## Verification" in body
+            assert "authority" in body.lower()
+            assert "cannot grant" in body.lower()
+            assert "project-relative" in body.lower()
+            assert not re.search(r"(?i)(?:/home/|/users/|[a-z]:\\\\users\\\\)", text)
+            assert not re.search(
+                r"-----BEGIN .*PRIVATE KEY-----|\\b(?:ghp|github_pat|sk)-[A-Za-z0-9_]{20,}\\b",
+                text,
+            )
+
+        assert {
+            name
+            for name in wheel_archive.namelist()
+            if name.startswith("aether_agents/resources/skills/") and name.endswith("/SKILL.md")
+        } == {
+            f"aether_agents/resources/skills/{skill_name}/SKILL.md"
+            for skill_name in CANONICAL_SKILLS
+        }
+
+
+def test_git_github_closeout_distinguishes_unit_commit_preparation_from_pipeline_history() -> None:
+    skill = (
+        ROOT / "src" / "aether_agents" / "resources" / "skills" / "git-github-closeout" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    procedure = skill.split("## Procedure", 1)[1].split("## Pitfalls", 1)[0].lower()
+
+    assert "direct/single-unit work" in procedure
+    assert "one conventional commit" in procedure
+    assert re.search(
+        r"pipeline\s+integration.{0,300}every\s+accepted\s+implementation\s+unit.{0,120}"
+        r"own\s+commit\s+or\s+merge\s+commit",
+        procedure,
+        re.DOTALL,
+    )
+    for forbidden_operation in ("squash", "amend", "rebase", "history rewrite"):
+        assert re.search(
+            rf"pipeline\s+integration.{{0,300}}{re.escape(forbidden_operation)}",
+            procedure,
+            re.DOTALL,
+        )
+
+
+def test_git_github_closeout_cleans_only_verified_merged_objective_residue() -> None:
+    skill = (
+        ROOT / "src" / "aether_agents" / "resources" / "skills" / "git-github-closeout" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    procedure = skill.split("## Procedure", 1)[1].split("## Pitfalls", 1)[0].lower()
+    cleanup_match = re.search(r"\n9\.\s+(?P<cleanup>.*?)\n10\.", procedure, re.DOTALL)
+
+    assert cleanup_match is not None
+    cleanup = cleanup_match.group("cleanup")
+    assert "only after durable pr, merge, board, and final-verification evidence" in cleanup
+    assert "all objective-owned merged child/root branches and worktrees" in cleanup
+    for preserved_residue in (
+        "active",
+        "unmerged",
+        "blocked",
+        "review-active",
+        "concurrent",
+        "unknown",
+        "unrelated",
+        "pre-existing",
+    ):
+        assert preserved_residue in cleanup

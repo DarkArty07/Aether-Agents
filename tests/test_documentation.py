@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
@@ -275,6 +276,9 @@ def test_policy_workflow_admits_the_documentation_inventory_and_runs_the_checker
         "docs/reference/capabilities.md",
         "docs/capabilities.toml",
         ".aether/objective-contracts/oc_b8865f5129d60535/v1.md",
+        "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md",
+        "src/aether_agents/resources/skills/git-github-closeout/SKILL.md",
+        "src/aether_agents/resources/skills/semver-release/SKILL.md",
     ):
         assert path in workflow
     assert "^(docs|schemas|home/(profiles|skills|plugins|prompts))/" not in workflow
@@ -292,3 +296,33 @@ def test_contribution_and_pull_request_guidance_requires_proportionate_documenta
     assert "Behavior-preserving internal refactors" in contributing
     assert "Documentation / registry impact" in template
     assert "non-applicability rationale" in template
+
+
+def test_canonical_skill_capabilities_are_statused_and_traceable() -> None:
+    registry = tomllib.loads((ROOT / "docs/capabilities.toml").read_text(encoding="utf-8"))
+    records = {record["id"]: record for record in registry["capabilities"]}
+
+    assert records["skills.aether-canonical-resources"]["status"] == "implemented"
+    assert records["skills.project-canonical-discovery"]["status"] == "implemented"
+    assert (
+        "lifecycle.aether-canonical-skills"
+        in records["skills.aether-canonical-resources"]["surfaces"]
+    )
+    assert (
+        "lifecycle.project-canonical-skill-discovery"
+        in records["skills.project-canonical-discovery"]["surfaces"]
+    )
+    for skill_name in (
+        "git-github-closeout",
+        "semver-release",
+        "canonical-skill-governance",
+    ):
+        path = ROOT / "src" / "aether_agents" / "resources" / "skills" / skill_name / "SKILL.md"
+        assert path.is_file()
+        assert (
+            str(path.relative_to(ROOT))
+            in records["skills.aether-canonical-resources"]["implementation"]
+        )
+    assert ".aether/skills/<skill-name>/SKILL.md" in (ROOT / "AGENTS.md").read_text(
+        encoding="utf-8"
+    )
