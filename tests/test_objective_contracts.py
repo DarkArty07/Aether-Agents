@@ -1114,3 +1114,144 @@ def test_product_resources_bind_contract_flows_without_widening_role_sessions() 
 
     assert "session_affinity" not in implementer_soul
     assert "same-profile Supervisor" not in implementer_soul
+
+
+def _packaged_role_souls() -> dict[str, str]:
+    root = Path(__file__).parents[1]
+    profiles = root / "src" / "aether_agents" / "resources" / "profiles"
+    return {
+        role: (profiles / role / "SOUL.md").read_text(encoding="utf-8")
+        for role in ("morfeo", "supervisor", "implementer")
+    }
+
+
+def _normalized_markdown(text: str) -> str:
+    return " ".join(text.split())
+
+
+def test_packaged_role_souls_define_canonical_skill_precedence_without_skill_lists() -> None:
+    root = Path(__file__).parents[1]
+    profiles = root / "src" / "aether_agents" / "resources" / "profiles"
+    assert {path.name for path in profiles.iterdir() if path.is_dir()} == {
+        "morfeo",
+        "supervisor",
+        "implementer",
+    }
+
+    required = (
+        "Aether Canonical Skills",
+        "Project Canonical Skills",
+        "Learned Profile Skills",
+        ".aether/skills/<name>/SKILL.md",
+        "current owner instruction",
+        "constitution/design/stage specs/Objective Contract",
+        "repository operating rules",
+        "procedure, never authority",
+        "Project Canonical",
+        "Aether Canonical",
+        "Learned Profile",
+    )
+    for soul in _packaged_role_souls().values():
+        normalized = _normalized_markdown(soul)
+        assert all(clause in normalized for clause in required)
+        assert "src/aether_agents/resources/skills/" not in normalized
+        assert "git/github closeout" not in normalized.lower()
+        assert "semver/release" not in normalized.lower()
+
+
+def test_role_souls_assign_onboarding_issue_and_publication_boundaries() -> None:
+    souls = _packaged_role_souls()
+    morfeo = souls["morfeo"]
+    supervisor = souls["supervisor"]
+    implementer = souls["implementer"]
+
+    assert "root `AGENTS.md`" in morfeo
+    assert "root `agents.md` is absent" in morfeo.lower()
+    assert "onboard" in morfeo.lower()
+    assert "constitution confirmation" in morfeo
+    assert "brownfield" in morfeo
+    assert "preserve" in morfeo and "reconcile" in morfeo
+    assert "project policy uses Issues" in morfeo
+    assert "canonical issue" in morfeo and "non-duplicate" in morfeo
+    assert "direct-route closeout" in morfeo
+    assert "pipeline branch" in morfeo and "fully closed" in morfeo
+
+    assert "independent review" in supervisor
+    assert "AGENTS.md coherence" in supervisor
+    assert "release_impact" in supervisor
+    assert "release_action" in supervisor
+    assert "release_channel" in supervisor
+    assert "normal branch push" in supervisor
+    assert "required checks" in supervisor
+    assert "green merge without bypass" in supervisor
+    assert "terminal evidence" in supervisor
+    assert "non-applicability reason" in supervisor
+    assert "residue cleanup" in supervisor
+    assert "local integration alone is not success" in supervisor.lower()
+
+    assert "local commits and evidence" in implementer
+    assert "compatibility impact" in implementer
+    assert "invalidates guidance" in implementer
+    assert "specific non-applicability reason" in implementer
+    assert "never publish" in implementer
+    assert "never push" in implementer
+    assert "never open or merge" in implementer
+    assert "never mutate issues" in implementer
+
+
+def test_release_conclusions_stay_separate_from_compatibility_and_channel() -> None:
+    souls = _packaged_role_souls()
+    lifecycle = (Path(__file__).parents[1] / "docs" / "guides" / "lifecycle.md").read_text(
+        encoding="utf-8"
+    )
+    authority = (Path(__file__).parents[1] / "docs" / "roles-and-authority.md").read_text(
+        encoding="utf-8"
+    )
+    for source in (souls["supervisor"], lifecycle, authority):
+        assert "release_impact = none|patch|minor|major" in source
+        assert "release_action = defer|prepare|publish" in source
+        assert "release_channel = none|prerelease|stable" in source
+    combined = lifecycle + authority + souls["supervisor"]
+    assert "Prerelease is not a compatibility impact" in combined
+    assert "merge does not imply a release" in combined
+    assert "compatibility impact" in combined
+
+
+def test_terminal_pipeline_closeout_rejects_local_integration_as_success() -> None:
+    root = Path(__file__).parents[1]
+    sources = [
+        (root / "docs" / "roles-and-authority.md").read_text(encoding="utf-8"),
+        (root / "docs" / "guides" / "lifecycle.md").read_text(encoding="utf-8"),
+        (root / "docs" / "guides" / "execution.md").read_text(encoding="utf-8"),
+    ]
+    combined = "\n".join(sources)
+    normalized = _normalized_markdown(combined).lower()
+    for clause in (
+        "acceptance",
+        "normal branch push",
+        "pull request",
+        "required checks",
+        "objective-caused CI",
+        "green merge without bypass",
+        "issue/milestone reconciliation",
+        "remote merged-branch cleanup",
+        "local objective branch/worktree cleanup",
+        "durable evidence",
+        "final evidence",
+        "concrete non-applicability reason",
+        "active/unmerged/review/concurrent/unrelated work is preserved",
+    ):
+        assert clause.lower() in normalized
+    assert "local integration alone is not terminal" in normalized
+
+
+def test_policy_distinguishes_routine_closeout_from_protected_variants() -> None:
+    path = Path(__file__).parents[1] / "docs" / "guides" / "policy-and-recovery.md"
+    policy = path.read_text(encoding="utf-8").lower()
+    assert "routine closeout" in policy
+    assert "existing credentials" in policy
+    assert "credential acquisition/widening" in policy
+    assert "settings mutation" in policy
+    assert "force/history rewrite" in policy
+    assert "package publication" in policy
+    assert "deployment" in policy
