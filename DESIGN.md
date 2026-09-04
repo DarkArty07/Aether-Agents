@@ -2,7 +2,7 @@
 
 **Status:** accepted current conceptual design through PD-76; operational reliability stabilization active
 **Accepted baseline:** 2026-08-17
-**Last amended:** 2026-08-27
+**Last amended:** 2026-09-04
 **Product authority:** Christopher
 
 ## 1. Purpose and scope
@@ -186,6 +186,88 @@ R6 must therefore decide against that guidance and against Aether's chosen topol
 
 *A previous version of this section claimed Hermes contained no A2A implementation. That claim was researched against version 0.19.1, which is not the source Aether runs, and is withdrawn. See `specs/r4-hermes-boundary/research.md` §11.*
 
+## 10.1 Autonomous project stewardship and canonical procedures
+
+For an owner-authorized objective in an already provisioned project, Aether maintains one
+end-to-end stewardship contract. This is a responsibility alignment across the three
+existing roles, not a fourth lifecycle role, queue, workflow engine, state machine, or
+second release framework. The normal local and reversible path is governed by scope,
+worktrees, Git, tests, review, and rollback; routine GitHub work already covered by R8
+FR-824 is not placed behind a new per-action or per-contract availability gate.
+
+The role boundary is unambiguous. For pipeline work, Supervisor owns independent review,
+integration, aggregate release classification, normal GitHub pull-request/check/merge
+closeout, applicable issue and milestone reconciliation, and terminal evidence.
+Implementer owns only the bounded local code, documentation, tests, preparation, and
+commits assigned to its unit; it never publishes pipeline work. For bounded direct work,
+Morfeo owns the authorized routine closeout as part of the same bounded objective and
+does not create a ceremonial pipeline card.
+
+The single GitHub-backed terminal path is:
+
+```text
+acceptance verification
+    → release_impact / release_action / release_channel
+    → normal branch push
+    → pull request
+    → required checks
+    → bounded diagnosis/correction of objective-caused CI failures
+    → green merge without bypass
+    → applicable issue/milestone reconciliation
+    → remote merged-branch cleanup
+    → local objective branch/worktree residue cleanup after durable evidence
+    → final evidence report
+```
+
+Local integration alone is not project closure. The pipeline supervisor, or Morfeo on an
+authorized direct route, MUST either complete each applicable step or record a concrete
+reason why that step is not applicable. A routine closeout does not imply that a release
+must be made: every objective records exactly these three independent conclusions:
+`release_impact = none|patch|minor|major`,
+`release_action = defer|prepare|publish`, and `release_channel = none|prerelease|stable`.
+Impact is compatibility impact, action is the chosen release operation, and channel is
+the publication channel; prerelease is never an impact class and no merge implies a
+release. The existing explicit Aether `v1.0.0` owner and qualification gate remains in
+force.
+
+Issue representation is conditional rather than ceremonial. At authorized intake,
+Morfeo creates or reconciles only one non-duplicate issue when project policy uses
+Issues and no canonical issue already represents the objective; otherwise it creates
+none. At close, the responsible route reconciles any applicable issue and milestone
+state; otherwise the final evidence records why no issue or milestone applies.
+
+### Canonical skills and project guidance
+
+Skills are reusable procedure, never authority. Aether Canonical Skills are public,
+versioned, package-owned procedures at
+`src/aether_agents/resources/skills/<skill-name>/SKILL.md`. Project Canonical Skills are
+tracked, versioned, project-visible procedures at
+`.aether/skills/<skill-name>/SKILL.md`. Learned Profile Skills are private, local,
+adaptive profile procedures and never become canonical automatically. The SKILL.md
+frontmatter and body are the source; Aether adds no duplicate skill registry, generic
+loader, queue, role, or state machine for them. The initial Aether set is limited to
+Git/GitHub project closeout, SemVer/release decision and execution, and canonical-skill
+governance/promotion, kept as focused non-overlapping procedures.
+
+Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating rules. A finalized Objective
+Contract binds one delegated objective within the higher artifacts; repository guidance
+and skills cannot widen it. Among compatible procedures only, a Project Canonical Skill
+is more specific than an Aether Canonical Skill, and both are more specific than a
+Learned Profile Skill. No skill can grant authority, replace intent or acceptance, or
+override any higher artifact. Agents discover project skills through the current root
+`AGENTS.md`, direct project-relative reads, card pinning, or an existing native skill
+mechanism, and load only task-relevant procedures rather than a hard-coded project list.
+
+Every project has an accurate root `AGENTS.md`. Morfeo establishes missing guidance only
+after inspecting the repository and confirming the constitution. The role whose
+authorized change invalidates build, test, run, version, release, deploy, generated-file,
+or skill guidance updates that file in the same change, or records a concrete
+non-applicability reason. Supervisor performs the final closure coherence gate. Existing
+brownfield instructions are preserved and reconciled; nested `AGENTS.md` files are added
+only for demonstrated subtree-specific rules. A private learned skill may be promoted
+only through sanitization, generalization, verification, independent review, commit,
+and pull request; promotion never happens by learning alone.
+
 ## 11. Accepted product decisions and review triggers
 
 | ID | Current decision | Reopen when |
@@ -311,7 +393,7 @@ Aether assigns ownership by semantic question, not by a single linear document h
 | Worktree and workspace state | Local isolation (not an authority) | A worktree is mutable write isolation, not an intent or status store; source overlap is reconciled by the integration process. |
 | Executable role-local prompt wording | Versioned `SOUL` resources | Owns prompt wording for a role only; it is derived operational context and cannot redefine role responsibility, authority, or project decisions. |
 | Private user context and durable preferences/recall | Private `USER`/`MEMORY` | Local/private only; it never owns project principles or decisions and its contents are never placed in public artifacts. |
-| Reusable procedure | Versioned skills | Owns reusable method only; it does not own project intent, execution status, or role authority. |
+| Reusable procedure | Aether Canonical Skills, Project Canonical Skills, and Learned Profile Skills | Own reusable procedure only; Aether skills live under `src/aether_agents/resources/skills/<skill-name>/SKILL.md`, project skills under `.aether/skills/<skill-name>/SKILL.md`, and private learned skills never become authority or auto-promote. |
 | Checkout and repository operating instructions | `AGENTS.md` | Owns repository-local operating guidance; it does not duplicate or override product and stage truth. |
 | Current-build behavior and use guidance | `docs/` | Describes behavior available in the current build and how to use or diagnose it; it does not own conceptual design, normative requirements, or live runtime state. |
 | Current implementation status and traceability | `docs/capabilities.toml` | Sole current implementation-status registry. Its generated capability reference is derived and neither artifact is design or behavioral authority. |
@@ -322,6 +404,8 @@ Aether assigns ownership by semantic question, not by a single linear document h
 | Implemented behavior and reproducible runtime facts | Evidentiary: source and direct execution | These reveal what is implemented or observed and may expose drift, but cannot redefine normative intent. |
 | Project mappings, profile homes, XDG state, configured services/providers, sessions, and private effective runtime observations | Local/private environment and runtime state | Remains outside public artifacts. Public documentation may describe the class and its boundary, never its contents, identifiers, credentials, bindings, machine paths, or live-runtime claims. |
 | Reader-facing placement and conflict explanation | Derived: `docs/authority.md` | Explains this section for readers and must not compete with the owners above. `docs/index.md` is navigation only and owns no semantic project truth. |
+
+Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating rules. Within the procedural tier only, a compatible Project Canonical Skill outranks an Aether Canonical Skill, which outranks a Learned Profile Skill; none can grant authority or replace intent or acceptance.
 
 Conflict handling follows the semantic owner rather than file order or recency alone:
 

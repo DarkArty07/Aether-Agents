@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import stat
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
@@ -24,6 +29,7 @@ A1_SPEC_PATH = ROOT / "specs" / "001-aether-v1-productization" / "spec.md"
 A1_PRODUCT_PLAN_PATH = ROOT / "specs" / "001-aether-v1-productization" / "plan.md"
 OBS_SPEC_PATH = ROOT / "specs" / "002-aether-contract-observation" / "spec.md"
 OBS_RESEARCH_PATH = ROOT / "specs" / "002-aether-contract-observation" / "research.md"
+RELEASE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "release.yml"
 
 
 class ReleaseLockSourceModeTests(unittest.TestCase):
@@ -278,6 +284,305 @@ class ObservationNormativeDocumentationTests(unittest.TestCase):
             "Deterministic implementation evidence did not substitute for controlled runtime evidence",
             self.roadmap,
         )
+
+
+class ReleaseWorkflowTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.validation_script = _workflow_step_script("Validate release tag")
+        cls.release_script = _workflow_step_script("Create or reconcile GitHub Release")
+
+    def run_validation(
+        self, repo: Path, tag: str
+    ) -> tuple[subprocess.CompletedProcess[str], dict[str, str]]:
+        output_path = repo / "github-output"
+        environment = dict(os.environ)
+        environment.update(RELEASE_TAG=tag, GITHUB_OUTPUT=str(output_path))
+        result = subprocess.run(
+            ("bash",),
+            cwd=repo,
+            env=environment,
+            input=self.validation_script,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        outputs = {}
+        if output_path.exists():
+            outputs = dict(
+                line.split("=", 1)
+                for line in output_path.read_text(encoding="utf-8").splitlines()
+                if "=" in line
+            )
+        return result, outputs
+
+    def run_release(
+        self,
+        repo: Path,
+        version: str,
+        tag: str,
+        prerelease: str,
+        *,
+        existing: bool = False,
+    ) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+        root = repo.parent
+        log_path = root / "gh-calls.jsonl"
+        existing_path = root / "existing-release"
+        if existing:
+            existing_path.touch()
+        bin_path = root / "bin"
+        _write_gh_stub(bin_path)
+        environment = dict(os.environ)
+        environment.update(
+            RELEASE_TAG=tag,
+            RELEASE_VERSION=version,
+            RELEASE_PRERELEASE=prerelease,
+            GH_STUB_EXISTING=str(existing_path),
+            GH_STUB_LOG=str(log_path),
+            PATH=f"{bin_path}{os.pathsep}{environment.get('PATH', '')}",
+        )
+        result = subprocess.run(
+            ("bash",),
+            cwd=repo,
+            env=environment,
+            input=self.release_script,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        calls = []
+        if log_path.exists():
+            calls = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        return result, calls
+
+    def assert_validation_rejected(
+        self,
+        version: str,
+        tag: str,
+        *,
+        annotated: bool = True,
+        diverged: bool = False,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), version)
+            if diverged:
+                (repo / "change.txt").write_text("non-main\n", encoding="utf-8")
+                _git(repo, "add", "change.txt")
+                _git(repo, "commit", "-q", "-m", "non-main")
+            if annotated:
+                _git(repo, "tag", "-a", tag, "-m", "release")
+            else:
+                _git(repo, "tag", tag)
+
+            result, outputs = self.run_validation(repo, tag)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(outputs, {})
+
+    def test_stable_tag_validation_outputs_exact_pep440_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), "1.2.3")
+            _git(repo, "tag", "-a", "v1.2.3", "-m", "stable release")
+
+            result, outputs = self.run_validation(repo, "v1.2.3")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(outputs, {"version": "1.2.3", "prerelease": "false"})
+
+    def test_rc_release_creation_marks_the_release_as_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), "1.2.3rc4")
+            _git(repo, "tag", "-a", "v1.2.3-rc.4", "-m", "release candidate")
+            result, outputs = self.run_validation(repo, "v1.2.3-rc.4")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            release_result, calls = self.run_release(
+                repo,
+                outputs["version"],
+                "v1.2.3-rc.4",
+                outputs["prerelease"],
+            )
+
+        self.assertEqual(release_result.returncode, 0, release_result.stderr)
+        self.assertEqual(calls[0][:3], ["release", "view", "v1.2.3-rc.4"])
+        self.assertEqual(calls[1][:3], ["release", "create", "v1.2.3-rc.4"])
+        self.assertIn("--verify-tag", calls[1])
+        self.assertIn("--generate-notes", calls[1])
+        self.assertIn("--prerelease", calls[1])
+        self.assertNotIn("--prerelease=false", calls[1])
+
+    def test_stable_release_creation_explicitly_clears_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), "1.2.3")
+            _git(repo, "tag", "-a", "v1.2.3", "-m", "stable release")
+            result, outputs = self.run_validation(repo, "v1.2.3")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            release_result, calls = self.run_release(
+                repo,
+                outputs["version"],
+                "v1.2.3",
+                outputs["prerelease"],
+            )
+
+        self.assertEqual(release_result.returncode, 0, release_result.stderr)
+        self.assertEqual(calls[1][:3], ["release", "create", "v1.2.3"])
+        self.assertIn("--prerelease=false", calls[1])
+        self.assertNotIn("--prerelease", [arg for arg in calls[1] if arg != "--prerelease=false"])
+
+    def test_existing_stable_release_reconciliation_clears_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), "1.2.3")
+            _git(repo, "tag", "-a", "v1.2.3", "-m", "stable release")
+            result, outputs = self.run_validation(repo, "v1.2.3")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            release_result, calls = self.run_release(
+                repo,
+                outputs["version"],
+                "v1.2.3",
+                outputs["prerelease"],
+                existing=True,
+            )
+
+        self.assertEqual(release_result.returncode, 0, release_result.stderr)
+        self.assertEqual(calls[1][:3], ["release", "edit", "v1.2.3"])
+        self.assertIn("--prerelease=false", calls[1])
+        self.assertNotIn(["release", "create", "v1.2.3"], calls)
+
+    def test_existing_rc_release_reconciliation_sets_prerelease(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = _make_release_repository(Path(directory), "1.2.3rc4")
+            _git(repo, "tag", "-a", "v1.2.3-rc.4", "-m", "release candidate")
+            result, outputs = self.run_validation(repo, "v1.2.3-rc.4")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+            release_result, calls = self.run_release(
+                repo,
+                outputs["version"],
+                "v1.2.3-rc.4",
+                outputs["prerelease"],
+                existing=True,
+            )
+
+        self.assertEqual(release_result.returncode, 0, release_result.stderr)
+        self.assertEqual(calls[1][:3], ["release", "edit", "v1.2.3-rc.4"])
+        self.assertIn("--prerelease", calls[1])
+        self.assertNotIn("--prerelease=false", calls[1])
+
+    def test_malformed_and_unsupported_prerelease_tags_are_rejected(self) -> None:
+        for tag in (
+            "v1.2.3-rc.0",
+            "v1.2.3-rc.01",
+            "v1.2.3-rc",
+            "v1.2.3-rc.1.2",
+            "v1.2.3-alpha.1",
+            "v1.2.3-RC.1",
+            "v1.2.3+build.1",
+            "1.2.3",
+        ):
+            with self.subTest(tag=tag):
+                self.assert_validation_rejected("1.2.3", tag)
+
+    def test_version_mismatch_is_rejected_before_release_outputs(self) -> None:
+        self.assert_validation_rejected("1.2.3", "v1.2.4")
+        self.assert_validation_rejected("1.2.3rc2", "v1.2.3-rc.1")
+
+    def test_lightweight_tag_is_rejected(self) -> None:
+        self.assert_validation_rejected("1.2.3", "v1.2.3", annotated=False)
+
+    def test_tag_pointing_off_origin_main_is_rejected(self) -> None:
+        self.assert_validation_rejected("1.2.3", "v1.2.3", diverged=True)
+
+    def test_workflow_keeps_release_effects_and_permissions_bounded(self) -> None:
+        workflow = RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
+
+        self.assertIn("      - 'v*'", workflow)
+        self.assertIn("  workflow_dispatch:", workflow)
+        self.assertIn("permissions:\n  contents: write", workflow)
+        for forbidden in (
+            "packages:",
+            "id-token:",
+            "gh release upload",
+            "gh repo edit",
+            "docker push",
+            "uv publish",
+            "git tag",
+            "git push",
+        ):
+            self.assertNotIn(forbidden, workflow)
+
+
+def _write_gh_stub(bin_path: Path) -> None:
+    bin_path.mkdir()
+    stub = bin_path / "gh"
+    stub.write_text(
+        f"""#!{sys.executable}
+import json
+import os
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+with Path(os.environ["GH_STUB_LOG"]).open("a", encoding="utf-8") as stream:
+    json.dump(args, stream)
+    stream.write("\\n")
+if args[:2] == ["release", "view"]:
+    raise SystemExit(0 if Path(os.environ["GH_STUB_EXISTING"]).exists() else 1)
+if args[:2] == ["release", "edit"] and "--generate-notes" in args:
+    raise SystemExit(98)
+if args[:2] in (["release", "create"], ["release", "edit"]):
+    raise SystemExit(0)
+raise SystemExit(97)
+""",
+        encoding="utf-8",
+    )
+    stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _workflow_step_script(step_name: str) -> str:
+    lines = RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8").splitlines()
+    marker = f"      - name: {step_name}"
+    start = lines.index(marker)
+    run_marker = "        run: |"
+    run_start = next(index for index in range(start, len(lines)) if lines[index] == run_marker)
+    script_lines = []
+    for line in lines[run_start + 1 :]:
+        if line.startswith("      - "):
+            break
+        if line.startswith("          "):
+            script_lines.append(line[10:])
+        elif not line.strip():
+            script_lines.append("")
+        else:
+            break
+    return "\n".join(script_lines) + "\n"
+
+
+def _git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ("git", *arguments),
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _make_release_repository(root: Path, version: str) -> Path:
+    remote = root / "remote.git"
+    repo = root / "repo"
+    repo.mkdir()
+    _git(root, "init", "--bare", "-q", str(remote))
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "release-test@example.invalid")
+    _git(repo, "config", "user.name", "Release Test")
+    (repo / "VERSION").write_text(f"{version}\n", encoding="utf-8")
+    _git(repo, "add", "VERSION")
+    _git(repo, "commit", "-q", "-m", "base")
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "-u", "origin", "main")
+    return repo
 
 
 if __name__ == "__main__":

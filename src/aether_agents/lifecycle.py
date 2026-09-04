@@ -462,6 +462,11 @@ _PROJECTION_POINTER_NAME_RE = re.compile(
     re.ASCII,
 )
 _PROFILE_ROLES = ("morfeo", "supervisor", "implementer")
+_CANONICAL_SKILLS = (
+    "git-github-closeout",
+    "semver-release",
+    "canonical-skill-governance",
+)
 _OBSERVER_RUNTIME_DEPENDENCIES = {"jsonschema": "4.26.0"}
 _OBSERVER_LOCKED_DISTRIBUTIONS = {
     "attrs": "26.1.0",
@@ -2577,10 +2582,21 @@ class LifecycleManager:
     def _profile_sources(cls, role: str) -> dict[str, Path]:
         return {name: cls._profile_source(role, name) for name in ("config.yaml", "SOUL.md")}
 
+    @staticmethod
+    def _skill_source(name: str) -> Path:
+        if name not in _CANONICAL_SKILLS:
+            raise IntegrityError("unknown canonical skill resource")
+        return Path(__file__).parent / "resources" / "skills" / name / "SKILL.md"
+
+    @classmethod
+    def _skill_sources(cls) -> dict[str, Path]:
+        return {name: cls._skill_source(name) for name in _CANONICAL_SKILLS}
+
     def _materialize_profile_bundle(self, stage: Path) -> str:
         profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
         profiles_root = stage / "profiles"
         _create_private_directory(profiles_root)
+        skill_sources = self._skill_sources()
         for role in _PROFILE_ROLES:
             target_dir = profiles_root / role
             _create_private_directory(target_dir)
@@ -2598,7 +2614,27 @@ class LifecycleManager:
                     "path": f"profiles/{role}/{name}",
                     "sha256": hashlib.sha256(data).hexdigest(),
                 }
-            profiles[role] = {"resources": resources}
+            skills_root = target_dir / "skills"
+            _create_private_directory(skills_root)
+            skills: dict[str, dict[str, str]] = {}
+            for skill_name, source in skill_sources.items():
+                if source.is_symlink() or not source.is_file():
+                    raise IntegrityError("packaged canonical skill resource is unavailable")
+                try:
+                    data = read_private_bytes(source)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError(
+                        "packaged canonical skill resource is unreadable"
+                    ) from error
+                skill_dir = skills_root / skill_name
+                _create_private_directory(skill_dir)
+                target = skill_dir / "SKILL.md"
+                self._write_durable(target, data)
+                skills[skill_name] = {
+                    "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                }
+            profiles[role] = {"resources": resources, "skills": skills}
         manifest = {
             "schema_version": 2,
             "observer_entry_point": HERMES_BASELINE.observer_entry_point,
@@ -2617,6 +2653,9 @@ class LifecycleManager:
             home = self.store.profile_home(role)
             if home.is_symlink():
                 raise IntegrityError("managed profile home must not be a symlink")
+            skills_root = home / "skills"
+            if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
+                raise IntegrityError("managed profile skill directory is unsafe")
             for name in ("config.yaml", "SOUL.md", "aether-observer.json"):
                 path = home / name
                 if path.is_symlink():
@@ -2625,6 +2664,17 @@ class LifecycleManager:
                     snapshot[path] = read_private_bytes(path) if path.is_file() else None
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile product file is unreadable") from error
+            for skill_name in _CANONICAL_SKILLS:
+                skill_dir = skills_root / skill_name
+                if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
+                    raise IntegrityError("managed profile canonical skill directory is unsafe")
+                path = skill_dir / "SKILL.md"
+                if path.is_symlink():
+                    raise IntegrityError("managed profile canonical skill must not be a symlink")
+                try:
+                    snapshot[path] = read_private_bytes(path) if path.is_file() else None
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile canonical skill is unreadable") from error
         return snapshot
 
     @staticmethod
@@ -2668,6 +2718,28 @@ class LifecycleManager:
                 except (OSError, ValueError) as error:
                     raise IntegrityError("managed profile resource is unreadable") from error
                 _atomic_bytes(home / name, source_bytes)
+            skills_root = home / "skills"
+            if skills_root.is_symlink() or (skills_root.exists() and not skills_root.is_dir()):
+                raise IntegrityError("managed profile skill directory is unsafe")
+            ensure_private_dir(skills_root)
+            for skill_name in _CANONICAL_SKILLS:
+                skill_dir = skills_root / skill_name
+                if skill_dir.is_symlink() or (skill_dir.exists() and not skill_dir.is_dir()):
+                    raise IntegrityError("managed profile canonical skill directory is unsafe")
+                ensure_private_dir(skill_dir)
+                target = skill_dir / "SKILL.md"
+                if target.is_symlink():
+                    raise IntegrityError("managed profile canonical skill must not be a symlink")
+                source = release / "profiles" / role / "skills" / skill_name / "SKILL.md"
+                if source.is_symlink() or not source.is_file():
+                    raise IntegrityError("managed canonical skill resource is missing")
+                try:
+                    source_bytes = read_private_bytes(source)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError(
+                        "managed canonical skill resource is unreadable"
+                    ) from error
+                _atomic_bytes(target, source_bytes)
             _atomic_json(home / "aether-observer.json", self._profile_activation(record, role))
         _fsync_directory(self.store.profile_homes)
 
@@ -2680,13 +2752,15 @@ class LifecycleManager:
             config = home / "config.yaml"
             soul = home / "SOUL.md"
             activation = home / "aether-observer.json"
-            if any(path.is_symlink() for path in (home, config, soul, activation)):
+            skills_root = home / "skills"
+            if any(path.is_symlink() for path in (home, config, soul, activation, skills_root)):
                 raise IntegrityError("managed profile activation contains a symlink")
             if (
                 not home.is_dir()
                 or not config.is_file()
                 or not soul.is_file()
                 or not activation.is_file()
+                or not skills_root.is_dir()
             ):
                 raise IntegrityError("managed profile activation is incomplete")
             try:
@@ -2707,11 +2781,34 @@ class LifecycleManager:
                 raise IntegrityError("managed profile activation is unreadable") from error
             if payload != self._profile_activation(record, role):
                 raise IntegrityError("managed profile activation identity mismatch")
+            skill_paths: list[tuple[Path, Path, Path]] = []
+            for skill_name in _CANONICAL_SKILLS:
+                skill_dir = skills_root / skill_name
+                target = skill_dir / "SKILL.md"
+                source = release / "profiles" / role / "skills" / skill_name / "SKILL.md"
+                if any(path.is_symlink() for path in (skill_dir, target, source)):
+                    raise IntegrityError("managed profile activation contains a symlink")
+                if not skill_dir.is_dir() or not target.is_file() or not source.is_file():
+                    raise IntegrityError("managed profile canonical skill activation is incomplete")
+                try:
+                    target_bytes = read_private_bytes(target)
+                    source_bytes = read_private_bytes(source)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile canonical skill is unreadable") from error
+                if target_bytes != source_bytes:
+                    raise IntegrityError("managed profile canonical skill resource drift")
+                skill_paths.append((skill_dir, target, source))
             if os.name == "posix" and (
                 stat.S_IMODE(home.stat().st_mode) != DIR_MODE
                 or stat.S_IMODE(config.stat().st_mode) != FILE_MODE
                 or stat.S_IMODE(soul.stat().st_mode) != FILE_MODE
                 or stat.S_IMODE(activation.stat().st_mode) != FILE_MODE
+                or stat.S_IMODE(skills_root.stat().st_mode) != DIR_MODE
+                or any(
+                    stat.S_IMODE(skill_dir.stat().st_mode) != DIR_MODE
+                    or stat.S_IMODE(target.stat().st_mode) != FILE_MODE
+                    for skill_dir, target, _source in skill_paths
+                )
             ):
                 raise IntegrityError("managed profile activation permissions mismatch")
 
@@ -2746,6 +2843,33 @@ class LifecycleManager:
                         raise IntegrityError("managed profile resource is unreadable") from error
                     if product_owned:
                         target.unlink()
+            skills_root = home / "skills"
+            if skills_root.exists() or skills_root.is_symlink():
+                if skills_root.is_symlink() or not skills_root.is_dir():
+                    raise IntegrityError("managed profile skill directory is unsafe to deactivate")
+                for skill_name, source in self._skill_sources().items():
+                    skill_dir = skills_root / skill_name
+                    if not skill_dir.exists() and not skill_dir.is_symlink():
+                        continue
+                    if skill_dir.is_symlink() or not skill_dir.is_dir():
+                        raise IntegrityError(
+                            "managed profile canonical skill directory is unsafe to deactivate"
+                        )
+                    target = skill_dir / "SKILL.md"
+                    if (
+                        target.is_file()
+                        and not target.is_symlink()
+                        and source.is_file()
+                        and not source.is_symlink()
+                    ):
+                        try:
+                            product_owned = read_private_bytes(target) == read_private_bytes(source)
+                        except (OSError, ValueError) as error:
+                            raise IntegrityError(
+                                "managed profile canonical skill is unreadable"
+                            ) from error
+                        if product_owned:
+                            target.unlink()
             _fsync_directory(home)
         _fsync_directory(self.store.profile_homes)
 
@@ -3054,15 +3178,22 @@ class LifecycleManager:
             raise IntegrityError("managed profile directory set mismatch")
         for role in _PROFILE_ROLES:
             details = profiles.get(role)
-            if not isinstance(details, dict) or set(details) != {"resources"}:
+            if not isinstance(details, dict) or set(details) != {"resources", "skills"}:
                 raise IntegrityError("managed profile evidence is malformed")
             resources = details.get("resources")
             if not isinstance(resources, dict) or set(resources) != {"config.yaml", "SOUL.md"}:
                 raise IntegrityError("managed profile resource evidence is malformed")
+            skills = details.get("skills")
+            if not isinstance(skills, dict) or set(skills) != set(_CANONICAL_SKILLS):
+                raise IntegrityError("managed profile skill evidence is malformed")
             role_root = profiles_root / role
             if role_root.is_symlink() or not role_root.is_dir():
                 raise IntegrityError("managed profile directory is missing")
-            if {child.name for child in role_root.iterdir()} != {"config.yaml", "SOUL.md"}:
+            if {child.name for child in role_root.iterdir()} != {
+                "config.yaml",
+                "SOUL.md",
+                "skills",
+            }:
                 raise IntegrityError("managed profile contains unknown product bytes")
             if os.name == "posix" and stat.S_IMODE(role_root.stat().st_mode) != DIR_MODE:
                 raise IntegrityError("managed profile directory permissions mismatch")
@@ -3093,6 +3224,47 @@ class LifecycleManager:
                 digest = hashlib.sha256(expected_bytes).hexdigest()
                 if resource.get("sha256") != digest:
                     raise IntegrityError("managed profile resource digest mismatch")
+            skills_root = role_root / "skills"
+            if skills_root.is_symlink() or not skills_root.is_dir():
+                raise IntegrityError("managed profile skill directory is missing")
+            if os.name == "posix" and stat.S_IMODE(skills_root.stat().st_mode) != DIR_MODE:
+                raise IntegrityError("managed profile skill directory permissions mismatch")
+            if {child.name for child in skills_root.iterdir()} != set(_CANONICAL_SKILLS):
+                raise IntegrityError("managed profile skill directory set mismatch")
+            for skill_name, source in self._skill_sources().items():
+                expected_path = f"profiles/{role}/skills/{skill_name}/SKILL.md"
+                resource = skills.get(skill_name)
+                if not isinstance(resource, dict) or set(resource) != {"path", "sha256"}:
+                    raise IntegrityError("managed profile skill evidence is malformed")
+                if resource.get("path") != expected_path:
+                    raise IntegrityError("managed profile skill path mismatch")
+                skill_dir = skills_root / skill_name
+                target = release / expected_path
+                if (
+                    skill_dir.is_symlink()
+                    or not skill_dir.is_dir()
+                    or source.is_symlink()
+                    or not source.is_file()
+                    or target.is_symlink()
+                    or not target.is_file()
+                    or {child.name for child in skill_dir.iterdir()} != {"SKILL.md"}
+                ):
+                    raise IntegrityError("managed profile skill resource is missing")
+                if os.name == "posix" and (
+                    stat.S_IMODE(skill_dir.stat().st_mode) != DIR_MODE
+                    or stat.S_IMODE(target.stat().st_mode) != FILE_MODE
+                ):
+                    raise IntegrityError("managed profile skill permissions mismatch")
+                try:
+                    expected_bytes = read_private_bytes(source)
+                    observed_bytes = read_private_bytes(target)
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile skill is unreadable") from error
+                if observed_bytes != expected_bytes:
+                    raise IntegrityError("managed profile skill resource drift")
+                digest = hashlib.sha256(expected_bytes).hexdigest()
+                if resource.get("sha256") != digest:
+                    raise IntegrityError("managed profile skill digest mismatch")
 
     def validate_release(self, release_id: str) -> ReleaseRecord:
         """Re-prove every activation boundary for an installed release."""

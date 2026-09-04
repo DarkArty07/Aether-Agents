@@ -217,11 +217,21 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
         )
         synthetic_manager_python.chmod(0o700)
     resources = Path(lifecycle.__file__).parent / "resources" / "profiles"
+    skills = Path(lifecycle.__file__).parent / "resources" / "skills"
+    canonical_skills = (
+        "git-github-closeout",
+        "semver-release",
+        "canonical-skill-governance",
+    )
     for role in ("morfeo", "supervisor", "implementer"):
         profile_root = stage / "profiles" / role
         profile_root.mkdir(parents=True, exist_ok=True)
         for name in ("config.yaml", "SOUL.md"):
             (profile_root / name).write_bytes((resources / role / name).read_bytes())
+        for skill_name in canonical_skills:
+            target = profile_root / "skills" / skill_name / "SKILL.md"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((skills / skill_name / "SKILL.md").read_bytes())
     (stage / "release.json").write_text(
         json.dumps(
             {
@@ -316,6 +326,12 @@ def _aether_identity(version: str) -> dict[str, object]:
 def _profile_bundle_sha256() -> str:
     profiles: dict[str, dict[str, dict[str, dict[str, str]]]] = {}
     resources_root = Path(lifecycle.__file__).parent / "resources" / "profiles"
+    skills_root = Path(lifecycle.__file__).parent / "resources" / "skills"
+    canonical_skills = (
+        "git-github-closeout",
+        "semver-release",
+        "canonical-skill-governance",
+    )
     for role in ("morfeo", "supervisor", "implementer"):
         resources: dict[str, dict[str, str]] = {}
         for name in ("config.yaml", "SOUL.md"):
@@ -324,7 +340,14 @@ def _profile_bundle_sha256() -> str:
                 "path": f"profiles/{role}/{name}",
                 "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             }
-        profiles[role] = {"resources": resources}
+        skills: dict[str, dict[str, str]] = {}
+        for skill_name in canonical_skills:
+            source = skills_root / skill_name / "SKILL.md"
+            skills[skill_name] = {
+                "path": f"profiles/{role}/skills/{skill_name}/SKILL.md",
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            }
+        profiles[role] = {"resources": resources, "skills": skills}
     manifest = {
         "schema_version": 2,
         "observer_entry_point": HERMES_BASELINE.observer_entry_point,
@@ -760,6 +783,66 @@ def test_activation_materializes_three_explicit_profile_homes_under_store(
             },
         }
         assert str(home) not in os.environ.get("HERMES_HOME", "")
+
+
+def test_profile_bundle_contains_only_the_explicit_canonical_skill_allowlist(
+    tmp_path: Path,
+) -> None:
+    manager = LifecycleManager(
+        store=ReleaseStore(tmp_path / "state" / "aether"),
+        python_executable=Path(sys.executable),
+    )
+    stage = tmp_path / "stage"
+    stage.mkdir()
+
+    manager._materialize_profile_bundle(stage)
+
+    manifest = json.loads((stage / "profile-bundle.json").read_text(encoding="utf-8"))
+    expected_skills = {
+        "git-github-closeout",
+        "semver-release",
+        "canonical-skill-governance",
+    }
+    assert set(manifest["profiles"]["morfeo"]["skills"]) == expected_skills
+    for role in ("morfeo", "supervisor", "implementer"):
+        skills_root = stage / "profiles" / role / "skills"
+        assert {path.parent.name for path in skills_root.glob("*/SKILL.md")} == expected_skills
+        assert not any(path.name == "private" for path in skills_root.rglob("*"))
+
+
+def test_activation_materializes_canonical_skills_in_each_native_profile_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    prepared = _prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    record = store.register(prepared)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    private_skill = store.profile_home("morfeo") / "skills" / "private-local" / "SKILL.md"
+    private_skill.parent.mkdir(parents=True, exist_ok=True)
+    private_skill.write_text("private profile skill\n", encoding="utf-8")
+
+    manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+
+    source_root = Path(lifecycle.__file__).parent / "resources" / "skills"
+    for role in ("morfeo", "supervisor", "implementer"):
+        for skill_name in (
+            "git-github-closeout",
+            "semver-release",
+            "canonical-skill-governance",
+        ):
+            target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
+            assert target.read_bytes() == (source_root / skill_name / "SKILL.md").read_bytes()
+    assert private_skill.read_text(encoding="utf-8") == "private profile skill\n"
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX no-follow profile authority")

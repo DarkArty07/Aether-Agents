@@ -291,17 +291,24 @@ def _write_marker(marker_path: Path, marker: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-_TRACKED_PATHS = (".aether/project.toml", ".aether/objective-contracts/")
+_TRACKED_PATHS = (
+    ".aether/project.toml",
+    ".aether/objective-contracts/",
+    ".aether/skills/",
+)
 _IGNORED_PATHS = (".aether/drafts/",)
 
 _IGNORE_BLOCK = """
-# Aether project identity and finalized Objective Contracts (managed by `aether init`).
+# Aether project identity, finalized Objective Contracts, and
+# canonical skills (managed by `aether init`).
 # Local drafts and every other .aether/ entry stay ignored.
 !.aether/
 /.aether/*
 !/.aether/project.toml
 !/.aether/objective-contracts/
 !/.aether/objective-contracts/**
+!/.aether/skills/
+!/.aether/skills/**
 """
 
 
