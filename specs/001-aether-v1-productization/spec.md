@@ -8,6 +8,7 @@
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
 **Written**: 2026-08-20
+**Amended**: 2026-09-04 — autonomous stewardship, canonical skills, and terminal closeout reconciled
 **Implementation baseline inspected**: `47e26c5884d906aeb9790937910ec4a7bb67c3ed`
 **Depends on**: `DESIGN.md`, R0-R13, the current public Aether repository, Hermes Agent upstream, the transitional public `DarkArty07/hermes-agent` fork only while indispensable patches remain, PyPI, uv, and GitHub Actions
 **May affect**: R4, R8, R9, R10, R11, R12, R13, README, repository policy, release automation, and the live Aether installation only after a separately authorized cutover
@@ -22,17 +23,25 @@ The public product is a packaged Python CLI named `aether-agents`, exposing the 
 
 ## 2. Authority and execution boundary
 
-Christopher's current request authorizes this contract and the reversible local build, documentation, and verification work needed to prepare Aether 1.0. It does not silently authorize a protected external effect.
+Christopher's current request authorizes this contract and the reversible local build,
+documentation, and verification work needed to prepare Aether 1.0. For an owner-authorized
+objective in an already provisioned project, the routine GitHub lifecycle named by R8
+FR-824 is also available to its responsible role without a new per-action or per-contract
+runtime availability gate. This does not turn a build candidate into a release or imply
+that every merge produces one.
 
-The following remain separate gates:
+The following remain separate protected gates: repository creation or settings/branch-
+protection mutation; force, lease, mirror, history or tag rewrite; hook/check/protection
+bypass; destructive repository or Release mutation; Pages, Discussions or public
+announcement changes outside the routine release path; package/container or TestPyPI/
+PyPI publication and trusted-publisher configuration; credential creation, acquisition or
+widening, cross-profile authentication, or live provider spend; installation cutover,
+migration, service mutation, or deployment of the candidate; and deletion of user state,
+repositories, releases, packages, or unrelated remote resources.
 
-- pushing branches or tags, merging or publishing pull requests, changing GitHub repository settings, enabling Discussions or Pages, publishing fork or Aether releases, and publishing to TestPyPI or PyPI;
-- creating or changing PyPI trusted-publisher configuration;
-- using credentials, sharing authentication across profiles, or spending against a live model provider;
-- installing the candidate into, migrating, stopping, restarting, or replacing Christopher's current live Aether installation;
-- deleting user state, repositories, releases, packages, or remote resources.
-
-Supervisor MUST stop the affected lane at the relevant gate rather than interpreting the build objective as publication or activation authority.
+Supervisor MUST stop the affected lane at a separately protected gate. It MUST NOT add a
+new availability gate to the routine FR-824 path, and it MUST NOT interpret routine
+authority as permission for the protected effects above.
 
 ## 3. Scope
 
@@ -267,6 +276,68 @@ A release operator installs the RC from PyPI and runs a preregistered realistic 
 - **A1-FR-092**: Before A1 feature expansion or RC qualification resumes, the disposable E2E laboratory MUST exercise direct work, a real three-role pipeline, positive and negative edge-policy controls, bounded recovery, brownfield preservation, parallel work and review/rework using real Hermes processes, real boards/worktrees/Git and deterministic project acceptance. Model/provider execution remains subject to the explicit credential/spend gate in A1-FR-086.
 - **A1-FR-093**: PD-74's reliability gate MUST be satisfied before the stabilization freeze lifts: at least 19 passes in the latest 20 representative E2E runs, the latest 10 consecutive runs passing, zero protected-edge violations and zero manual recovery caused by the guard. Each infrastructure change MUST pass the small canary before another infrastructure change is layered on top.
 
+### 5.11 Autonomous project stewardship and canonical procedures
+
+An authorized objective uses one terminal closure contract rather than separate gates for
+each routine GitHub command. For pipeline work, Supervisor owns review, integration,
+aggregate release classification, normal branch push, pull request, required checks,
+bounded objective-caused CI correction, green merge without bypass, applicable
+issue/milestone reconciliation, remote merged-branch cleanup, local objective residue
+cleanup after durable evidence, and the final evidence report. Implementer owns bounded
+local code, documentation, tests, preparation, and commits and never publishes. For
+bounded direct work, Morfeo owns the applicable routine closeout within current or
+standing project authority. Local integration alone is non-terminal.
+
+The ordered GitHub-backed sequence is acceptance verification →
+`release_impact`/`release_action`/`release_channel` → normal branch push → pull request →
+required checks → bounded objective-caused CI correction → green merge without bypass →
+applicable issue/milestone reconciliation → remote merged-branch cleanup → local
+objective branch/worktree cleanup after durable evidence → final report. Every omitted
+step MUST carry a concrete non-applicability reason in terminal evidence.
+
+- **A1-FR-094**: Every objective MUST record exactly one value for each independent
+  conclusion: `release_impact = none|patch|minor|major`,
+  `release_action = defer|prepare|publish`, and
+  `release_channel = none|prerelease|stable`. Prerelease is never an impact class, and
+  no merge implies a release.
+- **A1-FR-095**: Aether MUST retain exactly three roles. Supervisor owns pipeline review,
+  integration, aggregate release classification, normal GitHub PR/check/merge closeout,
+  applicable issue/milestone reconciliation, and terminal evidence; Implementer owns
+  bounded local unit work and commits but never publication; Morfeo owns authorized
+  routine closeout for bounded direct work.
+- **A1-FR-096**: At authorized intake, Morfeo MUST create or reconcile only one
+  non-duplicate issue when project policy uses Issues and no canonical issue represents
+  the objective; otherwise no issue is created. At close, the responsible role MUST
+  reconcile applicable issue and milestone state or record why none applies; issue
+  creation is not ceremonial.
+- **A1-FR-097**: Aether Canonical Skills are public, versioned, package-owned procedures
+  at `src/aether_agents/resources/skills/<skill-name>/SKILL.md`; Project Canonical Skills
+  are tracked, versioned procedures at `.aether/skills/<skill-name>/SKILL.md`; Learned
+  Profile Skills remain private and never auto-promote. All three classes are procedure,
+  never authority. Promotion requires sanitization, generalization, verification,
+  independent review, commit, and pull request.
+- **A1-FR-098**: Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating rules. Among compatible procedures only, Project Canonical Skills outrank Aether Canonical Skills, which outrank Learned Profile Skills. No skill can grant authority, replace intent or acceptance, or require a duplicate registry, loader, queue, role, or state machine.
+- **A1-FR-099**: Project skills MUST be discoverable by any file-capable agent through
+  root `AGENTS.md`, direct project-relative reads, card pinning, or an existing native
+  skill mechanism. Agents load only task-relevant procedures rather than a hard-coded
+  project skill list.
+- **A1-FR-100**: Every project MUST have accurate root `AGENTS.md` guidance. Morfeo
+  establishes missing guidance after repository inspection and constitution confirmation;
+  the role whose authorized change invalidates build, test, run, version, release,
+  deploy, generated-file, or skill guidance updates it in the same change or records a
+  concrete non-applicability reason; Supervisor performs the final coherence gate.
+  Brownfield instructions are preserved and reconciled, and `aether init` MUST NOT
+  invent project-specific guidance.
+- **A1-FR-101**: Branches and worktrees MUST be preserved through review, integration,
+  and publication. After durable PR, merge, board, and final-verification evidence,
+  objective-owned merged remote branches and local branch/worktree residue MUST be
+  removed; active, unmerged, blocked, review-active, concurrent, unrelated, and
+  pre-existing residue MUST remain. Cleanup MUST NOT rewrite history.
+- **A1-FR-102**: The explicit owner and qualification gate for Aether `v1.0.0` remains
+  mandatory even when routine FR-824 GitHub closeout is authorized. A routine merge,
+  `release_action = publish`, or `release_channel = stable` does not waive A1-FR-089,
+  package-publication, deployment, credential, or spend gates.
+
 ## 6. Non-functional requirements
 
 - **A1-NFR-001 — Recoverability**: Every local mutation made by setup, init, update, rollback, service management, or uninstall MUST either be atomic or have tested deterministic recovery. When Aether/Hermes itself breaks the requested route, PD-72 recovery restores the last known-good E2E by safe retry/resume, rollback, or at most two focused repairs before any separate hardening work begins.
@@ -304,6 +375,9 @@ Implementation MAY add private internal structures, but it MUST NOT change these
 - **A1-SC-013**: Representative local/reversible work for all three roles executes without policy denial—including local Git, local contract/project edits, tests/builds, unknown ordinary tools and bounded Supervisor integration repair—while secrets/credentials, credential acquisition/widening, unauthorized remote mutation and clearly destructive irreversible controls remain denied.
 - **A1-SC-014**: The packaged contract observer produces one schema-valid deterministic summary spanning the owner message, Morfeo creation, Supervisor handoff, explicitly bound implementation/review graph, acceptance verification, and terminal resolution; its duration partition, participant actions, exact tool totals, task/run/review/acceptance state, flow classifications, invariant transitions, separated lifecycle state, and coverage reconcile with a controlled real contract trace. Collection remains local, metadata-only, non-blocking and is not permitted to change the functional E2E outcome during PD-74 stabilization.
 - **A1-SC-015**: The operational reliability gate reaches at least 19/20 representative E2E passes with the latest 10 consecutive, zero guard-caused manual recovery and zero protected-edge violations before feature expansion or release qualification resumes.
+- **A1-SC-016**: An authorized GitHub-backed objective reaches one attributable terminal path, with acceptance verification, all three independent release conclusions, applicable issue/milestone disposition, durable evidence, and no false completion at local integration.
+- **A1-SC-017**: Aether Canonical, Project Canonical, and Learned Profile Skills remain distinct in location, visibility, mutability, precedence, and promotion; none grants authority or introduces a second loader, registry, queue, role, or state machine.
+- **A1-SC-018**: Every project has accurate root `AGENTS.md` guidance with Morfeo establishment, induced updates or concrete non-applicability reasons, and Supervisor closure verification, while brownfield guidance and unrelated residues remain intact.
 
 ## 9. Known assumptions and limitations
 

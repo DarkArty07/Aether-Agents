@@ -6,6 +6,7 @@
 **Amended**: 2026-08-18 — direct PD-44 workspace, Git, and publication rules
 **Reopened**: 2026-08-26 — retired PD-67 micro-authorization and allowed bounded Supervisor integration repair
 **Amended**: 2026-09-01 — owner preauthorized the routine GitHub lifecycle and rejected a mandatory per-publication availability gate
+**Amended**: 2026-09-04 — terminal closeout, conditional issue handling, guidance stewardship, and residue cleanup reconciled
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Hermes
 **Future role owner**: Supervisor
@@ -28,7 +29,7 @@ The runtime provides three workspace kinds. Aether uses each for exactly one pur
 
 | Aether work | Workspace kind | Lifetime |
 |---|---|---|
-| Implementing a unit | A git worktree per card | Preserved |
+| Implementing a unit | A git worktree per card | Preserved through review, integration, and publication; cleaned after durable terminal evidence |
 | Morfeo direct stewardship | The existing managed project workspace | Preserved; no false implementation card |
 | Morfeo canonical authoring during pipeline preparation/recovery | The managed project checkout or an explicitly selected isolated worktree, following project Git conventions | Preserved until review/integration or rollback |
 | Working on an existing project in place | An absolute directory path | Preserved |
@@ -71,7 +72,9 @@ The resolution is a writer rule, not a new mechanism:
 - **FR-809b**: A project-linked task MUST inherit the board's project unless an explicit, valid project binding overrides it; this uses the native board-project contract verified by `tests/hermes_cli/test_kanban_board_project.py:40-87`.
 - **FR-810**: A worker SHOULD remain on its assigned branch/worktree for implementation so isolation and attribution stay simple. Local branch inspection, commits and reversible Git operations are not pre-tool protected effects; crossing unit boundaries without authorization is a review/integration defect.
 - **FR-811**: Force-pushing a shared or remote branch remains prohibited as a protected external/history effect. A correction is a new commit or an explicit local revert.
-- **FR-812**: A branch MUST be preserved after its card completes. It is the evidence trail for that unit and the only way a merged unit can be inspected in isolation later.
+- **FR-812**: An implementation branch and its worktree MUST remain available through review, integration, and publication so the unit and its evidence can be inspected while the pipeline is active. After durable PR, merge, board, and final-verification evidence exists, objective-owned merged residue MUST be cleaned; Git history, the PR, and board evidence preserve inspectability.
+- **FR-812a**: Remote merged-branch cleanup and local objective-owned branch/worktree cleanup MUST occur only after the applicable terminal evidence is durable. Unmerged, blocked, review-active, concurrent, unrelated, and pre-existing branches or worktrees MUST be preserved.
+- **FR-812b**: Cleanup MUST use ordinary non-destructive operations and MUST NOT force-push, rewrite history, delete unrelated refs, or remove evidence needed by an unfinished objective.
 
 ## 5. Integration
 
@@ -102,16 +105,64 @@ Reversibility replaces the confirmation gate the owner removed. It carries the w
 
 Aether maintains the project end to end and the normal path contains no confirmation gate (PD-15). That authority is real but bounded.
 
-- **FR-824**: The routine GitHub lifecycle for an already provisioned project repository — normal branch push, pull-request creation, green-check merge without administrative bypass, merged-branch cleanup, an exact SemVer tag, non-destructive GitHub Release creation/edit/upload, and issue reconciliation — is owner-preauthorized without a per-action or per-contract runtime gate. Pipeline publication MUST be performed by the supervising role after independent review, never assigned to Implementer merely because the common hook permits the command. For direct PD-44 work, Morfeo MAY publish only when the current instruction authorizes that effect. Force/lease/mirror/history or tag rewrite, hook/check/branch-protection bypass, remote ref/tag deletion outside merged-branch cleanup, destructive Release/repository mutation, package/container publication, deployment, migration, credential/provider/spend changes, and arbitrary mutating API calls remain separate protected effects.
+- **FR-824**: The routine GitHub lifecycle for an already provisioned project repository — normal branch push, pull-request creation, green-check merge without administrative bypass, merged-branch cleanup, an exact SemVer tag, non-destructive GitHub Release creation/edit/upload, and issue reconciliation — is owner-preauthorized without a per-action or per-contract runtime gate. Pipeline publication MUST be performed by the supervising role after independent review, never assigned to Implementer merely because the common hook permits the command. For direct PD-44 work, Morfeo MAY publish only when the current instruction or standing project authority authorizes that effect. Force/lease/mirror/history or tag rewrite, hook/check/branch-protection bypass, remote ref/tag deletion outside merged-branch cleanup, destructive Release/repository mutation, package/container publication, deployment, migration, credential/provider/spend changes, and arbitrary mutating API calls remain separate protected effects.
 - **FR-825**: Publication MUST stay inside the authority the contract conferred (R2-FR-205). Absence of a stated limit is not permission for an irreversible effect; FR-823 governs.
 - **FR-826**: When a pull request already exists for a unit, the runtime refuses to respawn that unit. Aether MUST treat that refusal as correct behaviour and MUST NOT defeat it by creating a duplicate card for the same unit.
 - **FR-827**: Credentials MUST be the ones the owner already provisioned on that profile. No role acquires, creates, or widens access (R1-FR-114).
+
+### 7.1 One terminal closure contract
+
+The routine GitHub lifecycle in FR-824 is one closeout path, not a collection of
+independently gated pushes. For a GitHub-backed pipeline objective, Supervisor owns
+review, integration, aggregate release classification, normal branch push, pull request,
+required-check follow-up, green merge without bypass, applicable issue/milestone
+reconciliation, remote merged-branch cleanup, local residue cleanup after durable
+evidence, and the final evidence report. Supervisor may diagnose and route a bounded
+objective-caused CI correction; an implementation-sized correction returns through the
+appropriate bounded unit. For a bounded direct objective, Morfeo owns the same applicable
+routine closeout within current or standing project authority. Implementer prepares only
+its assigned local work and commits and never publishes pipeline work.
+
+The ordered sequence is acceptance verification → `release_impact`/`release_action`/
+`release_channel` → normal branch push → pull request → required checks → bounded
+objective-caused CI correction → green merge without bypass → applicable issue/milestone
+reconciliation → remote merged-branch cleanup → local objective branch/worktree residue
+cleanup after durable evidence → final report. Local integration alone is non-terminal.
+Every omitted step MUST carry a concrete non-applicability reason in the terminal
+evidence.
+
+- **FR-827a**: Every objective MUST record exactly one value for each independent
+  conclusion: `release_impact = none|patch|minor|major`,
+  `release_action = defer|prepare|publish`, and
+  `release_channel = none|prerelease|stable`. Prerelease is a channel, never an impact
+  class, and no merge implies a release.
+- **FR-827b**: At authorized intake, Morfeo MUST create or reconcile only one
+  non-duplicate issue when project policy uses Issues and no canonical issue represents
+  the objective; otherwise no issue is created. At close, the responsible role MUST
+  reconcile applicable issue and milestone state or record why none applies; ceremonial
+  duplicates are prohibited.
+- **FR-827c**: The routine FR-824 lifecycle for an already provisioned repository is
+  owner-preauthorized without a per-action or per-contract runtime availability gate.
+  Protected variants—history or tag rewrite, bypass, destructive repository or Release
+  mutation, package publication, deployment, credential changes, and arbitrary mutating
+  APIs—remain separately protected.
+- **FR-827d**: A pipeline card MUST NOT be reported complete at local integration. Terminal
+  success requires the applicable ordered closeout, durable evidence, and cleanup audit.
 
 ## 8. Brownfield
 
 - **FR-828**: For an existing project, the brownfield boundary MUST be stated in the contract in advance: conventions to follow, areas not to touch, tests that must keep passing (R2-FR-208).
 - **FR-829**: Established conventions in the existing project MUST outrank both the owner's general preference and any agent's preference (R3-FR-308).
 - **FR-830**: A change outside the stated boundary MUST be surfaced as a question in the end-of-work report, and MUST NOT be silently kept or silently reverted (PD-16).
+- **FR-831**: Every project MUST have accurate root `AGENTS.md` guidance before closure.
+  Morfeo establishes missing guidance after repository inspection and constitution
+  confirmation; the role whose authorized change invalidates guidance updates it in the
+  same change or records a concrete non-applicability reason; Supervisor performs the
+  final coherence gate. Existing brownfield instructions MUST be preserved and
+  reconciled.
+- **FR-832**: Root `AGENTS.md` MUST point file-capable agents to the project canonical
+  skill convention at `.aether/skills/<skill-name>/SKILL.md` without becoming a second
+  authority or a hard-coded skill registry.
 
 ## 9. Evidence
 
@@ -150,6 +201,12 @@ Not inspected: the terminal backends. Aether's design assumes local execution; a
 - **SC-808**: A direct Morfeo change is inspectable and practically reversible without a false worktree, implementation card, or integration card, and no publication occurs merely because terminal access exists.
 - **SC-809**: Morfeo contract authoring remains attributable, reversible and reviewable without requiring board/run/workspace/branch micro-authorization inside the pre-tool hook.
 - **SC-810**: Project initialization reuses native Hermes Project/board/worktree behavior and does not create a parallel coordination store.
+- **SC-811**: A GitHub-backed pipeline objective is not terminal at local integration and
+  has one attributable Supervisor-owned closeout with explicit release conclusions,
+  applicable issue/milestone disposition, durable evidence, and safe cleanup.
+- **SC-812**: Active, unmerged, blocked, review-active, concurrent, unrelated, and
+  pre-existing work remains intact, while only objective-owned merged residue is removed
+  after durable evidence without history rewrite.
 
 ## 12. Done When
 
