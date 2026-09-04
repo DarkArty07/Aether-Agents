@@ -294,12 +294,44 @@ No open decision in this table is authorized merely because a framework already 
 
 ## 13. Canonical artifact relationships
 
-- `DESIGN.md` owns the current conceptual product design and accepted high-level product decisions.
-- `ROADMAP.md` owns only stage boundaries, dependencies, documentary status, and links.
-- `specs/<stage>/spec.md` owns current requirements and decisions for one stage.
-- `specs/<stage>/research.md` owns evidence, rationale, alternatives, and change impact.
-- Plans, contracts, tasks, prompts, code, and runtime state are derived artifacts or implementation evidence.
-- Agent prompts, skills, memories, and conversations are operational context, not competing product truth.
+Aether assigns ownership by semantic question, not by a single linear document hierarchy. Each normative question has one owner below; another artifact may quote, link, or derive from it, but may not become a competing source of truth. The [authority map](docs/authority.md) explains these boundaries for readers without creating another normative owner.
+
+| Semantic information class | Owner or status | Boundary and placement rule |
+| --- | --- | --- |
+| Current owner instruction and immediate direction | Current explicit owner instruction | Governs immediately, subject to safety and protected-effect limits; capture it in the artifact that owns the question before closure. Objective-specific delegated authority is owned durably by the finalized Objective Contract. It is not durable project history until recorded. |
+| Project constitution and governance principles | Accepted `specs/r0-design-governance/spec.md` | Owns project-wide principles. A future `.specify/memory/constitution.md` is a derived materialization, not a second authority; it does not own stage or objective requirements. |
+| Framework-wide conceptual product design and accepted high-level decisions | `DESIGN.md` | Owns the product concept and fixed framework decisions; it does not own named-stage requirements, execution plans, current status, or runtime state. |
+| Framework role definitions and authority boundaries | `DESIGN.md` | Stage specifications may state only stage-scoped role requirements; versioned role prompts cannot redefine the framework roles or their authority. |
+| Named-stage scope, requirements (including stage-scoped role requirements), acceptance, and decisions | `specs/<stage>/spec.md` | Owns the current normative content of that stage; it does not own research history or implementation facts. |
+| Stage rationale, decision evidence, alternatives, and change impact | `specs/<stage>/research.md` | Owns the stage's rationale and history as evidence; it never replaces current normative intent in `spec.md`. |
+| One objective's executable outcome, scope, delegated authority, deliverables, acceptance, testing, and stop conditions | Finalized `.aether/objective-contracts/<contract-id>/v<N>.md` | Owns one objective's executable binding while remaining constrained by constitution, conceptual design, and applicable stage specifications. Drafts and handoff envelopes do not widen it. |
+| Execution approach and interface handoffs | Derived: `plan.md` and stage `contracts/` | Constrained by accepted specifications and applicable Objective Contracts; cannot widen product intent or delegated authority. |
+| Delegated work-unit scope and ordering | Derived: task body and `tasks.md` | A task body describes one bounded delegated unit; these artifacts cannot redefine requirements, architecture, or authority. Board run state belongs to the execution record below. |
+| Delegated execution coordination and status | Native board rows, events, comments, and runs | This is the durable pipeline record; it does not own product intent, acceptance meaning, or implementation status outside the execution record. |
+| Worktree and workspace state | Local isolation (not an authority) | A worktree is mutable write isolation, not an intent or status store; source overlap is reconciled by the integration process. |
+| Executable role-local prompt wording | Versioned `SOUL` resources | Owns prompt wording for a role only; it is derived operational context and cannot redefine role responsibility, authority, or project decisions. |
+| Private user context and durable preferences/recall | Private `USER`/`MEMORY` | Local/private only; it never owns project principles or decisions and its contents are never placed in public artifacts. |
+| Reusable procedure | Versioned skills | Owns reusable method only; it does not own project intent, execution status, or role authority. |
+| Checkout and repository operating instructions | `AGENTS.md` | Owns repository-local operating guidance; it does not duplicate or override product and stage truth. |
+| Current-build behavior and use guidance | `docs/` | Describes behavior available in the current build and how to use or diagnose it; it does not own conceptual design, normative requirements, or live runtime state. |
+| Current implementation status and traceability | `docs/capabilities.toml` | Sole current implementation-status registry. Its generated capability reference is derived and neither artifact is design or behavioral authority. |
+| Future and planned work, stage planning, and issue tracking | `ROADMAP.md` and issue records | Owns future/planned work and issue history; it does not serve as the current capability-status registry or current product manual. |
+| Release history and deltas | `CHANGELOG.md` and release records | Owns what changed in a release; it does not replace the current manual or current implementation-status registry. |
+| Auditable change and verification history | Evidentiary: Git, pull requests, tests, and evidence artifacts | These records support claims about changes and verification; they do not redefine intent. |
+| Portable project identity | `.aether/project.toml` | Owns tracked, portable project identity only; it contains no machine-specific runtime mapping or credential material. |
+| Implemented behavior and reproducible runtime facts | Evidentiary: source and direct execution | These reveal what is implemented or observed and may expose drift, but cannot redefine normative intent. |
+| Project mappings, profile homes, XDG state, configured services/providers, sessions, and private effective runtime observations | Local/private environment and runtime state | Remains outside public artifacts. Public documentation may describe the class and its boundary, never its contents, identifiers, credentials, bindings, machine paths, or live-runtime claims. |
+| Reader-facing placement and conflict explanation | Derived: `docs/authority.md` | Explains this section for readers and must not compete with the owners above. `docs/index.md` is navigation only and owns no semantic project truth. |
+
+Conflict handling follows the semantic owner rather than file order or recency alone:
+
+1. Apply the current explicit owner instruction immediately, subject to safety and protected-effect limits.
+2. Identify the semantic question and the one artifact that owns it; update that owner first and preserve its rationale or evidence.
+3. Reconcile only dependent derived artifacts, including plans, contracts, tasks, prompts, documentation, and implementation outputs; preserve Git, test, evidence, and release history.
+4. Do not resolve a disagreement by promoting a task, worktree, prompt, source fact, runtime observation, or framework-provided mechanism into authority.
+5. If two accepted normative owners are irreconcilable, or resolution would define mission, capabilities, autonomy, or use cases, stop for the owner/Morfeo decision rather than guessing.
+
+This taxonomy defines no mission, product capability, autonomy envelope, use case, role behavior, or current capability status; it only identifies where such questions would be owned or recorded.
 
 ## 14. Reference sources
 
