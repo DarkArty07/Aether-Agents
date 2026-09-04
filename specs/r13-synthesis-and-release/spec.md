@@ -7,6 +7,7 @@
 **Amended**: 2026-08-20 — EC1 Phase 6 closed by owner instruction
 **Amended**: 2026-08-21 — private-local implementation entry superseded by PD-48–PD-68, A1, and the 002 contract-observation prerequisite
 **Reopened**: 2026-08-26 — reliability/E2E gate now precedes feature expansion and release qualification
+**Amended**: 2026-09-04 — autonomous stewardship, canonical procedures, and terminal closeout reconciled
 **Decision authority**: Christopher
 **Contract owner**: Morfeo
 **Execution owner**: Supervisor
@@ -48,6 +49,8 @@ The earlier EC1/private-profile build and its closed Phase 6 are historical evid
 - **FR-1310f**: Route choice evaluates the whole owner objective; substantial work cannot be fragmented into small direct mutations to evade the pipeline.
 - **FR-1310g**: Morfeo may inspect to discover scope, but stops expanding direct mutation and finalizes the canonical contract when real scope becomes feature-scale, architectural, multi-responsibility, or materially uncertain.
 - **FR-1310h**: Use the process that fits the problem, not the maximum process available; current instruction, scope, credentials, owner decisions, protected effects, and out-of-scope reporting remain binding.
+- **FR-1310i**: Every project MUST have accurate root `AGENTS.md` guidance. Morfeo establishes missing guidance after repository inspection and constitution confirmation; existing brownfield guidance is preserved and reconciled.
+- **FR-1310j**: At authorized objective intake, Morfeo MUST create or reconcile only one non-duplicate issue when project policy uses Issues and no canonical issue represents the objective; otherwise no issue is created. Morfeo owns the applicable routine GitHub closeout for a bounded direct objective and MUST record concrete non-applicability reasons for omitted steps.
 
 ### 2.2 Supervisor
 
@@ -60,6 +63,8 @@ The earlier EC1/private-profile build and its closed Phase 6 are historical evid
 - **FR-1317**: Independent review is performed by a role/run that did not author the candidate; rework returns through review, not a fake blocker.
 - **FR-1318**: Integration follows dependencies, preserves one revertible unit per commit, and never rewrites shared history.
 - **FR-1319**: Supervisor cannot grant authority it did not receive.
+- **FR-1319a**: For pipeline work, Supervisor owns review, integration, aggregate `release_impact`/`release_action`/`release_channel` classification, normal branch push, pull request, required checks, bounded objective-caused CI correction, green merge without bypass, applicable issue/milestone reconciliation, terminal cleanup, and final evidence. Implementer owns bounded local unit work and commits but never publication.
+- **FR-1319b**: Supervisor performs the final root-`AGENTS.md` coherence gate and MUST verify that the role whose authorized change invalidated guidance updated it in the same change or recorded a concrete non-applicability reason.
 
 ### 2.3 Implementer
 
@@ -71,12 +76,43 @@ The earlier EC1/private-profile build and its closed Phase 6 are historical evid
 - **FR-1325**: Completion evidence says what changed, what was actually verified, what would unblock/retry failure, and what risk remains.
 - **FR-1326**: Collision hotspots are flagged rather than silently compounded.
 - **FR-1327**: Unfinished work is blocked/escalated; no role reports an outcome it did not achieve.
+- **FR-1327a**: Implementer MUST report compatibility/release impact relevant to its bounded unit, any induced `AGENTS.md` or canonical-skill update, and the evidence needed by Supervisor. It MUST NOT publish or claim pipeline closure.
 
 ### 2.4 Common prompt/resource rules
 
 - **FR-1328**: Product prompts MUST NOT duplicate the lifecycle/orchestration block Hermes already injects into board workers.
 - **FR-1329**: Prompts and public profile resources MUST NOT contain private model/provider/router identifiers, credentials, owner-specific paths, or machine-specific absolute paths.
 - **FR-1330**: A prompt is reinforcement, never the only control for an R10 protected effect.
+
+### 2.5 One terminal closure contract
+
+R13 materializes the single stewardship contract in `DESIGN.md` §10.1; it does not add a
+second lifecycle framework. For a GitHub-backed pipeline objective, the ordered terminal
+path is acceptance verification → `release_impact`/`release_action`/`release_channel` →
+normal branch push → pull request → required checks → bounded objective-caused CI
+correction → green merge without bypass → applicable issue/milestone reconciliation →
+remote merged-branch cleanup → local objective branch/worktree cleanup after durable
+evidence → final evidence report. Local integration alone is non-terminal. Every omitted
+step MUST have a concrete non-applicability reason in the final evidence.
+
+- **FR-1330a**: Every objective MUST record exactly one value for each independent
+  conclusion: `release_impact = none|patch|minor|major`,
+  `release_action = defer|prepare|publish`, and
+  `release_channel = none|prerelease|stable`. Prerelease is a publication channel, not
+  an impact class, and no merge implies a release.
+- **FR-1330b**: Pipeline publication and terminal evidence belong to Supervisor after
+  independent review; direct routine closeout belongs to Morfeo only within current or
+  standing project authority. Implementer never publishes.
+- **FR-1330c**: Branches and worktrees remain available through review, integration, and
+  publication. After durable merge and board evidence, only objective-owned merged
+  residue is removed; active, unmerged, blocked, review-active, concurrent, unrelated,
+  and pre-existing residue remains, with no force or history rewrite.
+- **FR-1330d**: Canonical procedures are subordinate to authority. Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating rules. Aether Canonical Skills live at `src/aether_agents/resources/skills/<skill-name>/SKILL.md`, Project Canonical Skills at `.aether/skills/<skill-name>/SKILL.md`, and Learned Profile Skills remain private and never auto-promote. Among compatible procedures, project canonical outranks Aether canonical, which outranks learned; none can grant authority or replace intent or acceptance. No generic loader or registry is added.
+- **FR-1330e**: The role whose authorized change invalidates build, test, run, version,
+  release, deploy, generated-file, or skill guidance updates root `AGENTS.md` in the same
+  change or records a concrete non-applicability reason. Project skills are discovered by
+  root guidance, direct project-relative reads, card pinning, or an existing native
+  mechanism rather than a hard-coded list.
 
 ## 3. Public product boundary
 
@@ -138,16 +174,20 @@ Supervisor receives this specification, A1's accepted spec/plan/research/contrac
 
 ## 7. External gates and non-authority
 
-Canonical reconciliation and local build/verification do not authorize any of these effects:
+Canonical reconciliation and local build/verification do not by themselves grant an
+external effect. In an already provisioned project, however, an owner-authorized
+objective may use the routine FR-824 GitHub lifecycle through its responsible role
+without a new per-action or per-contract availability gate. The protected variants are
+still separate: public downstream repository creation, repository settings or branch
+protection mutation, history/tag rewrite, bypass, arbitrary mutating APIs, package or
+container publication, deployment/cutover, credential acquisition/widening, paid model
+use, destructive purge, unrelated service/process mutation, and Aether's stable
+`v1.0.0` publication gate.
 
-- public downstream repository/tag/release assets;
-- push, pull request, stable tag, GitHub Release, Pages, Discussions/private reporting, repository settings, or public announcement;
-- PyPI trusted-publisher configuration or package publication;
-- credential creation/acquisition/widening, paid model use, or live RC run;
-- installation cutover of an existing private Aether/Hermes runtime;
-- destructive purge or unrelated service/process mutation.
-
-Each external/destructive effect requires the exact gate named by the A1 contract. A genuine protected-edge denial is authoritative and MUST NOT be routed around. An unexpected denial of ordinary local/reversible work is instead a PD-72 product regression: recover the last green canary, do not disguise the false positive as user authority.
+Each protected effect requires the exact gate named by the A1 contract. A genuine
+protected-edge denial is authoritative and MUST NOT be routed around. An unexpected
+denial of ordinary local/reversible work is instead a PD-72 product regression: recover
+the last green canary, do not disguise the false positive as user authority.
 
 ## 8. Success criteria
 
@@ -161,6 +201,9 @@ Each external/destructive effect requires the exact gate named by the A1 contrac
 - **SC-1308**: Deterministic and live RC matrices retain machine-readable evidence bound to exact commits, versions, artifacts, platforms, scenarios, budgets, and exit status.
 - **SC-1309**: No public or destructive external effect occurs without its explicit owner gate.
 - **SC-1310**: Before A1 feature/release expansion resumes, the latest 20 representative E2E runs contain at least 19 passes, the latest 10 pass consecutively, and there are zero guard-caused manual recoveries or protected-edge violations.
+- **SC-1311**: Every authorized GitHub-backed objective has one role-owned terminal path with independent release conclusions, conditional issue/milestone disposition, durable evidence, and no false completion at local integration.
+- **SC-1312**: Canonical and learned skill procedures remain distinct, portable or private as specified, subordinate to authority, and free of a second loader, registry, queue, role, or state machine.
+- **SC-1313**: Every project closes with accurate root `AGENTS.md` guidance, including induced updates or concrete non-applicability reasons, while brownfield instructions and unrelated residues remain preserved.
 
 ## 9. Done when
 

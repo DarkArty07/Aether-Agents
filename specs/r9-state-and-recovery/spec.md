@@ -4,6 +4,7 @@
 **Stage status**: done — reconciled 2026-08-21 for PD-55, PD-62, PD-63, and A1 public recovery
 **Accepted**: 2026-08-17 — Christopher accepted the R4–R13 Decision Review
 **Amended**: 2026-08-18 — direct PD-44 actions distinguished from delegated board execution
+**Amended**: 2026-09-04 — canonical skill domains and terminal residue retention reconciled
 **Decision authority**: Christopher
 **Autonomous design delegate for this stage**: Morfeo
 **Future role owner**: Morfeo
@@ -26,7 +27,7 @@ R9 does not design enforcement (R10), define evidence content (R11), or select m
 |---|---|---|
 | The project repository | The contract and the code it governs | Permanent, versioned |
 | The board's durable rows | What was delegated, by whom, in how many attempts, with what result | Permanent until retention removes it |
-| Each profile's own home | That role's memory, sessions, skills, credentials | Per profile, never shared |
+| Each profile's own home | That role's memory, sessions, learned profile skills, credentials | Per profile, never shared |
 | Aether XDG product state | Installed releases, active-release record, sanitized product resources, project mappings, transition journals, backups, bounded contract-observation metadata/read models, and local redacted logs | Product-managed; user-preserving update/uninstall rules |
 
 - **FR-901**: Aether MUST NOT create a second authoritative contract or execution store. Any question about delegated pipeline status is answered from the board; any question about what was accepted is answered from the repository. PD-68 permits a metadata-only contract journal and rebuildable summary projection for observation, but neither can alter or overrule those owning stores. A direct PD-44 action is evidenced by the project repository, actual tool output, and Morfeo's profile session, not by a manufactured card.
@@ -69,6 +70,31 @@ Owner preferences are Aether's only personalization mechanism (PD-12, PD-22). Ev
 - **FR-913**: Supervisor and implementer profiles MUST NOT accumulate owner-facing memory. They exist per unit of work and their durable output is the card, not their recollection.
 - **FR-914**: A profile's automatic memory writing MUST be considered when profiles are configured, because an unattended role that writes memory on every run compounds state that nobody reviews.
 
+## 4.1 Canonical and learned skills
+
+Skills are reusable procedure, never authority. Aether Canonical Skills are public,
+versioned, package-owned procedures whose source files are
+`src/aether_agents/resources/skills/<skill-name>/SKILL.md`. Project Canonical Skills are
+tracked, versioned, project-visible procedures whose source files are
+`.aether/skills/<skill-name>/SKILL.md`. Learned Profile Skills are private, local,
+adaptive procedures held by one profile and never become canonical automatically.
+
+- **FR-914a**: The frontmatter and body of each `SKILL.md` are its source. Aether MUST
+  NOT add a duplicate skill registry, generic loader, queue, role, or state machine to
+  make canonical procedures available.
+- **FR-914b**: Authority precedence is current owner instruction → constitution/design/stage specs/Objective Contract → repository operating
+  rules. Among compatible procedures only, a Project Canonical Skill is more specific
+  than an Aether Canonical Skill, and both are more specific than a Learned Profile
+  Skill. No skill can grant authority or replace intent or acceptance.
+- **FR-914c**: Agents MUST discover project procedures through the current root
+  `AGENTS.md`, direct project-relative reads, card pinning, or an existing native skill
+  mechanism, and MUST load only procedures relevant to the current task. A project
+  skill follows that project's repository visibility; a learned skill remains private
+  and MUST NOT be copied into public artifacts.
+- **FR-914d**: Promoting a Learned Profile Skill requires sanitization, generalization,
+  verification, independent review, commit, and pull request. Learning alone MUST NOT
+  promote a skill or change any role's authority.
+
 ## 5. Recovery
 
 For delegated work, the unit of durability is the card, not the process. This is what makes unattended pipeline execution survivable and it supersedes the earlier finding that it could not be (PD-26 superseded by PD-29). A direct Morfeo action is bounded to the current session and relies on the managed project's ordinary reversibility; if work needs durable multi-attempt recovery, that is evidence that the pipeline adds value.
@@ -106,8 +132,8 @@ Every durable surface grows without bound by default. Retention is therefore a d
 | Card rows, comments, attempt records | Permanent by default; the acceptance record of the project |
 | Board events | Pruned on a schedule; they are execution telemetry, not the record |
 | Worker logs | Pruned on a schedule |
-| Preserved worktrees | Pruned once the unit is integrated and its branch is preserved |
-| Branches | Permanent. They are the per-unit evidence trail (R8-FR-812) |
+| Preserved worktrees | Retained through review, integration, and publication; pruned after durable terminal evidence |
+| Branches | Retained through review, integration, and publication; objective-owned merged branches are removed after durable evidence while unrelated/pre-existing branches remain |
 | Attachments | Retained with their card |
 | Notification subscriptions | Removed when the work they watch reaches its irreversible end state |
 | Immutable release directories | Retained while active or rollback-eligible; pruned only after a newer coherent release is proven |
@@ -118,11 +144,12 @@ Every durable surface grows without bound by default. Retention is therefore a d
 | Observation fingerprint keys | Private persistent project state across update/rollback/uninstall-preserve; never published or included in ordinary export |
 | Download cache | Freely replaceable after integrity verification and activation |
 
-- **FR-920**: Retention MUST distinguish the acceptance record from execution telemetry. Rows and branches are the record; events, logs, and worktrees are telemetry and may be pruned.
+- **FR-920**: Retention MUST distinguish the acceptance record from execution telemetry. Board rows, Git commits, pull requests, and final evidence preserve the record; events, logs, and worktrees are telemetry and may be pruned only after terminal evidence is durable.
 - **FR-921**: A retention sweep MUST NOT remove anything an unfinished unit depends on. Pruning is only ever applied to terminal work.
-- **FR-922**: Pruning worktrees MUST NOT remove the corresponding branch. The branch is what makes a merged unit inspectable later; the worktree is only a checkout of it.
+- **FR-922**: An objective-owned worktree or merged branch MUST be removed only after durable PR, merge, board, and final-verification evidence exists. Git history, the PR, and board evidence preserve merged-unit inspectability; active, unmerged, blocked, review-active, concurrent, unrelated, and pre-existing residues MUST remain.
 - **FR-923**: Retention values are calibration, not architecture, and MUST be recorded when set.
 - **FR-923a**: Observation has no pruning path. Compaction MUST preserve exact uncompressed event bytes, final schema-valid summaries, invariant results, coverage/gap declarations, safe evidence references, and decision references; raw content never enters any retained layer. Explicit purge deletes the selected observation state rather than manufacturing a reduced historical record.
+- **FR-923b**: Remote merged-branch cleanup and local objective branch/worktree cleanup are terminal closeout steps, not independent product state. They MUST use ordinary non-destructive operations and MUST NOT rewrite history or delete evidence for unfinished or unrelated work.
 
 ## 7. Boards Are the Project Boundary
 
@@ -169,6 +196,8 @@ Not inspected: the memory provider internals and the board's full event referenc
 - **SC-910**: Default uninstall preserves profiles/projects; destructive purge is explicit and separately confirmed.
 - **SC-911**: Update, rollback, and forward re-update preserve every observation source byte and key epoch; incompatible readers use separate projections and never destroy unknown newer evidence.
 - **SC-912**: No public/release/log/ordinary-export surface contains a fingerprint key, and key rotation is visible without fabricating a configuration delta.
+- **SC-913**: Aether Canonical, Project Canonical, and Learned Profile Skills remain procedural, correctly located and visible, ordered only within the procedural tier, and never auto-promoted or authoritative.
+- **SC-914**: Objective-owned merged branches and worktrees are removed only after durable terminal evidence, while active or unrelated residues and all acceptance evidence remain preserved.
 
 ## 11. Done When
 

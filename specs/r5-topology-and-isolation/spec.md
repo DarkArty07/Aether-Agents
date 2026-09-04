@@ -6,6 +6,7 @@
 **Amended**: 2026-08-18 — PD-44 proportional direct execution accepted by Christopher
 **Amended**: 2026-08-20 — PD-44 capability surface expanded and PD-45 accepted by Christopher
 **Amended**: 2026-08-26 — role responsibility remains semantic while the pre-tool micro-permission boundary is retired
+**Amended**: 2026-09-04 — autonomous stewardship, project guidance, and procedural skill precedence reconciled
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -74,6 +75,9 @@ Morfeo's route boundary is agentic rather than structurally enforced: its operat
 - **FR-508**: Every card's assignee MUST name a profile that exists. Assignment MUST be grounded in actual profiles before a card is created.
 - **FR-508a**: **Corrected by execution.** An unknown assignee does not fail loudly and does not fail silently everywhere: the dispatcher reports it in its own output as a skipped non-spawnable lane and treats it as legitimate, because an assignee that is not a local profile is a supported external-worker shape. **Nothing is written to the card** — its event history shows only creation and promotion. A typo'd assignee therefore leaves a unit waiting forever and is invisible at the place anyone would look. Detection MUST come from the board's health snapshot, which reports a unit whose assignee never produces a claim (R11-FR-1122).
 - **FR-509**: A new role MUST NOT be introduced to solve an execution problem. Fresh context, a pinned skill, or a per-card model override MUST be tried first, and adding a role requires Christopher's decision against PD-02.
+- **FR-509a**: Aether MUST retain exactly three roles. In pipeline work, Supervisor owns review, integration, aggregate `release_impact`/`release_action`/`release_channel` classification, normal GitHub PR/check/merge closeout, applicable issue/milestone reconciliation, and terminal evidence; Implementer owns bounded local unit work and commits but never publication. In bounded direct work, Morfeo owns authorized routine closeout.
+- **FR-509b**: Role procedures MUST remain subordinate to authority. Agents discover only task-relevant Aether or project canonical skills through root `AGENTS.md`, direct project-relative reads, card pinning, or an existing native mechanism; no hard-coded skill list, loader, or new role is introduced by R5.
+- **FR-509c**: Every project MUST have accurate root `AGENTS.md` guidance. Morfeo establishes missing guidance after repository inspection and constitution confirmation, the role whose authorized change invalidates guidance updates it, and Supervisor verifies coherence before pipeline closure. Brownfield guidance is preserved and reconciled.
 
 ### Concurrent processes
 
@@ -91,7 +95,7 @@ The constraint that defeated the previous design does not exist here. The board 
 
 | Aether work | Workspace kind | Behaviour |
 |---|---|---|
-| Implementation of a unit | `worktree` — a git worktree per card | Preserved on completion |
+| Implementing a unit | `worktree` — a git worktree per card | Preserved through review, integration, and publication; cleaned after durable terminal evidence |
 | Work on an existing project in place | `dir:<absolute path>` | Preserved; must be absolute |
 | Research, analysis, decomposition | `scratch` | Deleted on completion; declared artifacts copied to durable storage first |
 
@@ -223,6 +227,8 @@ Restart durability was recorded as an unavoidable limit. It was a limit of in-pr
 - **SC-506**: Non-convergence blocks for review rather than exiting silently.
 - **SC-507**: Aether adds no queue, state machine, retry, reclaim, or audit mechanism of its own.
 - **SC-508**: Morfeo has file and terminal capability for bounded direct operations, no unrelated toolset is enabled, and substantial work still crosses the role boundary through one Supervisor card.
+- **SC-509**: Pipeline closeout remains owned by Supervisor while bounded direct closeout remains owned by Morfeo, with Implementer limited to local unit work and commits.
+- **SC-510**: All roles use task-relevant procedural skills without turning skills into authority or adding a role, loader, or coordination mechanism, and every project has accurate root `AGENTS.md` guidance before pipeline closure.
 
 ## 14. Owner correction resolved: Morfeo is also the owner's operational steward
 
@@ -248,6 +254,7 @@ The owner has now resolved the previously open boundary: no classifier, threshol
 - [x] The R13 build contradiction between Morfeo's stewardship and its absent file capability is corrected; portable `config.yaml` + `SOUL.md` activation now carries the reconciled behavior contract while R10 protects only PD-71 edge effects.
 - [x] PD-44 replaces the obsolete no-execution boundary with proportional direct stewardship while preserving three roles, pipeline separation for substantial product work, and the anti-fragmentation rule.
 - [x] Corrected against execution, not only reading: escalation is now proportional Tier 0/1/2, the block budget remains effectively one human-visible attempt, the unknown-assignee behaviour is stated accurately, and the review lane remains a first-class transition with a bundled procedure.
+- [x] Pipeline and direct-route stewardship ownership, project guidance duties, and task-relevant procedural-skill discovery are reconciled without changing the three-role topology.
 - [x] Dispatcher internals inspected and executed: claim, workspace preparation, spawn, live concurrency capping, crash detection, stale reclaim, and the review claim path.
 - [ ] Still not inspected: memory-provider internals and terminal backends. Each is read by the stage that relies on it — R9 and R8 respectively.
 - [x] Christopher reviewed the baseline (R4–R13 Decision Review, 2026-08-17), accepted PD-44 on 2026-08-18, and accepted the capability amendment plus PD-45 on 2026-08-20.
