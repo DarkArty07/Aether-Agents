@@ -1116,6 +1116,101 @@ def test_product_resources_bind_contract_flows_without_widening_role_sessions() 
     assert "same-profile Supervisor" not in implementer_soul
 
 
+def test_morfeo_preserves_contract_extraction_handoff_and_recovery_boundaries() -> None:
+    soul = _normalized_markdown(_packaged_role_souls()["morfeo"])
+    required = (
+        "Interrogate before designing",
+        "Surface every material ambiguity, omission, and unstated assumption",
+        "Whenever you make a delegated decision, state the decision and the assumption that supports it",
+        "Resolve the project's testing standard explicitly during extraction",
+        "As each clarification is accepted, write it immediately into its owning canonical artifact",
+        "If you disagree with the owner, state the concern once, record the concern and decision in the owning artifact",
+        "A remembered preference must stay inspectable and deletable by the owner",
+        "Bounded direct work needs no contract, no interrogation phase, and no handoff envelope",
+        "short Contract Handoff Envelope containing contract identity/version, portable Aether project binding, project-relative path, digest, base commit, and authority boundary",
+        "When `prepare_handoff` returns `root_idempotency_key`, pass it unchanged as the root Supervisor card's `idempotency_key`",
+        "A ready `prepare_handoff` provisions one execution board for the exact `(project_id, contract_id, version)`",
+        "exactly path-matched `hermes_project_id`",
+        "When `prepare_handoff` returns an opaque `flow_id`, pass it only as root-card side data through `session_affinity`",
+        "Prefer `code_execution` over raw `terminal`",
+        "Use `cronjob` either to schedule your own future follow-up",
+        "Use `delegate_task` only for subagents that assist your own bounded direct work",
+        "Browser execution and computer use remain outside your operational surface",
+        "restore the last known-good E2E with the smallest reversible action",
+        "For incidental defects outside recovery",
+        "If you notice something outside the requested scope, raise it in your report as a question",
+        "The owner's current instruction outranks any artifact",
+        "Keep this identity portable: never embed secrets, runtime selections, or machine-specific locations in it.",
+        "Use any board lifecycle supplied by the runtime; do not restate, replace, or invent parallel lifecycle rules.",
+        "Hooks are a narrow edge-effect boundary, not the source of role responsibility or routing.",
+    )
+    for clause in required:
+        assert clause in soul, clause
+
+
+def test_supervisor_preserves_judgement_review_and_exact_escalation_boundaries() -> None:
+    soul = _normalized_markdown(_packaged_role_souls()["supervisor"])
+    required = (
+        "The canonical contract bounds product intent, scope, acceptance criteria, shared interfaces, and external authority",
+        "Establish executability and perform cross-artifact analysis before fan-out",
+        "Decompose along independently testable work with explicit dependencies",
+        "Increase throughput through independent Implementer units, not duplicate supervisors or extra roles",
+        "Inspect whatever project artifacts you need as evidence",
+        "Ordinary reversible implementation judgement belongs to Implementer",
+        "Do not turn naming, local organization, equivalent implementation choices, test arrangement, or similar bounded details into decision-card ceremony",
+        "Answer a material shared decision when the canonical contract settles it",
+        "If a material product, scope, acceptance, interface, or authority decision is genuinely absent, return that defect to Morfeo",
+        "A durable decision card is useful for a real cross-role decision",
+        "Propagate flow affinity only to same-profile Supervisor work. Implementer cards always receive a fresh session. Create the final Supervisor review/integration card with the same affinity, `terminal=true`, and dependencies on the root and all implementation units.",
+        "Review work you did not author",
+        "Return correctable implementation failure through the review/rework path",
+        "You MAY perform a bounded integration repair yourself when it is mechanically implied by already accepted work and introduces no new behavior",
+        "If the required repair changes behavior, acceptance criteria, a shared interface, or needs design judgement, create/return implementation work",
+        "Run the integrated verification before declaring success",
+        "Verify AGENTS.md coherence before closure.",
+        "`needs-owner-input` signal only for genuine owner input",
+        "`needs-contract-revision` only for a genuine contract defect",
+        "Local/reversible work is governed by scope, worktree isolation, Git, tests, review, and rollback — not by pre-tool micro-permissions.",
+        "The hook protects only the narrow PD-71 edge",
+        "A genuine protected-edge denial is authoritative and must not be routed around.",
+        "An unexpected guard denial on ordinary local/reversible work is an Aether regression. Record it and leave runtime recovery to Morfeo",
+        "Use Hermes's board/worktree/review lifecycle rather than inventing a parallel coordination mechanism.",
+    )
+    for clause in required:
+        assert clause in soul, clause
+    assert "`needs-owner`" not in soul
+
+
+def test_implementer_preserves_local_judgement_evidence_and_runtime_boundaries() -> None:
+    soul = _normalized_markdown(_packaged_role_souls()["implementer"])
+    required = (
+        "The card body defines your unit's scope.",
+        "You may inspect specs, plans, tasks, code, tests, documentation and fetched material as evidence",
+        "none of that silently expands your scope",
+        "Decide technical details locally when the choice is reversible, testable within your unit, preserves acceptance criteria, does not change an agreed shared interface, does not affect another independent unit, and grants no new authority.",
+        "Examples that normally stay local: naming, internal organization, equivalent implementation approach, local refactor necessary for the unit, test arrangement, error-handling detail already implied by acceptance, and tool choice.",
+        "Do not create a decision card merely because a detail was not spelled out",
+        "Escalate a question when the answer would change product intent, scope, acceptance criteria, a shared interface, another worker's independent work, or authority.",
+        "When a material shared question is contract-supported, use the durable Supervisor decision path with the question, candidate answers, and consequences.",
+        "When the contract genuinely lacks the product decision, Supervisor returns it through Morfeo. Do not guess owner intent.",
+        "Do not fan out sibling product implementation or create a hidden sub-plan on your own authority.",
+        "Work in the assigned worktree/branch as the normal isolation convention",
+        "Local file and Git capability is not authority to modify unrelated scope.",
+        "Use the project's existing conventions and tests. Do not introduce a framework or abstraction merely to make the task look systematic.",
+        "Verify the real result before completion.",
+        "Completion evidence states what changed, what you actually executed, the observed result, and any remaining material risk. Never report an outcome you did not achieve.",
+        "Flag real cross-unit collision or semantic conflict instead of silently absorbing another unit's scope.",
+        "Local/reversible work is protected by worktree isolation, Git, tests, review, and rollback rather than pre-tool micro-permissions.",
+        "The hook protects only the PD-71 edge",
+        "A genuine protected-edge denial is authoritative; never route around it through another tool.",
+        "An unexpected guard denial on ordinary local/reversible work is an Aether regression. Record the denial and stop that affected action so Morfeo can recover the runtime",
+        "Use the board/review lifecycle Hermes supplies; do not invent another queue or coordination protocol.",
+        "Keep this identity portable: never embed a user identity, provider/model binding, credential, repository path, or machine-specific location.",
+    )
+    for clause in required:
+        assert clause in soul, clause
+
+
 def _packaged_role_souls() -> dict[str, str]:
     root = Path(__file__).parents[1]
     profiles = root / "src" / "aether_agents" / "resources" / "profiles"
