@@ -200,3 +200,25 @@ specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r10-security
 implementation = ["src/aether_agents/resources/profiles/implementer/SOUL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
 verification = ["tests/test_objective_contracts.py", "tests/test_observation_lifecycle.py"]
 notes = "Portable resources are versioned candidate bytes; clean installed-profile activation and public qualification remain pending."
+
+[[capabilities]]
+id = "skills.aether-canonical-resources"
+status = "implemented"
+summary = "Three Aether Canonical Skills are packaged and materialized through the existing native profile skill directories."
+surfaces = ["lifecycle.aether-canonical-skills"]
+documents = ["docs/authority.md", "docs/guides/project-initialization.md"]
+specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r13-synthesis-and-release/spec.md"]
+implementation = ["src/aether_agents/lifecycle.py", "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md", "src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/skills/semver-release/SKILL.md"]
+verification = ["tests/test_observation_packaging.py", "tests/test_observation_lifecycle.py"]
+notes = "Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; full public release qualification remains separate."
+
+[[capabilities]]
+id = "skills.project-canonical-discovery"
+status = "implemented"
+summary = "Project Canonical Skills are discoverable by direct project-relative reads from the root AGENTS.md convention without a new loader or registry."
+surfaces = ["lifecycle.project-canonical-skill-discovery"]
+documents = ["docs/authority.md", "docs/guides/project-initialization.md"]
+specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r13-synthesis-and-release/spec.md"]
+implementation = ["AGENTS.md", "docs/guides/project-initialization.md"]
+verification = ["tests/test_project_init.py"]
+notes = "Disposable-project discovery and brownfield guidance preservation are focused checks; release qualification is not implied."

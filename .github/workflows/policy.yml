@@ -226,6 +226,9 @@ jobs:
           src/aether_agents/resources/profiles/morfeo/config.yaml
           src/aether_agents/resources/profiles/supervisor/SOUL.md
           src/aether_agents/resources/profiles/supervisor/config.yaml
+          src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
+          src/aether_agents/resources/skills/git-github-closeout/SKILL.md
+          src/aether_agents/resources/skills/semver-release/SKILL.md
           src/aether_agents/resources/lab
           src/aether_agents/resources/hermes-baseline.json
           src/aether_agents/result.py

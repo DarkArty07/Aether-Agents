@@ -465,6 +465,7 @@ def test_init_makes_the_marker_trackable_under_pre_existing_ignore_rules(
     assert not _ignored(repository, ".aether/project.toml")
     assert not _ignored(repository, ".aether/objective-contracts/")
     assert not _ignored(repository, ".aether/objective-contracts/oc_abc/v1.md")
+    assert not _ignored(repository, ".aether/skills/example/SKILL.md")
     # Drafts stay local, and unrelated project policy is untouched.
     assert _ignored(repository, ".aether/drafts/x.json")
     assert _ignored(repository, "node_modules/pkg/index.js")
@@ -511,6 +512,7 @@ def test_init_does_not_touch_an_already_correct_ignore_policy(
     policy = (
         "node_modules/\n/.aether/*\n!/.aether/project.toml\n"
         "!/.aether/objective-contracts/\n!/.aether/objective-contracts/**\n"
+        "!/.aether/skills/\n!/.aether/skills/**\n"
     )
     (repository / ".gitignore").write_text(policy, encoding="utf-8")
     monkeypatch.setenv(
@@ -636,3 +638,57 @@ def test_prepare_handoff_is_ready_after_init_authoring_and_an_ordinary_commit(
         project_id=project_id, contract_id=contract_id, version=final["version"]
     )
     assert handoff["handoff_ready"] is True, handoff
+
+
+def test_init_preserves_existing_agents_and_does_not_invent_missing_guidance(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    existing = _git_repository(tmp_path / "existing")
+    agents = existing / "AGENTS.md"
+    original = "# Existing project rules\n\nKeep this exact guidance.\n"
+    agents.write_text(original, encoding="utf-8")
+    monkeypatch.setenv(
+        "HERMES_HOME",
+        str(
+            _hermes_home(
+                tmp_path / "existing-home", [("p_existing", "existing", "Existing", existing)]
+            )
+        ),
+    )
+
+    initialized = run_init(_args(existing), registry=registry)
+
+    assert initialized.result == "changed", initialized.errors
+    assert agents.read_text(encoding="utf-8") == original
+
+    missing = _git_repository(tmp_path / "missing")
+    monkeypatch.setenv(
+        "HERMES_HOME",
+        str(
+            _hermes_home(tmp_path / "missing-home", [("p_missing", "missing", "Missing", missing)])
+        ),
+    )
+
+    initialized = run_init(_args(missing), registry=registry)
+
+    assert initialized.result == "changed", initialized.errors
+    assert not (missing / "AGENTS.md").exists()
+
+
+def test_project_canonical_skill_is_discoverable_from_root_agents_convention(
+    tmp_path: Path,
+) -> None:
+    repository = _git_repository(tmp_path / "repo")
+    agents = repository / "AGENTS.md"
+    agents.write_text(
+        (Path(__file__).parents[1] / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    skill = repository / ".aether" / "skills" / "example" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: example\n---\n# Example\n", encoding="utf-8")
+
+    guidance = agents.read_text(encoding="utf-8")
+
+    assert ".aether/skills/<skill-name>/SKILL.md" in guidance
+    assert skill.is_file()
+    assert skill.read_text(encoding="utf-8").startswith("---\nname: example")

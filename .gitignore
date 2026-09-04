@@ -10,6 +10,8 @@
 !/.aether/project.toml
 !/.aether/objective-contracts/
 !/.aether/objective-contracts/**
+!/.aether/skills/
+!/.aether/skills/**
 /.claude/
 /.hermes/
 /.specify/

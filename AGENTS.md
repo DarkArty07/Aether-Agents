@@ -46,6 +46,23 @@ Worked examples of this method live in `specs/r2-contract-and-handoff/research.m
 
 This principle is owned canonically by `specs/r0-design-governance/spec.md` and is materialized locally for Spec Kit at the ignored `.specify/memory/constitution.md`; the local copy is not a second authority.
 
+## Project guidance and canonical skills
+
+Every project root has operating guidance. Morfeo establishes missing root `AGENTS.md`
+guidance only after inspecting the repository and confirming its constitution; `aether init`
+does not invent generic project content. Existing brownfield guidance is preserved and
+reconciled, not overwritten. The role whose authorized change invalidates an operating
+instruction updates it in that same change, and Supervisor verifies its coherence before
+closure.
+
+All file-capable agents inspect task-relevant Project Canonical Skills by direct,
+project-relative reads at `.aether/skills/<skill-name>/SKILL.md`. The convention follows
+the project's repository visibility and does not require a loader or a duplicate skill
+registry. Aether package-owned canonical procedures are loaded only through the existing
+package/native profile skill mechanism. Skills provide reusable procedure only and remain
+subordinate to owner instruction, the constitution, `DESIGN.md`, stage specifications,
+Objective Contracts, and these repository rules; no skill grants authority.
+
 ## External research sources
 
 Research checkouts stay outside this repository. They are evidence sources, not vendored dependencies or project sources of truth.
