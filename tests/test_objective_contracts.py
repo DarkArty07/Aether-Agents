@@ -1140,7 +1140,7 @@ def test_morfeo_preserves_contract_extraction_handoff_and_recovery_boundaries() 
         "For incidental defects outside recovery",
         "If you notice something outside the requested scope, raise it in your report as a question",
         "The owner's current instruction outranks any artifact",
-        "Keep this identity portable: never embed secrets, runtime selections, or machine-specific locations in it.",
+        "Keep this identity portable: never embed secrets, runtime selections, a user identity, private identities, provider/model bindings, providers, models, credentials, a repository path, repository bindings, machine-specific locations, machine paths, or runtime state.",
         "Use any board lifecycle supplied by the runtime; do not restate, replace, or invent parallel lifecycle rules.",
         "Hooks are a narrow edge-effect boundary, not the source of role responsibility or routing.",
     )
@@ -1167,7 +1167,7 @@ def test_supervisor_preserves_judgement_review_and_exact_escalation_boundaries()
         "You MAY perform a bounded integration repair yourself when it is mechanically implied by already accepted work and introduces no new behavior",
         "If the required repair changes behavior, acceptance criteria, a shared interface, or needs design judgement, create/return implementation work",
         "Run the integrated verification before declaring success",
-        "Verify AGENTS.md coherence before closure.",
+        "Verify root `AGENTS.md` coherence before closure.",
         "`needs-owner-input` signal only for genuine owner input",
         "`needs-contract-revision` only for a genuine contract defect",
         "Local/reversible work is governed by scope, worktree isolation, Git, tests, review, and rollback — not by pre-tool micro-permissions.",
@@ -1272,7 +1272,7 @@ def test_role_souls_assign_onboarding_issue_and_publication_boundaries() -> None
     assert "pipeline branch" in morfeo and "fully closed" in morfeo
 
     assert "independent review" in supervisor
-    assert "AGENTS.md coherence" in supervisor
+    assert "root `AGENTS.md` coherence" in supervisor
     assert "release_impact" in supervisor
     assert "release_action" in supervisor
     assert "release_channel" in supervisor
@@ -1292,6 +1292,41 @@ def test_role_souls_assign_onboarding_issue_and_publication_boundaries() -> None
     assert "never push" in implementer
     assert "never open or merge" in implementer
     assert "never mutate issues" in implementer
+
+
+def test_role_souls_reconcile_compatibility_evidence_and_ownership() -> None:
+    souls = _packaged_role_souls()
+    morfeo = _normalized_markdown(souls["morfeo"])
+    supervisor = _normalized_markdown(souls["supervisor"])
+    implementer = _normalized_markdown(souls["implementer"])
+
+    assert "Report compatibility evidence that supports `release_impact`" in morfeo
+    assert (
+        "`release_impact`, `release_action`, and `release_channel` are three separate conclusions"
+        in morfeo
+    )
+    assert morfeo.count("Keep this identity portable:") == 1
+
+    assert supervisor.count("Verify root `AGENTS.md` coherence before closure.") == 1
+    assert "Verify AGENTS.md coherence before closure." not in supervisor
+    assert "Require aggregate conclusions in every terminal report" in supervisor
+    assert (
+        "Collect each unit's compatibility impact before making the aggregate conclusion."
+        in supervisor
+    )
+    assert (
+        "Pipeline publication belongs to Supervisor after review, never to Implementer."
+        in supervisor
+    )
+
+    assert "Report only unit-level compatibility evidence and conclusions" in implementer
+    assert (
+        "prerelease is not a compatibility impact, and a merge does not imply a release"
+        in implementer
+    )
+    assert "Never make the aggregate release decision or publication" in implementer
+    assert "Supervisor owns aggregate release conclusions and pipeline publication." in implementer
+    assert "The aggregate conclusions are" not in implementer
 
 
 def test_release_conclusions_stay_separate_from_compatibility_and_channel() -> None:
