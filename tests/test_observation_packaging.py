@@ -391,3 +391,49 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             f"aether_agents/resources/skills/{skill_name}/SKILL.md"
             for skill_name in CANONICAL_SKILLS
         }
+
+
+def test_git_github_closeout_distinguishes_unit_commit_preparation_from_pipeline_history() -> None:
+    skill = (
+        ROOT / "src" / "aether_agents" / "resources" / "skills" / "git-github-closeout" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    procedure = skill.split("## Procedure", 1)[1].split("## Pitfalls", 1)[0].lower()
+
+    assert "direct/single-unit work" in procedure
+    assert "one conventional commit" in procedure
+    assert re.search(
+        r"pipeline\s+integration.{0,300}every\s+accepted\s+implementation\s+unit.{0,120}"
+        r"own\s+commit\s+or\s+merge\s+commit",
+        procedure,
+        re.DOTALL,
+    )
+    for forbidden_operation in ("squash", "amend", "rebase", "history rewrite"):
+        assert re.search(
+            rf"pipeline\s+integration.{{0,300}}{re.escape(forbidden_operation)}",
+            procedure,
+            re.DOTALL,
+        )
+
+
+def test_git_github_closeout_cleans_only_verified_merged_objective_residue() -> None:
+    skill = (
+        ROOT / "src" / "aether_agents" / "resources" / "skills" / "git-github-closeout" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    procedure = skill.split("## Procedure", 1)[1].split("## Pitfalls", 1)[0].lower()
+    cleanup_match = re.search(r"\n9\.\s+(?P<cleanup>.*?)\n10\.", procedure, re.DOTALL)
+
+    assert cleanup_match is not None
+    cleanup = cleanup_match.group("cleanup")
+    assert "only after durable pr, merge, board, and final-verification evidence" in cleanup
+    assert "all objective-owned merged child/root branches and worktrees" in cleanup
+    for preserved_residue in (
+        "active",
+        "unmerged",
+        "blocked",
+        "review-active",
+        "concurrent",
+        "unknown",
+        "unrelated",
+        "pre-existing",
+    ):
+        assert preserved_residue in cleanup

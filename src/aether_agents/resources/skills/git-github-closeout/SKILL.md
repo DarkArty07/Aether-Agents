@@ -59,8 +59,12 @@ corresponding external step. Keep all evidence redacted and project-relative.
    is staged.
 3. Run focused tests, affected tests, `git diff --check`, and the project's required
    quality gates. Fix only objective-caused failures within the bounded rework allowance.
-4. Review the final diff and stage only the intended files. Create one conventional
-   commit whose message describes the verified change; record its SHA and tree state.
+4. For direct/single-unit work, review the final diff and stage only the intended files.
+   Create one conventional commit whose message describes the verified change; record
+   its SHA and tree state. For pipeline integration, preserve every accepted
+   implementation unit as its own commit or merge commit and record each unit's SHA and
+   tree state. Never squash, amend, rebase, or perform a history rewrite in pipeline
+   integration.
 5. When the contract authorizes publication, push the normal branch and open one PR
    against the protected default branch. Link the acceptance and verification evidence.
    Never force-push, rewrite history, or bypass review or protection.
@@ -71,9 +75,12 @@ corresponding external step. Keep all evidence redacted and project-relative.
    merge commit is the expected one, and required checks remain green.
 8. Reconcile an applicable linked issue and milestone without creating ceremonial or
    duplicate records. If none applies, record the specific reason in the evidence.
-9. After durable PR, merge, board, and issue evidence exists, delete only the merged
-   objective branch and local objective worktree. Preserve active, unmerged, blocked,
-   concurrent, unknown, and unrelated work.
+9. Only after durable PR, merge, board, and final-verification evidence exists, audit all
+   objective-owned merged child/root branches and worktrees, locally and remotely where
+   authorized. Remove all objective-owned merged child/root branches and worktrees
+   identified by the audit. Preserve active, unmerged, blocked, review-active, concurrent,
+   unknown, unrelated, and pre-existing branches, worktrees, stashes, and processes; report
+   preserved residue separately.
 10. Report the terminal result from Git, GitHub, board, and test state. Include the
     commit, PR/check result, issue disposition, cleanup audit, omissions, and residual
     risk; local integration alone is not closure.
@@ -94,5 +101,10 @@ corresponding external step. Keep all evidence redacted and project-relative.
 - Confirm checks and merge state with the repository's read-only PR inspection command.
 - Confirm applicable issue/milestone reconciliation or its explicit non-applicability
   reason.
-- Confirm merged objective residue is absent while unrelated and active residue remains.
+- Confirm every accepted pipeline unit remains individually inspectable as its own commit
+  or merge commit and that integration history was not squashed, amended, rebased, or
+  otherwise rewritten.
+- Confirm all objective-owned merged child/root branches and worktrees are absent after
+  the evidence gate while active, unmerged, blocked, review-active, concurrent, unknown,
+  unrelated, and pre-existing residue remains.
 - Preserve the exact commands, observed outputs, and remaining risk in the handoff.
