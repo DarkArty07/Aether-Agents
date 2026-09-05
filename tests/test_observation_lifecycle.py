@@ -845,6 +845,259 @@ def test_activation_materializes_canonical_skills_in_each_native_profile_directo
     assert private_skill.read_text(encoding="utf-8") == "private profile skill\n"
 
 
+def test_activation_refuses_same_name_learned_skill_before_overwrite(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    prepared = _prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    record = store.register(prepared)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    learned_skill = store.profile_home("morfeo") / "skills" / "git-github-closeout" / "SKILL.md"
+    learned_skill.parent.mkdir(parents=True, exist_ok=True)
+    learned_bytes = b"same-name learned profile skill\n"
+    learned_skill.write_bytes(learned_bytes)
+
+    with pytest.raises(IntegrityError, match="canonical skill"):
+        manager.activate_existing(
+            record.release_id,
+            transition_kind="install",
+            expected_active_release_id=None,
+        )
+
+    assert learned_skill.read_bytes() == learned_bytes
+    assert store.active(required=False) is None
+
+
+def test_activation_refuses_same_name_skill_even_when_bytes_match_without_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    prepared = _prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one")
+    record = store.register(prepared)
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    target = store.profile_home("morfeo") / "skills" / "git-github-closeout" / "SKILL.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(
+        (
+            Path(lifecycle.__file__).parent
+            / "resources"
+            / "skills"
+            / "git-github-closeout"
+            / "SKILL.md"
+        ).read_bytes()
+    )
+    before = target.read_bytes()
+
+    with pytest.raises(IntegrityError, match="canonical skill"):
+        manager.activate_existing(
+            record.release_id,
+            transition_kind="install",
+            expected_active_release_id=None,
+        )
+
+    assert target.read_bytes() == before
+    assert store.active(required=False) is None
+
+
+def test_update_allows_only_marker_proven_prior_release_skill_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    first = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    manager.activate_existing(
+        first.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    second = store.register(_prepared_release(tmp_path / "r2", "1.0.1", b"wheel-two"))
+
+    updated = manager.activate_existing(
+        second.release_id,
+        transition_kind="update",
+        expected_active_release_id=first.release_id,
+    )
+
+    assert updated.release_id == second.release_id
+    for role in ("morfeo", "supervisor", "implementer"):
+        marker = json.loads(
+            (store.profile_home(role) / "aether-observer.json").read_text(encoding="utf-8")
+        )
+        assert marker["release_id"] == second.release_id
+        for skill_name in ("git-github-closeout", "semver-release", "canonical-skill-governance"):
+            target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
+            source = (
+                store.release_path(second.release_id)
+                / "profiles"
+                / role
+                / "skills"
+                / skill_name
+                / "SKILL.md"
+            )
+            assert target.read_bytes() == source.read_bytes()
+
+
+def test_collision_in_one_role_preflights_all_profiles_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    first = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    manager.activate_existing(
+        first.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    second = store.register(_prepared_release(tmp_path / "r2", "1.0.1", b"wheel-two"))
+    collision = store.profile_home("implementer") / "skills" / "semver-release" / "SKILL.md"
+    collision.write_bytes(b"learned implementer procedure\n")
+    before = {
+        path: path.read_bytes()
+        for role in ("morfeo", "supervisor", "implementer")
+        for path in store.profile_home(role).rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    pointer_before = store.active_pointer.read_bytes()
+    monkeypatch.setattr(manager, "_recover_locked", lambda: {})
+
+    with pytest.raises(IntegrityError, match="canonical skill"):
+        manager.activate_existing(
+            second.release_id,
+            transition_kind="update",
+            expected_active_release_id=first.release_id,
+        )
+
+    assert store.active_pointer.read_bytes() == pointer_before
+    assert {
+        path: path.read_bytes() for path in before if path.exists() and not path.is_symlink()
+    } == before
+    assert collision.read_bytes() == b"learned implementer procedure\n"
+
+
+def test_deactivation_removes_only_marker_owned_profile_skill_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    unrelated = store.profile_home("morfeo") / "skills" / "private-local" / "SKILL.md"
+    unrelated.parent.mkdir(parents=True, exist_ok=True)
+    unrelated.write_bytes(b"learned private skill\n")
+
+    manager._deactivate_profile_homes(record)
+
+    for role in ("morfeo", "supervisor", "implementer"):
+        home = store.profile_home(role)
+        assert not (home / "aether-observer.json").exists()
+        for skill_name in ("git-github-closeout", "semver-release", "canonical-skill-governance"):
+            assert not (home / "skills" / skill_name / "SKILL.md").exists()
+    assert unrelated.read_bytes() == b"learned private skill\n"
+
+
+def test_deactivation_preserves_drifted_same_name_skill_and_reports_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    record = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    manager.activate_existing(
+        record.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    drifted = store.profile_home("supervisor") / "skills" / "semver-release" / "SKILL.md"
+    drifted_bytes = b"learned replacement must survive\n"
+    drifted.write_bytes(drifted_bytes)
+    marker = store.profile_home("supervisor") / "aether-observer.json"
+    marker_bytes = marker.read_bytes()
+
+    with pytest.raises(IntegrityError, match="deactivation"):
+        manager._deactivate_profile_homes(record)
+
+    assert drifted.read_bytes() == drifted_bytes
+    assert marker.read_bytes() == marker_bytes
+    assert (store.profile_home("morfeo") / "skills" / "semver-release" / "SKILL.md").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX profile permissions")
+def test_activation_refuses_profile_permission_drift_before_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = ReleaseStore(tmp_path / "state" / "aether")
+    first = store.register(_prepared_release(tmp_path / "r1", "1.0.0", b"wheel-one"))
+    manager = LifecycleManager(store=store, python_executable=Path(sys.executable))
+    _allow_unit_manager_authority(manager, monkeypatch)
+    monkeypatch.setattr(
+        manager,
+        "validate_release",
+        lambda release_id: store._read_release(release_id),
+    )
+    manager.activate_existing(
+        first.release_id,
+        transition_kind="install",
+        expected_active_release_id=None,
+    )
+    target = store.profile_home("morfeo") / "skills" / "semver-release" / "SKILL.md"
+    target.chmod(0o644)
+    second = store.register(_prepared_release(tmp_path / "r2", "1.0.1", b"wheel-two"))
+    pointer_before = store.active_pointer.read_bytes()
+    target_before = target.read_bytes()
+
+    with pytest.raises(IntegrityError, match="permissions"):
+        manager.activate_existing(
+            second.release_id,
+            transition_kind="update",
+            expected_active_release_id=first.release_id,
+        )
+
+    assert store.active_pointer.read_bytes() == pointer_before
+    assert target.read_bytes() == target_before
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX no-follow profile authority")
 def test_profile_activation_validation_rejects_check_then_symlink_swap(
     tmp_path: Path,
