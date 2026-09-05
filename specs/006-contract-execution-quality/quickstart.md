@@ -25,6 +25,12 @@ availability, capacity or fixtures between them. Keep public evidence curated: c
 ids/hashes, case IDs, outcome reasons, safe command names and project-relative artifacts;
 private transcripts, absolute runtime paths and credentials stay outside public source.
 
+Resolve all paths before any filesystem/board mutation. Reject symlinks/redirections,
+nonempty destinations, and a run root that is equal to, inside, or an ancestor of a real
+checkout, installation, active home/board/state or other case. Include these refusals
+as deterministic tests. Inspect effective imported source and native binding after
+preparation as well: an attractive temporary-directory name alone cannot prove isolation.
+
 ## 2. Deterministic source and package gates
 
 From the candidate checkout, using a resolved interpreter that supplies `pytest`,
@@ -102,6 +108,14 @@ Preflight every destination before any model call and read back all resource has
 Use existing native discovery/loading; a fresh process must actually load the relevant
 candidate procedure. Do not change tool availability to manufacture compliance.
 
+Require a native session/tool receipt for the role-appropriate skill load: Morfeo in
+Q4, Supervisor in Q5, Implementer in Q7. Bind each receipt to the real role run, source
+resource hash and disposable resolved path, and verify successful loading of those
+bytes from private native evidence. Copied files, a skill name in a summary or a
+self-reported load counter alone do not qualify. Q1's direct route is not forced to
+load a pipeline-only procedure. An independent Supervisor reviews the native evidence;
+the adapter does not mint load receipts on the subject's behalf.
+
 **Case execution.** Q1 uses the bounded native Morfeo direct route plus its fixed compact
 receipt example. Q2/Q3 use native isolated Supervisor receipt-review cards carrying
 deliberately defective test contracts; the trusted fixture creates these through the
@@ -148,6 +162,17 @@ independent review. Never turn a run failure into a fabricated oracle result.
 Angle-bracket values are resolved local inputs, not literal commands or extra authority.
 The adapter may inspect fixture files and durable records read-only, but never stamp
 expected evidence into the board or implement the native orchestration itself.
+
+**Postflight is part of the oracle.** Record experiment-owned native PIDs/process trees
+and their effective disposable board identities. Use existing bounded cleanup only on
+proven-owned processes, then observe survivors and all source/installation preservation
+checks. Surviving owned or unclassifiable experiment processes yield BLOCKED/FAIL, never
+PASS; preserve unrelated processes. Final receipts include `cleanup_complete` and
+`preservation_verified`, backed by real postflight evidence. Produce the final exit
+code/verdict after these checks rather than reusing an earlier generic runner PASS.
+Add a no-model negative control where a supplied cleanup result contains survivors;
+it must not return a successful qualification. This is a test of the finite adapter,
+not permission to change generic lab cleanup or to kill real external processes.
 
 Run one baseline and one candidate Q1–Q7 pass. Only failed candidate cases may receive one
 corrected same-route rerun. Respect existing role capacity and laboratory root-isolation

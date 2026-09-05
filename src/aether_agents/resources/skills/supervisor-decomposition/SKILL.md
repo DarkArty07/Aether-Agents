@@ -1,8 +1,8 @@
 ---
 name: supervisor-decomposition
-description: Use when decomposing or reviewing pipeline units.
+description: Use when Supervisor decomposes or reviews units.
 version: 0.1.0
-author: Aether contributors, Hermes Agent
+author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
@@ -24,6 +24,8 @@ bounded implementation. More workers are not a quality or performance guarantee.
 - Use when Supervisor receives a finalized Objective Contract for decomposition.
 - Use for reviewing a breakdown, diagnosing avoidable serialization, or returning rework.
 - Do not use to dispatch direct Morfeo work or let Implementer fan out product work.
+- Morfeo and Implementer may read delivery criteria as evidence; this skill does not
+  assign them Supervisor's decomposition, independent review or integration phase.
 
 ## Prerequisites
 
@@ -87,8 +89,11 @@ current limits and authority as constraints, not settings to tune during decompo
    evidence against the unit's requirements, interfaces, preservation and oracles.
    Re-run proportionate checks when required. A missing obligation is rework even if
    the summary says PASS. A unit-level success is not integrated product success.
-   Integrate and perform terminal closeout under the existing canonical procedures,
-   preserving accepted commits, review independence and actual release conclusions.
+   For graphs you create, review units through the native same-card lane; issue a
+   verdict only from the claimed review run. Honor a distinct pre-created review lane
+   when the trusted runtime graph explicitly supplies it. The terminal integration
+   card consumes reviewed units; it does not replace unit review. Integrate and close
+   out under existing procedures, preserving accepted commits and release conclusions.
 
 ## Compact unit delivery (template, not another schema)
 
@@ -99,8 +104,9 @@ current limits and authority as constraints, not settings to tune during decompo
 - Judgement: local choices left to Implementer and material questions to return.
 - Verification: agreed commands/actions, acceptance oracles and required evidence.
 - Dependencies: actual parent edges and reason; declared independence or collision.
-- Completion: expected commit/artifact handoff, remaining-risk reporting and applicable
-  review lane. Runtime/session/board binding remains native side data, not prose identity.
+- Completion: expected commit/artifact handoff, remaining-risk reporting and explicit
+  unit review lane, distinct from terminal integration. Runtime/session/board binding
+  remains native side data, not prose identity.
 
 Use an existing plan reference for long stable context. Do not make a unit consume
 stale parent prose as proof of the current repository. Supervisor retains ownership

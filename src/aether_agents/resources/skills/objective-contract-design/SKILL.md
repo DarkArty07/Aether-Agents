@@ -1,8 +1,8 @@
 ---
 name: objective-contract-design
-description: Use when designing a pipeline contract.
+description: Use when Morfeo designs a pipeline contract.
 version: 0.1.0
-author: Aether contributors, Hermes Agent
+author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
@@ -25,6 +25,8 @@ and decomposition, and Implementer retains reversible unit-local judgement.
 - Use for resolving a contract defect returned by Supervisor at its owning artifact.
 - Do not require a contract or this full procedure for bounded direct work.
 - Do not use to decompose tasks, implement a product, or certify your own independent review.
+- Other roles may inspect these criteria as evidence; this procedure does not assign
+  Morfeo's design or contract-authoring phase to them.
 
 ## Prerequisites
 
@@ -72,7 +74,7 @@ or their delegated project policy; a skill does not supply universal defaults.
 7. **Design verification.** Map each acceptance obligation to a scenario, expected
    observable result and intended evidence in the owning artifacts. Provide the
    canonical runnable end-to-end validation, including prerequisites, commands or
-   tool actions, and pass/fail observations. Mark unavailable capabilities honestly.
+   tool actions, and expected pass/fail observations. Mark unavailable capabilities honestly.
    Distinguish proposed checks from executed results and unit checks from integrated
    acceptance; do not impose test-first or live calls unless the resolved standard does.
 8. **Check contradictions before finalizing.** Compare scope, deliverables, acceptance,

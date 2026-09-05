@@ -84,13 +84,35 @@ resources. Baseline and candidate have identical fixture intent and provisioned 
 provider/model/settings/capacity; only explicitly snapshotted approved resources differ.
 Semantic judgment remains the existing independent Supervisor, not a new judge role.
 
+**D7 — Qualification isolation is checked, not assumed.** Resolve source, installation,
+Project/home/board/state and proposed run-root identities before creating anything.
+Reject a run root inside, equal to, or containing a real source checkout, active home,
+board/state root or another case. Reject symlinks/redirections and nonempty run roots.
+Only then create fresh disposable roots and prove effective native destinations there.
+Do not weaken the generic runner or mistake clearing inherited board overrides inside
+that disposable child environment for permission to remove a denied identity marker.
+
+**D8 — Subject and cleanup receipts are mandatory.** Snapshot manifests bind each
+role's exact SOUL and canonical skill bytes to its source revision. Candidate skill
+loading receipts come from real native session/tool execution, not merely files copied
+onto disk. Observe the role-appropriate loads in Q4/Q5/Q7; the Q1 direct-work control
+must not be forced to run contract-design procedure. Track only experiment-owned native
+processes and use existing bounded cleanup. A surviving or unclassifiable process or an
+unverified destination prevents PASS; never kill an unrelated PID to clean a test.
+Emit the final qualification verdict only after process/state postflight, regardless
+of an earlier behavioral PASS. Do not reuse the generic runner's pre-cleanup exit status.
+
 ## Ownership and writable surface
 
-Morfeo owns this spec/plan/quickstart, standing R2/R3/R7 amendments, the Objective
-Contract, and the authored meaning of the new skills and role wording. Supervisor owns
-`tasks.md`, shared contract-supported execution decisions, independent review,
-integration, qualification verdict and terminal closeout. Implementer owns the bounded
-registration, fixtures, verification code and other application needed by its unit.
+The owner decides intent and every addition or change to role authority. `DESIGN.md`
+and the owning R2/R3/R7 specifications retain their normative responsibilities.
+Morfeo personally drafts this spec/plan/quickstart, the owner-approved amendments,
+the Objective Contract, and candidate skill/SOUL wording; authorship grants no new
+authority. SOUL resources express executable instructions within the approved roles,
+not competing role definitions. Supervisor owns `tasks.md`, shared contract-supported
+execution decisions, independent review, integration, qualification verdict and
+terminal closeout. Implementer owns bounded registration, fixtures, verification code
+and other application needed by its assigned unit.
 Do not assign exact-copying, staging or authoring the canonical Objective Contract to
 Implementer. It is a read-only prerequisite already checkpointed by Morfeo.
 

@@ -1,8 +1,8 @@
 ---
 name: implementation-evidence
-description: Use when implementing a contract-derived unit.
+description: Use when Implementer executes a contract-derived unit.
 version: 0.1.0
-author: Aether contributors, Hermes Agent
+author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
@@ -23,6 +23,8 @@ shared contract-supported execution decisions and independent review belong to S
 - Use when Implementer starts, resumes, self-checks or hands off a scoped unit.
 - Use for correcting implementation failures returned through the native review path.
 - Do not use to author an Objective Contract, split the wider product, publish or integrate.
+- Other roles may inspect this evidence procedure without assuming Implementer's
+  execution phase or treating its self-review as independent approval.
 
 ## Prerequisites
 
@@ -75,12 +77,14 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    project-relative evidence references in portable artifacts; never include secrets,
    raw private state or provider credentials. Report unit-level compatibility evidence
    only; Supervisor owns aggregate release conclusions and pipeline publication.
-8. **Use the existing terminal/review lane.** Re-read the card's actual graph and runtime
-   instructions. Release an explicitly pre-created dependent review/integration lane
-   through the required completion transition; otherwise use same-card review when
-   required. Never create both review routes, block merely for review, or claim a
-   finished unit is a fully closed product. Use native lifecycle tools, not shell board
-   edits or another queue. Return real external blockers honestly and preserve work.
+8. **Use the existing terminal/review lane.** Re-read the actual graph and native task
+   protocol. Normal Aether unit review is same-card: request it instead of self-approving;
+   only the claimed Supervisor review run issues its verdict. A terminal integration
+   child alone does not replace unit review. If the trusted runtime graph explicitly
+   pre-creates a distinct review lane, complete the finished phase to release it as
+   that protocol requires; do not strand it or duplicate it with same-card review.
+   Never block merely for review or call a finished unit a fully closed product. Use
+   native lifecycle tools, not shell board edits or another queue. Preserve real blockers.
 
 ## Evidence shape (illustrative, not a tool-schema change)
 
