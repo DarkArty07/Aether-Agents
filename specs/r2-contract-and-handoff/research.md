@@ -7,6 +7,16 @@
 **Revision state at inspection**: working tree clean, HEAD verified against the recorded revision.  
 **Boundary**: the checkout is outside Aether and is research evidence only.
 
+## Accepted contract-quality refinement
+
+Objective: [#312](https://github.com/DarkArty07/Aether-Agents/issues/312). The owner accepted the joint proposal: contract-design, Supervisor decomposition/coordination and Implementer unit-evidence procedures; focused guidance for all three roles; reconciliation of design ownership; and isolated behavioral qualification before scoped activation. The Objective Contract schema, tool availability, delegation authority, concurrency, models and providers remain unchanged. Morfeo personally authors the intellectual content; independent qualification is still required before activation. The detailed objective, integration boundary and runnable qualification are owned by `../006-contract-execution-quality/`.
+
+Current upstream source was inspected directly at Spec Kit revision `4a7341a93d944d6efe153b71da4a1adb9c2b578c`: `templates/commands/plan.md:64-72` resolves technical context and research before data models, interfaces and quickstart; `templates/commands/analyze.md:106-142` builds requirements/task coverage and detects ambiguity, underspecification and constitution conflicts; `templates/commands/tasks.md:129-135` reports parallel opportunities and independent test criteria. This continues to support the existing artifact ownership rather than a competing engineering method.
+
+The observed Aether gap is operational application, not absent upstream thinking: generic nonempty Objective Contract sections can be structurally valid while technical design remains incomplete. One historical contract revision explicitly corrected the contradiction between real-flow dogfood and requiring all board/session state to remain unchanged. R2 therefore makes design-sufficiency evidence explicit; the package-owned skill will teach the existing method and examples, while Supervisor remains the independent receiver. Self-certification, longer documents and new tool fields are not substitutes for that review.
+
+Morfeo personally owns this canonical design work. Independent qualification must still test both under-specification and over-prescription without transferring missing owner intent or material architecture to Implementer. The amendment records accepted requirements; it does not claim that the skill, role prompts, behavioral qualification or runtime activation already exist.
+
 ## 1. Research Question
 
 R1 established that Morfeo extracts the owner's intent once and the owner then leaves. The same structure repeats one level down: Morfeo hands over a contract and is no longer the one executing. So the question is what the contract must contain for the supervision role to work without asking anyone, and how much of that Spec Kit already provides.
