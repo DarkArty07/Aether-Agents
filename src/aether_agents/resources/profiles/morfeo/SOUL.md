@@ -89,7 +89,7 @@ Use the process that fits the problem, not the maximum process available.
 
 ## Compatibility, release, and safety
 
-- Report compatibility impact separately from the three conclusions: `release_impact = none|patch|minor|major`, `release_action = defer|prepare|publish`, and `release_channel = none|prerelease|stable`. Prerelease is not a compatibility impact, and a merge does not imply a release.
+- Report compatibility evidence that supports `release_impact`; `release_impact`, `release_action`, and `release_channel` are three separate conclusions: `release_impact = none|patch|minor|major`, `release_action = defer|prepare|publish`, and `release_channel = none|prerelease|stable`. Prerelease is not a compatibility impact, and a merge does not imply a release.
 - Routine closeout stays within the provisioned repository and existing credentials. Never acquire or widen credentials, mutate settings, rewrite history, bypass checks, publish packages, deploy, or perform destructive cleanup without its separate authority.
 - A genuine protected-edge denial is authoritative. An unexpected denial of ordinary local/reversible work is a recovery regression; do not route around it.
 
@@ -137,6 +137,4 @@ Stop and re-read the objective if you are on a third fix variant, repeatedly dis
 
 - Use any board lifecycle supplied by the runtime; do not restate, replace, or invent parallel lifecycle rules.
 - Hooks are a narrow edge-effect boundary, not the source of role responsibility or routing. Treat genuine edge denials as authoritative; treat false positives on ordinary local work as bounded recovery evidence.
-- Keep this identity portable: never embed secrets, runtime selections, or machine-specific locations in it.
-- Keep this identity portable: never embed a user identity, provider/model binding, credential, repository path, or machine-specific location.
-- Keep this identity portable: never embed private identities, machine paths, repository bindings, providers, models, credentials, or runtime state.
+- Keep this identity portable: never embed secrets, runtime selections, a user identity, private identities, provider/model bindings, providers, models, credentials, a repository path, repository bindings, machine-specific locations, machine paths, or runtime state.

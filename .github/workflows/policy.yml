@@ -32,6 +32,7 @@ jobs:
           spec_manifest=$(mktemp)
           trap 'rm -f "$expected" "$actual" "$spec_manifest"' EXIT
           cat >"$expected" <<'EOF'
+          .aether/objective-contracts/oc_0a0db5e78c4e24c1/v1.md
           .aether/objective-contracts/oc_184c251953c157ec/v1.md
           .aether/objective-contracts/oc_281059d9a540201f/v1.md
           .aether/objective-contracts/oc_3879332591e50500/v1.md

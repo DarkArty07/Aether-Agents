@@ -2452,11 +2452,32 @@ class LifecycleManager:
             return self.store._recover_locked()
 
     def _recover_locked(self) -> dict[str, int]:
+        pending_source_id: str | None = None
+        pending_target_id: str | None = None
+        if self.store.transitions.exists() and not self.store.transitions.is_symlink():
+            for path in sorted(self.store.transitions.glob("trn_*.json")):
+                try:
+                    payload = self.store._read_transition(path)
+                except IntegrityError:
+                    continue
+                if payload["state"] == "pending":
+                    pending_source_id = payload["from_release_id"]
+                    pending_target_id = payload["to_release_id"]
         result = self.store._recover_locked()
         active = self.store.active(required=False)
         if active is not None:
+            recovery_record = None
+            if (
+                pending_source_id == active.release_id
+                and pending_target_id is not None
+                and pending_target_id != active.release_id
+            ):
+                recovery_record = self.store._read_release(pending_target_id)
             self.validate_release(active.release_id)
-            self._materialize_profile_homes(active)
+            if recovery_record is None:
+                self._materialize_profile_homes(active)
+            else:
+                self._materialize_profile_homes(active, recovery_record=recovery_record)
             self._validate_profile_homes(active)
             self._reconcile_release_projections_locked(active)
         else:
@@ -2699,9 +2720,198 @@ class LifecycleManager:
             "observer": dict(record.observer),
         }
 
-    def _materialize_profile_homes(self, record: ReleaseRecord) -> None:
+    @staticmethod
+    def _profile_resource_status(path: Path, *, directory: bool, label: str) -> os.stat_result:
+        """Prove one profile boundary is a private, non-aliased filesystem entry."""
+
+        if path.is_symlink():
+            raise IntegrityError(f"{label} must not be a symlink")
+        try:
+            status = os.stat(path, follow_symlinks=False)
+        except OSError as error:
+            raise IntegrityError(f"{label} is unavailable") from error
+        if directory:
+            valid = stat.S_ISDIR(status.st_mode)
+        else:
+            valid = stat.S_ISREG(status.st_mode) and status.st_nlink == 1
+        if not valid:
+            raise IntegrityError(f"{label} is not a private regular entry")
+        if not directory and os.name == "posix" and stat.S_IMODE(status.st_mode) != FILE_MODE:
+            raise IntegrityError(f"{label} permissions mismatch")
+        return status
+
+    def _read_profile_activation_marker(
+        self,
+        home: Path,
+        role: str,
+    ) -> dict[str, Any] | None:
+        """Read one marker without accepting aliases or a widened marker grammar."""
+
+        marker = home / "aether-observer.json"
+        if marker.is_symlink():
+            raise IntegrityError("managed profile activation marker must not be a symlink")
+        if not marker.exists():
+            return None
+        self._profile_resource_status(marker, directory=False, label="profile activation marker")
+        try:
+            payload = json.loads(read_private_bytes(marker).decode("utf-8"))
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as error:
+            raise IntegrityError("managed profile activation marker is malformed") from error
+        expected_keys = {
+            "schema_version",
+            "role",
+            "release_id",
+            "wheel_sha256",
+            "prebuild_identity",
+            "installed_file_fingerprint",
+            "observer",
+        }
+        if not isinstance(payload, dict) or set(payload) != expected_keys:
+            raise IntegrityError("managed profile activation marker is malformed")
+        if payload.get("schema_version") != 1 or payload.get("role") != role:
+            raise IntegrityError("managed profile activation marker identity mismatch")
+        for name in ("wheel_sha256", "prebuild_identity", "installed_file_fingerprint"):
+            value = payload.get(name)
+            if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+                raise IntegrityError("managed profile activation marker identity is invalid")
+        release_id = payload.get("release_id")
+        if not isinstance(release_id, str) or _RELEASE_ID_RE.fullmatch(release_id) is None:
+            raise IntegrityError("managed profile activation marker release is invalid")
+        if payload.get("observer") != OBSERVER_ENTRY_POINT:
+            raise IntegrityError("managed profile activation marker observer is invalid")
+        return payload
+
+    def _profile_bundle_resource_bytes(
+        self,
+        record: ReleaseRecord,
+        role: str,
+        relative_path: str,
+    ) -> bytes:
+        path = self.store.release_path(record.release_id) / "profiles" / role / relative_path
+        if path.is_symlink() or not path.is_file():
+            raise IntegrityError("managed profile release resource is unavailable")
+        try:
+            return read_private_bytes(path)
+        except (OSError, ValueError) as error:
+            raise IntegrityError("managed profile release resource is unreadable") from error
+
+    def _preflight_profile_homes(
+        self,
+        record: ReleaseRecord,
+        previous: ReleaseRecord | None,
+        recovery_record: ReleaseRecord | None = None,
+    ) -> None:
+        """Prove every existing canonical target before any profile mutation."""
+
+        profiles_root = self.store.profile_homes
+        if profiles_root.is_symlink():
+            raise IntegrityError("managed profile homes must not be a symlink")
+        if not profiles_root.exists():
+            return
+        if not profiles_root.is_dir():
+            raise IntegrityError("managed profile homes are unavailable")
+        self._profile_resource_status(profiles_root, directory=True, label="managed profile homes")
+
+        for role in _PROFILE_ROLES:
+            home = self.store.profile_home(role)
+            if home.is_symlink():
+                raise IntegrityError("managed profile home must not be a symlink")
+            if not home.exists():
+                continue
+            if not home.is_dir():
+                raise IntegrityError("managed profile home is unavailable")
+            self._profile_resource_status(home, directory=True, label="managed profile home")
+            marker = self._read_profile_activation_marker(home, role)
+            ownership_record: ReleaseRecord | None = None
+            if marker is not None:
+                if previous is not None and marker == self._profile_activation(previous, role):
+                    ownership_record = previous
+                elif recovery_record is not None and marker == self._profile_activation(
+                    recovery_record,
+                    role,
+                ):
+                    # A crash can leave the target marker visible while durable
+                    # transition recovery restores the source pointer.  The pending
+                    # transition is the only additional ownership proof accepted here.
+                    ownership_record = recovery_record
+                else:
+                    raise IntegrityError("canonical skill ownership evidence is stale")
+
+            for name in ("config.yaml", "SOUL.md"):
+                target = home / name
+                if target.is_symlink():
+                    raise IntegrityError("managed profile product file must not be a symlink")
+                if target.exists():
+                    self._profile_resource_status(
+                        target,
+                        directory=False,
+                        label="managed profile product file",
+                    )
+
+            skills_root = home / "skills"
+            if skills_root.is_symlink():
+                raise IntegrityError("managed profile skill directory must not be a symlink")
+            if not skills_root.exists():
+                continue
+            if not skills_root.is_dir():
+                raise IntegrityError("managed profile skill directory is unsafe")
+            self._profile_resource_status(
+                skills_root,
+                directory=True,
+                label="managed profile skill directory",
+            )
+            for skill_name in _CANONICAL_SKILLS:
+                skill_dir = skills_root / skill_name
+                if skill_dir.is_symlink():
+                    raise IntegrityError(
+                        "managed profile canonical skill directory must not be a symlink"
+                    )
+                if not skill_dir.exists():
+                    continue
+                if not skill_dir.is_dir():
+                    raise IntegrityError("managed profile canonical skill directory is unsafe")
+                self._profile_resource_status(
+                    skill_dir,
+                    directory=True,
+                    label="managed profile canonical skill directory",
+                )
+                target = skill_dir / "SKILL.md"
+                if target.is_symlink():
+                    raise IntegrityError("managed profile canonical skill must not be a symlink")
+                if not target.exists():
+                    continue
+                if ownership_record is None:
+                    raise IntegrityError("canonical skill ownership evidence is missing")
+                self._profile_resource_status(
+                    target,
+                    directory=False,
+                    label="managed profile canonical skill",
+                )
+                try:
+                    observed = read_private_bytes(target)
+                    expected = self._profile_bundle_resource_bytes(
+                        ownership_record,
+                        role,
+                        f"skills/{skill_name}/SKILL.md",
+                    )
+                except (OSError, ValueError) as error:
+                    raise IntegrityError("managed profile canonical skill is unreadable") from error
+                if observed != expected:
+                    raise IntegrityError("canonical skill ownership evidence is mismatched")
+
+    def _materialize_profile_homes(
+        self,
+        record: ReleaseRecord,
+        *,
+        recovery_record: ReleaseRecord | None = None,
+    ) -> None:
         """Activate one immutable bundle in three explicit, disposable-capable homes."""
 
+        self._preflight_profile_homes(
+            record,
+            self.store.active(required=False),
+            recovery_record=recovery_record,
+        )
         release = self.store.release_path(record.release_id)
         ensure_private_dir(self.store.profile_homes)
         for role in _PROFILE_ROLES:
@@ -2812,65 +3022,138 @@ class LifecycleManager:
             ):
                 raise IntegrityError("managed profile activation permissions mismatch")
 
-    def _deactivate_profile_homes(self) -> None:
-        """Remove only Aether-owned activation bytes; retain unknown role state."""
+    def _deactivate_profile_homes(
+        self,
+        expected_record: ReleaseRecord | None = None,
+    ) -> None:
+        """Remove only files proven by each profile's exact activation marker."""
 
         if not self.store.profile_homes.exists():
             return
         if self.store.profile_homes.is_symlink() or not self.store.profile_homes.is_dir():
             raise IntegrityError("managed profile homes are unsafe to deactivate")
+
+        removals: list[Path] = []
+        marker_removals: list[Path] = []
+        issues: list[str] = []
         for role in _PROFILE_ROLES:
             home = self.store.profile_home(role)
             if not home.exists():
                 continue
             if home.is_symlink() or not home.is_dir():
                 raise IntegrityError("managed profile home is unsafe to deactivate")
-            activation = home / "aether-observer.json"
-            if activation.exists() or activation.is_symlink():
-                activation.unlink()
+            marker_path = home / "aether-observer.json"
+            try:
+                marker = self._read_profile_activation_marker(home, role)
+            except IntegrityError:
+                issues.append("profile activation marker is invalid")
+                continue
+            if marker is None:
+                managed_targets = [home / name for name in ("config.yaml", "SOUL.md")]
+                skills_root = home / "skills"
+                if skills_root.is_symlink():
+                    issues.append("profile skill directory is unsafe")
+                elif skills_root.exists() and not skills_root.is_dir():
+                    issues.append("profile skill directory is unsafe")
+                elif skills_root.is_dir():
+                    managed_targets.extend(
+                        skills_root / skill_name / "SKILL.md" for skill_name in _CANONICAL_SKILLS
+                    )
+                if any(path.is_symlink() or path.exists() for path in managed_targets):
+                    issues.append("canonical profile ownership evidence is missing")
+                continue
+
+            try:
+                owned_record = self.store._read_release(marker["release_id"])
+                if marker != self._profile_activation(owned_record, role):
+                    raise IntegrityError("profile activation marker identity mismatch")
+                if expected_record is not None and marker != self._profile_activation(
+                    expected_record,
+                    role,
+                ):
+                    raise IntegrityError("profile activation marker is stale")
+            except IntegrityError:
+                issues.append("profile activation ownership evidence is stale")
+                continue
+
+            role_removals: list[Path] = []
+            role_issue = False
             for name in ("config.yaml", "SOUL.md"):
                 target = home / name
-                source = self._profile_source(role, name)
-                if (
-                    target.is_file()
-                    and not target.is_symlink()
-                    and source.is_file()
-                    and not source.is_symlink()
-                ):
-                    try:
-                        product_owned = read_private_bytes(target) == read_private_bytes(source)
-                    except (OSError, ValueError) as error:
-                        raise IntegrityError("managed profile resource is unreadable") from error
-                    if product_owned:
-                        target.unlink()
+                if not target.exists() and not target.is_symlink():
+                    continue
+                if target.is_symlink() or not target.is_file():
+                    role_issue = True
+                    continue
+                try:
+                    self._profile_resource_status(
+                        target,
+                        directory=False,
+                        label="managed profile resource",
+                    )
+                    observed = read_private_bytes(target)
+                    expected = self._profile_bundle_resource_bytes(owned_record, role, name)
+                except (IntegrityError, OSError, ValueError):
+                    role_issue = True
+                    continue
+                if observed == expected:
+                    role_removals.append(target)
+                else:
+                    role_issue = True
+
             skills_root = home / "skills"
             if skills_root.exists() or skills_root.is_symlink():
                 if skills_root.is_symlink() or not skills_root.is_dir():
-                    raise IntegrityError("managed profile skill directory is unsafe to deactivate")
-                for skill_name, source in self._skill_sources().items():
-                    skill_dir = skills_root / skill_name
-                    if not skill_dir.exists() and not skill_dir.is_symlink():
-                        continue
-                    if skill_dir.is_symlink() or not skill_dir.is_dir():
-                        raise IntegrityError(
-                            "managed profile canonical skill directory is unsafe to deactivate"
-                        )
-                    target = skill_dir / "SKILL.md"
-                    if (
-                        target.is_file()
-                        and not target.is_symlink()
-                        and source.is_file()
-                        and not source.is_symlink()
-                    ):
+                    role_issue = True
+                else:
+                    for skill_name in _CANONICAL_SKILLS:
+                        skill_dir = skills_root / skill_name
+                        if not skill_dir.exists() and not skill_dir.is_symlink():
+                            continue
+                        if skill_dir.is_symlink() or not skill_dir.is_dir():
+                            role_issue = True
+                            continue
+                        target = skill_dir / "SKILL.md"
+                        if not target.exists() and not target.is_symlink():
+                            continue
+                        if target.is_symlink() or not target.is_file():
+                            role_issue = True
+                            continue
                         try:
-                            product_owned = read_private_bytes(target) == read_private_bytes(source)
-                        except (OSError, ValueError) as error:
-                            raise IntegrityError(
-                                "managed profile canonical skill is unreadable"
-                            ) from error
-                        if product_owned:
-                            target.unlink()
-            _fsync_directory(home)
+                            self._profile_resource_status(
+                                target,
+                                directory=False,
+                                label="managed profile canonical skill",
+                            )
+                            observed = read_private_bytes(target)
+                            expected = self._profile_bundle_resource_bytes(
+                                owned_record,
+                                role,
+                                f"skills/{skill_name}/SKILL.md",
+                            )
+                        except (IntegrityError, OSError, ValueError):
+                            role_issue = True
+                            continue
+                        if observed == expected:
+                            role_removals.append(target)
+                        else:
+                            role_issue = True
+            if role_issue:
+                issues.append("managed profile resource ownership is mismatched")
+            else:
+                removals.extend(role_removals)
+                marker_removals.append(marker_path)
+
+        if issues:
+            raise IntegrityError(
+                "managed profile deactivation refused: canonical skill ownership evidence is unavailable"
+            )
+        for path in (*removals, *marker_removals):
+            _unlink_private_file(path, missing_ok=True)
+        for role in _PROFILE_ROLES:
+            home = self.store.profile_home(role)
+            if home.exists():
+                _fsync_directory(home)
         _fsync_directory(self.store.profile_homes)
 
     def prepare_release(
@@ -3518,6 +3801,9 @@ class LifecycleManager:
                 target.observation_compatibility
             ) < _projection_schema_ordinal(previous.observation_compatibility):
                 raise IntegrityError("projection schema downgrade requires explicit rollback")
+        # Ownership must be established for every role/skill before projections or
+        # profile bytes can be changed.  Incoming-byte identity alone is not proof.
+        self._preflight_profile_homes(target, previous)
         profile_snapshot = self._capture_profile_product_state()
         transition = self.store._begin_transition_locked(
             kind=transition_kind,
@@ -4633,8 +4919,8 @@ print(json.dumps({"registered": registered, "remaining": remaining, "unloaded": 
             return UninstallResult(True, False)
         active = self.store.active()
         assert active is not None
+        self._deactivate_profile_homes(active)
         self._deactivate_release_projections_locked(active)
-        self._deactivate_profile_homes()
         self.store.active_pointer.unlink(missing_ok=True)
         for product_path in (
             self.store.releases,
