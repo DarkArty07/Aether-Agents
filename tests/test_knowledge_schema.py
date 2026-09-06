@@ -112,6 +112,10 @@ def test_parameter_schema_structure(tool: str) -> None:
         req_fields, opt_fields = _ACTION_FIELDS[act]
         assert set(branch["required"]) == {"action", *req_fields}
         assert set(branch["properties"].keys()) == {"action", *req_fields, *opt_fields}
+        if act == "visualize":
+            assert "dependentSchemas" in branch
+            assert "detail" in branch["dependentSchemas"]
+            assert branch["dependentSchemas"]["detail"]["properties"]["format"]["enum"] == ["graph"]
 
 
 PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
@@ -673,9 +677,27 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
     ),
     (
         "project_knowledge",
+        {"action": "visualize", "format": "graph", "detail": "auto"},
+        True,
+        "visualize format graph and detail auto",
+    ),
+    (
+        "project_knowledge",
         {"action": "visualize", "format": "graph", "detail": "full"},
         True,
         "visualize format and detail",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "tree", "detail": "auto"},
+        False,
+        "visualize format tree rejects detail auto",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "tree", "detail": "full"},
+        False,
+        "visualize format tree rejects detail full",
     ),
     (
         "project_knowledge",
@@ -1085,3 +1107,45 @@ def test_runtime_dispatch_rejects_invalid_after_sanitization() -> None:
     with pytest.raises(KnowledgeError) as exc8:
         validate_arguments("project_knowledge", {"action": "list_prs", "limit": 51})
     assert exc8.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc9:
+        validate_arguments(
+            "project_knowledge", {"action": "visualize", "format": "tree", "detail": "auto"}
+        )
+    assert exc9.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc10:
+        validate_arguments(
+            "project_knowledge", {"action": "visualize", "format": "tree", "detail": "full"}
+        )
+    assert exc10.value.code == "ARGUMENT_INVALID"
+
+
+def test_visualize_tree_rejects_detail_schema_and_handler_parity() -> None:
+    schema = parameters("project_knowledge")
+    validator = Draft202012Validator(schema)
+
+    # Valid combinations: format omitted defaults to graph downstream, format=graph with detail
+    valid_payloads = [
+        {"action": "visualize"},
+        {"action": "visualize", "format": "graph"},
+        {"action": "visualize", "format": "tree"},
+        {"action": "visualize", "detail": "auto"},
+        {"action": "visualize", "detail": "full"},
+        {"action": "visualize", "format": "graph", "detail": "auto"},
+        {"action": "visualize", "format": "graph", "detail": "full"},
+    ]
+    for payload in valid_payloads:
+        assert validator.is_valid(payload), f"Draft202012Validator rejected valid {payload}"
+        assert validate_arguments("project_knowledge", payload) == "visualize"
+
+    # Invalid combinations: format="tree" with either explicit detail value
+    invalid_tree_detail_payloads = [
+        {"action": "visualize", "format": "tree", "detail": "auto"},
+        {"action": "visualize", "format": "tree", "detail": "full"},
+    ]
+    for payload in invalid_tree_detail_payloads:
+        assert not validator.is_valid(payload), f"Draft202012Validator should reject {payload}"
+        with pytest.raises(KnowledgeError) as exc:
+            validate_arguments("project_knowledge", payload)
+        assert exc.value.code == "ARGUMENT_INVALID"

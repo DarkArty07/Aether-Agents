@@ -216,14 +216,21 @@ def parameters(tool: str) -> dict[str, Any]:
         }
         if action == "search" and "limit" in branch_props:
             branch_props["limit"] = {**branch_props["limit"], "maximum": 20}
-        one_of.append(
-            {
-                "type": "object",
-                "properties": branch_props,
-                "required": ["action", *sorted(req)],
-                "additionalProperties": False,
+        branch_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": branch_props,
+            "required": ["action", *sorted(req)],
+            "additionalProperties": False,
+        }
+        if action == "visualize":
+            branch_schema["dependentSchemas"] = {
+                "detail": {
+                    "properties": {
+                        "format": {"enum": ["graph"]},
+                    }
+                }
             }
-        )
+        one_of.append(branch_schema)
 
     return {
         "type": "object",
@@ -248,6 +255,10 @@ def validate_arguments(tool: str, args: dict[str, Any]) -> str:
     if any(key not in args for key in required) or set(args) - {"action", *required, *optional}:
         raise KnowledgeError(
             "ARGUMENT_INVALID", "Missing or inapplicable arguments for this action."
+        )
+    if action == "visualize" and args.get("format") == "tree" and "detail" in args:
+        raise KnowledgeError(
+            "ARGUMENT_INVALID", "The detail parameter is only valid for graph visualization."
         )
     return action
 
