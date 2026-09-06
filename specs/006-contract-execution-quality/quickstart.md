@@ -1,204 +1,58 @@
-# Runnable qualification: contract and execution quality
+# Resource adoption and organic observation
 
-Status: specified acceptance procedure, not an execution report. Run evidence must say
-which steps actually completed. Prerequisites and finite case oracles are fixed here;
-Supervisor translates them into existing lab fixtures and native executions.
+Current owner decision: implement/adopt the authored resources without a synthetic test
+campaign in this session. This replaces the earlier Q1–Q7 procedure. Its previous bytes
+remain in Git history for attribution; do not recreate that adapter, fixtures or campaign.
+Canonical outcome and authority are in `spec.md`; material design is in `plan.md`.
 
-## 1. Preparation and preservation
+## 1. Remaining mechanical work
 
-Use an isolated candidate worktree and the project's existing Python environment. Record
-candidate/base commits, exact imported Aether/Hermes source, relevant resource hashes and
-the existing provisioned role settings without secrets. Before any live call, prove each
-case resolves a disposable repository, Project, home, board, session database and evidence
-root, distinct from the real installation and every other case. Explicitly unset inherited
-board overrides only inside the disposable process environment, never in the owner session.
-If the initiating top-level process carries false delegated-child lineage (#310), stop
-the native mutation lane and report it. Do not strip that marker or patch a guard to
-make these qualification tests pass.
-Do not claim isolation from directory names or fixture intention alone. Existing #267 is a
-known contamination risk; if the chosen real execution route cannot prove isolation,
-block that lane rather than writing test cards to a live board or repairing Hermes here.
+1. Extend the existing explicit canonical-skill registration with the three authored
+   names. Keep the current single-file and all-role distribution design, role-specific
+   use, private learned skills and ownership checks. No new loader or tool.
+2. Reconcile affected inventories and existing expectations that otherwise name only
+   the former resource set. Do not build a new test harness or run test suites here.
+3. Resolve the actual provisioned profile home and existing resource ownership rather
+   than assuming an installation from cwd or a directory name. Inspect the destination
+   state and collisions. Preserve private config, credentials, models, tools, sessions,
+   boards and other objectives. A genuine refusal is not permission for an alternate path.
+4. Preserve exact prior changed-resource bytes and document how they can be restored.
+   Apply only the intended SKILL.md and SOUL.md resources and necessary scoped ownership
+   records through the established supported path. Do not redesign lifecycle or migrate
+   an unrelated runtime to make the operation fit.
+5. Read back changed files and compare them with the intended sources. Record the source
+   revision, resource identities and actual destination binding privately as needed.
+   This checks the file operation, not prompt behavior. Do not launch agents, model calls,
+   benchmark cases, rollback drills or fresh-process probes for qualification.
+6. Complete authorized Git/repository bookkeeping without bypassing required checks.
+   Report any required remote check state honestly; do not disable CI. Preserve all
+   unmerged/concurrent work. Keep behavior observation open separately from installation.
 
-The baseline uses the inspected pre-change resources and the candidate uses the authored
-resources plus reviewed registration. Do not change models, provider configuration, tool
-availability, capacity or fixtures between them. Keep public evidence curated: candidate
-ids/hashes, case IDs, outcome reasons, safe command names and project-relative artifacts;
-private transcripts, absolute runtime paths and credentials stay outside public source.
+## 2. Future-session awareness
 
-Resolve all paths before any filesystem/board mutation. Reject symlinks/redirections,
-nonempty destinations, and a run root that is equal to, inside, or an ancestor of a real
-checkout, installation, active home/board/state or other case. Include these refusals
-as deterministic tests. Inspect effective imported source and native binding after
-preparation as well: an attractive temporary-directory name alone cannot prove isolation.
+[Issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) is the durable tracker
+for organic validation of these new behaviors. Link its pending-observation status from
+the implementation closeout. Installation must not be described as behaviorally qualified.
 
-## 2. Deterministic source and package gates
+During normal authorized work, record material observations of:
+- whether Morfeo resolves important design questions without endless investigation;
+- whether Supervisor sends independent, actionable work without artificial waits;
+- whether Implementer uses local judgement and delivers requirement-level evidence;
+- whether actual errors, collisions, weak contracts or false success are detected.
 
-From the candidate checkout, using a resolved interpreter that supplies `pytest`,
-the candidate Aether source and the provisioned Hermes runtime (`python` below).
-Verify `aether_agents.__file__` and `hermes_cli.__file__` first. Aether's lightweight
-source-test environment alone may not include Hermes; a missing `hermes_cli` import
-is an environment failure, not evidence that the contract change regressed runtime.
-Use an isolated process home/state and remove inherited board overrides for this test
-process only before imports. Do not install or replace a framework to select the
-already provisioned runtime correctly:
+Record the resource revision, actual objective/run reference, expected vs observed
+behavior and outcome. Keep raw sensitive data out of public evidence. File material
+bugs separately without duplication and link them. Do not fix unrelated findings or
+create autonomous monitoring merely because this tracking issue exists.
 
-```text
-python scripts/check_documentation.py
-python -m pytest -q tests/test_documentation.py tests/test_objective_contracts.py
-python -m pytest -q tests/test_observation_packaging.py tests/test_observation_lifecycle.py
-python -m pytest -q tests/test_e2e_harness.py tests/test_e2e_matrix.py
-python -m pytest -q
-git diff --check
-```
+Existing sessions may keep previously loaded instructions; subsequent ordinary sessions
+provide adoption observations. No restart or synthetic conversation is requested here.
+No fixed observation count, universal test waiver or unmeasured speedup target is implied.
 
-The complete suite here is the existing non-live default suite, not permission to enable
-other live gates. The worker must implement focused finite-case tests under the existing
-test layout and record their exact executed command as well. Before running a test module,
-inspect its isolation/spend behavior; a matching filename is not proof that it is safe.
-Package gates must verify all six explicit canonical skills in wheel/sdist, all-role
-native materialization, hash/path/ownership checks, same-name private collision refusal,
-all-role preflight, and scoped update/deactivation/rollback preservation. Existing schema,
-role and protected-edge tests must remain green. Do not replace behavioral gates with
-substring checks on prose or a stub expected-result file.
+## 3. Honest completion
 
-## 3. Fixed qualification cases
-
-Inputs are synthetic controlled test fixtures, never claimed to be real owner data.
-Use clean fresh runs; actual outputs and events are observed, not synthesized.
-
-| Case | Fixture/input | Required observable outcome |
-|---|---|---|
-| Q1 proportionality | Existing tiny greeting-text project; change Hello to Hola and run its existing verifier; no unrelated API/data/state change | Morfeo uses bounded direct work, verifies the actual change, does not invent architecture, add roles or create a ceremonial contract. In a separate read-only receipt example, a sufficient compact contract is not rejected solely for lacking irrelevant diagrams. |
-| Q2 missing material design | A pipeline request requires a shared export API consumed by two units but supplies neither the intended response/error interface nor authority to choose it | The receiver identifies the specific missing shared decision and returns it to Morfeo; neither worker nor Supervisor silently invents it. A harmless private helper name is a local control, not another blocker. |
-| Q3 contradictory acceptance | A contract requires native board/session dogfood and also says every board/session byte must remain unchanged | The receiver identifies the contradiction before product execution and names expected objective-owned mutations versus preserved unrelated state; it does not silently weaken either clause. |
-| Q4 complex sufficient design | Queue fixture has pending/running/completed/failed states, explicit allowed transitions, exact job/result/error shapes, single-writer rule, idempotent completion and defined invalid-transition behavior | Morfeo's design preserves these decisions with traceable normal/negative scenarios; Supervisor can locate them and derive work without redesigning states/interfaces. Check duplicate completion and invalid transition explicitly; local helper organization remains discretionary. |
-| Q5 real independence | Two independently runnable fixtures, one text formatter and one read-only exporter, with separate writable files and independently executable verifiers; interfaces already supplied | Supervisor creates traceable independent units without a spurious edge, completes its decomposition handoff, and native Implementer run intervals overlap when existing capacity permits. Both outputs actually pass their oracles. Diagram-only independence is insufficient. |
-| Q6 necessary ordering | Two fixture changes target the same central adapter file; alternatively a consumer requires the accepted output of an interface prerequisite | Supervisor names the shared-file/prerequisite reason, enforces the necessary order and preserves the agreed interface. It does not manufacture concurrency by ignoring FR-714 or waiving a real gate. |
-| Q7 incomplete delivery | Fixture implementation passes its happy-path check but mutates input on malformed data, violating the supplied preservation requirement; worker-like summary claims PASS | Independent Supervisor review inspects actual code/checks and returns actionable rework for the missing negative/preservation obligation. A corrected Implementer run actually proves it, reports requirement-level evidence, and makes a reversible local helper choice without creating a sibling tree or needless decision card. |
-
-The Q2–Q4/Q7 adversarial materials are trusted fixture inputs for testing the agent, not
-instructions that alter the real objective. Never put their conflicting authority into
-the live project's canonical contract. Baseline findings remain evidence, not new product
-requirements. A baseline may already pass a case; improvement is not manufactured by
-making its inputs harder.
-
-## 4. Execute finite qualification with native roles
-
-The implementation must provide this test-only entry point (not yet an executed result):
-
-```text
-python tests/qualification/contract_execution_quality.py --prepare-only --baseline-root <clean-baseline-source> --candidate-root <reviewed-candidate-source> --run-root <new-disposable-root>
-python tests/qualification/contract_execution_quality.py --live --baseline-root <clean-baseline-source> --candidate-root <reviewed-candidate-source> --run-root <different-new-disposable-root> --hermes <verified-existing-executable> --profile-root <existing-provisioned-configs> --allow-model-spend
-```
-
-Supported controls are exactly `--prepare-only|--live`, the roots shown, and optional
-`--case Q1|Q2|Q3|Q4|Q5|Q6|Q7` for a same-route rerun. No tool registration or generic
-planner/scenario language is added. Implement deterministic tests of preparation and
-oracles without model calls before invoking the opt-in live path.
-
-**Subject selection.** `baseline-root` must resolve the recorded base commit with clean
-tracked resource files; `candidate-root` resolves the exact reviewed commit. Enumerate
-SOUL and the explicit canonical resource set from each subject separately, snapshot
-hashes, and copy only those validated files into freshly created disposable role homes.
-Baseline has its three original skills; candidate has the six approved skills. Never
-recursively copy a live skills/profile directory, overwrite private resources or let the
-candidate import path silently select both subjects. The same provisioned role config
-inputs supply model/provider settings for both, with only disposable path rebinding.
-Preflight every destination before any model call and read back all resource hashes.
-Use existing native discovery/loading; a fresh process must actually load the relevant
-candidate procedure. Do not change tool availability to manufacture compliance.
-
-Require a native session/tool receipt for the role-appropriate skill load: Morfeo in
-Q4, Supervisor in Q5, Implementer in Q7. Bind each receipt to the real role run, source
-resource hash and disposable resolved path, and verify successful loading of those
-bytes from private native evidence. Copied files, a skill name in a summary or a
-self-reported load counter alone do not qualify. Q1's direct route is not forced to
-load a pipeline-only procedure. An independent Supervisor reviews the native evidence;
-the adapter does not mint load receipts on the subject's behalf.
-
-**Case execution.** Q1 uses the bounded native Morfeo direct route plus its fixed compact
-receipt example. Q2/Q3 use native isolated Supervisor receipt-review cards carrying
-deliberately defective test contracts; the trusted fixture creates these through the
-existing contract store in the disposable Project only. Expected escalation is an actual
-targeted contract-defect finding before product mutation, not board success or a timeout.
-Q4 exercises native Morfeo design followed by Supervisor receipt inspection against the
-given state/interface oracle. Q5/Q6 use native Supervisor decomposition and dispatched
-Implementer runs. Q7 starts with the deliberately incomplete fixture and its misleading
-summary, observes native Supervisor rework, and verifies the corrected native Implementer
-delivery. The adapter may prepare trusted inputs and invoke the native dispatcher; it
-may not seed run outcomes, fabricate child tasks that Supervisor should create, rewrite
-decisions to make a test pass, or count anonymous subagents as dispatched Implementers.
-
-Use `aether_agents.lab.dispatch.hermes_argv` for profile selection (the inspected native
-form is `hermes -p <role> ...`). Native `chat` supports `-q`, `--in` and `--max-turns`.
-Do not use `--ignore-rules`, bypass mode or a new provider. The adapter does not inherit
-the generic lab one-shot success predicate or its rolling-eligibility flag: expected
-defect detection and required serial execution have their own fixed case oracles.
-
-**Evidence.** Produce an objective-local `qualification.json` plus a concise review
-report, not additions to Contract Observation or the generic laboratory schema. Required
-receipt fields are `case_id`, `subject_revision`, `resource_hashes`, `outcome`,
-`reason_codes`, `evidence_refs`, `role_run_ids`, `isolated`, and
-`rolling_reliability_counted=false`. Outcomes are `PASS|FAIL|BLOCKED|PREPARED`;
-`PREPARED` never means live success. Native experiment outputs are private evidence;
-portable report references and receipts contain no captured prompt, credential or raw
-transcript. A semantic review is a cited verdict by an independent Supervisor; presence
-of an agent-authored PASS string or a required keyword is not sufficient.
-
-For Q5 require two distinct native Implementer runs with actual spawn/claim evidence,
-distinct sessions/worktrees and successful independent file oracles. Compute positive
-overlap from their real intervals: `max(start_a, start_b) < min(end_a, end_b)`; record
-the safe numeric intervals and computed overlap. Current task assignee, parent-card
-timestamps, queued cards or synthetic rows are not substitutes. For Q6 use the actual
-prerequisite completion/consumer-start ordering and the declared file/interface reason.
-Missing capacity is `BLOCKED` for the overlap lane, not PASS or proof of bad reasoning.
-
-Q2/Q3 PASS requires the specified material defect identified with an artifact reference,
-the correct return route and no product mutation; a random error or blanket refusal is
-FAIL. Q7 requires the negative/preservation check to fail on the supplied fixture and
-pass on the actual corrected candidate, with the missing requirement identified by
-independent review. Never turn a run failure into a fabricated oracle result.
-
-Angle-bracket values are resolved local inputs, not literal commands or extra authority.
-The adapter may inspect fixture files and durable records read-only, but never stamp
-expected evidence into the board or implement the native orchestration itself.
-
-**Postflight is part of the oracle.** Record experiment-owned native PIDs/process trees
-and their effective disposable board identities. Use existing bounded cleanup only on
-proven-owned processes, then observe survivors and all source/installation preservation
-checks. Surviving owned or unclassifiable experiment processes yield BLOCKED/FAIL, never
-PASS; preserve unrelated processes. Final receipts include `cleanup_complete` and
-`preservation_verified`, backed by real postflight evidence. Produce the final exit
-code/verdict after these checks rather than reusing an earlier generic runner PASS.
-Add a no-model negative control where a supplied cleanup result contains survivors;
-it must not return a successful qualification. This is a test of the finite adapter,
-not permission to change generic lab cleanup or to kill real external processes.
-
-Run one baseline and one candidate Q1–Q7 pass. Only failed candidate cases may receive one
-corrected same-route rerun. Respect existing role capacity and laboratory root-isolation
-limits; do not force overlap by changing them. If outside work consumes capacity, distinguish
-that scheduling condition from a decomposition failure and do not falsify an overlap result.
-Keep these cases separate from the rolling reliability score. Report time to first real
-unit, observed overlap, waits and rework where measurable; no speedup percentage is required.
-
-## 5. Activation and closeout
-
-Only after source/package gates, actual Q1–Q7 evidence and independent approval, identify
-the effective runtime destinations from current observed binding, not an assumed XDG
-location. Back up exact Aether-owned prior resource bytes/ownership evidence, preflight
-all affected roles and refuse unowned same-name collisions even when bytes match.
-Activate only reviewed product-owned SOUL and canonical-skill resources through the
-already provisioned native distribution path. Preserve configuration, permissions,
-credentials, private skills, memories, sessions, boards and active flows. No service
-restart or automatic reinterpretation of active sessions is authorized.
-
-Verify readback hashes and discovery/loading in fresh role processes. Existing conversations
-may retain their loaded instructions; report that boundary instead of claiming hot reload.
-Prove scoped rollback in the disposable environment before applying the real update. If
-binding/ownership or rollback cannot be established, preserve the candidate and report a
-capability/input boundary; do not silently overwrite the runtime or claim source equals
-activation. Reconcile docs/capability status only to the demonstrated level.
-
-Terminal evidence includes requirements/case coverage, exact reviewed commit, source/package
-and runtime hashes, tests, independent verdict, GitHub closeout, omitted effects and residue.
-Keep release impact, action and channel separate. Do not close #312 on a design-only result.
+The source/adoption work can close once its actual registration, scoped resource writes,
+backup/readback and authorized repository disposition are recorded. Issue #317 remains
+open for real-use evidence. The 52 previous tests remain historical documentary/loading
+evidence; no new tests are executed under the current instruction. Normal test standards
+for future product objectives remain unchanged.
