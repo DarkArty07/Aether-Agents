@@ -1,8 +1,9 @@
 # R2 Specification: The Contract and the Handoff
 
 **Roadmap ID**: R2  
-**Stage status**: done  
+**Stage status**: in-progress — installed contract-quality procedures under owner-selected organic observation (#317)
 **Amended**: 2026-08-24 — Objective Contract identity/materialization added after #227; prior 2026-08-18 pipeline scoping retained
+**Owner-approved refinement**: contract-design sufficiency, canonical procedure and focused role guidance; organic observation replaces the synthetic qualification campaign for this adoption, and implementation/readback evidence is separate from behavioral qualification
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
 **Future role owner**: Morfeo  
@@ -73,6 +74,17 @@ Completeness is measured with mechanisms that already exist upstream, not assert
 - **FR-211**: No unresolved clarification marker or unquantified vague term may remain at handoff.
 - **FR-212**: Requirements-quality validation MUST use traceability references, per upstream's standard of at least 80% of items carrying one.
 - **FR-213**: Morfeo MUST NOT claim cross-artifact consistency he cannot yet measure.
+
+### Evidence of design sufficiency
+
+- **FR-213a**: Morfeo MUST distinguish structural contract validity from design sufficiency. Successful `validate`, `finalize`, or `prepare_handoff` proves only the guarantees implemented by that capability; it MUST NOT be reported as independent approval of requirements or architecture.
+- **FR-213b**: Before handoff, the owning artifacts MUST make the inspected project baseline, required outcomes, acceptance scenarios, preservation boundary, and material design decisions discoverable without reconstructing the owner conversation. Code references SHOULD identify stable paths and symbols with the inspected revision; line numbers alone are not a durable implementation prescription.
+- **FR-213c**: Material design MUST specify the applicable component responsibilities, shared interfaces, data/control flow, error behavior, states and invariants sufficiently for Supervisor to derive implementation units without inventing product intent or architecture. Models, diagrams, examples and pseudocode are conditional aids, not mandatory filler or a substitute for implemented code.
+- **FR-213d**: Material feasibility uncertainty MUST be resolved with proportionate inspection or authorized evidence before a build-ready handoff. An unresolved research question MUST remain explicit and MUST NOT be disguised as an implementation detail. Decisions reserved to the owner remain with the owner; ordinary reversible implementation judgement remains with Implementer under R3/R7.
+- **FR-213e**: Each acceptance obligation MUST have a traceable verification scenario and expected observable evidence at the level needed for the objective. Morfeo MUST check contradictions among authority, scope, deliverables, preservation requirements and test effects. Expected mutations of objective-owned test or execution state MUST NOT be confused with preservation of unrelated state.
+- **FR-213f**: Aether MUST provide a canonical contract-design procedure that operationalizes these requirements through existing artifact owners. Focused role guidance MUST require discovery and use of the applicable canonical procedure without duplicating its manual. Skills own procedure, never requirements or authority; Supervisor's independent receipt analysis remains separate from Morfeo's self-check.
+
+The approved joint intervention preserves the current Objective Contract schema and immutable historical versions. Qualification MUST compare actual contract-shaped cases: a sufficient small objective, missing material design, contradictory acceptance, and a complex interface/state objective. R7 owns the complementary decomposition, parallelism and unit-evidence obligations. The check must demonstrate useful detection and proportionality, not document length, self-certified boolean fields, or a new cognitive enforcement engine. Tool availability, delegation authority, concurrency, models and providers remain unchanged. Scoped activation is authorized only after the isolated qualification and preservation gates in `../006-contract-execution-quality/quickstart.md`; existing active flows are not interrupted.
 
 ### After receipt — the supervision side
 

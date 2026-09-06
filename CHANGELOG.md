@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Contract design and execution procedures
+
+- Added the personally authored `objective-contract-design`, `supervisor-decomposition`, and `implementation-evidence` canonical resources and focused role wording: material design before handoff, useful independent decomposition, and requirement-linked unit evidence.
+- Registered the resources through the existing explicit skill distribution surface and reconciled the corresponding inventory expectations; no new tool, loader, role, schema, model, or concurrency setting is introduced.
+- New behavior is under organic observation in [#317](https://github.com/DarkArty07/Aether-Agents/issues/317). At the owner's direction this delivery does not run a local synthetic qualification campaign; source registration and resource installation do not establish behavioral quality or speedup.
+
 ### Current beta project and documentation surface
 
 - Added the user-visible `aether init` path for an existing Git repository root: it writes the portable project marker, preserves the required ignore boundary, and binds exactly one existing native Hermes Project by exact primary path; `--hermes-project ID` resolves an otherwise ambiguous exact match without creating or changing a native Project.

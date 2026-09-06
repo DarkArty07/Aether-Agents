@@ -222,6 +222,9 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
     )
     for role in ("morfeo", "supervisor", "implementer"):
         profile_root = stage / "profiles" / role
@@ -331,6 +334,9 @@ def _profile_bundle_sha256() -> str:
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
     )
     for role in ("morfeo", "supervisor", "implementer"):
         resources: dict[str, dict[str, str]] = {}
@@ -802,6 +808,9 @@ def test_profile_bundle_contains_only_the_explicit_canonical_skill_allowlist(
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
     }
     assert set(manifest["profiles"]["morfeo"]["skills"]) == expected_skills
     for role in ("morfeo", "supervisor", "implementer"):
@@ -839,6 +848,9 @@ def test_activation_materializes_canonical_skills_in_each_native_profile_directo
             "git-github-closeout",
             "semver-release",
             "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
         ):
             target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
             assert target.read_bytes() == (source_root / skill_name / "SKILL.md").read_bytes()
@@ -943,7 +955,14 @@ def test_update_allows_only_marker_proven_prior_release_skill_bytes(
             (store.profile_home(role) / "aether-observer.json").read_text(encoding="utf-8")
         )
         assert marker["release_id"] == second.release_id
-        for skill_name in ("git-github-closeout", "semver-release", "canonical-skill-governance"):
+        for skill_name in (
+            "git-github-closeout",
+            "semver-release",
+            "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
+        ):
             target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
             source = (
                 store.release_path(second.release_id)
@@ -1026,7 +1045,14 @@ def test_deactivation_removes_only_marker_owned_profile_skill_bytes(
     for role in ("morfeo", "supervisor", "implementer"):
         home = store.profile_home(role)
         assert not (home / "aether-observer.json").exists()
-        for skill_name in ("git-github-closeout", "semver-release", "canonical-skill-governance"):
+        for skill_name in (
+            "git-github-closeout",
+            "semver-release",
+            "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
+        ):
             assert not (home / "skills" / skill_name / "SKILL.md").exists()
     assert unrelated.read_bytes() == b"learned private skill\n"
 

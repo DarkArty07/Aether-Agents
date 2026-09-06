@@ -52,6 +52,7 @@ jobs:
           .aether/objective-contracts/oc_916909aee68c3473/v1.md
           .aether/objective-contracts/oc_924b2054e774ca5b/v1.md
           .aether/objective-contracts/oc_a63ccc67b95411eb/v1.md
+          .aether/objective-contracts/oc_a578f1815b1eeee9/v1.md
           .aether/objective-contracts/oc_b8865f5129d60535/v1.md
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
@@ -238,6 +239,9 @@ jobs:
           src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
           src/aether_agents/resources/skills/git-github-closeout/SKILL.md
           src/aether_agents/resources/skills/semver-release/SKILL.md
+          src/aether_agents/resources/skills/objective-contract-design/SKILL.md
+          src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md
+          src/aether_agents/resources/skills/implementation-evidence/SKILL.md
           src/aether_agents/resources/lab
           src/aether_agents/resources/hermes-baseline.json
           src/aether_agents/result.py
@@ -247,6 +251,7 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_contract_quality_documents.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py

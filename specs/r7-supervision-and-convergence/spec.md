@@ -36,6 +36,12 @@ R3-D01 assigned `tasks` to the supervising role because a breakdown requires con
 - **FR-704**: Every decision two sibling units would each have to make MUST be made once by the supervisor and written into **both** card bodies. Workers cannot see sibling cards, so an unstamped shared decision is a decision each worker invents differently.
 - **FR-705**: Each card body MUST be written as explicit acceptance criteria, not as a description. This is a hard requirement rather than a style preference, because the convergence judge reads the body as its acceptance criteria (§7).
 
+### Executable unit delivery
+
+- **FR-705a**: Supervisor MUST use the applicable canonical decomposition procedure to establish material contract sufficiency and cross-artifact coverage before dispatch. The procedure MUST NOT transfer missing product design to Implementer, impose irrelevant design artifacts on a sufficient small objective, or replace `tasks.md` with another plan.
+- **FR-705b**: Every implementation delivery MUST identify source requirements, independently testable outcome, verified base/prerequisites, writable and preserved boundaries, agreed shared decisions, local judgement, verification oracles and evidence, dependencies with their reason, and the applicable completion/review lane. Long stable context MAY be referenced; shared decisions MUST remain available to every affected worker.
+- **FR-705c**: Supervisor MUST complete a verified decomposition handoff once the graph and executable unit deliveries exist, rather than keeping its root open until parent-gated implementation completes. This does not permit skipping receipt analysis, a real contract gate or the runtime's lifecycle.
+
 ## 3. Two Runtime Defaults That Must Be Switched Off
 
 Both are enabled by default and both silently take work away from the supervisor. Leaving either alone produces a system that reassigns work the contract never authorised.
@@ -74,6 +80,12 @@ The two defaults compose badly. The unblock-loop breaker routes a repeatedly-blo
 - **FR-714d**: The runtime MUST fence the binding by board, Project, flow, profile, workspace, generation and lease. Resume MUST use the exact stored session with `--no-restore-cwd --in <canonical-workspace>` and reject missing, closed, corrupt, cross-profile, cross-Project, cross-flow, or stale-generation state.
 - **FR-714e**: Exactly one terminal Supervisor card uses `terminal=true`. Ordinary decomposition, implementation, review and rework milestones remain silent to the origin; only explicit `input`, `revision`, or `flow_terminal` routing returns to Morfeo's owner-facing session.
 
+### Evidence-backed useful parallelism
+
+- **FR-714f**: Supervisor MUST identify actual independent outcomes and explain prerequisite/interface/shared-file reasons for dependency edges. A materially concentrated unit MUST have a concrete coupling rationale or be reconsidered for a useful split. Arbitrary worker counts, file-count thresholds and splitting solely by technical layer MUST NOT substitute for independently testable work.
+- **FR-714g**: Ready independent units MUST NOT be held behind an unrelated review, optional investigation or documentation task unless the canonical contract makes that task a real prerequisite. File-conflicting units remain ordered under FR-714; this requirement does not waive a gate, interrupt healthy work or change concurrency settings.
+- **FR-714h**: Throughput claims MUST distinguish verified graph independence from actual run overlap, queue wait, rework and integration. Use run-level evidence and the effective existing capacity; current-assignee totals and heartbeats alone are insufficient. Qualification MUST include an independent graph and a genuinely ordered graph without inventing a percentage speedup target.
+
 ## 5. Escalation — local judgement first, durable escalation when material
 
 Christopher's original instruction remains authoritative at the material boundary:
@@ -101,6 +113,7 @@ The existing decision-card mechanism remains useful when the choice affects shar
 - **FR-718**: Tier 1 SHOULD use the verified decision-card pattern rather than a human-visible block.
 - **FR-719**: Implementer MUST NOT fan out product implementation or create sibling execution work on its own authority. This is a semantic/review rule under PD-73, not a pre-tool permission rule under R10.
 - **FR-719a**: A decision card MUST carry the question, candidate answers and consequences; a card that only reports confusion is incomplete.
+- **FR-719b**: Implementer MUST use the applicable canonical unit-execution procedure to verify delivered scope, actual prerequisites, interfaces and test oracles, decide legitimate local choices, implement and self-check assigned behavior, and return evidence through the existing lane. A bad split or materially absent boundary returns to Supervisor; Implementer MUST NOT create a second product breakdown or Objective Contract.
 
 ### Tier 2 — the contract is genuinely defective
 
@@ -139,6 +152,7 @@ The runtime provides first-class same-card review: an implementer can hand its c
 - **FR-734**: Review MUST be performed by a role that authored neither the requirements nor the code (R3-FR-318). The supervisor is that role.
 - **FR-735**: Aether MUST NOT rely on the bundled review skill as its reviewer of record. It MAY be pinned to a review card as additional procedure, but the reviewing authority is the supervisor profile.
 - **FR-736**: Returning rework MUST use the review return path rather than a block, so repeated review cycles do not consume the recurrence budget of §6.
+- **FR-736a**: Unit completion evidence MUST map each assigned acceptance obligation to the actual check, observed result and inspectable artifact or run evidence, with unexecuted checks and remaining risk explicit. Supervisor MUST compare that evidence with the diff and required behavior; confident prose, a green build or a test count MUST NOT conceal incomplete acceptance. Unit self-review is not independent integrated acceptance.
 - **FR-737**: Review MUST be same-card, so review history stays attached to the work it judges (R5-FR-526).
 - **FR-737a**: **A reviewer verdict requires a claimed review run.** Verified by execution: returning rework is valid only while the unit is running under a run claimed from review, and it returns a diagnostic rather than failing loudly when it is not. A verdict issued against a unit merely sitting in review does nothing. Aether's review procedure MUST therefore run inside a dispatched review run, never as a direct write.
 - **FR-737b**: Requesting review wakes a subscribed originator in the same way a block does. Review-time wakes MUST be scoped to Morfeo's own reasoning and MUST NOT reach the owner (R6-FR-619).

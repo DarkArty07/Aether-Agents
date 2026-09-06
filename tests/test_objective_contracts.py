@@ -1106,7 +1106,9 @@ def test_product_resources_bind_contract_flows_without_widening_role_sessions() 
     assert "Implementer cards" in supervisor_soul
     assert "fresh session" in supervisor_soul
     assert "`terminal=true`" in supervisor_soul
-    assert "root and all implementation units" in supervisor_soul
+    assert "root and all independently reviewed implementation units" in supervisor_soul
+    assert "native same-card review lane" in supervisor_soul
+    assert "only from its claimed review run" in supervisor_soul
     assert "needs-owner" in supervisor_soul
     assert "needs-contract-revision" in supervisor_soul
     assert "internal" in supervisor_soul
@@ -1161,7 +1163,9 @@ def test_supervisor_preserves_judgement_review_and_exact_escalation_boundaries()
         "Answer a material shared decision when the canonical contract settles it",
         "If a material product, scope, acceptance, interface, or authority decision is genuinely absent, return that defect to Morfeo",
         "A durable decision card is useful for a real cross-role decision",
-        "Propagate flow affinity only to same-profile Supervisor work. Implementer cards always receive a fresh session. Create the final Supervisor review/integration card with the same affinity, `terminal=true`, and dependencies on the root and all implementation units.",
+        "Propagate flow affinity only to same-profile Supervisor work. Implementer cards always receive a fresh session. Create the terminal Supervisor integration/closeout card with the same affinity, `terminal=true`, and dependencies on the root and all independently reviewed implementation units.",
+        "A terminal integration card is not a substitute for unit review.",
+        "Honor a distinct pre-created review lane when the trusted runtime graph explicitly supplies one",
         "Review work you did not author",
         "Return correctable implementation failure through the review/rework path",
         "You MAY perform a bounded integration repair yourself when it is mechanically implied by already accepted work and introduces no new behavior",

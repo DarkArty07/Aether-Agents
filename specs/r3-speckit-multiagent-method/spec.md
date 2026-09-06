@@ -1,7 +1,7 @@
 # R3 Specification: Spec Kit as a Multi-Agent Method
 
 **Roadmap ID**: R3  
-**Stage status**: done
+**Stage status**: in-progress — clarified design/decomposition boundary under owner-selected organic observation (#317)
 **Amended**: 2026-08-18 — PD-44 direct stewardship distinguished from distributed Spec Kit phases
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  
@@ -39,6 +39,7 @@ The upstream order is `constitution → specify → clarify → plan → tasks �
 - **FR-301**: Each Spec Kit phase in the pipeline MUST have exactly one owning role.
 - **FR-302**: A role MUST NOT perform a pipeline phase owned by another role, per PD-13. A direct PD-44 operation is not reclassified as Morfeo owning the pipeline's `implement` phase.
 - **FR-303**: For pipeline work, the handoff boundary is between `plan` and `tasks`. Morfeo delivers intent and approach; the supervision role makes it executable. Direct bounded work crosses no role boundary and creates no fake phase artifact.
+- **FR-303a**: Technical design and execution decomposition are distinct meanings of planning. Morfeo owns the material technical approach in `plan.md` and the applicable R2 artifacts; Supervisor owns the executable breakdown in `tasks.md`, dependency ordering and contract-supported shared execution decisions. Making a contract executable MUST NOT mean inventing a missing material product, architecture or shared-interface decision. Implementer retains reversible unit-local judgement under R7.
 - **FR-304**: Deriving the task breakdown MUST NOT alter intent. It expresses the contract as executable work and nothing more.
 - **FR-305**: Quality phases MUST be applied where ambiguity or risk is material, not ceremonially on every unit of work.
 
