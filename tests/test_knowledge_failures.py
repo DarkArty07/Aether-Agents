@@ -167,3 +167,17 @@ def test_operator_cli_complete_note_and_binding_cycle(
     assert invalid[0] == 1 and invalid[1]["error"]["code"] == "ARGUMENT_INVALID"
     assert call("disable")[1]["enabled"] is False
     assert call("doctor")[0] == 1
+
+
+def test_doctor_reports_semantic_enabled(tmp_path: Path, native_python: Path, capsys) -> None:
+    _root, state = project(tmp_path)
+    service = KnowledgeService(state, tmp_path / "cache")
+    parser = _build_parser()
+
+    from aether_agents.knowledge.component import configure
+
+    configure(service, native_python, semantic_enabled=True)
+    code = run_knowledge(parser.parse_args(["knowledge", "doctor", "--json"]), service)
+    data = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert data["semantic_enabled"] is True

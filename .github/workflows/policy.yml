@@ -289,10 +289,13 @@ jobs:
           src/aether_agents/knowledge/common.py
           src/aether_agents/knowledge/component.py
           src/aether_agents/knowledge/context.py
+          src/aether_agents/knowledge/exports.py
+          src/aether_agents/knowledge/github.py
           src/aether_agents/knowledge/graph_worker.py
           src/aether_agents/knowledge/graphify.py
           src/aether_agents/knowledge/hermes_plugin.py
           src/aether_agents/knowledge/memory.py
+          src/aether_agents/knowledge/semantic.py
           src/aether_agents/knowledge/service.py
           src/aether_agents/knowledge/snapshots.py
           src/aether_agents/resources/graphify/requirements.in

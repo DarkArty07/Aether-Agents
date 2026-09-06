@@ -18,7 +18,7 @@ class GraphifyBackend:
     def __init__(self, python: Path, *, timeout: float = 60.0):
         # Do not resolve a venv interpreter symlink: doing so loses its environment.
         self.python = python.expanduser().absolute()
-        self.timeout = min(max(float(timeout), 1.0), 300.0)
+        self.timeout = min(max(float(timeout), 1.0), 600.0)
 
     def probe(self) -> dict[str, Any]:
         return self.run("probe")

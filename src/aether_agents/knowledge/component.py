@@ -23,6 +23,8 @@ def configure(
     *,
     ownership: str = "external",
     lock_id: str | None = None,
+    semantic_enabled: bool = False,
+    semantic_auxiliary_task: str = "web_extract",
 ) -> dict[str, Any]:
     python = python.expanduser().absolute()
     probe = GraphifyBackend(python).probe()
@@ -39,7 +41,12 @@ def configure(
         "ownership": ownership,
         "lock_id": lock_id,
         "python_version": probe["python"],
-        "semantic_enabled": False,
+        "semantic_enabled": bool(semantic_enabled),
+        "semantic_auxiliary_task": semantic_auxiliary_task,
+        "semantic": {
+            "enabled": bool(semantic_enabled),
+            "auxiliary_task": semantic_auxiliary_task,
+        },
     }
     atomic_json(service.config_path, config)
     return {

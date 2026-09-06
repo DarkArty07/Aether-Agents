@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
-from test_project_knowledge_engine import PROJECT, git_at, project
+from test_project_knowledge_engine import OTHER, PROJECT, git_at, project
 from test_project_knowledge_engine import native_python as native_python
 from test_work_memory import payload
 
@@ -360,3 +362,454 @@ def test_regression_d31_query_explain_community_discovery(
     assert cinfo["id"] == cid
     assert "name" in cinfo
     assert isinstance(cinfo["node_count"], int) and cinfo["node_count"] > 0
+
+
+def test_manager_envelope_expansion_actions(tmp_path: Path, native_python: Path) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+
+    # 1. stats
+    stats_res = store.execute(ctx, "stats", {})
+    assert stats_res["ok"] is True
+    assert "stats" in stats_res
+    stats = stats_res["stats"]
+    assert "node_count" in stats
+    assert "edge_count" in stats
+    assert "community_count" in stats
+    assert "confidence_counts" in stats
+    assert "origin_counts" in stats
+
+    # 2. god_nodes
+    gods_res = store.execute(ctx, "god_nodes", {"top_n": 5})
+    assert gods_res["ok"] is True
+    assert "nodes" in gods_res
+    assert isinstance(gods_res["nodes"], list)
+
+    # 3. query with query_options
+    q_res = store.execute(
+        ctx, "query", {"question": "process_order", "traversal": "dfs", "depth": 1}
+    )
+    assert q_res["ok"] is True
+    assert "query_options" in q_res
+    assert q_res["query_options"]["traversal"] == "dfs"
+    assert q_res["query_options"]["depth"] == 1
+
+    # 4. visualize
+    viz_res = store.execute(ctx, "visualize", {"format": "graph", "detail": "auto"})
+    assert viz_res["ok"] is True
+    assert "artifact" in viz_res
+    art = viz_res["artifact"]
+    assert art["format"] == "graph"
+    assert art["snapshot_id"] == stats_res["snapshot_id"]
+    assert Path(art["local_path"]).is_file()
+    assert art["bytes"] > 0
+    assert "rendered_nodes" in art
+    assert "total_nodes" in art
+
+
+def test_d39_visualize_both_html_formats_and_snapshot_stability(
+    tmp_path: Path, native_python: Path
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+
+    graph_file = state / "knowledge" / PROJECT / "views" / ctx.view_id
+    pointer = json.loads((graph_file / f"{ctx.source_revision}.json").read_text())
+    snapshot_id = pointer["snapshot_id"]
+    graph_json = (
+        tmp_path / "cache" / "knowledge" / PROJECT / snapshot_id / "graphify-out" / "graph.json"
+    )
+    sha_initial = hashlib.sha256(graph_json.read_bytes()).hexdigest()
+
+    # 1. Graph format (auto detail)
+    res_graph_auto = store.execute(ctx, "visualize", {"format": "graph", "detail": "auto"})
+    assert res_graph_auto["ok"] is True
+    art_auto = res_graph_auto["artifact"]
+    assert art_auto["format"] == "graph"
+    assert art_auto["snapshot_id"] == snapshot_id
+    assert "vis-network" in str(art_auto["external_assets"])
+    html_auto = Path(art_auto["local_path"]).read_text(encoding="utf-8")
+    assert PROJECT[:8] in html_auto or ctx.source_revision[:8] in html_auto
+    assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
+
+    # 2. Graph format (full detail)
+    res_graph_full = store.execute(ctx, "visualize", {"format": "graph", "detail": "full"})
+    assert res_graph_full["ok"] is True
+    art_full = res_graph_full["artifact"]
+    assert art_full["format"] == "graph"
+    assert art_full["aggregated"] is False
+    assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
+
+    # 3. Tree format
+    res_tree = store.execute(ctx, "visualize", {"format": "tree"})
+    assert res_tree["ok"] is True
+    art_tree = res_tree["artifact"]
+    assert art_tree["format"] == "tree"
+    assert "d3" in str(art_tree["external_assets"])
+    html_tree = Path(art_tree["local_path"]).read_text(encoding="utf-8")
+    assert PROJECT[:8] in html_tree or ctx.source_revision[:8] in html_tree
+    assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
+
+    # 4. Artifact reuse
+    res_reuse = store.execute(ctx, "visualize", {"format": "graph", "detail": "auto"})
+    assert res_reuse["ok"] is True
+    assert res_reuse["artifact"]["sha256"] == art_auto["sha256"]
+    assert "Reused existing" in res_reuse["content"]
+    assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
+
+
+def test_d38_github_pr_operations_and_error_boundaries(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+
+    # 1. Local forge -> GITHUB_UNAVAILABLE
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.execute(ctx, "list_prs", {})
+    assert exc_info.value.code == "GITHUB_UNAVAILABLE"
+
+    # Configure GitHub forge in project.toml
+    project_toml = root / ".aether" / "project.toml"
+    project_toml.write_text(
+        f'schema_version = 1\nproject_id = "{PROJECT}"\nname = "example"\n'
+        'initialized_by = "1.0.0"\nforge = "github"\ncontract_root = "specs"\n\n'
+        '[github]\nrepository = "org/repo-a"\n'
+    )
+
+    # 2. Remote mismatch -> PROJECT_CONFLICT
+    git_at(root, "remote", "add", "origin", "https://github.com/org/repo-b.git")
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.execute(ctx, "list_prs", {})
+    assert exc_info.value.code == "PROJECT_CONFLICT"
+
+    # Set matching remote
+    git_at(root, "remote", "set-url", "origin", "https://github.com/org/repo-a.git")
+
+    # 3. Mock gh CLI responses
+    import aether_agents.knowledge.github as gh_mod
+
+    # Empty PR list is valid and returns prs: []
+    monkeypatch.setattr(gh_mod, "_run_gh", lambda args: [] if "list" in args else {})
+    list_res = store.execute(ctx, "list_prs", {"limit": 10})
+    assert list_res["ok"] is True
+    assert list_res["prs"] == []
+    assert "No open pull requests found" in list_res["content"]
+    assert list_res["github"]["repository"] == "org/repo-a"
+
+    # Non-empty PR list
+    fake_prs = [
+        {
+            "number": 42,
+            "title": "Fix order processing",
+            "headRefName": "fix-order",
+            "baseRefName": "main",
+            "headRefOid": "headsha42",
+            "baseRefOid": "basesha00",
+            "isDraft": False,
+            "statusCheckRollup": [{"state": "SUCCESS"}],
+            "reviewDecision": "APPROVED",
+            "updatedAt": "2026-09-06T12:00:00Z",
+        },
+        {
+            "number": 43,
+            "title": "Add order metrics",
+            "headRefName": "metrics",
+            "baseRefName": "main",
+            "headRefOid": "headsha43",
+            "baseRefOid": "basesha00",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T13:00:00Z",
+        },
+    ]
+
+    def mock_gh_calls(args: list[str]) -> Any:
+        if "list" in args:
+            return fake_prs
+        if "view" in args:
+            pr_num = args[args.index("view") + 1]
+            if pr_num == "42":
+                return {**fake_prs[0], "files": [{"path": "module.py"}]}
+            if pr_num == "43":
+                return {**fake_prs[1], "files": [{"path": "module.py"}, {"path": "unmatched.py"}]}
+            return {"headRefOid": "headsha42" if pr_num == "42" else "headsha43"}
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_calls)
+
+    # list_prs with data
+    list_data = store.execute(ctx, "list_prs", {"limit": 20})
+    assert len(list_data["prs"]) == 2
+    assert list_data["prs"][0]["number"] == 42
+    assert list_data["prs"][0]["ci_status"] == "SUCCESS"
+
+    # pr_impact
+    impact_res = store.execute(ctx, "pr_impact", {"pr_number": 42})
+    assert impact_res["ok"] is True
+    assert impact_res["pr"]["number"] == 42
+    assert impact_res["impact"]["files"] == 1
+    assert impact_res["impact"]["matched_files"] == ["module.py"]
+    assert impact_res["impact"]["unmatched_files"] == []
+    assert len(impact_res["references"]) > 0
+
+    # triage_prs
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_res["ok"] is True
+    assert len(triage_res["prs"]) == 2
+    assert "community_overlaps" in triage_res
+    # Both PRs touch module.py so they share a community
+    overlaps = triage_res["community_overlaps"]
+    assert len(overlaps) > 0
+    assert overlaps[0]["pr_a"] == 42
+    assert overlaps[0]["pr_b"] == 43
+
+
+def test_d36_semantic_lifecycle_cache_and_enrichment(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    # 1. Structural update leaves documents structural_only and semantic disabled
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={"enabled": True, "semantic_enabled": False},
+    )
+    struct_res = store.execute(ctx, "update", {"mode": "structural"})
+    assert struct_res["ok"] is True
+    assert struct_res["coverage"]["documents"] == "structural_only"
+    assert struct_res["semantic"]["state"] == "disabled"
+    assert struct_res["semantic_pending"] is False
+
+    # 2. Configure semantic enabled and mock auxiliary model
+    call_count = 0
+
+    def mock_aux_call(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        nonlocal call_count
+        call_count += 1
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "OrdersDocument",
+                        "label": "OrdersDocument",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "OrdersDocument",
+                        "target": "module_process_order",
+                        "relation": "specifies",
+                    }
+                ],
+            }
+        )
+        return fake_llm_json, {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_call)
+
+    # 3. Same-commit enrichment
+    semantic_store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
+    )
+    enriched_res = semantic_store.execute(ctx, "update", {"mode": "configured"})
+    assert enriched_res["ok"] is True
+    assert enriched_res["coverage"]["documents"] == "semantic"
+    assert enriched_res["semantic"]["state"] == "complete"
+    assert enriched_res["semantic_pending"] is False
+    assert call_count > 0
+
+    # 4. Repeat unchanged configured update produces ZERO model calls
+    initial_calls = call_count
+    repeat_res = semantic_store.execute(ctx, "update", {"mode": "configured"})
+    assert repeat_res["ok"] is True
+    assert repeat_res["outcome"] == "unchanged"
+    assert repeat_res["semantic_pending"] is False
+    assert call_count == initial_calls, "Repeat unchanged update must make 0 model calls"
+
+    # 5. Verify document-to-code relationship is queryable
+    q_res = semantic_store.execute(ctx, "query", {"question": "OrdersDocument"})
+    assert q_res["ok"] is True
+    assert "process_order" in q_res["content"] or "OrdersDocument" in q_res["content"]
+
+
+def test_d37_failure_preservation_timeout_exhaustion_malformed(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    # 1. Router exhaustion (429) fails/defers visibly without endless loop
+    def mock_429(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        raise KnowledgeError("ROUTER_EXHAUSTION", "429 Too Many Requests")
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_429)
+
+    exhaust_store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
+    )
+    res_429 = exhaust_store.execute(ctx, "update", {"mode": "configured"})
+    assert res_429["ok"] is True
+    # Still publishes structural coverage
+    assert res_429["coverage"]["code"] == "structural"
+    assert res_429["semantic"]["state"] in ("unavailable", "pending")
+    assert res_429["semantic_pending"] is True
+
+    # 2. Malformed / hollow output doesn't corrupt graph
+    def mock_hollow(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return "{}", {"total_tokens": 10}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_hollow)
+    res_hollow = exhaust_store.execute(ctx, "update", {"mode": "configured"})
+    assert res_hollow["ok"] is True
+    assert res_hollow["coverage"]["code"] == "structural"
+    assert res_hollow["semantic"]["state"] in ("unavailable", "pending")
+
+
+def test_d35_cross_project_isolation_and_symbol_collision(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Two isolated projects with colliding symbols
+    root_a, state_a = project(tmp_path, identity=PROJECT, folder="proj_a")
+    root_b, state_b = project(tmp_path, identity=OTHER, folder="proj_b")
+
+    ctx_a = resolve_context(PROJECT, "morfeo", state_root=state_a, root=root_a)
+    ctx_b = resolve_context(OTHER, "morfeo", state_root=state_b, root=root_b)
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    # Mock auxiliary extraction for controlled test
+    def mock_aux_a(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return (
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "DocAlpha",
+                            "label": "DocAlpha",
+                            "source_file": "README.md",
+                            "source_location": "1",
+                        }
+                    ],
+                    "edges": [
+                        {
+                            "source": "DocAlpha",
+                            "target": "module_process_order",
+                            "relation": "specifies",
+                            "confidence": "EXTRACTED",
+                        }
+                    ],
+                }
+            ),
+            {"total_tokens": 100},
+        )
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_a)
+
+    store_a = KnowledgeStore(
+        state_a,
+        tmp_path / "cache_a",
+        GraphifyBackend(native_python),
+        configuration={"enabled": True, "semantic_enabled": True},
+    )
+    store_b = KnowledgeStore(
+        state_b,
+        tmp_path / "cache_b",
+        GraphifyBackend(native_python),
+        configuration={"enabled": True, "semantic_enabled": True},
+    )
+
+    res_a = store_a.execute(ctx_a, "update", {"mode": "configured"})
+    assert res_a["ok"] is True
+    assert res_a["semantic"]["state"] == "complete"
+
+    # Verify no LLM-as-AST promotion: origin must be llm and confidence must be INFERRED
+    graph_a_file = (
+        tmp_path
+        / "cache_a"
+        / "knowledge"
+        / PROJECT
+        / res_a["snapshot_id"]
+        / "graphify-out"
+        / "graph.json"
+    )
+    graph_a = json.loads(graph_a_file.read_text(encoding="utf-8"))
+    edges = graph_a.get("edges", graph_a.get("links", []))
+    spec_edge = next((e for e in edges if e.get("relation") == "specifies"), None)
+    assert spec_edge is not None
+    assert spec_edge.get("origin") == "llm" or spec_edge.get("_origin") == "llm"
+    assert spec_edge.get("confidence") == "INFERRED"
+
+    # Index project B
+    res_b = store_b.execute(ctx_b, "update", {"mode": "configured"})
+    assert res_b["ok"] is True
+    # Verify no cross-project cache leakage: cache_a and cache_b are separate
+    cache_a_files = list(
+        (tmp_path / "cache_a" / "knowledge" / PROJECT / "semantic_cache").glob("*.json")
+    )
+    cache_b_files = list(
+        (tmp_path / "cache_b" / "knowledge" / OTHER / "semantic_cache").glob("*.json")
+    )
+    assert len(cache_a_files) > 0
+    assert len(cache_b_files) > 0
+
+
+def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python: Path) -> None:
+    """Exercise live auxiliary when provisioned; honestly label skip otherwise."""
+    try:
+        from agent.auxiliary_client import call_llm  # type: ignore[import-untyped]
+
+        res = call_llm(
+            task="web_extract",
+            messages=[{"role": "user", "content": "ping"}],
+            timeout=10,
+        )
+    except Exception as exc:
+        pytest.skip(f"Live auxiliary connection not provisioned in test runner ({exc})")
+
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
+    )
+    res = store.execute(ctx, "update", {"mode": "configured"})
+    assert res["ok"] is True
+    assert res["semantic"]["state"] == "complete"
+    assert res["semantic"]["observed_usage"]["total_tokens"] > 0

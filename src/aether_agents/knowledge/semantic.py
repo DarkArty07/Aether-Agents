@@ -1,0 +1,357 @@
+"""Semantic extraction lifecycle, fingerprinting, caching, and auxiliary transport."""
+
+from __future__ import annotations
+
+import concurrent.futures
+import hashlib
+import json
+import logging
+import threading
+import time
+from pathlib import Path
+from typing import Any
+
+from aether_agents.paths import atomic_private_write, ensure_private_dir
+
+from .common import KnowledgeError
+from .context import KnowledgeContext
+from .graphify import GraphifyBackend
+
+logger = logging.getLogger(__name__)
+
+# Extensions eligible for semantic extraction (docs and source code)
+_ELIGIBLE_EXTENSIONS = frozenset(
+    ".md .txt .rst .py .js .jsx .ts .tsx .go .rs .java .c .h .cpp .hpp .cs .rb .php .swift .kt .sql .html".split()
+)
+
+
+def compute_chunk_fingerprint(
+    scope_version: str,
+    prompt_text: str,
+    policy: dict[str, Any],
+    model_identity_digest: str,
+    chunk_file_hashes: dict[str, str],
+) -> str:
+    """Calculate deterministic chunk fingerprint across all inputs and extraction policies."""
+    hasher = hashlib.sha256()
+    hasher.update(scope_version.encode("utf-8"))
+    hasher.update(prompt_text.encode("utf-8"))
+    hasher.update(json.dumps(policy, sort_keys=True).encode("utf-8"))
+    hasher.update(model_identity_digest.encode("utf-8"))
+    for path, fhash in sorted(chunk_file_hashes.items()):
+        hasher.update(f"{path}:{fhash}".encode("utf-8"))
+    return hasher.hexdigest()
+
+
+def get_model_identity_digest(
+    task: str, provider: str | None = None, model: str | None = None
+) -> str:
+    """Non-secret digest of model and task binding."""
+    identity = f"{task}:{provider or 'default'}:{model or 'default'}"
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+class SemanticCache:
+    def __init__(self, cache_dir: Path):
+        self.cache_dir = cache_dir
+        ensure_private_dir(self.cache_dir)
+
+    def get(self, fingerprint: str) -> dict[str, Any] | None:
+        path = self.cache_dir / f"{fingerprint}.json"
+        if not path.is_file():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "fragment" in data:
+                return data["fragment"]
+        except Exception:
+            pass
+        return None
+
+    def put(
+        self, fingerprint: str, fragment: dict[str, Any], meta: dict[str, Any] | None = None
+    ) -> None:
+        path = self.cache_dir / f"{fingerprint}.json"
+        payload = {
+            "fingerprint": fingerprint,
+            "saved_at": time.time(),
+            "meta": meta or {},
+            "fragment": fragment,
+        }
+        atomic_private_write(path, json.dumps(payload, indent=2).encode("utf-8"))
+
+
+def _call_auxiliary_model(
+    task: str,
+    system_prompt: str,
+    user_prompt: str,
+    timeout: float = 120.0,
+) -> tuple[str, dict[str, Any]]:
+    """Invoke the Hermes profile-scoped auxiliary client."""
+    try:
+        from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]  # pyright: ignore[reportMissingImports]
+            call_llm,
+        )
+    except ImportError as exc:
+        raise KnowledgeError(
+            "COMPONENT_UNAVAILABLE", "Hermes auxiliary client is not available in this environment."
+        ) from exc
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        response = call_llm(task=task, messages=messages, timeout=timeout)
+    except Exception as exc:
+        err_msg = str(exc)
+        if "429" in err_msg or "rate" in err_msg.casefold() or "quota" in err_msg.casefold():
+            raise KnowledgeError(
+                "ROUTER_EXHAUSTION", f"Auxiliary model rate limit/quota: {exc}"
+            ) from exc
+        raise KnowledgeError("AUXILIARY_FAILED", f"Auxiliary model call failed: {exc}") from exc
+
+    content = ""
+    if hasattr(response, "choices") and response.choices:
+        msg = response.choices[0].message
+        content = getattr(msg, "content", "") or ""
+    elif isinstance(response, dict):
+        choices = response.get("choices", [])
+        if choices and isinstance(choices[0], dict):
+            content = choices[0].get("message", {}).get("content", "")
+
+    usage = {}
+    if not isinstance(response, dict) and hasattr(response, "usage") and response.usage:
+        usage = {
+            "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
+            "completion_tokens": getattr(response.usage, "completion_tokens", 0),
+            "total_tokens": getattr(response.usage, "total_tokens", 0),
+        }
+    elif isinstance(response, dict) and "usage" in response:
+        usage = response["usage"]
+
+    return content, usage
+
+
+def run_semantic_extraction(
+    backend: GraphifyBackend,
+    source_root: Path,
+    graph_path: Path,
+    inputs: dict[str, str],
+    cache_root: Path,
+    ctx: KnowledgeContext,
+    configuration: dict[str, Any],
+    *,
+    deadline_seconds: float = 600.0,
+) -> dict[str, Any]:
+    """Orchestrate semantic chunking, auxiliary calls, validation, caching, and graph merging."""
+    semantic_cfg = configuration.get("semantic", {})
+    aux_task = (
+        semantic_cfg.get("auxiliary_task")
+        or configuration.get("semantic_auxiliary_task")
+        or "web_extract"
+    )
+    model_digest = get_model_identity_digest(aux_task)
+    policy = {"deep": False, "token_budget": 4000}
+    scope_version = "regular-tracked-v1"
+
+    # Identify eligible documentation and code files
+    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    if not eligible_files:
+        return {
+            "state": "complete",
+            "fingerprint": hashlib.sha256(b"no_eligible_files").hexdigest(),
+            "covered_paths": [],
+            "pending_paths": [],
+            "failed_paths": [],
+            "validated_chunk_ids": [],
+            "observed_usage": {"total_tokens": 0, "model_calls": 0},
+        }
+
+    # Step 1: Prepare chunks in native worker
+    prep_res = backend.run(
+        "semantic_prepare",
+        source_root=source_root,
+        graph_path=graph_path,
+        arguments={"files": eligible_files},
+    )
+    chunks = prep_res.get("chunks", [])
+    if not chunks:
+        return {
+            "state": "complete",
+            "fingerprint": hashlib.sha256(b"no_chunks").hexdigest(),
+            "covered_paths": [],
+            "pending_paths": [],
+            "failed_paths": [],
+            "validated_chunk_ids": [],
+            "observed_usage": {"total_tokens": 0, "model_calls": 0},
+        }
+
+    cache_dir = cache_root / "knowledge" / ctx.project_id / "semantic_cache"
+    cache = SemanticCache(cache_dir)
+
+    start_time = time.time()
+    deadline = start_time + deadline_seconds
+
+    chunk_fingerprints: dict[int, str] = {}
+    cached_fragments: dict[int, dict[str, Any]] = {}
+    needed_chunks: list[dict[str, Any]] = []
+
+    for chunk in chunks:
+        cid = int(chunk["chunk_id"])
+        c_files = chunk.get("files", [])
+        file_hashes = {f: inputs[f] for f in c_files if f in inputs}
+        prompt_text = chunk["system_prompt"] + "\n" + chunk["user_prompt"]
+        fp = compute_chunk_fingerprint(
+            scope_version, prompt_text, policy, model_digest, file_hashes
+        )
+        chunk_fingerprints[cid] = fp
+
+        fragment = cache.get(fp)
+        if fragment is not None:
+            cached_fragments[cid] = fragment
+        else:
+            needed_chunks.append(chunk)
+
+    total_tokens = 0
+    model_calls_made = 0
+    newly_validated_fragments: dict[int, dict[str, Any]] = {}
+    failed_chunks: set[int] = set()
+
+    if needed_chunks:
+        semaphore = threading.Semaphore(2)  # max_concurrency = 2
+        lock = threading.Lock()
+
+        def process_chunk(c: dict[str, Any]) -> None:
+            nonlocal total_tokens, model_calls_made
+            cid = int(c["chunk_id"])
+            fp = chunk_fingerprints[cid]
+
+            if time.time() >= deadline:
+                with lock:
+                    failed_chunks.add(cid)
+                return
+
+            with semaphore:
+                # Up to 1 transient retry per chunk
+                last_err = None
+                raw_text = ""
+                usage: dict[str, Any] = {}
+                for attempt in range(2):
+                    if time.time() >= deadline:
+                        break
+                    try:
+                        with lock:
+                            model_calls_made += 1
+                        raw_text, usage = _call_auxiliary_model(
+                            task=aux_task,
+                            system_prompt=c["system_prompt"],
+                            user_prompt=c["user_prompt"],
+                            timeout=min(180.0, max(10.0, deadline - time.time())),
+                        )
+                        break
+                    except Exception as exc:
+                        last_err = exc
+                        if isinstance(exc, KnowledgeError) and exc.code == "ROUTER_EXHAUSTION":
+                            # Router exhaustion fails immediately without endless retries
+                            break
+                        time.sleep(0.5)
+
+                if not raw_text:
+                    logger.warning("Chunk %d failed auxiliary extraction: %s", cid, last_err)
+                    with lock:
+                        failed_chunks.add(cid)
+                    return
+
+                with lock:
+                    total_tokens += usage.get("total_tokens", 0)
+
+                # Validate semantic fragment through worker
+                try:
+                    val_res = backend.run(
+                        "semantic_validate",
+                        source_root=source_root,
+                        graph_path=graph_path,
+                        arguments={
+                            "model_text": raw_text,
+                            "allowed_sources": c.get("files", []),
+                            "allow_empty": False,
+                        },
+                    )
+                    frag = val_res.get("fragment", {})
+                    cache.put(fp, frag, meta={"usage": usage})
+                    with lock:
+                        newly_validated_fragments[cid] = frag
+                except Exception as exc:
+                    logger.warning("Chunk %d failed fragment validation: %s", cid, exc)
+                    with lock:
+                        failed_chunks.add(cid)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(process_chunk, c) for c in needed_chunks]
+            concurrent.futures.wait(futures)
+
+    # Step 3: Apply all validated fragments (cached + newly validated) to graph
+    all_valid_fragments = {**cached_fragments, **newly_validated_fragments}
+    for cid in sorted(all_valid_fragments.keys()):
+        frag = all_valid_fragments[cid]
+        try:
+            backend.run(
+                "semantic_apply",
+                source_root=source_root,
+                graph_path=graph_path,
+                arguments={
+                    "fragment": frag,
+                    "allowed_sources": list(inputs.keys()),
+                    "allow_empty": True,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Failed applying fragment for chunk %d: %s", cid, exc)
+            failed_chunks.add(cid)
+            all_valid_fragments.pop(cid, None)
+
+    # Compute coverage status
+    covered_paths_set: set[str] = set()
+    failed_paths_set: set[str] = set()
+    pending_paths_set: set[str] = set()
+
+    for chunk in chunks:
+        cid = int(chunk["chunk_id"])
+        c_files = chunk.get("files", [])
+        if cid in all_valid_fragments:
+            covered_paths_set.update(c_files)
+        elif cid in failed_chunks:
+            failed_paths_set.update(c_files)
+        else:
+            pending_paths_set.update(c_files)
+
+    # If any files are in failed, they are not covered
+    failed_paths_set -= covered_paths_set
+    pending_paths_set -= covered_paths_set
+
+    # Overall fingerprint
+    all_fps = "".join(chunk_fingerprints[int(c["chunk_id"])] for c in chunks)
+    overall_fp = hashlib.sha256(all_fps.encode("utf-8")).hexdigest()
+
+    if len(all_valid_fragments) == len(chunks):
+        state = "complete"
+    elif len(all_valid_fragments) > 0:
+        state = "partial"
+    else:
+        state = "unavailable" if failed_chunks else "pending"
+
+    return {
+        "state": state,
+        "fingerprint": overall_fp,
+        "covered_paths": sorted(covered_paths_set),
+        "pending_paths": sorted(pending_paths_set),
+        "failed_paths": sorted(failed_paths_set),
+        "validated_chunk_ids": sorted(all_valid_fragments.keys()),
+        "observed_usage": {
+            "total_tokens": total_tokens,
+            "model_calls": model_calls_made,
+            "elapsed_seconds": round(time.time() - start_time, 3),
+        },
+    }
