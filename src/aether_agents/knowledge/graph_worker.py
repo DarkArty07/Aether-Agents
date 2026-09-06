@@ -8,6 +8,7 @@ graph search engine. The JSON request is produced only by the trusted adapter.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.metadata
 import io
 import json
@@ -15,6 +16,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 
 def normalize_recovery_wording(text: str) -> str:
@@ -81,9 +83,8 @@ def normalize_recovery_wording(text: str) -> str:
     text = re.sub(r"\bMCP\s+([a-zA-Z0-9_]+)\s+tool\b", r"\1", text)
     text = re.sub(r"\bMCP\s*", "", text)
 
-    # 6. Residual mentions of context_filter, get_node, CLI: --budget, --budget
+    # 6. Residual mentions of context_filter in recovery advice, get_node, CLI: --budget, --budget
     text = re.sub(r"\bcontext_filter=\[[^\]]*\]", "narrower question", text)
-    text = re.sub(r"\bcontext_filter\b", "question", text)
     text = re.sub(r"\brelation_filter\b", "question", text)
     text = re.sub(r"\btoken_budget\b", "budget_tokens", text)
     text = re.sub(r"\bget_node\b", "explain", text)
@@ -117,6 +118,101 @@ def _extract_subgraph_references(content: str) -> list[dict[str, str]]:
                     seen.add((p, loc))
                     refs.append({"path": p, "location": loc})
     return refs
+
+
+def _sanitize_and_validate_fragment(
+    raw_fragment: Any,
+    allowed_sources: list[str] | None = None,
+    allow_empty: bool = False,
+) -> dict[str, Any]:
+    from graphify.semantic_cleanup import validate_semantic_fragment
+
+    if not isinstance(raw_fragment, dict):
+        raise ValueError("Parsed model fragment must be a dictionary.")
+
+    errors = validate_semantic_fragment(raw_fragment)
+    if errors:
+        raise ValueError(f"Semantic fragment schema validation failed: {'; '.join(errors)}")
+
+    nodes = raw_fragment.get("nodes", [])
+    edges = raw_fragment.get("edges", [])
+    if not nodes and not edges and not allow_empty:
+        raise ValueError("Hollow model fragment: both nodes and edges are empty.")
+
+    allowed_set = set(allowed_sources) if allowed_sources else None
+
+    sanitized_nodes = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        sf = node.get("source_file")
+        if allowed_set is not None and sf and sf not in allowed_set:
+            continue
+        n = dict(node)
+        n["_origin"] = "llm"
+        n["origin"] = "llm"
+        if not n.get("source_location"):
+            n["source_location"] = None
+        sanitized_nodes.append(n)
+
+    sanitized_edges = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        sf = edge.get("source_file")
+        if allowed_set is not None and sf and sf not in allowed_set:
+            continue
+        e = dict(edge)
+        e["_origin"] = "llm"
+        e["origin"] = "llm"
+        conf = str(e.get("confidence") or "").upper()
+        if conf == "EXTRACTED" or not conf:
+            e["confidence"] = "INFERRED"
+        else:
+            e["confidence"] = conf
+        if not e.get("source_location"):
+            e["source_location"] = None
+        sanitized_edges.append(e)
+
+    return {
+        "nodes": sanitized_nodes,
+        "edges": sanitized_edges,
+        "hyperedges": raw_fragment.get("hyperedges", []),
+    }
+
+
+def _parse_and_validate_semantic(
+    model_text: str,
+    allowed_sources: list[str] | None = None,
+    allow_empty: bool = False,
+) -> dict[str, Any]:
+    from graphify.llm import _parse_llm_json
+
+    if not model_text or not isinstance(model_text, str):
+        raise ValueError("model_text must be a non-empty string.")
+    try:
+        raw_fragment = _parse_llm_json(model_text)
+    except Exception as exc:
+        raise ValueError(f"Malformed model text: failed to parse JSON: {exc}") from exc
+
+    if not raw_fragment.get("nodes") and not raw_fragment.get("edges"):
+        try:
+            parsed = json.loads(model_text.strip())
+        except Exception:
+            m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", model_text, re.DOTALL)
+            if m:
+                try:
+                    parsed = json.loads(m.group(1))
+                except Exception as exc:
+                    raise ValueError(f"Malformed model text: invalid JSON: {exc}") from exc
+            else:
+                raise ValueError("Malformed model text: no valid JSON found.")
+        if not parsed.get("nodes") and not parsed.get("edges") and not allow_empty:
+            raise ValueError("Hollow model fragment: both nodes and edges are empty.")
+
+    return _sanitize_and_validate_fragment(
+        raw_fragment, allowed_sources=allowed_sources, allow_empty=allow_empty
+    )
 
 
 def execute(request: dict) -> dict:
@@ -167,6 +263,110 @@ def execute(request: dict) -> dict:
     args = request.get("arguments", {})
     budget = args.get("budget_tokens", 2000)
 
+    if action == "stats":
+        from graphify.serve import _communities_from_graph, _load_graph
+
+        graph = _load_graph(str(graph_path))
+        communities = _communities_from_graph(graph)
+        node_count = graph.number_of_nodes()
+        edge_count = graph.number_of_edges()
+        community_count = len(communities)
+
+        confidence_counts = {
+            "EXTRACTED": 0,
+            "INFERRED": 0,
+            "AMBIGUOUS": 0,
+            "UNKNOWN": 0,
+        }
+        for _, _, d in graph.edges(data=True):
+            conf = d.get("confidence")
+            if isinstance(conf, str) and conf.upper() in confidence_counts:
+                confidence_counts[conf.upper()] += 1
+            else:
+                confidence_counts["UNKNOWN"] += 1
+
+        origin_counts = {
+            "structural": 0,
+            "llm": 0,
+            "unknown": 0,
+        }
+
+        def _classify(d: dict) -> str:
+            o = str(d.get("origin") or d.get("_origin") or "").lower()
+            if o in ("ast", "structural"):
+                return "structural"
+            if o in ("llm", "semantic"):
+                return "llm"
+            return "unknown"
+
+        for _, d in graph.nodes(data=True):
+            origin_counts[_classify(d)] += 1
+        for _, _, d in graph.edges(data=True):
+            origin_counts[_classify(d)] += 1
+
+        content = (
+            f"Graph stats: {node_count} nodes, {edge_count} edges across {community_count} communities. "
+            f"Confidence: {confidence_counts['EXTRACTED']} extracted, {confidence_counts['INFERRED']} inferred, "
+            f"{confidence_counts['AMBIGUOUS']} ambiguous, {confidence_counts['UNKNOWN']} unknown. "
+            f"Origin: {origin_counts['structural']} structural, {origin_counts['llm']} llm, {origin_counts['unknown']} unknown."
+        )
+        return {
+            "content": content,
+            "references": [],
+            "stats": {
+                "node_count": node_count,
+                "edge_count": edge_count,
+                "community_count": community_count,
+                "confidence_counts": confidence_counts,
+                "origin_counts": origin_counts,
+            },
+        }
+
+    if action == "god_nodes":
+        from graphify.analyze import god_nodes
+        from graphify.serve import _load_graph
+
+        graph = _load_graph(str(graph_path))
+        top_n = int(args.get("top_n", 10))
+        exclude_hubs_percentile = args.get("exclude_hubs_percentile")
+        god_kwargs: dict[str, Any] = {"top_n": top_n}
+        if exclude_hubs_percentile is not None:
+            god_kwargs["exclude_hubs_percentile"] = float(exclude_hubs_percentile)
+
+        raw_gods = god_nodes(graph, **god_kwargs)
+        node_entries = []
+        references = []
+        seen_refs = set()
+        lines = [f"God nodes (top {len(raw_gods)} by degree):"]
+        for i, item in enumerate(raw_gods, 1):
+            nid = item["id"]
+            node_data = graph.nodes.get(nid, {})
+            cid = node_data.get("community")
+            comm_id = int(cid) if cid is not None else None
+            node_entry = {
+                "id": nid,
+                "label": item.get("label", nid),
+                "degree": item.get("degree", graph.degree(nid)),
+                "community_id": comm_id,
+            }
+            node_entries.append(node_entry)
+            lines.append(
+                f"{i}. `{node_entry['label']}` - {node_entry['degree']} edges (community: {comm_id})"
+            )
+            if node_data.get("source_file"):
+                p = str(node_data["source_file"])
+                loc = str(node_data.get("source_location") or "")
+                if (p, loc) not in seen_refs:
+                    seen_refs.add((p, loc))
+                    references.append({"path": p, "location": loc})
+
+        content = normalize_recovery_wording("\n".join(lines))
+        return {
+            "content": content,
+            "references": references,
+            "nodes": node_entries,
+        }
+
     if action == "query":
         from graphify.reflect import load_learning_overlay
         from graphify.serve import _query_graph_text
@@ -195,13 +395,23 @@ def execute(request: dict) -> dict:
         except Exception:
             G.graph["_learning_overlay"] = {}
 
+        traversal = str(args.get("traversal", "bfs")).lower()
+        if traversal not in ("bfs", "dfs"):
+            traversal = "bfs"
+        depth = int(args.get("depth", 2))
+        raw_cf = args.get("context_filter") or args.get("context_filters")
+        if raw_cf is not None:
+            context_filters = [raw_cf] if isinstance(raw_cf, str) else list(raw_cf)
+        else:
+            context_filters = []
+
         raw_content = _query_graph_text(
             G,
             args["question"],
-            mode="bfs",
-            depth=2,
+            mode=traversal,
+            depth=depth,
             token_budget=budget,
-            context_filters=[],
+            context_filters=context_filters,
             graph_path=None,
         )
         native_truncated = "[!] TRUNCATED: showing " in raw_content
@@ -213,6 +423,11 @@ def execute(request: dict) -> dict:
             "references": references,
             "truncated": native_truncated,
             "over_budget_complete": over_budget_complete,
+            "query_options": {
+                "traversal": traversal,
+                "depth": depth,
+                "context_filter": context_filters,
+            },
         }
 
     if action == "explain":
@@ -284,8 +499,13 @@ def execute(request: dict) -> dict:
         if seed is None:
             raise ValueError(f"No unique node match for '{node_arg}'.")
         depth = int(args.get("depth", 2))
-        content = normalize_recovery_wording(format_affected(G, node_arg, depth=depth))
-        hits = affected_nodes(G, seed, depth=depth)
+        relations = args.get("relations")
+        impact_kwargs: dict[str, Any] = {"depth": depth}
+        if relations is not None:
+            impact_kwargs["relations"] = tuple(relations)
+
+        content = normalize_recovery_wording(format_affected(G, node_arg, **impact_kwargs))
+        hits = affected_nodes(G, seed, **impact_kwargs)
 
         references = []
         seen = set()
@@ -325,11 +545,12 @@ def execute(request: dict) -> dict:
         )
 
         graph = _load_graph(str(graph_path))
+        undirected = bool(args.get("undirected", False))
         arguments = {
             "source": args["source"],
             "target": args["target"],
             "max_hops": args.get("max_hops", 8),
-            "undirected": False,
+            "undirected": undirected,
         }
         content = normalize_recovery_wording(_shortest_path_text(graph, arguments))
         references = []
@@ -340,15 +561,23 @@ def execute(request: dict) -> dict:
             src_nid = _pick_scored_endpoint(graph, src_scored, args["source"])
             tgt_nid = _pick_scored_endpoint(graph, tgt_scored, args["target"])
             if src_nid != tgt_nid:
-                _dg = nx.DiGraph()
-                _dg.add_nodes_from(sorted(graph.nodes))
-                _dg.add_edges_from(
-                    sorted(
-                        (d.get("_src", u), d.get("_tgt", v)) for u, v, d in graph.edges(data=True)
+                if undirected:
+                    _und = nx.Graph()
+                    _und.add_nodes_from(sorted(graph.nodes))
+                    _und.add_edges_from(sorted((min(u, v), max(u, v)) for u, v in graph.edges()))
+                    search_graph = _und
+                else:
+                    _dg = nx.DiGraph()
+                    _dg.add_nodes_from(sorted(graph.nodes))
+                    _dg.add_edges_from(
+                        sorted(
+                            (d.get("_src", u), d.get("_tgt", v))
+                            for u, v, d in graph.edges(data=True)
+                        )
                     )
-                )
+                    search_graph = _dg
                 try:
-                    path_nodes = nx.shortest_path(_dg, src_nid, tgt_nid)
+                    path_nodes = nx.shortest_path(search_graph, src_nid, tgt_nid)
                     if len(path_nodes) - 1 <= int(args.get("max_hops", 8)):
                         for i in range(len(path_nodes)):
                             u = path_nodes[i]
@@ -360,7 +589,11 @@ def execute(request: dict) -> dict:
                                     references.append({"path": p, "location": loc})
                             if i + 1 < len(path_nodes):
                                 v = path_nodes[i + 1]
-                                datas = edge_datas(graph, u, v) or edge_datas(graph, v, u)
+                                datas = []
+                                if graph.has_edge(u, v):
+                                    datas = edge_datas(graph, u, v)
+                                elif graph.has_edge(v, u):
+                                    datas = edge_datas(graph, v, u)
                                 for ed in datas:
                                     if ed.get("source_file"):
                                         p = str(ed["source_file"])
@@ -373,6 +606,247 @@ def execute(request: dict) -> dict:
         return {
             "content": content,
             "references": references,
+        }
+
+    if action == "visualize":
+        from graphify.exporters.html import to_html
+        from graphify.serve import _communities_from_graph, _load_graph
+        from graphify.tree_html import write_tree_html
+
+        fmt = str(args.get("format", "graph")).lower()
+        detail = str(args.get("detail", "auto")).lower()
+        export_path_str = request.get("export_path") or args.get("export_path")
+        if not export_path_str:
+            raise ValueError("export_path is required for visualize action.")
+        export_path = Path(export_path_str)
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+
+        graph = _load_graph(str(graph_path))
+        total_nodes = graph.number_of_nodes()
+
+        if fmt == "tree":
+            write_tree_html(
+                graph_path,
+                export_path,
+                project_label=args.get("project_label"),
+            )
+            raw_bytes = export_path.read_bytes()
+            external_assets = ["https://d3js.org/d3.v7.min.js"]
+            rendered_nodes = total_nodes
+            aggregated = False
+        elif fmt == "graph":
+            communities = _communities_from_graph(graph)
+            node_limit = 5000 if detail == "auto" else 50000
+            aggregated = total_nodes > 5000 if detail == "auto" else False
+            to_html(
+                graph,
+                communities,
+                str(export_path),
+                node_limit=node_limit,
+            )
+            raw_bytes = export_path.read_bytes()
+            external_assets = [
+                "https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
+            ]
+            rendered_nodes = len(communities) if aggregated else total_nodes
+        else:
+            raise ValueError(f"Unsupported visualize format '{fmt}'.")
+
+        artifact = {
+            "format": fmt,
+            "local_path": str(export_path),
+            "bytes": len(raw_bytes),
+            "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+            "rendered_nodes": rendered_nodes,
+            "total_nodes": total_nodes,
+            "aggregated": aggregated,
+            "external_assets": external_assets,
+        }
+        content = (
+            f"Exported {fmt} visualization to {export_path.name} "
+            f"({rendered_nodes}/{total_nodes} nodes rendered, aggregated={aggregated})."
+        )
+        return {
+            "content": content,
+            "references": [],
+            "artifact": artifact,
+        }
+
+    if action in ("pr_impact", "compute_pr_impact"):
+        from graphify.prs import compute_pr_impact
+        from graphify.serve import _load_graph
+
+        graph = _load_graph(str(graph_path))
+        files = args.get("files", [])
+        if not isinstance(files, list):
+            raise ValueError("files must be a list of file paths.")
+
+        # Index graph source files for matching
+        graph_files = {
+            str(d.get("source_file")) for _, d in graph.nodes(data=True) if d.get("source_file")
+        }
+        matched_files = []
+        unmatched_files = []
+        for f in files:
+            is_match = any(
+                src == f or src.endswith("/" + f) or f.endswith("/" + src) for src in graph_files
+            )
+            if is_match:
+                matched_files.append(f)
+            else:
+                unmatched_files.append(f)
+
+        communities_touched, nodes_affected = compute_pr_impact(files, graph)
+
+        references = []
+        seen_refs = set()
+        for _, d in graph.nodes(data=True):
+            src = d.get("source_file")
+            if src and any(
+                src == f or src.endswith("/" + f) or f.endswith("/" + src) for f in matched_files
+            ):
+                loc = str(d.get("source_location") or "")
+                if (src, loc) not in seen_refs:
+                    seen_refs.add((src, loc))
+                    references.append({"path": str(src), "location": loc})
+                    if len(references) >= 50:
+                        break
+
+        impact_info = {
+            "files": len(files),
+            "matched_files": matched_files,
+            "unmatched_files": unmatched_files,
+            "communities": communities_touched,
+            "node_count": nodes_affected,
+        }
+        content = (
+            f"PR impact: {len(matched_files)} matched files, {len(unmatched_files)} unmatched files, "
+            f"{len(communities_touched)} communities touched, {nodes_affected} nodes affected."
+        )
+        return {
+            "content": content,
+            "references": references,
+            "impact": impact_info,
+        }
+
+    if action == "semantic_prepare":
+        from graphify.llm import (
+            _extraction_system,
+            _pack_chunks_by_tokens,
+            _read_files,
+            expand_oversized_files,
+        )
+
+        file_list = args.get("files", [])
+        max_chars = int(args.get("max_chars", 100_000))
+        token_budget = int(args.get("token_budget", 4000))
+        file_paths = [source_root / f for f in file_list if (source_root / f).is_file()]
+        expanded = expand_oversized_files(file_paths, max_chars=max_chars)
+        packed_chunks = _pack_chunks_by_tokens(expanded, token_budget=token_budget)
+        system_prompt = _extraction_system(deep=False)
+        chunks = []
+        for idx, chunk in enumerate(packed_chunks):
+            user_prompt = _read_files(chunk, root=source_root)
+            paths = []
+            for item in chunk:
+                p = getattr(item, "path", item)
+                try:
+                    rel = str(Path(p).relative_to(source_root))
+                except ValueError:
+                    rel = str(p)
+                paths.append(rel)
+            chunks.append(
+                {
+                    "chunk_id": idx,
+                    "files": paths,
+                    "system_prompt": system_prompt,
+                    "user_prompt": user_prompt,
+                }
+            )
+        content = f"Prepared {len(chunks)} semantic extraction chunks from {len(file_paths)} files."
+        return {
+            "content": content,
+            "references": [],
+            "chunks": chunks,
+        }
+
+    if action in ("semantic_parse", "semantic_validate"):
+        model_text = args.get("model_text", "")
+        parsed = _parse_and_validate_semantic(
+            model_text=model_text,
+            allowed_sources=args.get("allowed_sources"),
+            allow_empty=bool(args.get("allow_empty", False)),
+        )
+        return {
+            "content": f"Semantic fragment valid: {len(parsed.get('nodes', []))} nodes, {len(parsed.get('edges', []))} edges.",
+            "references": [],
+            "fragment": parsed,
+        }
+
+    if action == "semantic_apply":
+        import graphify.cluster as cluster
+        import graphify.export as export
+        from graphify.build import build_merge
+        from graphify.serve import _load_graph
+
+        model_text = args.get("model_text")
+        fragment = args.get("fragment")
+        if model_text is not None:
+            fragment = _parse_and_validate_semantic(
+                model_text=model_text,
+                allowed_sources=args.get("allowed_sources"),
+                allow_empty=bool(args.get("allow_empty", False)),
+            )
+        elif fragment is None:
+            raise ValueError("model_text or fragment is required for semantic_apply.")
+        else:
+            fragment = _sanitize_and_validate_fragment(
+                fragment,
+                allowed_sources=args.get("allowed_sources"),
+                allow_empty=bool(args.get("allow_empty", False)),
+            )
+
+        existing_G = _load_graph(str(graph_path))
+        raw_edges = fragment.get("edges", [])
+        kept_edges = []
+        omitted_edges = []
+        for e in raw_edges:
+            s, t = e.get("source"), e.get("target")
+            if s and t and existing_G.has_edge(s, t):
+                existing_edata = existing_G.get_edge_data(s, t) or {}
+                orig = str(
+                    existing_edata.get("_origin") or existing_edata.get("origin") or ""
+                ).lower()
+                if orig in ("ast", "structural"):
+                    omitted_edges.append(e)
+                    continue
+            kept_edges.append(e)
+
+        fragment_to_merge = dict(fragment, edges=kept_edges)
+        merged_G = build_merge([fragment_to_merge], graph_path=graph_path, root=source_root)
+        comms = cluster.cluster(merged_G)
+        export.to_json(merged_G, comms, str(graph_path), force=True)
+
+        references = []
+        seen = set()
+        for node in fragment.get("nodes", []):
+            if node.get("source_file"):
+                p = str(node["source_file"])
+                loc = str(node.get("source_location") or "")
+                if (p, loc) not in seen:
+                    seen.add((p, loc))
+                    references.append({"path": p, "location": loc})
+
+        content = (
+            f"Applied semantic fragment: {len(fragment.get('nodes', []))} nodes, "
+            f"{len(kept_edges)} edges merged, {len(omitted_edges)} colliding structural edges preserved."
+        )
+        return {
+            "content": content,
+            "references": references,
+            "applied_nodes": len(fragment.get("nodes", [])),
+            "applied_edges": len(kept_edges),
+            "omitted_edges": omitted_edges,
         }
 
     from graphify.serve import (
