@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-08-31T02:01:37Z`
+Observation timestamp: `2026-09-06T00:39:44Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d556db6c1e6`
+Source ledger SHA-256: `737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be4114865e9fe`
 
 ## Remaining local guarantees
 
@@ -20,6 +20,7 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-246`: Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.
 - `HLP-247`: Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.
 - `HLP-262`: Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.
+- `HLP-280`: Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.
 
 ## Qualified upstream equivalents
 
@@ -65,6 +66,10 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-262` (uncertainty): The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.
 - `HLP-262` (uncertainty): The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.
 - `HLP-262` (uncertainty): The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded.
+- `HLP-280` (artifact): The exact local reconstruction passed, but its already-modified operator runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from this patch checksum.
+- `HLP-280` (retirement_gate): Retirement gate status is failed.
+- `HLP-280` (uncertainty): The inventory upstream lacks the affinity origin primitives.
+- `HLP-280` (uncertainty): Clean public-baseline reconstruction is not claimed; the exact local preimage is retained privately.
 
 ## Artifact integrity
 
@@ -80,6 +85,7 @@ Source ledger SHA-256: `82594ffd774ef371877ab2deddb0503e5a74a13cbd68024c67002d55
 - `HLP-246`: not_applicable
 - `HLP-247`: not_applicable
 - `HLP-262`: unavailable
+- `HLP-280`: unavailable
 
 ## Safe next decisions
 
