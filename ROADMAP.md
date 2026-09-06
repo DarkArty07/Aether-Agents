@@ -21,12 +21,12 @@ The owner's current instruction outranks every artifact. Artifacts outrank memor
 |---|---|---|---|
 | R0 | Design governance and constitution principles | done | `specs/r0-design-governance/` |
 | R1 | Authority and owner interaction | done | `specs/r1-authority-and-interaction/` |
-| R2 | Contract and handoff | done | `specs/r2-contract-and-handoff/` |
-| R3 | Spec Kit multi-agent method | done | `specs/r3-speckit-multiagent-method/` |
+| R2 | Contract and handoff | in-progress; contract-quality refinement | `specs/r2-contract-and-handoff/` |
+| R3 | Spec Kit multi-agent method | in-progress; design/decomposition clarification | `specs/r3-speckit-multiagent-method/` |
 | R4 | Hermes foundation/adaptation boundary | done; A1-reconciled | `specs/r4-hermes-boundary/` |
 | R5 | Role topology and profile isolation | done | `specs/r5-topology-and-isolation/` |
 | R6 | Protocol and communication | done | `specs/r6-protocol-and-communication/` |
-| R7 | Supervision, convergence, review, integration | in-progress; reopened for PD-73 autonomy/E2E | `specs/r7-supervision-and-convergence/` |
+| R7 | Supervision, convergence, review, integration | in-progress; PD-73 autonomy/E2E and execution quality | `specs/r7-supervision-and-convergence/` |
 | R8 | Workspaces, canonical authoring, integration, publication | in-progress; PD-67 micro-authorization superseded by PD-71/PD-73 | `specs/r8-workspaces-and-integration/` |
 | R9 | State, XDG ownership, projects, update/recovery | done; A1-reconciled | `specs/r9-state-and-recovery/` |
 | R10 | Security, trust, privacy, minimal edge guard | in-progress; strict micro-permission design retired under PD-71 | `specs/r10-security-and-authority/` |

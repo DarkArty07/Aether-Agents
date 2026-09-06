@@ -27,6 +27,9 @@ CANONICAL_SKILLS = (
     "git-github-closeout",
     "semver-release",
     "canonical-skill-governance",
+    "objective-contract-design",
+    "supervisor-decomposition",
+    "implementation-evidence",
 )
 
 

@@ -73,6 +73,25 @@ another unit's scope. Unfinished, blocked, review-active, concurrent, or
 unrelated work is preserved. Completion evidence states what changed, what was
 actually verified, and what material risk or non-applicability remains.
 
+## Contract/execution procedure adoption
+
+The explicit canonical resource set includes `objective-contract-design` for Morfeo,
+`supervisor-decomposition` for Supervisor and `implementation-evidence` for Implementer,
+alongside the existing governance and closeout procedures. Native distribution makes
+the canonical files available to all roles; each role loads the applicable procedure,
+without gaining another role's authority.
+
+These three procedures and the related role wording are under organic observation in
+[issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317). The owner chose real
+future work rather than a synthetic qualification campaign for this adoption. Consult
+that tracker before claiming proven behavior or throughput; resource installation and
+historical document/loading checks are not behavioral qualification. Record actual
+expected-versus-observed outcomes from authorized objectives, not invented metrics.
+This is not a global no-testing rule for future work or permission to bypass required
+checks. Do not restart the owner-withdrawn #312 delegated flow or recreate its retired
+test adapter merely to clear the observation issue. See the current
+[objective specification](../../specs/006-contract-execution-quality/spec.md).
+
 ## Qualification limit
 
 The handoff source and focused tests cover deterministic IDs, isolation checks,

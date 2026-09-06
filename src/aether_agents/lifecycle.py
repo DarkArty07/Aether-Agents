@@ -466,6 +466,9 @@ _CANONICAL_SKILLS = (
     "git-github-closeout",
     "semver-release",
     "canonical-skill-governance",
+    "objective-contract-design",
+    "supervisor-decomposition",
+    "implementation-evidence",
 )
 _OBSERVER_RUNTIME_DEPENDENCIES = {"jsonschema": "4.26.0"}
 _OBSERVER_LOCKED_DISTRIBUTIONS = {

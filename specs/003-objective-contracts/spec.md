@@ -5,7 +5,7 @@
 
 ## Purpose and vocabulary
 
-An **Objective Contract** is Morfeo's durable, executable statement of one owner-approved objective handed to Supervisor. It defines the required outcome, scope, delegated authority, deliverables, acceptance, testing standard and stop conditions. Supervisor owns the execution plan and work-unit decomposition.
+An **Objective Contract** is Morfeo's durable, executable statement of one owner-approved objective handed to Supervisor. It defines the required outcome, scope, delegated authority, deliverables, acceptance, testing standard and stop conditions. Morfeo owns the material technical design in the applicable R2/R3 artifacts. Supervisor owns execution decomposition in `tasks.md`, dependency ordering and integration planning within that design; "execution plan" does not transfer ownership of `plan.md` or permit invention of missing product or architectural decisions.
 
 A **Contract Handoff Envelope** is the short Kanban body carrying only contract identity, portable project UUID, project-relative path, SHA-256, base commit and a verify-before-decomposition instruction. Kanban is routing/lifecycle, never the contract body.
 
