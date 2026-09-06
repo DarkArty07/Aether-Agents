@@ -352,6 +352,11 @@ def _fixture_report(
         search = _memory_call(
             service, context, {"action": "search", "query": "production service", "limit": 5}
         )
+        search_matches = [m for m in search.get("matches", []) if isinstance(m, dict)]
+        if not any(str(item.get("note_id")) == note_id for item in search_matches):
+            raise RuntimeError(
+                f"saved note {note_id} not found in work_memory search matches: {search_matches}"
+            )
         read = _memory_call(service, context, {"action": "read", "note_id": note_id})
         corrected = _memory_call(
             service,
@@ -390,7 +395,7 @@ def _fixture_report(
                     "visualize_tree": _artifact_summary(tree_artifact["artifact"]),
                 },
                 "memory_checks": {
-                    "search_hits": len(search.get("notes", [])),
+                    "search_hits": len(search_matches),
                     "read_note_id": read.get("note_id"),
                     "corrected_revision": corrected.get("revision"),
                     "reflection_count": reflect.get("count"),

@@ -24,8 +24,10 @@ cannot grant authority or replace the project's canonical decisions.
 
 - Orient within a project, investigate dependencies, locate implementation or documented
   decisions, or return to a project in a later session.
-- Refresh knowledge after a coherent committed change to relevant code or documentation.
+- Refresh knowledge after a coherent committed change to relevant code or documentation,
+  including on integrated main before closeout, through configured update (`mode="configured"`).
 - Do not use for greetings, unrelated questions, or as ceremony before every file read.
+  Ordinary queries, status checks, and greetings never call a model; no background watcher is installed.
 
 ## Prerequisites
 
@@ -138,10 +140,15 @@ default across rebuilds.
    claim. Documentation can describe a requirement that the implementation does not meet.
 6. Perform the authorized work with the role's existing responsibilities, tools, tests
    and review. Owning a tool does not widen scope or transfer another role's authority.
-7. After an appropriate committed checkpoint, call `update` for the bound revision.
-   Any role can do this; there is no Morfeo-only writer or new human approval for an
-   ordinary in-scope update. `changed_paths` is an efficiency hint, not permission to
-   omit other changed sources. The integration deduplicates and serializes publication.
+7. Perform or resume a configured update (`mode="configured"`, default) at coherent
+   committed checkpoints whenever covered code or documentation changed, including
+   on integrated main before closeout. Any role can do this; there is no Morfeo-only
+   writer or mandatory separate human semantic request. Ordinary queries, status checks,
+   and greetings never call a model, and no background watcher is installed. `changed_paths`
+   is an efficiency hint, not permission to omit other changed sources. If temporary
+   failures occur, at most one bounded retry is allowed; persistent unavailable or
+   deferred work is reported rather than looping to force completion. The integration
+   deduplicates and serializes publication.
 8. Check `updated`, `unchanged` or failure and the revision actually covered. Dirty files
    are not indexed by this candidate. Never label a worker branch as the integrated
    result or union graphs from incompatible branches.
@@ -165,12 +172,14 @@ default across rebuilds.
 - Do not read or write another project's index because the intended index is missing.
 - Do not edit published `graph.json` files manually. Updates derive from source files.
 - Do not demand a complete reindex on every turn or hide failed/unfinished updates.
-- Structural update mode never calls a model. Configured update mode may run the selected
-  `semantic.auxiliary_task` (currently `web_extract`) when semantic extraction is explicitly
-  enabled in the existing component configuration. Missing or ambiguous auxiliary access is
-  reported as unavailable; there is no primary-model fallback or watcher. Coverage, pending
-  paths and observed usage remain explicit. This skill makes no token-saving or universal
-  quality claim.
+- Structural update mode never calls a model. Configured update mode (`mode="configured"`, default)
+  performs or resumes semantic extraction when enabled in the existing component configuration
+  (`semantic.auxiliary_task`, currently `web_extract`). Query, status, and greetings never
+  invoke a model, and no background watcher is installed. Missing or ambiguous auxiliary access is
+  reported as unavailable/deferred; there is no primary-model fallback. One bounded retry is
+  allowed for temporary failures; persistent unavailable/deferred work is reported, not looped.
+  Coverage, pending paths and observed usage remain explicit. This skill makes no token-saving or
+  universal quality claim.
 - A component error is not a reason to stop otherwise authorized development. Continue
   with direct inspection and report the knowledge limitation accurately.
 

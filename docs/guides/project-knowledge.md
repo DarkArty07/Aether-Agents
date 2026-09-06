@@ -93,14 +93,16 @@ Community IDs belong strictly to the active snapshot. Never treat `0` or any oth
 All three roles can request an update after relevant committed changes:
 
 ```json
-{"action":"update","reason":"Refresh the map after the interface and tests changed","mode":"structural"}
+{"action":"update","reason":"Refresh the map after the interface and tests changed","mode":"configured"}
 ```
 
-`changed_paths` may be supplied as a hint, but it is not trusted as a complete change list. Updates capture the selected committed revision from Git objects. Ordinary updates and note writes require no additional per-role approval once the component, task and profile are authorized.
+Skills and agents are instructed to perform or resume configured updates (`mode="configured"`, default) at coherent committed checkpoints whenever covered code or documentation changed, including on integrated main before closeout. Ordinary queries, status checks, and greetings never call a model, and no background watcher is installed.
+
+`changed_paths` may be supplied as a hint, but it is not trusted as a complete change list. Updates capture the selected committed revision from Git objects. Ordinary updates and note writes require no additional per-role approval once the component, task and profile are authorized. If temporary failures occur, at most one bounded retry is allowed; persistent unavailable or deferred work is reported rather than looping to force completion.
 
 Repeated updates of the same view/revision reuse its valid snapshot. Different commits or worktrees do not overwrite each other. A stable external lock serializes managed publication, including the waiting-writer case found in the upstream audit. Readers only see finalized snapshots. A failed build leaves the previous snapshot intact, though a different current revision may require an explicit rebuild before query availability.
 
-An implementation branch describes that branch, not the integrated product. After integration, update from the integrated revision instead of union-merging graphs of divergent code. Uncommitted and new files are reported as not indexed and must be read directly.
+An implementation branch describes that branch, not the integrated product. After integration, update from the integrated revision (including integrated main before closeout) instead of union-merging graphs of divergent code. Uncommitted and new files are reported as not indexed and must be read directly.
 
 ## Tool actions
 
@@ -160,12 +162,14 @@ State follows Aether's XDG configuration. The component is under the product dat
 
 The initial corpus limit is 5,000 selected files, 256,000 bytes per file and 32,000,000 source bytes. Graphs have a 64,000,000-byte ceiling. Unsupported files, symlinks, submodules, LFS pointers, installed dependencies, runtime homes, sessions, logs and high-confidence credential patterns are excluded. A tracked file is not automatically safe or authoritative. These controls reduce accidental inclusion; they are not a complete secret detector or an OS sandbox.
 
-Structural update mode never invokes a model. Configured mode uses the existing
-component configuration: when `semantic.enabled` is true it runs the selected
-`semantic.auxiliary_task` (the qualified activation uses `web_extract`) through the
-profile-scoped auxiliary connection. Semantic metadata reports `state`, covered/pending/
+Structural update mode never invokes a model. Configured mode (`mode="configured"`, default)
+uses the existing component configuration: when `semantic.enabled` is true it performs or resumes
+the selected `semantic.auxiliary_task` (the qualified activation uses `web_extract`) through the
+profile-scoped auxiliary connection. Ordinary queries, status checks, and greetings never call a
+model, and no background watcher is installed. Semantic metadata reports `state`, covered/pending/
 failed paths, a fingerprint and observed usage. Missing, ambiguous or exhausted auxiliary
-access is `unavailable`/`partial`, never a primary-model fallback. No watcher is installed.
+access is `unavailable`/`partial`, never a primary-model fallback. One bounded retry is allowed
+for temporary failures; persistent unavailable/deferred work is reported, not looped.
 Rebuilding a new revision captures the selected corpus again; reuse is guaranteed for an
 unchanged view/revision, not every possible incremental optimization. This behavior does
 not establish token savings or universal quality superiority.

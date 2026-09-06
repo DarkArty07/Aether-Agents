@@ -184,7 +184,7 @@ live-agent adoption or release claim.
 - Upstream Graphify 0.9.54 and Hermes baseline `v2026.8.18` remain completely unmodified.
 - No new public tool, action, or CLI command was added.
 - No live-agent E2E, token-savings, or universal model-backed quality claims are made.
-- Unit compatibility impact is `patch` (compatible envelope/schema/guidance repairs). Publication and aggregate release decisions remain deferred to terminal supervisor closeout.
+- Unit compatibility impact is `minor` (documentation and qualification surface for the accepted expanded catalog). Publication and aggregate release decisions remain deferred to terminal supervisor closeout.
 
 ## What remains outside demonstrated behavior
 
