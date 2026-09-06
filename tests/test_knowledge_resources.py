@@ -93,6 +93,7 @@ def test_managed_component_installs_locked_distribution_and_queries(tmp_path: Pa
         "work_memory",
         {
             "action": "save",
+            "idempotency_key": "installed-component-note-01",
             "situation": "Installed component test",
             "lesson": "Original answer remains readable",
             "applicability": "Fixture",

@@ -1,10 +1,10 @@
 # 005: Shared project knowledge and role work memory
 
-**Status:** owner-authorized implementation candidate, 2026-09-05. This branch is not
-an activated runtime or release qualification. The owner's explicit request to implement
-this plan on a branch is a bounded exception to PD-74 for this capability only. It does
-not unfreeze unrelated features or authorize remote publication, deployment, profile
-activation or provider/model spending.
+**Status:** owner-authorized main-integration candidate, 2026-09-05. This source is not
+an activated runtime or release qualification. The owner's explicit requests to implement
+the plan and integrate the completed candidate into `main` are a bounded exception to
+PD-74 for this capability only. They do not unfreeze unrelated features or authorize a
+release, deployment, live-profile activation or provider/model spending.
 
 ## Outcome
 
@@ -41,9 +41,12 @@ Experiences belong to the project and role, not to a shared owner-personalizatio
   separately explicit. Return revision, coverage and bounded output with honest token
   estimates; a successful transport alone is not functional success.
 - **KG-07 Experiences:** store complete situation, lesson, applicability, outcome and
-  evidence under `(project_id, role_id)`. All temporary implementers share the Implementer
-  role namespace but retain individual session/task/run attribution. This does not share
-  Hermes homes or owner-facing personal memory.
+  evidence under `(project_id, role_id)`. Every save carries one opaque idempotency key:
+  an exact retry returns the existing note, reuse with changed content conflicts, and
+  independent contributions use distinct keys even when their text matches. Only the key
+  digest is persisted. All temporary implementers share the Implementer role namespace
+  but retain individual session/task/run attribution. This does not share Hermes homes or
+  owner-facing personal memory.
 - **KG-08 Integrity:** note versions are immutable and have one effective revision.
   Corrections require the expected revision. Original content remains searchable and
   readable with explicit continuation. Reflection consumes only effective complete notes.

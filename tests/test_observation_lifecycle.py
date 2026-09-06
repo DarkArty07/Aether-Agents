@@ -222,6 +222,9 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
         "project-knowledge",
         "work-memory",
     )
@@ -333,6 +336,9 @@ def _profile_bundle_sha256() -> str:
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
         "project-knowledge",
         "work-memory",
     )
@@ -806,6 +812,9 @@ def test_profile_bundle_contains_only_the_explicit_canonical_skill_allowlist(
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
         "project-knowledge",
         "work-memory",
     }
@@ -845,6 +854,9 @@ def test_activation_materializes_canonical_skills_in_each_native_profile_directo
             "git-github-closeout",
             "semver-release",
             "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
             "project-knowledge",
             "work-memory",
         ):
@@ -955,6 +967,9 @@ def test_update_allows_only_marker_proven_prior_release_skill_bytes(
             "git-github-closeout",
             "semver-release",
             "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
             "project-knowledge",
             "work-memory",
         ):
@@ -1044,6 +1059,9 @@ def test_deactivation_removes_only_marker_owned_profile_skill_bytes(
             "git-github-closeout",
             "semver-release",
             "canonical-skill-governance",
+            "objective-contract-design",
+            "supervisor-decomposition",
+            "implementation-evidence",
             "project-knowledge",
             "work-memory",
         ):

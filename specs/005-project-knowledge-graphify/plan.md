@@ -3,7 +3,7 @@
 **Fecha:** 2026-09-05. **Revisión del plan:** 2, posterior a la auditoría experimental.
 **Base Aether inspeccionada:** `ec182522082b4cdbe58bbd38a9e2bf7e627c1177`.
 **Graphify probado:** Python `graphifyy==0.9.54`, commit `937e59a5476fcb2665d6c4f4b7c0d0a4142011b6`.
-**Status of this artifact:** historical planning baseline. The owner subsequently authorized implementation on a separate branch. The local structural implementation, current limits and executed checks are recorded in [implementation.md](implementation.md), [spec.md](spec.md) and the [capability registry](../../docs/capabilities.toml). Planning text below is not a claim that every proposed capability is implemented; live activation and semantic qualification remain separate.
+**Status of this artifact:** historical planning baseline. The owner subsequently authorized implementation on a separate branch and integration of the reconciled candidate into `main`. The local structural implementation, current limits and executed checks are recorded in [implementation.md](implementation.md), [spec.md](spec.md) and the [capability registry](../../docs/capabilities.toml). Planning text below is not a claim that every proposed capability is implemented; live activation and semantic qualification remain separate.
 
 ## 1. Objetivo y alcance acordado
 
@@ -31,12 +31,12 @@ Un plugin de Aether, distribuido con el producto y basado en interfaces pública
 
 - [Research](research.md): evidencia, límites y correcciones a la propuesta anterior.
 - [Contratos de herramientas y datos](contracts/tools-and-data.md): operaciones y campos concretos.
-- [Cambios de SOUL y distribución de skills](contracts/soul-and-skills.md): bloques propuestos y rutas destino.
-- [Skill de conocimiento del proyecto](drafts/skills/project-knowledge/SKILL.md).
-- [Skill de experiencias](drafts/skills/work-memory/SKILL.md).
+- [Contrato de SOUL y distribución de skills](contracts/soul-and-skills.md): recursos aplicados, rutas canónicas y límites de activación.
+- [Skill canónica de conocimiento del proyecto](../../src/aether_agents/resources/skills/project-knowledge/SKILL.md).
+- [Skill canónica de experiencias](../../src/aether_agents/resources/skills/work-memory/SKILL.md).
 - [Validación y aceptación](validation.md): pruebas funcionales, de comportamiento, packaging y coste.
 
-Los archivos bajo `drafts/` no son skills activas ni una segunda fuente permanente. Al implementar se revisan, se materializan en `src/aether_agents/resources/skills/` y se retiran esos borradores para que quede una sola fuente canónica. Los cambios de SOUL se aplican entonces al recurso fuente correcto, no a copias privadas bajo `home/`.
+Los archivos bajo `drafts/` quedaron reducidos a avisos históricos de reemplazo: no contienen procedimiento ejecutable y no son una segunda fuente. Las únicas skills canónicas están en `src/aether_agents/resources/skills/`. Los cambios de SOUL se aplicaron al recurso fuente correcto, no a copias privadas bajo `home/`.
 
 ## 3. Evidencia que manda sobre las suposiciones
 
@@ -149,7 +149,7 @@ Materializar dos Aether Canonical Skills, iguales para los tres perfiles:
 - `project-knowledge`: consulta selectiva, fuentes, límites de interpretación, actualizaciones colaborativas, revisión y fallback.
 - `work-memory`: selección de experiencias, búsqueda/lectura, notas con evidencia, corrección, reflexión privada y promoción apropiada.
 
-Los borradores completos y ejemplos están bajo `drafts/skills/`. Los bloques exactos a insertar en los tres SOUL están en [contracts/soul-and-skills.md](contracts/soul-and-skills.md). Se insertan junto a la sección existente de descubrimiento de procedimientos, sin reescribir identidades ni duplicar manuales.
+Las skills completas y sus ejemplos están únicamente en `src/aether_agents/resources/skills/`. El contrato aplicado a los tres SOUL está en [contracts/soul-and-skills.md](contracts/soul-and-skills.md); los recursos se integraron junto a las instrucciones existentes sin reescribir identidades ni duplicar manuales.
 
 SOUL establece hábitos: orientar antes de explorar cuando ayuda, actualizar tras cambios pertinentes, recuperar experiencia relevante y registrar aprendizajes reales. Las skills enseñan cómo. No prohibir leer antes de consultar, no exigir notas ceremoniales, no recargar el grafo o toda la memoria en cada turno y no convertir una avería opcional en un bloqueo del objetivo.
 

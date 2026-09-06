@@ -1,20 +1,20 @@
-# Cambios propuestos de SOUL y skills canónicas
+# Contrato de SOUL y skills canónicas
 
-**Estado:** bloques de implementación preparados; no aplicados a los prompts activos ni a perfiles vivos. Derivados de [plan.md](../plan.md) y [tools-and-data.md](tools-and-data.md).
+**Estado:** aplicado a los recursos portables del candidato e inspeccionado mediante pruebas de empaquetado. No se ha activado en perfiles vivos ni se atribuye adopción conductual a los agentes. Derivado de [plan.md](../plan.md), [tools-and-data.md](tools-and-data.md) y [implementation.md](../implementation.md).
 
-Las herramientas deberán existir y estar cualificadas antes de materializar estos recursos como disponibles. Los tres perfiles reciben idéntico catálogo y las mismas dos skills. Las diferencias de párrafo describen el trabajo de cada rol, no restricciones de herramientas.
+Las dos herramientas y skills están materializadas para los tres perfiles con un catálogo idéntico. Las diferencias de párrafo describen el trabajo de cada rol, no restricciones de herramientas. La activación local sigue siendo opt-in y requiere sesiones nuevas.
 
-## 1. Archivos destino y punto de inserción
+## 1. Archivos materializados y punto de inserción
 
-| Archivo del producto | Inserción exacta prevista |
+| Archivo del producto | Inserción aplicada |
 |---|---|
 | `src/aether_agents/resources/profiles/morfeo/SOUL.md` | Después de `## Authority and procedure discovery`, antes de `## Contract extraction`. |
 | `src/aether_agents/resources/profiles/supervisor/SOUL.md` | Después de `## Authority and procedure discovery`, antes de `## Decisions and escalation`. |
 | `src/aether_agents/resources/profiles/implementer/SOUL.md` | Después de `## Procedure precedence`, antes de `## Execution and evidence`. |
 
-No reemplazar los archivos completos ni modificar los límites de contrato, publicación, recuperación o interfaz del usuario. Volver a leer los archivos al aplicar: la base inspeccionada fue `ec182522082b4cdbe58bbd38a9e2bf7e627c1177`.
+La aplicación preserva los límites de contrato, publicación, recuperación e interfaz del usuario. La base histórica inspeccionada fue `ec182522082b4cdbe58bbd38a9e2bf7e627c1177`; la integración final debe reconciliar el contenido posterior de `main` y volver a verificar los recursos completos.
 
-Huellas previas de los recursos, sólo para comprobar que esta planificación no los altera:
+Huellas históricas previas a la aplicación:
 
 - Morfeo: `d8d30f6f3a87449b143a210e4a753b82c3084a39b46d1eeaab11ca39f215ba1f`.
 - Supervisor: `74cfe1984ae6e927d8c4765ff0015d485700fbbe3ff9493e3ad0017cee76a528`.
@@ -57,23 +57,23 @@ Use project knowledge and prior supervision experiences to locate dependency, re
 Use the graph and the project's Implementer-role experiences to locate the assigned component and relevant tests. Update knowledge for your own committed work revision after meaningful changes; inspect dirty files directly rather than claiming they are already indexed. Record useful techniques, scoped failures and corrections with evidence so later Implementers can reuse them. This does not permit expanding the objective or performing Supervisor-owned publication and integration.
 ```
 
-## 4. Skills que deben materializarse
+## 4. Skills materializadas
 
-| Fuente borrador | Única ruta canónica final |
+| Skill | Ruta canónica única |
 |---|---|
-| `drafts/skills/project-knowledge/SKILL.md` en este paquete | `src/aether_agents/resources/skills/project-knowledge/SKILL.md` |
-| `drafts/skills/work-memory/SKILL.md` en este paquete | `src/aether_agents/resources/skills/work-memory/SKILL.md` |
+| `project-knowledge` | `src/aether_agents/resources/skills/project-knowledge/SKILL.md` |
+| `work-memory` | `src/aether_agents/resources/skills/work-memory/SKILL.md` |
 
-Son skills Aether Canonical, no Project Canonical y no Learned Profile Skills. Se distribuyen con Aether a los tres roles por el mecanismo nativo existente. No crear un directorio aprendido privado como fuente de la función pública ni otra lista de instrucciones dentro de cada proyecto.
+Son skills Aether Canonical, no Project Canonical y no Learned Profile Skills. Se distribuyen con Aether a los tres roles por el mecanismo nativo existente. Los archivos bajo `drafts/` son evidencia histórica reemplazada y no una segunda fuente normativa. No crear un directorio aprendido privado como fuente de la función pública ni otra lista de instrucciones dentro de cada proyecto.
 
-Las dos skills contienen triggers, prerrequisitos, ejemplos de herramientas, procedimiento, errores y verificación. El marcador de borrador bajo el título se elimina al materializar sólo después de comprobar los nombres y schemas efectivos. Sus ejemplos son contratos propuestos, no comandos que se deban ejecutar ahora.
+Las dos skills canónicas contienen triggers, prerrequisitos, ejemplos validados contra los schemas, procedimiento, errores y verificación. Sus ejemplos ilustran llamadas disponibles cuando el plugin está habilitado; no autorizan activación, gasto ni publicación.
 
-Mantener `canonical-skill-governance`, `git-github-closeout` y `semver-release`; incorporar las dos nuevas al conjunto existente, no sustituir las anteriores. Resolver colisiones de nombre sin sobrescribir contenido privado ajeno. Reconciliar la antigua skill Graphify que instala paquetes automáticamente para que no contradiga las nuevas; documentar qué se desactiva y conservar contenido ajeno.
+El conjunto reconciliado conserva las seis skills de `main` —`canonical-skill-governance`, `git-github-closeout`, `semver-release`, `objective-contract-design`, `supervisor-decomposition` e `implementation-evidence`— y añade `project-knowledge` y `work-memory`, para ocho recursos canónicos. Ninguna incorporación sobrescribe contenido privado ajeno. Una skill Graphify antigua que instale paquetes automáticamente no debe coexistir como procedimiento activo contradictorio.
 
 ## 5. Configuración, empaquetado y sesiones
 
-- Añadir el mismo plugin a los tres archivos `resources/profiles/<role>/config.yaml`, preservando entradas existentes. El opt-in local decide cuándo se activa, no un catálogo por rol.
-- Registrar un entry point público con las dos herramientas. Actualizar `AETHER_PLUGIN_ENTRY_POINTS`, `_CANONICAL_SKILLS`, los contratos de bundles y sus pruebas de forma explícita.
+- El mismo plugin está presente y deshabilitado por defecto en los tres archivos `resources/profiles/<role>/config.yaml`, preservando entradas existentes. El opt-in local decide cuándo se activa, no un catálogo por rol.
+- El entry point público registra las dos herramientas. `AETHER_PLUGIN_ENTRY_POINTS`, `_CANONICAL_SKILLS`, los contratos de bundles y sus pruebas enumeran las incorporaciones de forma explícita.
 - Verificar el wheel/sdist y la materialización byte a byte en perfiles de prueba. El arranque no descarga Graphify ni añade herramientas a mitad de conversación.
 - No editar `home/profiles/*/SOUL.md` para simular una entrega. La activación posterior materializa recursos versionados mediante lifecycle y comprueba los perfiles efectivos.
 - Reaperturas/cambios de sesión respetan continuidad de Morfeo y Supervisor. No reiniciar servicios ni borrar conversaciones como parte de esta planificación.

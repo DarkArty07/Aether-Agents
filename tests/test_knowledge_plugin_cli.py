@@ -20,7 +20,21 @@ from aether_agents.knowledge.service import KnowledgeService, parameters, valida
 
 
 def test_identical_tool_schema_rejects_identity_injection() -> None:
-    assert "role" not in parameters("work_memory")["properties"]
+    memory_schema = parameters("work_memory")
+    assert "role" not in memory_schema["properties"]
+    assert "idempotency_key" in memory_schema["properties"]
+    with pytest.raises(KnowledgeError):
+        validate_arguments(
+            "work_memory",
+            {
+                "action": "save",
+                "situation": "missing operation identity",
+                "lesson": "retry safety is required",
+                "applicability": "every save",
+                "outcome": "useful",
+                "evidence": [],
+            },
+        )
     for key in ("role", "project_id", "graph_path", "memory_dir", "project_path", "python"):
         with pytest.raises(KnowledgeError):
             validate_arguments("project_knowledge", {"action": "status", key: "injected"})

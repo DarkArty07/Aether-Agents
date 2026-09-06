@@ -4,7 +4,7 @@
 
 This record covers the owner-authorized implementation on `feature/graphify-project-knowledge`, based on Aether commit `ead2b59b7f771f4dd940b49423121f92d1a9ad8f`. It is a local structural integration candidate, not a public release, a live-profile activation or completion of the PD-74 gate. The historical [plan](plan.md) and [audit research](research.md) explain intent; the [specification](spec.md), [user guide](../../docs/guides/project-knowledge.md) and [capability registry](../../docs/capabilities.toml) distinguish current behavior from the wider plan.
 
-No live Hermes profile, running agent, board, credential or service was changed. Work stays on the feature branch, outside the active main checkout. The three unrelated skills already present in the base were preserved; this change does not silently expand their lifecycle materialization.
+No live Hermes profile, running agent, board, credential or service was changed. The owner subsequently authorized reconciliation with `main` and source integration while retaining opt-in profile activation. Until the Git transition completes, work remains on the feature branch outside the active main checkout.
 
 ## Delivered code and procedures
 
@@ -25,7 +25,23 @@ No live Hermes profile, running agent, board, credential or service was changed.
 3. Published graph reads reject redirected parent paths even when graph bytes otherwise match the recorded digest. Malformed node/manifest records do not become valid snapshots.
 4. UTF-8 worker requests avoid ASCII-escape expansion and are bounded before process creation. Timeout/cancellation terminates the managed child process group.
 5. Metadata-only status does not manufacture an unavailable executable path; it can operate without a component backend.
-6. Packaging assertions preserve the extra skills inherited from the branch base while explicitly testing the five materialized resources. Platform expectations retain Linux-only scope for the new skills rather than claiming untested platforms.
+6. Packaging assertions preserve and explicitly materialize all eight canonical skills: the six resources on current `main` plus `project-knowledge` and `work-memory`. Platform expectations retain Linux-only scope for the two knowledge skills rather than claiming untested platforms.
+7. `work_memory.save` now requires an opaque idempotency key. Exact sequential, concurrent and post-restart retries return one current note; changed-payload key reuse fails, independent equal contributions remain distinct, and only key/payload digests are persisted.
+8. The historical draft skill paths contain replacement notices instead of a second executable procedure. The package-owned resources are the sole canonical copies.
+
+## Main reconciliation continuation — 2026-09-05
+
+The integration target inspected for this continuation is `main` at `3a124fb737e0705950fa74bbc276a89994c2d2fc`. The feature branch originally diverged from `ead2b59b7f771f4dd940b49423121f92d1a9ad8f`; current `main` had eleven later commits and the Graphify branch one implementation commit before the continuation changes.
+
+The six predicted content-conflict surfaces were reconciled deliberately rather than by selecting one side wholesale:
+
+- `CHANGELOG.md` retains the contract-design/execution procedure entry and adds Graphify plus idempotent note saves.
+- `docs/capabilities.toml` and its generated reference retain current capability records, add the four knowledge records and enumerate eight canonical skills.
+- `src/aether_agents/lifecycle.py` materializes all eight resources.
+- Lifecycle and packaging tests use the same eight-resource allowlist and retain the three-plugin package contract.
+- Each SOUL retains the current HLP-280 bounded-investigation language alongside the role-specific project-knowledge guidance.
+
+The owner's instruction to integrate the reconciled candidate into `main` is recorded in [spec.md](spec.md) as the bounded PD-74 exception for this capability. It does not activate live profiles, semantic extraction, provider spending, deployment or release publication.
 
 ## Executed verification
 
@@ -81,6 +97,28 @@ uv run --frozen python scripts/check_public_artifacts.py \
 
 The generated reference was produced from `scripts.check_documentation.render` and applied through the file-edit tool; the normal documentation checker confirms exact equality. The public scan covers both built artifacts, including added files not yet tracked by Git. The integration index's expected digest was deliberately updated for the authorized change, not removed.
 
+### Main-reconciliation qualification checkpoint
+
+After closing save idempotency and reconciling current `main` behavior into the candidate files, the following fresh checks completed:
+
+| Lane | Result |
+| --- | --- |
+| Exact-Hermes suite excluding lifecycle, performance and native worker modules | 795 passed; 2 pre-existing conditional skips; 373 subtests passed. |
+| Exact-Hermes lifecycle module | 90 passed. |
+| Uninstrumented performance module | 3 passed. |
+| Native worker under the isolated Graphify 0.9.54 interpreter | 13 passed. |
+| Total executed test inventory | 901 passed; 2 conditional skips; 373 subtests passed. |
+| Ruff check / format check | Passed; 127 files formatted. |
+| Mypy source gate | Passed; 50 source files checked. |
+| Documentation registry/reference | Passed with exact generated equality. |
+| Accumulated branch coverage | 78%, meeting the unchanged 78% project floor. |
+| Wheel and sdist build | `aether_agents-0.24.0` artifacts built successfully. |
+| Public artifact scan | Passed for tracked surface, wheel and sdist. |
+
+The coverage run executed the performance module, but callback instrumentation raised its pre-existing p95 sensitivity from the uninstrumented passing result to 5.94 ms against the 5 ms threshold. That instrumented performance invocation is not reported as green and no threshold was changed; the separate ordinary performance lane passed 3/3. A prior `pytest-cov` attempt also completed 794 tests before its subprocess combiner rejected mixed statement/branch data. The successful replacement used one external coverage data file with direct `coverage run --branch --source=aether_agents` blocks and the native worker append.
+
+These results qualify the reconciled feature-tree content before the Git merge operation. Because non-overlapping commits from `main` enter only when the histories are joined, the final merged tree must receive a post-merge smoke/documentation check before `main` is declared complete.
+
 ## What remains outside demonstrated behavior
 
 - No model-backed semantic document extraction is configured. `configured` and `structural` modes both use the implemented local structural path, with semantic coverage pending.
@@ -91,4 +129,4 @@ The generated reference was produced from `scripts.check_documentation.render` a
 - No shared learning overlay, vector service, graph merge across projects, HTTP daemon, project hook installer or automatic skill promotion is introduced.
 - Component uninstallation/garbage collection and advanced knowledge migration are not exposed as completed features. Disablement preserves data. Deletion cannot remove independently exported copies or external backups.
 
-These limits are also present in current user-facing documentation. A local package/verification result does not grant authority to activate profiles, deploy, merge main, push or publish a release.
+These limits are also present in current user-facing documentation. The owner authorized source integration into `main`; that authorization does not activate profiles, deploy, publish a release or establish any unmeasured quality claim.

@@ -1,6 +1,6 @@
 # Validación y aceptación de la integración
 
-**Estado:** plan de pruebas pendiente de ejecución de la integración. No son resultados actuales. La auditoría previa del componente se documenta por separado en [research.md](research.md).
+**Estado:** contrato de aceptación vigente. Los carriles deterministas de componente, plugin, empaquetado y repositorio ya tienen resultados en [implementation.md](implementation.md); deben repetirse sobre la integración final con `main`. Los escenarios E01–E08 y la evaluación comparativa continúan pendientes y no se presentan como resultados actuales. La auditoría previa del componente se documenta por separado en [research.md](research.md).
 
 ## 1. Niveles de evidencia
 
@@ -126,6 +126,6 @@ Pruebas del repositorio se ejecutan mediante el wrapper de `CONTRIBUTING.md`/`sc
 
 Cierre: fuente, wheel, recursos materializados, documentación y registry concuerdan; no claims de función implementada basados sólo en prompts. Emitir resultados, fallos previos conservados, límites de cobertura y rollback. La activación real, publicación y release se realizan sólo por su vía autorizada. No fabricar aprobaciones adicionales para notas/updates locales dentro de un objetivo y configuración ya permitidos.
 
-## 7. Verificación de esta entrega documental
+## 7. Verificación y registro de resultados
 
-En la sesión de creación del plan sólo corresponde comprobar consistencia de documentos, enlaces locales, frontmatter, ejemplos respecto al contrato propuesto y ausencia de cambios en SOUL/perfiles activos. No presentar esos controles como ejecución de D/S/E ni repetir las 415 pruebas para simular una integración que no se implementó.
+La entrega documental inicial sólo comprobó consistencia, enlaces, frontmatter y ejemplos. La implementación posterior añadió pruebas ejecutables y sus resultados se conservan en [implementation.md](implementation.md), separados de la auditoría histórica de 415 pruebas. Cada rebase o integración con `main` invalida cualquier afirmación de que el candidato final está verde hasta repetir los carriles afectados y registrar comandos y resultados nuevos. Las pruebas deterministas no sustituyen E01–E08 ni acreditan ahorro de tokens, conducta autónoma o la puerta PD-74.

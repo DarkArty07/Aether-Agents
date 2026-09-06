@@ -93,8 +93,10 @@ Experience records are keyed by project and role. Morfeo, Supervisor and Impleme
 Save a non-obvious outcome when its context is fresh, not every successful command. Record applicability and evidence without credentials or irrelevant conversation content:
 
 ```json
-{"action":"save","situation":"A focused test passed but integration failed","lesson":"Run the integration test after wiring the changed interface","applicability":"When this interface crosses the component boundary","outcome":"useful","evidence":[],"source_nodes":[]}
+{"action":"save","idempotency_key":"wm-save-interface-integration-01","situation":"A focused test passed but integration failed","lesson":"Run the integration test after wiring the changed interface","applicability":"When this interface crosses the component boundary","outcome":"useful","evidence":[],"source_nodes":[]}
 ```
+
+Every save requires an opaque `idempotency_key` of 8–160 supported ASCII characters. Preserve the same key and exact payload only when retrying one intended save; the replay returns the existing note with `idempotent_replay=true`. Use a different key for a separate contribution, even when its text is identical. Reusing a key with changed content fails explicitly. Aether stores only the key's digest.
 
 An empty evidence list is allowed, but the record is reported, not independently verified. Checking that a referenced file exists does not certify a claimed test result. Prefer references to the actual revision and observations.
 
@@ -135,6 +137,7 @@ Export writes the selected namespace to stdout, not an automatically chosen file
 | `INDEX_MISSING`, `INDEX_CORRUPT` | Rebuild the selected revision; continue with direct files meanwhile. |
 | `BUSY`, `TIMEOUT` | Another update or a bounded component operation did not complete; inspect status before retrying. |
 | `REVISION_CONFLICT` | Read the current note version before applying a correction. |
+| `IDEMPOTENCY_CONFLICT` | Reuse a save key only with its original payload; assign a new key to a distinct note. |
 | `SCOPE_UNAVAILABLE`, `RESULT_TOO_LARGE` | Narrow the operation or review documented limits; coverage is not silently invented. |
 
 No callback changes the prompt or automatically invokes a model. Graphify failures do not disable file/terminal tools. Deterministic component/plugin tests do not establish live-agent behavior, production readiness or token savings. Qualification must compare against directed search and reading, include indexing costs, and test modified repositories across sessions.

@@ -22,6 +22,8 @@ from aether_agents.knowledge.service import KnowledgeService
 @pytest.mark.parametrize(
     "overrides,code",
     [
+        ({"idempotency_key": "short"}, "ARGUMENT_INVALID"),
+        ({"idempotency_key": "invalid key with spaces"}, "ARGUMENT_INVALID"),
         ({"situation": ""}, "ARGUMENT_INVALID"),
         ({"lesson": "x" * 16001}, "ARGUMENT_INVALID"),
         ({"lesson": "sk-" + "a" * 40}, "SENSITIVE_CONTENT"),

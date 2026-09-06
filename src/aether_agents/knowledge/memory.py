@@ -22,6 +22,7 @@ from .context import KnowledgeContext
 from .graphify import GraphifyBackend
 
 _NOTE_ID = re.compile(r"^wn_[a-f0-9]{32}$")
+_SAVE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$")
 _SECRETS = re.compile(
     r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{24,}|\bAKIA[A-Z0-9]{16}\b"
 )
@@ -151,17 +152,17 @@ class WorkMemoryStore:
             )
         return evidence
 
-    def _publish(
-        self,
-        ctx: KnowledgeContext,
-        root: Path,
-        index: dict[str, Any],
-        note_id: str,
-        revision: int,
-        args: dict[str, Any],
-        *,
-        correction: str | None = None,
-    ) -> dict[str, Any]:
+    @staticmethod
+    def _save_key(args: dict[str, Any]) -> str:
+        value = _text(args, "idempotency_key", 160)
+        if not _SAVE_KEY.fullmatch(value):
+            raise KnowledgeError(
+                "ARGUMENT_INVALID",
+                "idempotency_key must be 8-160 opaque ASCII letters, digits, dots, colons, underscores or hyphens.",
+            )
+        return value
+
+    def _prepare_payload(self, ctx: KnowledgeContext, args: dict[str, Any]) -> dict[str, Any]:
         situation = _text(args, "situation", 4096)
         lesson = _text(args, "lesson", 16000)
         applicability = _text(args, "applicability", 4096)
@@ -182,6 +183,46 @@ class WorkMemoryStore:
             )
         if any(_SECRETS.search(node) for node in nodes):
             raise KnowledgeError("SENSITIVE_CONTENT", "Source labels must not contain credentials.")
+        return {
+            "situation": situation,
+            "lesson": lesson,
+            "applicability": applicability,
+            "outcome": outcome,
+            "evidence": evidence,
+            "source_nodes": nodes,
+        }
+
+    @staticmethod
+    def _save_fingerprint(ctx: KnowledgeContext, payload: dict[str, Any]) -> str:
+        canonical = json.dumps(
+            {"source_revision": ctx.source_revision, "payload": payload},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return hashlib.sha256(canonical).hexdigest()
+
+    def _publish(
+        self,
+        ctx: KnowledgeContext,
+        root: Path,
+        index: dict[str, Any],
+        note_id: str,
+        revision: int,
+        args: dict[str, Any],
+        *,
+        correction: str | None = None,
+        prepared_payload: dict[str, Any] | None = None,
+        idempotency_key_sha256: str | None = None,
+        creation_payload_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        payload = prepared_payload or self._prepare_payload(ctx, args)
+        situation = payload["situation"]
+        lesson = payload["lesson"]
+        applicability = payload["applicability"]
+        outcome = payload["outcome"]
+        evidence = payload["evidence"]
+        nodes = payload["source_nodes"]
         note = self._native(
             "memory_save",
             {
@@ -216,6 +257,10 @@ class WorkMemoryStore:
             "supersedes_revision": revision - 1 if revision > 1 else None,
             "updated_at": time.time(),
         }
+        if idempotency_key_sha256 is not None:
+            record["idempotency_key_sha256"] = idempotency_key_sha256
+        if creation_payload_sha256 is not None:
+            record["creation_payload_sha256"] = creation_payload_sha256
         destination = root / "notes" / note_id / str(revision)
         if any(parent.is_symlink() for parent in (root / "notes", destination.parent, destination)):
             raise KnowledgeError("UNSAFE_PATH", "A note destination is redirected.")
@@ -256,9 +301,45 @@ class WorkMemoryStore:
             with stable_lock(root / "write.lock", timeout=10):
                 index = self._index(root)
                 if action == "save":
-                    result.update(
-                        self._publish(ctx, root, index, "wn_" + uuid.uuid4().hex, 1, args)
-                    )
+                    save_key = self._save_key(args)
+                    prepared = self._prepare_payload(ctx, args)
+                    key_sha256 = hashlib.sha256(save_key.encode()).hexdigest()
+                    payload_sha256 = self._save_fingerprint(ctx, prepared)
+                    note_id = "wn_" + key_sha256[:32]
+                    current = index["heads"].get(note_id)
+                    if current is not None:
+                        _path, existing = self._record(root, note_id, current)
+                        if (
+                            existing.get("idempotency_key_sha256") != key_sha256
+                            or existing.get("creation_payload_sha256") != payload_sha256
+                        ):
+                            raise KnowledgeError(
+                                "IDEMPOTENCY_CONFLICT",
+                                "This idempotency key is already bound to a different work note.",
+                            )
+                        result.update(
+                            note_id=note_id,
+                            revision=current,
+                            generation=index["generation"],
+                            source_revision=existing["source_revision"],
+                            verification=existing["verification"],
+                            idempotent_replay=True,
+                        )
+                    else:
+                        result.update(
+                            self._publish(
+                                ctx,
+                                root,
+                                index,
+                                note_id,
+                                1,
+                                args,
+                                prepared_payload=prepared,
+                                idempotency_key_sha256=key_sha256,
+                                creation_payload_sha256=payload_sha256,
+                            )
+                        )
+                        result["idempotent_replay"] = False
                 elif action == "correct":
                     note_id = _text(args, "note_id", 40)
                     current = index["heads"].get(note_id)
@@ -299,6 +380,8 @@ class WorkMemoryStore:
                             current + 1,
                             payload,
                             correction=_text(args, "reason", 4096),
+                            idempotency_key_sha256=old.get("idempotency_key_sha256"),
+                            creation_payload_sha256=old.get("creation_payload_sha256"),
                         )
                     )
                 elif action == "reflect":

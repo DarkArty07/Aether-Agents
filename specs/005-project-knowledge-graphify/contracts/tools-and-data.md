@@ -1,6 +1,6 @@
-# Contrato propuesto de herramientas y datos
+# Contrato de herramientas y datos
 
-**Estado:** diseño para implementación; ninguna interfaz de este documento se declara disponible hoy. Derivado de [plan.md](../plan.md). Los ejemplos de las skills deben coincidir con este contrato y después con los schemas registrados.
+**Estado:** contrato del candidato estructural implementado. Las interfaces están registradas en el paquete y verificadas de forma determinista, pero permanecen deshabilitadas en las plantillas portables y su calificación con agentes vivos sigue pendiente. Derivado de [plan.md](../plan.md) y trazado por [implementation.md](../implementation.md). Los ejemplos de las skills coinciden con los schemas registrados.
 
 ## 1. Contexto común
 
@@ -54,7 +54,7 @@ Valores de frescura: `current`, `stale`, `dirty_not_indexed`, `unknown`. Son evi
 
 `update` devuelve además `outcome=updated|unchanged|deferred`, `indexed_revision`, `uncovered_paths` y `semantic_pending`. `deferred` identifica una operación que no se completó; no implica que exista un proceso o trabajo asíncrono. El adaptador no promete ejecución posterior si no la ha registrado realmente mediante un mecanismo autorizado existente.
 
-Errores tipados propuestos: `PROJECT_UNRESOLVED`, `PROJECT_CONFLICT`, `VIEW_MISMATCH`, `COMPONENT_UNAVAILABLE`, `INDEX_MISSING`, `INDEX_CORRUPT`, `BUSY`, `TIMEOUT`, `SCOPE_UNAVAILABLE`, `SEMANTIC_NOT_ENABLED`. `ok=false` puede incluir una sugerencia de lectura directa; no entrega resultados de otro proyecto. Distinguir un timeout sin escritura de una publicación completada cuyo recibo no llegó; recuperar por clave de operación antes de repetir.
+Errores tipados: `PROJECT_UNRESOLVED`, `PROJECT_CONFLICT`, `VIEW_MISMATCH`, `COMPONENT_UNAVAILABLE`, `INDEX_MISSING`, `INDEX_CORRUPT`, `BUSY`, `TIMEOUT`, `SCOPE_UNAVAILABLE`, `SEMANTIC_NOT_ENABLED`, `REVISION_CONFLICT` e `IDEMPOTENCY_CONFLICT`. `ok=false` puede incluir una sugerencia de lectura directa; no entrega resultados de otro proyecto. Distinguir un timeout sin escritura de una publicación completada cuyo recibo no llegó; recuperar por clave de operación antes de repetir.
 
 Los tokens solicitados están limitados por configuración; adjuntar tamaño/medición o estimación, nunca afirmar tokenización exacta basada sólo en caracteres. Saneamiento del contenido es defensa adicional, no convierte documentación recuperada en instrucciones de sistema.
 
@@ -64,13 +64,15 @@ Namespace automáticamente ligado a proyecto y rol. Todas las instancias tempora
 
 | action | Argumentos del modelo | Resultado esperado |
 |---|---|---|
-| `save` | `situation`, `lesson`, `applicability`, `outcome`, `evidence`; `source_nodes` opcional. | ID estable y recibo de nota completa, con revisión y procedencia del runtime. |
+| `save` | `idempotency_key`, `situation`, `lesson`, `applicability`, `outcome`, `evidence`; `source_nodes` opcional. | ID estable y recibo de nota completa, con revisión, procedencia del runtime y estado de replay. |
 | `search` | `query`; `limit` y `budget_tokens` opcionales. | Coincidencias por texto/símbolos, extracto, vigencia y note_id; no lee otro namespace. |
 | `read` | `note_id`; `cursor` opcional. | Nota original con contenido completo o continuación explícita. |
-| `correct` | `note_id`, `reason`, `replacement`, `evidence`. | Nueva revisión atribuible que sustituye la anterior en recuperación normal. |
+| `correct` | `note_id`, `expected_revision`, `reason`, `replacement`, `evidence`. | Nueva revisión atribuible que sustituye la anterior en recuperación normal. |
 | `reflect` | Ninguno. | Informe privado acotado y referencia al documento; generación de notas que cubre. |
 
 `outcome` conserva la semántica nativa `useful|dead_end|corrected`. La verificación es otro campo: Aether distingue declaración del agente, fuente observada y evidencia comprobada; no confiar en un booleano suministrado por el LLM. `evidence` puede estar vacío si no existe, y la nota se marca no verificada. Cada referencia puede indicar ruta, revisión, locator y resultado observado; una prueba histórica no se marca vigente en HEAD nuevo sin revalidar.
+
+`idempotency_key` es obligatorio, opaco y acotado. El agente o cliente genera una clave nueva por cada nota intencional y conserva exactamente la misma clave al reintentar esa operación. Aether persiste sólo su digest. Clave y payload originales devuelven la nota existente con `idempotent_replay=true`, incluso después de reiniciar el store; la misma clave con contenido o revisión fuente diferentes devuelve `IDEMPOTENCY_CONFLICT`. Dos contribuciones independientes, aunque tengan texto idéntico, usan claves distintas y se conservan por separado.
 
 `replacement` contiene la nueva lección y condiciones, no un parche libre al filesystem. Corregir no borra la historia ni multiplica señales de corroboración: search y reflect consumen una sola versión efectiva de cada nota. Correcciones concurrentes sobre versiones incompatibles devuelven conflicto explícito y conservan ambos antecedentes; no gana silenciosamente el último escritor.
 

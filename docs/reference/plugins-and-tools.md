@@ -51,7 +51,7 @@ The knowledge plugin registers both tools in `aether_knowledge` when its `enable
 | `project_knowledge` | `community` | `community_id` from the same snapshot. |
 | `project_knowledge` | `path` | `source`, `target`. |
 | `project_knowledge` | `update` | `reason`; optional `mode` and `changed_paths`. |
-| `work_memory` | `save` | `situation`, `lesson`, `applicability`, `outcome`, `evidence`. |
+| `work_memory` | `save` | `idempotency_key`, `situation`, `lesson`, `applicability`, `outcome`, `evidence`. |
 | `work_memory` | `search` | `query`; optional `limit` and `budget_tokens`. |
 | `work_memory` | `read` | `note_id`; optional continuation `cursor`. |
 | `work_memory` | `correct` | `note_id`, `expected_revision`, `reason`, `replacement`, `evidence`. |
@@ -59,7 +59,7 @@ The knowledge plugin registers both tools in `aether_knowledge` when its `enable
 
 Graph queries support bounded context. `neighbors` accepts an optional `relation`; `impact` accepts `depth`; `path` accepts `max_hops`. References and graph relations are derived evidence, not authority or exhaustive runtime analysis. `outcome` is `useful`, `dead_end` or `corrected`; evidence is not independently verified merely because an agent supplies it.
 
-All roles can update; a stable lock coordinates writes, not role permissions. Worktree revisions remain separate. Experiences are keyed by project and role; temporary implementers share role notes without sharing Hermes homes. Corrections use optimistic revision checks and reflection includes only current complete notes. Original notes remain available through search/read because native `reflect` aggregates signals rather than full technical solutions.
+All roles can update; a stable lock coordinates writes, not role permissions. Worktree revisions remain separate. Experiences are keyed by project and role; temporary implementers share role notes without sharing Hermes homes. Save keys are hashed and make exact retries return one note; reusing a key with different content is an explicit conflict, while separate contributions use separate keys. Corrections use optimistic revision checks and reflection includes only current complete notes. Original notes remain available through search/read because native `reflect` aggregates signals rather than full technical solutions.
 
 Errors use `ok: false` and a typed `error.code`; identity conflicts return no substitute data. The integration falls back to ordinary file work, never to a different graph. See [project knowledge](../guides/project-knowledge.md) for setup, coverage, privacy and qualification limits. Graphify's PR tools, global graph merging, HTTP serving and automatic learning sidecars are not exposed by this plugin.
 

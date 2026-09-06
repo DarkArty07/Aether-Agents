@@ -40,9 +40,12 @@ project-relative evidence; this procedure cannot grant authority or certify a re
 ## How to Run
 
 Use `work_memory` to save, search, read, correct and reflect. Never supply an identity,
-project path, note directory, executable or environment override. Do not invoke raw
-`graphify reflect` from the project: omitting `--graph` still allows graph autodetection.
-The integration explicitly calls the Python function with `graph_path=None` in isolation.
+project path, note directory, executable or environment override. Every `save` requires
+an opaque `idempotency_key`: reuse it unchanged only when retrying that exact save, and
+create a new key for every independent note. A key is hashed before persistence. Do not
+invoke raw `graphify reflect` from the project: omitting `--graph` still allows graph
+autodetection. The integration explicitly calls the Python function with
+`graph_path=None` in isolation.
 
 ## Quick Reference
 
@@ -51,7 +54,7 @@ The integration explicitly calls the Python function with `graph_path=None` in i
 ```
 
 ```json
-{"action":"save","situation":"A validation failure was caused by an unchecked empty input","lesson":"Check the empty-input boundary before dispatching this operation","applicability":"The contract-validation path inspected in this task; revalidate after interface changes","outcome":"useful","evidence":[{"path":"src/contracts.py","locator":"validate_contract","result":"Observed the explicit empty-input check in source"}],"source_nodes":["validate_contract"]}
+{"action":"save","idempotency_key":"wm-save-contract-empty-input-01","situation":"A validation failure was caused by an unchecked empty input","lesson":"Check the empty-input boundary before dispatching this operation","applicability":"The contract-validation path inspected in this task; revalidate after interface changes","outcome":"useful","evidence":[{"path":"src/contracts.py","locator":"validate_contract","result":"Observed the explicit empty-input check in source"}],"source_nodes":["validate_contract"]}
 ```
 
 ```json
@@ -81,8 +84,10 @@ returned by the tool. Follow `next_cursor` to read the remainder of an original 
 4. Apply the lesson only within the task and governing artifacts. Current instructions,
    specifications, code and applicable canonical procedures outrank recollection.
 5. Save a concise, complete experience when it can prevent meaningful repetition:
-   situation, lesson, conditions, outcome and actual evidence. Evidence may be empty;
-   never invent a source or successful test to make a note appear verified.
+   situation, lesson, conditions, outcome and actual evidence. Generate one opaque
+   `idempotency_key` for that intended note and preserve it if the same tool call must be
+   retried; do not reuse it for another contribution. Evidence may be empty; never invent
+   a source or successful test to make a note appear verified.
 6. Use `useful`, `dead_end` or `corrected` to describe the observed outcome, not universal
    quality of the cited component. A failed search in one task does not make a module
    irrelevant for every future task.
@@ -106,12 +111,16 @@ returned by the tool. Follow `next_cursor` to read the remainder of an original 
 - Separate memory by role is not a security sandbox against another process running as
   the same trusted OS user; do not claim stronger isolation than is implemented.
 - A successful save receipt means the note was stored, not that its lesson is true.
+- Reusing an `idempotency_key` with changed content is a conflict. Retrying unchanged
+  content returns the original note with `idempotent_replay=true`; equal independent
+  contributions require different keys.
 - Deletion/export belongs to the explicit operator surface; exported copies and external
   backups cannot be erased merely by deleting the local note.
 
 ## Verification
 
-Check the returned project, role, note ID, revision and generation. Recover a saved lesson
-through a later search/read and verify relevant sources before reuse. Reflection should
+Check the returned project, role, note ID, revision, generation and
+`idempotent_replay` status. Recover a saved lesson through a later search/read and verify
+relevant sources before reuse. Reflection should
 not expose another role's notes or alter the shared graph. For closure, report actual task
 and test evidence through the ordinary lifecycle; a memory record never replaces it.

@@ -407,7 +407,7 @@ Portable profile templates are opt-in. Managed installation currently uses local
 
 **Status:** `partial`
 
-Project/role notes retain complete experiences with lexical search, paginated reads, revision-aware corrections and private signal-only reflection.
+Project/role notes retain complete experiences with idempotent save retries, lexical search, paginated reads, revision-aware corrections and private signal-only reflection.
 
 ### Surfaces
 - `cli.command.aether.knowledge.delete`
@@ -444,7 +444,7 @@ Project/role notes retain complete experiences with lexical search, paginated re
 
 ### Notes / current limits
 
-Temporary implementers share the role/project namespace, not a Hermes home. Notes remain reported evidence, not automatically verified facts. Reflection explicitly passes graph_path=None and does not write a shared learning sidecar. No embeddings, automatic skill promotion, semantic synthesis or live-agent improvement is claimed.
+Temporary implementers share the role/project namespace, not a Hermes home. Save keys are stored only as digests: an exact retry reuses the current note revision, changed-payload reuse conflicts, and independent contributions require distinct keys. Notes remain reported evidence, not automatically verified facts. Reflection explicitly passes graph_path=None and does not write a shared learning sidecar. No embeddings, automatic skill promotion, semantic synthesis or live-agent improvement is claimed.
 
 ## `knowledge.session-bindings`
 
@@ -905,7 +905,7 @@ Portable resources are versioned candidate bytes; private live-profile activatio
 
 **Status:** `implemented`
 
-Five Aether Canonical Skills are packaged and materialized through the existing native profile skill directories, including project knowledge and role work memory.
+Eight Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge and role work memory.
 
 ### Surfaces
 - `lifecycle.aether-canonical-skills`
@@ -922,8 +922,11 @@ Five Aether Canonical Skills are packaged and materialized through the existing 
 - [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 - [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
 - [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
+- [src/aether_agents/resources/skills/implementation-evidence/SKILL.md](../../src/aether_agents/resources/skills/implementation-evidence/SKILL.md)
+- [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
 - [src/aether_agents/resources/skills/project-knowledge/SKILL.md](../../src/aether_agents/resources/skills/project-knowledge/SKILL.md)
 - [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
+- [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
 - [src/aether_agents/resources/skills/work-memory/SKILL.md](../../src/aether_agents/resources/skills/work-memory/SKILL.md)
 
 ### Verification
@@ -932,7 +935,7 @@ Five Aether Canonical Skills are packaged and materialized through the existing 
 
 ### Notes / current limits
 
-Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures remain under owner-directed organic behavior observation in issue #317; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

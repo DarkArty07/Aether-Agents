@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -23,8 +24,10 @@ def memory(tmp_path: Path):
     return WorkMemoryStore(state, Path(raw)), state
 
 
-def payload(lesson: str = "Use the committed source revision.") -> dict:
+def payload(lesson: str = "Use the committed source revision.", *, key: str | None = None) -> dict:
+    save_key = key or "test-save-" + hashlib.sha256(lesson.encode()).hexdigest()[:16]
     return {
+        "idempotency_key": save_key,
         "situation": "Which revision is indexed?",
         "lesson": lesson,
         "applicability": "When checking project knowledge.",
@@ -102,6 +105,76 @@ def test_pagination_and_foreign_project_isolation(memory, tmp_path: Path) -> Non
     assert store.execute(other, "search", {"query": "Unicode"})["matches"] == []
     with pytest.raises(KnowledgeError):
         store.execute(other, "read", {"note_id": note["note_id"]})
+
+
+def test_save_retry_is_idempotent_across_store_restart(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    data = payload("A retry must reuse the original note.", key="retry-across-restart")
+
+    first = store.execute(ctx, "save", data)
+    restarted = WorkMemoryStore(state, Path(os.environ["AETHER_GRAPHIFY_PYTHON"]))
+    replay = restarted.execute(ctx, "save", data)
+
+    assert first["idempotent_replay"] is False
+    assert replay["idempotent_replay"] is True
+    assert replay["note_id"] == first["note_id"]
+    assert replay["revision"] == first["revision"] == 1
+    assert len(restarted.execute(ctx, "export", {})["notes"]) == 1
+
+
+def test_parallel_retries_publish_one_note(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    data = payload("Concurrent retries share one operation.", key="parallel-retry-operation")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        saved = list(pool.map(lambda _index: store.execute(ctx, "save", data), range(12)))
+
+    assert len({note["note_id"] for note in saved}) == 1
+    assert sum(not note["idempotent_replay"] for note in saved) == 1
+    assert len(store.execute(ctx, "export", {})["notes"]) == 1
+
+
+def test_reused_key_conflicts_but_distinct_keys_preserve_equal_contributions(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    first = store.execute(ctx, "save", payload("Same lesson.", key="independent-operation-a"))
+
+    with pytest.raises(KnowledgeError) as conflict:
+        store.execute(ctx, "save", payload("Changed lesson.", key="independent-operation-a"))
+    assert conflict.value.code == "IDEMPOTENCY_CONFLICT"
+
+    second = store.execute(ctx, "save", payload("Same lesson.", key="independent-operation-b"))
+    assert first["note_id"] != second["note_id"]
+    assert len(store.execute(ctx, "export", {})["notes"]) == 2
+
+
+def test_save_retry_tracks_the_current_corrected_revision(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    original = payload("Original answer.", key="corrected-save-operation")
+    saved = store.execute(ctx, "save", original)
+    store.execute(
+        ctx,
+        "correct",
+        {
+            "note_id": saved["note_id"],
+            "expected_revision": 1,
+            "reason": "The verified behavior changed.",
+            "replacement": {
+                "lesson": "Corrected answer.",
+                "applicability": "Current revision only.",
+            },
+            "evidence": [],
+        },
+    )
+
+    replay = store.execute(ctx, "save", original)
+    assert replay["idempotent_replay"] is True
+    assert replay["note_id"] == saved["note_id"]
+    assert replay["revision"] == 2
+    assert len(store.execute(ctx, "export", {})["notes"]) == 1
 
 
 def test_parallel_implementer_notes_are_all_retained(memory) -> None:

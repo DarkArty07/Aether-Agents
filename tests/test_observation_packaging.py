@@ -27,15 +27,11 @@ CANONICAL_SKILLS = (
     "git-github-closeout",
     "semver-release",
     "canonical-skill-governance",
-    "project-knowledge",
-    "work-memory",
-)
-# Preserve the independently authored resources already present in this branch's
-# base. Their lifecycle materialization is outside the Graphify change.
-OTHER_PACKAGED_SKILLS = (
     "objective-contract-design",
     "supervisor-decomposition",
     "implementation-evidence",
+    "project-knowledge",
+    "work-memory",
 )
 
 
@@ -410,7 +406,7 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             if name.startswith("aether_agents/resources/skills/") and name.endswith("/SKILL.md")
         } == {
             f"aether_agents/resources/skills/{skill_name}/SKILL.md"
-            for skill_name in (*CANONICAL_SKILLS, *OTHER_PACKAGED_SKILLS)
+            for skill_name in CANONICAL_SKILLS
         }
 
 
