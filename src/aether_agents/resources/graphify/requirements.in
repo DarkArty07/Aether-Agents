@@ -1,0 +1,7 @@
+# Optional Graphify component. Resolved for its isolated Python 3.11 runtime.
+# Graphify remains externally authored; see the distributed package notices.
+graphifyy==0.9.54
+networkx==3.6.1
+numpy==1.26.4
+rapidfuzz==3.14.5
+tree-sitter==0.25.2

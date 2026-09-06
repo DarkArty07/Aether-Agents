@@ -65,6 +65,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     build_init_subparser(subparsers)
 
+    from aether_agents.commands.knowledge import build_subparser as build_knowledge_subparser
+
+    build_knowledge_subparser(subparsers)
+
     version_parser = subparsers.add_parser("version", help="Report the Aether product version.")
     version_parser.add_argument("--json", action="store_true")
 
@@ -665,6 +669,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Bind streams at invocation time.  ``commands.observe`` is imported while
         # parsers are built, and test/embedding stream objects may be replaced later.
         return run_observe(args, stdout=sys.stdout, stderr=sys.stderr)
+
+    if args.command == "knowledge":
+        from aether_agents.commands.knowledge import run_knowledge
+
+        return run_knowledge(args)
 
     if args.command == "version":
         return _run_version(args.json)

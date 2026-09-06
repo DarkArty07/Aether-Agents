@@ -8,6 +8,14 @@
 - Registered the resources through the existing explicit skill distribution surface and reconciled the corresponding inventory expectations; no new tool, loader, role, schema, model, or concurrency setting is introduced.
 - New behavior is under organic observation in [#317](https://github.com/DarkArty07/Aether-Agents/issues/317). At the owner's direction this delivery does not run a local synthetic qualification campaign; source registration and resource installation do not establish behavioral quality or speedup.
 
+### Optional shared project knowledge and role experiences
+
+- Added the native `aether-project-knowledge` plugin with identical `project_knowledge` and `work_memory` action catalogs for Morfeo, Supervisor and Implementer; portable templates remain disabled until explicitly configured.
+- Added revision/worktree-scoped structural Graphify snapshots, stable collaborative publication locks, native-session/operator bindings and explicit dirty-file coverage instead of a global graph or last-project fallback.
+- Added project/role experiences with complete original notes, lexical retrieval, paginated reads, revision-aware corrections, idempotent save retries, private signal-only reflection, operator export and deletion. Save keys are stored only as digests; changed payload reuse fails explicitly, and reflection cannot write a personal sidecar into the shared technical graph.
+- Added the two package-owned canonical skills and availability-guarded guidance in all three SOUL resources, plus optional hash-locked component installation and diagnostics outside the Hermes environment.
+- Documented setup, all commands, ownership, isolation and limitations. Structural Markdown navigation is supported; semantic extraction, live-agent E2E and measured token savings remain separate qualification work. No live profiles or services are activated by these source changes.
+
 ### Current beta project and documentation surface
 
 - Added the user-visible `aether init` path for an existing Git repository root: it writes the portable project marker, preserves the required ignore boundary, and binds exactly one existing native Hermes Project by exact primary path; `--hermes-project ID` resolves an otherwise ambiguous exact match without creating or changing a native Project.

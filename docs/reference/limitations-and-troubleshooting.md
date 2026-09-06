@@ -15,6 +15,9 @@ This page records current limits plainly. It does not turn a candidate interface
 | Guided/declarative setup | Only a local wheel/check-out/release-lock candidate interface exists. | Do not treat it as a clean public installation wizard. |
 | State export | `uninstall --export` returns `EXPORT_NOT_IMPLEMENTED`. | Preserve state; do not claim an export occurred. |
 | Portable profiles | Resources are versioned candidate bytes, not proof of live profile activation. | Avoid copying private profile state into project artifacts. |
+| Optional Graphify | Structural graphs are committed-revision snapshots; no semantic provider is configured, and dirty files are not indexed. | Check revision/coverage and read changed sources directly; see [project knowledge](../guides/project-knowledge.md). |
+| Role learning | Reflection aggregates outcome signals, not full answer semantics; lexical search has bounded scale and notes remain agent-reported evidence. | Search/read original notes, correct by expected revision and revalidate old sources. |
+| Knowledge activation | Component installation does not enable profile tools or resolve a session automatically when native workspace metadata is absent. | Check `aether knowledge doctor`, plugin enablement and exact session binding; never select the last-used graph. |
 | Live reliability/release evidence | Provider-backed model execution, persistent-session wake, protected CI, immutable runtime, and public release qualification remain outside this local build. | Use deterministic tests as local evidence only; do not invoke providers or publish. |
 
 ## Provider-free diagnostics
@@ -24,6 +27,7 @@ aether --version
 aether --help
 aether observe --help
 aether doctor --json
+aether knowledge doctor --json
 ```
 
 A missing active release may make `doctor` return an integrity error. That is an honest diagnostic in a clean environment. `observe` needs a resolvable initialized project/observation state; no trace is reported as an explicit empty state, while ambiguous inputs are errors rather than guesses.

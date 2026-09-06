@@ -29,6 +29,7 @@ aether = "aether_agents.cli:main"
 [project.entry-points."hermes_agent.plugins"]
 aether-contract-observer = "aether_agents.observation.capture.hermes_plugin"
 aether-objective-contracts = "aether_agents.objective_contracts.hermes_plugin"
+aether-project-knowledge = "aether_agents.knowledge.hermes_plugin"
 
 [project.urls]
 Homepage = "https://github.com/DarkArty07/aether-agents"
@@ -118,3 +119,9 @@ exclude = "(^src/aether_agents/resources/lab/fixtures/|^src/aether_agents/(?:lif
 files = ["src/aether_agents"]
 python_version = "3.11"
 warn_unused_configs = true
+
+# These imports execute only in the isolated optional component or a native
+# Hermes callback. Neither upstream package is a manager/runtime dependency.
+[[tool.mypy.overrides]]
+module = ["graphify", "graphify.*", "hermes_constants"]
+ignore_missing_imports = true

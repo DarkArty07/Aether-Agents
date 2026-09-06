@@ -1,6 +1,11 @@
 plugins:
   enabled:
     - aether-contract-observer
+    - aether-project-knowledge
+  entries:
+    aether-project-knowledge:
+      settings:
+        enabled: false
 approvals:
   mode: "off"
 security:

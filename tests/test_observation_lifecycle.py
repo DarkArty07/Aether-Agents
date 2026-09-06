@@ -225,6 +225,8 @@ def _prepared_release(root: Path, version: str, payload: bytes) -> PreparedRelea
         "objective-contract-design",
         "supervisor-decomposition",
         "implementation-evidence",
+        "project-knowledge",
+        "work-memory",
     )
     for role in ("morfeo", "supervisor", "implementer"):
         profile_root = stage / "profiles" / role
@@ -337,6 +339,8 @@ def _profile_bundle_sha256() -> str:
         "objective-contract-design",
         "supervisor-decomposition",
         "implementation-evidence",
+        "project-knowledge",
+        "work-memory",
     )
     for role in ("morfeo", "supervisor", "implementer"):
         resources: dict[str, dict[str, str]] = {}
@@ -811,6 +815,8 @@ def test_profile_bundle_contains_only_the_explicit_canonical_skill_allowlist(
         "objective-contract-design",
         "supervisor-decomposition",
         "implementation-evidence",
+        "project-knowledge",
+        "work-memory",
     }
     assert set(manifest["profiles"]["morfeo"]["skills"]) == expected_skills
     for role in ("morfeo", "supervisor", "implementer"):
@@ -851,6 +857,8 @@ def test_activation_materializes_canonical_skills_in_each_native_profile_directo
             "objective-contract-design",
             "supervisor-decomposition",
             "implementation-evidence",
+            "project-knowledge",
+            "work-memory",
         ):
             target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
             assert target.read_bytes() == (source_root / skill_name / "SKILL.md").read_bytes()
@@ -962,6 +970,8 @@ def test_update_allows_only_marker_proven_prior_release_skill_bytes(
             "objective-contract-design",
             "supervisor-decomposition",
             "implementation-evidence",
+            "project-knowledge",
+            "work-memory",
         ):
             target = store.profile_home(role) / "skills" / skill_name / "SKILL.md"
             source = (
@@ -1052,6 +1062,8 @@ def test_deactivation_removes_only_marker_owned_profile_skill_bytes(
             "objective-contract-design",
             "supervisor-decomposition",
             "implementation-evidence",
+            "project-knowledge",
+            "work-memory",
         ):
             assert not (home / "skills" / skill_name / "SKILL.md").exists()
     assert unrelated.read_bytes() == b"learned private skill\n"

@@ -30,6 +30,8 @@ CANONICAL_SKILLS = (
     "objective-contract-design",
     "supervisor-decomposition",
     "implementation-evidence",
+    "project-knowledge",
+    "work-memory",
 )
 
 
@@ -83,6 +85,7 @@ def test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins(
         assert dict(parser["hermes_agent.plugins"]) == {
             "aether-contract-observer": "aether_agents.observation.capture.hermes_plugin",
             "aether-objective-contracts": "aether_agents.objective_contracts.hermes_plugin",
+            "aether-project-knowledge": "aether_agents.knowledge.hermes_plugin",
         }
         for profile in PROFILE_NAMES:
             data = archive.read(f"aether_agents/resources/profiles/{profile}/config.yaml").decode(
@@ -197,7 +200,7 @@ eps = sorted(
     for ep in importlib.metadata.entry_points().select(group='hermes_agent.plugins')
     if ep.dist and ep.dist.metadata['Name'] == 'aether-agents'
 )
-if len(eps) != 2:
+if len(eps) != 3:
     raise RuntimeError('Aether plugin entry-point set mismatch')
 observer = importlib.import_module('aether_agents.observation.capture.hermes_plugin')
 loaded = next(ep for ep in eps if ep.name == 'aether-contract-observer').load()
@@ -281,6 +284,7 @@ def test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadow
     assert manager_identity["entrypoints"] == [
         ["aether-contract-observer", "aether_agents.observation.capture.hermes_plugin"],
         ["aether-objective-contracts", "aether_agents.objective_contracts.hermes_plugin"],
+        ["aether-project-knowledge", "aether_agents.knowledge.hermes_plugin"],
     ]
     assert manager_identity["observer_module"] == (
         "aether_agents.observation.capture.hermes_plugin"
@@ -368,10 +372,20 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             assert frontmatter["version"] == "0.1.0"
             assert isinstance(frontmatter["author"], str) and frontmatter["author"]
             assert frontmatter["license"] == "MIT"
-            assert frontmatter["platforms"] == ["linux", "macos", "windows"]
+            expected_platforms = (
+                ["linux"]
+                if skill_name in {"project-knowledge", "work-memory"}
+                else ["linux", "macos", "windows"]
+            )
+            assert frontmatter["platforms"] == expected_platforms
             metadata = frontmatter["metadata"]["hermes"]
             assert isinstance(metadata["tags"], list) and metadata["tags"]
-            assert metadata["related_skills"] == []
+            expected_related = {
+                "project-knowledge": ["work-memory", "canonical-skill-governance"],
+                "work-memory": ["project-knowledge", "canonical-skill-governance"],
+            }.get(skill_name, [])
+            assert metadata["related_skills"] == expected_related
+            assert set(metadata["related_skills"]) <= set(CANONICAL_SKILLS)
             body = match.group("body")
             assert "## When to Use" in body
             assert "Use when" in body or "Use for" in body

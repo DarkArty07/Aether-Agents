@@ -22,7 +22,7 @@ A project should not be added here merely because it was researched. Add it when
 | [Aether Router](https://github.com/DarkArty07/aether-router) | **ACTIVE** | Model access for Aether profiles | Hermes custom provider `custom:aether-router` | Centralize model/provider access outside the role logic and keep routing policy independent from Aether Agents | Model routing, provider abstraction, credentials/access path, context/model selection and model-economics concerns |
 | [Context7](https://github.com/upstash/context7) | **ACTIVE** | Primarily Morfeo research/design | MCP server via `npx -y @upstash/context7-mcp` | Give Morfeo current, library-specific documentation instead of relying on stale model knowledge or generic web results | Current APIs, SDK/framework documentation, configuration, migrations and version-specific usage during design/research |
 | [Exa](https://github.com/exa-labs/exa-py) | **ACTIVE** | Primarily Morfeo research | Hermes web search/extract backend configured as `exa` | Give Morfeo general current-web discovery and extraction beyond library documentation | Fresh public-web research, source discovery and page extraction when Context7 is not the right source |
-| [Graphify](https://github.com/rhanka/graphify) | **OPTIONAL** | Project/codebase understanding | Project-local Hermes skill plus installed `graphify` CLI; local skill version `0.8.28` | Preserve a reusable structural/semantic graph when a corpus or codebase benefits from relationship-oriented navigation | Re-reading large corpora, cross-file/cross-document relationships, architecture exploration and persistent queryable context |
+| [Graphify Python](https://github.com/Graphify-Labs/graphify) | **OPTIONAL** | All three roles; project/revision graphs and separate project/role experiences | Packaged `aether-project-knowledge` native Hermes plugin, two canonical skills and isolated hash-locked `graphifyy==0.9.54` component | Reuse structural extraction and graph navigation while Aether binds identity, coordinates writes and separates notes | Repeated repository discovery, stale maps and loss of useful technical experiences between sessions; savings remain to be measured |
 
 ## Integration notes
 
@@ -63,9 +63,13 @@ Aether currently consumes Exa through Hermes's web capability rather than owning
 
 ### Graphify
 
-Graphify is present as a project-local Hermes skill and CLI, but it is **not currently a required runtime integration**: no Graphify MCP is configured in Morfeo's active profile and no `.graphify/` project graph is currently present.
+The selected distribution is the Python project `Graphify-Labs/graphify`, package `graphifyy`, not the separate `rhanka/graphify` TypeScript port. Historical project-local skills are not the managed integration or its version authority.
 
-Keep it `OPTIONAL` until Aether deliberately makes a persistent graph part of a normal role workflow. Presence of a skill alone must not be mistaken for an architectural dependency.
+Aether packages `project_knowledge` and `work_memory` with the same operations for Morfeo, Supervisor and Implementer. The component is installed separately with the hash lock under `src/aether_agents/resources/graphify/`; Graphify is not a dependency of the Hermes-free manager import path. The native MCP is not required and does not by itself expose the update/save/reflect operations this integration needs.
+
+Structural code and supported Markdown navigation are implemented. Rich semantic extraction and model-driven qualification remain pending. Graphs are revision-scoped shared derivatives; notes, original answers and signal-only reflections belong to a project/role namespace. A stable Aether lock, explicit path selection and Python reflection without a graph address the behaviors reproduced in the audit.
+
+Keep this entry `OPTIONAL`: portable templates are disabled until explicitly configured, and package inclusion does not establish live activation or measured token savings. See the [project-knowledge guide](docs/guides/project-knowledge.md), [005 specification](specs/005-project-knowledge-graphify/spec.md) and implementation registry for current limits. Retire or disable the component if its measured cost, correctness or maintenance burden outweighs the exploration it avoids; normal source-file tools remain available.
 
 ## Update rule
 

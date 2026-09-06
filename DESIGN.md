@@ -417,6 +417,32 @@ Conflict handling follows the semantic owner rather than file order or recency a
 
 This taxonomy defines no mission, product capability, autonomy envelope, use case, role behavior, or current capability status; it only identifies where such questions would be owned or recorded.
 
+## 13.1 Project knowledge and role experiences
+
+Owner-authorized implementation scope, 2026-09-05: integrate Graphify as an optional,
+externally authored, isolated component through one Aether native Hermes plugin. This is
+a bounded exception to the PD-74 feature freeze for specification 005 only; it does not
+unfreeze other features or authorize live activation, provider spending or publication.
+
+The project owns its derived technical graph. Morfeo, Supervisor and Implementer have
+the same query and update tools, and each may maintain knowledge within the authorized
+work. Aether resolves project and source revision, coordinates writes and publishes
+coherent snapshots. The graph is navigational evidence, not a source of product intent,
+execution status or acceptance. Worktree revisions do not silently replace one another.
+
+Work experiences are stored separately by project and role. Temporary implementers may
+share the Implementer role namespace with task/session attribution; this never shares
+Hermes homes or owner-facing personal memory. Current notes remain inspectable,
+correctable and deletable. Original answers are recoverable; native Graphify reflection
+aggregates signals and must not be described as training or full semantic synthesis.
+Private experience files and learning overlays do not enter the shared graph.
+
+The component adds neither a role nor a runtime scheduler. Existing file inspection and
+review remain available when knowledge fails. Package-owned `project-knowledge` and
+`work-memory` skills govern procedure only. Detailed requirements and qualification
+boundaries are owned by `specs/005-project-knowledge-graphify/spec.md` and R9; current
+implementation status belongs to the capability registry, not this design declaration.
+
 ## 14. Reference sources
 
 - Hermes Agent / Nous Research: <https://github.com/NousResearch/hermes-agent>

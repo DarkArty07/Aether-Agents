@@ -43,6 +43,17 @@ The table below maps each information class to its authoritative artifact, defin
 | **Evidence (Implemented behavior)** | Implemented behavior and reproducible runtime facts (Source code and direct execution) | Demonstrable behavior of the source code and observed direct execution facts | Normative intent or design authority (all evidence supports claims and cannot redefine intent) | Source code is public, portable; local direct execution output is private/local, transient evidence | Reveals what is implemented or observed and may expose drift, but all evidence supports claims and cannot redefine normative intent. |
 | **Reader explanation** | Reader-facing placement and conflict explanation (Derived: [`docs/authority.md`](authority.md)) | Explanatory reader guide mapping artifact ownership, non-ownership, and conflict resolution | Normative architectural decisions, stage requirements, or capability status (derived from `DESIGN.md` section 13) | Public, portable | Explains canonical relationships for readers without competing with normative owners. [`docs/index.md`](index.md) provides navigation only and owns no semantic project truth. |
 
+## Derived project knowledge and role experiences
+
+The [005 specification](../specs/005-project-knowledge-graphify/spec.md) and R9 distinguish two local artifact classes from personal preferences and canonical procedures:
+
+| Class | Owner of meaning | Placement and update rule |
+| --- | --- | --- |
+| Shared technical graph | The referenced source code and canonical project documents, not the graph itself. | Rebuildable, local project/revision snapshots. All three roles may maintain them through the same tool; Aether coordinates publication and labels coverage. Never commit private indices as project authority. |
+| Role work experiences | The originating task and its evidence; a note is an attributable report, not a new rule. | Durable private state keyed by project and role. Original notes, effective revisions and reflections remain separated from shared graph inputs. Operator export/deletion is explicit. |
+
+A verified rule belongs in the relevant project documentation or canonical procedure. It does not become canonical because `reflect` lists a source as useful. Temporary implementers can share technical role experiences without sharing profile homes or owner preferences. The [project-knowledge guide](guides/project-knowledge.md) describes the implemented local behavior and its limits.
+
 ## Canonical skill discovery and precedence
 
 Aether has three procedural skill classes, not a second authority system:

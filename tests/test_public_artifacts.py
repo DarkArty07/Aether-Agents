@@ -12,7 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 SCANNER = ROOT / "scripts" / "check_public_artifacts.py"
 ROOT_REPORTS = ("INTEGRATIONS.md", "INCOMPLETE_IMPLEMENTATIONS.md")
-INTEGRATIONS_SHA256 = "3bd701dd544e7fa843717ee03181b693047fd657956dfc73888345993f1383a6"
+# Updated by the owner-authorized Graphify integration; retain byte-integrity coverage.
+INTEGRATIONS_SHA256 = "b34ac51af0a9ae65d3b35fb1e724165042585b61bfe92ed3196369e853c86536"
 
 
 def _run(*arguments: str, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -41,7 +42,7 @@ def test_root_reports_are_tracked_immutable_and_privacy_safe(tmp_path: Path) -> 
     assert tracked.returncode == 0, tracked.stderr
 
     integrations = ROOT / "INTEGRATIONS.md"
-    assert integrations.stat().st_size == 8028
+    assert integrations.stat().st_size == 9305
     assert hashlib.sha256(integrations.read_bytes()).hexdigest() == INTEGRATIONS_SHA256
 
     subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
@@ -111,4 +112,5 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
     assert set(project["entry-points"]["hermes_agent.plugins"]) == {
         "aether-contract-observer",
         "aether-objective-contracts",
+        "aether-project-knowledge",
     }

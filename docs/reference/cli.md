@@ -35,10 +35,32 @@ These commands have tested local candidate behavior, but their registry status i
 
 `setup` accepts only locally supplied wheel/check-out/lock inputs. `update` and `rollback` can plan or select staged candidates. `uninstall --export` reports `EXPORT_NOT_IMPLEMENTED`; `--purge` requires `--yes`. See [Policy and recovery](../guides/policy-and-recovery.md).
 
+## Optional project knowledge
+
+`aether knowledge` requires a subcommand. It does not activate Hermes profiles or start an MCP server. All subcommands accept `--json`. Project-scoped operator commands accept required `--project-id UUID`, optional `--role morfeo|supervisor|implementer` (default `morfeo`) and `--workspace PATH` for a verified attached worktree. These operator selectors are not exposed as model-tool arguments.
+
+| Subcommand | Additional options | Behavior |
+| --- | --- | --- |
+| `install` | None. | Explicitly install the hash-locked Graphify component with local Python 3.11 and configure it. |
+| `configure` | `--python PATH` (required). | Validate an existing isolated Graphify 0.9.54 interpreter; does not certify its dependency provenance. |
+| `disable` | None. | Disable component-dependent operations, preserving notes and indices. |
+| `doctor` | None. | Probe version and component readiness; not a live-agent or savings test. |
+| `bind` | Project options; `--session ID` (required), `--replace`. | Create or deliberately replace a per-role/session project binding. |
+| `status` | Project options. | Report availability, committed revision, coverage and dirty paths. |
+| `query` | Project options; `--question TEXT` (required), `--budget-tokens N`. | Return bounded structural graph context. |
+| `update` | Project options; `--reason TEXT`, `--mode configured|structural`. | Build or reuse a committed revision's structural index. |
+| `call` | Project options; `--tool project_knowledge|work_memory`, `--arguments JSON` (both required). | Execute the same validated action contract as the native tools. |
+| `export` | Project options. | Emit effective work-note records for that role/project as JSON to stdout. |
+| `delete` | Project options; `--note-id ID` and `--yes` (required to delete). | Remove a note and retained local revisions, invalidating its reflection. |
+
+Both update modes currently use structural extraction; no semantic provider is enabled. `call` rejects unknown or inapplicable action fields. `correct` requires `expected_revision`; a read may return `next_cursor` for the rest of a long original note. The [project-knowledge guide](../guides/project-knowledge.md) covers configuration, data placement, isolation, canonical skills and current limits.
+
+Knowledge commands return JSON objects with `ok`, typed errors and action-specific data, using exit 0 for success, 1 for a failed operation and argparse exit 2 for invalid CLI syntax. Without `--json`, the same object is pretty-printed. This is the knowledge-specific contract, not the lifecycle `Envelope` categories. Disabling this optional component does not delete an environment or remove tools from an already running session.
+
 ## Explicitly unsupported commands
 
 `aether start`, `aether stop`, `aether restart`, `aether status`, and `aether reconcile` are parser-visible placeholders. They return an explicit unsupported result rather than managing a service or mixed runtime state. The detailed limitation record is in [limitations and troubleshooting](limitations-and-troubleshooting.md).
 
 ## Exit and output behavior
 
-Successful human results use stdout and errors use stderr. A JSON result uses stdout. The current result envelope retains the standard result categories (`ready`, `changed`, `no_change`, `planned`, `blocked`, `unsupported`, and `error`); use output diagnostics rather than assuming a detailed state from an exit code alone.
+For the lifecycle/version/init/observe commands, successful human results use stdout and errors use stderr. A JSON result uses stdout. Their result envelope retains the standard result categories (`ready`, `changed`, `no_change`, `planned`, `blocked`, `unsupported`, and `error`); use output diagnostics rather than assuming a detailed state from an exit code alone.

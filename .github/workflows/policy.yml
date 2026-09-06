@@ -279,6 +279,30 @@ jobs:
           tests/test_same_card_phase_predicates.py
           uv.lock
           VERSION
+          docs/guides/project-knowledge.md
+          src/aether_agents/commands/knowledge.py
+          src/aether_agents/knowledge/__init__.py
+          src/aether_agents/knowledge/bindings.py
+          src/aether_agents/knowledge/common.py
+          src/aether_agents/knowledge/component.py
+          src/aether_agents/knowledge/context.py
+          src/aether_agents/knowledge/graph_worker.py
+          src/aether_agents/knowledge/graphify.py
+          src/aether_agents/knowledge/hermes_plugin.py
+          src/aether_agents/knowledge/memory.py
+          src/aether_agents/knowledge/service.py
+          src/aether_agents/knowledge/snapshots.py
+          src/aether_agents/resources/graphify/requirements.in
+          src/aether_agents/resources/graphify/requirements.txt
+          src/aether_agents/resources/skills/project-knowledge/SKILL.md
+          src/aether_agents/resources/skills/work-memory/SKILL.md
+          tests/test_graphify_worker_native.py
+          tests/test_knowledge_failures.py
+          tests/test_knowledge_plugin_cli.py
+          tests/test_knowledge_regressions.py
+          tests/test_knowledge_resources.py
+          tests/test_project_knowledge_engine.py
+          tests/test_work_memory.py
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
@@ -438,13 +462,37 @@ jobs:
         run: >-
           uv run --frozen python scripts/run_tests.py
           -- tests/test_hermes_baseline.py -q
+      - name: Provide isolated Graphify Python baseline
+        id: graphify-python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install hash-locked disposable Graphify component
+        shell: bash
+        run: |
+          set -euo pipefail
+          component="${RUNNER_TEMP}/graphify-component"
+          uv venv --python "${{ steps.graphify-python.outputs.python-path }}" --no-python-downloads "$component"
+          uv pip install --python "$component/bin/python" --require-hashes \
+            --index-url https://pypi.org/simple \
+            -r src/aether_agents/resources/graphify/requirements.txt
+          # Test instrumentation belongs only in the disposable component environment.
+          pytest_version="$(uv run --frozen python -c 'import importlib.metadata; print(importlib.metadata.version("pytest"))')"
+          coverage_version="$(uv run --frozen python -c 'import importlib.metadata; print(importlib.metadata.version("coverage"))')"
+          uv pip install --python "$component/bin/python" \
+            "pytest==$pytest_version" "coverage==$coverage_version"
       - name: Enforce integrated coverage floor
         shell: bash
         run: |
           set -euo pipefail
           export PYTHONPATH="${RUNNER_TEMP}/hermes-exact"
           export COVERAGE_FILE="${RUNNER_TEMP}/.coverage"
+          export AETHER_GRAPHIFY_PYTHON="${RUNNER_TEMP}/graphify-component/bin/python"
+          export AETHER_TEST_COMPONENT_INSTALL=1
           uv run --frozen coverage run -m pytest -q --ignore=tests/test_observation_performance.py
+          # The production subprocess strips instrumentation; measure its native
+          # functions in the isolated engine, never install Graphify into Hermes.
+          "$AETHER_GRAPHIFY_PYTHON" -m coverage run --append -m pytest -q tests/test_graphify_worker_native.py
           uv run --frozen coverage report --format=total
       - name: Retain exact-Hermes test qualification artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -180,6 +180,69 @@ verification = ["tests/test_objective_contracts.py", "tests/test_project_init.py
 notes = ""
 
 [[capabilities]]
+id = "knowledge.isolated-component"
+status = "partial"
+summary = "An optional hash-locked Graphify Python component is installed outside Hermes and exposed through a native Aether plugin."
+surfaces = [
+  "plugin.aether-project-knowledge",
+  "cli.command.aether.knowledge",
+  "cli.command.aether.knowledge.install", "cli.option.aether.knowledge.install.--json",
+  "cli.command.aether.knowledge.configure", "cli.option.aether.knowledge.configure.--json", "cli.option.aether.knowledge.configure.--python",
+  "cli.command.aether.knowledge.disable", "cli.option.aether.knowledge.disable.--json",
+  "cli.command.aether.knowledge.doctor", "cli.option.aether.knowledge.doctor.--json",
+]
+documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-tools.md", "docs/reference/cli.md"]
+specifications = ["specs/005-project-knowledge-graphify/spec.md"]
+implementation = ["src/aether_agents/knowledge/component.py", "src/aether_agents/knowledge/graphify.py", "src/aether_agents/knowledge/hermes_plugin.py", "src/aether_agents/commands/knowledge.py", "src/aether_agents/resources/graphify/requirements.txt"]
+verification = ["tests/test_knowledge_resources.py", "tests/test_knowledge_plugin_cli.py", "tests/test_observation_packaging.py"]
+notes = "Portable profile templates are opt-in. Managed installation currently uses local Python 3.11 on Linux; external configure validates the engine version, not a third-party environment's full provenance. Semantic extraction, live-profile activation and model-backed quality/cost qualification remain pending."
+
+[[capabilities]]
+id = "knowledge.shared-project-graph"
+status = "partial"
+summary = "All three roles can query and update committed structural project graphs with stable publication locks and explicit revision/worktree identity."
+surfaces = [
+  "tool.project_knowledge",
+  "cli.command.aether.knowledge.status", "cli.option.aether.knowledge.status.--json", "cli.option.aether.knowledge.status.--project-id", "cli.option.aether.knowledge.status.--role", "cli.option.aether.knowledge.status.--workspace",
+  "cli.command.aether.knowledge.query", "cli.option.aether.knowledge.query.--json", "cli.option.aether.knowledge.query.--project-id", "cli.option.aether.knowledge.query.--role", "cli.option.aether.knowledge.query.--workspace", "cli.option.aether.knowledge.query.--question", "cli.option.aether.knowledge.query.--budget-tokens",
+  "cli.command.aether.knowledge.update", "cli.option.aether.knowledge.update.--json", "cli.option.aether.knowledge.update.--project-id", "cli.option.aether.knowledge.update.--role", "cli.option.aether.knowledge.update.--workspace", "cli.option.aether.knowledge.update.--reason", "cli.option.aether.knowledge.update.--mode",
+  "cli.command.aether.knowledge.call", "cli.option.aether.knowledge.call.--json", "cli.option.aether.knowledge.call.--project-id", "cli.option.aether.knowledge.call.--role", "cli.option.aether.knowledge.call.--workspace", "cli.option.aether.knowledge.call.--tool", "cli.option.aether.knowledge.call.--arguments",
+]
+documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-tools.md", "docs/reference/cli.md"]
+specifications = ["specs/005-project-knowledge-graphify/spec.md", "specs/005-project-knowledge-graphify/contracts/tools-and-data.md"]
+implementation = ["src/aether_agents/knowledge/snapshots.py", "src/aether_agents/knowledge/common.py", "src/aether_agents/knowledge/graph_worker.py", "src/aether_agents/knowledge/service.py"]
+verification = ["tests/test_project_knowledge_engine.py", "tests/test_knowledge_plugin_cli.py"]
+notes = "Indexes committed regular sources, including supported Markdown structure, but does not interpret document semantics with a model. Dirty files require direct reads. Equivalent view/revision updates reuse snapshots; new revisions currently recapture the bounded corpus. Large-repository, live-agent and token-saving qualification is not claimed."
+
+[[capabilities]]
+id = "knowledge.session-bindings"
+status = "implemented"
+summary = "Each knowledge call resolves an exact native session workspace or an explicit operator binding against the existing project registry, rejecting conflicting identities."
+surfaces = [
+  "cli.command.aether.knowledge.bind", "cli.option.aether.knowledge.bind.--json", "cli.option.aether.knowledge.bind.--project-id", "cli.option.aether.knowledge.bind.--role", "cli.option.aether.knowledge.bind.--workspace", "cli.option.aether.knowledge.bind.--session", "cli.option.aether.knowledge.bind.--replace",
+]
+documents = ["docs/guides/project-knowledge.md", "docs/reference/cli.md"]
+specifications = ["specs/005-project-knowledge-graphify/spec.md"]
+implementation = ["src/aether_agents/knowledge/bindings.py", "src/aether_agents/knowledge/context.py"]
+verification = ["tests/test_knowledge_plugin_cli.py", "tests/test_project_knowledge_engine.py"]
+notes = "No last-project, process-cwd or model-selected path fallback. The adapter depends on the selected Hermes session database contract; an explicit operator binding is available when native workspace metadata is absent. This is local identity isolation, not an OS sandbox or hostile multitenant boundary."
+
+[[capabilities]]
+id = "knowledge.role-work-memory"
+status = "partial"
+summary = "Project/role notes retain complete experiences with idempotent save retries, lexical search, paginated reads, revision-aware corrections and private signal-only reflection."
+surfaces = [
+  "tool.work_memory",
+  "cli.command.aether.knowledge.export", "cli.option.aether.knowledge.export.--json", "cli.option.aether.knowledge.export.--project-id", "cli.option.aether.knowledge.export.--role", "cli.option.aether.knowledge.export.--workspace",
+  "cli.command.aether.knowledge.delete", "cli.option.aether.knowledge.delete.--json", "cli.option.aether.knowledge.delete.--project-id", "cli.option.aether.knowledge.delete.--role", "cli.option.aether.knowledge.delete.--workspace", "cli.option.aether.knowledge.delete.--note-id", "cli.option.aether.knowledge.delete.--yes",
+]
+documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-tools.md", "docs/reference/cli.md"]
+specifications = ["specs/005-project-knowledge-graphify/spec.md", "specs/r9-state-and-recovery/spec.md"]
+implementation = ["src/aether_agents/knowledge/memory.py", "src/aether_agents/knowledge/graph_worker.py", "src/aether_agents/knowledge/service.py"]
+verification = ["tests/test_work_memory.py", "tests/test_knowledge_plugin_cli.py"]
+notes = "Temporary implementers share the role/project namespace, not a Hermes home. Save keys are stored only as digests: an exact retry reuses the current note revision, changed-payload reuse conflicts, and independent contributions require distinct keys. Notes remain reported evidence, not automatically verified facts. Reflection explicitly passes graph_path=None and does not write a shared learning sidecar. No embeddings, automatic skill promotion, semantic synthesis or live-agent improvement is claimed."
+
+[[capabilities]]
 id = "policy.edge-effect-guard"
 status = "implemented"
 summary = "One portable pre-tool policy permits ordinary reversible local work while blocking high-confidence credential, protected external, and clearly destructive effects."
@@ -204,13 +267,13 @@ notes = "Portable resources are versioned candidate bytes; private live-profile 
 [[capabilities]]
 id = "skills.aether-canonical-resources"
 status = "implemented"
-summary = "Six Aether Canonical Skills are explicitly registered for packaging and native profile materialization; the three contract/execution procedures are under organic behavior observation."
+summary = "Eight Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge and role work memory."
 surfaces = ["lifecycle.aether-canonical-skills"]
 documents = ["docs/authority.md", "docs/guides/project-initialization.md"]
 specifications = ["specs/r5-topology-and-isolation/spec.md", "specs/r13-synthesis-and-release/spec.md"]
-implementation = ["src/aether_agents/lifecycle.py", "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md", "src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/skills/semver-release/SKILL.md", "src/aether_agents/resources/skills/objective-contract-design/SKILL.md", "src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md", "src/aether_agents/resources/skills/implementation-evidence/SKILL.md"]
+implementation = ["src/aether_agents/lifecycle.py", "src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md", "src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/skills/semver-release/SKILL.md", "src/aether_agents/resources/skills/objective-contract-design/SKILL.md", "src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md", "src/aether_agents/resources/skills/implementation-evidence/SKILL.md", "src/aether_agents/resources/skills/project-knowledge/SKILL.md", "src/aether_agents/resources/skills/work-memory/SKILL.md"]
 verification = ["tests/test_observation_packaging.py", "tests/test_observation_lifecycle.py"]
-notes = "Existing package/lifecycle checks cover the resource mechanism; their explicit inventory expectations include the six registered resources. No new local test campaign was run for this adoption at the owner's direction. Installed resource readback is separate from behavioral qualification, which remains experimental and tracked in issue #317. The public installed lifecycle remains unqualified."
+notes = "The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures remain under owner-directed organic behavior observation in issue #317; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified."
 
 [[capabilities]]
 id = "skills.project-canonical-discovery"

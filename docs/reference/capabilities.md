@@ -360,6 +360,184 @@ Reports the installed package version without importing Hermes.
 
 The current result intentionally warns that managed Hermes source and profile-policy details are unavailable.
 
+## `knowledge.isolated-component`
+
+**Status:** `partial`
+
+An optional hash-locked Graphify Python component is installed outside Hermes and exposed through a native Aether plugin.
+
+### Surfaces
+- `cli.command.aether.knowledge`
+- `cli.command.aether.knowledge.configure`
+- `cli.command.aether.knowledge.disable`
+- `cli.command.aether.knowledge.doctor`
+- `cli.command.aether.knowledge.install`
+- `cli.option.aether.knowledge.configure.--json`
+- `cli.option.aether.knowledge.configure.--python`
+- `cli.option.aether.knowledge.disable.--json`
+- `cli.option.aether.knowledge.doctor.--json`
+- `cli.option.aether.knowledge.install.--json`
+- `plugin.aether-project-knowledge`
+
+### Current documentation
+- [docs/guides/project-knowledge.md](../guides/project-knowledge.md)
+- [docs/reference/cli.md](cli.md)
+- [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
+
+### Owning specifications
+- [specs/005-project-knowledge-graphify/spec.md](../../specs/005-project-knowledge-graphify/spec.md)
+
+### Implementation
+- [src/aether_agents/commands/knowledge.py](../../src/aether_agents/commands/knowledge.py)
+- [src/aether_agents/knowledge/component.py](../../src/aether_agents/knowledge/component.py)
+- [src/aether_agents/knowledge/graphify.py](../../src/aether_agents/knowledge/graphify.py)
+- [src/aether_agents/knowledge/hermes_plugin.py](../../src/aether_agents/knowledge/hermes_plugin.py)
+- [src/aether_agents/resources/graphify/requirements.txt](../../src/aether_agents/resources/graphify/requirements.txt)
+
+### Verification
+- [tests/test_knowledge_plugin_cli.py](../../tests/test_knowledge_plugin_cli.py)
+- [tests/test_knowledge_resources.py](../../tests/test_knowledge_resources.py)
+- [tests/test_observation_packaging.py](../../tests/test_observation_packaging.py)
+
+### Notes / current limits
+
+Portable profile templates are opt-in. Managed installation currently uses local Python 3.11 on Linux; external configure validates the engine version, not a third-party environment's full provenance. Semantic extraction, live-profile activation and model-backed quality/cost qualification remain pending.
+
+## `knowledge.role-work-memory`
+
+**Status:** `partial`
+
+Project/role notes retain complete experiences with idempotent save retries, lexical search, paginated reads, revision-aware corrections and private signal-only reflection.
+
+### Surfaces
+- `cli.command.aether.knowledge.delete`
+- `cli.command.aether.knowledge.export`
+- `cli.option.aether.knowledge.delete.--json`
+- `cli.option.aether.knowledge.delete.--note-id`
+- `cli.option.aether.knowledge.delete.--project-id`
+- `cli.option.aether.knowledge.delete.--role`
+- `cli.option.aether.knowledge.delete.--workspace`
+- `cli.option.aether.knowledge.delete.--yes`
+- `cli.option.aether.knowledge.export.--json`
+- `cli.option.aether.knowledge.export.--project-id`
+- `cli.option.aether.knowledge.export.--role`
+- `cli.option.aether.knowledge.export.--workspace`
+- `tool.work_memory`
+
+### Current documentation
+- [docs/guides/project-knowledge.md](../guides/project-knowledge.md)
+- [docs/reference/cli.md](cli.md)
+- [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
+
+### Owning specifications
+- [specs/005-project-knowledge-graphify/spec.md](../../specs/005-project-knowledge-graphify/spec.md)
+- [specs/r9-state-and-recovery/spec.md](../../specs/r9-state-and-recovery/spec.md)
+
+### Implementation
+- [src/aether_agents/knowledge/graph_worker.py](../../src/aether_agents/knowledge/graph_worker.py)
+- [src/aether_agents/knowledge/memory.py](../../src/aether_agents/knowledge/memory.py)
+- [src/aether_agents/knowledge/service.py](../../src/aether_agents/knowledge/service.py)
+
+### Verification
+- [tests/test_knowledge_plugin_cli.py](../../tests/test_knowledge_plugin_cli.py)
+- [tests/test_work_memory.py](../../tests/test_work_memory.py)
+
+### Notes / current limits
+
+Temporary implementers share the role/project namespace, not a Hermes home. Save keys are stored only as digests: an exact retry reuses the current note revision, changed-payload reuse conflicts, and independent contributions require distinct keys. Notes remain reported evidence, not automatically verified facts. Reflection explicitly passes graph_path=None and does not write a shared learning sidecar. No embeddings, automatic skill promotion, semantic synthesis or live-agent improvement is claimed.
+
+## `knowledge.session-bindings`
+
+**Status:** `implemented`
+
+Each knowledge call resolves an exact native session workspace or an explicit operator binding against the existing project registry, rejecting conflicting identities.
+
+### Surfaces
+- `cli.command.aether.knowledge.bind`
+- `cli.option.aether.knowledge.bind.--json`
+- `cli.option.aether.knowledge.bind.--project-id`
+- `cli.option.aether.knowledge.bind.--replace`
+- `cli.option.aether.knowledge.bind.--role`
+- `cli.option.aether.knowledge.bind.--session`
+- `cli.option.aether.knowledge.bind.--workspace`
+
+### Current documentation
+- [docs/guides/project-knowledge.md](../guides/project-knowledge.md)
+- [docs/reference/cli.md](cli.md)
+
+### Owning specifications
+- [specs/005-project-knowledge-graphify/spec.md](../../specs/005-project-knowledge-graphify/spec.md)
+
+### Implementation
+- [src/aether_agents/knowledge/bindings.py](../../src/aether_agents/knowledge/bindings.py)
+- [src/aether_agents/knowledge/context.py](../../src/aether_agents/knowledge/context.py)
+
+### Verification
+- [tests/test_knowledge_plugin_cli.py](../../tests/test_knowledge_plugin_cli.py)
+- [tests/test_project_knowledge_engine.py](../../tests/test_project_knowledge_engine.py)
+
+### Notes / current limits
+
+No last-project, process-cwd or model-selected path fallback. The adapter depends on the selected Hermes session database contract; an explicit operator binding is available when native workspace metadata is absent. This is local identity isolation, not an OS sandbox or hostile multitenant boundary.
+
+## `knowledge.shared-project-graph`
+
+**Status:** `partial`
+
+All three roles can query and update committed structural project graphs with stable publication locks and explicit revision/worktree identity.
+
+### Surfaces
+- `cli.command.aether.knowledge.call`
+- `cli.command.aether.knowledge.query`
+- `cli.command.aether.knowledge.status`
+- `cli.command.aether.knowledge.update`
+- `cli.option.aether.knowledge.call.--arguments`
+- `cli.option.aether.knowledge.call.--json`
+- `cli.option.aether.knowledge.call.--project-id`
+- `cli.option.aether.knowledge.call.--role`
+- `cli.option.aether.knowledge.call.--tool`
+- `cli.option.aether.knowledge.call.--workspace`
+- `cli.option.aether.knowledge.query.--budget-tokens`
+- `cli.option.aether.knowledge.query.--json`
+- `cli.option.aether.knowledge.query.--project-id`
+- `cli.option.aether.knowledge.query.--question`
+- `cli.option.aether.knowledge.query.--role`
+- `cli.option.aether.knowledge.query.--workspace`
+- `cli.option.aether.knowledge.status.--json`
+- `cli.option.aether.knowledge.status.--project-id`
+- `cli.option.aether.knowledge.status.--role`
+- `cli.option.aether.knowledge.status.--workspace`
+- `cli.option.aether.knowledge.update.--json`
+- `cli.option.aether.knowledge.update.--mode`
+- `cli.option.aether.knowledge.update.--project-id`
+- `cli.option.aether.knowledge.update.--reason`
+- `cli.option.aether.knowledge.update.--role`
+- `cli.option.aether.knowledge.update.--workspace`
+- `tool.project_knowledge`
+
+### Current documentation
+- [docs/guides/project-knowledge.md](../guides/project-knowledge.md)
+- [docs/reference/cli.md](cli.md)
+- [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
+
+### Owning specifications
+- [specs/005-project-knowledge-graphify/contracts/tools-and-data.md](../../specs/005-project-knowledge-graphify/contracts/tools-and-data.md)
+- [specs/005-project-knowledge-graphify/spec.md](../../specs/005-project-knowledge-graphify/spec.md)
+
+### Implementation
+- [src/aether_agents/knowledge/common.py](../../src/aether_agents/knowledge/common.py)
+- [src/aether_agents/knowledge/graph_worker.py](../../src/aether_agents/knowledge/graph_worker.py)
+- [src/aether_agents/knowledge/service.py](../../src/aether_agents/knowledge/service.py)
+- [src/aether_agents/knowledge/snapshots.py](../../src/aether_agents/knowledge/snapshots.py)
+
+### Verification
+- [tests/test_knowledge_plugin_cli.py](../../tests/test_knowledge_plugin_cli.py)
+- [tests/test_project_knowledge_engine.py](../../tests/test_project_knowledge_engine.py)
+
+### Notes / current limits
+
+Indexes committed regular sources, including supported Markdown structure, but does not interpret document semantics with a model. Dirty files require direct reads. Equivalent view/revision updates reuse snapshots; new revisions currently recapture the bounded corpus. Large-repository, live-agent and token-saving qualification is not claimed.
+
 ## `lifecycle.conditional-issue-intake-reconciliation`
 
 **Status:** `partial`
@@ -727,7 +905,7 @@ Portable resources are versioned candidate bytes; private live-profile activatio
 
 **Status:** `implemented`
 
-Six Aether Canonical Skills are explicitly registered for packaging and native profile materialization; the three contract/execution procedures are under organic behavior observation.
+Eight Aether Canonical Skills are explicitly registered for packaging and native profile materialization, including contract execution, project knowledge and role work memory.
 
 ### Surfaces
 - `lifecycle.aether-canonical-skills`
@@ -746,8 +924,10 @@ Six Aether Canonical Skills are explicitly registered for packaging and native p
 - [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
 - [src/aether_agents/resources/skills/implementation-evidence/SKILL.md](../../src/aether_agents/resources/skills/implementation-evidence/SKILL.md)
 - [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
+- [src/aether_agents/resources/skills/project-knowledge/SKILL.md](../../src/aether_agents/resources/skills/project-knowledge/SKILL.md)
 - [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
 - [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
+- [src/aether_agents/resources/skills/work-memory/SKILL.md](../../src/aether_agents/resources/skills/work-memory/SKILL.md)
 
 ### Verification
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
@@ -755,7 +935,7 @@ Six Aether Canonical Skills are explicitly registered for packaging and native p
 
 ### Notes / current limits
 
-Existing package/lifecycle checks cover the resource mechanism; their explicit inventory expectations include the six registered resources. No new local test campaign was run for this adoption at the owner's direction. Installed resource readback is separate from behavioral qualification, which remains experimental and tracked in issue #317. The public installed lifecycle remains unqualified.
+The resource mechanism and explicit eight-skill inventory are covered by wheel, sdist, profile-bundle, native-directory, byte-identity and privacy checks. The three contract/execution procedures remain under owner-directed organic behavior observation in issue #317; knowledge-skill packaging does not establish live-agent adoption. Private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

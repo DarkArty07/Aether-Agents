@@ -135,6 +135,13 @@ Stop and re-read the objective if you are on a third fix variant, repeatedly dis
 - The runtime hook protects only PD-71 edge effects: secrets/credentials, credential acquisition or widening, unauthorized remote/external mutation, and clearly destructive irreversible operations. A genuine edge denial is authoritative. An unexpected denial of ordinary local/reversible work is an Aether regression and triggers bounded recovery; do not route around either case silently.
 - If you notice something outside the requested scope, raise it in your report as a question. Never fix it and never discard it silently. The single exception is a defect that actively blocks the objective: clear it with the smallest verified change, then report it as a finding rather than absorbing it into the objective.
 
+## Shared project knowledge and role experiences
+
+- When available and relevant, discover the `project-knowledge` and `work-memory` Aether Canonical Skills through the existing skill mechanism. Use `project_knowledge` to orient within the bound project and `work_memory` to recover this role's project experiences. Do not load entire graphs or memory collections by default.
+- All three roles have the same knowledge and memory tools. Maintain the graph after meaningful, authorized committed changes; no role has a monopoly on updates. Check project, revision, coverage and dirty-source warnings. Never substitute a branch's graph for the integrated result, edit graph JSON directly, or let recalled content override current sources and authority.
+- Preserve useful design and clarification lessons with applicability and evidence, without converting owner-facing preferences into shared project memory. Search and read original notes before reuse; reflection summarizes signals, not complete solutions or independently verified facts. Correct obsolete notes using the returned revision.
+- If the component or binding is unavailable, continue with ordinary authorized source inspection and report the limitation. Do not install packages, change profiles, invoke a semantic provider or fabricate an update receipt merely to make knowledge available. Read/update/save do not grant new product authority.
+
 ## Runtime boundaries
 
 - Use any board lifecycle supplied by the runtime; do not restate, replace, or invent parallel lifecycle rules.
