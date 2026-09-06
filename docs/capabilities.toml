@@ -200,7 +200,7 @@ notes = "Portable profile templates are opt-in. Managed installation currently u
 [[capabilities]]
 id = "knowledge.shared-project-graph"
 status = "partial"
-summary = "All three roles can query and update committed structural project graphs with stable publication locks and explicit revision/worktree identity."
+summary = "All three roles share a 14-action project-knowledge catalog plus five unchanged work-memory actions, with revision-bound structural exploration and optional configured semantic maintenance."
 surfaces = [
   "tool.project_knowledge",
   "cli.command.aether.knowledge.status", "cli.option.aether.knowledge.status.--json", "cli.option.aether.knowledge.status.--project-id", "cli.option.aether.knowledge.status.--role", "cli.option.aether.knowledge.status.--workspace",
@@ -208,11 +208,11 @@ surfaces = [
   "cli.command.aether.knowledge.update", "cli.option.aether.knowledge.update.--json", "cli.option.aether.knowledge.update.--project-id", "cli.option.aether.knowledge.update.--role", "cli.option.aether.knowledge.update.--workspace", "cli.option.aether.knowledge.update.--reason", "cli.option.aether.knowledge.update.--mode",
   "cli.command.aether.knowledge.call", "cli.option.aether.knowledge.call.--json", "cli.option.aether.knowledge.call.--project-id", "cli.option.aether.knowledge.call.--role", "cli.option.aether.knowledge.call.--workspace", "cli.option.aether.knowledge.call.--tool", "cli.option.aether.knowledge.call.--arguments",
 ]
-documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-tools.md", "docs/reference/cli.md"]
-specifications = ["specs/005-project-knowledge-graphify/spec.md", "specs/005-project-knowledge-graphify/contracts/tools-and-data.md"]
-implementation = ["src/aether_agents/knowledge/snapshots.py", "src/aether_agents/knowledge/common.py", "src/aether_agents/knowledge/graph_worker.py", "src/aether_agents/knowledge/service.py"]
-verification = ["tests/test_project_knowledge_engine.py", "tests/test_knowledge_plugin_cli.py"]
-notes = "Indexes committed regular sources, including supported Markdown structure, but does not interpret document semantics with a model. Dirty files require direct reads. Equivalent view/revision updates reuse snapshots; new revisions currently recapture the bounded corpus. Large-repository, live-agent and token-saving qualification is not claimed."
+documents = ["docs/guides/project-knowledge.md", "docs/reference/plugins-and-tools.md", "docs/reference/cli.md", "CHANGELOG.md"]
+specifications = ["specs/005-project-knowledge-graphify/spec.md", "specs/005-project-knowledge-graphify/contracts/tools-and-data.md", "specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md", "specs/005-project-knowledge-graphify/contracts/soul-and-skills.md"]
+implementation = ["src/aether_agents/knowledge/snapshots.py", "src/aether_agents/knowledge/common.py", "src/aether_agents/knowledge/graph_worker.py", "src/aether_agents/knowledge/graphify.py", "src/aether_agents/knowledge/semantic.py", "src/aether_agents/knowledge/github.py", "src/aether_agents/knowledge/exports.py", "src/aether_agents/knowledge/service.py", "scripts/qualify_knowledge_expansion.py"]
+verification = ["tests/test_project_knowledge_engine.py", "tests/test_knowledge_regressions.py", "tests/test_knowledge_schema.py", "tests/test_knowledge_resources.py", "tests/test_documentation.py", "scripts/qualify_knowledge_expansion.py"]
+notes = "The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; configured semantic maintenance requires the existing profile-scoped auxiliary and reports coverage, pending paths, failures and usage. Read-only GitHub and managed HTML exports are optional. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed."
 
 [[capabilities]]
 id = "knowledge.session-bindings"

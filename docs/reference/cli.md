@@ -47,13 +47,13 @@ These commands have tested local candidate behavior, but their registry status i
 | `doctor` | None. | Probe version and component readiness; not a live-agent or savings test. |
 | `bind` | Project options; `--session ID` (required), `--replace`. | Create or deliberately replace a per-role/session project binding. |
 | `status` | Project options. | Report availability, committed revision, coverage and dirty paths. |
-| `query` | Project options; `--question TEXT` (required), `--budget-tokens N`. | Return bounded structural graph context. |
-| `update` | Project options; `--reason TEXT`, `--mode configured|structural`. | Build or reuse a committed revision's structural index. |
-| `call` | Project options; `--tool project_knowledge|work_memory`, `--arguments JSON` (both required). | Execute the same validated action contract as the native tools. |
+| `query` | Project options; `--question TEXT` (required), `--budget-tokens N`. | Return bounded graph context from the selected snapshot. |
+| `update` | Project options; `--reason TEXT`, `--mode configured|structural`. | Build or reuse a committed snapshot; configured mode may run explicitly enabled semantic maintenance. |
+| `call` | Project options; `--tool project_knowledge|work_memory`, `--arguments JSON` (both required). | Execute the same validated 14/5 action contract as the native tools, including exploration, read-only PR and visualization actions. |
 | `export` | Project options. | Emit effective work-note records for that role/project as JSON to stdout. |
 | `delete` | Project options; `--note-id ID` and `--yes` (required to delete). | Remove a note and retained local revisions, invalidating its reflection. |
 
-Both update modes currently use structural extraction; no semantic provider is enabled. `call` rejects unknown or inapplicable action fields. `correct` requires `expected_revision`; a read may return `next_cursor` for the rest of a long original note. The [project-knowledge guide](../guides/project-knowledge.md) covers configuration, data placement, isolation, canonical skills and current limits.
+Configured mode uses semantic maintenance only when the existing component configuration enables it and binds an auxiliary task; structural mode remains no-model. `call` rejects unknown or inapplicable action fields. Use `budget_tokens` inside `--arguments` for tool actions; recovery is expressed through the validated tool contract rather than an extra CLI flag. `correct` requires `expected_revision`; a read may return `next_cursor` for the rest of a long original note. The [project-knowledge guide](../guides/project-knowledge.md) covers configuration, data placement, isolation, canonical skills, read-only GitHub/visualization behavior and qualification limits.
 
 Knowledge commands return JSON objects with `ok`, typed errors and action-specific data, using exit 0 for success, 1 for a failed operation and argparse exit 2 for invalid CLI syntax. Without `--json`, the same object is pretty-printed. This is the knowledge-specific contract, not the lifecycle `Envelope` categories. Disabling this optional component does not delete an environment or remove tools from an already running session.
 

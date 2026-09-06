@@ -19,7 +19,9 @@
 - Added query→explain→community discovery: `explain` returns `resolved_node` with snapshot-local `community_id` and name; `community` returns community metadata matching the requested ID.
 - Added canonical action-discriminated schemas for `project_knowledge` and `work_memory` with root properties retained and field descriptions naming accepted actions; runtime validation strictly rejects inapplicable fields and identity injection.
 - Updated the `project-knowledge` and `work-memory` canonical skills and project knowledge guides with validated examples, discovery procedures, and honest truncation/reference semantics.
-- Documented setup, all commands, ownership, isolation and limitations. Structural Markdown navigation is supported; semantic extraction, live-agent E2E and measured token savings remain separate qualification work. No live profiles or services are activated by these source changes.
+- Documented setup, all commands, ownership, isolation and limitations. Structural Markdown navigation is supported; live-agent E2E and measured token savings remain separate qualification work. No live profiles or services are activated by these source changes.
+- Expanded the reusable project-knowledge catalog to fourteen project actions (`stats`, `god_nodes`, read-only PR views and graph/tree visualization included) while retaining the five work-memory actions. Query-only `context_filter`, path-only `undirected`, bounded traversal controls, semantic coverage metadata, and optional configured auxiliary maintenance are documented without enabling a primary-model fallback or watcher.
+- Added `scripts/qualify_knowledge_expansion.py`, which validates the 14/5 schemas and exercises production service paths with disposable two-project fixtures offline. Optional auxiliary/GitHub lanes report unavailable access honestly; no token-saving, universal-superiority, live-agent adoption or release claim is made.
 
 ### Current beta project and documentation surface
 
