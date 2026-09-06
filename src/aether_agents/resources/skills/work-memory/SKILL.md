@@ -39,6 +39,10 @@ project-relative evidence; this procedure cannot grant authority or certify a re
 
 ## How to Run
 
+Tool parameters use action-discriminated schemas: each action accepts only its specific
+declared parameters (such as `query`, `limit`, `budget_tokens` for `search`), and extra or
+inapplicable arguments are rejected by runtime validation.
+
 Use `work_memory` to save, search, read, correct and reflect. Never supply an identity,
 project path, note directory, executable or environment override. Every `save` requires
 an opaque `idempotency_key`: reuse it unchanged only when retrying that exact save, and
