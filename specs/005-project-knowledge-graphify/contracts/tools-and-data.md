@@ -16,16 +16,24 @@ Los argumentos del modelo no contienen `role`, `agent_id`, `project_path`, `grap
 |---|---|---|
 | `status` | Ninguno. | Snapshot disponible, revisión, cobertura y cambios no indexados. |
 | `query` | `question`; `budget_tokens` opcional. | Contexto de nodos/relaciones y referencias; consulta técnica no personalizada. |
-| `explain` | `node`; `budget_tokens` opcional. | Detalle del elemento y fuentes. |
+| `explain` | `node`; `budget_tokens` opcional. | Detalle del elemento, fuentes y metadatos tipados del nodo resuelto, incluido su ID de comunidad cuando exista. |
 | `neighbors` | `node`; `relation` y `budget_tokens` opcionales. | Vecinos pertinentes del mismo grafo. |
-| `community` | `community_id`; `budget_tokens` opcional. | Contexto del grupo de esa instantánea; el ID no es portable entre reconstrucciones. |
+| `community` | `community_id`; `budget_tokens` opcional. | Contexto y metadatos autoidentificativos del grupo de esa instantánea; el ID se descubre mediante `explain` y no es portable entre reconstrucciones. |
 | `path` | `source`, `target`; `max_hops` opcional. | Relación/conexión entre elementos; dirección y límites explícitos. |
 | `impact` | `node`; `depth` y `budget_tokens` opcionales. | Dependencias inversas detectadas; no prueba exhaustiva de efectos en ejecución. |
 | `update` | `reason`; `changed_paths` y `mode` opcionales. | Recibo de revisión/alcance realmente actualizado, reutilizado o pendiente. |
 
 `mode`: `configured` por defecto o `structural`. `configured` usa sólo el alcance y presupuesto ya habilitados. No ofrece un flag para saltar autorización de envío o ampliar corpus. `changed_paths` es una sugerencia para eficiencia, nunca una fuente confiable de «todo lo cambiado»: el adaptador obtiene y valida las diferencias del snapshot para no omitir borrados o dependencias.
 
-Consulta usa CLI pública o un ejecutor que invoca operaciones existentes. La representación texto de Graphify puede conservarse como `content`; no inventar un JSON nativo de `query`. Vecinos/comunidades/impacto requieren prueba de equivalencia del adaptador con el candidato instalado. Si alguno falla su cualificación, se reporta como limitación, no como una implementación falsa.
+Consulta usa CLI pública o un ejecutor que invoca operaciones existentes. La representación texto de Graphify puede conservarse como `content`; no inventar un JSON nativo de `query`. El adaptador puede normalizar únicamente avisos de frontera para que nombren operaciones y argumentos realmente expuestos por Aether. No debe retransmitir `context_filter`, `get_node`, rutas de grafo ni otras instrucciones exclusivas de la CLI/MCP upstream como si fueran acciones disponibles para el modelo. Vecinos/comunidades/impacto requieren prueba de equivalencia del adaptador con el candidato instalado. Si alguno falla su cualificación, se reporta como limitación, no como una implementación falsa.
+
+`truncated` es la verdad acumulada de la respuesta: vale `true` cuando Graphify omitió nodos o líneas, cuando el límite de Aether recortó `content`, o cuando el límite existente de referencias omitió procedencia visible. Un aviso upstream de respuesta completa por encima del presupuesto no es truncamiento y permanece distinguible en `warnings`. La implementación no puede reemplazar una omisión real por `false` al volver a limitar texto ya acotado.
+
+Toda acción que presente nodos o relaciones con procedencia devuelve `references` deduplicadas en orden de aparición, limitadas a rutas del proyecto y ligadas a `source_revision`. Incluyen definiciones de nodos y sitios de relación visibles; `path` incluye los nodos y relaciones del camino. Se conserva el máximo existente de 50 referencias. Si ese máximo omite una referencia visible, `truncated=true` y `warnings` lo declara. Una referencia no prueba el comportamiento del archivo actual: el consumidor debe leer la fuente.
+
+`explain` añade `resolved_node={id, community_id, community_name}`. `community_id` y `community_name` pueden ser `null` cuando el snapshot no clasificó el nodo. `community` añade `community={id, name, node_count}` y el `id` debe coincidir exactamente con el argumento recibido. Así el flujo soportado es `query` → `explain` → `community`, sin adivinar enteros ni leer `graph.json`. Estos metadatos son derivados y permanecen ligados al `snapshot_id` del mismo sobre.
+
+Los schemas registrados conservan `type=object`, las propiedades superiores usadas por la coerción de Hermes y una unión discriminada por `action` que expresa exactamente campos requeridos y permitidos. Cada propiedad declara además en su descripción las acciones aplicables, porque el saneamiento de Hermes elimina combinadores superiores para ciertos backends estrictos. La validación canónica del schema y `validate_arguments` aceptan y rechazan el mismo lenguaje; el handler sigue siendo la frontera definitiva después del saneamiento. No se añaden herramientas ni acciones para resolver esta corrección.
 
 No duplicar consultas internas: `query` entrega también el estado mínimo del snapshot, por lo que no obliga a ejecutar `status` antes de cada pregunta. No imponer una llamada por tarea si no necesita conocimiento del repositorio.
 
@@ -47,6 +55,26 @@ No duplicar consultas internas: `query` entrega también el estado mínimo del s
   "references": [],
   "truncated": false,
   "warnings": []
+}
+```
+
+Las acciones pueden añadir metadatos tipados sin alterar los campos comunes. Ejemplo ilustrativo de `explain`:
+
+```json
+{
+  "resolved_node": {
+    "id": "src_package_module_symbol",
+    "community_id": 7,
+    "community_name": "module"
+  }
+}
+```
+
+Ejemplo ilustrativo de `community`:
+
+```json
+{
+  "community": {"id": 7, "name": "module", "node_count": 12}
 }
 ```
 
