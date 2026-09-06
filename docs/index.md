@@ -20,6 +20,12 @@ This index is navigation only and routes reader questions to the appropriate gui
 - **How do I bind an existing Git repository root to a Hermes Project?**
   See [Project initialization](guides/project-initialization.md).
 
+### Project knowledge and learning
+- **How do all three roles reuse and maintain a project's technical map?**
+  See [Project knowledge and role work memory](guides/project-knowledge.md).
+- **How are experiences kept separate and the two canonical skills used?**
+  See the same guide's experience, storage and tool sections, plus [Plugins and tools](reference/plugins-and-tools.md).
+
 ### Objective handoffs, execution, and lifecycle
 - **How are objective outcomes, acceptance criteria, and handoffs structured?**
   See [Objective Contracts](guides/objective-contracts.md).

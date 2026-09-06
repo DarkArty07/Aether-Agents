@@ -2,6 +2,7 @@ plugins:
   enabled:
     - aether-contract-observer
     - aether-objective-contracts
+    - aether-project-knowledge
   entries:
     aether-contract-observer:
       settings:
@@ -9,3 +10,6 @@ plugins:
     aether-objective-contracts:
       settings:
         author_profile: morfeo
+    aether-project-knowledge:
+      settings:
+        enabled: false

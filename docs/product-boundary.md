@@ -6,7 +6,7 @@ Aether is a product and method layered on [Hermes Agent](https://hermes-agent.no
 | --- | --- |
 | Agent conversation loop, profiles, tools, and hooks | A three-role responsibility model, Objective Contracts, portable role resources, and a small edge-effect policy |
 | Durable boards, dispatcher, cards, retries, reclaim, worktrees, review, and session support | Which role uses those primitives, how a finalized contract enters a project/version-specific board, and what evidence must accompany completion |
-| Plugin discovery and tool registration | The `aether-contract-observer` and `aether-objective-contracts` entry points and their bounded Aether tools |
+| Plugin discovery and tool registration | The `aether-contract-observer`, `aether-objective-contracts` and optional `aether-project-knowledge` entry points and their bounded Aether tools |
 | Generic configuration, provider, credential, and service behavior | Product-specific release/project/observation candidates and explicit limits; no duplicated generic manual |
 
 ## Aether-owned behavior
@@ -22,6 +22,12 @@ The current source contains:
 - a disposable qualification laboratory plus compatibility wrappers.
 
 The status of each surface is not implied by this inventory. Consult [Capability coverage](reference/capabilities.md) for implemented, partial, transitional, and unsupported status.
+
+## Optional Graphify component
+
+[Project knowledge](guides/project-knowledge.md) uses an isolated original Graphify distribution for structural extraction and graph navigation. Aether owns project/revision selection, coordinated publication, bounded tool responses and separate role/project experience records. All three roles have the same tools and can maintain the graph. Native reflection is a private signal report; original notes stay retrievable, and neither graph nor notes become project authority.
+
+The two package-owned canonical skills teach use of `project_knowledge` and `work_memory`; they do not add roles, gates or a second skills loader. This component does not change Hermes core, replace its memory providers or require its MCP transport. Live-profile activation and semantic extraction remain separate from the local component implementation.
 
 ## Deliberate non-ownership
 

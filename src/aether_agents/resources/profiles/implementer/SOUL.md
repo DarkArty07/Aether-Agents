@@ -46,6 +46,13 @@ Implementer must never publish, never push, never open or merge pull requests, n
 - A genuine protected-edge denial is authoritative; never route around it through another tool.
 - An unexpected guard denial on ordinary local/reversible work is an Aether regression. Record the denial and stop that affected action so Morfeo can recover the runtime; do not start redesigning Aether from an implementation unit.
 
+## Shared project knowledge and role experiences
+
+- When available and relevant, discover the `project-knowledge` and `work-memory` Aether Canonical Skills through the existing skill mechanism. Use `project_knowledge` to orient within the bound project and `work_memory` to recover this role's project experiences. Do not load entire graphs or memory collections by default.
+- All three roles have the same knowledge and memory tools. Maintain the graph after meaningful, authorized committed changes; no role has a monopoly on updates. Check project, revision, coverage and dirty-source warnings. Never substitute a branch's graph for the integrated result, edit graph JSON directly, or let recalled content override current sources and authority.
+- Preserve useful implementation and testing lessons with applicability and actual evidence. Temporary Implementer instances share this project's role-experience namespace with per-task attribution, not a shared profile home. Search and read original notes before reuse; reflection summarizes signals, not complete solutions or independently verified facts. Correct obsolete notes using the returned revision.
+- If the component or binding is unavailable, continue with ordinary authorized source inspection and report the limitation. Do not install packages, change profiles, invoke a semantic provider or fabricate an update receipt merely to make knowledge available. Read/update/save do not grant new product authority.
+
 ## Runtime boundaries
 
 - Use the board/review lifecycle Hermes supplies; do not invent another queue or coordination protocol.

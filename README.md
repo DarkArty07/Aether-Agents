@@ -11,6 +11,7 @@ Start with the [documentation index](docs/index.md). The current documentation o
 - [Getting started](docs/getting-started.md) and the [product boundary](docs/product-boundary.md)
 - [Roles and authority](docs/roles-and-authority.md), [lifecycle](docs/guides/lifecycle.md), and [execution](docs/guides/execution.md)
 - [Project initialization](docs/guides/project-initialization.md) and [Objective Contracts](docs/guides/objective-contracts.md)
+- [Optional project knowledge and role work memory](docs/guides/project-knowledge.md)
 - [Observation](docs/guides/observation.md) and [policy and recovery](docs/guides/policy-and-recovery.md)
 - [CLI reference](docs/reference/cli.md), [plugins and tools](docs/reference/plugins-and-tools.md), [capabilities reference](docs/reference/capabilities.md), and [limitations and troubleshooting](docs/reference/limitations-and-troubleshooting.md)
 

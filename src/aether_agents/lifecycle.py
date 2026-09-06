@@ -96,9 +96,16 @@ OBJECTIVE_CONTRACT_ENTRY_POINT: dict[str, str] = {
     "target": "aether_agents.objective_contracts.hermes_plugin",
 }
 
+KNOWLEDGE_ENTRY_POINT: dict[str, str] = {
+    "plugin_name": "aether-project-knowledge",
+    "group": "hermes_agent.plugins",
+    "target": "aether_agents.knowledge.hermes_plugin",
+}
+
 AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
     OBSERVER_ENTRY_POINT["plugin_name"]: OBSERVER_ENTRY_POINT["target"],
     OBJECTIVE_CONTRACT_ENTRY_POINT["plugin_name"]: OBJECTIVE_CONTRACT_ENTRY_POINT["target"],
+    KNOWLEDGE_ENTRY_POINT["plugin_name"]: KNOWLEDGE_ENTRY_POINT["target"],
 }
 
 
@@ -466,6 +473,8 @@ _CANONICAL_SKILLS = (
     "git-github-closeout",
     "semver-release",
     "canonical-skill-governance",
+    "project-knowledge",
+    "work-memory",
 )
 _OBSERVER_RUNTIME_DEPENDENCIES = {"jsonschema": "4.26.0"}
 _OBSERVER_LOCKED_DISTRIBUTIONS = {

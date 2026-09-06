@@ -9,6 +9,21 @@
 
 **Current behavior and implementation status**: [`docs/`](docs/index.md) and its sole status/traceability registry, [`docs/capabilities.toml`](docs/capabilities.toml). This roadmap records future work, accepted phase history, and release-visible limitations; it is not a live capability-status tracker.
 
+## Bounded Graphify integration candidate
+
+The owner's 2026-09-05 instruction authorizes implementation of
+[005 project knowledge](specs/005-project-knowledge-graphify/spec.md) on a separate
+branch as a scoped exception to the feature freeze. It does not reopen unrelated
+features, change the selected Hermes baseline, activate profiles or waive PD-74.
+
+The candidate covers shared structural graphs, collaborative updates, role/project
+experiences, two canonical skills and the three SOUL resources. Remaining
+qualification concerns are provider-backed semantic extraction, realistic large
+repositories, live behavior across sessions and measured total cost/quality gains.
+Current surfaces and limits belong to the capability registry, not this roadmap.
+See [the plan](specs/005-project-knowledge-graphify/plan.md) and
+[validation criteria](specs/005-project-knowledge-graphify/validation.md).
+
 ## 1. What this roadmap means
 
 Stages are scopes of reasoning and ownership, not a workflow engine. The stage labels below preserve accepted planning history: `done` means its accepted decisions are explicit and mutually consistent, not that every related capability is currently implemented or released. Current behavior and status are tracked separately in the documentation registry. Tests provide evidence. Kanban provides durable coordination. Neither defines the method or grants authority.

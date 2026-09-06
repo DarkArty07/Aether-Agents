@@ -95,6 +95,31 @@ adaptive procedures held by one profile and never become canonical automatically
   verification, independent review, commit, and pull request. Learning alone MUST NOT
   promote a skill or change any role's authority.
 
+## 4.2 Project knowledge and role work memory
+
+The owner-authorized [005 capability](../005-project-knowledge-graphify/spec.md)
+adds technical project knowledge, not another owner-personalization mechanism.
+FR-909 through FR-914 remain applicable to personal preferences and uncontrolled
+profile memory; they do not prohibit explicit, project-scoped technical experiences.
+
+- **FR-914e**: All three roles MAY query and maintain the same revision-bound project
+  graph through the same tools. The graph MUST remain derived from project sources,
+  with identity, coverage and freshness; it MUST NOT redefine canonical decisions.
+  Different worktrees/revisions MUST NOT be merged implicitly.
+- **FR-914f**: Work experiences MUST be isolated by project and role. Temporary
+  implementers MAY share the role's experience namespace with individual provenance;
+  they MUST NOT share Hermes homes or owner-facing personalization. Note versions,
+  retrieval and reflection MUST not expose another namespace or silently promote
+  an agent-reported result into a verified fact.
+- **FR-914g**: Original notes MUST remain recoverable because Graphify reflection is
+  signal aggregation, not a synthesis of every answer. Corrections MUST preserve
+  revision history and prevent stale overwrites. Operator inspection/export/deletion
+  MUST be explicit, and deletion MUST invalidate locally derived reflections.
+- **FR-914h**: Private notes and learning sidecars MUST remain outside shared graph
+  inputs. A useful project-wide rule is promoted through its canonical source, not
+  by copying a role's entire memory. Index failure MUST preserve ordinary file-based
+  work; index availability MUST NOT be a new authority gate.
+
 ## 5. Recovery
 
 For delegated work, the unit of durability is the card, not the process. This is what makes unattended pipeline execution survivable and it supersedes the earlier finding that it could not be (PD-26 superseded by PD-29). A direct Morfeo action is bounded to the current session and relies on the managed project's ordinary reversibility; if work needs durable multi-attempt recovery, that is evidence that the pipeline adds value.
