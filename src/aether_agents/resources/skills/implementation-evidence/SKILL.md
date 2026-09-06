@@ -42,6 +42,9 @@ Supervisor-owned delivery defines scope; reading more context does not enlarge i
    Preserve unrelated dirty work. Identify assigned requirements, accepted interfaces,
    modifiable surface, test oracles and expected delivery. Do not spend a full product
    investigation rediscovering decisions already supplied by the canonical design.
+   Once scope, inputs, interfaces and oracles are verified, begin the bounded change.
+   Reopen investigation only for a concrete inconsistency, failure or unknown affecting
+   the unit; do not wait for a second permission to exercise delegated local judgement.
 2. **Classify uncertainty at the right owner.** Decide reversible local implementation
    choices that preserve acceptance, shared interfaces, other units and authority.
    Bring a material shared question, candidate answers and consequences to Supervisor

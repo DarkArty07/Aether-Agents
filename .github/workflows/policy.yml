@@ -248,6 +248,7 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_contract_quality_documents.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py

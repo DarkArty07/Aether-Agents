@@ -44,6 +44,9 @@ or their delegated project policy; a skill does not supply universal defaults.
    repository state. Record stable project-relative paths/symbols and the inspected
    revision. Separate observed behavior, intended behavior and unqualified assumptions.
    Finish when the proposed change can be located in the real project.
+   Keep each further inspection tied to an unanswered material question and the
+   decision it can change. Reuse already verified references at the same revision;
+   do not repeatedly rediscover them or investigate every future unit's local details.
 2. **Extract intent.** Write the problem, user-visible outcome, representative user
    stories, exclusions and preservation boundary in their existing canonical homes.
    Identify each material question; resolve it with the owner when no delegated answer
@@ -83,6 +86,9 @@ or their delegated project policy; a skill does not supply universal defaults.
    normally names unrelated state and declared product invariants, not all bytes on
    the machine. Verify every referenced owning artifact exists at the intended base.
    Record the reason for genuinely non-applicable design dimensions without filler.
+   Perform a cold-read self-check: given only the referenced artifacts, list the
+   decisions the receiver would still have to invent and remove each material gap.
+   This is an author self-check, not an independent reviewer verdict.
 9. **Materialize one handoff.** Use the authorized `objective_contract` capability with
    explicitly verified portable Project identity and incremental sections. Reference
    owning artifacts rather than copying a competing spec/plan. Validate, finalize and
@@ -95,6 +101,28 @@ or their delegated project policy; a skill does not supply universal defaults.
     do not claim cross-artifact task coverage before that breakdown exists. If review
     returns a contract defect, repair the owning artifact and supersede final bytes
     when required; never patch an immutable contract in place.
+
+## Writing rules and compact evidence
+
+Separate four kinds of statement in the owning artifact: **decided** (authority and
+rationale), **assumed** (evidence and what would invalidate it), **locally delegated**
+(choice and boundaries), and **illustrative** (example, not a new obligation). A
+material unverified assumption cannot become a build-ready decision by changing its
+label. Use MUST only for an existing or accepted requirement, not a stylistic preference.
+Write an action, its observable output and its completion condition rather than a list
+of adjectives. Avoid repeating the same rule in the Objective Contract, plan and skill.
+
+For a material design decision, a compact entry in the existing plan can say:
+
+| Decision | Approved choice and reason | Evidence/assumption | Verification reference | Local freedom |
+|---|---|---|---|---|
+| Existing decision reference | Chosen behavior and rejected material alternative | Inspected source or authorized probe; validity boundary | Existing acceptance/scenario reference | Equivalent private implementation choices |
+
+This is an optional prose aid, not another registry or schema. Use existing identifiers
+and references; do not create a separate file or new identifier system just for this table.
+If design is incomplete, return the specific question, why it changes the outcome,
+known alternatives and evidence, and which owner can decide. Do not ask the owner to
+repeat context that the repository or prior accepted artifact can answer.
 
 ## Worked contrast (illustrative, not executed evidence)
 
