@@ -90,7 +90,9 @@ def run_knowledge(args: argparse.Namespace, service: Any = None) -> int:
             configuration = service.configuration()
             probe = service.backend().probe()
             semantic_cfg = configuration.get("semantic", {})
-            semantic_enabled = configuration.get("semantic_enabled", False) or semantic_cfg.get("enabled", False)
+            semantic_enabled = configuration.get("semantic_enabled", False) or semantic_cfg.get(
+                "enabled", False
+            )
             result = {
                 "ok": True,
                 "component": probe,
