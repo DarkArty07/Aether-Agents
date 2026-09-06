@@ -5,6 +5,15 @@
 **Graphify probado:** Python `graphifyy==0.9.54`, commit `937e59a5476fcb2665d6c4f4b7c0d0a4142011b6`.
 **Status of this artifact:** historical planning baseline. The owner subsequently authorized implementation on a separate branch and integration of the reconciled candidate into `main`. The local structural implementation, current limits and executed checks are recorded in [implementation.md](implementation.md), [spec.md](spec.md) and the [capability registry](../../docs/capabilities.toml). Planning text below is not a claim that every proposed capability is implemented; live activation and semantic qualification remain separate.
 
+## Current expansion design
+
+Issue #330 and the owner's subsequent approval extend the integrated baseline to semantic
+maintenance, graph exploration, optional read-only PR context and native graph/tree exports.
+The shared architecture, interfaces, publication/cache behavior and runnable verification
+are in [expanded tools and semantic maintenance](contracts/expanded-tools-and-semantic.md).
+That design supersedes conflicting initial planning limits below; historical evidence stays
+historical. No live auxiliary identity or credentials belong in this plan.
+
 ## 1. Objetivo y alcance acordado
 
 Reducir la exploración repetida de repositorios entre sesiones, conservar conocimiento técnico actualizado y reutilizar experiencias sin mezclar proyectos, revisiones o roles.

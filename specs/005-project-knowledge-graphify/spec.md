@@ -1,10 +1,10 @@
 # 005: Shared project knowledge and role work memory
 
-**Status:** owner-authorized main-integration candidate, 2026-09-05. This source is not
-an activated runtime or release qualification. The owner's explicit requests to implement
-the plan and integrate the completed candidate into `main` are a bounded exception to
-PD-74 for this capability only. They do not unfreeze unrelated features or authorize a
-release, deployment, live-profile activation or provider/model spending.
+**Status:** structural baseline integrated; expanded semantic/tool scope authorized in
+issue #330 and undergoing contract design. The owner approved autonomous implementation,
+live qualification through the provisioned auxiliary connection and scoped local activation
+for this expansion. This is not an implementation or release receipt. The bounded PD-74
+exception applies only to this capability, not unrelated features or public publication.
 
 ## Outcome
 
@@ -63,14 +63,38 @@ Experiences belong to the project and role, not to a shared owner-personalizatio
   compulsory calls for irrelevant work. Skills do not redefine authority.
 - **KG-11 Degradation:** unavailable, stale, corrupt or unbound knowledge cannot prevent
   normal authorized file-based work. Do not claim that failed updates will finish later
-  unless a real operation has been scheduled. No automatic provider use or tool-schema
-  mutation inside a conversation.
+  unless a real operation has been scheduled. Provider use occurs only through explicitly
+  authorized configured semantic maintenance; never from ordinary queries or status.
+  Tool schemas are not mutated inside a conversation.
 - **KG-12 Qualification:** verify native component execution, role/project isolation,
   simultaneous updates, correction and recovery across sessions, packaging and native
   plugin dispatch. Separate deterministic/component results from model-driven E2E,
   semantic extraction and measured cost/quality improvement.
 
-## Initial implementation boundary
+## Expanded requirements (owner-authorized, not yet delivered)
+
+- **KG-13 Semantic maintenance:** all bound projects can enrich supported committed code
+  and documentation through the existing configured text auxiliary; configured graph
+  updates perform/resume this work without a separate human request. Structural-only mode
+  remains available and has no model calls. No watcher or cross-project graph is added.
+- **KG-14 Provenance and recovery:** semantic origin is explicit and never promoted to AST
+  fact because an LLM labels it EXTRACTED. Safe references, actual coverage, bounded retries,
+  chunk reuse/invalidation and failure preservation apply to every semantic snapshot.
+- **KG-15 Exploration:** add stats and central-node ranking and expose native query traversal,
+  depth/context controls, impact relation filters and optional undirected paths.
+- **KG-16 GitHub context:** optionally expose read-only PR list, impact and triage for the
+  exact bound GitHub repository; unavailable GitHub does not disable local graph features.
+- **KG-17 Visualization:** export native graph or tree HTML as a revision-bound local artifact,
+  without modifying the snapshot, opening a browser or adding a dashboard/server.
+- **KG-18 Delivery:** preserve two tools with fourteen project and five memory actions;
+  qualify the real auxiliary, native operations, cross-project isolation and existing
+  quality gates; synchronize feature-owned managed guidance and verify fresh-process load.
+
+The [expanded tools and semantic contract](contracts/expanded-tools-and-semantic.md) owns
+the concrete shared interfaces, lifecycle, live verification and delegated implementation
+freedom. It supersedes only conflicting initial scope statements for this objective.
+
+## Initial implementation boundary (historical structural baseline)
 
 Structural extraction and document navigation are local. Rich semantic document
 extraction is not implemented or enabled in this candidate. It requires a separately
