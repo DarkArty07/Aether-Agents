@@ -51,6 +51,76 @@ def get_model_identity_digest(
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 
+def resolve_auxiliary_task(configuration: dict[str, Any]) -> str | None:
+    """Resolve auxiliary task name or None if missing/auto/ambiguous."""
+    semantic_cfg = configuration.get("semantic", {})
+    task_a = None
+    if isinstance(semantic_cfg, dict):
+        raw_a = semantic_cfg.get("auxiliary_task")
+        if raw_a is not None:
+            task_a = str(raw_a).strip()
+    raw_b = configuration.get("semantic_auxiliary_task")
+    task_b = str(raw_b).strip() if raw_b is not None else None
+
+    # Check ambiguity: if both provided and different
+    if task_a is not None and task_b is not None and task_a != task_b:
+        return None
+
+    task = task_a if task_a is not None else task_b
+    if not task:
+        return None
+    if task.casefold() in ("", "auto", "none", "null"):
+        return None
+    return task
+
+
+def compute_semantic_fingerprint(
+    backend: GraphifyBackend,
+    source_root: Path,
+    graph_path: Path,
+    inputs: dict[str, str],
+    configuration: dict[str, Any],
+) -> str | None:
+    """Deterministic overall fingerprint for configured semantic extraction without calling LLM."""
+    aux_task = resolve_auxiliary_task(configuration)
+    if not aux_task:
+        return None
+
+    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    if not eligible_files:
+        return hashlib.sha256(b"no_eligible_files").hexdigest()
+
+    try:
+        prep_res = backend.run(
+            "semantic_prepare",
+            source_root=source_root,
+            graph_path=graph_path,
+            arguments={"files": eligible_files},
+        )
+    except Exception:
+        return None
+
+    chunks = prep_res.get("chunks", [])
+    if not chunks:
+        return hashlib.sha256(b"no_chunks").hexdigest()
+
+    model_digest = get_model_identity_digest(aux_task)
+    policy = {"deep": False, "token_budget": 4000}
+    scope_version = "regular-tracked-v1"
+
+    chunk_fps: list[str] = []
+    for chunk in chunks:
+        c_files = chunk.get("files", [])
+        file_hashes = {f: inputs[f] for f in c_files if f in inputs}
+        prompt_text = chunk["system_prompt"] + "\n" + chunk["user_prompt"]
+        fp = compute_chunk_fingerprint(
+            scope_version, prompt_text, policy, model_digest, file_hashes
+        )
+        chunk_fps.append(fp)
+
+    return hashlib.sha256("".join(chunk_fps).encode("utf-8")).hexdigest()
+
+
 class SemanticCache:
     def __init__(self, cache_dir: Path):
         self.cache_dir = cache_dir
@@ -144,14 +214,30 @@ def run_semantic_extraction(
     configuration: dict[str, Any],
     *,
     deadline_seconds: float = 600.0,
+    cancel_event: threading.Event | None = None,
 ) -> dict[str, Any]:
     """Orchestrate semantic chunking, auxiliary calls, validation, caching, and graph merging."""
-    semantic_cfg = configuration.get("semantic", {})
-    aux_task = (
-        semantic_cfg.get("auxiliary_task")
-        or configuration.get("semantic_auxiliary_task")
-        or "web_extract"
-    )
+    if cancel_event and cancel_event.is_set():
+        raise KnowledgeError("OPERATION_CANCELLED", "Semantic extraction was cancelled.")
+
+    aux_task = resolve_auxiliary_task(configuration)
+    if not aux_task:
+        return {
+            "state": "unavailable",
+            "fingerprint": None,
+            "covered_paths": [],
+            "pending_paths": sorted(
+                [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+            ),
+            "failed_paths": [],
+            "validated_chunk_ids": [],
+            "observed_usage": {
+                "total_tokens": 0,
+                "model_calls": 0,
+                "reason": "unbound_auxiliary_task",
+            },
+        }
+
     model_digest = get_model_identity_digest(aux_task)
     policy = {"deep": False, "token_budget": 4000}
     scope_version = "regular-tracked-v1"
@@ -228,7 +314,7 @@ def run_semantic_extraction(
             cid = int(c["chunk_id"])
             fp = chunk_fingerprints[cid]
 
-            if time.time() >= deadline:
+            if (cancel_event and cancel_event.is_set()) or time.time() >= deadline:
                 with lock:
                     failed_chunks.add(cid)
                 return
@@ -239,7 +325,7 @@ def run_semantic_extraction(
                 raw_text = ""
                 usage: dict[str, Any] = {}
                 for attempt in range(2):
-                    if time.time() >= deadline:
+                    if (cancel_event and cancel_event.is_set()) or time.time() >= deadline:
                         break
                     try:
                         with lock:
@@ -291,6 +377,9 @@ def run_semantic_extraction(
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(process_chunk, c) for c in needed_chunks]
             concurrent.futures.wait(futures)
+
+        if cancel_event and cancel_event.is_set():
+            raise KnowledgeError("OPERATION_CANCELLED", "Semantic extraction was cancelled.")
 
     # Step 3: Apply all validated fragments (cached + newly validated) to graph
     all_valid_fragments = {**cached_fragments, **newly_validated_fragments}

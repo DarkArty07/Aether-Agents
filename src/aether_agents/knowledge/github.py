@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -72,11 +73,35 @@ def resolve_github_repository(root: Path) -> str:
     return configured_repo
 
 
-def _run_gh(args: list[str]) -> Any:
-    """Execute bounded gh command with structured output."""
+def _gh_environment() -> dict[str, str]:
+    """Isolate environment for gh subprocess matching repo git conventions."""
+    env = {
+        "PATH": os.environ.get("PATH", os.defpath),
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "GH_PROMPT_DISABLED": "1",
+        "NO_COLOR": "1",
+    }
+    for key in (
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GH_ENTERPRISE_TOKEN",
+        "GH_HOST",
+    ):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    return env
+
+
+def _run_gh(root: Path, args: list[str]) -> Any:
+    """Execute bounded gh command with structured output in bound repository."""
     try:
         completed = subprocess.run(
             ["gh", *args],
+            cwd=root,
+            env=_gh_environment(),
             capture_output=True,
             timeout=30,
             text=True,
@@ -150,7 +175,7 @@ def execute_list_prs(
     if base:
         args.extend(["--base", str(base)])
 
-    raw_list = _run_gh(args)
+    raw_list = _run_gh(root, args)
     if not isinstance(raw_list, list):
         raise KnowledgeError("GITHUB_UNAVAILABLE", "Unexpected gh pr list response shape.")
 
@@ -197,7 +222,7 @@ def execute_pr_impact(
         "--json",
         "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,statusCheckRollup,reviewDecision,updatedAt,files",
     ]
-    raw = _run_gh(args)
+    raw = _run_gh(root, args)
     if not isinstance(raw, dict):
         raise KnowledgeError("GITHUB_UNAVAILABLE", "Unexpected gh pr view response shape.")
 
@@ -211,9 +236,12 @@ def execute_pr_impact(
             if isinstance(f, dict) and f.get("path"):
                 file_paths.append(str(f["path"]))
 
+    total_files = len(file_paths)
+    truncated = False
     # Bounded file pagination check (max 500 files for impact)
     if len(file_paths) > 500:
         file_paths = file_paths[:500]
+        truncated = True
 
     graph_file = location / "graphify-out" / "graph.json"
     source_root = location / "sources"
@@ -227,24 +255,29 @@ def execute_pr_impact(
 
     # Verify PR head SHA after multi-call analysis
     check_args = ["pr", "view", str(pr_number), "--repo", repo, "--json", "headRefOid"]
-    head_check = _run_gh(check_args)
-    head_after = head_check.get("headRefOid")
+    head_check = _run_gh(root, check_args)
+    head_after = head_check.get("headRefOid") if isinstance(head_check, dict) else None
     if head_after != head_before:
         # Retry once if head moved
-        raw = _run_gh(args)
+        raw = _run_gh(root, args)
         pr_summary = _parse_pr_summary(raw)
         head_retry = pr_summary["head_sha"]
         file_paths = [
-            f["path"] for f in raw.get("files", []) if isinstance(f, dict) and f.get("path")
-        ][:500]
+            str(f["path"]) for f in raw.get("files", []) if isinstance(f, dict) and f.get("path")
+        ]
+        total_files = len(file_paths)
+        truncated = len(file_paths) > 500
+        if truncated:
+            file_paths = file_paths[:500]
         worker_res = backend.run(
             "pr_impact",
             source_root=source_root,
             graph_path=graph_file,
             arguments={"files": file_paths},
         )
-        head_check = _run_gh(check_args)
-        if head_check.get("headRefOid") != head_retry:
+        head_check = _run_gh(root, check_args)
+        head_final = head_check.get("headRefOid") if isinstance(head_check, dict) else None
+        if head_final != head_retry:
             raise KnowledgeError(
                 "GITHUB_UNAVAILABLE", f"PR #{pr_number} head SHA moved during analysis."
             )
@@ -257,8 +290,28 @@ def execute_pr_impact(
         "graph_revision": ctx.source_revision,
     }
     impact_info = worker_res.get("impact", {})
+    if truncated:
+        impact_info["truncated"] = True
+        impact_info["total_files"] = total_files
+        impact_info["analyzed_files"] = len(file_paths)
+        impact_info["warning"] = (
+            f"PR touches {total_files} files; analysis truncated to first 500 files."
+        )
+
+    unmatched = impact_info.get("unmatched_files", [])
+    if unmatched:
+        impact_info["unmatched_warning"] = (
+            f"{len(unmatched)} files are not indexed in the knowledge graph."
+        )
+
     references = worker_res.get("references", [])
     content = str(worker_res.get("content", ""))
+    if truncated:
+        content += (
+            f"\nWarning: PR touches {total_files} files; analysis truncated to first 500 files."
+        )
+    if unmatched:
+        content += f"\nNotice: {len(unmatched)} unanalyzed files are not present in the graph."
 
     return github_ctx, pr_summary, impact_info, references, content
 
@@ -280,8 +333,11 @@ def execute_triage_prs(
     triaged_prs = []
     for p in prs:
         pr_num = p["number"]
+        files: list[str] = []
+        truncated = False
         try:
             view_raw = _run_gh(
+                root,
                 [
                     "pr",
                     "view",
@@ -290,13 +346,17 @@ def execute_triage_prs(
                     repo,
                     "--json",
                     "files",
-                ]
+                ],
             )
             files = [
-                f["path"]
+                str(f["path"])
                 for f in view_raw.get("files", [])
                 if isinstance(f, dict) and f.get("path")
-            ][:200]
+            ]
+            total_files = len(files)
+            if len(files) > 200:
+                files = files[:200]
+                truncated = True
             worker_res = backend.run(
                 "pr_impact",
                 source_root=source_root,
@@ -304,13 +364,20 @@ def execute_triage_prs(
                 arguments={"files": files},
             )
             impact = worker_res.get("impact", {})
-        except Exception:
+            if truncated:
+                impact["truncated"] = True
+                impact["total_files"] = total_files
+                impact["analyzed_files"] = len(files)
+        except Exception as exc:
+            # Failure must NOT masquerade as zero impact
             impact = {
-                "files": 0,
+                "status": "unavailable",
+                "error": str(exc),
+                "files": len(files) if files else None,
                 "matched_files": [],
-                "unmatched_files": [],
+                "unmatched_files": files,
                 "communities": [],
-                "node_count": 0,
+                "node_count": None,
             }
         triaged_pr = dict(p, impact=impact)
         triaged_prs.append(triaged_pr)
@@ -334,10 +401,17 @@ def execute_triage_prs(
     lines = [f"PR Triage for {repo} ({len(triaged_prs)} PRs analyzed):"]
     for p in triaged_prs:
         imp = p.get("impact", {})
-        lines.append(
-            f"- #{p['number']}: {p['title']} touches communities {imp.get('communities', [])} "
-            f"({imp.get('node_count', 0)} nodes affected)"
-        )
+        if imp.get("status") == "unavailable":
+            lines.append(
+                f"- #{p['number']}: {p['title']} (impact analysis unavailable: {imp.get('error', 'unknown error')})"
+            )
+        else:
+            unmatched = imp.get("unmatched_files", [])
+            unmatched_note = f", {len(unmatched)} unanalyzed files" if unmatched else ""
+            lines.append(
+                f"- #{p['number']}: {p['title']} touches communities {imp.get('communities', [])} "
+                f"({imp.get('node_count', 0)} nodes affected{unmatched_note})"
+            )
     if overlap_pairs:
         lines.append("\nCommunity overlaps detected (potential conflict):")
         for o in overlap_pairs:

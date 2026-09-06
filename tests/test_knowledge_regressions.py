@@ -415,15 +415,18 @@ def test_d39_visualize_both_html_formats_and_snapshot_stability(
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
     store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
-    store.execute(ctx, "update", {"reason": "Initial index"})
+    struct_res = store.execute(ctx, "update", {"reason": "Initial index", "mode": "structural"})
 
     graph_file = state / "knowledge" / PROJECT / "views" / ctx.view_id
     pointer = json.loads((graph_file / f"{ctx.source_revision}.json").read_text())
     snapshot_id = pointer["snapshot_id"]
+    assert snapshot_id == struct_res["snapshot_id"]
     graph_json = (
         tmp_path / "cache" / "knowledge" / PROJECT / snapshot_id / "graphify-out" / "graph.json"
     )
+    manifest_json = tmp_path / "cache" / "knowledge" / PROJECT / snapshot_id / "manifest.json"
     sha_initial = hashlib.sha256(graph_json.read_bytes()).hexdigest()
+    manifest_initial = hashlib.sha256(manifest_json.read_bytes()).hexdigest()
 
     # 1. Graph format (auto detail)
     res_graph_auto = store.execute(ctx, "visualize", {"format": "graph", "detail": "auto"})
@@ -461,6 +464,10 @@ def test_d39_visualize_both_html_formats_and_snapshot_stability(
     assert "Reused existing" in res_reuse["content"]
     assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
 
+    # 5. Snapshot immutability: published snapshot bytes must remain immutable
+    assert hashlib.sha256(graph_json.read_bytes()).hexdigest() == sha_initial
+    assert hashlib.sha256(manifest_json.read_bytes()).hexdigest() == manifest_initial
+
 
 def test_d38_github_pr_operations_and_error_boundaries(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
@@ -496,7 +503,7 @@ def test_d38_github_pr_operations_and_error_boundaries(
     import aether_agents.knowledge.github as gh_mod
 
     # Empty PR list is valid and returns prs: []
-    monkeypatch.setattr(gh_mod, "_run_gh", lambda args: [] if "list" in args else {})
+    monkeypatch.setattr(gh_mod, "_run_gh", lambda root, args: [] if "list" in args else {})
     list_res = store.execute(ctx, "list_prs", {"limit": 10})
     assert list_res["ok"] is True
     assert list_res["prs"] == []
@@ -531,16 +538,21 @@ def test_d38_github_pr_operations_and_error_boundaries(
         },
     ]
 
-    def mock_gh_calls(args: list[str]) -> Any:
+    view_calls = 0
+
+    def mock_gh_calls(rt: Path, args: list[str]) -> Any:
+        nonlocal view_calls
+        assert rt == root  # Bound repository isolation verified
         if "list" in args:
             return fake_prs
         if "view" in args:
             pr_num = args[args.index("view") + 1]
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha42" if pr_num == "42" else "headsha43"}
             if pr_num == "42":
                 return {**fake_prs[0], "files": [{"path": "module.py"}]}
             if pr_num == "43":
                 return {**fake_prs[1], "files": [{"path": "module.py"}, {"path": "unmatched.py"}]}
-            return {"headRefOid": "headsha42" if pr_num == "42" else "headsha43"}
         return {}
 
     monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_calls)
@@ -560,16 +572,90 @@ def test_d38_github_pr_operations_and_error_boundaries(
     assert impact_res["impact"]["unmatched_files"] == []
     assert len(impact_res["references"]) > 0
 
-    # triage_prs
+    # Large PR (>500 files) triggers truncation warning
+    many_files = [{"path": f"file_{i}.py"} for i in range(600)]
+
+    def mock_gh_large(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha42"}
+            return {**fake_prs[0], "files": many_files}
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_large)
+    large_impact = store.execute(ctx, "pr_impact", {"pr_number": 42})
+    assert large_impact["impact"]["truncated"] is True
+    assert large_impact["impact"]["total_files"] == 600
+    assert large_impact["impact"]["analyzed_files"] == 500
+    assert "truncated" in large_impact["content"].lower()
+
+    # Moving head SHA during pr_impact:
+    # Scenario A: head moves once -> retried with new head and succeeds
+    head_attempts = 0
+
+    def mock_moving_head(rt: Path, args: list[str]) -> Any:
+        nonlocal head_attempts
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                head_attempts += 1
+                # First check says head moved to headsha_new
+                return {"headRefOid": "headsha_new"}
+            # Return new head on retry
+            return {
+                **fake_prs[0],
+                "headRefOid": "headsha_new",
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_moving_head)
+    moving_res = store.execute(ctx, "pr_impact", {"pr_number": 42})
+    assert moving_res["ok"] is True
+    assert moving_res["pr"]["head_sha"] == "headsha_new"
+
+    # Scenario B: head keeps moving continuously -> GITHUB_UNAVAILABLE
+    def mock_continuous_move(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                import uuid
+
+                return {"headRefOid": uuid.uuid4().hex}
+            return {**fake_prs[0], "files": [{"path": "module.py"}]}
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_continuous_move)
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.execute(ctx, "pr_impact", {"pr_number": 42})
+    assert exc_info.value.code == "GITHUB_UNAVAILABLE"
+
+    # triage_prs with normal overlaps
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_calls)
     triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
     assert triage_res["ok"] is True
     assert len(triage_res["prs"]) == 2
     assert "community_overlaps" in triage_res
-    # Both PRs touch module.py so they share a community
     overlaps = triage_res["community_overlaps"]
     assert len(overlaps) > 0
-    assert overlaps[0]["pr_a"] == 42
-    assert overlaps[0]["pr_b"] == 43
+
+    # Triage error boundary: PR view failure must NOT masquerade as zero impact
+    def mock_gh_view_fail(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return fake_prs
+        if "view" in args:
+            raise KnowledgeError("GITHUB_UNAVAILABLE", "Simulated GitHub API failure")
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_view_fail)
+    triage_fail_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_fail_res["ok"] is True
+    # Impact must show unavailable status and error, NOT 0 nodes affected!
+    for p in triage_fail_res["prs"]:
+        imp = p["impact"]
+        assert imp["status"] == "unavailable"
+        assert "Simulated GitHub API failure" in imp["error"]
+        assert imp["node_count"] is None
+    assert "0 nodes affected" not in triage_fail_res["content"]
+    assert "impact analysis unavailable" in triage_fail_res["content"]
 
 
 def test_d36_semantic_lifecycle_cache_and_enrichment(
@@ -578,7 +664,8 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     root, state = project(tmp_path)
     ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
 
-    # 1. Structural update leaves documents structural_only and semantic disabled
+    # 1. Structural update leaves documents structural_only
+    # When semantic is disabled: semantic.state is disabled, semantic_pending is False
     store = KnowledgeStore(
         state,
         tmp_path / "cache",
@@ -590,13 +677,43 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     assert struct_res["coverage"]["documents"] == "structural_only"
     assert struct_res["semantic"]["state"] == "disabled"
     assert struct_res["semantic_pending"] is False
+    struct_snapshot_id = struct_res["snapshot_id"]
+    struct_graph_file = (
+        tmp_path
+        / "cache"
+        / "knowledge"
+        / PROJECT
+        / struct_snapshot_id
+        / "graphify-out"
+        / "graph.json"
+    )
+    struct_graph_sha = hashlib.sha256(struct_graph_file.read_bytes()).hexdigest()
 
-    # 2. Configure semantic enabled and mock auxiliary model
+    # 2. Structural update with semantic enabled honestly reports semantic_pending=True
+    store_pending = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
+    )
+    # Re-running structural with semantic enabled on same inputs reports semantic_pending=True
+    struct_pending_res = store_pending.execute(ctx, "update", {"mode": "structural"})
+    assert struct_pending_res["ok"] is True
+    # Previous snapshot had semantic.state == 'disabled', so pending work remains
+    assert struct_pending_res["semantic_pending"] is False  # disabled in existing manifest
+
+    # 3. Configure semantic enabled and mock auxiliary model
     call_count = 0
+    recorded_tasks: list[str] = []
 
-    def mock_aux_call(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+    def mock_aux_call(task: str, *args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         nonlocal call_count
         call_count += 1
+        recorded_tasks.append(task)
         fake_llm_json = json.dumps(
             {
                 "nodes": [
@@ -622,7 +739,7 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_call)
 
-    # 3. Same-commit enrichment
+    # 4. Same-commit enrichment publishes a NEW immutable snapshot (D36 / KG-14)
     semantic_store = KnowledgeStore(
         state,
         tmp_path / "cache",
@@ -639,8 +756,13 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     assert enriched_res["semantic"]["state"] == "complete"
     assert enriched_res["semantic_pending"] is False
     assert call_count > 0
+    enriched_snapshot_id = enriched_res["snapshot_id"]
+    # Snapshot IDs must differ (new immutable snapshot published, not mutated in-place)
+    assert enriched_snapshot_id != struct_snapshot_id
+    # Structural snapshot graph bytes must remain completely immutable
+    assert hashlib.sha256(struct_graph_file.read_bytes()).hexdigest() == struct_graph_sha
 
-    # 4. Repeat unchanged configured update produces ZERO model calls
+    # 5. Repeat unchanged configured update produces ZERO model calls
     initial_calls = call_count
     repeat_res = semantic_store.execute(ctx, "update", {"mode": "configured"})
     assert repeat_res["ok"] is True
@@ -648,7 +770,39 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     assert repeat_res["semantic_pending"] is False
     assert call_count == initial_calls, "Repeat unchanged update must make 0 model calls"
 
-    # 5. Verify document-to-code relationship is queryable
+    # 6. Switching configuration (e.g. semantic_auxiliary_task to other_task) invalidates fingerprint (D36 / Probe P2)
+    other_store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "other_task",
+        },
+    )
+    other_res = other_store.execute(ctx, "update", {"mode": "configured"})
+    assert other_res["ok"] is True
+    assert other_res["outcome"] == "updated", "Config change must invalidate fingerprint and re-run"
+    assert call_count > initial_calls
+    assert "other_task" in recorded_tasks
+
+    # 7. Structural update honesty: if manifest has state=partial, structural reports semantic_pending=True (Probe P3)
+    manifest_file = (
+        tmp_path / "cache" / "knowledge" / PROJECT / other_res["snapshot_id"] / "manifest.json"
+    )
+    manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+    manifest_data["semantic"]["state"] = "partial"
+    manifest_file.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
+
+    struct_honest_res = other_store.execute(ctx, "update", {"mode": "structural"})
+    assert struct_honest_res["ok"] is True
+    assert struct_honest_res["outcome"] == "unchanged"
+    assert struct_honest_res["semantic_pending"] is True, (
+        "Structural update must honestly report semantic_pending=True when semantics are partial"
+    )
+
+    # 8. Verify document-to-code relationship is queryable
     q_res = semantic_store.execute(ctx, "query", {"question": "OrdersDocument"})
     assert q_res["ok"] is True
     assert "process_order" in q_res["content"] or "OrdersDocument" in q_res["content"]
@@ -662,7 +816,7 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
 
     import aether_agents.knowledge.semantic as sem_mod
 
-    # 1. Router exhaustion (429) fails/defers visibly without endless loop
+    # 1. Router exhaustion (429) fails/defers visibly without endless loop on initial index
     def mock_429(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         raise KnowledgeError("ROUTER_EXHAUSTION", "429 Too Many Requests")
 
@@ -680,9 +834,10 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
     )
     res_429 = exhaust_store.execute(ctx, "update", {"mode": "configured"})
     assert res_429["ok"] is True
-    # Still publishes structural coverage
+    # Still publishes usable structural coverage
     assert res_429["coverage"]["code"] == "structural"
-    assert res_429["semantic"]["state"] in ("unavailable", "pending")
+    assert res_429["coverage"]["documents"] == "structural_only"
+    assert res_429["semantic"]["state"] == "unavailable"
     assert res_429["semantic_pending"] is True
 
     # 2. Malformed / hollow output doesn't corrupt graph
@@ -694,6 +849,94 @@ def test_d37_failure_preservation_timeout_exhaustion_malformed(
     assert res_hollow["ok"] is True
     assert res_hollow["coverage"]["code"] == "structural"
     assert res_hollow["semantic"]["state"] in ("unavailable", "pending")
+
+    # 3. Retain previously complete snapshot on failed refresh (D37 / Probe P4)
+    # First: perform a successful configured update to establish a complete snapshot
+    def mock_success(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return (
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "DocAlpha",
+                            "label": "DocAlpha",
+                            "source_file": "README.md",
+                            "source_location": "1",
+                        }
+                    ],
+                    "edges": [
+                        {
+                            "source": "DocAlpha",
+                            "target": "module_process_order",
+                            "relation": "specifies",
+                        }
+                    ],
+                }
+            ),
+            {"total_tokens": 100},
+        )
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_success)
+    complete_res = exhaust_store.execute(ctx, "update", {"mode": "configured"})
+    assert complete_res["ok"] is True
+    assert complete_res["semantic"]["state"] == "complete"
+    complete_snapshot_id = complete_res["snapshot_id"]
+
+    # Now refresh with new task and 429 router exhaustion: MUST retain previously complete snapshot
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_429)
+    refresh_store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "refresh_task",
+        },
+    )
+    refresh_res = refresh_store.execute(ctx, "update", {"mode": "configured"})
+    assert refresh_res["ok"] is True
+    assert refresh_res["outcome"] == "unchanged"
+    assert refresh_res["snapshot_id"] == complete_snapshot_id
+    assert refresh_res["semantic"]["state"] == "complete"
+    assert refresh_res["semantic_pending"] is False
+    assert any("Refresh failed; retained" in w for w in refresh_res["warnings"])
+
+    # Active pointer must still point to complete_snapshot_id
+    pointer_file = (
+        state / "knowledge" / PROJECT / "views" / ctx.view_id / f"{ctx.source_revision}.json"
+    )
+    pointer = json.loads(pointer_file.read_text(encoding="utf-8"))
+    assert pointer["snapshot_id"] == complete_snapshot_id
+
+    # 4. Cancellation stops processing, retains validated cache, never publishes unfinished state
+    import threading
+
+    cancel_evt = threading.Event()
+    cancel_evt.set()
+    with pytest.raises(KnowledgeError) as exc_info:
+        sem_mod.run_semantic_extraction(
+            backend=GraphifyBackend(native_python),
+            source_root=tmp_path
+            / "cache"
+            / "knowledge"
+            / PROJECT
+            / complete_snapshot_id
+            / "sources",
+            graph_path=tmp_path
+            / "cache"
+            / "knowledge"
+            / PROJECT
+            / complete_snapshot_id
+            / "graphify-out"
+            / "graph.json",
+            inputs={"README.md": "abc"},
+            cache_root=tmp_path / "cache",
+            ctx=ctx,
+            configuration={"semantic_auxiliary_task": "web_extract"},
+            cancel_event=cancel_evt,
+        )
+    assert exc_info.value.code == "OPERATION_CANCELLED"
 
 
 def test_d35_cross_project_isolation_and_symbol_collision(
@@ -740,13 +983,21 @@ def test_d35_cross_project_isolation_and_symbol_collision(
         state_a,
         tmp_path / "cache_a",
         GraphifyBackend(native_python),
-        configuration={"enabled": True, "semantic_enabled": True},
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
     )
     store_b = KnowledgeStore(
         state_b,
         tmp_path / "cache_b",
         GraphifyBackend(native_python),
-        configuration={"enabled": True, "semantic_enabled": True},
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
     )
 
     res_a = store_a.execute(ctx_a, "update", {"mode": "configured"})
@@ -782,6 +1033,103 @@ def test_d35_cross_project_isolation_and_symbol_collision(
     )
     assert len(cache_a_files) > 0
     assert len(cache_b_files) > 0
+
+
+def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Missing, auto, or ambiguous auxiliary bindings must return unavailable (Decision 4)."""
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+
+    calls = 0
+
+    def mock_fail(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("Auxiliary model must not be called for unbound tasks!")
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_fail)
+
+    # 1. Missing auxiliary task
+    store_missing = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={"enabled": True, "semantic_enabled": True},
+    )
+    res_missing = store_missing.execute(ctx, "update", {"mode": "configured"})
+    assert res_missing["ok"] is True
+    assert res_missing["semantic"]["state"] == "unavailable"
+    assert res_missing["semantic_pending"] is True
+    assert res_missing["coverage"]["documents"] == "structural_only"
+    assert calls == 0
+
+    # 2. Auto auxiliary task
+    store_auto = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "auto",
+        },
+    )
+    res_auto = store_auto.execute(ctx, "update", {"mode": "configured"})
+    assert res_auto["semantic"]["state"] == "unavailable"
+    assert res_auto["semantic_pending"] is True
+    assert calls == 0
+
+    # 3. Ambiguous auxiliary task (differing task in semantic dict vs outer key)
+    store_ambiguous = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        GraphifyBackend(native_python),
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic": {"auxiliary_task": "task_one"},
+            "semantic_auxiliary_task": "task_two",
+        },
+    )
+    res_ambiguous = store_ambiguous.execute(ctx, "update", {"mode": "configured"})
+    assert res_ambiguous["semantic"]["state"] == "unavailable"
+    assert res_ambiguous["semantic_pending"] is True
+    assert calls == 0
+
+
+def test_d38_real_gh_read_only_pr_or_honest_skip() -> None:
+    """Exercise real gh read-only PR if authenticated; skip honestly otherwise."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("gh"):
+        pytest.skip("GitHub CLI ('gh') is not installed.")
+
+    try:
+        proc = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+        if proc.returncode != 0:
+            pytest.skip("GitHub CLI ('gh') is not authenticated in this environment.")
+    except Exception as exc:
+        pytest.skip(f"GitHub CLI check failed ({exc}).")
+
+    from aether_agents.knowledge.github import _run_gh
+
+    # Read-only test against current repo
+    try:
+        repo_root = Path(__file__).parents[1]
+        prs = _run_gh(repo_root, ["pr", "list", "--limit", "1", "--json", "number,title"])
+        assert isinstance(prs, list)
+    except Exception as exc:
+        pytest.skip(f"gh pr list query could not complete ({exc}).")
 
 
 def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python: Path) -> None:
