@@ -193,3 +193,150 @@ def test_stable_lock_excludes_another_process_and_retains_its_inode(tmp_path: Pa
     )
     assert acquired.returncode == 0, acquired.stderr
     assert lock.stat().st_ino == inode
+
+
+def test_regression_d29_truncation_honesty_and_supported_recovery(
+    tmp_path: Path, native_python: Path
+) -> None:
+    root, state = project(tmp_path)
+    funcs = "\n".join(f"def step_{i}():\n    return step_{i + 1}()\n" for i in range(8))
+    funcs += "def step_8():\n    return 42\n"
+    (root / "flow.py").write_text(funcs)
+    git_at(root, "add", "flow.py")
+    git_at(root, "commit", "-qm", "interconnected steps")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Map flow steps"})
+
+    # Case 1: Budget is small (128 tokens). Graphify omits nodes.
+    # Must report truncated=True, ok=True, and no unsupported recovery instructions.
+    trunc_res = store.execute(ctx, "query", {"question": "step_0", "budget_tokens": 128})
+    assert trunc_res["ok"] is True
+    assert trunc_res["truncated"] is True
+    content = trunc_res["content"]
+    assert "context_filter" not in content
+    assert "get_node" not in content
+    assert "--budget" not in content
+    assert "CLI:" not in content
+    assert "MCP" not in content
+    assert "Graph:" not in content
+
+    # Case 2: Complete-over-budget control (550 tokens). All nodes fit but nodes+edges
+    # exceed token budget in Graphify.
+    # Must preserve truncated=False and provide an explicit over-budget warning.
+    ctrl_res = store.execute(ctx, "query", {"question": "step_0", "budget_tokens": 550})
+    assert ctrl_res["ok"] is True
+    assert ctrl_res["truncated"] is False
+    assert any("over budget" in w.lower() or "complete" in w.lower() for w in ctrl_res["warnings"])
+    ctrl_content = ctrl_res["content"]
+    assert "context_filter" not in ctrl_content
+    assert "get_node" not in ctrl_content
+
+
+def test_regression_d30_structured_references_and_cap_limit(
+    tmp_path: Path, native_python: Path
+) -> None:
+    root, state = project(tmp_path)
+    funcs = "\n".join(f"def step_{i}():\n    return step_{i + 1}()\n" for i in range(4))
+    funcs += "def step_4():\n    return 42\n"
+    (root / "flow.py").write_text(funcs)
+    git_at(root, "add", "flow.py")
+    git_at(root, "commit", "-qm", "step chain")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    updated = store.execute(ctx, "update", {"reason": "Index step chain"})
+    manifest_path = (
+        tmp_path / "cache/knowledge" / PROJECT / updated["snapshot_id"] / "manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text())
+    graph_path = (
+        tmp_path / "cache/knowledge" / PROJECT / updated["snapshot_id"] / "graphify-out/graph.json"
+    )
+    graph = json.loads(graph_path.read_text())
+    step_0_node = next(n["id"] for n in graph["nodes"] if "step_0" in n.get("label", ""))
+    step_1_node = next(n["id"] for n in graph["nodes"] if "step_1" in n.get("label", ""))
+
+    # All 6 source-bearing actions must return valid, non-empty, deduplicated references
+    actions = [
+        ("query", {"question": "step_0"}),
+        ("explain", {"node": step_0_node}),
+        ("neighbors", {"node": step_0_node}),
+        ("community", {"community_id": 0}),
+        ("path", {"source": step_0_node, "target": step_1_node}),
+        ("impact", {"node": step_1_node, "depth": 2}),
+    ]
+    for action, args in actions:
+        res = store.execute(ctx, action, args)
+        assert res["ok"] is True, f"Failed for action {action}"
+        refs = res["references"]
+        assert isinstance(refs, list) and len(refs) > 0, (
+            f"Expected non-empty references for {action}"
+        )
+        # Deduplication check
+        pairs = [(r["path"], r["location"]) for r in refs]
+        assert len(pairs) == len(set(pairs)), f"Duplicates found in references for {action}: {refs}"
+        for r in refs:
+            assert r["path"] in manifest["inputs"], (
+                f"Reference path {r['path']} not in manifest inputs"
+            )
+            assert not Path(r["path"]).is_absolute(), (
+                f"Absolute path escaped in references: {r['path']}"
+            )
+            assert r["revision"] == ctx.source_revision
+            assert "location" in r
+        # No snapshot private path in content or references
+        for r in refs:
+            assert str(tmp_path) not in r["path"]
+
+    # Silent cap repair: exceeding 50 references must cap at 50, set truncated=True, and warn
+    synthetic_backend = GraphifyBackend(native_python)
+    orig_run = synthetic_backend.run
+
+    def mock_run_with_many_refs(action: str, **kwargs):
+        native_res = orig_run(action, **kwargs)
+        if action == "query":
+            # Synthesize 60 references to input files
+            fake_refs = [{"path": "flow.py", "location": f"L{i}"} for i in range(60)]
+            native_res["references"] = fake_refs
+        return native_res
+
+    synthetic_backend.run = mock_run_with_many_refs
+    capped_store = KnowledgeStore(state, tmp_path / "cache", synthetic_backend)
+    capped_res = capped_store.execute(ctx, "query", {"question": "step_0"})
+    assert len(capped_res["references"]) == 50
+    assert capped_res["truncated"] is True
+    assert any("50" in w for w in capped_res["warnings"])
+
+
+def test_regression_d31_query_explain_community_discovery(
+    tmp_path: Path, native_python: Path
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+
+    # 1. Start from query
+    q_res = store.execute(ctx, "query", {"question": "process_order"})
+    assert q_res["ok"] is True
+    assert "process_order" in q_res["content"]
+
+    # 2. Call explain on node without inspecting graph.json
+    exp_res = store.execute(ctx, "explain", {"node": "process_order"})
+    assert exp_res["ok"] is True
+    assert "resolved_node" in exp_res
+    rn = exp_res["resolved_node"]
+    assert isinstance(rn["id"], str) and len(rn["id"]) > 0
+    assert "community_id" in rn
+    assert "community_name" in rn
+    cid = rn["community_id"]
+    assert isinstance(cid, int)
+
+    # 3. Call community with the discovered community_id without guessing
+    comm_res = store.execute(ctx, "community", {"community_id": cid})
+    assert comm_res["ok"] is True
+    assert "community" in comm_res
+    cinfo = comm_res["community"]
+    assert cinfo["id"] == cid
+    assert "name" in cinfo
+    assert isinstance(cinfo["node_count"], int) and cinfo["node_count"] > 0

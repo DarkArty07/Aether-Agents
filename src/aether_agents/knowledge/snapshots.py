@@ -293,26 +293,51 @@ class KnowledgeStore:
             arguments=arguments,
         )
         text = str(native.get("content", "")).replace(str(location / "sources") + "/", "")
+        text = text.replace(str(location.resolve()), "<knowledge-snapshot>")
         text = text.replace(str(location), "<knowledge-snapshot>")
-        result["content"], result["truncated"] = bounded(text, arguments.get("budget_tokens", 2000))
         result["budget_measurement"] = "UTF-8 byte cap; tokens estimated at four bytes each"
-        refs = []
+        refs: list[dict[str, str]] = []
+        seen_refs: set[tuple[str, str]] = set()
         for ref in native.get("references", []):
-            path = Path(ref.get("path", ""))
+            path_str = ref.get("path", "")
+            if not path_str:
+                continue
+            path = Path(path_str)
             if path.is_absolute():
                 try:
                     path = path.relative_to(location / "sources")
                 except ValueError:
                     continue
-            if path.as_posix() in manifest["inputs"]:
-                refs.append(
-                    {
-                        "path": path.as_posix(),
-                        "location": ref.get("location", ""),
-                        "revision": context.source_revision,
-                    }
-                )
+            posix_path = path.as_posix()
+            if posix_path in manifest["inputs"]:
+                loc = str(ref.get("location", ""))
+                key = (posix_path, loc)
+                if key not in seen_refs:
+                    seen_refs.add(key)
+                    refs.append(
+                        {
+                            "path": posix_path,
+                            "location": loc,
+                            "revision": context.source_revision,
+                        }
+                    )
+        ref_capped = len(refs) > 50
         result["references"] = refs[:50]
+        if ref_capped:
+            result["warnings"].append(
+                "References capped at 50 items; additional visible sources omitted."
+            )
+        native_truncated = bool(native.get("truncated", False))
+        result["content"], aether_truncated = bounded(text, arguments.get("budget_tokens", 2000))
+        result["truncated"] = native_truncated or aether_truncated or ref_capped
+        if native.get("over_budget_complete"):
+            result["warnings"].append(
+                "Complete native answer exceeds requested token budget; all nodes and edges shown."
+            )
+        if "resolved_node" in native:
+            result["resolved_node"] = native["resolved_node"]
+        if "community" in native:
+            result["community"] = native["community"]
         if manifest["coverage"].get("documents") != "semantic":
             result["warnings"].append(
                 "Documents have structural navigation only; semantic extraction is not enabled."

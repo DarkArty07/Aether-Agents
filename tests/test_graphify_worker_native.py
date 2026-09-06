@@ -59,6 +59,13 @@ def test_native_worker_query_contracts(corpus, action: str, arguments: dict) -> 
     result = graph_worker.execute({**corpus, "action": action, "arguments": arguments})
     assert result["content"]
     assert isinstance(result["references"], list)
+    assert len(result["references"]) > 0
+    if action == "explain":
+        assert "resolved_node" in result
+        assert result["resolved_node"]["id"]
+    if action == "community":
+        assert "community" in result
+        assert result["community"]["id"] == arguments["community_id"]
 
 
 @pytest.mark.parametrize(
