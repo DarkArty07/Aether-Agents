@@ -108,18 +108,85 @@ _ACTION_FIELDS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "reflect": ((), ()),
 }
 
+_FIELD_DESCRIPTIONS: dict[str, str] = {
+    "question": "Natural language technical question about the project codebase.",
+    "node": "Symbol or entity identifier in the project graph.",
+    "relation": "Relationship type filter for neighboring nodes.",
+    "source": "Starting symbol or entity identifier for path discovery.",
+    "target": "Destination symbol or entity identifier for path discovery.",
+    "community_id": "Snapshot-local community identifier discovered via explain.",
+    "depth": "Maximum traversal depth for dependency impact analysis.",
+    "max_hops": "Maximum path length between source and target.",
+    "budget_tokens": "Token estimate budget for response context.",
+    "reason": "Explanation for the requested operation.",
+    "mode": "Update strategy for graph re-indexing ('configured' or 'structural').",
+    "changed_paths": "Optional hint list of modified project-relative paths.",
+    "idempotency_key": "Caller-provided unique token for retry and replay deduplication.",
+    "situation": "Context and trigger condition under which the experience occurred.",
+    "lesson": "Core takeaway, recommendation, or procedure learned.",
+    "applicability": "Boundary conditions and scope where this lesson applies.",
+    "outcome": "Observed outcome classification ('useful', 'dead_end', or 'corrected').",
+    "evidence": "Verification references and observed results backing the note.",
+    "source_nodes": "Optional list of project graph node identifiers associated with this experience.",
+    "query": "Search query string across role experience notes.",
+    "limit": "Maximum number of search results to return.",
+    "note_id": "Unique identifier of the note.",
+    "cursor": "Opaque continuation cursor for paginated note reads.",
+    "expected_revision": "Expected note revision number for optimistic concurrency.",
+    "replacement": "Updated lesson and applicability replacing the prior revision.",
+}
+
 
 def parameters(tool: str) -> dict[str, Any]:
     actions = KNOWLEDGE_ACTIONS if tool == "project_knowledge" else MEMORY_ACTIONS
     names = {name for action in actions for group in _ACTION_FIELDS[action] for name in group}
+    props: dict[str, Any] = {
+        "action": {
+            "type": "string",
+            "enum": list(actions),
+            "description": f"The {tool} action to perform: {', '.join(actions)}.",
+        }
+    }
+    for name in sorted(names):
+        accepted = [
+            act
+            for act in actions
+            if name in _ACTION_FIELDS[act][0] or name in _ACTION_FIELDS[act][1]
+        ]
+        if len(accepted) == 1:
+            accepted_str = f"Accepted by action: {accepted[0]}."
+        else:
+            accepted_str = f"Accepted by actions: {', '.join(accepted)}."
+        field_schema = dict(_FIELDS[name])
+        desc = _FIELD_DESCRIPTIONS.get(name, "")
+        field_schema["description"] = f"{desc} {accepted_str}".strip()
+        props[name] = field_schema
+
+    one_of = []
+    for action in actions:
+        req, opt = _ACTION_FIELDS[action]
+        branch_props: dict[str, Any] = {
+            "action": {
+                "const": action,
+                "description": f"Execute the '{action}' action.",
+            },
+            **{name: props[name] for name in sorted((*req, *opt))},
+        }
+        one_of.append(
+            {
+                "type": "object",
+                "properties": branch_props,
+                "required": ["action", *sorted(req)],
+                "additionalProperties": False,
+            }
+        )
+
     return {
         "type": "object",
         "additionalProperties": False,
         "required": ["action"],
-        "properties": {
-            "action": {"type": "string", "enum": list(actions)},
-            **{name: _FIELDS[name] for name in sorted(names)},
-        },
+        "properties": props,
+        "oneOf": one_of,
     }
 
 
