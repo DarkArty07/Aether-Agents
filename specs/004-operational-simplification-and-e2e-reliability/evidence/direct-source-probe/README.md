@@ -18,6 +18,13 @@ The canary task was completed, its subscription removed, and only its isolated
 board was archived recoverably. Private board/session/process identities and the
 archived database remain in the local recovery backup, not this public package.
 
+## Session closure
+
+The [session retrospective](session-retrospective.md) records the delivery failures,
+Morfeo's routing/communication lessons, and measured line changes. The
+[usage snapshot](session-cost-snapshot.json) reports causally attributed consumption
+with explicit coverage and monetary-cost limitations. Neither expands the repair.
+
 ## Exact artifact identity
 
 - Patch SHA-256: `59f873ad50e0b3386223bac1fbe2a63699a19dd757175879fefc5bf923f1738b`.
