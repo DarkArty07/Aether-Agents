@@ -63,6 +63,13 @@ package/native profile skill mechanism. Skills provide reusable procedure only a
 subordinate to owner instruction, the constitution, `DESIGN.md`, stage specifications,
 Objective Contracts, and these repository rules; no skill grants authority.
 
+Current adoption status for the contract/execution procedures is tracked in
+[issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) and
+[the execution guide](docs/guides/execution.md#contractexecution-procedure-adoption).
+The owner chose organic observation during real work for this adoption; do not claim
+the new behavior is qualified merely because resources are installed, or recreate the
+retired synthetic campaign. This does not alter testing authority for other objectives.
+
 ## External research sources
 
 Research checkouts stay outside this repository. They are evidence sources, not vendored dependencies or project sources of truth.

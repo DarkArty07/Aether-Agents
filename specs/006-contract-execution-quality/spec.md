@@ -1,6 +1,6 @@
 # Contract design and execution quality
 
-Status: source authored; registration/adoption pending; organic behavior observation selected by owner.
+Status: source resources registered and native profile files adopted; behavior remains under organic observation in #317. Repository closeout evidence is tracked in #312.
 Issue: [#312](https://github.com/DarkArty07/Aether-Agents/issues/312).
 Owners: Morfeo designs intent/procedures; Supervisor independently reviews and owns
 execution decomposition/integration; Implementer owns bounded application and tests.

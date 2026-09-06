@@ -1,7 +1,7 @@
 # R3 Specification: Spec Kit as a Multi-Agent Method
 
 **Roadmap ID**: R3  
-**Stage status**: in-progress — clarified design/decomposition boundary awaiting joint quality qualification
+**Stage status**: in-progress — clarified design/decomposition boundary under owner-selected organic observation (#317)
 **Amended**: 2026-08-18 — PD-44 direct stewardship distinguished from distributed Spec Kit phases
 **Decision authority**: Christopher  
 **Autonomous design delegate for this stage**: Hermes  

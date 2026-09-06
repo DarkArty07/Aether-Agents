@@ -1,4 +1,5 @@
 """Document/source loading checks, NOT behavioral or installed-profile qualification."""
+
 from __future__ import annotations
 
 import hashlib
@@ -83,18 +84,22 @@ def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) 
     env = os.environ.copy()
     for key in list(env):
         if key.startswith("HERMES_KANBAN_") or key in {
-            "HERMES_PROFILE", "HERMES_SESSION_ID", "HERMES_SKILLS_DIR",
+            "HERMES_PROFILE",
+            "HERMES_SESSION_ID",
+            "HERMES_SKILLS_DIR",
         }:
             env.pop(key)
     # Never suppress a delegated-child identity marker; loading text needs no board mutation.
-    env.update({
-        "HERMES_HOME": str(home),
-        "XDG_CONFIG_HOME": str(tmp_path / "config"),
-        "XDG_DATA_HOME": str(tmp_path / "data"),
-        "XDG_STATE_HOME": str(tmp_path / "state"),
-        "XDG_CACHE_HOME": str(tmp_path / "cache"),
-        "PYTHONDONTWRITEBYTECODE": "1",
-    })
+    env.update(
+        {
+            "HERMES_HOME": str(home),
+            "XDG_CONFIG_HOME": str(tmp_path / "config"),
+            "XDG_DATA_HOME": str(tmp_path / "data"),
+            "XDG_STATE_HOME": str(tmp_path / "state"),
+            "XDG_CACHE_HOME": str(tmp_path / "cache"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
     script = """
 import hashlib, json, os
 from pathlib import Path
@@ -111,8 +116,13 @@ print(json.dumps(result, sort_keys=True))
 """
     env["CHECK_SKILL_NAMES"] = json.dumps(list(SKILLS))
     run = subprocess.run(
-        [sys.executable, "-B", "-c", script], cwd=tmp_path, env=env,
-        text=True, capture_output=True, timeout=60, check=False,
+        [sys.executable, "-B", "-c", script],
+        cwd=tmp_path,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
     )
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout) == expected

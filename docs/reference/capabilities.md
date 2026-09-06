@@ -727,7 +727,7 @@ Portable resources are versioned candidate bytes; private live-profile activatio
 
 **Status:** `implemented`
 
-Three Aether Canonical Skills are packaged and materialized through the existing native profile skill directories.
+Six Aether Canonical Skills are explicitly registered for packaging and native profile materialization; the three contract/execution procedures are under organic behavior observation.
 
 ### Surfaces
 - `lifecycle.aether-canonical-skills`
@@ -744,7 +744,10 @@ Three Aether Canonical Skills are packaged and materialized through the existing
 - [src/aether_agents/lifecycle.py](../../src/aether_agents/lifecycle.py)
 - [src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md](../../src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md)
 - [src/aether_agents/resources/skills/git-github-closeout/SKILL.md](../../src/aether_agents/resources/skills/git-github-closeout/SKILL.md)
+- [src/aether_agents/resources/skills/implementation-evidence/SKILL.md](../../src/aether_agents/resources/skills/implementation-evidence/SKILL.md)
+- [src/aether_agents/resources/skills/objective-contract-design/SKILL.md](../../src/aether_agents/resources/skills/objective-contract-design/SKILL.md)
 - [src/aether_agents/resources/skills/semver-release/SKILL.md](../../src/aether_agents/resources/skills/semver-release/SKILL.md)
+- [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
 
 ### Verification
 - [tests/test_observation_lifecycle.py](../../tests/test_observation_lifecycle.py)
@@ -752,7 +755,7 @@ Three Aether Canonical Skills are packaged and materialized through the existing
 
 ### Notes / current limits
 
-Focused wheel, sdist, profile-bundle, native-directory, byte-identity, and privacy checks pass; private live-profile activation is separate runtime evidence, and the public installed lifecycle remains unqualified.
+Existing package/lifecycle checks cover the resource mechanism; their explicit inventory expectations include the six registered resources. No new local test campaign was run for this adoption at the owner's direction. Installed resource readback is separate from behavioral qualification, which remains experimental and tracked in issue #317. The public installed lifecycle remains unqualified.
 
 ## `skills.project-canonical-discovery`
 

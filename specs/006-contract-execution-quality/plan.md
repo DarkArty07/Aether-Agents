@@ -13,7 +13,7 @@ The local ignored constitution is derived state; R0 remains its canonical source
 - `objective_contracts/store.py` checks required-section completeness and transport
   integrity, not intellectual sufficiency. Its schema and semantics remain unchanged.
 - `resources/profiles/{morfeo,supervisor,implementer}/SOUL.md` owns portable role prompts.
-- `resources/skills/` contains three existing canonical single-file procedures.
+- At that inspected baseline, `resources/skills/` contained three existing canonical single-file procedures; this objective adds three more through the same explicit mechanism.
 - `lifecycle.py::_CANONICAL_SKILLS`, `_skill_sources`, `_materialize_profile_bundle` and
   profile-bundle verification/materialization implement an explicit allowlist with
   hashes, marker-proven ownership, preflight and rollback. The current file contract
