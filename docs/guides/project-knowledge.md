@@ -63,6 +63,16 @@ Use a narrow graph query when understanding the repository benefits the task. Th
 {"action":"query","question":"Where is objective contract validation implemented?","budget_tokens":2000}
 ```
 
+### Discovery: query → explain → community
+
+Knowledge discovery proceeds from broad queries to focused inspection without guessing node or cluster identifiers:
+
+1. **`query`**: Search for relevant symbols or topics across the project graph.
+2. **`explain`**: Inspect a specific returned symbol using `node`. The response returns `resolved_node` with `{id, community_id, community_name}` (community fields are `null` if the node is unclassified).
+3. **`community`**: Pass the snapshot-local `community_id` discovered from `explain` to inspect community membership and context. The response echoes `{id, name, node_count}`.
+
+Community IDs belong strictly to the active snapshot. Never treat `0` or any other community ID as a portable default across snapshots or rebuilds; always discover community IDs through `explain`.
+
 All three roles can request an update after relevant committed changes:
 
 ```json
@@ -82,9 +92,28 @@ An implementation branch describes that branch, not the integrated product. Afte
 | `project_knowledge` | `status`, `query`, `explain`, `neighbors`, `community`, `path`, `impact`, `update` | Inspect or maintain the bound revision's shared technical graph. |
 | `work_memory` | `save`, `search`, `read`, `correct`, `reflect` | Maintain experiences belonging to the bound project and role. |
 
-See [plugins and tools](../reference/plugins-and-tools.md) and the [tool/data contract](../../specs/005-project-knowledge-graphify/contracts/tools-and-data.md) for arguments. Community IDs belong to one snapshot. Impact traversal is not proof of complete runtime impact, and an absent relationship is not evidence that no dependency exists.
+See [plugins and tools](../reference/plugins-and-tools.md) and the [tool/data contract](../../specs/005-project-knowledge-graphify/contracts/tools-and-data.md) for arguments. Both tools use action-discriminated parameter schemas with retained root properties; field descriptions name accepted actions, and runtime validation rejects extraneous or inapplicable fields. Community IDs belong to one snapshot. Impact traversal is not proof of complete runtime impact, and an absent relationship is not evidence that no dependency exists.
 
-Graph query output is capped using UTF-8 bytes and Graphify's token estimate, not exact provider tokenization. The default requested budget is 2,000 tokens; the supported range is 128–8,000 with a 32,768-byte content ceiling. Metadata is reported separately. Narrow the question when output is truncated.
+Graph query output is bounded using UTF-8 bytes and Graphify's token estimate, not exact provider tokenization. The default requested budget is 2,000 tokens; the supported range is 128–8,000 with a 32,768-byte content ceiling.
+
+### Truncation and supported recovery
+
+The `truncated` indicator is cumulative: it is reported as `true` if Graphify natively omitted nodes or lines at the requested budget, if Aether's 32,768-byte ceiling bounded the response content, or if visible source items reached the 50-reference cap.
+
+When a native Graphify response is complete but exceeds the requested token estimate, it remains `truncated=false` with an explicit warning noting that output exceeded the requested estimate.
+
+When output is truncated or requires refinement, use supported Aether recovery actions:
+- Ask a narrower `question`;
+- Specify a higher `budget_tokens` within the supported 128–8,000 range; or
+- Call `explain` on a returned node to inspect detailed definitions and relationships.
+
+Unsupported upstream recovery mechanisms—such as `context_filter`, `get_node`, direct graph-file paths, CLI `--budget`, or MCP commands—are not available in Aether and are normalized to supported Aether actions.
+
+### Provenance and references
+
+Source-bearing actions (`query`, `explain`, `neighbors`, `community`, `path`, `impact`) return structured, project-relative, revision-bound, deduplicated references `{path, location, revision}` in stable order for visible definitions and relation sites. For `path`, references include both path nodes and edge relation sites along the traversal.
+
+References are capped at 50 items. Reaching this cap is never silent: it sets `truncated=true` and emits an explicit warning. Private working-tree or snapshot-internal absolute filesystem paths never escape into references.
 
 ## Experiences that survive sessions
 
