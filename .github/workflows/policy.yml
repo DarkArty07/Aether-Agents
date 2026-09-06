@@ -107,6 +107,9 @@ jobs:
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
+          patches/hermes/HLP-280-bounded-flow-recovery.patch
+          patches/hermes/tests/test_hlp280_live_routing_probe.py
+          patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py

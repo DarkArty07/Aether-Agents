@@ -1,0 +1,252 @@
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -4313,22 +4313,49 @@
+     reason: str,
+     outcome: str = "failed",
+ ) -> bool:
+-    """Emit one terminal flow event and route it to the origin subscription."""
+-    task = get_task(conn, task_id)
+-    if task is None or not task.session_affinity:
+-        return False
+-    with write_txn(conn):
+-        _inherit_origin_signal_subs(conn, task_id)
+-        _append_event(
+-            conn,
+-            task_id,
+-            "flow_terminal",
+-            {
+-                "reason": str(reason)[:500],
+-                "outcome": str(outcome),
+-                "flow_id": task.session_affinity.get("flow_id"),
+-            },
+-        )
++    """Route an exhausted attempt once, inside its failure transaction.
++
++    A non-affinity Implementer is still a parent of the affinity controller.
++    Exhaustion must enter that existing recovery path rather than disappear.
++    """
++    with write_txn(conn, allow_nested=True):
++        task = get_task(conn, task_id)
++        if task is None:
++            return False
++        cause = conn.execute(
++            "SELECT id FROM task_events WHERE task_id = ? AND kind = 'gave_up' "
++            "ORDER BY id DESC LIMIT 1", (task_id,),
++        ).fetchone()
++        cause_id = int(cause["id"]) if cause else 0
++        # Check while holding the writer lock, not before it (two dispatchers).
++        for event in conn.execute(
++            "SELECT payload FROM task_events WHERE task_id = ? "
++            "AND kind = 'flow_failure_routed'", (task_id,),
++        ):
++            if json.loads(event["payload"])["cause_event_id"] == cause_id:
++                return True
++        controller = _wake_terminal_flow_controller(
++            conn, task_id, reason=reason, kind="capability", origin_signal="recovery",
++        )
++        signal = None
++        if controller is None and not task.session_affinity:
++            signal = _default_flow_block_signal(conn, task_id, "capability")
++            if signal is None:
++                return False  # Genuine non-flow task: preserve legacy routing.
++        _append_event(conn, task_id, "flow_failure_routed", {
++            "cause_event_id": cause_id, "flow_controller": controller,
++        })
++        if controller is None:
++            _inherit_origin_signal_subs(conn, task_id)
++            if task.session_affinity:
++                _append_event(conn, task_id, "flow_terminal", {
++                    "reason": str(reason)[:500], "outcome": str(outcome),
++                    "flow_id": task.session_affinity["flow_id"],
++                })
++            else:
++                _append_event(conn, task_id, "origin_signal", {
++                    "reason": str(reason)[:500], "origin_signal": signal,
++                })
+     return True
+ 
+ 
+@@ -5414,13 +5441,92 @@
+     ).fetchone() is None
+ 
+ 
++def _default_flow_block_signal(
++    conn: sqlite3.Connection, task_id: str, kind: Optional[str],
++) -> Optional[str]:
++    """Fallback only for a proven affinity ancestry, never for legacy work.
++
++    Called in the block/failure transaction. Recover subscriptions from the
++    actual ancestor DAG, not a board-wide guess based on a nullable session.
++    """
++    rows = conn.execute(
++        "WITH RECURSIVE ancestors(id) AS (SELECT ? UNION "
++        "SELECT l.parent_id FROM task_links l JOIN ancestors a ON l.child_id=a.id) "
++        "SELECT t.id, t.project_id, t.session_affinity FROM tasks t "
++        "JOIN ancestors a ON a.id=t.id WHERE t.session_affinity IS NOT NULL",
++        (task_id,),
++    ).fetchall()
++    if not rows:
++        return None
++    task = conn.execute("SELECT project_id FROM tasks WHERE id=?", (task_id,)).fetchone()
++    flows = set()
++    for row in rows:
++        affinity = normalize_session_affinity(json.loads(row["session_affinity"]))
++        if not affinity or not row["project_id"] or row["project_id"] != task["project_id"]:
++            raise ValueError("invalid affinity ancestry for blocker")
++        flows.add(affinity["flow_id"])
++    if len(flows) != 1:
++        raise ValueError("ambiguous affinity ancestry for blocker")
++    cursor = conn.execute(
++        "SELECT COALESCE(MAX(id),0) FROM task_events WHERE task_id=?", (task_id,),
++    ).fetchone()[0]
++    for row in rows:
++        conn.execute(
++            "INSERT OR IGNORE INTO kanban_notify_subs "
++            "(task_id,platform,chat_id,thread_id,user_id,user_id_alt,chat_type,"
++            "notifier_profile,delivery_mode,delivery_metadata,created_at,last_event_id) "
++            "SELECT ?,platform,chat_id,thread_id,user_id,user_id_alt,chat_type,"
++            "notifier_profile,delivery_mode,delivery_metadata,?,? "
++            "FROM kanban_notify_subs WHERE task_id=?",
++            (task_id, int(time.time()), cursor, row["id"]),
++        )
++    return "input" if kind == "needs_input" else "recovery"
++
++
++def _escalate_expired_flow_attentions(conn: sqlite3.Connection) -> None:
++    """Bound an unresolved recovery attempt in the existing dispatcher tick.
++
++    A heartbeat proves liveness, not resolution. Do not kill or unclaim the
++    controller: deliver one durable recovery signal per unresolved attention.
++    """
++    now = int(time.time())
++    with write_txn(conn):
++        controllers = conn.execute(
++            "SELECT DISTINCT t.id FROM tasks t JOIN task_events e ON e.task_id=t.id "
++            "WHERE e.kind='flow_attention' AND t.session_affinity IS NOT NULL "
++            "AND t.status NOT IN ('done','archived')",
++        ).fetchall()
++        for controller in controllers:
++            tid = controller["id"]
++            for attention in _pending_flow_attentions(conn, tid):
++                if now - attention["created_at"] < 300:
++                    continue
++                # A prior explicit escalation in this cycle already reached origin.
++                if conn.execute(
++                    "SELECT 1 FROM task_events WHERE task_id=? AND id>? "
++                    "AND kind IN ('origin_signal','flow_terminal') LIMIT 1",
++                    (tid, attention["event_id"]),
++                ).fetchone():
++                    continue
++                blocked = get_task(conn, attention["blocked_task_id"])
++                if blocked is None or blocked.status not in ('blocked', 'triage'):
++                    continue
++                _default_flow_block_signal(conn, tid, "capability")
++                _append_event(conn, tid, "origin_signal", {
++                    "origin_signal": "recovery",
++                    "reason": "Flow recovery attention has remained unresolved for 300 seconds",
++                    "blocked_task_id": blocked.id,
++                    "attention_event_id": attention["event_id"],
++                })
++
++
+ def _pending_flow_attentions(
+     conn: sqlite3.Connection, controller_id: str
+ ) -> list[dict[str, Any]]:
+     """Return unresolved blocker-attention payloads in causal order."""
+     pending: dict[str, dict[str, Any]] = {}
+     for row in conn.execute(
+-        "SELECT id, kind, payload FROM task_events "
++        "SELECT id, kind, payload, created_at FROM task_events "
+         "WHERE task_id = ? AND kind IN ('flow_attention', 'flow_attention_resolved') "
+         "ORDER BY id",
+         (controller_id,),
+@@ -5433,7 +5539,7 @@
+         if not isinstance(blocked_task_id, str) or not blocked_task_id:
+             continue
+         if row["kind"] == "flow_attention":
+-            pending[blocked_task_id] = {**payload, "event_id": int(row["id"])}
++            pending[blocked_task_id] = {**payload, "event_id": int(row["id"]), "created_at": int(row["created_at"])}
+         else:
+             pending.pop(blocked_task_id, None)
+     return sorted(pending.values(), key=lambda item: item["event_id"])
+@@ -5463,7 +5569,7 @@
+     for row in conn.execute(
+         "SELECT child.id, child.project_id, child.status, child.session_affinity "
+         "FROM task_links link JOIN tasks child ON child.id = link.child_id "
+-        "WHERE link.parent_id = ? AND child.status IN ('todo', 'ready', 'running', 'blocked')",
++        "WHERE link.parent_id = ? AND child.status NOT IN ('done', 'archived')",
+         (blocked_task_id,),
+     ).fetchall():
+         if row["project_id"] != blocked["project_id"] or not row["session_affinity"]:
+@@ -5477,6 +5583,8 @@
+     if len(candidates) != 1:
+         return None
+     controller = candidates[0]
++    if controller["status"] in ("blocked", "triage"):
++        return None  # Not executable: do not suppress the origin escalation.
+     controller_id = str(controller["id"])
+     if any(
+         item["blocked_task_id"] == blocked_task_id
+@@ -5494,9 +5602,10 @@
+             "requested_origin_signal": origin_signal,
+         },
+     )
+-    if controller["status"] == "todo":
++    if controller["status"] in ("todo", "scheduled"):
+         conn.execute(
+-            "UPDATE tasks SET status = 'ready' WHERE id = ? AND status = 'todo'",
++            "UPDATE tasks SET status = 'ready' "
++            "WHERE id = ? AND status IN ('todo','scheduled')",
+             (controller_id,),
+         )
+     return controller_id
+@@ -7317,7 +7426,9 @@
+                 kind=kind,
+                 origin_signal=origin_signal,
+             )
+-            effective_origin_signal = None if controller_id else origin_signal
++            effective_origin_signal = None if controller_id else (
++                origin_signal or _default_flow_block_signal(conn, task_id, kind)
++            )
+             if effective_origin_signal:
+                 _inherit_origin_signal_subs(conn, task_id)
+             _append_event(
+@@ -7333,6 +7444,11 @@
+                 },
+                 run_id=run_id,
+             )
++            if effective_origin_signal:
++                _append_event(conn, task_id, "origin_signal", {
++                    "origin_signal": effective_origin_signal, "reason": reason,
++                    "kind": kind, "source_status": source_status,
++                }, run_id=run_id)
+         else:
+             if expected_run_id is None:
+                 cur = conn.execute(
+@@ -7387,7 +7503,9 @@
+                 kind=kind,
+                 origin_signal=origin_signal,
+             )
+-            effective_origin_signal = None if controller_id else origin_signal
++            effective_origin_signal = None if controller_id else (
++                origin_signal or _default_flow_block_signal(conn, task_id, kind)
++            )
+             if effective_origin_signal:
+                 _inherit_origin_signal_subs(conn, task_id)
+             _append_event(
+@@ -10259,6 +10377,7 @@
+             _append_event(
+                 conn, task_id, "gave_up", payload, run_id=run_id,
+             )
++            _route_affinity_terminal(conn, task_id, reason=error, outcome="failed")
+             blocked = True
+         else:
+             # Below threshold.
+@@ -10805,6 +10924,7 @@
+     if _crash_rate_limited:
+         result.rate_limited.extend(_crash_rate_limited)
+     result.timed_out = enforce_max_runtime(conn)
++    _escalate_expired_flow_attentions(conn)
+     result.promoted = recompute_ready(conn, failure_limit=failure_limit)
+ 
+     # Both knobs are total in-flight caps. Collapse them before either lane
