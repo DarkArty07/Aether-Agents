@@ -927,6 +927,21 @@ def execute(request: dict) -> dict:
         structural_pairs = set()
         structural_directed = set()
         structural_edge_records: dict[tuple[str, str], dict] = {}
+        structural_node_records: dict[str, dict] = {}
+        for n in existing_nodes:
+            if not isinstance(n, dict):
+                continue
+            nid = n.get("id")
+            if not nid:
+                continue
+            is_structural = (
+                n.get("_origin") in ("ast", "structural")
+                or n.get("origin") in ("ast", "structural")
+                or _is_ast_tier(n)
+            )
+            if is_structural:
+                structural_node_records[str(nid)] = dict(n)
+
         for e in existing_edges:
             if not isinstance(e, dict):
                 continue
@@ -986,6 +1001,20 @@ def execute(request: dict) -> dict:
                 if orig_data.get("confidence"):
                     edata["confidence"] = orig_data["confidence"]
 
+        for nid, orig_data in structural_node_records.items():
+            if merged_G.has_node(nid):
+                ndata = merged_G.nodes[nid]
+                ndata["_origin"] = orig_data.get("_origin", "ast")
+                ndata["origin"] = orig_data.get("origin", orig_data.get("_origin", "ast"))
+                if orig_data.get("label"):
+                    ndata["label"] = orig_data["label"]
+                if orig_data.get("source_file"):
+                    ndata["source_file"] = orig_data["source_file"]
+                if orig_data.get("source_location"):
+                    ndata["source_location"] = orig_data["source_location"]
+                if orig_data.get("confidence"):
+                    ndata["confidence"] = orig_data["confidence"]
+
         comms = cluster.cluster(merged_G)
         export.to_json(merged_G, comms, str(graph_path), force=True)
 
@@ -1003,20 +1032,18 @@ def execute(request: dict) -> dict:
                     if edata.get("origin") == "llm" or edata.get("_origin") == "llm":
                         applied_edges_count += 1
 
+        existing_node_ids = {
+            str(n.get("id")) for n in existing_nodes if isinstance(n, dict) and n.get("id")
+        }
         applied_nodes_count = 0
-        for n in fragment_nodes:
-            nid = n.get("id")
-            if nid and nid in merged_G:
+        for nid, ndata in merged_G.nodes(data=True):
+            nid_str = str(nid)
+            if (
+                nid_str not in existing_node_ids
+                and nid_str not in structural_node_records
+                and (ndata.get("origin") == "llm" or ndata.get("_origin") == "llm")
+            ):
                 applied_nodes_count += 1
-            else:
-                sf, label = n.get("source_file"), n.get("label")
-                if sf and label:
-                    if any(
-                        merged_G.nodes[m].get("source_file") == sf
-                        and merged_G.nodes[m].get("label") == label
-                        for m in merged_G.nodes()
-                    ):
-                        applied_nodes_count += 1
 
         references = []
         seen = set()

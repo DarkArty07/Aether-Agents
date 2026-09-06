@@ -740,9 +740,18 @@ def test_native_worker_semantic_prepare_parse_and_apply(corpus, tmp_path: Path) 
             "arguments": {"fragment": normalized_collision_fragment},
         }
     )
+    assert apply_nc["applied_nodes"] == 0
     assert apply_nc["applied_edges"] == 0
+    assert "0 nodes" in apply_nc["content"]
+    assert "0 edges merged" in apply_nc["content"]
     assert len(apply_nc["omitted_edges"]) == 1
     G_nc = _load_graph(str(temp_graph))
+    assert "ghost_reserve" not in G_nc
+    assert "ghost_charge" not in G_nc
+    assert G_nc.nodes["order_reserve"]["_origin"] == "ast"
+    assert G_nc.nodes["order_reserve"]["origin"] in ("ast", "structural")
+    assert G_nc.nodes["order_charge"]["_origin"] == "ast"
+    assert G_nc.nodes["order_charge"]["origin"] in ("ast", "structural")
     ed_nc = G_nc.get_edge_data("order_reserve", "order_charge")
     assert ed_nc["_origin"] == "ast"
     assert ed_nc["origin"] in ("ast", "structural")
