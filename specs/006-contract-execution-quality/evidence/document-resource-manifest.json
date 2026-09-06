@@ -19,18 +19,18 @@
     },
     {
       "path": "src/aether_agents/resources/profiles/morfeo/SOUL.md",
-      "sha256": "0dd91171c19de86f3cd1272bd6b0f674511d474bb79a2deec2e52fada7739556",
-      "bytes": 16913
+      "sha256": "10a569c6bfdc24009c187863c51a5433aa6af6142bac50a7c1711acff253a2b5",
+      "bytes": 17107
     },
     {
       "path": "src/aether_agents/resources/profiles/supervisor/SOUL.md",
-      "sha256": "9a529f3d85860366bebb43dc81fa0986360b57ee5e2b516612d7bbd542308d23",
-      "bytes": 8847
+      "sha256": "e95ebf6ecea6be03258398840b90c0917008df68d1d54ea81c3f5622d1134efd",
+      "bytes": 9075
     },
     {
       "path": "src/aether_agents/resources/profiles/implementer/SOUL.md",
-      "sha256": "e0c68d3fc30012897b94632431db5ec553993e887446a1e87d242b751486d518",
-      "bytes": 6348
+      "sha256": "d87a186fe09ccabc93359ead5732f16231c0b3c99ef5cd60d7b151bd958a34be",
+      "bytes": 6500
     }
   ]
 }

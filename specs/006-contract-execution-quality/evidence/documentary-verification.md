@@ -78,10 +78,16 @@ An optional final refinement to the SOUL wording and current delivery status hea
 attempted with the normal multi-file patch tool. Native protected-instruction approval
 timed out. The tool reported zero changes; Git verification showed only the three
 successful skill edits. No alternate write route or guard/config bypass was attempted.
-The SOUL resources remain at the earlier corrected, 44-test-verified candidate; the
-additional question-driven stop conditions are currently explicit in their skills only.
-The related issue is #315. This file records that boundary; it is not a substitute edit
-of the denied instruction text or a claim that the blocked patch was applied.
+The related issue is #315. That failed combined patch remains historical evidence.
+After the owner explicitly requested a new native approval prompt, a new patch limited
+to the three SOUL refinements succeeded through the normal patch surface. Morfeo now
+states question-driven investigation and clearly illustrative examples; Supervisor
+states when to stop local research and deliver its breakdown; Implementer states when
+verified inputs are sufficient to start bounded work. No permission/configuration or
+guard was changed. A fresh run of the same three test modules passed all 52 tests.
+The resource manifest was refreshed against the successful source bytes. This is a
+successful scoped write, not evidence that the underlying approval-timeout bug is fixed.
+The unrelated status-header hunks from the earlier denied batch were not retried.
 
 The retained spec/plan/quickstart describe the earlier broader system qualification,
 not new permission to resume its stopped dispatch. Current owner direction governs.
