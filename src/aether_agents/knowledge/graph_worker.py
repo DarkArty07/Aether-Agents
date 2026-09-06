@@ -124,8 +124,14 @@ def _sanitize_and_validate_fragment(
     raw_fragment: Any,
     allowed_sources: list[str] | None = None,
     allow_empty: bool = False,
+    graph_path: Path | None = None,
+    source_root: Path | None = None,
 ) -> dict[str, Any]:
+    import graphify.build as _gbuild  # type: ignore[import-untyped]
+    from graphify.build import build_from_json  # type: ignore[import-untyped]
     from graphify.semantic_cleanup import validate_semantic_fragment
+
+    _load_existing_graph = getattr(_gbuild, "_load_existing_graph")
 
     if not isinstance(raw_fragment, dict):
         raise ValueError("Parsed model fragment must be a dictionary.")
@@ -151,6 +157,11 @@ def _sanitize_and_validate_fragment(
         n = dict(node)
         n["_origin"] = "llm"
         n["origin"] = "llm"
+        conf = str(n.get("confidence") or "").upper()
+        if conf == "EXTRACTED" or not conf:
+            n["confidence"] = "INFERRED"
+        else:
+            n["confidence"] = conf
         if not n.get("source_location"):
             n["source_location"] = None
         sanitized_nodes.append(n)
@@ -174,10 +185,51 @@ def _sanitize_and_validate_fragment(
             e["source_location"] = None
         sanitized_edges.append(e)
 
+    sanitized_hyperedges = []
+    for he in raw_fragment.get("hyperedges", []):
+        if not isinstance(he, dict):
+            continue
+        sf = he.get("source_file")
+        if allowed_set is not None and sf and sf not in allowed_set:
+            continue
+        h = dict(he)
+        h["_origin"] = "llm"
+        h["origin"] = "llm"
+        conf = str(h.get("confidence") or "").upper()
+        if conf == "EXTRACTED" or not conf:
+            h["confidence"] = "INFERRED"
+        else:
+            h["confidence"] = conf
+        sanitized_hyperedges.append(h)
+
+    # Re-validate surviving elements for hollowness post-filter
+    if not sanitized_nodes and not sanitized_edges and not allow_empty:
+        raise ValueError("Hollow model fragment: no nodes or edges survived source validation.")
+
+    # Endpoint integrity check: every surviving edge must bind to accepted fragment or structural nodes
+    existing_nodes: list[dict] = []
+    if graph_path and graph_path.is_file():
+        loaded = _load_existing_graph(graph_path)
+        if loaded is not None:
+            existing_nodes = loaded[0]
+
+    for edge in sanitized_edges:
+        test_G = build_from_json(
+            {"nodes": list(existing_nodes) + list(sanitized_nodes), "edges": [edge]},
+            directed=True,
+            root=source_root,
+        )
+        if test_G.number_of_edges() == 0:
+            s_name = edge.get("source", edge.get("from"))
+            t_name = edge.get("target", edge.get("to"))
+            raise ValueError(
+                f"Semantic edge endpoints do not bind to accepted fragment or structural nodes: '{s_name}' -> '{t_name}'."
+            )
+
     return {
         "nodes": sanitized_nodes,
         "edges": sanitized_edges,
-        "hyperedges": raw_fragment.get("hyperedges", []),
+        "hyperedges": sanitized_hyperedges,
     }
 
 
@@ -185,6 +237,8 @@ def _parse_and_validate_semantic(
     model_text: str,
     allowed_sources: list[str] | None = None,
     allow_empty: bool = False,
+    graph_path: Path | None = None,
+    source_root: Path | None = None,
 ) -> dict[str, Any]:
     from graphify.llm import _parse_llm_json
 
@@ -209,9 +263,14 @@ def _parse_and_validate_semantic(
                 raise ValueError("Malformed model text: no valid JSON found.")
         if not parsed.get("nodes") and not parsed.get("edges") and not allow_empty:
             raise ValueError("Hollow model fragment: both nodes and edges are empty.")
+        raw_fragment = parsed
 
     return _sanitize_and_validate_fragment(
-        raw_fragment, allowed_sources=allowed_sources, allow_empty=allow_empty
+        raw_fragment,
+        allowed_sources=allowed_sources,
+        allow_empty=allow_empty,
+        graph_path=graph_path,
+        source_root=source_root,
     )
 
 
@@ -621,6 +680,17 @@ def execute(request: dict) -> dict:
         export_path = Path(export_path_str)
         export_path.parent.mkdir(parents=True, exist_ok=True)
 
+        project_label = args.get("project_label") or request.get("project_label")
+        if not project_label:
+            pid = args.get("project_id") or request.get("project_id")
+            rev = args.get("revision") or request.get("revision")
+            if pid and rev:
+                project_label = f"{pid} @ {rev}"
+            elif pid:
+                project_label = str(pid)
+            elif rev:
+                project_label = str(rev)
+
         graph = _load_graph(str(graph_path))
         total_nodes = graph.number_of_nodes()
 
@@ -628,7 +698,7 @@ def execute(request: dict) -> dict:
             write_tree_html(
                 graph_path,
                 export_path,
-                project_label=args.get("project_label"),
+                project_label=project_label,
             )
             raw_bytes = export_path.read_bytes()
             external_assets = ["https://d3js.org/d3.v7.min.js"]
@@ -636,19 +706,47 @@ def execute(request: dict) -> dict:
             aggregated = False
         elif fmt == "graph":
             communities = _communities_from_graph(graph)
-            node_limit = 5000 if detail == "auto" else 50000
-            aggregated = total_nodes > 5000 if detail == "auto" else False
+            if detail == "auto":
+                node_limit = 5000
+                aggregated = total_nodes > 5000
+            else:
+                node_limit = None
+                aggregated = False
+                os.environ["GRAPHIFY_VIZ_NODE_LIMIT"] = "50000"
+
             to_html(
                 graph,
                 communities,
                 str(export_path),
                 node_limit=node_limit,
             )
+            html_text = export_path.read_text(encoding="utf-8")
+            if project_label:
+                import html as py_html
+
+                escaped_label = py_html.escape(str(project_label))
+                html_text = re.sub(
+                    r"<title>graphify - [^<]*</title>",
+                    f"<title>graphify - {escaped_label}</title>",
+                    html_text,
+                )
+                html_text = html_text.replace(
+                    '<div id="stats">',
+                    f'<div id="stats"><span id="project-identity">{escaped_label}</span><br>',
+                )
+                export_path.write_text(html_text, encoding="utf-8")
+
             raw_bytes = export_path.read_bytes()
             external_assets = [
                 "https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
             ]
-            rendered_nodes = len(communities) if aggregated else total_nodes
+            if aggregated:
+                match = re.search(
+                    r"const RAW_NODES = (\[.*?\]);\nconst RAW_EDGES", html_text, re.DOTALL
+                )
+                rendered_nodes = len(json.loads(match.group(1))) if match else len(communities)
+            else:
+                rendered_nodes = total_nodes
         else:
             raise ValueError(f"Unsupported visualize format '{fmt}'.")
 
@@ -776,6 +874,8 @@ def execute(request: dict) -> dict:
             model_text=model_text,
             allowed_sources=args.get("allowed_sources"),
             allow_empty=bool(args.get("allow_empty", False)),
+            graph_path=graph_path,
+            source_root=source_root,
         )
         return {
             "content": f"Semantic fragment valid: {len(parsed.get('nodes', []))} nodes, {len(parsed.get('edges', []))} edges.",
@@ -784,10 +884,13 @@ def execute(request: dict) -> dict:
         }
 
     if action == "semantic_apply":
+        import graphify.build as _gbuild  # type: ignore[import-untyped]
         import graphify.cluster as cluster
         import graphify.export as export
-        from graphify.build import build_merge
-        from graphify.serve import _load_graph
+        from graphify.build import build_from_json, build_merge  # type: ignore[import-untyped]
+
+        _is_ast_tier = getattr(_gbuild, "_is_ast_tier")
+        _load_existing_graph = getattr(_gbuild, "_load_existing_graph")
 
         model_text = args.get("model_text")
         fragment = args.get("fragment")
@@ -796,6 +899,8 @@ def execute(request: dict) -> dict:
                 model_text=model_text,
                 allowed_sources=args.get("allowed_sources"),
                 allow_empty=bool(args.get("allow_empty", False)),
+                graph_path=graph_path,
+                source_root=source_root,
             )
         elif fragment is None:
             raise ValueError("model_text or fragment is required for semantic_apply.")
@@ -804,32 +909,118 @@ def execute(request: dict) -> dict:
                 fragment,
                 allowed_sources=args.get("allowed_sources"),
                 allow_empty=bool(args.get("allow_empty", False)),
+                graph_path=graph_path,
+                source_root=source_root,
             )
 
-        existing_G = _load_graph(str(graph_path))
+        loaded = _load_existing_graph(graph_path)
+        if loaded is None:
+            existing_nodes, existing_edges, existing_hyperedges, existing_directed = (
+                [],
+                [],
+                [],
+                False,
+            )
+        else:
+            existing_nodes, existing_edges, existing_hyperedges, existing_directed = loaded
+
+        structural_pairs = set()
+        structural_directed = set()
+        structural_edge_records: dict[tuple[str, str], dict] = {}
+        for e in existing_edges:
+            if not isinstance(e, dict):
+                continue
+            is_structural = (
+                e.get("_origin") in ("ast", "structural")
+                or e.get("origin") in ("ast", "structural")
+                or _is_ast_tier(e)
+            )
+            if is_structural:
+                es = str(e.get("source", e.get("from", "")))
+                et = str(e.get("target", e.get("to", "")))
+                if es and et:
+                    structural_directed.add((es, et))
+                    structural_pairs.add(frozenset({es, et}))
+                    structural_edge_records[(es, et)] = dict(e)
+
         raw_edges = fragment.get("edges", [])
+        fragment_nodes = fragment.get("nodes", [])
         kept_edges = []
         omitted_edges = []
         for e in raw_edges:
-            s, t = e.get("source"), e.get("target")
-            if s and t and existing_G.has_edge(s, t):
-                existing_edata = existing_G.get_edge_data(s, t) or {}
-                orig = str(
-                    existing_edata.get("_origin") or existing_edata.get("origin") or ""
-                ).lower()
-                if orig in ("ast", "structural"):
-                    omitted_edges.append(e)
-                    continue
+            test_G = build_from_json(
+                {"nodes": list(existing_nodes) + list(fragment_nodes), "edges": [e]},
+                directed=True,
+                root=source_root,
+            )
+            if test_G.number_of_edges() == 0:
+                omitted_edges.append(e)
+                continue
+            norm_u, norm_v = list(test_G.edges())[0]
+            if not existing_directed:
+                is_collision = frozenset({norm_u, norm_v}) in structural_pairs
+            else:
+                is_collision = (
+                    (norm_u, norm_v) in structural_directed
+                    or (norm_v, norm_u) in structural_directed
+                    or frozenset({norm_u, norm_v}) in structural_pairs
+                )
+            if is_collision:
+                omitted_edges.append(e)
+                continue
             kept_edges.append(e)
 
         fragment_to_merge = dict(fragment, edges=kept_edges)
         merged_G = build_merge([fragment_to_merge], graph_path=graph_path, root=source_root)
+
+        # Guarantee every structural relation/site/provenance field is preserved
+        for (es, et), orig_data in structural_edge_records.items():
+            if merged_G.has_edge(es, et):
+                edata = merged_G.get_edge_data(es, et)
+                edata["_origin"] = orig_data.get("_origin", "ast")
+                edata["origin"] = orig_data.get("origin", orig_data.get("_origin", "ast"))
+                if orig_data.get("relation"):
+                    edata["relation"] = orig_data["relation"]
+                if orig_data.get("source_location"):
+                    edata["source_location"] = orig_data["source_location"]
+                if orig_data.get("confidence"):
+                    edata["confidence"] = orig_data["confidence"]
+
         comms = cluster.cluster(merged_G)
         export.to_json(merged_G, comms, str(graph_path), force=True)
 
+        applied_edges_count = 0
+        for e in kept_edges:
+            test_G = build_from_json(
+                {"nodes": list(existing_nodes) + list(fragment_nodes), "edges": [e]},
+                directed=True,
+                root=source_root,
+            )
+            if test_G.number_of_edges() > 0:
+                nu, nv = list(test_G.edges())[0]
+                if merged_G.has_edge(nu, nv):
+                    edata = merged_G.get_edge_data(nu, nv)
+                    if edata.get("origin") == "llm" or edata.get("_origin") == "llm":
+                        applied_edges_count += 1
+
+        applied_nodes_count = 0
+        for n in fragment_nodes:
+            nid = n.get("id")
+            if nid and nid in merged_G:
+                applied_nodes_count += 1
+            else:
+                sf, label = n.get("source_file"), n.get("label")
+                if sf and label:
+                    if any(
+                        merged_G.nodes[m].get("source_file") == sf
+                        and merged_G.nodes[m].get("label") == label
+                        for m in merged_G.nodes()
+                    ):
+                        applied_nodes_count += 1
+
         references = []
         seen = set()
-        for node in fragment.get("nodes", []):
+        for node in fragment_nodes:
             if node.get("source_file"):
                 p = str(node["source_file"])
                 loc = str(node.get("source_location") or "")
@@ -838,14 +1029,14 @@ def execute(request: dict) -> dict:
                     references.append({"path": p, "location": loc})
 
         content = (
-            f"Applied semantic fragment: {len(fragment.get('nodes', []))} nodes, "
-            f"{len(kept_edges)} edges merged, {len(omitted_edges)} colliding structural edges preserved."
+            f"Applied semantic fragment: {applied_nodes_count} nodes, "
+            f"{applied_edges_count} edges merged, {len(omitted_edges)} colliding structural edges preserved."
         )
         return {
             "content": content,
             "references": references,
-            "applied_nodes": len(fragment.get("nodes", [])),
-            "applied_edges": len(kept_edges),
+            "applied_nodes": applied_nodes_count,
+            "applied_edges": applied_edges_count,
             "omitted_edges": omitted_edges,
         }
 
