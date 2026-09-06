@@ -49,6 +49,13 @@ IDENTITY_FIELDS = (
     "executable",
     "env",
     "python",
+    "project",
+    "repo",
+    "URL",
+    "output_path",
+    "provider",
+    "model",
+    "secret",
 )
 
 
@@ -105,6 +112,10 @@ def test_parameter_schema_structure(tool: str) -> None:
         req_fields, opt_fields = _ACTION_FIELDS[act]
         assert set(branch["required"]) == {"action", *req_fields}
         assert set(branch["properties"].keys()) == {"action", *req_fields, *opt_fields}
+        if act == "visualize":
+            assert "dependentSchemas" in branch
+            assert "detail" in branch["dependentSchemas"]
+            assert branch["dependentSchemas"]["detail"]["properties"]["format"]["enum"] == ["graph"]
 
 
 PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
@@ -178,8 +189,97 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
     (
         "project_knowledge",
         {"action": "query", "question": "where is foo?", "depth": 2},
+        True,
+        "query with depth 2",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "depth": 1},
+        True,
+        "query with depth 1",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "depth": 6},
+        True,
+        "query with depth 6",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "depth": 0},
         False,
-        "query with inapplicable depth",
+        "query with depth 0 (<1)",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "depth": 7},
+        False,
+        "query with depth 7 (>6)",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "traversal": "bfs"},
+        True,
+        "query with traversal bfs",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "traversal": "dfs"},
+        True,
+        "query with traversal dfs",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "traversal": "dijkstra"},
+        False,
+        "query with invalid traversal",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "context_filter": ["calls"]},
+        True,
+        "query with context_filter",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "context_filter": []},
+        False,
+        "query with empty context_filter array",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "context_filter": [""]},
+        False,
+        "query with empty string in context_filter",
+    ),
+    (
+        "project_knowledge",
+        {"action": "query", "question": "where is foo?", "context_filter": ["a" * 81]},
+        False,
+        "query with context_filter item >80 chars",
+    ),
+    (
+        "project_knowledge",
+        {
+            "action": "query",
+            "question": "where is foo?",
+            "context_filter": [f"c_{i}" for i in range(21)],
+        },
+        False,
+        "query with context_filter >20 items",
+    ),
+    (
+        "project_knowledge",
+        {
+            "action": "query",
+            "question": "where is foo?",
+            "depth": 3,
+            "traversal": "dfs",
+            "context_filter": ["imports", "calls"],
+            "budget_tokens": 2000,
+        },
+        True,
+        "query all optionals",
     ),
     # project_knowledge - explain
     ("project_knowledge", {"action": "explain"}, False, "explain missing node"),
@@ -268,6 +368,37 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
         False,
         "path with depth",
     ),
+    (
+        "project_knowledge",
+        {"action": "path", "source": "A", "target": "B", "undirected": True},
+        True,
+        "path undirected True",
+    ),
+    (
+        "project_knowledge",
+        {"action": "path", "source": "A", "target": "B", "undirected": False},
+        True,
+        "path undirected False",
+    ),
+    (
+        "project_knowledge",
+        {"action": "path", "source": "A", "target": "B", "undirected": "yes"},
+        False,
+        "path undirected non-bool",
+    ),
+    (
+        "project_knowledge",
+        {
+            "action": "path",
+            "source": "A",
+            "target": "B",
+            "max_hops": 5,
+            "budget_tokens": 1500,
+            "undirected": True,
+        },
+        True,
+        "path all optionals",
+    ),
     # project_knowledge - impact
     ("project_knowledge", {"action": "impact"}, False, "impact missing node"),
     ("project_knowledge", {"action": "impact", "node": "sym"}, True, "valid impact"),
@@ -294,6 +425,48 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
         {"action": "impact", "node": "sym", "source": "A"},
         False,
         "impact with source",
+    ),
+    (
+        "project_knowledge",
+        {"action": "impact", "node": "sym", "relations": ["calls"]},
+        True,
+        "impact with relations",
+    ),
+    (
+        "project_knowledge",
+        {"action": "impact", "node": "sym", "relations": []},
+        False,
+        "impact empty relations array",
+    ),
+    (
+        "project_knowledge",
+        {"action": "impact", "node": "sym", "relations": [""]},
+        False,
+        "impact empty string in relations",
+    ),
+    (
+        "project_knowledge",
+        {"action": "impact", "node": "sym", "relations": ["a" * 81]},
+        False,
+        "impact relations string >80 chars",
+    ),
+    (
+        "project_knowledge",
+        {"action": "impact", "node": "sym", "relations": [f"r_{i}" for i in range(21)]},
+        False,
+        "impact relations >20 items",
+    ),
+    (
+        "project_knowledge",
+        {
+            "action": "impact",
+            "node": "sym",
+            "depth": 3,
+            "relations": ["calls", "imports"],
+            "budget_tokens": 2000,
+        },
+        True,
+        "impact all optionals",
     ),
     # project_knowledge - update
     ("project_knowledge", {"action": "update"}, False, "update missing reason"),
@@ -327,6 +500,216 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
         {"action": "update", "reason": "code changed", "budget_tokens": 500},
         False,
         "update with budget_tokens",
+    ),
+    # project_knowledge - stats
+    ("project_knowledge", {"action": "stats"}, True, "valid stats"),
+    (
+        "project_knowledge",
+        {"action": "stats", "budget_tokens": 500},
+        False,
+        "stats + budget_tokens extra",
+    ),
+    ("project_knowledge", {"action": "stats", "node": "foo"}, False, "stats + node extra"),
+    # project_knowledge - god_nodes
+    ("project_knowledge", {"action": "god_nodes"}, True, "valid god_nodes minimal"),
+    ("project_knowledge", {"action": "god_nodes", "top_n": 10}, True, "god_nodes with top_n"),
+    ("project_knowledge", {"action": "god_nodes", "top_n": 50}, True, "god_nodes top_n 50"),
+    ("project_knowledge", {"action": "god_nodes", "top_n": 0}, False, "god_nodes top_n 0 (<1)"),
+    ("project_knowledge", {"action": "god_nodes", "top_n": 51}, False, "god_nodes top_n 51 (>50)"),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "exclude_hubs_percentile": 95.5},
+        True,
+        "god_nodes exclude_hubs_percentile float",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "exclude_hubs_percentile": 0},
+        True,
+        "god_nodes exclude_hubs_percentile 0",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "exclude_hubs_percentile": 100},
+        True,
+        "god_nodes exclude_hubs_percentile 100",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "exclude_hubs_percentile": -1},
+        False,
+        "god_nodes exclude_hubs_percentile negative",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "exclude_hubs_percentile": 101},
+        False,
+        "god_nodes exclude_hubs_percentile >100",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "budget_tokens": 1000},
+        True,
+        "god_nodes with budget_tokens",
+    ),
+    (
+        "project_knowledge",
+        {
+            "action": "god_nodes",
+            "top_n": 10,
+            "exclude_hubs_percentile": 90,
+            "budget_tokens": 1000,
+        },
+        True,
+        "god_nodes all optionals",
+    ),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "node": "sym"},
+        False,
+        "god_nodes inapplicable node",
+    ),
+    # project_knowledge - list_prs
+    ("project_knowledge", {"action": "list_prs"}, True, "valid list_prs minimal"),
+    ("project_knowledge", {"action": "list_prs", "base": "main"}, True, "list_prs with base"),
+    ("project_knowledge", {"action": "list_prs", "base": ""}, False, "list_prs empty base"),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "base": "a" * 256},
+        False,
+        "list_prs base >255 chars",
+    ),
+    ("project_knowledge", {"action": "list_prs", "limit": 20}, True, "list_prs with limit 20"),
+    ("project_knowledge", {"action": "list_prs", "limit": 21}, True, "list_prs with limit 21"),
+    ("project_knowledge", {"action": "list_prs", "limit": 50}, True, "list_prs with limit 50"),
+    ("project_knowledge", {"action": "list_prs", "limit": 0}, False, "list_prs limit 0 (<1)"),
+    ("project_knowledge", {"action": "list_prs", "limit": 51}, False, "list_prs limit 51 (>50)"),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "budget_tokens": 1000},
+        True,
+        "list_prs with budget_tokens",
+    ),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "base": "main", "limit": 25, "budget_tokens": 1000},
+        True,
+        "list_prs all optionals",
+    ),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "pr_number": 42},
+        False,
+        "list_prs inapplicable pr_number",
+    ),
+    # project_knowledge - pr_impact
+    ("project_knowledge", {"action": "pr_impact"}, False, "pr_impact missing pr_number"),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": 0},
+        False,
+        "pr_impact pr_number 0 (<1)",
+    ),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": -5},
+        False,
+        "pr_impact negative pr_number",
+    ),
+    ("project_knowledge", {"action": "pr_impact", "pr_number": 123}, True, "valid pr_impact"),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": 123, "budget_tokens": 1500},
+        True,
+        "pr_impact with budget_tokens",
+    ),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": 123, "node": "sym"},
+        False,
+        "pr_impact inapplicable node",
+    ),
+    # project_knowledge - triage_prs
+    ("project_knowledge", {"action": "triage_prs"}, True, "valid triage_prs minimal"),
+    ("project_knowledge", {"action": "triage_prs", "base": "main"}, True, "triage_prs with base"),
+    ("project_knowledge", {"action": "triage_prs", "limit": 21}, True, "triage_prs with limit 21"),
+    ("project_knowledge", {"action": "triage_prs", "limit": 50}, True, "triage_prs with limit 50"),
+    (
+        "project_knowledge",
+        {"action": "triage_prs", "limit": 51},
+        False,
+        "triage_prs limit 51 (>50)",
+    ),
+    (
+        "project_knowledge",
+        {"action": "triage_prs", "budget_tokens": 2000},
+        True,
+        "triage_prs with budget_tokens",
+    ),
+    (
+        "project_knowledge",
+        {"action": "triage_prs", "format": "tree"},
+        False,
+        "triage_prs inapplicable format",
+    ),
+    # project_knowledge - visualize
+    ("project_knowledge", {"action": "visualize"}, True, "valid visualize minimal"),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "graph"},
+        True,
+        "visualize format graph",
+    ),
+    ("project_knowledge", {"action": "visualize", "format": "tree"}, True, "visualize format tree"),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "svg"},
+        False,
+        "visualize invalid format",
+    ),
+    ("project_knowledge", {"action": "visualize", "detail": "auto"}, True, "visualize detail auto"),
+    ("project_knowledge", {"action": "visualize", "detail": "full"}, True, "visualize detail full"),
+    (
+        "project_knowledge",
+        {"action": "visualize", "detail": "high"},
+        False,
+        "visualize invalid detail",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "graph", "detail": "auto"},
+        True,
+        "visualize format graph and detail auto",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "graph", "detail": "full"},
+        True,
+        "visualize format and detail",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "tree", "detail": "auto"},
+        False,
+        "visualize format tree rejects detail auto",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "format": "tree", "detail": "full"},
+        False,
+        "visualize format tree rejects detail full",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "budget_tokens": 1000},
+        False,
+        "visualize with budget_tokens rejected",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "node": "sym"},
+        False,
+        "visualize inapplicable node",
     ),
     # work_memory - reflect
     ("work_memory", {"action": "reflect"}, True, "valid reflect"),
@@ -516,6 +899,90 @@ PARITY_MATRIX: list[tuple[str, dict[str, Any], bool, str]] = [
         False,
         "correct with inapplicable cursor",
     ),
+    # Prohibited field injections on new actions
+    ("project_knowledge", {"action": "stats", "role": "admin"}, False, "stats + role injection"),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "project_id": "p_123"},
+        False,
+        "god_nodes + project_id injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "project_path": "/tmp"},
+        False,
+        "list_prs + project_path injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": 1, "graph_path": "/tmp"},
+        False,
+        "pr_impact + graph_path injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "triage_prs", "memory_dir": "/tmp"},
+        False,
+        "triage_prs + memory_dir injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "executable": "bin"},
+        False,
+        "visualize + executable injection",
+    ),
+    ("project_knowledge", {"action": "stats", "env": {"A": "B"}}, False, "stats + env injection"),
+    (
+        "project_knowledge",
+        {"action": "god_nodes", "python": "/usr/bin/python"},
+        False,
+        "god_nodes + python injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "repo": "owner/repo"},
+        False,
+        "list_prs + repo injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "pr_impact", "pr_number": 1, "provider": "openai"},
+        False,
+        "pr_impact + provider injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "triage_prs", "model": "gpt-4"},
+        False,
+        "triage_prs + model injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "secret": "token"},
+        False,
+        "visualize + secret injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "visualize", "output_path": "/tmp/out.html"},
+        False,
+        "visualize + output_path injection",
+    ),
+    (
+        "project_knowledge",
+        {"action": "list_prs", "URL": "https://github.com"},
+        False,
+        "list_prs + URL injection",
+    ),
+    # Limit parity across tools: limit=21 valid for list_prs/triage_prs, invalid for search
+    ("project_knowledge", {"action": "list_prs", "limit": 21}, True, "list_prs limit 21 valid"),
+    ("project_knowledge", {"action": "triage_prs", "limit": 21}, True, "triage_prs limit 21 valid"),
+    (
+        "work_memory",
+        {"action": "search", "query": "find this", "limit": 21},
+        False,
+        "search limit 21 invalid",
+    ),
     # Unknown action
     ("project_knowledge", {"action": "destroy"}, False, "unknown action project_knowledge"),
     ("work_memory", {"action": "destroy"}, False, "unknown action work_memory"),
@@ -624,3 +1091,61 @@ def test_runtime_dispatch_rejects_invalid_after_sanitization() -> None:
             },
         )
     assert exc4.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc5:
+        validate_arguments("project_knowledge", {"action": "stats", "budget_tokens": 500})
+    assert exc5.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc6:
+        validate_arguments("project_knowledge", {"action": "visualize", "budget_tokens": 1000})
+    assert exc6.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc7:
+        validate_arguments("project_knowledge", {"action": "pr_impact"})
+    assert exc7.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc8:
+        validate_arguments("project_knowledge", {"action": "list_prs", "limit": 51})
+    assert exc8.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc9:
+        validate_arguments(
+            "project_knowledge", {"action": "visualize", "format": "tree", "detail": "auto"}
+        )
+    assert exc9.value.code == "ARGUMENT_INVALID"
+
+    with pytest.raises(KnowledgeError) as exc10:
+        validate_arguments(
+            "project_knowledge", {"action": "visualize", "format": "tree", "detail": "full"}
+        )
+    assert exc10.value.code == "ARGUMENT_INVALID"
+
+
+def test_visualize_tree_rejects_detail_schema_and_handler_parity() -> None:
+    schema = parameters("project_knowledge")
+    validator = Draft202012Validator(schema)
+
+    # Valid combinations: format omitted defaults to graph downstream, format=graph with detail
+    valid_payloads = [
+        {"action": "visualize"},
+        {"action": "visualize", "format": "graph"},
+        {"action": "visualize", "format": "tree"},
+        {"action": "visualize", "detail": "auto"},
+        {"action": "visualize", "detail": "full"},
+        {"action": "visualize", "format": "graph", "detail": "auto"},
+        {"action": "visualize", "format": "graph", "detail": "full"},
+    ]
+    for payload in valid_payloads:
+        assert validator.is_valid(payload), f"Draft202012Validator rejected valid {payload}"
+        assert validate_arguments("project_knowledge", payload) == "visualize"
+
+    # Invalid combinations: format="tree" with either explicit detail value
+    invalid_tree_detail_payloads = [
+        {"action": "visualize", "format": "tree", "detail": "auto"},
+        {"action": "visualize", "format": "tree", "detail": "full"},
+    ]
+    for payload in invalid_tree_detail_payloads:
+        assert not validator.is_valid(payload), f"Draft202012Validator should reject {payload}"
+        with pytest.raises(KnowledgeError) as exc:
+            validate_arguments("project_knowledge", payload)
+        assert exc.value.code == "ARGUMENT_INVALID"

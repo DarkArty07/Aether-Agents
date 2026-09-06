@@ -141,16 +141,54 @@ Following authorization under Objective Contract `oc_7beb699ef34a7f04@v2` on bas
    - **Example validation:** All skill JSON examples validate against registered tool schemas via `validate_arguments`. Community examples use illustrative snapshot-local IDs rather than documenting `community_id: 0` as a default.
    - **Documentation alignment:** `docs/guides/project-knowledge.md` and `docs/reference/plugins-and-tools.md` document supported actions, arguments, truncation semantics, references, and discovery workflows. Verified via `scripts/check_documentation.py`.
 
+## Current semantic and exploration expansion (GX-01–GX-04)
+
+The reusable expansion authorized by Objective Contract `oc_c0abec2179f6b09c@v1` is
+implemented against Graphify 0.9.54 without modifying Graphify, Hermes or the lockfiles:
+
+- **GX-01 / D33:** `project_knowledge` exposes fourteen action-discriminated project
+  operations while `work_memory` retains five operations. Draft 2020-12 validation,
+  runtime `validate_arguments` and sanitizer-safe descriptions agree; query-only
+  `context_filter`, path-only `undirected`, identity rejection and the tree/detail boundary
+  are explicit.
+- **GX-02 / D34 and D39:** The native worker supplies stats, bounded centrality, traversal,
+  relation and direction controls, semantic fragment handling, PR impact computation and
+  graph/tree HTML export. Native references and truncation remain additive envelope data.
+- **GX-03 / D34–D39:** The manager publishes immutable revision-bound snapshots and additive
+  `aether.project-knowledge.v1` objects, optionally resumes configured auxiliary semantic
+  work with fingerprint/cache/failure preservation, and provides verified read-only GitHub
+  views and managed visualization artifacts. Structural mode remains no-model; missing
+  auxiliary or GitHub access is unavailable rather than a fallback.
+- **GX-04 / AC8 and D40:** Current guides, capability registry/reference, changelog and
+  packaged skills describe the 14/5 catalog and semantic boundaries. The reproducible
+  `scripts/qualify_knowledge_expansion.py` lane validates all examples, uses two disposable
+  portable fixture IDs through the production service, and separates deterministic offline
+  evidence from optional live auxiliary/GitHub evidence.
+
+The qualification lane deliberately reports availability and skips rather than converting
+missing provider or GitHub access into a pass. It makes no token-saving, universal-quality,
+live-agent adoption or release claim.
+
+### GX-04 execution evidence
+
+| Lane | Observed result |
+| --- | --- |
+| `scripts/check_documentation.py` | Passed; generated capability reference matches the registry. |
+| `tests/test_knowledge_resources.py` and `tests/test_documentation.py` | 18 passed; 1 explicit networked component-install skip. |
+| `scripts/qualify_knowledge_expansion.py --json` | Passed offline; 14 project actions and 5 memory actions validated, 5 boundary cases rejected, two isolated fixtures updated through the production service, and graph/tree exports plus memory checks completed. |
+| `scripts/qualify_knowledge_expansion.py --live-auxiliary --json` | Offline lane passed; live auxiliary was honestly skipped as unavailable in this environment. GitHub was skipped when no project id was supplied. |
+| Script static gates | `ruff check`, `ruff format --check`, `compileall`, public-artifact scan and `git diff --check` passed for the candidate. |
+
 ### Boundaries and exclusions
 
 - Upstream Graphify 0.9.54 and Hermes baseline `v2026.8.18` remain completely unmodified.
 - No new public tool, action, or CLI command was added.
-- No live-agent E2E, token-savings, or model-backed semantic-extraction claims are made.
-- Unit compatibility impact is `patch` (compatible envelope/schema/guidance repairs). Publication and aggregate release decisions remain deferred to terminal supervisor closeout.
+- No live-agent E2E, token-savings, or universal model-backed quality claims are made.
+- Unit compatibility impact is `minor` (documentation and qualification surface for the accepted expanded catalog). Publication and aggregate release decisions remain deferred to terminal supervisor closeout.
 
 ## What remains outside demonstrated behavior
 
-- No model-backed semantic document extraction is configured. `configured` and `structural` modes both use the implemented local structural path, with semantic coverage pending.
+- Semantic extraction is optional and requires an explicitly configured auxiliary; the default packaged configuration remains disabled. Live-agent E2E and source-supported semantic quality still require the live qualification lane and independent review.
 - No actual Morfeo/Supervisor/Implementer LLM conversations were run for this capability. Real plugin registration and dispatch surfaces were tested without model calls; that is not a behavioral E2E with autonomous agents.
 - No token savings, long-horizon quality gain or large-repository scaling claim is made. Query output uses byte limits and token estimates, not exact provider accounting.
 - New revision builds recapture the bounded corpus. Reuse is implemented for identical view/revision snapshots; incremental cache seeding across arbitrary revisions remains an optimization to qualify.

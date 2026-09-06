@@ -89,12 +89,14 @@ def run_knowledge(args: argparse.Namespace, service: Any = None) -> int:
         elif name == "doctor":
             configuration = service.configuration()
             probe = service.backend().probe()
+            semantic_cfg = configuration.get("semantic", {})
+            semantic_enabled = configuration.get("semantic_enabled", False) or semantic_cfg.get("enabled", False)
             result = {
                 "ok": True,
                 "component": probe,
                 "ownership": configuration.get("ownership"),
                 "lock_id": configuration.get("lock_id"),
-                "semantic_enabled": False,
+                "semantic_enabled": bool(semantic_enabled),
                 "warning": "Component health does not prove agent E2E behavior or token savings.",
             }
         elif name == "bind":

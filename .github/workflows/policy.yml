@@ -176,6 +176,7 @@ jobs:
           scripts/e2e/scenarios
           scripts/e2e/synthetic_owner.py
           scripts/qualify_observation.py
+          scripts/qualify_knowledge_expansion.py
           scripts/sync_policy_hooks.py
           SECURITY.md
           src/aether_agents/cli.py
@@ -289,10 +290,13 @@ jobs:
           src/aether_agents/knowledge/common.py
           src/aether_agents/knowledge/component.py
           src/aether_agents/knowledge/context.py
+          src/aether_agents/knowledge/exports.py
+          src/aether_agents/knowledge/github.py
           src/aether_agents/knowledge/graph_worker.py
           src/aether_agents/knowledge/graphify.py
           src/aether_agents/knowledge/hermes_plugin.py
           src/aether_agents/knowledge/memory.py
+          src/aether_agents/knowledge/semantic.py
           src/aether_agents/knowledge/service.py
           src/aether_agents/knowledge/snapshots.py
           src/aether_agents/resources/graphify/requirements.in
@@ -537,10 +541,10 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
+          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
           uv run --frozen mypy src/aether_agents
-          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
-          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
       - name: Reject operator-specific paths in public artifacts
