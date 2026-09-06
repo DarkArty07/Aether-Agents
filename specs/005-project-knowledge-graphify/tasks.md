@@ -1,18 +1,21 @@
-# Graphify knowledge-tool boundary repair — Supervisor task breakdown
+# Graphify semantic expansion — Supervisor task breakdown
 
-**Status:** active execution breakdown for Objective Contract `oc_7beb699ef34a7f04@v2`.
+**Status:** active execution breakdown for Objective Contract `oc_c0abec2179f6b09c@v1`.
 
-**Derived by:** Supervisor, 2026-09-06
+**Derived by:** Supervisor
 
-**Source contract:** `.aether/objective-contracts/oc_7beb699ef34a7f04/v2.md`
-(SHA-256 `58aab1be1d4c32abdeacbc3a83b2ee8533a2536d73f267f748123f514bfb1c69`)
-on base `ccd862b7e295669ec9dcc3d6cdf7145636614354`.
+**Source contract:** `.aether/objective-contracts/oc_c0abec2179f6b09c/v1.md`
+(SHA-256 `3b25822ccd005b5f760e902113e5b425c843a65f3836b4c869e20aec7ecf11a9`)
+on base `d30be12a1eb6497670e6eeaaa16d751179aeb306`.
 
-**Owning specs:** `specs/005-project-knowledge-graphify/spec.md` (KG-01–KG-12),
-`contracts/tools-and-data.md`, `validation.md` (D29–D32), GitHub #324–#327.
+**Owning specs:** `specs/005-project-knowledge-graphify/spec.md` (KG-13–KG-18),
+`contracts/expanded-tools-and-semantic.md`, `contracts/tools-and-data.md`,
+`validation.md` (D01–D40), GitHub #330.
 
 This file is Supervisor-owned execution decomposition. It does not widen the
-Objective Contract. Card bodies remain the executable unit deliveries.
+Objective Contract. Card bodies remain the executable unit deliveries. The prior
+GK-01–GK-03 breakdown for `oc_7beb699ef34a7f04@v2` is superseded here; that
+repair remains in source as the structural baseline.
 
 ## Receipt
 
@@ -20,9 +23,9 @@ Objective Contract. Card bodies remain the executable unit deliveries.
 | --- | --- |
 | Portable project | `.aether/project.toml` `project_id` equals envelope `12027989-a08f-41cd-a82c-54ff1bfb6b03` |
 | Contract bytes | SHA-256 matches the envelope |
-| Base / HEAD | `ccd862b7e295669ec9dcc3d6cdf7145636614354` (`docs(contract): clarify Graphify repair authority`) |
-| Design sufficiency | D29–D32 and AC1–AC8 are decided in the contract and tool/data contract; no missing product API |
-| Component | `aether knowledge doctor --json` reports Graphify `0.9.54` healthy (managed lock) |
+| Base / HEAD | `d30be12a1eb6497670e6eeaaa16d751179aeb306` (`docs(contract): authorize reusable Graphify expansion`) |
+| Design sufficiency | KG-13–KG-18, D33–D40 and AC1–AC8 are decided in the contract and expanded-tools contract; no missing product API |
+| Component | `aether knowledge doctor --json` reports Graphify `0.9.54` healthy (managed lock); `semantic_enabled` is still false |
 | Knowledge index | bound project matches; current revision is not indexed (`INDEX_MISSING`); source inspection used |
 | Profiles | `implementer` and `supervisor` exist; no extra roles |
 | Project Canonical Skills | none under `.aether/skills/`; Aether Canonical procedures apply |
@@ -31,118 +34,146 @@ Objective Contract. Card bodies remain the executable unit deliveries.
 
 | Concern | Settled conclusion | Execution consequence |
 | --- | --- | --- |
-| Adapter vs upstream | Graphify 0.9.54 and Hermes stay unmodified; repair is Aether adapter/envelope/schema/tests/guidance | No unit may patch, vendor, or bump those dependencies |
-| Truncation | `truncated` is cumulative: native omission, Aether content bound, or 50-reference cap. Complete native answers that only exceed the requested estimate stay `truncated=false` with an explicit warning | Envelope unit owns the flag composition |
-| Recovery wording | Preserve useful native content; replace `context_filter`, `get_node`, graph-path, CLI/MCP recovery with narrower `question`, higher `budget_tokens` (128–8000), or `explain` on a returned node | Envelope unit rewrites boundary guidance only |
-| Provenance | `query`/`explain`/`neighbors`/`community`/`path`/`impact` return revision-bound, project-relative, deduplicated `{path,location,revision}` in stable order; cap 50 is never silent | Envelope unit; `snapshots.py` already binds/caps but does not set `truncated` on cap |
-| Community discovery | No new action. `explain` adds `resolved_node={id,community_id,community_name}`; `community` adds `community={id,name,node_count}`; nulls allowed; IDs snapshot-local | Envelope unit |
-| Schema | Keep top-level properties for Hermes coercion; add action-discriminated branches; every field description names applicable actions because Hermes `schema_sanitizer._strip_top_level_combinators` drops top-level `oneOf`/`anyOf`/`allOf`/`enum`/`not`. Runtime `validate_arguments` remains authoritative | Schema unit |
-| Shared files | `graph_worker.py` and `snapshots.py` implement D29–D31 on the same query/explain/impact/path/community branches | Concentrate D29–D31; do not parallelize by issue number |
-| Schema files | `service.py` `parameters()`/`validate_arguments()` are independent of the native worker | Schema unit may run with the envelope unit |
-| Guidance files | Guide, packaged skills, changelog, stage-005 evidence, and generated reference would collide if split | One docs unit after both behavior units |
-| Release | Contract decision 7: `release_impact=patch`, `release_action=defer`, `release_channel=none` | Units report unit-level compatibility only; terminal owns the aggregate |
-| Publication | Implementer commits locally and does not push/PR/merge/close issues | Terminal Supervisor closeout |
+| Adapter vs upstream | Graphify 0.9.54 and Hermes stay unmodified; reuse native extract/parse/validate/build, `analyze.god_nodes`, `prs.compute_pr_impact`, HTML exporters | No unit may patch, vendor, bump, or MCP-start those dependencies |
+| Catalog | Fourteen `project_knowledge` actions, five unchanged `work_memory` actions, two tools | Schema unit owns the catalog; no third public tool |
+| Schema vs sanitizer | Keep root `type=object`, `additionalProperties=false`, `required=["action"]`, union properties for Hermes coercion, action `oneOf` branches, per-field action descriptions | Same D32 shape; extend fields/actions only |
+| Shared `limit` | Root property is the union 1..50 so coercion accepts PR limits; `work_memory.search` branch and `validate_arguments` stay 1..20 | Schema unit must not silently raise search's accepted max |
+| Recovery wording | `context_filter` is query-only; `undirected` is path-only. Strip `get_node`, MCP, CLI `--budget`, raw graph paths. Do not forbid those literals unconditionally | Native unit updates `normalize_recovery_wording` and D29 tests |
+| Native vs manager | `graph_worker.py` is the isolated subprocess; GitHub `gh` and auxiliary-client resolution stay on the manager. No secret, client object, or private endpoint in worker JSON/argv/logs/cache keys | Native unit owns worker JSON; manager unit owns transport |
+| `snapshots.py` hotspot | `KnowledgeStore.execute`/`update` is the single envelope, publication lock, semantic fingerprint and new-action dispatch surface | Concentrate D34-envelope + D35–D39 in one manager unit; do not parallelize GitHub/visualize/semantic by issue |
+| `graph_worker.py` hotspot | All native Graphify calls already live in one worker | Concentrate stats/god_nodes/query-impact-path controls/native HTML/semantic parse-apply/PR impact compute in one native unit |
+| Guidance / policy.yml | New tracked non-`specs/` files must be added to `.github/workflows/policy.yml` expected list in the same unit. Skills/docs/changelog/registry are shared | Delivery unit after manager; do not split script vs docs across concurrent `policy.yml` edits |
+| Semantic config | `semantic.enabled` plus `semantic.auxiliary_task=web_extract` for this activation; missing/auto/ambiguous binding is unavailable, never primary-model fallback | Manager unit; no credential/provider/router change |
+| Release | Contract: `release_impact=minor`, `release_action=defer`, `release_channel=none` | Units report unit-level compatibility only; terminal owns the aggregate |
+| Publication / activation | Implementer commits locally and does not push/PR/merge/close issues or mutate live profiles | Terminal Supervisor closeout and scoped local activation |
+| Out of scope | Issue #329, Graphify/Hermes forks, watchers, extra connectors, browser automation, release tags | Report incidental defects; do not absorb them |
 
-Inspected current defects (base behavior):
+Inspected current baseline (HEAD behavior):
 
-- `graph_worker.py` query/explain/impact capture CLI stdout and return `references: []` with no native truncation metadata.
-- `graph_worker.py` path returns `references: []`.
-- `snapshots.py` overwrites `truncated` from `bounded(...)` only and slices `refs[:50]` without a cap warning.
-- `service.py` `parameters()` is a field union; `validate_arguments()` then rejects inapplicable combinations (#327).
-- Native/regression tests assert non-empty content and that `references` is a list, so an empty list currently passes.
+- `KNOWLEDGE_ACTIONS` is the eight structural actions; `query` hardcodes `mode=bfs`, `depth=2`, `context_filters=[]`; `path` hardcodes `undirected=False`.
+- `normalize_recovery_wording` strips `context_filter` and `undirected=true` unconditionally; D29 tests assert that.
+- `KnowledgeStore.execute` allow-list is the eight actions; `update` always leaves `semantic_pending=True` and coverage `structural_only`.
+- `component.py` / doctor hardcode `semantic_enabled: false`.
+- No `scripts/qualify_knowledge_expansion.py`. Packaged skills still document `context_filter` as unsupported.
 
 ## Requirement coverage
 
 | Source | Unit | Notes |
 | --- | --- | --- |
-| AC1 / D29 / #324 | GK-01 | Native truncation honesty + supported recovery wording |
-| AC2 / D30 / #325 | GK-01 | Structured references + silent-cap repair |
-| AC3 / D31 / #326 | GK-01 | `query` → `explain` → `community` without guessing |
-| AC4 / D32 / #327 | GK-02 | Discriminated schema parity with `validate_arguments` and sanitizer |
-| AC5 | GK-01, GK-02, GK-03 preserve; GK-INT verifies | Isolation, limits, pin, work-memory, update semantics |
-| AC6 | GK-03 | Guide, packaged skills, registry/generated reference |
-| AC7 | Each unit RED-GREEN; GK-INT full gates | No skipped/weakened tests; 78% branch floor unchanged |
-| AC8 | GK-INT | Merge, issue reconciliation, no release artifact |
-| KG-05/KG-06/KG-10/KG-11 | preserved by all | No new tool/action; fallback to file inspection remains |
-| Non-build | GK-INT | GitHub closeout, graph refresh as navigation coverage |
+| AC1 / D33 / KG-18 catalog | GX-01 | 14/5 actions, sanitizer, identity rejection, old shapes |
+| AC2 / D34 / KG-15 native | GX-02 | Native stats, ranking, query/impact/path controls, refs/truncation |
+| AC2 / D34 envelope | GX-03 | Copy native additive objects through `aether.project-knowledge.v1` |
+| AC3 / D35 / KG-13–KG-14 live extract | GX-03 + GX-04 live lane; GX-INT independent review | Two fixture projects + one bound-project inspection |
+| AC4 / D36 fingerprint/cache | GX-03 | Same-commit enrich, zero-call repeat, rename/delete/config, resume |
+| AC5 / D37 failure preservation | GX-03 | Exhaustion, hollow/malformed, timeout, cancel, concurrency |
+| AC6 / D38 / KG-16 | GX-03 | Read-only gh + native impact; unavailable ≠ zero impact |
+| AC7 / D39 / KG-17 | GX-02 native render; GX-03 export envelope | Real graph/tree HTML, snapshot bytes unchanged |
+| AC8 / D40 docs, gates, activation | GX-04 guidance/script; GX-INT merge/activation | Fresh-process load and managed skill copies at terminal |
+| D29–D32 regressions | GX-01/GX-02/GX-03 as touched; GX-INT full | Update unconditional `context_filter` prohibitions |
+| Non-build | GX-INT | GitHub closeout, #330, scoped activation, graph refresh as navigation |
 
 ## Shared decisions (stamp into every implementation unit)
 
-1. Do not modify Graphify, Hermes, lockfiles, or add a public tool/action.
-2. `truncated=true` if any of: Graphify omitted nodes/lines; Aether `bounded()` cut content; the existing 50-reference cap omitted a visible source. A complete native answer that only exceeds the requested estimate remains `truncated=false` with an explicit warning. Do not parse untrusted prose as the sole proof of functional success; use exact-version adapter results plus envelope composition.
-3. Replace unsupported recovery (`context_filter`, `get_node`, direct graph paths, CLI `--budget` / MCP) with supported Aether calls only.
-4. References are project-relative, revision-bound, deduplicated, stable order, max 50. No snapshot/private absolute path may escape. `path` includes nodes and relation sites on the path.
-5. `explain.resolved_node={id, community_id, community_name}`; `community.community={id, name, node_count}` with `id` equal to the requested `community_id`. Unclassified nodes use JSON `null` community fields. IDs are snapshot-local and must not be documented as portable across rebuilds.
-6. Canonical `parameters()` retains root `type=object`, `additionalProperties=false`, `required=["action"]`, and the union of properties Hermes coercion needs. Add action-discriminated branches whose required/allowed fields match `_ACTION_FIELDS`. Every property description names the actions that accept it. `Draft202012Validator(parameters(tool))` and `validate_arguments` accept/reject the same representative matrix. After `tools.schema_sanitizer.sanitize_tool_schemas`, top-level combinators may be absent; usable action/field descriptions remain. Identity-injection payloads still fail.
-7. Work-memory actions stay behaviorally unchanged except schema parity. Do not alter snapshot publication, update, or note semantics beyond the envelope/schema fields above.
-8. First add focused regressions that fail on this base, then implement. Native GraphifyBackend tests must not skip. Do not print or persist the component interpreter path.
-9. Local judgement: smallest exact-version technique to extract native truncation, visible references, path nodes, and community membership from Graphify 0.9.54 (`graphify/serve.py`, `graphify/__main__.py`, `graphify/affected.py`). Escalate only if that requires patching upstream or a new public action.
-10. Unit compatibility evidence is `patch` (compatible fix / additive metadata). Do not publish. Aggregate release conclusions belong to GK-INT: patch / defer / none.
+1. Do not modify Graphify, Hermes, lockfiles, or add a third public tool. Do not acquire credentials, change router/provider/model, open a browser, or publish.
+2. Catalog (project_knowledge): `status`, `query`, `explain`, `neighbors`, `community`, `path`, `impact`, `update`, `stats`, `god_nodes`, `list_prs`, `pr_impact`, `triage_prs`, `visualize`. Memory: `save`, `search`, `read`, `correct`, `reflect` unchanged.
+3. New/changed model fields (missing optional fields preserve old behavior):
+   - `query`: optional `traversal` (`bfs`\|`dfs`, default `bfs`), `depth` (1..6, default 2), `context_filter` (array, max 20 nonempty strings, each <=80 chars).
+   - `impact`: optional `relations` (array, max 20 nonempty strings, each <=80 chars).
+   - `path`: optional `undirected` (boolean, default false).
+   - `god_nodes`: optional `top_n` (1..50, default 10), `exclude_hubs_percentile` (0..100), `budget_tokens`.
+   - `list_prs` / `triage_prs`: optional `base` (1..255 chars), `limit` (1..50, default 20), `budget_tokens`.
+   - `pr_impact`: required `pr_number` (positive integer); optional `budget_tokens`.
+   - `visualize`: optional `format` (`graph`\|`tree`, default `graph`), `detail` (`auto`\|`full`, default `auto`, graph only). No `budget_tokens`.
+   - `stats`: no extra arguments and no `budget_tokens`.
+4. Root schema `limit` is integer 1..50 (union). `work_memory.search` oneOf/`validate_arguments` remain 1..20. Values 21..50 are valid only for `list_prs`/`triage_prs`. Do not add identity/repo/path/provider/secret arguments.
+5. Additive output objects follow `contracts/expanded-tools-and-semantic.md`. Empty successful PR lists are distinct from `GITHUB_UNAVAILABLE`. Unknown filters return empty explicit results, not an unfiltered fallback. LLM origin is `origin=llm`; model EXTRACTED is stored as INFERRED or AMBIGUOUS, never AST fact. Do not invent locators.
+6. Worker protocol: trusted manager JSON only. Extend `arguments`; optional additive result keys (`stats`, `nodes`, `query_options`, `github`, `pr`, `impact`, `prs`, `artifact`, semantic coverage). Manager rewrites any worker-local path to the public export handle. No raw secret or client object in the worker request.
+7. Semantic transport: existing Hermes profile-scoped auxiliary client; this activation uses `semantic.auxiliary_task=web_extract`. Structural `update(mode=structural)` stays no-LLM and must not downgrade a complete same-revision semantic snapshot. Repeat unchanged complete configured work makes zero model calls. Bounded defaults: max_concurrency=2, request timeout min(auxiliary, 180s), one transient retry/chunk, invocation deadline 600s.
+8. GitHub: resolve repository from the project marker and verified Git remote; `--repo` only; fixed argv; read-only `gh pr view` / `gh pr list` / bounded file pagination. No checkout, approve, comment, merge, or extra LLM ranking.
+9. Visualize: managed `knowledge/<project_id>/exports/<snapshot_id>/`; fixed names by format/detail; snapshot digest unchanged; disclose aggregation and native external assets; do not open a browser.
+10. First add focused regressions that fail on this base, then implement. Native GraphifyBackend tests must not skip. Do not print or persist the component interpreter path, auxiliary URL, or model identifier in public artifacts.
+11. Local judgement: helper module names under `src/aether_agents/knowledge/`, cache serialization, and equivalent bounded batching. Return to Supervisor if a new public action, upstream patch, credential/provider change, or graph-union appears required.
+12. Unit compatibility evidence is `minor` for catalog/behavior additions and `none` or `minor` for docs. Do not publish. Aggregate belongs to GX-INT: minor / defer / none.
 
 ## Execution graph
 
 ```text
-t_979bdeac (Supervisor decomposition root)
-    → GK-01 envelope D29–D31 (Implementer, isolated worktree)
-    → GK-02 schema D32 (Implementer, isolated worktree)
+t_e725e76d (Supervisor decomposition root)
+    → GX-01 schema D33 (Implementer, isolated worktree)
+    → GX-02 native worker D34/D39-render/parse (Implementer, isolated worktree)
          ↘
-    GK-03 guidance AC6 (Implementer; after independently reviewed GK-01 and GK-02)
+    GX-03 manager envelope + semantic + GitHub + visualize D34-env/D35–D39
+         (Implementer; after independently reviewed GX-01 and GX-02)
+         ↘
+    GX-04 guidance, qualify script, policy manifest (Implementer; after GX-03)
     → same-card Supervisor review on each implementation unit
-    → GK-INT terminal integration/closeout (Supervisor, same flow, terminal=true)
+    → GX-INT terminal integration/closeout (Supervisor, same flow, terminal=true)
 ```
 
-GK-01 and GK-02 are independent: different writable files, different tests, no shared interface they must invent. GK-03 is serialized because the guide and packaged skills are shared writable files that must describe both behaviors and keep examples valid against the new schema. D29–D31 are one concentrated unit because they collide on `graph_worker.py` and `snapshots.py`; splitting by issue would be a hotspot, not parallelism.
+GX-01 and GX-02 are independent: different writable files, no shared interface they
+must invent (the field catalog is stamped above). GX-03 is concentrated because
+`snapshots.py` / `graphify.py` own dispatch, publication, envelope keys and
+manager-side I/O for every new action; splitting semantic/GitHub/visualize would
+be a `snapshots.py` hotspot. GX-04 is serialized because skills/docs/`policy.yml`
+must describe the implemented catalog and register any new tracked files.
 
-Same-card review is the unit review lane. GK-INT consumes independently reviewed units and does not replace unit review.
+Same-card review is the unit review lane. GX-INT consumes independently reviewed
+units and does not replace unit review.
 
-## GK-01 — Envelope adapter (D29–D31)
+## GX-01 — Discriminated schemas (D33)
 
-- Source: AC1–AC3, D29–D31, issues #324–#326; this unit.
-- Outcome: honest cumulative `truncated`, supported recovery wording, structured references for all six source-bearing actions, and query→explain→community discovery via `resolved_node` / `community`. Excludes schema combinators, packaged-skill/guide rewrites, publication.
-- Inputs: base `ccd862b`; Graphify 0.9.54 doctor healthy; no prerequisite unit.
-- Boundaries: writable `src/aether_agents/knowledge/graph_worker.py`, `src/aether_agents/knowledge/snapshots.py`, `tests/test_graphify_worker_native.py`, `tests/test_knowledge_regressions.py`, and envelope assertions in `tests/test_project_knowledge_engine.py` if needed. `common.py` only if composition cannot live in `snapshots.py` (flag hotspot). Preserve `service.py`, `hermes_plugin.py`, `memory.py`, skills, docs, lockfiles, Objective Contract.
-- Judgement: adapter extraction technique. Return to Supervisor if a new public action or upstream patch appears required.
-- Verification: fail-first focused native/regression tests for D29–D31; then
-  `GRAPHIFY_PYTHON="$(uv run --frozen python -c 'from aether_agents.knowledge.service import KnowledgeService; print(KnowledgeService().configuration()["python"])')"`
-  `uv run --frozen aether knowledge doctor --json` → version 0.9.54
-  `AETHER_GRAPHIFY_PYTHON="$GRAPHIFY_PYTHON" uv run --frozen python scripts/run_tests.py -- -q -rs tests/test_graphify_worker_native.py tests/test_knowledge_regressions.py tests/test_project_knowledge_engine.py`
-  plus ruff/format/mypy on touched Python. GraphifyBackend tests must not skip.
+- Source: AC1, D33, KG-18 catalog; this unit.
+- Outcome: canonical 14/5 action-discriminated schemas; Draft 2020-12 and `validate_arguments` identical; sanitizer-usable descriptions; old successful calls still valid; identity/secret inputs rejected. Excludes native/manager behavior, docs, publication.
+- Inputs: base `d30be12`; no prerequisite unit.
+- Boundaries: writable `src/aether_agents/knowledge/service.py` (`KNOWLEDGE_ACTIONS`, `_FIELDS`, `_ACTION_FIELDS`, `_FIELD_DESCRIPTIONS`, `parameters()`, `validate_arguments()` only), `tests/test_knowledge_schema.py`. `tests/test_knowledge_plugin_cli.py` only if existing identity tests need the new action names. Preserve worker, snapshots, memory behavior, docs, lockfiles, Objective Contract.
+- Judgement: JSON Schema combinator layout as long as shared decisions 2–4 hold. Do not change `KnowledgeService.execute` routing.
+- Verification: fail-first parity matrix for every new action/field, including `query`+`depth`/`traversal`/`context_filter`, `path`+`undirected`, `impact`+`relations`, `stats` rejecting `budget_tokens`, `work_memory.search` `limit=21` rejected and `list_prs` `limit=21` accepted, identity injection. Sanitizer test using exact-Hermes `sanitize_tool_schemas`. `AETHER_GRAPHIFY_PYTHON` from `KnowledgeService().configuration()["python"]`; `uv run --frozen python scripts/run_tests.py -- -q -rs tests/test_knowledge_schema.py tests/test_knowledge_plugin_cli.py tests/test_work_memory.py`; ruff/format/mypy on touched Python.
 - Dependencies: decomposition root only.
-- Completion: local commit; same-card review; unit compatibility `patch`; no push.
+- Completion: local commit; same-card review; unit compatibility `minor`; no push.
 
-## GK-02 — Discriminated schemas (D32)
+## GX-02 — Native worker operations (D34 native, D39 render, semantic parse/apply, PR compute)
 
-- Source: AC4, D32, issue #327; this unit.
-- Outcome: canonical action-discriminated schemas for `project_knowledge` and `work_memory` with identical Draft 2020-12 and `validate_arguments` outcomes; sanitizer-usable descriptions; no registration/call regression. Excludes envelope behavior, docs/skills, publication.
-- Inputs: base `ccd862b`; no prerequisite unit. Inspect exact Hermes `tools/schema_sanitizer.py` via the repository bootstrap, not a random checkout.
-- Boundaries: writable `src/aether_agents/knowledge/service.py`; schema tests in `tests/test_knowledge_plugin_cli.py` and/or a new `tests/test_knowledge_schema.py`. `hermes_plugin.py` only if registration wrapping is required (prefer `parameters()` only). Preserve worker/snapshots/docs/skills/memory behavior.
-- Judgement: JSON Schema shape (`oneOf` vs `allOf`/`if-then`) as long as decisions 6 hold. Do not put the only discrimination in a top-level combinator without retaining root properties and per-field action descriptions.
-- Verification: fail-first matrix of valid/invalid action/field combinations (including `status`+`budget_tokens`, missing required fields, identity injection, work_memory cross-action fields) against `Draft202012Validator` and `validate_arguments`; sanitizer test using `sanitize_tool_schemas` on OpenAI-format wrappers; existing plugin register/dispatch/identity tests.
-  `AETHER_GRAPHIFY_PYTHON="$GRAPHIFY_PYTHON" uv run --frozen python scripts/run_tests.py -- -q -rs tests/test_knowledge_plugin_cli.py tests/test_work_memory.py` and any new schema test module; ruff/format/mypy on touched Python.
+- Source: AC2/D34 native, AC7/D39 renderer, worker half of D35/D38; this unit.
+- Outcome: Graphify 0.9.54 worker supports stats, god_nodes, query traversal/depth/context_filter, impact relations, path undirected, native graph/tree HTML write, semantic chunk prepare/parse/validate/apply from supplied model text, and `prs.compute_pr_impact` from supplied file lists. Recovery wording distinguishes supported query `context_filter` and path `undirected` from unsupported `get_node`/MCP/CLI. Excludes manager auxiliary/gh, snapshot publication, docs, publication.
+- Inputs: base `d30be12`; no prerequisite unit. Shared field catalog is in the decisions above, not sibling source.
+- Boundaries: writable `src/aether_agents/knowledge/graph_worker.py`, `tests/test_graphify_worker_native.py`, and native-only recovery assertions in `tests/test_knowledge_regressions.py` if they import the worker helper. Preserve `service.py`, `snapshots.py`, docs, lockfiles, Objective Contract. Do not call `gh` or Hermes auxiliary from the worker.
+- Judgement: worker action/subcommand names and how HTML is written to a manager-supplied export path. Escalate if native HTML or parse APIs cannot be used without patching Graphify.
+- Verification: fail-first native tests in the isolated Python 3.11 Graphify env (do not install pytest into the live managed component; follow the existing disposable-component pattern). Stats/ranking agree with the built graph; DFS vs BFS and context_filter change the result set; undirected path differs from directed; HTML files parse and leave `graph.json` bytes unchanged when invoked with a side export path; malformed model text is rejected without publishing; supplied PR file lists compute impact without network. Update D29 tests so `context_filter` is forbidden as recovery for non-query actions and allowed as a query argument. `AETHER_GRAPHIFY_PYTHON="$GRAPHIFY_PYTHON" uv run --frozen python scripts/run_tests.py -- -q -rs tests/test_graphify_worker_native.py`; ruff/format/mypy on touched Python. Native tests must not skip.
 - Dependencies: decomposition root only.
-- Completion: local commit; same-card review; unit compatibility `patch`; no push.
+- Completion: local commit; same-card review; unit compatibility `minor`; no push.
 
-## GK-03 — Guidance and evidence (AC6)
+## GX-03 — Manager envelope, semantic lifecycle, GitHub, visualize (D34-env, D35–D39)
 
-- Source: AC6, KG-10, deliverable 3; this unit.
-- Outcome: current guide and packaged canonical skills describe only supported calls and the new truncation/reference/community/schema semantics; all skill JSON examples validate; documentation registry/generated reference current if the checker requires it; stage-005 implementation evidence records this repair without claiming E2E/token savings. Excludes adapter/schema code unless a checked example is invalid (then fix the example, not the schema).
-- Inputs: independently reviewed GK-01 and GK-02 commits/tests. Do not treat parent prose as the current tree.
-- Boundaries: writable `docs/guides/project-knowledge.md`, `docs/reference/plugins-and-tools.md`, `src/aether_agents/resources/skills/project-knowledge/SKILL.md`, `src/aether_agents/resources/skills/work-memory/SKILL.md` only if procedure/examples need it, `specs/005-project-knowledge-graphify/implementation.md`, `CHANGELOG.md`, and `docs/capabilities.toml` plus generated `docs/reference/capabilities.md` if `scripts/check_documentation.py` requires. Tests: `tests/test_knowledge_resources.py`, `tests/test_documentation.py` as needed. Preserve adapter/schema sources.
-- Judgement: wording and example selection. Do not add `community_id: 0` as if it were a portable default. Do not document upstream-only recovery.
-- Verification: skill examples `validate_arguments`; `uv run --frozen python scripts/check_documentation.py`; focused `tests/test_knowledge_resources.py tests/test_documentation.py`; no machine paths/credentials in public text.
-- Dependencies: independently reviewed GK-01 and GK-02 (shared guidance files and example/schema coupling).
-- Completion: local commit; same-card review; unit compatibility `patch` (docs/guidance for a compatible fix); no push.
+- Source: AC2 envelope, AC3–AC7, D35–D39, KG-13/KG-14/KG-16/KG-17; this unit.
+- Outcome: `KnowledgeStore` dispatches all fourteen actions; exploration/GitHub/visualize additive objects appear in the v1 envelope; configured updates perform/resume semantic extraction through the existing auxiliary; structural mode stays no-LLM; GitHub is optional read-only; visualize artifacts are real export handles. Excludes packaged-skill/guide rewrites, qualify script, publication, live profile mutation.
+- Inputs: independently reviewed GX-01 and GX-02 commits. Do not treat parent prose as the current tree. Inspect current `service.py` / `graph_worker.py` after those commits.
+- Boundaries: writable `src/aether_agents/knowledge/snapshots.py`, `src/aether_agents/knowledge/graphify.py` (request/timeout/cancellation only), `src/aether_agents/knowledge/component.py`, `src/aether_agents/commands/knowledge.py` (doctor/config reporting), new cohesive helpers under `src/aether_agents/knowledge/` as needed, and tests `tests/test_knowledge_regressions.py`, `tests/test_project_knowledge_engine.py`, `tests/test_knowledge_failures.py`, plus new focused test modules if required. If a new non-`specs/` file is added, update `.github/workflows/policy.yml` expected list in this commit. Preserve schema field definitions (GX-01), worker native functions (GX-02), memory.py behavior, lockfiles, Objective Contract.
+- Judgement: helper module names, chunk-cache serialization, gh pagination details within the contract. Escalate if auxiliary resolution would require a new credential, primary-model fallback, or Graphify fork.
+- Verification: fail-first manager tests for envelope keys, semantic fingerprint/repeat-zero-calls/rename-delete/resume, failure classes (timeout, 429/exhaustion, hollow, cancel, concurrent update), GitHub unavailable vs empty list vs moving head vs large/truncated files, both HTML formats with digest-stable snapshots. Live auxiliary is authorized here for fixture-level D35 evidence when the provisioned connection works; record skip vs exercised honestly. Resolve GRAPHIFY_PYTHON from configuration. Focused `scripts/run_tests.py` on the touched test modules; ruff/format/mypy on touched Python. Public artifacts must not contain auxiliary URL, model id, or machine paths.
+- Dependencies: independently reviewed GX-01 and GX-02 (`snapshots.py` dispatch and worker protocol).
+- Completion: local commit; same-card review; unit compatibility `minor`; no push.
 
-## GK-INT — Terminal integration and closeout
+## GX-04 — Guidance, qualification script, policy manifest (D40 docs/script)
 
-- Source: AC5, AC7, AC8, deliverables 4–6; this unit.
-- Outcome: integrated tree on the objective branch, full exact-Hermes gates, CI-green merge to `main`, #324–#327 reconciled only after merge, objective residue cleaned after durable evidence, graph refresh reported as navigation coverage. No release artifact.
-- Inputs: independently reviewed GK-01, GK-02, GK-03 commits. Preserve each as its own commit; no squash/amend/rebase/history rewrite.
-- Boundaries: integration-owned conflict/import/wiring/docs-path repairs that introduce no new behavior. Behavior gaps return as implementation rework.
-- Verification: contract testing standard in full, including focused native set, complete `scripts/run_tests.py`, ruff, format, mypy, coverage ≥78% branch, `check_documentation.py`, `uv build`, public-artifact scan, `git diff --check`. Then git-github-closeout. Post-merge smoke of D29–D32 on exact `main`.
-- Dependencies: decomposition root and all three independently reviewed implementation units.
-- Completion: aggregate `release_impact=patch`, `release_action=defer`, `release_channel=none`. Local integration alone is not success.
+- Source: AC8 docs/skills/registry, D40 script, deliverable guidance; this unit.
+- Outcome: current guide, packaged skills, SOUL-compatible examples, changelog, capability registry/generated reference, stage-005 implementation evidence, and `scripts/qualify_knowledge_expansion.py` (`--live-auxiliary`, `--project-id`, `--pr-number`, `--json`) describe and exercise the 14/5 catalog. Skill JSON examples validate. No savings/superiority claim. Excludes adapter behavior changes unless a checked example is invalid (then fix the example).
+- Inputs: independently reviewed GX-03 (and therefore GX-01/GX-02). Do not treat parent prose as the current tree.
+- Boundaries: writable `docs/guides/project-knowledge.md`, `docs/reference/plugins-and-tools.md`, `docs/reference/cli.md`, `docs/capabilities.toml`, generated `docs/reference/capabilities.md`, `CHANGELOG.md`, `src/aether_agents/resources/skills/project-knowledge/SKILL.md`, `src/aether_agents/resources/skills/work-memory/SKILL.md` only if examples/procedure need it, role SOUL knowledge paragraphs only if the catalog sentence is now false, `specs/005-project-knowledge-graphify/implementation.md`, `scripts/qualify_knowledge_expansion.py`, tests `tests/test_knowledge_resources.py`, `tests/test_documentation.py`, and `.github/workflows/policy.yml` expected/compileall lists for the new script. Preserve adapter/schema sources. Do not edit live `home/` profiles or the Objective Contract.
+- Judgement: wording and example selection. `context_filter` is documented as query-only recovery, not as a general substitute for `get_node`.
+- Verification: skill examples `validate_arguments`; `uv run --frozen python scripts/check_documentation.py`; focused resource/documentation tests; offline `scripts/qualify_knowledge_expansion.py --json` (no live flag) passes deterministic cases; with `--live-auxiliary` run authorized live/gh cases or report the actual skip. No machine paths/credentials in public text.
+- Dependencies: independently reviewed GX-03 (shared guidance files, policy manifest, and script must target real behavior).
+- Completion: local commit; same-card review; unit compatibility `minor` or `none` with evidence; no push.
+
+## GX-INT — Terminal integration, closeout, scoped activation
+
+- Source: AC8, D40, deliverables including merge and local activation; this unit.
+- Outcome: integrated tree on the objective branch, full exact-Hermes gates, live qualification evidence, CI-green merge to `main`, #330 reconciled only after merge, objective residue cleaned after durable evidence, scoped local activation of the feature (component settings, safe sync of clean primary checkout, feature-owned managed skill copies for Morfeo/Supervisor/Implementer with custom copies preserved), fresh-process canary, current integrated graph. No release artifact.
+- Inputs: independently reviewed GX-01..GX-04 commits. Preserve each as its own commit; no squash/amend/rebase/history rewrite. Commit this `tasks.md` if it is not already on the integrated branch.
+- Boundaries: integration-owned conflict/import/wiring/docs-path/`policy.yml` repairs that introduce no new behavior. Behavior gaps return as implementation rework. Scoped activation may coordinate drain/reload of the provisioned gateway without interrupting active sessions.
+- Verification: contract testing standard in full, including native worker lane, complete `scripts/run_tests.py`, ruff, format, mypy, coverage ≥78% branch, `check_documentation.py`, `uv build`, public-artifact scan, `git diff --check`, `scripts/qualify_knowledge_expansion.py --live-auxiliary` (or recorded unavailability). Then git-github-closeout. Post-merge smoke and activation evidence. Independent review of source-supported semantic relations vs structural-only.
+- Dependencies: decomposition root and all four independently reviewed implementation units.
+- Completion: aggregate `release_impact=minor`, `release_action=defer`, `release_channel=none`. Local integration alone is not success.
 
 ## Authority and stop conditions
 
-Follow the Objective Contract. Ordinary configured Supervisor/Implementer execution is authorized. Stop and return `needs-contract-revision` only for a genuine contract defect. Do not activate profiles, change providers/models, run extra live product probes, acquire dependencies, bypass checks, force-push, or publish a release.
+Follow the Objective Contract. Ordinary configured Supervisor/Implementer execution, live auxiliary extraction for qualification, provisioned GitHub read, and routine closeout are authorized. Stop and return `needs-contract-revision` only for a genuine contract defect (Hermes/Graphify fork required, new credential/provider authority, graph union, or changed public action set). Missing configured auxiliary or exhausted router is unavailable/deferred, not fallback. Do not absorb issue #329. Do not overwrite conflicting custom profile skills, move a dirty/concurrent primary checkout, or interrupt live sessions.
