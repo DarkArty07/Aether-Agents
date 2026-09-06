@@ -42,6 +42,10 @@ current limits and authority as constraints, not settings to tune during decompo
    or genuinely missing product decisions before inventing a breakdown around them.
    Return a contract defect to Morfeo. Do not require irrelevant diagrams or escalate
    equivalent reversible local choices that already preserve the contract.
+   Stop receipt investigation when the design and dependency decisions needed to write
+   executable units are known. Before another broad read, name the unanswered question
+   and which scope, dependency or acceptance choice it affects. Do not perform each
+   Implementer's local investigation yourself or reread unchanged evidence for reassurance.
 2. **Derive independently testable outcomes.** Create or update only Supervisor-owned
    `tasks.md`, mapping each buildable requirement to execution and verification units
    and each unit back to its source. Account separately for non-build obligations such
@@ -112,6 +116,26 @@ Use an existing plan reference for long stable context. Do not make a unit consu
 stale parent prose as proof of the current repository. Supervisor retains ownership
 of this template and of the breakdown; Implementer consumes it without duplicating
 contract authority.
+
+## Concrete split example (illustrative, not an execution report)
+
+Assume an approved fixture objective already defines two results: a formatter changes
+`formatter.py` and has verifier `verify_formatter.py`; a read-only exporter changes
+`exporter.py` and has verifier `verify_exporter.py`. The response shapes and input
+preservation requirement are already decided; neither unit changes shared files.
+
+| Unit | Assigned outcome | Writable surface | Verification | Actual dependency |
+|---|---|---|---|---|
+| Formatter | Exact approved formatting behavior | `formatter.py`, its unit tests | Formatting examples and boundary cases | Verified decomposition root |
+| Exporter | Exact approved read-only export | `exporter.py`, its unit tests | Export shape and unchanged inputs | Verified decomposition root |
+| Terminal integration | Combined result and closeout | Integration-owned artifacts only | Both accepted outputs plus integrated acceptance | Root and both independently reviewed units |
+
+The two implementation units can be dispatched together. Same-card unit review remains
+separate from terminal integration. Do not create a Formatter-to-Exporter edge just
+because Formatter is listed first. If inspection instead proves both must edit
+`adapter.py`, record that concrete collision and serialize them; this example does not
+authorize an architectural refactor or waive a contract gate to recover parallelism.
+Actual overlap still needs run evidence; this table demonstrates only graph reasoning.
 
 ## Worked contrasts (illustrative)
 

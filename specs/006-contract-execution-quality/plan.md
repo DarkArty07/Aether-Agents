@@ -1,6 +1,6 @@
 # Technical plan: contract and execution quality
 
-Status: owner-approved approach; Morfeo-authored intellectual source. See `spec.md`
+Status: Morfeo-authored source; owner replaced synthetic qualification with organic observation in #317. See `spec.md`
 for outcomes and `quickstart.md` for acceptance. This is not Supervisor's task breakdown.
 
 ## Baseline and observations
@@ -13,7 +13,7 @@ The local ignored constitution is derived state; R0 remains its canonical source
 - `objective_contracts/store.py` checks required-section completeness and transport
   integrity, not intellectual sufficiency. Its schema and semantics remain unchanged.
 - `resources/profiles/{morfeo,supervisor,implementer}/SOUL.md` owns portable role prompts.
-- `resources/skills/` contains three existing canonical single-file procedures.
+- At that inspected baseline, `resources/skills/` contained three existing canonical single-file procedures; this objective adds three more through the same explicit mechanism.
 - `lifecycle.py::_CANONICAL_SKILLS`, `_skill_sources`, `_materialize_profile_bundle` and
   profile-bundle verification/materialization implement an explicit allowlist with
   hashes, marker-proven ownership, preflight and rollback. The current file contract
@@ -53,54 +53,32 @@ necessary Aether resource-registration/inventory/test integration. No Hermes-cor
 modification, tool schema change, generic evaluator or scheduling machinery is needed.
 A larger discovered requirement must be reported before expanding mutation.
 
-**D5 — Compatibility and rollback.** Do not weaken current ownership checks to accept
-old or unknown bytes. Test baseline-to-candidate resource activation and restoration
-of the matching baseline executable/resource state; never claim an arbitrary new
-manager can validate an old bundle merely because its schema number matches. Existing
-release validation binds resources to source bytes. No generalized cross-version
-migration is authorized. If the existing reversible path cannot preserve private state
-or safely restore the known baseline, stop activation and surface that concrete boundary.
-Expected compatibility impact is additive (`minor`); final impact requires actual
-package/rollback evidence. `release_action=defer`, `release_channel=none`: no tag,
-package publication or release-version bump is required by this objective.
+**D5 — Compatibility and preservation.** Do not weaken current ownership checks to
+accept old or unknown bytes. Inspect and preserve exact prior resource bytes and a
+reversible restoration path; do not launch a rollback-test campaign in this session.
+Never claim that an arbitrary new manager validates an old bundle merely because its
+schema number matches. No generalized migration is authorized. If actual destination
+ownership or safe preservation cannot be established, report that concrete boundary.
+Expected package impact is additive (`minor`), not a claim of tested compatibility.
+`release_action=defer`, `release_channel=none`: no tag, publication or version bump.
 
-**D6 — Finite qualification adapter, not an unchanged harness claim.** Existing
-`lab.runner.prepare_profiles` copies SOUL from its own imported package and only config
-from `--profile-root`; it currently copies no canonical skills. The generic one-shot
-runner also expects a successfully settled board and marks live outcomes as rolling
-eligible. Merely passing two profile roots would therefore be an invalid comparison,
-and generic PASS/FAIL is not the Q2/Q3 expected-defect oracle.
+**D6 — Organic observation replaces the finite adapter.** The owner explicitly
+removed the Q1–Q7 adapter, fixtures, baseline/candidate campaign and model probes from
+current delivery. Do not implement or run them. The old design remains in Git history,
+not as active work. Real later use is tracked in issue #317 without an evaluator,
+watcher, cron job or automatic test campaign.
 
-Add finite test support under `tests/qualification/contract_execution_quality.py`,
-with fixed Q1–Q7 fixtures under `tests/fixtures/contract-execution-quality/`, reusing
-native CLI/Project/board/dispatch primitives and existing test isolation. It is not an
-agent tool, production module, daemon, generalized scenario engine or model evaluator.
-The adapter's exact CLI, subject selection, evidence and case oracles are specified in
-`quickstart.md`. Do not modify general live runner or evidence-schema semantics just
-to make expected contract rejection count as product success. Keep results separate
-from all rolling histories. Package materialization is tested through lifecycle,
-while role behavior runs in fresh test-owned profile homes with verified subject
-resources. Baseline and candidate have identical fixture intent and provisioned runtime,
-provider/model/settings/capacity; only explicitly snapshotted approved resources differ.
-Semantic judgment remains the existing independent Supervisor, not a new judge role.
+**D7 — Installation is bounded and inspectable.** Resolve the actual provisioned
+profile home and owned resource destinations; inspect collisions and preserve unrelated
+bytes before writing. Back up changed resources and read them back against the source.
+This is file-operation verification, not an agent behavior test or permission to bypass
+an ownership/approval refusal. No live board, session, credential or tool config changes.
 
-**D7 — Qualification isolation is checked, not assumed.** Resolve source, installation,
-Project/home/board/state and proposed run-root identities before creating anything.
-Reject a run root inside, equal to, or containing a real source checkout, active home,
-board/state root or another case. Reject symlinks/redirections and nonempty run roots.
-Only then create fresh disposable roots and prove effective native destinations there.
-Do not weaken the generic runner or mistake clearing inherited board overrides inside
-that disposable child environment for permission to remove a denied identity marker.
-
-**D8 — Subject and cleanup receipts are mandatory.** Snapshot manifests bind each
-role's exact SOUL and canonical skill bytes to its source revision. Candidate skill
-loading receipts come from real native session/tool execution, not merely files copied
-onto disk. Observe the role-appropriate loads in Q4/Q5/Q7; the Q1 direct-work control
-must not be forced to run contract-design procedure. Track only experiment-owned native
-processes and use existing bounded cleanup. A surviving or unclassifiable process or an
-unverified destination prevents PASS; never kill an unrelated PID to clean a test.
-Emit the final qualification verdict only after process/state postflight, regardless
-of an earlier behavioral PASS. Do not reuse the generic runner's pre-cleanup exit status.
+**D8 — Report adoption separately from quality.** Record the installed revision and
+exact changed resource paths in the delivery evidence and #317. Behavior remains under
+organic observation; neither matching files nor the 52 historical tests qualify it.
+Normal future sessions supply actual observations without forced fresh-agent probes in
+this session. Existing processes may retain loaded instructions; do not restart them.
 
 ## Ownership and writable surface
 
@@ -117,25 +95,26 @@ Do not assign exact-copying, staging or authoring the canonical Objective Contra
 Implementer. It is a read-only prerequisite already checkpointed by Morfeo.
 
 Affected surface: three new skill resources; additive role wording; existing lifecycle
-allowlist/materialization tests; existing package tests; scoped finite qualification
-fixtures/checks; owning specs/guides/capability evidence/CI inventory. `AGENTS.md` needs
+registration; corresponding existing inventory expectations and documentation; scoped
+resource adoption and ordinary file readback. No new qualification fixtures/adapter or
+executed test campaign. The owner-stopped delegated route is not restarted by this plan. `AGENTS.md` needs
 only a relevant navigation/operating correction if the actual change invalidates it;
 the current generic canonical-discovery guidance remains valid. No new root skill index.
 
 ## Execution envelope
 
-Owner-approved effects: local reversible work, tests, bounded role qualification through
-existing provisioned access, independent review, normal commit/branch push/PR/checks/merge
-and scoped resource activation after gates. No credentials or provider configuration may
+Current owner-approved effects: source registration and documentation reconciliation,
+normal authorized repository closeout, scoped resource adoption and preservation/readback.
+No tests or model-driven probes are executed in this session. Mandatory remote checks
+are not bypassed; this is not authority to disable CI or broaden credentials. No credentials or provider configuration may
 be copied into public artifacts. Runtime selectors and exact local paths are private run
 inputs, not this portable plan or the skill text. Do not modify another active objective.
 
-Bounded qualification: one baseline and one candidate pass through Q1–Q7; at most one
-corrected candidate rerun for each failed case. A failed case remains recorded; only a
-corrected same-route pass satisfies it. Stop after that bound rather than add exceptions.
-Use existing per-role concurrency and per-unit attempt/time limits from R7 without
-increasing them; do not cancel a worker merely for taking time. Infrastructure capability
-walls remain honest blockers, not failed reasoning or a license to repair Hermes here.
+The former qualification budget is retired for this delivery. Future real objectives
+retain their own test/authority standards and existing capacity; the organic tracking
+issue does not spawn work or waive their gates. Infrastructure capability walls remain
+honest blockers, not a license to repair Hermes here. Do not claim a measured speedup,
+full-system PASS or validated compatibility from source adoption alone.
 
 Readiness before dispatch: canonical artifacts and source resources exist in the exact
 base; no material owner decision remains; the Project/envelope binding and intended

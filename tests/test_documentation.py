@@ -316,6 +316,9 @@ def test_canonical_skill_capabilities_are_statused_and_traceable() -> None:
         "git-github-closeout",
         "semver-release",
         "canonical-skill-governance",
+        "objective-contract-design",
+        "supervisor-decomposition",
+        "implementation-evidence",
     ):
         path = ROOT / "src" / "aether_agents" / "resources" / "skills" / skill_name / "SKILL.md"
         assert path.is_file()

@@ -1,10 +1,25 @@
 # Contract design and execution quality
 
-Status: owner-approved objective; authored candidate, not qualified or activated.
+Status: source resources registered and native profile files adopted; behavior remains under organic observation in #317. Repository closeout evidence is tracked in #312.
 Issue: [#312](https://github.com/DarkArty07/Aether-Agents/issues/312).
 Owners: Morfeo designs intent/procedures; Supervisor independently reviews and owns
 execution decomposition/integration; Implementer owns bounded application and tests.
 Governance: R0 constitution unchanged; R2/R3/R7 own standing role obligations.
+
+## Current owner decision: organic validation, no test campaign
+
+The owner explicitly replaces the synthetic qualification campaign with observation
+during real future use. Do not build the Q1–Q7 adapter/fixtures, execute new tests or
+run model-driven probes in the current session. The 52 earlier documentary/loading
+tests remain historical evidence only. This decision supersedes the synthetic/live
+pre-activation requirements of the earlier finalized contract for this objective;
+its immutable bytes are preserved, and the withdrawn delegated flow stays stopped.
+
+Register and adopt the authored resources with ordinary destination/ownership checks,
+backup and exact-file readback. Adoption is experimental, not behaviorally qualified.
+Track subsequent real observations in [#317](https://github.com/DarkArty07/Aether-Agents/issues/317)
+and keep that issue open after mechanical delivery. This objective-local choice does
+not change other projects' testing standards or authorize bypassing required checks.
 
 ## Intent and scope
 
@@ -57,13 +72,15 @@ even when the worker's prose says PASS, and owns integrated acceptance and close
 - **CQ-07**: Package and materialize these resources through the existing canonical skill
   allowlist and lifecycle, preserving fail-closed path/hash/ownership/collision checks,
   all-role preflight and private learned skills. No new loader, registry or schema.
-- **CQ-08**: Qualify the seven cases in `quickstart.md` using real outputs and isolated
-  execution. Structural tests alone do not establish role behavior or parallelism.
-  Record baseline/candidate differences without promising an unmeasured speedup.
-- **CQ-09**: Prove no live-board/session/profile contamination during qualification.
-  Authorize scoped activation of reviewed resource bytes only after all gates, with
-  backup, readback, fresh-process loading evidence and practical rollback. Preserve
-  active sessions/flows; no restart, provider/config/tool change or service cutover.
+- **CQ-08**: Observe behavior organically during subsequent authorized real work and
+  record expected versus observed outcomes in #317. No synthetic Q1–Q7 campaign,
+  test adapter, fixtures or model probes are required for current delivery. Structural
+  tests, source installation or missing bug reports do not establish behavior quality.
+- **CQ-09**: Adopt only the intended source resources after actual destination and
+  ownership inspection, backup and readback. Preserve private skills, configuration,
+  sessions, boards and active flows. No restart, provider/tool change or service cutover.
+  Existing sessions may retain already loaded instructions; new sessions are observed
+  through normal usage rather than artificial qualification in this session.
 - **CQ-10**: Preserve immutable historical contracts, Objective Contract schema/actions,
   public runtime APIs, delegation authority, providers/models, concurrency and protected
   edges. No Hermes-core change or extra role/tool/daemon/evaluator platform.
@@ -75,13 +92,13 @@ even when the worker's prose says PASS, and owns integrated acceptance and close
 
 | Requirement | Acceptance evidence |
 |---|---|
-| CQ-01/02 | exact candidate resource bytes; format/privacy checks; real native discovery and relevant skill loading |
-| CQ-03 | Q1–Q4 decisions and artifact references, including justified rejection and proportional acceptance |
-| CQ-04/05 | Q5/Q6 tasks/card graph, actual role runs and positive overlap or necessary ordering |
-| CQ-06 | Q7 actual missing obligation detected; real local choice remains local; actual verification evidence |
-| CQ-07 | wheel/sdist, native-profile materialization, ownership/collision/tamper preservation and matched rollback tests |
-| CQ-08/09 | controlled qualification receipts, isolation/preflight, scoped activation readback and fresh-process evidence |
-| CQ-10/11 | exact diff, focused/regression suites, unchanged excluded surfaces, documentation and closeout evidence |
+| CQ-01/02 | personally authored resource bytes and existing documentary evidence; adoption readback |
+| CQ-03 | authored decision/acceptance guidance; real completeness/proportionality outcomes pending in #317 |
+| CQ-04/05 | authored unit/independence guidance; actual graphs, overlap and justified ordering observed in #317 |
+| CQ-06 | authored evidence/rework guidance; real delivery quality observed in #317, not assumed at installation |
+| CQ-07 | explicit registration/inventory changes and scoped installation/ownership/readback; no new test campaign |
+| CQ-08/09 | #317 open, honest experimental status, scoped backup/adoption receipts and preserved unrelated state |
+| CQ-10/11 | exact diff, unchanged excluded surfaces, updated documentation and honest repository closeout |
 
 ## Exclusions
 
@@ -93,8 +110,9 @@ bounded owner-approved improvement, not a general lifting of the stabilization f
 
 ## Definition of completion
 
-The objective is complete only when reviewed source, packaging, behavioral qualification,
-authorized scoped activation and repository closeout have actual evidence. A good design,
-static PASS or local commit alone is partial. Preserve and report a real blocked boundary
-instead of weakening acceptance. `tasks.md` is authored by Supervisor at decomposition,
-not by Morfeo during this design stage.
+The mechanical delivery is complete when source registration/inventories, scoped
+resource adoption, readback/preservation and authorized repository closeout have actual
+evidence. It is not a declaration that new behavior is qualified: organic observation
+remains open in #317. Report omitted tests explicitly; do not invent PASS results or
+bypass required repository checks. No new delegated flow or tasks.md is requested by
+this amendment, and the owner-stopped flow must not resume automatically.

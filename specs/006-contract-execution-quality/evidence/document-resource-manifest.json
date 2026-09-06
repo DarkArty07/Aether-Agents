@@ -1,0 +1,36 @@
+{
+  "kind": "documentary-source-snapshot",
+  "not_runtime_activation": true,
+  "files": [
+    {
+      "path": "src/aether_agents/resources/skills/objective-contract-design/SKILL.md",
+      "sha256": "f263de3ec462fb7060f9037bf4974ff40bdeb292d568b1cde151edb3694c64d2",
+      "bytes": 10407
+    },
+    {
+      "path": "src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md",
+      "sha256": "16dab2a8ab2ca7aa0012f891d05f5d87ab44464c59755cf4ab48e13edcc2441c",
+      "bytes": 11314
+    },
+    {
+      "path": "src/aether_agents/resources/skills/implementation-evidence/SKILL.md",
+      "sha256": "e6104a0fe2520f607c322a9227f3f4c7174124dc36e163c84d3af39fae857d0f",
+      "bytes": 8069
+    },
+    {
+      "path": "src/aether_agents/resources/profiles/morfeo/SOUL.md",
+      "sha256": "10a569c6bfdc24009c187863c51a5433aa6af6142bac50a7c1711acff253a2b5",
+      "bytes": 17107
+    },
+    {
+      "path": "src/aether_agents/resources/profiles/supervisor/SOUL.md",
+      "sha256": "e95ebf6ecea6be03258398840b90c0917008df68d1d54ea81c3f5622d1134efd",
+      "bytes": 9075
+    },
+    {
+      "path": "src/aether_agents/resources/profiles/implementer/SOUL.md",
+      "sha256": "d87a186fe09ccabc93359ead5732f16231c0b3c99ef5cd60d7b151bd958a34be",
+      "bytes": 6500
+    }
+  ]
+}

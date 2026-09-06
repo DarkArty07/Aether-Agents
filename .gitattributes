@@ -1,2 +1,3 @@
 # Unified patches encode blank context lines with a required prefix space.
 patches/hermes/HLP-263-gateway-process-ownership.patch whitespace=-trailing-space
+patches/hermes/HLP-280-bounded-flow-recovery.patch whitespace=-trailing-space

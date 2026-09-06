@@ -1,0 +1,71 @@
+{
+  "id": "HLP-280",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-280--bounded-recovery-of-the-existing-hlp-211b-path",
+  "components": [
+    "HLP-280",
+    "HLP-211b",
+    "hermes_cli/kanban_db.py"
+  ],
+  "required_behavior": "Preserve silent repairable flow recovery; escalate a blocked root/controller that omits origin_signal, route exhausted non-affinity children through the existing controller transaction, and signal an unresolved recovery attention after 300 seconds without cancelling the controller.",
+  "local_status": "ACTIVE_LOCAL_E2E_QUALIFIED",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/280"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "Exact inventory revision was re-read for closeout: block_task and _record_task_failure exist, but origin_signal and flow_attention each have zero source occurrences. This inventory record is not a claim that this historical revision is current upstream."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an exact upstream supports the affinity origin path and passes the recovery/compatibility and native-origin canary without HLP-280. Preserve the existing HLP-211b and HLP-262 guarantees.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "exact-inventory source prerequisite check",
+        "result": "Required origin_signal and flow_attention primitives are absent; the full upstream retirement gate cannot run on this revision. Local qualification is separately documented in the direct-source-probe evidence."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-280-bounded-flow-recovery.patch",
+        "result": "passed",
+        "ledger_sha256": "59f873ad50e0b3386223bac1fbe2a63699a19dd757175879fefc5bf923f1738b",
+        "computed_sha256": "59f873ad50e0b3386223bac1fbe2a63699a19dd757175879fefc5bf923f1738b",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "private exact active preimage SHA-256 58d97754650280db9fd1e7ad545b9af151b86d83d73d653dd84fb531f34a29b3",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "local exact-preimage reconstruction and installed output SHA-256 10d60a61000b02457381cac3de2b202bf5ecc84bff9ad0f52e4f8f35809a1eb0",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact local reconstruction passed, but its already-modified operator runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from this patch checksum."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The inventory upstream lacks the affinity origin primitives.",
+    "Clean public-baseline reconstruction is not claimed; the exact local preimage is retained privately."
+  ],
+  "summary": "Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade."
+}

@@ -1,0 +1,23 @@
+{
+  "status": "native_origin_canary_passed_recovery_stopped",
+  "runtime_sha256": "10d60a61000b02457381cac3de2b202bf5ecc84bff9ad0f52e4f8f35809a1eb0",
+  "canary": {
+    "event_id": 3,
+    "published_non_executable": true,
+    "task_status": "done",
+    "subscription_removed": true,
+    "board_archived": true
+  },
+  "reader_cursor": 3,
+  "production_files_changed": [
+    "hermes_cli/kanban_db.py"
+  ],
+  "new_tables": [],
+  "new_workers": [],
+  "limitations": [
+    "Deadline test uses simulated elapsed time plus the real dispatcher tick",
+    "No arbitrary corrupt-state or exactly-once receipt redesign qualification"
+  ],
+  "native_origin_turn_received": true,
+  "provenance": "Exact local lineage, board identity and archived database retained in the private recovery backup; public issue links the owner-visible native canary result."
+}

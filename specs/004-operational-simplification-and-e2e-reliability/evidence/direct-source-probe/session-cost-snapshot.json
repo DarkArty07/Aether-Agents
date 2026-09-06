@@ -1,0 +1,187 @@
+{
+  "schema_version": "hlp280-session-cost-snapshot.v1",
+  "snapshot_utc": "2026-09-06T01:17:47.904320+00:00",
+  "scope": "Origin conversation, native descendants and causally matched workers for contract v1-v5; not earlier #280 sessions",
+  "unique_sessions": 32,
+  "groups": {
+    "implementer_workers": {
+      "sessions": 12,
+      "api_call_count": 1865,
+      "input_tokens": 12087628,
+      "output_tokens": 791554,
+      "cache_read_tokens": 487967058,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 578213
+    },
+    "origin_conversation": {
+      "sessions": 1,
+      "api_call_count": 655,
+      "input_tokens": 11711386,
+      "output_tokens": 402307,
+      "cache_read_tokens": 171224960,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 164560
+    },
+    "origin_subagents": {
+      "sessions": 13,
+      "api_call_count": 203,
+      "input_tokens": 3395218,
+      "output_tokens": 251803,
+      "cache_read_tokens": 14741504,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 180415
+    },
+    "supervisor_workers": {
+      "sessions": 6,
+      "api_call_count": 339,
+      "input_tokens": 3896609,
+      "output_tokens": 336657,
+      "cache_read_tokens": 68676096,
+      "cache_write_tokens": 0,
+      "reasoning_tokens": 152976
+    }
+  },
+  "primary_totals": {
+    "api_call_count": 3062,
+    "input_tokens": 31090841,
+    "output_tokens": 1782321,
+    "cache_read_tokens": 742609618,
+    "cache_write_tokens": 0,
+    "reasoning_tokens": 1076164
+  },
+  "auxiliary_recorded": {
+    "usage_rows": 27,
+    "api_call_count": 27,
+    "input_tokens": 65791,
+    "output_tokens": 14392,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "reasoning_tokens": 0
+  },
+  "combined_recorded_counters": {
+    "api_call_count": 3089,
+    "input_tokens": 31156632,
+    "output_tokens": 1796713,
+    "cache_read_tokens": 742609618,
+    "cache_write_tokens": 0,
+    "reasoning_tokens": 1076164,
+    "canonical_total_tokens": 775562963
+  },
+  "monetary_cost": {
+    "usd": null,
+    "status": "unavailable",
+    "session_statuses": {
+      "unknown": 32
+    },
+    "sessions_with_actual_cost": 0,
+    "known_actual_cost_sum_usd": null,
+    "reason": "No complete actual-cost or valid priced-estimate data; unknown zeros are not free usage."
+  },
+  "accounting_checks": {
+    "unresolved_native_worker_session_ids": 0,
+    "board_versions": 5,
+    "selected_duplicate_session_ids_across_stores": 0,
+    "primary_sessions_counted_once": true,
+    "auxiliary_usage_not_in_session_primary_counters": true
+  },
+  "line_changes": {
+    "runtime": {
+      "added": 143,
+      "removed": 23,
+      "net": 120,
+      "sha256": "59f873ad50e0b3386223bac1fbe2a63699a19dd757175879fefc5bf923f1738b"
+    },
+    "repair_pr": {
+      "additions": 1001,
+      "changedFiles": 18,
+      "deletions": 4,
+      "mergeCommit": {
+        "oid": "c71cb3e024eefd3ad489031a1f36e43ccda83137"
+      },
+      "mergedAt": "2026-09-06T00:52:30Z",
+      "number": 318,
+      "state": "MERGED"
+    },
+    "contract_prs": [
+      {
+        "additions": 159,
+        "changedFiles": 2,
+        "deletions": 0,
+        "mergeCommit": {
+          "oid": "53ee102873816cfcb2e5bdd02b82a4598ffd0536"
+        },
+        "mergedAt": "2026-09-05T05:24:43Z",
+        "number": 307,
+        "state": "MERGED"
+      },
+      {
+        "additions": 169,
+        "changedFiles": 2,
+        "deletions": 0,
+        "mergeCommit": {
+          "oid": "429c2369d905f6ca4bbea91e8192e409daa38152"
+        },
+        "mergedAt": "2026-09-05T10:39:21Z",
+        "number": 308,
+        "state": "MERGED"
+      },
+      {
+        "additions": 157,
+        "changedFiles": 2,
+        "deletions": 0,
+        "mergeCommit": {
+          "oid": "85423504c9fd82677aeac062915b0af34550df72"
+        },
+        "mergedAt": "2026-09-05T12:02:01Z",
+        "number": 309,
+        "state": "MERGED"
+      },
+      {
+        "additions": 191,
+        "changedFiles": 2,
+        "deletions": 0,
+        "mergeCommit": {
+          "oid": "115ec8ab9ed27140acee170b6f2e2cdc71df497e"
+        },
+        "mergedAt": "2026-09-05T20:51:29Z",
+        "number": 311,
+        "state": "MERGED"
+      },
+      {
+        "additions": 154,
+        "changedFiles": 2,
+        "deletions": 0,
+        "mergeCommit": {
+          "oid": "ec182522082b4cdbe58bbd38a9e2bf7e627c1177"
+        },
+        "mergedAt": "2026-09-05T22:32:47Z",
+        "number": 314,
+        "state": "MERGED"
+      }
+    ],
+    "all_six_merged_prs": {
+      "added": 1831,
+      "removed": 4,
+      "net": 1827
+    },
+    "scope_note": "Merged contract PRs and recovery PR through #318 only; this later retrospective PR is reported separately."
+  },
+  "wall_clock_seconds_origin_to_repair_merge": 79702,
+  "limitations": [
+    "A snapshot, not an invoice or final billing total.",
+    "The active origin session continues; later documentation work and final answer are not included.",
+    "Session totals do not split direct recovery from preceding design turns.",
+    "Only causally recorded sessions are included; failed requests without persisted usage may be absent.",
+    "Cached and reasoning counters are separate counters; do not blindly sum overlapping usage categories.",
+    "Script-only milestone notifications use no agent API calls; network/CI/subscription overhead is not priced.",
+    "Unmerged/rejected generated code is excluded from shipped LOC; no claim of total historical typing effort.",
+    "Origin conversation also contains discussion of incidental #267/#305/#310 and bookkeeping."
+  ],
+  "counter_semantics": {
+    "input_tokens": "Canonical uncached input as stored by Hermes; cache reads/writes are separate.",
+    "output_tokens": "Canonical output; reasoning is an overlapping reported subset, not added again.",
+    "cache_read_tokens": "Repeated context reads, not unique new content.",
+    "canonical_total_tokens": "input + output + cache_read + cache_write; not a monetary charge."
+  },
+  "private_attribution_snapshot_sha256": "c8448fc4b602c5e2b3adc00fd8108fc50c83d76e7825aadb81fdc5f818c1eed0"
+}

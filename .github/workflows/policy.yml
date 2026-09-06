@@ -107,6 +107,9 @@ jobs:
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
+          patches/hermes/HLP-280-bounded-flow-recovery.patch
+          patches/hermes/tests/test_hlp280_live_routing_probe.py
+          patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
           lab/fixtures/sandbox/brownfield/AGENTS.md
           lab/fixtures/sandbox/brownfield/message.py
@@ -248,6 +251,7 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_contract_quality_documents.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py
@@ -275,6 +279,30 @@ jobs:
           tests/test_same_card_phase_predicates.py
           uv.lock
           VERSION
+          docs/guides/project-knowledge.md
+          src/aether_agents/commands/knowledge.py
+          src/aether_agents/knowledge/__init__.py
+          src/aether_agents/knowledge/bindings.py
+          src/aether_agents/knowledge/common.py
+          src/aether_agents/knowledge/component.py
+          src/aether_agents/knowledge/context.py
+          src/aether_agents/knowledge/graph_worker.py
+          src/aether_agents/knowledge/graphify.py
+          src/aether_agents/knowledge/hermes_plugin.py
+          src/aether_agents/knowledge/memory.py
+          src/aether_agents/knowledge/service.py
+          src/aether_agents/knowledge/snapshots.py
+          src/aether_agents/resources/graphify/requirements.in
+          src/aether_agents/resources/graphify/requirements.txt
+          src/aether_agents/resources/skills/project-knowledge/SKILL.md
+          src/aether_agents/resources/skills/work-memory/SKILL.md
+          tests/test_graphify_worker_native.py
+          tests/test_knowledge_failures.py
+          tests/test_knowledge_plugin_cli.py
+          tests/test_knowledge_regressions.py
+          tests/test_knowledge_resources.py
+          tests/test_project_knowledge_engine.py
+          tests/test_work_memory.py
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
