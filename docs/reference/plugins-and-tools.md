@@ -43,21 +43,38 @@ Supported actions are:
 
 The knowledge plugin registers both tools in `aether_knowledge` when its `enabled` setting is exactly `true` and the native profile is Morfeo, Supervisor or Implementer. Registration does not import Graphify or start a process. Configuration and data remain installation-local; there is no model-selected role, project path or storage override. An exact native session workspace or an operator-created binding must resolve to the registered project and worktree on every call.
 
-| Tool | Actions | Required arguments beyond `action` |
-| --- | --- | --- |
-| `project_knowledge` | `status` | None. |
-| `project_knowledge` | `query` | `question`. |
-| `project_knowledge` | `explain`, `neighbors`, `impact` | `node`. |
-| `project_knowledge` | `community` | `community_id` from the same snapshot. |
-| `project_knowledge` | `path` | `source`, `target`. |
-| `project_knowledge` | `update` | `reason`; optional `mode` and `changed_paths`. |
-| `work_memory` | `save` | `idempotency_key`, `situation`, `lesson`, `applicability`, `outcome`, `evidence`. |
-| `work_memory` | `search` | `query`; optional `limit` and `budget_tokens`. |
-| `work_memory` | `read` | `note_id`; optional continuation `cursor`. |
-| `work_memory` | `correct` | `note_id`, `expected_revision`, `reason`, `replacement`, `evidence`. |
-| `work_memory` | `reflect` | None. |
+### Schema and parameter discrimination
 
-Graph queries support bounded context. `neighbors` accepts an optional `relation`; `impact` accepts `depth`; `path` accepts `max_hops`. References and graph relations are derived evidence, not authority or exhaustive runtime analysis. `outcome` is `useful`, `dead_end` or `corrected`; evidence is not independently verified merely because an agent supplies it.
+Canonical parameter schemas use action-discriminated branches under `oneOf` while retaining root properties (`type=object`, `additionalProperties=false`, `required=["action"]`). Every field description names the actions that accept it. This ensures usability when Hermes schema sanitizers strip top-level combinators for strict LLM providers, while runtime `validate_arguments` continues to enforce action-specific schemas:
+
+| Tool | Actions | Required arguments | Optional arguments |
+| --- | --- | --- | --- |
+| `project_knowledge` | `status` | None | None |
+| `project_knowledge` | `query` | `question` | `budget_tokens` |
+| `project_knowledge` | `explain` | `node` | `budget_tokens` |
+| `project_knowledge` | `neighbors` | `node` | `relation`, `budget_tokens` |
+| `project_knowledge` | `community` | `community_id` (snapshot-local) | `budget_tokens` |
+| `project_knowledge` | `path` | `source`, `target` | `max_hops`, `budget_tokens` |
+| `project_knowledge` | `impact` | `node` | `depth`, `budget_tokens` |
+| `project_knowledge` | `update` | `reason` | `changed_paths`, `mode` |
+| `work_memory` | `save` | `idempotency_key`, `situation`, `lesson`, `applicability`, `outcome`, `evidence` | `source_nodes` |
+| `work_memory` | `search` | `query` | `limit`, `budget_tokens` |
+| `work_memory` | `read` | `note_id` | `cursor` |
+| `work_memory` | `correct` | `note_id`, `expected_revision`, `reason`, `replacement`, `evidence` | None |
+| `work_memory` | `reflect` | None | None |
+
+### Discovery, truncation, and provenance
+
+Knowledge discovery follows a query→explain→community progression:
+1. `query` locates relevant nodes;
+2. `explain` provides symbol details and returns `resolved_node` (`{id, community_id, community_name}`, with `null` community fields if unclassified);
+3. `community` consumes the snapshot-local `community_id` and returns `{id, name, node_count}`. Community IDs belong to the active snapshot and are not portable across rebuilds.
+
+The `truncated` flag is cumulative across native omission at budget, the 32,768-byte content ceiling, and the 50-reference cap. A complete native answer that exceeds its requested estimate remains `truncated=false` with an explicit warning. Supported recovery is restricted to narrower questions, higher `budget_tokens` (128–8,000), or `explain` on returned nodes; unsupported upstream recovery (such as `context_filter`, `get_node`, raw graph files, CLI `--budget`, or MCP commands) is normalized away.
+
+Source-bearing actions (`query`, `explain`, `neighbors`, `community`, `path`, `impact`) return deduplicated, project-relative, revision-bound `{path, location, revision}` references in stable order. The 50-reference cap sets `truncated=true` and emits an explicit warning. Private working-tree or snapshot-internal absolute paths never escape.
+
+`outcome` is `useful`, `dead_end` or `corrected`; evidence is not independently verified merely because an agent supplies it.
 
 All roles can update; a stable lock coordinates writes, not role permissions. Worktree revisions remain separate. Experiences are keyed by project and role; temporary implementers share role notes without sharing Hermes homes. Save keys are hashed and make exact retries return one note; reusing a key with different content is an explicit conflict, while separate contributions use separate keys. Corrections use optimistic revision checks and reflection includes only current complete notes. Original notes remain available through search/read because native `reflect` aggregates signals rather than full technical solutions.
 

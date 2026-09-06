@@ -41,6 +41,10 @@ Use `project_knowledge`. Project, role, worktree, graph destination and runtime 
 are selected by the integration, not by model arguments. All three roles have the same
 operations. Consult the returned revision, coverage, warnings and freshness.
 
+Tool parameters use action-discriminated schemas: each action accepts only its specific
+declared parameters (such as `question` for `query` or `node` for `explain`), and extra or
+inapplicable arguments are rejected.
+
 Use native file tools to inspect the relevant current sources after orientation.
 A source reference in an older snapshot is a lead, not evidence that the source still
 has that behavior. Do not bypass a genuine protected-edge denial through another tool.
@@ -60,7 +64,7 @@ has that behavior. Do not bypass a genuine protected-edge denial through another
 ```
 
 ```json
-{"action":"community","community_id":0,"budget_tokens":2000}
+{"action":"community","community_id":42,"budget_tokens":2000}
 ```
 
 ```json
@@ -75,31 +79,59 @@ has that behavior. Do not bypass a genuine protected-edge denial through another
 {"action":"update","reason":"Committed the scoped contract-validation changes","changed_paths":["src/contracts.py"],"mode":"structural"}
 ```
 
+Identifiers in examples above are illustrative. Community IDs are snapshot-local: discover a
+real ID by calling `explain` on a returned node (`resolved_node.community_id`). Never treat
+`0` or any other community ID as a portable default across rebuilds.
+
 ## Procedure
 
 1. Confirm the current task and normal project guidance. Discover only relevant canonical
    procedures; do not load every project document or graph report into the prompt.
-2. Ask a bounded question about the area that matters. A normal query returns its own
-   revision and coverage; a separate `status` call is not mandatory each time.
-3. Interpret relations carefully. Extracted, inferred and ambiguous relations are not
-   interchangeable, and absence from a graph does not prove absence from the system.
-4. Follow references to current source files before changing code or making a behavioral
+2. Query → Explain → Community discovery: Ask a bounded question with `query`. When a
+   promising symbol is returned, call `explain` with `node` to inspect connections. The
+   response returns `resolved_node` with `{id, community_id, community_name}` (community
+   fields are `null` if the node is unclassified). Use the returned snapshot-local
+   `community_id` to call `community` for cluster context (`community` returns
+   `{id, name, node_count}`).
+3. Cumulative truncation and references: `truncated` is cumulative: it is `true` if Graphify
+   omitted nodes or lines at budget, if Aether's byte limit bounded output, or if visible
+   sources reached the 50-reference cap. A complete native response that only exceeds its
+   requested token estimate remains `truncated=false` with an explicit warning.
+   Source-bearing actions (`query`, `explain`, `neighbors`, `community`, `path`, `impact`)
+   return project-relative, revision-bound, deduplicated `{path, location, revision}`
+   references in stable order for visible definitions and relation sites. The 50-reference
+   cap is never silent: reaching it sets `truncated=true` and adds a warning. No snapshot or
+   private absolute paths escape.
+4. Supported recovery: When output is truncated or a query needs refinement, use supported
+   Aether recovery actions only: ask a narrower `question`, specify a higher `budget_tokens`
+   within the supported range (128–8000), or call `explain` on a returned node. Never use
+   unsupported mechanisms such as `context_filter`, `get_node`, direct graph-file paths,
+   CLI `--budget`, or MCP commands.
+5. Follow references to current source files before changing code or making a behavioral
    claim. Documentation can describe a requirement that the implementation does not meet.
-5. Perform the authorized work with the role's existing responsibilities, tools, tests
+6. Perform the authorized work with the role's existing responsibilities, tools, tests
    and review. Owning a tool does not widen scope or transfer another role's authority.
-6. After an appropriate committed checkpoint, call `update` for the bound revision.
+7. After an appropriate committed checkpoint, call `update` for the bound revision.
    Any role can do this; there is no Morfeo-only writer or new human approval for an
    ordinary in-scope update. `changed_paths` is an efficiency hint, not permission to
    omit other changed sources. The integration deduplicates and serializes publication.
-7. Check `updated`, `unchanged` or failure and the revision actually covered. Dirty files
+8. Check `updated`, `unchanged` or failure and the revision actually covered. Dirty files
    are not indexed by this candidate. Never label a worker branch as the integrated
    result or union graphs from incompatible branches.
-8. When a durable lesson is worth preserving, use the work-memory procedure. Shared
+9. When a durable lesson is worth preserving, use the work-memory procedure. Shared
    project facts belong in the appropriate source document or verified code, not only
    in a private experience. Do not inject private notes into the shared index.
 
 ## Pitfalls
 
+- Do not treat `community_id: 0` or any community ID as a portable default across snapshots
+  or rebuilds. Always discover community IDs dynamically from `explain.resolved_node`.
+- Do not invoke or document unsupported recovery options such as `context_filter`, `get_node`,
+  direct graph paths, CLI `--budget`, or MCP tools. Supported recovery is a narrower
+  `question`, higher `budget_tokens` (128–8000), or `explain`.
+- Do not assume `truncated=false` means output was under budget when an explicit
+  complete-over-budget warning is present; conversely, `truncated=true` indicates cumulative
+  truncation from native node omission, byte bounds, or the 50-reference cap.
 - Do not run Graphify's global install, hooks, watch, graph merge or raw path-based
   commands to bypass the integration. No global `GRAPHIFY_OUT` destination is assumed.
 - Do not read or write another project's index because the intended index is missing.
@@ -114,6 +146,7 @@ has that behavior. Do not bypass a genuine protected-edge denial through another
 
 Confirm that the receipt names the bound project and intended revision, with no unexpected
 sources from another project. Check actual current files and relevant tests before reporting
-behavior. A graph update does not certify the implementation, close a task, or satisfy an
-acceptance criterion by itself. Record meaningful errors without copying private runtime
-paths, credentials, personal memories or entire graph payloads into public deliverables.
+behavior. Verify that references and community IDs match the active snapshot. A graph update
+does not certify the implementation, close a task, or satisfy an acceptance criterion by
+itself. Record meaningful errors without copying private runtime paths, credentials, personal
+memories or entire graph payloads into public deliverables.

@@ -119,6 +119,35 @@ The coverage run executed the performance module, but callback instrumentation r
 
 These results qualify the reconciled feature-tree content before the Git merge operation. Because non-overlapping commits from `main` enter only when the histories are joined, the final merged tree must receive a post-merge smoke/documentation check before `main` is declared complete.
 
+## Graphify boundary and contract repairs (#324–#327, GK-01–GK-03)
+
+Following authorization under Objective Contract `oc_7beb699ef34a7f04@v2` on base `ccd862b7e295669ec9dcc3d6cdf7145636614354`, the Graphify knowledge-tool integration boundary was repaired across three contract-derived implementation units:
+
+### Delivered repairs
+
+1. **GK-01 Envelope adapter (D29–D31, #324–#326, commits `ea4ec89`, `b9143c2`):**
+   - **Cumulative truncation (D29, #324):** `truncated` is computed cumulatively: it is `true` if Graphify natively omitted nodes or lines at the requested budget, if Aether's 32,768-byte content ceiling was reached, or if visible source items reached the 50-reference cap. Complete-over-budget native responses remain `truncated=false` with an explicit warning.
+   - **Supported recovery wording (D29, #324):** Native guidance citing unsupported upstream features (`context_filter`, `get_node`, direct graph paths, CLI `--budget`, MCP commands) is stripped and normalized to supported Aether actions: narrower `question`, higher `budget_tokens` (128–8000), or `explain` on a returned node.
+   - **Structured provenance (D30, #325):** All six source-bearing actions (`query`, `explain`, `neighbors`, `community`, `path`, `impact`) extract and return project-relative, revision-bound, deduplicated `{path, location, revision}` references in stable order. For `path`, references include both path nodes and traversal relation sites. The 50-reference cap is enforced and never silent: exceeding 50 items sets `truncated=true` and emits an explicit warning. No private or snapshot-internal absolute paths escape into references.
+   - **Community discovery (D31, #326):** `explain` includes `resolved_node` with `{id, community_id, community_name}` (community fields are `null` if unclassified). `community` accepts the snapshot-local `community_id` and returns `community` with `{id, name, node_count}` matching the request. IDs are snapshot-local and not portable across rebuilds.
+
+2. **GK-02 Discriminated schemas (D32, #327, commit `2810832`):**
+   - **Action-discriminated branches:** Canonical parameter schemas retain root `type=object`, `additionalProperties=false`, `required=["action"]`, and the full property union, while adding `oneOf` branches whose required and allowed properties match `_ACTION_FIELDS` for all 8 knowledge actions and 5 memory actions.
+   - **Sanitizer robustness:** Every field description names the actions that accept it. When Hermes `sanitize_tool_schemas` strips top-level combinators for strict LLM providers, action and field descriptions remain informative, while runtime `validate_arguments` strictly rejects inapplicable arguments and identity-injection attempts.
+   - **Draft 2020-12 and runtime parity:** A comprehensive 81-case test matrix verifies that canonical JSON Schema validation and runtime `validate_arguments` accept and reject identical argument combinations.
+
+3. **GK-03 Guidance and canonical skills (AC6):**
+   - **Skill updates:** Packaged canonical skills `project-knowledge` and `work-memory` reflect action-discriminated parameter schemas, query→explain→community discovery, cumulative truncation, the 50-reference cap, and supported recovery actions.
+   - **Example validation:** All skill JSON examples validate against registered tool schemas via `validate_arguments`. Community examples use illustrative snapshot-local IDs rather than documenting `community_id: 0` as a default.
+   - **Documentation alignment:** `docs/guides/project-knowledge.md` and `docs/reference/plugins-and-tools.md` document supported actions, arguments, truncation semantics, references, and discovery workflows. Verified via `scripts/check_documentation.py`.
+
+### Boundaries and exclusions
+
+- Upstream Graphify 0.9.54 and Hermes baseline `v2026.8.18` remain completely unmodified.
+- No new public tool, action, or CLI command was added.
+- No live-agent E2E, token-savings, or model-backed semantic-extraction claims are made.
+- Unit compatibility impact is `patch` (compatible envelope/schema/guidance repairs). Publication and aggregate release decisions remain deferred to terminal supervisor closeout.
+
 ## What remains outside demonstrated behavior
 
 - No model-backed semantic document extraction is configured. `configured` and `structural` modes both use the implemented local structural path, with semantic coverage pending.
