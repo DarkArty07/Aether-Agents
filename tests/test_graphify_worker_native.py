@@ -104,6 +104,64 @@ def test_native_save_and_reflect_preserve_answer_without_shared_sidecar(corpus) 
     assert not (Path(corpus["graph_path"]).parent / ".graphify_learning.json").exists()
 
 
+def test_native_worker_path_reverse_recovery_wording(corpus) -> None:
+    result = graph_worker.execute(
+        {**corpus, "action": "path", "arguments": {"source": "charge", "target": "reserve"}}
+    )
+    assert result["content"]
+    assert "No directed path found" in result["content"]
+    for forbidden in (
+        "undirected=true",
+        "context_filter",
+        "get_node",
+        "--budget",
+        "CLI:",
+        "MCP",
+        "Graph:",
+    ):
+        assert forbidden not in result["content"]
+    assert any(t in result["content"] for t in ["explain", "question", "budget_tokens"])
+
+
+@pytest.mark.parametrize(
+    "raw,expected_forbidden,expected_present",
+    [
+        (
+            "Use the MCP get_node tool.",
+            ["MCP", "get_node"],
+            "explain",
+        ),
+        (
+            "Use the MCP explain tool.",
+            ["MCP"],
+            "explain",
+        ),
+        (
+            "Retry with undirected=true to search ignoring edge direction.",
+            ["undirected=true"],
+            "explain",
+        ),
+        (
+            "Narrow with context_filter=['call'] or use get_node for a specific symbol",
+            ["context_filter", "get_node"],
+            "explain",
+        ),
+        (
+            "raise the token budget (CLI: --budget) or narrow the query",
+            ["CLI:", "--budget"],
+            "budget_tokens",
+        ),
+    ],
+)
+def test_normalize_recovery_wording_strips_mcp_and_unsupported_recovery(
+    raw: str, expected_forbidden: list[str], expected_present: str
+) -> None:
+    normalized = graph_worker.normalize_recovery_wording(raw)
+    for f in expected_forbidden:
+        assert f not in normalized
+    assert expected_present in normalized
+
+
 def test_native_worker_rejects_unqualified_version(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(importlib.metadata, "version", lambda _name: "99.0.0")
     with pytest.raises(ValueError, match="not qualified"):

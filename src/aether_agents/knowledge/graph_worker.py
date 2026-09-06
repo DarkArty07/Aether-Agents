@@ -36,13 +36,62 @@ def normalize_recovery_wording(text: str) -> str:
         "Narrow the question, raise budget_tokens (128-8000), or call explain on a returned node",
         text,
     )
-    # 4. Residual mentions of context_filter, get_node, CLI: --budget, --budget
+    text = re.sub(
+        r"Narrow with relation_filter or use get_node for a specific symbol",
+        "Narrow the question, raise budget_tokens (128-8000), or call explain on a returned node",
+        text,
+    )
+    text = re.sub(
+        r"Raise token_budget or use get_node for specific members",
+        "Raise budget_tokens (128-8000), narrow the question, or call explain on a returned node",
+        text,
+    )
+    # 4. Shortest path directed-path recovery notice
+    text = re.sub(
+        r"Retry with undirected=true to search ignoring edge direction\.",
+        "Call explain on a returned node to inspect connections, or narrow the question.",
+        text,
+    )
+    text = re.sub(
+        r"Retry with undirected=true[^\.\n]*[\.\n]?",
+        "Call explain on a returned node to inspect connections, or narrow the question.",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\bundirected\s*=\s*true\b", "explain on a returned node", text, flags=re.IGNORECASE
+    )
+
+    # 5. Strip unsupported MCP and CLI tool recovery phrasing
+    text = re.sub(
+        r"\b(?:[Uu]se\s+)?(?:the\s+)?MCP\s+(?:get_node|explain)(?:\s+tool)?\b",
+        "call explain on a returned node",
+        text,
+    )
+    text = re.sub(
+        r"\b(?:[Uu]se\s+)?(?:the\s+)?get_node(?:\s+tool)?\b",
+        "call explain on a returned node",
+        text,
+    )
+    text = re.sub(
+        r"\b(?:[Uu]se\s+)?(?:the\s+)?MCP\s+tool\b",
+        "call explain on a returned node",
+        text,
+    )
+    text = re.sub(r"\bMCP\s+([a-zA-Z0-9_]+)\s+tool\b", r"\1", text)
+    text = re.sub(r"\bMCP\s*", "", text)
+
+    # 6. Residual mentions of context_filter, get_node, CLI: --budget, --budget
     text = re.sub(r"\bcontext_filter=\[[^\]]*\]", "narrower question", text)
     text = re.sub(r"\bcontext_filter\b", "question", text)
+    text = re.sub(r"\brelation_filter\b", "question", text)
+    text = re.sub(r"\btoken_budget\b", "budget_tokens", text)
     text = re.sub(r"\bget_node\b", "explain", text)
     text = text.replace("CLI: --budget", "budget_tokens")
+    text = re.sub(r"\bCLI:\s*", "", text)
     text = text.replace("--budget", "budget_tokens")
-    # 5. Remove any Graph: /path/to/graph.json (N nodes) | header prefix to keep snapshot path internal
+
+    # 7. Remove any Graph: /path/to/graph.json (N nodes) | header prefix to keep snapshot path internal
     text = re.sub(r"^Graph:\s+[^\s|]+\s+\(\d+\s+nodes\)\s+\|\s+", "", text)
     return text
 

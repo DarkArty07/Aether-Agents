@@ -232,6 +232,26 @@ def test_regression_d29_truncation_honesty_and_supported_recovery(
     assert "context_filter" not in ctrl_content
     assert "get_node" not in ctrl_content
 
+    # Case 3: Directed path search with reverse/unconnected endpoints.
+    # Native recovery notice must contain supported Aether calls only, never undirected=true,
+    # context_filter, get_node, --budget, CLI:, MCP, or snapshot graph paths.
+    rev_path_res = store.execute(ctx, "path", {"source": "step_8", "target": "step_0"})
+    assert rev_path_res["ok"] is True
+    rev_content = rev_path_res["content"]
+    assert "No directed path found" in rev_content
+    for forbidden in (
+        "undirected=true",
+        "context_filter",
+        "get_node",
+        "--budget",
+        "CLI:",
+        "MCP",
+        "Graph:",
+        str(tmp_path),
+    ):
+        assert forbidden not in rev_content
+    assert any(term in rev_content for term in ["explain", "question", "budget_tokens"])
+
 
 def test_regression_d30_structured_references_and_cap_limit(
     tmp_path: Path, native_python: Path
