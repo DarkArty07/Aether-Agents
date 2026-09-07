@@ -1161,3 +1161,594 @@ def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python
     assert res["ok"] is True
     assert res["semantic"]["state"] == "complete"
     assert res["semantic"]["observed_usage"]["total_tokens"] > 0
+
+
+def test_gx06_deadline_seconds_zero_pending_honest_coverage(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GX-06: deadline_seconds=0 produces zero model calls, all eligible uncached chunks pending,
+    failed_paths empty, state pending or partial if cache already has fragments (never 100% failed).
+    """
+    root, state = project(tmp_path)
+    (root / "doc1.md").write_text("# Doc 1\n")
+    git_at(root, "add", "doc1.md")
+    git_at(root, "commit", "-qm", "add doc1")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    cache_root = tmp_path / "cache"
+    backend = GraphifyBackend(native_python)
+
+    model_calls = 0
+
+    def mock_fail(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        nonlocal model_calls
+        model_calls += 1
+        raise AssertionError("Auxiliary model must not be called when deadline_seconds=0")
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_fail)
+
+    # 1. Empty cache with deadline_seconds=0
+    store = KnowledgeStore(
+        state,
+        cache_root,
+        backend,
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+            "semantic_deadline_seconds": 0.0,
+        },
+    )
+    res_empty = store.execute(ctx, "update", {"mode": "configured"})
+    assert res_empty["ok"] is True
+    assert model_calls == 0
+    assert res_empty["semantic"]["state"] == "pending"
+    assert res_empty["semantic"]["failed_paths"] == []
+    assert set(res_empty["semantic"]["pending_paths"]) == {"README.md", "doc1.md", "module.py"}
+    assert res_empty["semantic"]["covered_paths"] == []
+    assert res_empty["semantic"]["observed_usage"]["model_calls"] == 0
+    assert res_empty["semantic"]["observed_usage"]["categories"]["deadline_deferred"] > 0
+    assert res_empty["semantic"]["observed_usage"]["categories"]["auxiliary_failed"] == 0
+
+    # 2. Pre-populated cache for one chunk: state becomes partial, not failed or pending
+    cache_dir = cache_root / "knowledge" / PROJECT / "semantic_cache"
+    cache = sem_mod.SemanticCache(cache_dir)
+
+    def mock_success(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        return (
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "DocNode",
+                            "label": "DocNode",
+                            "source_file": "README.md",
+                            "source_location": "1",
+                        }
+                    ],
+                    "edges": [
+                        {
+                            "source": "DocNode",
+                            "target": "module_process_order",
+                            "relation": "specifies",
+                        }
+                    ],
+                }
+            ),
+            {"total_tokens": 100},
+        )
+
+    # Prepare chunks with token_budget=1 to force multiple chunks
+    prep = backend.run(
+        "semantic_prepare",
+        source_root=root,
+        graph_path=root,
+        arguments={"files": ["README.md", "doc1.md", "module.py"], "token_budget": 1},
+    )
+    chunks = prep.get("chunks", [])
+    assert len(chunks) >= 2
+
+    chunk0 = chunks[0]
+    manifest_inputs = {"README.md": "h1", "doc1.md": "h2", "module.py": "h3"}
+    c0_files = chunk0.get("files", [])
+    f_hashes = {f: manifest_inputs[f] for f in c0_files if f in manifest_inputs}
+    fp0 = sem_mod.compute_chunk_fingerprint(
+        "regular-tracked-v1",
+        chunk0["system_prompt"] + "\n" + chunk0["user_prompt"],
+        {"deep": False, "token_budget": 4000},
+        sem_mod.get_model_identity_digest("web_extract"),
+        f_hashes,
+    )
+    val_res = backend.run(
+        "semantic_validate",
+        source_root=root,
+        graph_path=tmp_path
+        / "cache/knowledge"
+        / PROJECT
+        / res_empty["snapshot_id"]
+        / "graphify-out/graph.json",
+        arguments={
+            "model_text": mock_success()[0],
+            "allowed_sources": c0_files,
+            "allow_empty": False,
+        },
+    )
+    cache.put(fp0, val_res["fragment"])
+
+    class ChunkBackend(GraphifyBackend):
+        def __init__(self, inner: GraphifyBackend) -> None:
+            super().__init__(inner.python)
+            self.inner = inner
+
+        def run(self, action: str, **kwargs: Any) -> Any:
+            if action == "semantic_prepare":
+                return prep
+            return self.inner.run(action, **kwargs)
+
+    res_partial = sem_mod.run_semantic_extraction(
+        backend=ChunkBackend(backend),
+        source_root=root,
+        graph_path=tmp_path
+        / "cache/knowledge"
+        / PROJECT
+        / res_empty["snapshot_id"]
+        / "graphify-out/graph.json",
+        inputs=manifest_inputs,
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration={
+            "semantic_auxiliary_task": "web_extract",
+            "semantic_deadline_seconds": 0.0,
+        },
+    )
+    assert res_partial["state"] == "partial"
+    assert res_partial["observed_usage"]["model_calls"] == 0
+    assert res_partial["failed_paths"] == []
+    assert set(res_partial["covered_paths"]) == set(c0_files)
+    assert len(res_partial["pending_paths"]) > 0
+    assert res_partial["observed_usage"]["chunk_counts"]["cached"] == 1
+    assert res_partial["observed_usage"]["chunk_counts"]["pending"] == len(chunks) - 1
+    assert res_partial["observed_usage"]["chunk_counts"]["failed"] == 0
+
+
+def test_gx06_mixed_case_distinct_counts_and_paths(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GX-06: Mixed case with one successful chunk, one failed validation, and one not attempted
+    due to deadline yields distinct counts, categories, and paths.
+    """
+    root, state = project(tmp_path)
+    (root / "doc1.md").write_text("# Doc 1\n")
+    (root / "doc2.md").write_text("# Doc 2\n")
+    (root / "doc3.md").write_text("# Doc 3\n")
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "add docs")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    cache_root = tmp_path / "cache"
+    backend = GraphifyBackend(native_python)
+
+    store = KnowledgeStore(state, cache_root, backend)
+    struct_res = store.execute(ctx, "update", {"mode": "structural"})
+    graph_path = (
+        tmp_path
+        / "cache/knowledge"
+        / PROJECT
+        / struct_res["snapshot_id"]
+        / "graphify-out/graph.json"
+    )
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    chunks = [
+        {"chunk_id": 0, "files": ["doc1.md"], "system_prompt": "s0", "user_prompt": "u0"},
+        {"chunk_id": 1, "files": ["doc2.md"], "system_prompt": "s1", "user_prompt": "u1"},
+        {"chunk_id": 2, "files": ["doc3.md"], "system_prompt": "s2", "user_prompt": "u2"},
+    ]
+
+    valid_json = json.dumps(
+        {
+            "nodes": [
+                {
+                    "id": "Doc1Node",
+                    "label": "Doc1Node",
+                    "source_file": "doc1.md",
+                    "source_location": "1",
+                }
+            ],
+            "edges": [
+                {
+                    "source": "Doc1Node",
+                    "target": "module_process_order",
+                    "relation": "specifies",
+                }
+            ],
+        }
+    )
+    invalid_json = json.dumps({"nodes": [], "edges": [{"source": "X", "target": "Y"}]})
+
+    import time
+
+    original_time = time.time
+    mock_clock = [original_time()]
+
+    def mock_time() -> float:
+        return mock_clock[0]
+
+    def mock_aux(
+        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+    ) -> tuple[str, dict[str, Any]]:
+        if "s0" in system_prompt:
+            return valid_json, {"total_tokens": 100}
+        if "s1" in system_prompt:
+            mock_clock[0] += 1000.0  # Expire deadline so chunk 2 is deferred
+            return invalid_json, {"total_tokens": 50}
+        return valid_json, {"total_tokens": 100}
+
+    monkeypatch.setattr(time, "time", mock_time)
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
+
+    class MockBackend(GraphifyBackend):
+        def __init__(self, inner: GraphifyBackend) -> None:
+            super().__init__(inner.python)
+            self.inner = inner
+
+        def run(self, action: str, **kwargs: Any) -> Any:
+            if action == "semantic_prepare":
+                return {"chunks": chunks}
+            return self.inner.run(action, **kwargs)
+
+    res = sem_mod.run_semantic_extraction(
+        backend=MockBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs={
+            "doc1.md": "h1",
+            "doc2.md": "h2",
+            "doc3.md": "h3",
+            "README.md": "h4",
+            "module.py": "h5",
+        },
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract"},
+        deadline_seconds=500.0,
+    )
+
+    assert res["state"] == "partial"
+    assert "doc1.md" in res["covered_paths"]
+    assert "doc2.md" in res["failed_paths"]
+    assert "doc3.md" in res["pending_paths"]
+    assert "doc1.md" not in res["failed_paths"]
+    assert "doc1.md" not in res["pending_paths"]
+    assert "doc2.md" not in res["covered_paths"]
+    assert "doc3.md" not in res["covered_paths"]
+
+    counts = res["observed_usage"]["chunk_counts"]
+    assert counts["total"] == 3
+    assert counts["validated"] == 1
+    assert counts["failed"] == 1
+    assert counts["pending"] == 1
+
+    cats = res["observed_usage"]["categories"]
+    assert cats["validation_failed"] == 1
+    assert cats["deadline_deferred"] == 1
+    assert cats["auxiliary_failed"] == 0
+    assert cats["apply_failed"] == 0
+
+
+def test_gx06_split_file_conservative_coverage(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GX-06: A split file present across multiple chunks is covered only when ALL its chunks succeed.
+    If one chunk succeeds and another fails or remains pending, the shared file is not fully covered.
+    """
+    root, state = project(tmp_path)
+    (root / "shared.md").write_text("# Shared Doc\n")
+    (root / "only0.md").write_text("# Only 0\n")
+    (root / "only1.md").write_text("# Only 1\n")
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "add docs")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    cache_root = tmp_path / "cache"
+    backend = GraphifyBackend(native_python)
+
+    store = KnowledgeStore(state, cache_root, backend)
+    struct_res = store.execute(ctx, "update", {"mode": "structural"})
+    graph_path = (
+        tmp_path
+        / "cache/knowledge"
+        / PROJECT
+        / struct_res["snapshot_id"]
+        / "graphify-out/graph.json"
+    )
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    chunks = [
+        {
+            "chunk_id": 0,
+            "files": ["shared.md", "only0.md"],
+            "system_prompt": "s0",
+            "user_prompt": "u0",
+        },
+        {
+            "chunk_id": 1,
+            "files": ["shared.md", "only1.md"],
+            "system_prompt": "s1",
+            "user_prompt": "u1",
+        },
+    ]
+
+    valid_json0 = json.dumps(
+        {
+            "nodes": [
+                {
+                    "id": "SharedNode",
+                    "label": "SharedNode",
+                    "source_file": "shared.md",
+                    "source_location": "1",
+                },
+                {
+                    "id": "Only0Node",
+                    "label": "Only0Node",
+                    "source_file": "only0.md",
+                    "source_location": "1",
+                },
+            ],
+            "edges": [
+                {"source": "SharedNode", "target": "module_process_order", "relation": "specifies"},
+                {"source": "Only0Node", "target": "module_process_order", "relation": "specifies"},
+            ],
+        }
+    )
+    invalid_json1 = json.dumps({"nodes": [], "edges": [{"source": "A", "target": "B"}]})
+
+    class MockSplitBackend(GraphifyBackend):
+        def __init__(self, inner: GraphifyBackend) -> None:
+            super().__init__(inner.python)
+            self.inner = inner
+
+        def run(self, action: str, **kwargs: Any) -> Any:
+            if action == "semantic_prepare":
+                return {"chunks": chunks}
+            return self.inner.run(action, **kwargs)
+
+    inputs = {
+        "shared.md": "h1",
+        "only0.md": "h2",
+        "only1.md": "h3",
+        "README.md": "h4",
+        "module.py": "h5",
+    }
+
+    # Case A: Chunk 0 succeeds, Chunk 1 fails validation
+    def mock_aux_a(
+        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+    ) -> tuple[str, dict[str, Any]]:
+        if "s0" in system_prompt:
+            return valid_json0, {"total_tokens": 100}
+        return invalid_json1, {"total_tokens": 50}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_a)
+
+    res_a = sem_mod.run_semantic_extraction(
+        backend=MockSplitBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs=inputs,
+        cache_root=cache_root / "case_a",
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract"},
+    )
+    assert "only0.md" in res_a["covered_paths"]
+    assert "shared.md" not in res_a["covered_paths"]
+    assert "shared.md" in res_a["failed_paths"]
+    assert "only1.md" in res_a["failed_paths"]
+
+    # Case B: Chunk 0 succeeds, Chunk 1 is pending due to deadline
+    import time
+
+    mock_clock = [time.time()]
+
+    def mock_time_b() -> float:
+        return mock_clock[0]
+
+    def mock_aux_b(
+        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+    ) -> tuple[str, dict[str, Any]]:
+        if "s0" in system_prompt:
+            mock_clock[0] += 1000.0  # Expire deadline before chunk 1 can run
+            return valid_json0, {"total_tokens": 100}
+        raise AssertionError("Chunk 1 must not be called")
+
+    monkeypatch.setattr(time, "time", mock_time_b)
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_b)
+
+    res_b = sem_mod.run_semantic_extraction(
+        backend=MockSplitBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs=inputs,
+        cache_root=cache_root / "case_b",
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract"},
+        deadline_seconds=500.0,
+    )
+    assert "only0.md" in res_b["covered_paths"]
+    assert "shared.md" not in res_b["covered_paths"]
+    assert "shared.md" in res_b["pending_paths"]
+    assert "only1.md" in res_b["pending_paths"]
+    assert "shared.md" not in res_b["failed_paths"]
+
+
+def test_gx06_resume_uses_validated_cache_and_progresses_pending(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GX-06: Second run uses validated cache, does not recount validated fragments as failed,
+    and progresses only remaining pending chunks.
+    """
+    root, state = project(tmp_path)
+    (root / "doc1.md").write_text("# Doc 1\n")
+    (root / "doc2.md").write_text("# Doc 2\n")
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "add docs")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    cache_root = tmp_path / "cache"
+    backend = GraphifyBackend(native_python)
+
+    store = KnowledgeStore(state, cache_root, backend)
+    struct_res = store.execute(ctx, "update", {"mode": "structural"})
+    graph_path = (
+        tmp_path
+        / "cache/knowledge"
+        / PROJECT
+        / struct_res["snapshot_id"]
+        / "graphify-out/graph.json"
+    )
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    chunks = [
+        {"chunk_id": 0, "files": ["doc1.md"], "system_prompt": "s0", "user_prompt": "u0"},
+        {"chunk_id": 1, "files": ["doc2.md"], "system_prompt": "s1", "user_prompt": "u1"},
+    ]
+
+    valid_json0 = json.dumps(
+        {
+            "nodes": [
+                {
+                    "id": "Doc1Node",
+                    "label": "Doc1Node",
+                    "source_file": "doc1.md",
+                    "source_location": "1",
+                }
+            ],
+            "edges": [
+                {"source": "Doc1Node", "target": "module_process_order", "relation": "specifies"}
+            ],
+        }
+    )
+    valid_json1 = json.dumps(
+        {
+            "nodes": [
+                {
+                    "id": "Doc2Node",
+                    "label": "Doc2Node",
+                    "source_file": "doc2.md",
+                    "source_location": "1",
+                }
+            ],
+            "edges": [
+                {"source": "Doc2Node", "target": "module_process_order", "relation": "specifies"}
+            ],
+        }
+    )
+
+    class MockBackend(GraphifyBackend):
+        def __init__(self, inner: GraphifyBackend) -> None:
+            super().__init__(inner.python)
+            self.inner = inner
+
+        def run(self, action: str, **kwargs: Any) -> Any:
+            if action == "semantic_prepare":
+                return {"chunks": chunks}
+            return self.inner.run(action, **kwargs)
+
+    # Run 1: Chunk 0 succeeds, Chunk 1 deferred by deadline
+    import time
+
+    mock_clock = [time.time()]
+
+    def mock_time() -> float:
+        return mock_clock[0]
+
+    def mock_aux_run1(
+        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+    ) -> tuple[str, dict[str, Any]]:
+        if "s0" in system_prompt:
+            mock_clock[0] += 1000.0  # Expire deadline
+            return valid_json0, {"total_tokens": 100}
+        raise AssertionError("Chunk 1 must not be called in Run 1")
+
+    monkeypatch.setattr(time, "time", mock_time)
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_run1)
+
+    res1 = sem_mod.run_semantic_extraction(
+        backend=MockBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs={"doc1.md": "h1", "doc2.md": "h2"},
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract"},
+        deadline_seconds=500.0,
+    )
+    assert res1["state"] == "partial"
+    assert res1["covered_paths"] == ["doc1.md"]
+    assert res1["pending_paths"] == ["doc2.md"]
+    assert res1["failed_paths"] == []
+    assert res1["observed_usage"]["chunk_counts"]["validated"] == 1
+    assert res1["observed_usage"]["chunk_counts"]["pending"] == 1
+
+    # Run 2: Resume with deadline_seconds=0
+    # Zero model calls, cached chunk 0 is applied and not failed, chunk 1 remains pending
+    calls_run2 = 0
+
+    def mock_aux_run2(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        nonlocal calls_run2
+        calls_run2 += 1
+        raise AssertionError("No calls should be made with deadline_seconds=0")
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_run2)
+
+    res2 = sem_mod.run_semantic_extraction(
+        backend=MockBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs={"doc1.md": "h1", "doc2.md": "h2"},
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract", "semantic_deadline_seconds": 0.0},
+    )
+    assert res2["state"] == "partial"
+    assert calls_run2 == 0
+    assert res2["covered_paths"] == ["doc1.md"]
+    assert res2["pending_paths"] == ["doc2.md"]
+    assert res2["failed_paths"] == []
+    assert res2["observed_usage"]["chunk_counts"]["cached"] == 1
+    assert res2["observed_usage"]["chunk_counts"]["pending"] == 1
+    assert res2["observed_usage"]["chunk_counts"]["failed"] == 0
+
+    # Run 3: Resume with normal deadline, chunk 1 succeeds
+    # Chunk 0 must come from cache (0 calls), Chunk 1 makes exactly 1 call
+    calls_run3 = 0
+
+    def mock_aux_run3(
+        task: str, system_prompt: str, user_prompt: str, timeout: float = 120.0
+    ) -> tuple[str, dict[str, Any]]:
+        nonlocal calls_run3
+        calls_run3 += 1
+        assert "s1" in system_prompt
+        return valid_json1, {"total_tokens": 100}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_run3)
+
+    res3 = sem_mod.run_semantic_extraction(
+        backend=MockBackend(backend),
+        source_root=root,
+        graph_path=graph_path,
+        inputs={"doc1.md": "h1", "doc2.md": "h2"},
+        cache_root=cache_root,
+        ctx=ctx,
+        configuration={"semantic_auxiliary_task": "web_extract"},
+        deadline_seconds=500.0,
+    )
+    assert res3["state"] == "complete"
+    assert calls_run3 == 1
+    assert set(res3["covered_paths"]) == {"doc1.md", "doc2.md"}
+    assert res3["pending_paths"] == []
+    assert res3["failed_paths"] == []
+    assert res3["observed_usage"]["chunk_counts"]["cached"] == 1
+    assert res3["observed_usage"]["chunk_counts"]["validated"] == 1
+    assert res3["observed_usage"]["chunk_counts"]["pending"] == 0
