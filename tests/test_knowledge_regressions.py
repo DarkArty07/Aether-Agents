@@ -1161,3 +1161,126 @@ def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python
     assert res["ok"] is True
     assert res["semantic"]["state"] == "complete"
     assert res["semantic"]["observed_usage"]["total_tokens"] > 0
+
+
+def test_large_corpus_semantic_prepare_bounded_paging(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail-first regression on #332: large eligible corpus prepare exceeds 2MB monolithically, passes when paged."""
+    import aether_agents.knowledge.semantic as sem_mod
+
+    root, state = project(tmp_path)
+    doc_dir = root / "docs"
+    doc_dir.mkdir()
+    doc_files = []
+    content = "# Architecture\n\n" + (
+        "Aether autonomous multi-agent workflow knowledge graph.\n" * 200
+    )
+    for i in range(160):
+        fpath = doc_dir / f"guide_{i:03d}.md"
+        fpath.write_text(content, encoding="utf-8")
+        doc_files.append(str(fpath.relative_to(root)))
+
+    git_at(root, "add", ".")
+    git_at(root, "commit", "-qm", "large corpus")
+
+    backend = GraphifyBackend(native_python)
+
+    # 1. Monolithic simulation (#332 failure mode):
+    # Retrieve all chunks across pages and assert that returning them monolithically
+    # exceeds the 2,000,000 byte Graphify transport cap.
+    all_chunks = sem_mod._fetch_all_prepared_chunks(
+        backend, source_root=root, graph_path=root / "graph.json", eligible_files=doc_files
+    )
+    assert len(all_chunks) == 160
+    monolithic_payload = {
+        "ok": True,
+        "action": "semantic_prepare",
+        "content": "monolithic prepare payload",
+        "references": [],
+        "chunks": all_chunks,
+    }
+    monolithic_bytes = json.dumps(monolithic_payload).encode("utf-8")
+    assert len(monolithic_bytes) > 2_000_000, (
+        f"Monolithic payload must exceed 2MB to reproduce #332 (got {len(monolithic_bytes)} bytes)"
+    )
+
+    # 2. Bounded paging passes:
+    # A single paged prepare call is well below the 2MB limit
+    p0 = backend.run(
+        "semantic_prepare",
+        source_root=root,
+        graph_path=root / "graph.json",
+        arguments={"files": doc_files, "offset": 0, "limit": 25},
+    )
+    p0_bytes = json.dumps(p0).encode("utf-8")
+    assert len(p0_bytes) < 2_000_000, (
+        f"Paged payload must stay under 2MB (got {len(p0_bytes)} bytes)"
+    )
+    assert p0["total_chunks"] == 160
+    assert p0["has_more"] is True
+    assert len(p0["chunks"]) == 25
+
+    # 3. Deterministic fingerprinting over full eligible corpus succeeds without RESULT_TOO_LARGE
+    inputs = {f: hashlib.sha256((root / f).read_bytes()).hexdigest() for f in doc_files}
+    cfg = {"semantic": {"auxiliary_task": "web_extract"}}
+    fp = sem_mod.compute_semantic_fingerprint(
+        backend, source_root=root, graph_path=root / "graph.json", inputs=inputs, configuration=cfg
+    )
+    assert fp is not None and isinstance(fp, str)
+
+    # 4. Full extraction across large corpus:
+    # Mock auxiliary model to return valid fragments bound to existing structural nodes
+    def mock_aux_call(task: str, *args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        user_prompt = kwargs.get("user_prompt", "")
+        if not user_prompt and len(args) >= 2:
+            user_prompt = args[1]
+        matched = "README.md"
+        for f in doc_files:
+            if f in user_prompt:
+                matched = f
+                break
+        safe_name = matched.replace("/", "_").replace(".", "_")
+        frag = {
+            "nodes": [
+                {
+                    "id": f"node_{safe_name}",
+                    "label": f"Doc {matched}",
+                    "source_file": matched,
+                    "source_location": "1",
+                }
+            ],
+            "edges": [
+                {
+                    "source": f"node_{safe_name}",
+                    "target": "module_process_order",
+                    "relation": "references",
+                }
+            ],
+        }
+        return json.dumps(frag), {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+        }
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_call)
+
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={
+            "enabled": True,
+            "semantic_enabled": True,
+            "semantic_auxiliary_task": "web_extract",
+        },
+    )
+    res = store.execute(ctx, "update", {"mode": "configured"})
+    assert res["ok"] is True
+    assert res["coverage"]["documents"] == "semantic"
+    assert res["semantic"]["state"] == "complete"
+    assert len(res["semantic"]["covered_paths"]) == 162
+    assert len(res["semantic"]["validated_chunk_ids"]) == 160
+    assert res["semantic_pending"] is False
