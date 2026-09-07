@@ -838,12 +838,20 @@ def execute(request: dict) -> dict:
         file_list = args.get("files", [])
         max_chars = int(args.get("max_chars", 100_000))
         token_budget = int(args.get("token_budget", 4000))
+        offset = max(0, int(args.get("offset", 0)))
+        raw_limit = args.get("limit", args.get("page_size", 25))
+        limit = min(max(1, int(raw_limit)), 50) if raw_limit is not None else 25
+
         file_paths = [source_root / f for f in file_list if (source_root / f).is_file()]
         expanded = expand_oversized_files(file_paths, max_chars=max_chars)
         packed_chunks = _pack_chunks_by_tokens(expanded, token_budget=token_budget)
+        total_chunks = len(packed_chunks)
+        selected_chunks = packed_chunks[offset : offset + limit]
+
         system_prompt = _extraction_system(deep=False)
         chunks = []
-        for idx, chunk in enumerate(packed_chunks):
+        for i, chunk in enumerate(selected_chunks):
+            chunk_id = offset + i
             user_prompt = _read_files(chunk, root=source_root)
             paths = []
             for item in chunk:
@@ -855,17 +863,25 @@ def execute(request: dict) -> dict:
                 paths.append(rel)
             chunks.append(
                 {
-                    "chunk_id": idx,
+                    "chunk_id": chunk_id,
                     "files": paths,
                     "system_prompt": system_prompt,
                     "user_prompt": user_prompt,
                 }
             )
-        content = f"Prepared {len(chunks)} semantic extraction chunks from {len(file_paths)} files."
+        has_more = (offset + len(chunks)) < total_chunks
+        content = (
+            f"Prepared {len(chunks)} semantic extraction chunks "
+            f"(offset {offset}, total {total_chunks}) from {len(file_paths)} files."
+        )
         return {
             "content": content,
             "references": [],
             "chunks": chunks,
+            "total_chunks": total_chunks,
+            "offset": offset,
+            "limit": limit,
+            "has_more": has_more,
         }
 
     if action in ("semantic_parse", "semantic_validate"):

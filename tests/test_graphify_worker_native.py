@@ -784,3 +784,107 @@ def test_native_worker_semantic_prepare_parse_and_apply(corpus, tmp_path: Path) 
     assert ed_rev["_origin"] == "ast"
     assert ed_rev["origin"] in ("ast", "structural")
     assert ed_rev["confidence"] == "EXTRACTED"
+
+
+def test_native_worker_semantic_prepare_pagination(tmp_path: Path) -> None:
+    source_dir = tmp_path / "src"
+    source_dir.mkdir()
+    files = []
+    for i in range(6):
+        fname = f"mod_{i}.py"
+        (source_dir / fname).write_text(f"def func_{i}():\n    return {i}\n", encoding="utf-8")
+        files.append(fname)
+
+    graph_file = tmp_path / "graph.json"
+    request = {"source_root": str(source_dir), "graph_path": str(graph_file)}
+
+    # Default pagination
+    res_default = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "token_budget": 10},
+        }
+    )
+    assert res_default["total_chunks"] == 6
+    assert res_default["offset"] == 0
+    assert res_default["limit"] == 25
+    assert res_default["has_more"] is False
+    assert len(res_default["chunks"]) == 6
+
+    # Page 0 with limit 2
+    res_p0 = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "offset": 0, "limit": 2, "token_budget": 10},
+        }
+    )
+    assert res_p0["total_chunks"] == 6
+    assert res_p0["offset"] == 0
+    assert res_p0["limit"] == 2
+    assert res_p0["has_more"] is True
+    assert len(res_p0["chunks"]) == 2
+    assert res_p0["chunks"][0]["chunk_id"] == 0
+    assert res_p0["chunks"][1]["chunk_id"] == 1
+
+    # Page 1 with offset 2, limit 2
+    res_p1 = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "offset": 2, "limit": 2, "token_budget": 10},
+        }
+    )
+    assert res_p1["offset"] == 2
+    assert res_p1["has_more"] is True
+    assert len(res_p1["chunks"]) == 2
+    assert res_p1["chunks"][0]["chunk_id"] == 2
+    assert res_p1["chunks"][1]["chunk_id"] == 3
+
+    # Page 2 with offset 4, limit 2
+    res_p2 = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "offset": 4, "limit": 2, "token_budget": 10},
+        }
+    )
+    assert res_p2["offset"] == 4
+    assert res_p2["has_more"] is False
+    assert len(res_p2["chunks"]) == 2
+    assert res_p2["chunks"][0]["chunk_id"] == 4
+    assert res_p2["chunks"][1]["chunk_id"] == 5
+
+    # Offset beyond total
+    res_empty = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "offset": 10, "limit": 2, "token_budget": 10},
+        }
+    )
+    assert res_empty["chunks"] == []
+    assert res_empty["has_more"] is False
+
+    # Limit clamped to 50
+    res_clamped = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": files, "limit": 1000, "token_budget": 10},
+        }
+    )
+    assert res_clamped["limit"] == 50
+
+    # Empty files
+    res_none = graph_worker.execute(
+        {
+            **request,
+            "action": "semantic_prepare",
+            "arguments": {"files": []},
+        }
+    )
+    assert res_none["total_chunks"] == 0
+    assert res_none["chunks"] == []
+    assert res_none["has_more"] is False
