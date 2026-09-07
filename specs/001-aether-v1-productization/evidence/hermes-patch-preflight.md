@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-06T00:39:44Z`
+Observation timestamp: `2026-09-07T03:39:57Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be4114865e9fe`
+Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c052209e5c9bf`
 
 ## Remaining local guarantees
 
@@ -21,6 +21,7 @@ Source ledger SHA-256: `737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be411
 - `HLP-247`: Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.
 - `HLP-262`: Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.
 - `HLP-280`: Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.
+- `HLP-335`: Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.
 
 ## Qualified upstream equivalents
 
@@ -70,6 +71,10 @@ Source ledger SHA-256: `737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be411
 - `HLP-280` (retirement_gate): Retirement gate status is failed.
 - `HLP-280` (uncertainty): The inventory upstream lacks the affinity origin primitives.
 - `HLP-280` (uncertainty): Clean public-baseline reconstruction is not claimed; the exact local preimage is retained privately.
+- `HLP-335` (artifact): No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.
+- `HLP-335` (retirement_gate): Retirement gate status is failed.
+- `HLP-335` (uncertainty): Upstream PR 95199 remains open and is not an exact-revision behavioral pass of this local delta.
+- `HLP-335` (uncertainty): No public portable patch is checked into patches/hermes; reconstruction uses a private dirty preimage.
 
 ## Artifact integrity
 
@@ -86,6 +91,7 @@ Source ledger SHA-256: `737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be411
 - `HLP-247`: not_applicable
 - `HLP-262`: unavailable
 - `HLP-280`: unavailable
+- `HLP-335`: unavailable
 
 ## Safe next decisions
 
