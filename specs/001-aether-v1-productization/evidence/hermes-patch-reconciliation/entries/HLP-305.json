@@ -1,0 +1,82 @@
+{
+  "id": "HLP-305",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-305--transient-turn-lease-refresh-contention-must-not-impersonate-a-user-interrupt",
+  "components": [
+    "HLP-305",
+    "run_agent.py",
+    "tests/run_agent/test_cross_process_turn_lease.py"
+  ],
+  "required_behavior": "A transient SQLite locked or busy error while the current holder refreshes a session turn lease must not be presented as a user interrupt while the existing TTL leaves a complete bounded retry budget. A holder-qualified refresh miss, non-lock persistence error, or exhausted safe retry window must still hard-interrupt before authority can expire.",
+  "local_status": "RELOAD_PENDING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/305",
+        "state": "open"
+      },
+      {
+        "kind": "commit",
+        "url": "https://github.com/NousResearch/hermes-agent/commit/4810074d73d9419dc82545202d595507a73f4f0e",
+        "state": "current source spot-check"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4810074d73d9419dc82545202d595507a73f4f0e/agent/turn_facade_lease.py#L174-L203",
+        "result": "The current upstream façade still interrupts the turn for every refresh exception; it does not distinguish a transient locked or busy persistence error from authority loss."
+      },
+      {
+        "kind": "api",
+        "reference": "https://github.com/DarkArty07/Aether-Agents/issues/305#issuecomment-5575740762",
+        "result": "The live recurrence records a lease refresh blocked for more than 20 seconds, followed by a false interrupted_by_user terminal state while the TUI process and background work remained alive."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an exact upstream revision without HLP-305 completes a transient-lock-then-success turn, fails closed before TTL expiry under persistent contention, and preserves holder-miss, non-lock-error, late-refresh cleanup and real TUI continuation controls.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/run_agent/test_cross_process_turn_lease.py::test_run_conversation_retries_transient_locked_lease_refresh",
+        "result": "Exact loaded-source RED failed with an empty final response after the first locked refresh; the HLP-305 candidate and installed fresh-process run pass. Current upstream source still has the unconditional exception interrupt, so the upstream retirement gate is not satisfied."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-305-tui-lease-refresh-contention.patch",
+        "result": "passed",
+        "ledger_sha256": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
+        "computed_sha256": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "private exact loaded-source preimages identified by the SHA-256 values in HERMES_LOCAL_PATCHES.md",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "local exact-preimage application reconstructed both installed file hashes byte for byte",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact local reconstruction passed, but the already-modified editable runtime preimages are private and are not public release artifacts. Public readers must not infer clean upstream applicability from the portable patch checksum."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.",
+    "Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found."
+  ],
+  "summary": "Retain HLP-305 and reload gracefully after the Graphify audit. The local patch retries only transient locked or busy refresh failures while the current TTL leaves a full bounded retry budget; every proven or unsafe authority state remains fail-closed."
+}
