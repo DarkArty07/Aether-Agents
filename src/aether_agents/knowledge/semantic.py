@@ -74,6 +74,44 @@ def resolve_auxiliary_task(configuration: dict[str, Any]) -> str | None:
     return task
 
 
+def _fetch_all_prepared_chunks(
+    backend: GraphifyBackend,
+    source_root: Path,
+    graph_path: Path,
+    eligible_files: list[str],
+    *,
+    page_size: int = 25,
+) -> list[dict[str, Any]]:
+    """Fetch prepared semantic extraction chunks across bounded pages."""
+    all_chunks: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        prep_res = backend.run(
+            "semantic_prepare",
+            source_root=source_root,
+            graph_path=graph_path,
+            arguments={
+                "files": eligible_files,
+                "offset": offset,
+                "limit": page_size,
+            },
+        )
+        chunks = prep_res.get("chunks", [])
+        if not chunks:
+            break
+        all_chunks.extend(chunks)
+        total_chunks = prep_res.get("total_chunks")
+        has_more = prep_res.get("has_more")
+        if total_chunks is not None and len(all_chunks) >= total_chunks:
+            break
+        if has_more is False:
+            break
+        if total_chunks is None and len(chunks) < page_size:
+            break
+        offset += len(chunks)
+    return all_chunks
+
+
 def compute_semantic_fingerprint(
     backend: GraphifyBackend,
     source_root: Path,
@@ -86,21 +124,22 @@ def compute_semantic_fingerprint(
     if not aux_task:
         return None
 
-    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    eligible_files = sorted(
+        [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    )
     if not eligible_files:
         return hashlib.sha256(b"no_eligible_files").hexdigest()
 
     try:
-        prep_res = backend.run(
-            "semantic_prepare",
+        chunks = _fetch_all_prepared_chunks(
+            backend=backend,
             source_root=source_root,
             graph_path=graph_path,
-            arguments={"files": eligible_files},
+            eligible_files=eligible_files,
         )
     except Exception:
         return None
 
-    chunks = prep_res.get("chunks", [])
     if not chunks:
         return hashlib.sha256(b"no_chunks").hexdigest()
 
@@ -243,7 +282,9 @@ def run_semantic_extraction(
     scope_version = "regular-tracked-v1"
 
     # Identify eligible documentation and code files
-    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    eligible_files = sorted(
+        [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    )
     if not eligible_files:
         return {
             "state": "complete",
@@ -255,14 +296,30 @@ def run_semantic_extraction(
             "observed_usage": {"total_tokens": 0, "model_calls": 0},
         }
 
-    # Step 1: Prepare chunks in native worker
-    prep_res = backend.run(
-        "semantic_prepare",
-        source_root=source_root,
-        graph_path=graph_path,
-        arguments={"files": eligible_files},
-    )
-    chunks = prep_res.get("chunks", [])
+    # Step 1: Prepare chunks in native worker across bounded pages
+    try:
+        chunks = _fetch_all_prepared_chunks(
+            backend=backend,
+            source_root=source_root,
+            graph_path=graph_path,
+            eligible_files=eligible_files,
+        )
+    except Exception as exc:
+        logger.warning("Failed preparing semantic extraction chunks: %s", exc)
+        return {
+            "state": "unavailable",
+            "fingerprint": None,
+            "covered_paths": [],
+            "pending_paths": sorted(eligible_files),
+            "failed_paths": [],
+            "validated_chunk_ids": [],
+            "observed_usage": {
+                "total_tokens": 0,
+                "model_calls": 0,
+                "error": str(exc),
+            },
+        }
+
     if not chunks:
         return {
             "state": "complete",
