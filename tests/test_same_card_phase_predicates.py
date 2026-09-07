@@ -1,11 +1,13 @@
 """Aether acceptance tests for same-card implementation/review phases.
 
 These tests pin the Hermes lifecycle behavior Aether relies on for issue #190.
-They use an isolated HERMES_HOME and never touch the real board.
+They isolate inherited dispatcher routing as well as HERMES_HOME.
 """
 
 from __future__ import annotations
 
+import inspect
+import os
 from pathlib import Path
 
 import pytest
@@ -15,12 +17,91 @@ from hermes_cli import kanban_db as kb
 
 @pytest.fixture
 def isolated_board(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Explicit dispatcher pins outrank HERMES_HOME. Also remove task/run
+    # identity so native helpers cannot attribute fixture work to a real run.
+    for name in tuple(os.environ):
+        if name.startswith("HERMES_KANBAN_"):
+            monkeypatch.delenv(name)
     home = tmp_path / "hermes-home"
     home.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
     kb.init_db()
     with kb.connect_closing() as conn:
         yield conn
+
+
+@pytest.mark.parametrize("selector", ["db", "board", "home", "workspaces", "all"])
+def test_isolated_board_preserves_dispatcher_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selector: str
+) -> None:
+    def fixture_environment() -> dict[str, str]:
+        # Hermes may lazily set HERMES_QUIET while importing its CLI.
+        # Compare the fixture-owned namespace and an unrelated control,
+        # not the side effects of every native module loaded by the cycle.
+        return {
+            name: value
+            for name, value in os.environ.items()
+            if name.startswith("HERMES_KANBAN_") or name in {"HERMES_HOME", "AETHER_TEST_SENTINEL"}
+        }
+
+    monkeypatch.delenv("HERMES_QUIET", raising=False)
+    # Never use a real inherited board even when exercising the broken fixture.
+    for name in tuple(os.environ):
+        if name.startswith("HERMES_KANBAN_"):
+            monkeypatch.delenv(name)
+    outer = tmp_path / "dispatcher"
+    outer.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(outer))
+    outer_db = outer / "kanban.db"
+    kb.init_db(db_path=outer_db)
+    with kb.connect_closing(db_path=outer_db) as conn:
+        kb.create_task(conn, title="dispatcher sentinel", assignee=None)
+    before = {
+        path.relative_to(outer): path.read_bytes() for path in outer.rglob("*") if path.is_file()
+    }
+
+    selectors = {
+        "db": ("HERMES_KANBAN_DB", str(outer_db)),
+        "board": ("HERMES_KANBAN_BOARD", "dispatcher-board"),
+        "home": ("HERMES_KANBAN_HOME", str(outer)),
+        "workspaces": ("HERMES_KANBAN_WORKSPACES_ROOT", str(outer / "workspaces")),
+    }
+    for key in selectors if selector == "all" else (selector,):
+        name, value = selectors[key]
+        monkeypatch.setenv(name, value)
+    # Role/run markers must not make fixture operations impersonate the worker.
+    for name, value in {
+        "HERMES_KANBAN_TASK": "t_outer",
+        "HERMES_KANBAN_RUN_ID": "91",
+        "HERMES_KANBAN_AFFINITY_FLOW_ID": "outer-flow",
+        "HERMES_KANBAN_FUTURE_FIELD": "outer-future",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("AETHER_TEST_SENTINEL", "preserve unrelated configuration")
+    inherited = fixture_environment()
+
+    inner = tmp_path / "fixture"
+    inner.mkdir()
+    with pytest.MonkeyPatch.context() as fixture_patch:
+        fixture = inspect.unwrap(isolated_board)(inner, fixture_patch)
+        try:
+            conn = next(fixture)
+            actual = Path(conn.execute("PRAGMA database_list").fetchone()[2]).resolve()
+            expected_home = inner / "hermes-home"
+            assert actual == (expected_home / "kanban.db").resolve()
+            assert kb.workspaces_root() == expected_home / "kanban" / "workspaces"
+            assert not any(name.startswith("HERMES_KANBAN_") for name in os.environ)
+            assert os.environ["AETHER_TEST_SENTINEL"] == inherited["AETHER_TEST_SENTINEL"]
+            test_same_card_cycle_preserves_contract_candidate_budget_and_history(conn)
+            assert conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
+        finally:
+            fixture.close()
+
+    assert fixture_environment() == inherited
+    after = {
+        path.relative_to(outer): path.read_bytes() for path in outer.rglob("*") if path.is_file()
+    }
+    assert after == before
 
 
 def _stable_contract(task) -> dict:
