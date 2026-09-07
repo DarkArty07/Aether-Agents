@@ -1,0 +1,15 @@
+---
+import type { Copy } from '../data/content';
+interface Props { c: Copy; }
+const { c } = Astro.props;
+---
+<div class="process-diagram motion-scene" data-scene="process">
+  <div class="process-top mono"><span>{c.ui.path}</span><span>{c.process.correction} ↶</span></div>
+  <div class="process-rail" aria-hidden="true">
+    <svg viewBox="0 0 1200 100" preserveAspectRatio="none"><path class="rail-base" id="process-path" d="M100 40H1100"/><path class="rail-return" id="process-return" d="M900 40C900 100 700 100 700 40"/><g data-process-packet><circle r="9" class="packet-glow"/><circle r="3.5" class="packet-core"/></g></svg>
+  </div>
+  <ol class="process-stages">
+    {c.process.stages.map((stage, i) => <li data-stage={i}><span class="stage-index" aria-hidden="true"></span><h3>{stage.name}</h3><p>{stage.text}</p></li>)}
+  </ol>
+  <p class="metadata process-meta">{c.process.meta}</p>
+</div>

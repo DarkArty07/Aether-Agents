@@ -1,0 +1,97 @@
+---
+import Layout from '../layouts/Layout.astro';
+import SectionLabel from './SectionLabel.astro';
+import Astrolabe from './Astrolabe.astro';
+import TeamDiagram from './TeamDiagram.astro';
+import ProcessDiagram from './ProcessDiagram.astro';
+import KnowledgeGraph from './KnowledgeGraph.astro';
+import Atmosphere from './Atmosphere.astro';
+import { links, type Copy } from '../data/content';
+import { sitePath } from '../lib/site-path';
+interface Props { c: Copy; }
+const { c } = Astro.props;
+const d = c.development;
+const hero800 = sitePath('/images/aether-morfeo-hero-800.webp');
+const hero1280 = sitePath('/images/aether-morfeo-hero-1280.webp');
+const hero1672 = sitePath('/images/aether-morfeo-hero-1672.webp');
+const finale800 = sitePath('/images/aether-ether-finale-800.webp');
+const finale1280 = sitePath('/images/aether-ether-finale-1280.webp');
+const finale1672 = sitePath('/images/aether-ether-finale-1672.webp');
+const docsHome = sitePath('/docs/');
+---
+<Layout title={c.title} description={c.description} lang={c.lang}>
+  <main id="main">
+    <section id="origen" class="hero" data-section="00" data-atmosphere aria-labelledby="hero-title">
+      <picture class="hero-art" data-atmosphere-art><source type="image/webp" srcset={`${hero800} 800w, ${hero1280} 1280w, ${hero1672} 1672w`} sizes="100vw"/><img src={hero1672} width="1672" height="941" alt={c.hero.imageAlt} fetchpriority="high" /></picture>
+      <div class="hero-shade" aria-hidden="true"></div>
+      <Atmosphere variant="hero"/>
+      <div class="wrap hero-inner">
+        <div class="hero-eyebrow"><p class="mono">{c.hero.label}</p><span class="hero-coordinate mono" aria-hidden="true">ΑΙΘΗΡ / Æ</span></div>
+        <h1 id="hero-title" class="hero-wordmark" aria-label={c.hero.name}><span>AETHER</span>{' '}<span class="hero-agents">AGENTS</span></h1>
+        <div class="hero-message"><h2>{c.hero.headline}</h2><p>{c.description}</p></div>
+        <div class="hero-actions"><a href="#equipo" class="button button-primary">{c.hero.cta}</a><a href={links.github} class="button button-outline" target="_blank" rel="noopener noreferrer">{c.hero.github}</a></div>
+        <div class="hero-bottom"><p class="metadata"><span class="small-signal" aria-hidden="true"></span>{c.hero.meta}</p><a href="#desarrollo" class="scroll-cue" aria-label={c.lang === 'es' ? 'Ir a desarrollo' : 'Go to development'}><span aria-hidden="true">↓</span></a></div>
+      </div>
+    </section>
+    <div class="foundations-strip wrap"><div><span>{c.lang === 'es' ? 'BASADO EN /' : 'FOUNDATIONS /'}</span><a href={links.hermes} target="_blank" rel="noopener noreferrer">HERMES AGENT ↗</a><span>·</span><a href={links.speckit} target="_blank" rel="noopener noreferrer">GITHUB SPEC KIT ↗</a></div><div><span>{c.lang === 'es' ? 'CONOCIMIENTO OPCIONAL /' : 'OPTIONAL KNOWLEDGE /'}</span><a href={links.graphify} target="_blank" rel="noopener noreferrer">GRAPHIFY ↗</a></div></div>
+
+    <section id="desarrollo" class="section wrap" data-section="01" aria-labelledby="development-title">
+      <SectionLabel text={d.label} />
+      <div class="development-grid">
+        <div class="development-copy"><h2 id="development-title" class="display-title">{d.headline.map((line,i) => <span class:list={[i === 2 && 'accent']}>{line}</span>)}</h2><p class="body-copy">{d.intro}</p><p class="body-copy secondary">{d.objective}</p><div class="result-copy"><p>{d.result}</p><p class="secondary">{d.evidence}</p></div></div>
+        <div class="horizon-column"><Astrolabe c={c}/><div class="horizon-copy"><p class="eyebrow">{d.horizon.label}</p><h3>{d.horizon.title}</h3><p class="horizon-lead">{d.horizon.lead}</p><p class="secondary">{d.horizon.text}</p></div></div>
+      </div>
+      <div class="development-modes">{d.modes.map(mode => <article><div><h3>{mode.title}</h3><p>{mode.text}</p></div></article>)}</div>
+      <p class="metadata section-meta">{d.meta}</p>
+    </section>
+
+    <section id="equipo" class="section section-inset" data-section="02" aria-labelledby="team-heading"><div class="wrap">
+      <SectionLabel text={c.team.label}/>
+      <div class="section-heading"><h2 id="team-heading" class="display-title title-medium">{c.team.headline.map((line,i) => <span class:list={[i===1 && 'accent']}>{line}</span>)}</h2><p class="section-intro">{c.team.intro} {c.team.description}</p></div>
+      <div class="team-grid"><div class="role-list">{c.team.roles.map(role => <article><div class="role-kicker"><h3>{role.name} <span>/ {role.field}</span></h3></div><p>{role.text}</p></article>)}<div class="owner-statement"><p>{c.team.direction}</p><p>{c.team.execution}</p></div></div><TeamDiagram c={c}/></div>
+    </div></section>
+
+    <section id="proceso" class="section wrap" data-section="03" aria-labelledby="process-heading">
+      <SectionLabel text={c.process.label}/>
+      <div class="section-heading"><h2 id="process-heading" class="display-title">{c.process.headline.map((line,i) => <span class:list={[i===1 && 'accent']}>{line}</span>)}</h2><p class="section-intro">{c.process.intro}</p></div>
+      <ProcessDiagram c={c}/>
+      <aside class="direct-note"><span class="note-symbol" aria-hidden="true">↳</span><div><p>{c.process.direct}</p><p class="secondary">{c.process.directText}</p></div></aside>
+    </section>
+
+    <section id="conocimiento" class="section knowledge-section" data-section="04" aria-labelledby="knowledge-heading"><div class="wrap">
+      <SectionLabel text={c.knowledge.label}/>
+      <div class="section-heading"><h2 id="knowledge-heading" class="display-title">{c.knowledge.headline.map((line,i) => <span class:list={[i===1 && 'accent']}>{line}</span>)}</h2><p class="section-intro">{c.knowledge.intro}</p></div>
+      <KnowledgeGraph c={c}/>
+      <div class="knowledge-items">{c.knowledge.items.map(item => <article><h3>{item.title}</h3><p>{item.text}</p></article>)}</div>
+      <div class="knowledge-note"><p><strong>{c.knowledge.note}</strong> {c.knowledge.boundary}</p><a href={links.graphify} target="_blank" rel="noopener noreferrer" class="text-link">GRAPHIFY ↗</a></div>
+      <p class="metadata section-meta">{c.knowledge.meta}</p>
+    </div></section>
+
+    <section id="control" class="section wrap control-section" data-section="05" aria-labelledby="control-heading">
+      <SectionLabel text={c.control.label}/>
+      <div class="control-grid"><div class="control-intro"><h2 id="control-heading" class="display-title title-medium">{c.control.headline.map((line,i) => <span class:list={[i===1 && 'accent']}>{line}</span>)}</h2><p class="body-copy">{c.control.intro}</p><aside class="control-note"><p>{c.control.note}</p><p>{c.control.noteText}</p></aside></div><div class="control-items">{c.control.items.map(item => <article><div><h3>{item.title}</h3><p>{item.text}</p></div></article>)}</div></div>
+      <p class="metadata section-meta">{c.control.meta}</p>
+    </section>
+
+    <section id="fundamentos" class="section section-inset" data-section="06" aria-labelledby="foundations-heading"><div class="wrap">
+      <SectionLabel text={c.foundations.label}/>
+      <div class="section-heading"><h2 id="foundations-heading" class="display-title title-medium">{c.foundations.headline.map((line,i) => <span class:list={[i===1 && 'accent']}>{line}</span>)}</h2><p class="section-intro">{c.foundations.intro}</p></div>
+      <div class="foundation-list">{c.foundations.items.map(item => {
+        const external = item.href.startsWith('https');
+        const href = item.href.startsWith('/') ? sitePath(item.href) : item.href;
+        return <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}><h3>{item.title}</h3><p>{item.text}</p><span class="foundation-tag mono">{item.tag}</span><span class="foundation-arrow" aria-hidden="true">{external ? '↗' : '→'}</span></a>;
+      })}</div>
+      <div class="foundation-bottom"><p class="metadata">{c.foundations.meta}</p><p><a href={links.router} target="_blank" rel="noopener noreferrer">{c.foundations.note}</a></p></div>
+    </div></section>
+
+    <section id="autoria" class="section author-section" data-section="07" data-atmosphere aria-labelledby="author-heading">
+      <picture class="finale-art" data-atmosphere-art aria-hidden="true"><source type="image/webp" srcset={`${finale800} 800w, ${finale1280} 1280w, ${finale1672} 1672w`} sizes="100vw"/><img src={finale1672} width="1672" height="941" alt="" loading="lazy" decoding="async"/></picture>
+      <div class="finale-shade" aria-hidden="true"></div>
+      <Atmosphere variant="finale"/>
+      <div class="wrap author-inner">
+      <SectionLabel text={c.author.label}/>
+      <div class="author-grid"><div><div class="author-signature"><h2 id="author-heading" class="author-name">Christopher<br/>Hernández Jiménez</h2><a class="author-handle" href={links.author} target="_blank" rel="noopener noreferrer" aria-label={c.lang === 'es' ? 'Perfil de DarkArty07 en GitHub' : 'DarkArty07 on GitHub'}>@DarkArty07 <span aria-hidden="true">↗</span></a></div><p class="author-role">{c.author.role}</p></div><div class="author-text"><p>{c.author.intro}</p><p class="secondary">{c.author.text}</p><div class="author-links"><a href={links.github} target="_blank" rel="noopener noreferrer">{c.author.github}</a><a href={docsHome}>{c.author.docs}</a></div><p class="metadata">{c.author.meta}</p></div></div>
+      </div>
+    </section>
+  </main>
+</Layout>
