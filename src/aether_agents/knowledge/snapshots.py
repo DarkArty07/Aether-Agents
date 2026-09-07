@@ -461,7 +461,12 @@ class KnowledgeStore:
             result["resolved_node"] = native["resolved_node"]
         if "community" in native:
             result["community"] = native["community"]
-        if manifest["coverage"].get("documents") != "semantic":
+        documents = manifest["coverage"].get("documents")
+        if documents == "partial":
+            result["warnings"].append(
+                "Documents have partial semantic coverage; remaining paths stay structural."
+            )
+        elif documents != "semantic":
             result["warnings"].append(
                 "Documents have structural navigation only; semantic extraction is not enabled."
             )

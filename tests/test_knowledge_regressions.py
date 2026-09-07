@@ -787,12 +787,20 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
     assert call_count > initial_calls
     assert "other_task" in recorded_tasks
 
-    # 7. Structural update honesty: if manifest has state=partial, structural reports semantic_pending=True (Probe P3)
+    # 7. Verify document-to-code relationship is queryable on the complete snapshot
+    q_res = semantic_store.execute(ctx, "query", {"question": "OrdersDocument"})
+    assert q_res["ok"] is True
+    assert "process_order" in q_res["content"] or "OrdersDocument" in q_res["content"]
+    assert not any("not enabled" in warning for warning in q_res["warnings"])
+    assert not any("partial semantic coverage" in warning for warning in q_res["warnings"])
+
+    # 8. Structural update honesty: if manifest has state=partial, structural reports semantic_pending=True (Probe P3)
     manifest_file = (
         tmp_path / "cache" / "knowledge" / PROJECT / other_res["snapshot_id"] / "manifest.json"
     )
     manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
     manifest_data["semantic"]["state"] = "partial"
+    manifest_data["coverage"] = {"code": "structural", "documents": "partial"}
     manifest_file.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
 
     struct_honest_res = other_store.execute(ctx, "update", {"mode": "structural"})
@@ -802,10 +810,10 @@ def test_d36_semantic_lifecycle_cache_and_enrichment(
         "Structural update must honestly report semantic_pending=True when semantics are partial"
     )
 
-    # 8. Verify document-to-code relationship is queryable
-    q_res = semantic_store.execute(ctx, "query", {"question": "OrdersDocument"})
-    assert q_res["ok"] is True
-    assert "process_order" in q_res["content"] or "OrdersDocument" in q_res["content"]
+    partial_query = other_store.execute(ctx, "query", {"question": "OrdersDocument"})
+    assert partial_query["ok"] is True
+    assert not any("not enabled" in warning for warning in partial_query["warnings"])
+    assert any("partial semantic coverage" in warning for warning in partial_query["warnings"])
 
 
 def test_d37_failure_preservation_timeout_exhaustion_malformed(
