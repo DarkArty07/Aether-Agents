@@ -111,6 +111,7 @@ jobs:
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
           patches/hermes/HLP-280-bounded-flow-recovery.patch
+          patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
