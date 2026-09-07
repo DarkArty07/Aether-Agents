@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import time
 import uuid
 from pathlib import Path, PurePosixPath
@@ -172,10 +173,26 @@ def _dirty(context: KnowledgeContext) -> list[str]:
 
 
 class KnowledgeStore:
-    def __init__(self, state_root: Path, cache_root: Path, backend: GraphifyBackend | None):
+    def __init__(
+        self,
+        state_root: Path,
+        cache_root: Path,
+        backend: GraphifyBackend | None,
+        configuration: dict[str, Any] | None = None,
+    ):
         self.state_root = state_root
         self.cache_root = cache_root
         self.backend = backend
+        self._configuration = configuration
+
+    def configuration(self) -> dict[str, Any]:
+        if self._configuration is not None:
+            return self._configuration
+        config_file = self.state_root / "knowledge" / "component.json"
+        try:
+            return load_json(config_file)
+        except Exception:
+            return {}
 
     def _view(self, ctx: KnowledgeContext) -> Path:
         if not re.fullmatch(r"[a-f0-9-]{36}", ctx.project_id) or not re.fullmatch(
@@ -266,7 +283,21 @@ class KnowledgeStore:
     ) -> dict[str, Any]:
         if action == "update":
             return self.update(context, arguments)
-        if action not in ("status", "query", "explain", "neighbors", "community", "path", "impact"):
+        if action not in (
+            "status",
+            "query",
+            "explain",
+            "neighbors",
+            "community",
+            "path",
+            "impact",
+            "stats",
+            "god_nodes",
+            "list_prs",
+            "pr_impact",
+            "triage_prs",
+            "visualize",
+        ):
             raise KnowledgeError("ARGUMENT_INVALID", "Unknown project knowledge action.")
         try:
             location, manifest = self._snapshot(context)
@@ -281,17 +312,109 @@ class KnowledgeStore:
         if action == "status":
             result["excluded_count"] = manifest["excluded_count"]
             result["indexed_files"] = len(manifest["inputs"])
+            if "semantic" in manifest:
+                result["semantic"] = manifest["semantic"]
+                result["semantic_pending"] = manifest["semantic"].get("state") not in (
+                    "complete",
+                    "disabled",
+                )
             return result
-        if self.backend is None:
-            raise KnowledgeError(
-                "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+        if action == "stats":
+            if self.backend is None:
+                raise KnowledgeError(
+                    "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+                )
+            native = self.backend.run(
+                action,
+                source_root=location / "sources",
+                graph_path=location / "graphify-out" / "graph.json",
+                arguments=arguments,
             )
-        native = self.backend.run(
-            action,
-            source_root=location / "sources",
-            graph_path=location / "graphify-out" / "graph.json",
-            arguments=arguments,
-        )
+            result["stats"] = native.get("stats", {})
+            result["content"] = native.get("content", "")
+            result["references"] = []
+            result["truncated"] = False
+            return result
+        if action == "visualize":
+            if self.backend is None:
+                raise KnowledgeError(
+                    "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+                )
+            from .exports import export_visualization
+
+            artifact, content = export_visualization(
+                self.backend, location, manifest, context, self.cache_root, arguments
+            )
+            result["artifact"] = artifact
+            result["content"] = content
+            result["references"] = []
+            result["truncated"] = False
+            return result
+        if action == "list_prs":
+            from .github import execute_list_prs
+
+            github_ctx, prs, content = execute_list_prs(context.root, context, arguments)
+            result["github"] = github_ctx
+            result["prs"] = prs
+            result["content"], aether_truncated = bounded(
+                content, arguments.get("budget_tokens", 2000)
+            )
+            result["references"] = []
+            result["truncated"] = aether_truncated
+            return result
+        if action == "triage_prs":
+            if self.backend is None:
+                raise KnowledgeError(
+                    "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+                )
+            from .github import execute_triage_prs
+
+            github_ctx, triaged_prs, overlap_pairs, content = execute_triage_prs(
+                self.backend, location, context.root, context, arguments
+            )
+            result["github"] = github_ctx
+            result["prs"] = triaged_prs
+            result["community_overlaps"] = overlap_pairs
+            result["content"], aether_truncated = bounded(
+                content, arguments.get("budget_tokens", 2000)
+            )
+            result["references"] = []
+            result["truncated"] = aether_truncated
+            return result
+
+        if action == "pr_impact":
+            if self.backend is None:
+                raise KnowledgeError(
+                    "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+                )
+            from .github import execute_pr_impact
+
+            github_ctx, pr_summary, impact_info, worker_refs, content = execute_pr_impact(
+                self.backend, location, context.root, context, arguments
+            )
+            result["github"] = github_ctx
+            result["pr"] = pr_summary
+            result["impact"] = impact_info
+            native = {
+                "content": content,
+                "references": worker_refs,
+            }
+        else:
+            if self.backend is None:
+                raise KnowledgeError(
+                    "COMPONENT_UNAVAILABLE", "Configure Graphify before graph queries."
+                )
+            native = self.backend.run(
+                action,
+                source_root=location / "sources",
+                graph_path=location / "graphify-out" / "graph.json",
+                arguments=arguments,
+            )
+            if "nodes" in native:
+                result["nodes"] = native["nodes"]
+            if "query_options" in native:
+                result["query_options"] = native["query_options"]
+
         text = str(native.get("content", "")).replace(str(location / "sources") + "/", "")
         text = text.replace(str(location.resolve()), "<knowledge-snapshot>")
         text = text.replace(str(location), "<knowledge-snapshot>")
@@ -345,10 +468,9 @@ class KnowledgeStore:
         return result
 
     def update(self, ctx: KnowledgeContext, args: dict[str, Any]) -> dict[str, Any]:
-        if args.get("mode", "configured") not in ("structural", "configured"):
-            raise KnowledgeError(
-                "SEMANTIC_NOT_ENABLED", "Only local structural indexing is available."
-            )
+        mode = args.get("mode", "configured")
+        if mode not in ("structural", "configured"):
+            raise KnowledgeError("ARGUMENT_INVALID", "Invalid update mode.")
         for path in args.get("changed_paths", []):
             _relative(path)
         if self.backend is None:
@@ -358,44 +480,125 @@ class KnowledgeStore:
         self.backend.probe()
         view = self._view(ctx)
         with stable_lock(view / "update.lock", timeout=10.0):
+            cfg = self.configuration()
+            sem_cfg = cfg.get("semantic", {})
+            sem_enabled = bool(cfg.get("semantic_enabled") or sem_cfg.get("enabled"))
+
+            existing_manifest = None
+            existing_location = None
             try:
-                _location, manifest = self._snapshot(ctx)
+                existing_location, existing_manifest = self._snapshot(ctx)
             except KnowledgeError as exc:
                 if exc.code not in ("INDEX_MISSING", "INDEX_CORRUPT"):
                     raise
-            else:
-                result = self._envelope(ctx, "update", manifest)
-                result.update(
-                    outcome="unchanged",
-                    indexed_revision=ctx.source_revision,
-                    semantic_pending=True,
-                    uncovered_paths=result["dirty_paths"],
-                )
-                return result
+
             sources, excluded = _sources(ctx)
             if not sources:
                 raise KnowledgeError("SCOPE_UNAVAILABLE", "No supported non-secret text remains.")
-            snapshot_id = uuid.uuid4().hex
-            location = self.cache_root / "knowledge" / ctx.project_id / snapshot_id
-            source_root = location / "sources"
-            ensure_private_dir(source_root)
-            inputs = {}
+
+            inputs = {
+                path: hashlib.sha256(content).hexdigest() for path, content in sources.items()
+            }
+            input_sha256 = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+
+            # Check if existing snapshot matches the exact current inputs
+            same_inputs = (
+                existing_manifest is not None
+                and existing_location is not None
+                and existing_manifest.get("complete") is True
+                and existing_manifest.get("source_revision") == ctx.source_revision
+                and existing_manifest.get("inputs") == inputs
+                and (existing_location / "graphify-out" / "graph.json").is_file()
+            )
+
+            if same_inputs and existing_manifest is not None and existing_location is not None:
+                existing_sem = existing_manifest.get("semantic", {})
+                existing_sem_state = existing_sem.get("state")
+
+                if mode == "structural":
+                    # Structural update preserves existing snapshot without running LLM.
+                    # Honestly report whether semantic work remains pending or partial.
+                    if not sem_enabled or existing_sem_state == "disabled":
+                        semantic_pending = False
+                    elif existing_sem_state == "complete":
+                        semantic_pending = False
+                    else:
+                        semantic_pending = True
+
+                    result = self._envelope(ctx, "update", existing_manifest)
+                    result.update(
+                        outcome="unchanged",
+                        indexed_revision=ctx.source_revision,
+                        semantic_pending=semantic_pending,
+                        uncovered_paths=result["dirty_paths"],
+                    )
+                    if "semantic" in existing_manifest:
+                        result["semantic"] = existing_manifest["semantic"]
+                    return result
+
+                if mode == "configured":
+                    if not sem_enabled:
+                        if existing_sem_state in ("complete", "disabled"):
+                            result = self._envelope(ctx, "update", existing_manifest)
+                            result.update(
+                                outcome="unchanged",
+                                indexed_revision=ctx.source_revision,
+                                semantic_pending=False,
+                                uncovered_paths=result["dirty_paths"],
+                            )
+                            if "semantic" in existing_manifest:
+                                result["semantic"] = existing_manifest["semantic"]
+                            return result
+                    else:
+                        # Semantic is enabled: compare expected fingerprint
+                        from .semantic import compute_semantic_fingerprint
+
+                        expected_fp = compute_semantic_fingerprint(
+                            backend=self.backend,
+                            source_root=existing_location / "sources",
+                            graph_path=existing_location / "graphify-out" / "graph.json",
+                            inputs=inputs,
+                            configuration=cfg,
+                        )
+                        if (
+                            expected_fp is not None
+                            and existing_sem_state == "complete"
+                            and existing_sem.get("fingerprint") == expected_fp
+                        ):
+                            result = self._envelope(ctx, "update", existing_manifest)
+                            result.update(
+                                outcome="unchanged",
+                                indexed_revision=ctx.source_revision,
+                                semantic_pending=False,
+                                uncovered_paths=result["dirty_paths"],
+                            )
+                            if "semantic" in existing_manifest:
+                                result["semantic"] = existing_manifest["semantic"]
+                            return result
+
+            # Create a brand-new immutable snapshot directory (never mutate in-place)
+            new_snapshot_id = uuid.uuid4().hex
+            new_location = self.cache_root / "knowledge" / ctx.project_id / new_snapshot_id
+            new_source_root = new_location / "sources"
+            ensure_private_dir(new_source_root)
             for path, content in sources.items():
-                destination = source_root / path
+                destination = new_source_root / path
                 ensure_private_dir(destination.parent)
                 atomic_private_write(destination, content)
-                inputs[path] = hashlib.sha256(content).hexdigest()
-            output = location / "graphify-out" / "graph.json"
-            self.backend.run("update", source_root=source_root, graph_path=output)
+
+            new_output = new_location / "graphify-out" / "graph.json"
+            ensure_private_dir(new_output.parent)
+            self.backend.run("update", source_root=new_source_root, graph_path=new_output)
+
             if (
-                output.is_symlink()
-                or not output.is_file()
-                or output.stat().st_size > MAX_GRAPH_BYTES
+                new_output.is_symlink()
+                or not new_output.is_file()
+                or new_output.stat().st_size > MAX_GRAPH_BYTES
             ):
                 raise KnowledgeError(
                     "INDEX_CORRUPT", "Graphify did not create a bounded regular graph."
                 )
-            graph_bytes = read_private_bytes(output)
+            graph_bytes = read_private_bytes(new_output)
             try:
                 graph = json.loads(graph_bytes)
             except ValueError as exc:
@@ -412,7 +615,7 @@ class KnowledgeStore:
                 path = Path(str(value))
                 if path.is_absolute():
                     try:
-                        path = path.relative_to(source_root)
+                        path = path.relative_to(new_source_root)
                     except ValueError as exc:
                         raise KnowledgeError(
                             "INDEX_CORRUPT", "A graph source escaped its captured project."
@@ -421,37 +624,141 @@ class KnowledgeStore:
                     raise KnowledgeError(
                         "INDEX_CORRUPT", "A graph source escaped its captured project."
                     )
+
+            from .semantic import _ELIGIBLE_EXTENSIONS
+
+            eligible_files = [
+                p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS
+            ]
+            semantic_meta: dict[str, Any] = {"state": "disabled", "fingerprint": None}
+            semantic_failed_or_incomplete = False
+
+            if mode == "structural":
+                if sem_enabled:
+                    semantic_meta = {
+                        "state": "pending",
+                        "fingerprint": None,
+                        "covered_paths": [],
+                        "pending_paths": sorted(eligible_files),
+                        "failed_paths": [],
+                        "validated_chunk_ids": [],
+                        "observed_usage": {},
+                    }
+                else:
+                    semantic_meta = {
+                        "state": "disabled",
+                        "fingerprint": None,
+                        "covered_paths": [],
+                        "pending_paths": [],
+                        "failed_paths": [],
+                        "validated_chunk_ids": [],
+                        "observed_usage": {},
+                    }
+            elif mode == "configured":
+                if not sem_enabled:
+                    semantic_meta = {
+                        "state": "disabled",
+                        "fingerprint": None,
+                        "covered_paths": [],
+                        "pending_paths": [],
+                        "failed_paths": [],
+                        "validated_chunk_ids": [],
+                        "observed_usage": {},
+                    }
+                else:
+                    from .semantic import run_semantic_extraction
+
+                    try:
+                        semantic_meta = run_semantic_extraction(
+                            backend=self.backend,
+                            source_root=new_source_root,
+                            graph_path=new_output,
+                            inputs=inputs,
+                            cache_root=self.cache_root,
+                            ctx=ctx,
+                            configuration=cfg,
+                        )
+                        if semantic_meta.get("state") != "complete":
+                            semantic_failed_or_incomplete = True
+                    except Exception as exc:
+                        semantic_failed_or_incomplete = True
+                        semantic_meta = {
+                            "state": "unavailable",
+                            "fingerprint": None,
+                            "covered_paths": [],
+                            "pending_paths": sorted(eligible_files),
+                            "failed_paths": [],
+                            "validated_chunk_ids": [],
+                            "observed_usage": {"error": str(exc)},
+                        }
+
+            # If semantic refresh failed or was incomplete on an existing complete snapshot:
+            # RETAIN THE PRIOR COMPLETE SNAPSHOT!
+            if (
+                semantic_failed_or_incomplete
+                and same_inputs
+                and existing_manifest is not None
+                and existing_manifest.get("semantic", {}).get("state") == "complete"
+            ):
+                shutil.rmtree(new_location, ignore_errors=True)
+                result = self._envelope(ctx, "update", existing_manifest)
+                result.update(
+                    outcome="unchanged",
+                    indexed_revision=ctx.source_revision,
+                    semantic_pending=False,
+                    uncovered_paths=result["dirty_paths"],
+                )
+                result["warnings"].append("Refresh failed; retained previously complete snapshot.")
+                if "semantic" in existing_manifest:
+                    result["semantic"] = existing_manifest["semantic"]
+                return result
+
+            sem_state = semantic_meta.get("state")
+            if sem_state == "complete":
+                coverage = {"code": "structural", "documents": "semantic"}
+                semantic_pending = False
+            elif sem_state == "partial":
+                coverage = {"code": "structural", "documents": "partial"}
+                semantic_pending = True
+            elif sem_state == "disabled":
+                coverage = {"code": "structural", "documents": "structural_only"}
+                semantic_pending = False
+            else:
+                coverage = {"code": "structural", "documents": "structural_only"}
+                semantic_pending = True
+
+            graph_bytes = read_private_bytes(new_output)
             manifest = {
                 "schema_version": 1,
                 "complete": True,
                 "project_id": ctx.project_id,
                 "view_id": ctx.view_id,
-                "snapshot_id": snapshot_id,
+                "snapshot_id": new_snapshot_id,
                 "source_revision": ctx.source_revision,
                 "engine_version": GRAPHIFY_VERSION,
                 "scope_version": _SCOPE_VERSION,
                 "inputs": inputs,
-                "input_sha256": hashlib.sha256(
-                    json.dumps(inputs, sort_keys=True).encode()
-                ).hexdigest(),
+                "input_sha256": input_sha256,
                 "graph_sha256": hashlib.sha256(graph_bytes).hexdigest(),
-                "coverage": {"code": "structural", "documents": "structural_only"},
+                "coverage": coverage,
+                "semantic": semantic_meta,
                 "excluded_count": len(excluded),
                 "created_at": time.time(),
                 "publisher_role": ctx.role_id,
             }
-            atomic_json(location / "manifest.json", manifest)
+            atomic_json(new_location / "manifest.json", manifest)
             atomic_json(
                 self._pointer(ctx),
-                {"snapshot_id": snapshot_id, "source_revision": ctx.source_revision},
+                {"snapshot_id": new_snapshot_id, "source_revision": ctx.source_revision},
             )
             result = self._envelope(ctx, "update", manifest)
             result.update(
                 outcome="updated",
                 indexed_revision=ctx.source_revision,
-                semantic_pending=True,
+                semantic_pending=semantic_pending,
                 uncovered_paths=result["dirty_paths"],
                 excluded_count=len(excluded),
                 indexed_files=len(inputs),
+                semantic=semantic_meta,
             )
             return result

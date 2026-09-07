@@ -25,6 +25,12 @@ KNOWLEDGE_ACTIONS = (
     "path",
     "impact",
     "update",
+    "stats",
+    "god_nodes",
+    "list_prs",
+    "pr_impact",
+    "triage_prs",
+    "visualize",
 )
 MEMORY_ACTIONS = ("save", "search", "read", "correct", "reflect")
 _TEXT = {"type": "string", "minLength": 1, "maxLength": 16000}
@@ -78,7 +84,7 @@ _FIELDS: dict[str, dict[str, Any]] = {
         "items": {"type": "string", "maxLength": 500},
     },
     "query": {"type": "string", "minLength": 1, "maxLength": 2000},
-    "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
     "note_id": {"type": "string", "pattern": "^wn_[a-f0-9]{32}$"},
     "cursor": {"type": "string", "pattern": "^[0-9]+:[0-9]+$"},
     "expected_revision": {"type": "integer", "minimum": 1},
@@ -88,16 +94,42 @@ _FIELDS: dict[str, dict[str, Any]] = {
         "required": ["lesson", "applicability"],
         "properties": {"lesson": _TEXT, "applicability": _TEXT},
     },
+    "traversal": {"type": "string", "enum": ["bfs", "dfs"]},
+    "context_filter": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 20,
+        "items": {"type": "string", "minLength": 1, "maxLength": 80},
+    },
+    "relations": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 20,
+        "items": {"type": "string", "minLength": 1, "maxLength": 80},
+    },
+    "undirected": {"type": "boolean"},
+    "top_n": {"type": "integer", "minimum": 1, "maximum": 50},
+    "exclude_hubs_percentile": {"type": "number", "minimum": 0, "maximum": 100},
+    "base": {"type": "string", "minLength": 1, "maxLength": 255},
+    "pr_number": {"type": "integer", "minimum": 1},
+    "format": {"type": "string", "enum": ["graph", "tree"]},
+    "detail": {"type": "string", "enum": ["auto", "full"]},
 }
 _ACTION_FIELDS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "status": ((), ()),
-    "query": (("question",), ("budget_tokens",)),
+    "query": (("question",), ("budget_tokens", "traversal", "depth", "context_filter")),
     "explain": (("node",), ("budget_tokens",)),
     "neighbors": (("node",), ("relation", "budget_tokens")),
     "community": (("community_id",), ("budget_tokens",)),
-    "path": (("source", "target"), ("max_hops", "budget_tokens")),
-    "impact": (("node",), ("depth", "budget_tokens")),
+    "path": (("source", "target"), ("max_hops", "budget_tokens", "undirected")),
+    "impact": (("node",), ("depth", "budget_tokens", "relations")),
     "update": (("reason",), ("changed_paths", "mode")),
+    "stats": ((), ()),
+    "god_nodes": ((), ("top_n", "exclude_hubs_percentile", "budget_tokens")),
+    "list_prs": ((), ("base", "limit", "budget_tokens")),
+    "pr_impact": (("pr_number",), ("budget_tokens",)),
+    "triage_prs": ((), ("base", "limit", "budget_tokens")),
+    "visualize": ((), ("format", "detail")),
     "save": (
         ("idempotency_key", "situation", "lesson", "applicability", "outcome", "evidence"),
         ("source_nodes",),
@@ -115,7 +147,7 @@ _FIELD_DESCRIPTIONS: dict[str, str] = {
     "source": "Starting symbol or entity identifier for path discovery.",
     "target": "Destination symbol or entity identifier for path discovery.",
     "community_id": "Snapshot-local community identifier discovered via explain.",
-    "depth": "Maximum traversal depth for dependency impact analysis.",
+    "depth": "Maximum traversal depth (1..6).",
     "max_hops": "Maximum path length between source and target.",
     "budget_tokens": "Token estimate budget for response context.",
     "reason": "Explanation for the requested operation.",
@@ -129,11 +161,21 @@ _FIELD_DESCRIPTIONS: dict[str, str] = {
     "evidence": "Verification references and observed results backing the note.",
     "source_nodes": "Optional list of project graph node identifiers associated with this experience.",
     "query": "Search query string across role experience notes.",
-    "limit": "Maximum number of search results to return.",
+    "limit": "Maximum number of items to return.",
     "note_id": "Unique identifier of the note.",
     "cursor": "Opaque continuation cursor for paginated note reads.",
     "expected_revision": "Expected note revision number for optimistic concurrency.",
     "replacement": "Updated lesson and applicability replacing the prior revision.",
+    "traversal": "Graph traversal strategy ('bfs' or 'dfs', default 'bfs').",
+    "context_filter": "Filter context by relation types or node labels (up to 20 nonempty strings, max 80 chars each).",
+    "relations": "Relationship types to follow during impact analysis (up to 20 nonempty strings, max 80 chars each).",
+    "undirected": "Whether to treat graph edges as undirected during path search (default false).",
+    "top_n": "Number of top central nodes to return (1..50, default 10).",
+    "exclude_hubs_percentile": "Percentile threshold to exclude high-degree hub nodes (0..100).",
+    "base": "Base branch name to compare against for pull requests (1..255 characters).",
+    "pr_number": "Positive integer pull request number.",
+    "format": "Visualization export format ('graph' or 'tree', default 'graph').",
+    "detail": "Visualization detail level for graph format ('auto' or 'full', default 'auto').",
 }
 
 
@@ -170,16 +212,25 @@ def parameters(tool: str) -> dict[str, Any]:
                 "const": action,
                 "description": f"Execute the '{action}' action.",
             },
-            **{name: props[name] for name in sorted((*req, *opt))},
+            **{name: dict(props[name]) for name in sorted((*req, *opt))},
         }
-        one_of.append(
-            {
-                "type": "object",
-                "properties": branch_props,
-                "required": ["action", *sorted(req)],
-                "additionalProperties": False,
+        if action == "search" and "limit" in branch_props:
+            branch_props["limit"] = {**branch_props["limit"], "maximum": 20}
+        branch_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": branch_props,
+            "required": ["action", *sorted(req)],
+            "additionalProperties": False,
+        }
+        if action == "visualize":
+            branch_schema["dependentSchemas"] = {
+                "detail": {
+                    "properties": {
+                        "format": {"enum": ["graph"]},
+                    }
+                }
             }
-        )
+        one_of.append(branch_schema)
 
     return {
         "type": "object",
@@ -204,6 +255,10 @@ def validate_arguments(tool: str, args: dict[str, Any]) -> str:
     if any(key not in args for key in required) or set(args) - {"action", *required, *optional}:
         raise KnowledgeError(
             "ARGUMENT_INVALID", "Missing or inapplicable arguments for this action."
+        )
+    if action == "visualize" and args.get("format") == "tree" and "detail" in args:
+        raise KnowledgeError(
+            "ARGUMENT_INVALID", "The detail parameter is only valid for graph visualization."
         )
     return action
 

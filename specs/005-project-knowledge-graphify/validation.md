@@ -46,12 +46,29 @@ Las pruebas que reproducen errores upstream deben conservar su nombre/propósito
 | D26 | Cambio de proyecto en una conversación. | Bindings/cachés/guardados cambian correctamente; no persiste contenido anterior como hecho del proyecto nuevo. |
 | D27 | Retención, desactivación y rollback con lectores/tareas activos. | Snapshots en uso conservados, notas no tratadas como caché, fuentes y Hermes intactos. |
 | D28 | Matriz Linux/WSL2 y Python soportado. | Evidencia por plataforma del componente exacto; no extrapolar prueba local a toda la matriz. |
-| D29 | `query` nativa excede un presupuesto pequeño y Graphify omite nodos; una respuesta completa excede el presupuesto en un control separado. | El primer sobre devuelve `truncated=true`; el segundo conserva `truncated=false` y un aviso de exceso completo. Ningún contenido recomienda `context_filter`, `get_node` ni otras operaciones ausentes del schema Aether. |
+| D29 | `query` nativa excede un presupuesto pequeño y Graphify omite nodos; una respuesta completa excede el presupuesto en un control separado. | El primer sobre devuelve `truncated=true`; el segundo conserva `truncated=false` y un aviso de exceso completo. Ningún contenido recomienda `get_node` ni otras operaciones ausentes del schema Aether. En la expansión #330, `context_filter` es una recuperación permitida exclusivamente para `query`. |
 | D30 | `query`, `explain`, `neighbors`, `community`, `path` e `impact` devuelven nodos o relaciones con archivos/locators; un caso supera 50 referencias. | `references` contiene procedencia relativa, deduplicada, ordenada y ligada a la revisión para cada elemento fuente visible. El límite de 50 nunca es silencioso: activa `truncated` y un warning. No se filtran rutas privadas del snapshot. |
 | D31 | Un agente consulta un símbolo, lo resuelve con `explain` y solicita su comunidad sin inspeccionar `graph.json`; se repite tras reconstruir el snapshot. | `resolved_node` entrega ID exacto, `community_id` y nombre; `community` se autoidentifica con el mismo ID y cardinalidad. Los metadatos quedan ligados al snapshot y no se presentan como portables tras la reconstrucción. |
 | D32 | Matriz representativa de todas las acciones y campos de `project_knowledge`/`work_memory`, incluidos campos faltantes, inaplicables y prohibidos, antes y después del saneamiento Hermes. | El schema canónico discriminado y `validate_arguments` coinciden exactamente. `tool_describe` conserva la discriminación; el schema saneado mantiene propiedades/descripciones utilizables por backends estrictos y el handler sigue rechazando combinaciones inválidas. |
 
 Si se introduce MCP persistente, añadir initialize/initialized/tools/list/tools/call/close, ausencia de descargas/modelos al conectar, errores de grafo, stdout sólo protocolo, aislamiento por proceso/contexto y terminación de procesos. No exige HTTP para la primera entrega.
+
+### Expanded scope #330
+
+These scenarios extend D01-D32 and use the oracles and runnable lanes in the
+[expanded contract](contracts/expanded-tools-and-semantic.md). They are required evidence,
+not assertions of already-executed implementation tests.
+
+| ID | Scenario | Expected evidence |
+|---|---|---|
+| D33 | Expanded schemas on three roles, old calls and Hermes sanitization | 14/5 actions; exact action-field validity; no injected project/repo/path/provider authority. |
+| D34 | Native stats, ranking, query controls, impact filters and direction | Native-equivalent results, references, bounded output and explicit uncertainty. |
+| D35 | Real auxiliary extraction in two separate projects | Source-backed document/code relationships, selected existing model/transport, observed usage; no cross-project/private leakage or LLM-as-AST claims. |
+| D36 | Same commit enrichment, repeat/update, rename/delete and config change | Correct semantic fingerprint, zero calls for complete unchanged input, scoped cache invalidation and resume. |
+| D37 | Timeout, exhaustion, cancellation, malformed/hollow output and concurrency | Old complete artifact preserved; usable structural result; truthful partial/unavailable coverage; no endless retries or automatic fallback. |
+| D38 | Real read-only PR plus controlled absent/error/moving/large cases | Correct repo, base/head, files and community coverage; no failure misreported as zero impact; local graph remains usable without GitHub. |
+| D39 | Native graph/tree exports and aggregation | Real verified files, project/revision identity, valid data/JS, disclosed external assets; immutable snapshot preserved. |
+| D40 | Full integration, fresh-profile load and local activation | Existing gates/coverage; independently reviewed source relationships; main and managed skills current, no secret/config residue in public artifacts. |
 
 ## 3. Packaging, SOUL y skills
 

@@ -484,7 +484,7 @@ No last-project, process-cwd or model-selected path fallback. The adapter depend
 
 **Status:** `partial`
 
-All three roles can query and update committed structural project graphs with stable publication locks and explicit revision/worktree identity.
+All three roles share a 14-action project-knowledge catalog plus five unchanged work-memory actions, with revision-bound structural exploration and optional configured semantic maintenance.
 
 ### Surfaces
 - `cli.command.aether.knowledge.call`
@@ -516,27 +516,39 @@ All three roles can query and update committed structural project graphs with st
 - `tool.project_knowledge`
 
 ### Current documentation
+- [CHANGELOG.md](../../CHANGELOG.md)
 - [docs/guides/project-knowledge.md](../guides/project-knowledge.md)
 - [docs/reference/cli.md](cli.md)
 - [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
 
 ### Owning specifications
+- [specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md](../../specs/005-project-knowledge-graphify/contracts/expanded-tools-and-semantic.md)
+- [specs/005-project-knowledge-graphify/contracts/soul-and-skills.md](../../specs/005-project-knowledge-graphify/contracts/soul-and-skills.md)
 - [specs/005-project-knowledge-graphify/contracts/tools-and-data.md](../../specs/005-project-knowledge-graphify/contracts/tools-and-data.md)
 - [specs/005-project-knowledge-graphify/spec.md](../../specs/005-project-knowledge-graphify/spec.md)
 
 ### Implementation
+- [scripts/qualify_knowledge_expansion.py](../../scripts/qualify_knowledge_expansion.py)
 - [src/aether_agents/knowledge/common.py](../../src/aether_agents/knowledge/common.py)
+- [src/aether_agents/knowledge/exports.py](../../src/aether_agents/knowledge/exports.py)
+- [src/aether_agents/knowledge/github.py](../../src/aether_agents/knowledge/github.py)
 - [src/aether_agents/knowledge/graph_worker.py](../../src/aether_agents/knowledge/graph_worker.py)
+- [src/aether_agents/knowledge/graphify.py](../../src/aether_agents/knowledge/graphify.py)
+- [src/aether_agents/knowledge/semantic.py](../../src/aether_agents/knowledge/semantic.py)
 - [src/aether_agents/knowledge/service.py](../../src/aether_agents/knowledge/service.py)
 - [src/aether_agents/knowledge/snapshots.py](../../src/aether_agents/knowledge/snapshots.py)
 
 ### Verification
-- [tests/test_knowledge_plugin_cli.py](../../tests/test_knowledge_plugin_cli.py)
+- [scripts/qualify_knowledge_expansion.py](../../scripts/qualify_knowledge_expansion.py)
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_knowledge_regressions.py](../../tests/test_knowledge_regressions.py)
+- [tests/test_knowledge_resources.py](../../tests/test_knowledge_resources.py)
+- [tests/test_knowledge_schema.py](../../tests/test_knowledge_schema.py)
 - [tests/test_project_knowledge_engine.py](../../tests/test_project_knowledge_engine.py)
 
 ### Notes / current limits
 
-Indexes committed regular sources, including supported Markdown structure, but does not interpret document semantics with a model. Dirty files require direct reads. Equivalent view/revision updates reuse snapshots; new revisions currently recapture the bounded corpus. Large-repository, live-agent and token-saving qualification is not claimed.
+The fourteen project actions are status/query/explain/neighbors/community/path/impact/update/stats/god_nodes/list_prs/pr_impact/triage_prs/visualize; work-memory retains save/search/read/correct/reflect. Structural updates are no-model; configured semantic maintenance requires the existing profile-scoped auxiliary and reports coverage, pending paths, failures and usage. Read-only GitHub and managed HTML exports are optional. Missing live access, live-agent adoption, token savings and universal superiority remain unclaimed.
 
 ## `lifecycle.conditional-issue-intake-reconciliation`
 

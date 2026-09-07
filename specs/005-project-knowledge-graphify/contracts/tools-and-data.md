@@ -2,6 +2,14 @@
 
 **Estado:** contrato del candidato estructural implementado. Las interfaces están registradas en el paquete y verificadas de forma determinista, pero permanecen deshabilitadas en las plantillas portables y su calificación con agentes vivos sigue pendiente. Derivado de [plan.md](../plan.md) y trazado por [implementation.md](../implementation.md). Los ejemplos de las skills coinciden con los schemas registrados.
 
+## Approved expansion
+
+Issue #330 extends this integrated structural baseline through the
+[expanded tools and semantic contract](expanded-tools-and-semantic.md). It owns the six
+new actions, additional query/impact/path fields and configured semantic maintenance.
+The original action table below records the compatibility baseline, not the expanded
+catalog. Old successful calls and work-memory semantics remain valid.
+
 ## 1. Contexto común
 
 Plugin: `aether-project-knowledge`. Dos herramientas: `project_knowledge` y `work_memory`. Mismas operaciones en Morfeo, Supervisor e Implementer. No asignar catálogos distintos según rol.
@@ -25,7 +33,7 @@ Los argumentos del modelo no contienen `role`, `agent_id`, `project_path`, `grap
 
 `mode`: `configured` por defecto o `structural`. `configured` usa sólo el alcance y presupuesto ya habilitados. No ofrece un flag para saltar autorización de envío o ampliar corpus. `changed_paths` es una sugerencia para eficiencia, nunca una fuente confiable de «todo lo cambiado»: el adaptador obtiene y valida las diferencias del snapshot para no omitir borrados o dependencias.
 
-Consulta usa CLI pública o un ejecutor que invoca operaciones existentes. La representación texto de Graphify puede conservarse como `content`; no inventar un JSON nativo de `query`. El adaptador puede normalizar únicamente avisos de frontera para que nombren operaciones y argumentos realmente expuestos por Aether. No debe retransmitir `context_filter`, `get_node`, rutas de grafo ni otras instrucciones exclusivas de la CLI/MCP upstream como si fueran acciones disponibles para el modelo. Vecinos/comunidades/impacto requieren prueba de equivalencia del adaptador con el candidato instalado. Si alguno falla su cualificación, se reporta como limitación, no como una implementación falsa.
+Consulta usa CLI pública o un ejecutor que invoca operaciones existentes. La representación texto de Graphify puede conservarse como `content`; no inventar un JSON nativo de `query`. El adaptador puede normalizar únicamente avisos de frontera para que nombren operaciones y argumentos realmente expuestos por Aether. No debe retransmitir `get_node`, rutas de grafo ni otras instrucciones exclusivas de la CLI/MCP upstream como si fueran acciones disponibles para el modelo. La expansión #330 permite `context_filter` únicamente como argumento de `query`, y las recomendaciones deben reflejar ese alcance. Vecinos/comunidades/impacto requieren prueba de equivalencia del adaptador con el candidato instalado. Si alguno falla su cualificación, se reporta como limitación, no como una implementación falsa.
 
 `truncated` es la verdad acumulada de la respuesta: vale `true` cuando Graphify omitió nodos o líneas, cuando el límite de Aether recortó `content`, o cuando el límite existente de referencias omitió procedencia visible. Un aviso upstream de respuesta completa por encima del presupuesto no es truncamiento y permanece distinguible en `warnings`. La implementación no puede reemplazar una omisión real por `false` al volver a limitar texto ya acotado.
 
@@ -33,7 +41,7 @@ Toda acción que presente nodos o relaciones con procedencia devuelve `reference
 
 `explain` añade `resolved_node={id, community_id, community_name}`. `community_id` y `community_name` pueden ser `null` cuando el snapshot no clasificó el nodo. `community` añade `community={id, name, node_count}` y el `id` debe coincidir exactamente con el argumento recibido. Así el flujo soportado es `query` → `explain` → `community`, sin adivinar enteros ni leer `graph.json`. Estos metadatos son derivados y permanecen ligados al `snapshot_id` del mismo sobre.
 
-Los schemas registrados conservan `type=object`, las propiedades superiores usadas por la coerción de Hermes y una unión discriminada por `action` que expresa exactamente campos requeridos y permitidos. Cada propiedad declara además en su descripción las acciones aplicables, porque el saneamiento de Hermes elimina combinadores superiores para ciertos backends estrictos. La validación canónica del schema y `validate_arguments` aceptan y rechazan el mismo lenguaje; el handler sigue siendo la frontera definitiva después del saneamiento. No se añaden herramientas ni acciones para resolver esta corrección.
+Los schemas registrados conservan `type=object`, las propiedades superiores usadas por la coerción de Hermes y una unión discriminada por `action` que expresa exactamente campos requeridos y permitidos. Cada propiedad declara además en su descripción las acciones aplicables, porque el saneamiento de Hermes elimina combinadores superiores para ciertos backends estrictos. La validación canónica del schema y `validate_arguments` aceptan y rechazan el mismo lenguaje; el handler sigue siendo la frontera definitiva después del saneamiento. La corrección #324–#327 no añadió herramientas ni acciones; la expansión #330 aprobada por el propietario añade las acciones definidas en su contrato sin crear una tercera herramienta.
 
 No duplicar consultas internas: `query` entrega también el estado mínimo del snapshot, por lo que no obliga a ejecutar `status` antes de cada pregunta. No imponer una llamada por tarea si no necesita conocimiento del repositorio.
 

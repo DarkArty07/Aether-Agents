@@ -45,6 +45,16 @@ def test_skills_are_canonical_procedures_with_valid_examples(name: str, tool: st
     assert "never" in text.lower()
 
 
+def test_qualification_catalog_matches_registered_schemas() -> None:
+    from scripts.qualify_knowledge_expansion import _validate_catalog
+
+    result = _validate_catalog()
+    assert result["project_actions"] == 14
+    assert result["memory_actions"] == 5
+    assert result["validated_examples"] == 19
+    assert result["rejected_boundary_cases"] == 5
+
+
 @pytest.mark.parametrize("role", ["morfeo", "supervisor", "implementer"])
 def test_role_resources_share_tools_and_are_opt_in(role: str) -> None:
     soul = (RESOURCES / "profiles" / role / "SOUL.md").read_text()

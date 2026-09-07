@@ -18,7 +18,7 @@ class GraphifyBackend:
     def __init__(self, python: Path, *, timeout: float = 60.0):
         # Do not resolve a venv interpreter symlink: doing so loses its environment.
         self.python = python.expanduser().absolute()
-        self.timeout = min(max(float(timeout), 1.0), 300.0)
+        self.timeout = min(max(float(timeout), 1.0), 600.0)
 
     def probe(self) -> dict[str, Any]:
         return self.run("probe")
@@ -30,6 +30,7 @@ class GraphifyBackend:
         source_root: Path | None = None,
         graph_path: Path | None = None,
         arguments: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         if not self.python.is_file():
             raise KnowledgeError(
@@ -47,6 +48,9 @@ class GraphifyBackend:
             raise KnowledgeError(
                 "SCOPE_UNAVAILABLE", "The component request exceeds its byte limit."
             )
+        effective_timeout = (
+            min(self.timeout, float(timeout)) if timeout is not None else self.timeout
+        )
         with tempfile.TemporaryDirectory(prefix="aether-graphify-") as scratch:
             home = Path(scratch)
             try:
@@ -64,7 +68,7 @@ class GraphifyBackend:
                     "COMPONENT_UNAVAILABLE", "The Graphify process could not start."
                 ) from exc
             try:
-                stdout, _stderr = process.communicate(encoded, timeout=self.timeout)
+                stdout, _stderr = process.communicate(encoded, timeout=effective_timeout)
             except BaseException as exc:
                 # Cancellation and timeout must not leave a detached indexer alive.
                 with contextlib.suppress(ProcessLookupError):
