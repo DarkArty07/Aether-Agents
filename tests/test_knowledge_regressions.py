@@ -1293,6 +1293,7 @@ def test_large_corpus_semantic_prepare_bounded_paging(
     assert len(res["semantic"]["validated_chunk_ids"]) == 160
     assert res["semantic_pending"] is False
 
+
 def test_gx06_deadline_seconds_zero_pending_honest_coverage(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
