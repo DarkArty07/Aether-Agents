@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir, stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
 
@@ -156,7 +157,8 @@ test('documentation is rendered, linked to revision and searchable', async () =>
   assert.ok(index.find(d=>d.slug==='guides/project-knowledge').text.includes('Graphify'));
   const manual=await doc('docs/guides/execution/index.html');
   assert.ok(manual.querySelector('.prose h1'));
-  assert.ok(manual.querySelector('a[href*="/blob/0913ec636ab081654065be90b021cf1c47a41619/"]'));
+  const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  assert.ok(manual.querySelector(`a[href*="/blob/${revision}/"]`));
   assert.ok(manual.querySelector('.docs-sidebar'));
 });
 
