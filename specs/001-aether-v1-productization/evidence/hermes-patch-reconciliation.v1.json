@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-06T00:39:44Z",
+  "observed_at_utc": "2026-09-07T03:39:57Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -209,6 +209,26 @@
     {
       "detail": "Clean public-baseline reconstruction is not claimed; the exact local preimage is retained privately.",
       "id": "HLP-280",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.",
+      "id": "HLP-335",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-335",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "Upstream PR 95199 remains open and is not an exact-revision behavioral pass of this local delta.",
+      "id": "HLP-335",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "No public portable patch is checked into patches/hermes; reconstruction uses a private dirty preimage.",
+      "id": "HLP-335",
       "kind": "uncertainty"
     }
   ],
@@ -1155,10 +1175,80 @@
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
       }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "kind": "reconstruction_input",
+            "reference": "private exact dirty preimage SHA-256 10d60a61000b02457381cac3de2b202bf5ecc84bff9ad0f52e4f8f35809a1eb0",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "installed file SHA-256 159b2b521d5c950c086fffe9c89204d8d1334b72b876e6b2a40078c601747910; exact recovery delta SHA-256 7f971b5f73701ac7903e3ce955c323c263bcd8fa24edbf78b0d7e026026b7adf",
+            "result": "passed"
+          }
+        ],
+        "blocker": "No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "Upstream PR 95199 remains open and is not an exact-revision behavioral pass of this local delta.",
+        "No public portable patch is checked into patches/hermes; reconstruction uses a private dirty preimage."
+      ],
+      "components": [
+        "HLP-335",
+        "hermes_cli/kanban_db.py"
+      ],
+      "id": "HLP-335",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-335--terminal-pr-references-must-not-strand-graphify-closeout",
+      "local_status": "ACTIVE_LOCAL",
+      "required_behavior": "A respawn guard may treat only independently verifiable OPEN pull-request references as active. CLOSED or MERGED references must not strand a legitimate terminal continuation. OPEN, malformed, missing-gh, network/auth, and unknown states remain guarded. Review-lane, auth, cooldown, and recent-success guards remain unchanged.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable RED/GREEN respawn-guard gate recorded in HERMES_LOCAL_PATCHES.md",
+            "result": "Local disposable RED 5 failed / 15 passed; GREEN 20 passed; existing Kanban DB/review suites 51 passed / 1 skipped. Exact public inventory still lacks the CLOSED/MERGED exemption, so the full upstream retirement gate cannot pass on this revision."
+          }
+        ],
+        "status": "failed",
+        "summary": "Retire only when a qualified upstream version independently passes terminal/open/unknown/auth/duplicate-link controls and the legitimate continuation canary without this delta. Do not retire merely because an upstream PR merges."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.",
+      "upstream": {
+        "disposition": "upstream_open",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "The inspected inventory revision has no CLOSED/MERGED exemption for terminal PR references in the respawn guard. This inventory record is not a claim that the historical revision is current upstream."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/NousResearch/hermes-agent/pull/95199",
+            "result": "Still-open upstream PR 95199 proposes a terminal-state approach. HLP-335 adapted that idea locally rather than upgrading Hermes or adding a requeue bypass; no Aether-authored upstream PR was created."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/335"
+          },
+          {
+            "kind": "pull_request",
+            "url": "https://github.com/NousResearch/hermes-agent/pull/95199"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "737050c19ffe91c4065519f40d91a37aa40663f9e8a2ebbf6f3be4114865e9fe",
+  "source_ledger_sha256": "e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c052209e5c9bf",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

@@ -74,6 +74,44 @@ def resolve_auxiliary_task(configuration: dict[str, Any]) -> str | None:
     return task
 
 
+def _fetch_all_prepared_chunks(
+    backend: GraphifyBackend,
+    source_root: Path,
+    graph_path: Path,
+    eligible_files: list[str],
+    *,
+    page_size: int = 25,
+) -> list[dict[str, Any]]:
+    """Fetch prepared semantic extraction chunks across bounded pages."""
+    all_chunks: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        prep_res = backend.run(
+            "semantic_prepare",
+            source_root=source_root,
+            graph_path=graph_path,
+            arguments={
+                "files": eligible_files,
+                "offset": offset,
+                "limit": page_size,
+            },
+        )
+        chunks = prep_res.get("chunks", [])
+        if not chunks:
+            break
+        all_chunks.extend(chunks)
+        total_chunks = prep_res.get("total_chunks")
+        has_more = prep_res.get("has_more")
+        if total_chunks is not None and len(all_chunks) >= total_chunks:
+            break
+        if has_more is False:
+            break
+        if total_chunks is None and len(chunks) < page_size:
+            break
+        offset += len(chunks)
+    return all_chunks
+
+
 def compute_semantic_fingerprint(
     backend: GraphifyBackend,
     source_root: Path,
@@ -86,21 +124,22 @@ def compute_semantic_fingerprint(
     if not aux_task:
         return None
 
-    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    eligible_files = sorted(
+        [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    )
     if not eligible_files:
         return hashlib.sha256(b"no_eligible_files").hexdigest()
 
     try:
-        prep_res = backend.run(
-            "semantic_prepare",
+        chunks = _fetch_all_prepared_chunks(
+            backend=backend,
             source_root=source_root,
             graph_path=graph_path,
-            arguments={"files": eligible_files},
+            eligible_files=eligible_files,
         )
     except Exception:
         return None
 
-    chunks = prep_res.get("chunks", [])
     if not chunks:
         return hashlib.sha256(b"no_chunks").hexdigest()
 
@@ -243,7 +282,9 @@ def run_semantic_extraction(
     scope_version = "regular-tracked-v1"
 
     # Identify eligible documentation and code files
-    eligible_files = [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    eligible_files = sorted(
+        [p for p in inputs if Path(p).suffix.casefold() in _ELIGIBLE_EXTENSIONS]
+    )
     if not eligible_files:
         return {
             "state": "complete",
@@ -255,14 +296,30 @@ def run_semantic_extraction(
             "observed_usage": {"total_tokens": 0, "model_calls": 0},
         }
 
-    # Step 1: Prepare chunks in native worker
-    prep_res = backend.run(
-        "semantic_prepare",
-        source_root=source_root,
-        graph_path=graph_path,
-        arguments={"files": eligible_files},
-    )
-    chunks = prep_res.get("chunks", [])
+    # Step 1: Prepare chunks in native worker across bounded pages
+    try:
+        chunks = _fetch_all_prepared_chunks(
+            backend=backend,
+            source_root=source_root,
+            graph_path=graph_path,
+            eligible_files=eligible_files,
+        )
+    except Exception as exc:
+        logger.warning("Failed preparing semantic extraction chunks: %s", exc)
+        return {
+            "state": "unavailable",
+            "fingerprint": None,
+            "covered_paths": [],
+            "pending_paths": sorted(eligible_files),
+            "failed_paths": [],
+            "validated_chunk_ids": [],
+            "observed_usage": {
+                "total_tokens": 0,
+                "model_calls": 0,
+                "error": str(exc),
+            },
+        }
+
     if not chunks:
         return {
             "state": "complete",
@@ -276,6 +333,15 @@ def run_semantic_extraction(
 
     cache_dir = cache_root / "knowledge" / ctx.project_id / "semantic_cache"
     cache = SemanticCache(cache_dir)
+
+    cfg_deadline = configuration.get(
+        "semantic_deadline_seconds", configuration.get("deadline_seconds")
+    )
+    if cfg_deadline is not None:
+        try:
+            deadline_seconds = float(cfg_deadline)
+        except (ValueError, TypeError):
+            pass
 
     start_time = time.time()
     deadline = start_time + deadline_seconds
@@ -304,82 +370,127 @@ def run_semantic_extraction(
     model_calls_made = 0
     newly_validated_fragments: dict[int, dict[str, Any]] = {}
     failed_chunks: set[int] = set()
+    pending_chunks: set[int] = set()
+
+    deadline_deferred_chunks: set[int] = set()
+    auxiliary_failed_chunks: set[int] = set()
+    validation_failed_chunks: set[int] = set()
+    apply_failed_chunks: set[int] = set()
 
     if needed_chunks:
-        semaphore = threading.Semaphore(2)  # max_concurrency = 2
-        lock = threading.Lock()
+        if time.time() >= deadline:
+            for c in needed_chunks:
+                cid = int(c["chunk_id"])
+                pending_chunks.add(cid)
+                deadline_deferred_chunks.add(cid)
+        else:
+            semaphore = threading.Semaphore(2)  # max_concurrency = 2
+            lock = threading.Lock()
 
-        def process_chunk(c: dict[str, Any]) -> None:
-            nonlocal total_tokens, model_calls_made
-            cid = int(c["chunk_id"])
-            fp = chunk_fingerprints[cid]
+            def process_chunk(c: dict[str, Any]) -> None:
+                nonlocal total_tokens, model_calls_made
+                cid = int(c["chunk_id"])
+                fp = chunk_fingerprints[cid]
 
-            if (cancel_event and cancel_event.is_set()) or time.time() >= deadline:
-                with lock:
-                    failed_chunks.add(cid)
-                return
-
-            with semaphore:
-                # Up to 1 transient retry per chunk
-                last_err = None
-                raw_text = ""
-                usage: dict[str, Any] = {}
-                for attempt in range(2):
-                    if (cancel_event and cancel_event.is_set()) or time.time() >= deadline:
-                        break
-                    try:
-                        with lock:
-                            model_calls_made += 1
-                        raw_text, usage = _call_auxiliary_model(
-                            task=aux_task,
-                            system_prompt=c["system_prompt"],
-                            user_prompt=c["user_prompt"],
-                            timeout=min(180.0, max(10.0, deadline - time.time())),
-                        )
-                        break
-                    except Exception as exc:
-                        last_err = exc
-                        if isinstance(exc, KnowledgeError) and exc.code == "ROUTER_EXHAUSTION":
-                            # Router exhaustion fails immediately without endless retries
-                            break
-                        time.sleep(0.5)
-
-                if not raw_text:
-                    logger.warning("Chunk %d failed auxiliary extraction: %s", cid, last_err)
-                    with lock:
-                        failed_chunks.add(cid)
+                if cancel_event and cancel_event.is_set():
                     return
 
-                with lock:
-                    total_tokens += usage.get("total_tokens", 0)
-
-                # Validate semantic fragment through worker
-                try:
-                    val_res = backend.run(
-                        "semantic_validate",
-                        source_root=source_root,
-                        graph_path=graph_path,
-                        arguments={
-                            "model_text": raw_text,
-                            "allowed_sources": c.get("files", []),
-                            "allow_empty": False,
-                        },
-                    )
-                    frag = val_res.get("fragment", {})
-                    cache.put(fp, frag, meta={"usage": usage})
+                if time.time() >= deadline:
                     with lock:
-                        newly_validated_fragments[cid] = frag
-                except Exception as exc:
-                    logger.warning("Chunk %d failed fragment validation: %s", cid, exc)
+                        pending_chunks.add(cid)
+                        deadline_deferred_chunks.add(cid)
+                    return
+
+                with semaphore:
+                    if cancel_event and cancel_event.is_set():
+                        return
+
+                    if time.time() >= deadline:
+                        with lock:
+                            pending_chunks.add(cid)
+                            deadline_deferred_chunks.add(cid)
+                        return
+
+                    # Up to 1 transient retry per chunk
+                    last_err = None
+                    raw_text = ""
+                    usage: dict[str, Any] = {}
+                    attempts_made = 0
+                    for attempt in range(2):
+                        if cancel_event and cancel_event.is_set():
+                            break
+                        if time.time() >= deadline:
+                            break
+
+                        remaining_time = deadline - time.time()
+                        if remaining_time <= 0:
+                            break
+
+                        try:
+                            with lock:
+                                model_calls_made += 1
+                            attempts_made += 1
+                            raw_text, usage = _call_auxiliary_model(
+                                task=aux_task,
+                                system_prompt=c["system_prompt"],
+                                user_prompt=c["user_prompt"],
+                                timeout=min(180.0, max(1.0, remaining_time)),
+                            )
+                            break
+                        except Exception as exc:
+                            last_err = exc
+                            if isinstance(exc, KnowledgeError) and exc.code == "ROUTER_EXHAUSTION":
+                                # Router exhaustion fails immediately without endless retries
+                                break
+                            time.sleep(0.5)
+
+                    if cancel_event and cancel_event.is_set():
+                        return
+
+                    if attempts_made == 0:
+                        with lock:
+                            pending_chunks.add(cid)
+                            deadline_deferred_chunks.add(cid)
+                        return
+
+                    if not raw_text:
+                        logger.warning("Chunk %d failed auxiliary extraction: %s", cid, last_err)
+                        with lock:
+                            failed_chunks.add(cid)
+                            auxiliary_failed_chunks.add(cid)
+                        return
+
                     with lock:
-                        failed_chunks.add(cid)
+                        total_tokens += usage.get("total_tokens", 0)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [executor.submit(process_chunk, c) for c in needed_chunks]
-            concurrent.futures.wait(futures)
+                    # Validate semantic fragment through worker
+                    try:
+                        val_res = backend.run(
+                            "semantic_validate",
+                            source_root=source_root,
+                            graph_path=graph_path,
+                            arguments={
+                                "model_text": raw_text,
+                                "allowed_sources": c.get("files", []),
+                                "allow_empty": False,
+                            },
+                        )
+                        frag = val_res.get("fragment", {})
+                        cache.put(fp, frag, meta={"usage": usage})
+                        with lock:
+                            newly_validated_fragments[cid] = frag
+                    except Exception as exc:
+                        logger.warning("Chunk %d failed fragment validation: %s", cid, exc)
+                        with lock:
+                            failed_chunks.add(cid)
+                            validation_failed_chunks.add(cid)
 
-        if cancel_event and cancel_event.is_set():
-            raise KnowledgeError("OPERATION_CANCELLED", "Semantic extraction was cancelled.")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [executor.submit(process_chunk, c) for c in needed_chunks]
+                concurrent.futures.wait(futures)
+
+            if cancel_event and cancel_event.is_set():
+                raise KnowledgeError("OPERATION_CANCELLED", "Semantic extraction was cancelled.")
 
     # Step 3: Apply all validated fragments (cached + newly validated) to graph
     all_valid_fragments = {**cached_fragments, **newly_validated_fragments}
@@ -399,26 +510,38 @@ def run_semantic_extraction(
         except Exception as exc:
             logger.warning("Failed applying fragment for chunk %d: %s", cid, exc)
             failed_chunks.add(cid)
+            apply_failed_chunks.add(cid)
             all_valid_fragments.pop(cid, None)
 
+    successful_chunks = set(all_valid_fragments.keys())
+    for chunk in chunks:
+        cid = int(chunk["chunk_id"])
+        if cid not in successful_chunks and cid not in failed_chunks and cid not in pending_chunks:
+            pending_chunks.add(cid)
+            deadline_deferred_chunks.add(cid)
+
     # Compute coverage status
+    file_to_chunks: dict[str, set[int]] = {p: set() for p in eligible_files}
+    for chunk in chunks:
+        cid = int(chunk["chunk_id"])
+        for p in chunk.get("files", []):
+            file_to_chunks.setdefault(p, set()).add(cid)
+
     covered_paths_set: set[str] = set()
     failed_paths_set: set[str] = set()
     pending_paths_set: set[str] = set()
 
-    for chunk in chunks:
-        cid = int(chunk["chunk_id"])
-        c_files = chunk.get("files", [])
-        if cid in all_valid_fragments:
-            covered_paths_set.update(c_files)
-        elif cid in failed_chunks:
-            failed_paths_set.update(c_files)
+    for p in sorted(file_to_chunks.keys()):
+        cids = file_to_chunks[p]
+        if not cids:
+            pending_paths_set.add(p)
+        elif cids.issubset(successful_chunks):
+            covered_paths_set.add(p)
         else:
-            pending_paths_set.update(c_files)
-
-    # If any files are in failed, they are not covered
-    failed_paths_set -= covered_paths_set
-    pending_paths_set -= covered_paths_set
+            if cids & failed_chunks:
+                failed_paths_set.add(p)
+            if cids & pending_chunks:
+                pending_paths_set.add(p)
 
     # Overall fingerprint
     all_fps = "".join(chunk_fingerprints[int(c["chunk_id"])] for c in chunks)
@@ -428,8 +551,10 @@ def run_semantic_extraction(
         state = "complete"
     elif len(all_valid_fragments) > 0:
         state = "partial"
+    elif pending_chunks:
+        state = "partial" if failed_chunks else "pending"
     else:
-        state = "unavailable" if failed_chunks else "pending"
+        state = "unavailable"
 
     return {
         "state": state,
@@ -442,5 +567,18 @@ def run_semantic_extraction(
             "total_tokens": total_tokens,
             "model_calls": model_calls_made,
             "elapsed_seconds": round(time.time() - start_time, 3),
+            "chunk_counts": {
+                "total": len(chunks),
+                "cached": len(cached_fragments),
+                "validated": len(newly_validated_fragments),
+                "pending": len(pending_chunks),
+                "failed": len(failed_chunks),
+            },
+            "categories": {
+                "deadline_deferred": len(deadline_deferred_chunks),
+                "auxiliary_failed": len(auxiliary_failed_chunks),
+                "validation_failed": len(validation_failed_chunks),
+                "apply_failed": len(apply_failed_chunks),
+            },
         },
     }

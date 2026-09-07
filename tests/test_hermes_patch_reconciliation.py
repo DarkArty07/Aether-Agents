@@ -49,6 +49,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-247",
     "HLP-262",
     "HLP-280",
+    "HLP-335",
 )
 PATCH_DIGESTS = {
     "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
