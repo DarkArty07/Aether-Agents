@@ -1,0 +1,9 @@
+---
+import type { Doc } from '../lib/docs';
+import { sitePath } from '../lib/site-path';
+interface Props { docs: Doc[]; current?: string; }
+const { docs, current } = Astro.props;
+---
+<nav aria-label="Documentation chapters" lang="en">
+  {docs.map(d => <a href={sitePath(`/docs/${d.slug}/`)} class:list={[current === d.slug && 'current']} aria-current={current === d.slug ? 'page' : undefined}>{d.title}</a>)}
+</nav>

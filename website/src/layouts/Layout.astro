@@ -1,0 +1,70 @@
+---
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
+import '@fontsource/space-grotesk/latin-400.css';
+import '@fontsource/space-grotesk/latin-500.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '../styles/global.css';
+import { links, es, en } from '../data/content';
+import { sitePath } from '../lib/site-path';
+interface Props { title: string; description?: string; lang?: string; docs?: boolean; }
+const { title, description = es.description, lang = 'es', docs = false } = Astro.props;
+const c = lang === 'en' ? en : es;
+const home = sitePath(lang === 'en' ? '/en/' : '/');
+const esHome = sitePath('/');
+const enHome = sitePath('/en/');
+const docsHome = sitePath('/docs/');
+const favicon = sitePath('/favicon.svg');
+---
+<!doctype html>
+<html lang={lang === 'es' ? 'es-MX' : lang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#11111b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+    {!docs && <><link rel="alternate" hreflang="es" href={esHome} /><link rel="alternate" hreflang="en" href={enHome} /></>}
+    <title>{title}</title>
+  </head>
+  <body class:list={[docs && 'documentation']}>
+    <a class="skip-link" href="#main">{c.ui.skip}</a>
+    <header class="site-header">
+      <a class="brand" href={home} aria-label="Aether Agents">
+        <svg width="29" height="29" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v28M2 16h28M6 6l20 20M6 26L26 6"/><circle cx="16" cy="16" r="8"/></svg>
+        <span>AETHER<span class="brand-sub">AGENTS</span></span>
+      </a>
+      <nav class="desktop-nav" aria-label={lang === 'es' ? 'Navegación principal' : 'Main navigation'}>
+        <a href={`${home}#equipo`}>{c.nav[0]}</a>
+        <a href={`${home}#proceso`}>{c.nav[1]}</a>
+        <a href={`${home}#conocimiento`}>{c.nav[2]}</a>
+        <a href={docsHome} class:list={[docs && 'active']}>{c.nav[3]}</a>
+      </nav>
+      <div class="header-tools">
+        {!docs && <div class="language-switch" aria-label={c.ui.language}><a class:list={[lang === 'es' && 'selected']} aria-current={lang === 'es' ? 'page' : undefined} href={esHome} lang="es" data-language>ES</a><span>/</span><a class:list={[lang === 'en' && 'selected']} aria-current={lang === 'en' ? 'page' : undefined} href={enHome} lang="en" data-language>EN</a></div>}
+        <a class="header-github" href={links.github} target="_blank" rel="noopener noreferrer">GITHUB <span aria-hidden="true">↗</span></a>
+        <details class="mobile-nav">
+          <summary>{c.ui.menu} <span aria-hidden="true">≡</span></summary>
+          <nav aria-label={lang === 'es' ? 'Navegación móvil' : 'Mobile navigation'}>
+            <a href={`${home}#equipo`}>{c.nav[0]}</a><a href={`${home}#proceso`}>{c.nav[1]}</a><a href={`${home}#conocimiento`}>{c.nav[2]}</a><a href={docsHome}>{c.nav[3]}</a><a href={links.github} target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+          </nav>
+        </details>
+      </div>
+    </header>
+    <slot />
+    <footer class="site-footer wrap">
+      <a class="footer-wordmark" href={home}>AETHER <span>AGENTS</span></a>
+      <div class="footer-meta"><a href={links.license} target="_blank" rel="noopener noreferrer">{lang === 'es' ? 'LICENCIA MIT ↗' : 'MIT LICENSE ↗'}</a><span>© 2026 AETHER AGENTS</span></div>
+      <a class="back-top" href={docs ? '#main' : '#origen'}>{c.ui.top} <span aria-hidden="true">↑</span></a>
+    </footer>
+    {!docs && <button type="button" class="motion-toggle" data-motion-toggle hidden aria-pressed="false" data-pause={c.ui.pause} data-play={c.ui.play} aria-label={c.ui.pause}><span class="motion-icon" aria-hidden="true">Ⅱ</span><span data-motion-label>{c.ui.pause}</span></button>}
+    <script>
+      import { initSite } from '../scripts/motion';
+      initSite();
+    </script>
+  </body>
+</html>

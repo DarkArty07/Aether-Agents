@@ -1,0 +1,15 @@
+---
+interface Props { variant: 'hero' | 'finale'; }
+const { variant } = Astro.props;
+// Sparse atmosphere, not a starfield simulation or product telemetry.
+const motes = [[56,18,2],[63,38,3],[76,23,2],[87,55,2],[69,67,3],[81,79,2],[47,58,2],[92,31,2],[59,81,2],[73,48,2]];
+---
+<div class:list={['atmosphere', `atmosphere-${variant}`]} aria-hidden="true">
+  <div class="ether-light ether-light-main" data-ether-light></div>
+  <div class="ether-light ether-light-secondary" data-ether-light></div>
+  <div class="ether-motes">{motes.map(([x,y,size])=><i data-ether-mote style={`--mote-x:${x}%;--mote-y:${y}%;--mote-size:${size}px`}></i>)}</div>
+</div>
+<script>
+  import { initAtmospheres } from '../scripts/atmosphere';
+  initAtmospheres();
+</script>

@@ -1,0 +1,29 @@
+---
+import type { Copy } from '../data/content';
+interface Props { c: Copy; }
+const { c } = Astro.props;
+---
+<figure class="team-figure motion-scene" data-scene="team" data-labels={JSON.stringify(c.team.flowLabels)}>
+  <div class="figure-top mono"><span>{c.lang === 'es' ? 'UN EQUIPO, UN OBJETIVO' : 'ONE TEAM, ONE OBJECTIVE'}</span><span>{c.ui.path} <span class="small-signal" aria-hidden="true"></span></span></div>
+  <svg class="team-svg" viewBox="0 0 680 600" role="img" aria-labelledby="team-title team-desc">
+    <title id="team-title">{c.lang === 'es' ? 'Roles de Aether y circulación bidireccional del trabajo' : 'Aether roles and two-way work circulation'}</title>
+    <desc id="team-desc">{c.lang === 'es' ? 'Tú, Morfeo, Supervisor e implementadores. El trabajo puede avanzar, dividirse, esperar, regresar para revisión y converger.' : 'You, Morfeo, Supervisor and Implementers. Work can advance, branch, wait, return for review and converge.'}</desc>
+    <defs><pattern id="team-dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r=".8" fill="#45475a" opacity=".42"/></pattern><filter id="packet-glow"><feGaussianBlur stdDeviation="3"/></filter></defs>
+    <rect width="680" height="600" fill="url(#team-dots)"/>
+    <g class="diagram-guide"><path d="M340 25V580" stroke-dasharray="2 8"/><ellipse cx="340" cy="315" rx="269" ry="245"/><path d="M32 32h28M32 32v28M648 32h-28M648 32v28M32 568h28M32 568v-28M648 568h-28M648 568v-28"/></g>
+    <g class="diagram-edges">
+      <path id="team-owner" d="M340 91L340 179"/>
+      <path id="team-morfeo" d="M340 237L340 329"/>
+      <path id="team-a" d="M340 389L340 420Q340 439 319 439H142Q120 439 120 460V488"/>
+      <path id="team-b" d="M340 389V488"/>
+      <path id="team-c" d="M340 389L340 420Q340 439 361 439H538Q560 439 560 460V488"/>
+    </g>
+    <g class="diagram-side-labels"><text x="370" y="140">{c.lang === 'es' ? 'INTENCIÓN' : 'INTENT'}</text><text x="370" y="285">{c.lang === 'es' ? 'CONTRATO' : 'CONTRACT'}</text><text x="59" y="400">{c.lang === 'es' ? 'REVISIÓN ↟' : 'REVIEW ↟'}</text><text x="482" y="400">{c.lang === 'es' ? '↡ EJECUCIÓN' : '↡ EXECUTION'}</text></g>
+    <g class="diagram-node owner-node" data-node="owner"><circle cx="340" cy="66" r="25"/><text x="340" y="71" text-anchor="middle">{c.team.owner}</text></g>
+    <g class="diagram-node morfeo-node" data-node="morfeo"><rect x="215" y="179" width="250" height="58"/><path d="M205 192v-23h28M447 169h28v23M205 224v23h28M447 247h28v-23" class="node-brackets"/><text class="node-name" x="340" y="214" text-anchor="middle">MORFEO</text></g>
+    <g class="diagram-node" data-node="supervisor"><rect x="227" y="329" width="226" height="60"/><text class="node-name" x="340" y="365" text-anchor="middle">SUPERVISOR</text></g>
+    {[{x:120, id:'a'}, {x:340,id:'b'}, {x:560,id:'c'}].map(({x,id}) => <g class="diagram-node implementer-node" data-node={id}><rect x={x-84} y="488" width="168" height="61"/><text x={x} y="510" text-anchor="middle" class="node-micro">{c.lang === 'es' ? 'IMPLEMENTADOR' : 'IMPLEMENTER'}</text><text x={x} y="534" text-anchor="middle" class="node-index">{id.toUpperCase()}</text></g>)}
+    <g aria-hidden="true">{[0,1,2].map(i => <g data-packet={i} opacity="0"><circle r="10" class="packet-glow" filter="url(#packet-glow)"/><rect x="-3" y="-3" width="6" height="6" class="packet-core" transform="rotate(45)"/></g>)}</g>
+  </svg>
+  <figcaption class="instrument-caption"><span>{c.lang === 'es' ? 'El trabajo pasa entre etapas y agentes' : 'Work moves across stages and agents'}</span><span data-flow-label>{c.team.flowLabels[0]}</span></figcaption>
+</figure>
