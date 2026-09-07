@@ -95,6 +95,7 @@ jobs:
           .github/ISSUE_TEMPLATE/bug_report.md
           .github/ISSUE_TEMPLATE/feature_request.md
           .github/PULL_REQUEST_TEMPLATE.md
+          .github/workflows/pages.yml
           .github/workflows/policy.yml
           .github/workflows/release.yml
           .gitattributes
@@ -312,6 +313,61 @@ jobs:
           tests/test_knowledge_schema.py
           tests/test_project_knowledge_engine.py
           tests/test_work_memory.py
+          website/.gitignore
+          website/AGENTS.md
+          website/CONTENT_ARCHITECTURE.md
+          website/COPY_REFINEMENT.md
+          website/COPY_REFINEMENT_MX.md
+          website/DETAIL_REFINEMENT_PLAN.md
+          website/FINAL_POLISH_PLAN.md
+          website/HOMEPAGE_PROPOSAL.md
+          website/IMPLEMENTATION_PLAN.md
+          website/POLISH_PLAN.md
+          website/README.md
+          website/VERIFICATION.md
+          website/VISUAL_IDENTITY.md
+          website/assets/README.md
+          website/assets/images/aether-ether-finale.png
+          website/assets/images/aether-knowledge-graph.png
+          website/assets/images/aether-morfeo-hero.png
+          website/assets/images/aether-morfeo-refined.png
+          website/astro.config.mjs
+          website/package-lock.json
+          website/package.json
+          website/playwright.config.ts
+          website/public/favicon.svg
+          website/scripts/capture.mjs
+          website/scripts/prepare-assets.mjs
+          website/scripts/verify-pages-build.mjs
+          website/src/components/Astrolabe.astro
+          website/src/components/Atmosphere.astro
+          website/src/components/DocsNavigation.astro
+          website/src/components/Homepage.astro
+          website/src/components/KnowledgeGraph.astro
+          website/src/components/ProcessDiagram.astro
+          website/src/components/SectionLabel.astro
+          website/src/components/TeamDiagram.astro
+          website/src/data/content.ts
+          website/src/layouts/Layout.astro
+          website/src/lib/docs.ts
+          website/src/lib/site-path.ts
+          website/src/pages/404.astro
+          website/src/pages/docs/[...slug].astro
+          website/src/pages/docs/index.astro
+          website/src/pages/docs/search.json.ts
+          website/src/pages/en/index.astro
+          website/src/pages/index.astro
+          website/src/scripts/atmosphere.ts
+          website/src/scripts/knowledge.ts
+          website/src/scripts/motion.ts
+          website/src/styles/global.css
+          website/src/styles/knowledge.css
+          website/tests/browser/atmosphere.spec.ts
+          website/tests/browser/history.spec.ts
+          website/tests/browser/polish.spec.ts
+          website/tests/browser/site.spec.ts
+          website/tests/content.test.mjs
+          website/tsconfig.json
           EOF
           sed -i 's/^          //' "$expected"
           sort -o "$expected" "$expected"
