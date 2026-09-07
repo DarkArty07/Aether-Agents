@@ -92,5 +92,12 @@ class GraphifyBackend:
             ) from exc
         if not isinstance(result, dict) or not result.get("ok") or process.returncode:
             code = "COMPONENT_UNAVAILABLE" if action == "probe" else "INDEX_CORRUPT"
-            raise KnowledgeError(code, "Graphify could not complete the requested operation.")
+            msg = (
+                result.get("error")
+                or result.get("message")
+                or "Graphify could not complete the requested operation."
+                if isinstance(result, dict)
+                else "Graphify could not complete the requested operation."
+            )
+            raise KnowledgeError(code, str(msg))
         return result
