@@ -49,6 +49,12 @@ uv run --frozen pytest -q tests/test_objective_contracts.py
 Run focused tests while iterating and the full bootstrap before handoff. Do not remove,
 skip, or weaken a test to obtain a green result.
 
+Kanban fixtures must isolate dispatcher routing and execution identity, not only
+`HERMES_HOME`: inherited `HERMES_KANBAN_*` variables can still select the worker's live
+board or workspace. Use a scoped environment change with temporary destinations and
+verify that the outer board is unchanged. Subprocess probes can reuse
+`aether_agents.lab.isolated_hermes_env`; never test isolation against a live board.
+
 ## Quality checks
 
 Run the checks relevant to every changed Python path. The examples below cover the
