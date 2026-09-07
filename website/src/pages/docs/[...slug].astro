@@ -1,0 +1,24 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import DocsNavigation from '../../components/DocsNavigation.astro';
+import { loadDocs, sourceRevision, type Doc } from '../../lib/docs';
+import { sitePath } from '../../lib/site-path';
+export async function getStaticPaths() {
+  const docs = await loadDocs();
+  return docs.map((doc,i) => ({params:{slug:doc.slug},props:{doc,docs,previous:docs[i-1],next:docs[i+1]}}));
+}
+interface Props { doc: Doc; docs: Doc[]; previous?: Doc; next?: Doc; }
+const { doc, docs, previous, next } = Astro.props;
+const docsHome = sitePath('/docs/');
+---
+<Layout title={`${doc.title} — Aether Agents`} description={doc.description} lang="en" docs>
+  <main id="main" class="wrap docs-shell">
+    <aside class="docs-sidebar"><h2><a href={docsHome}>AETHER / DOCS</a></h2><DocsNavigation docs={docs} current={doc.slug}/></aside>
+    <div class="docs-content">
+      <details class="docs-menu-mobile"><summary>Explore documentation</summary><DocsNavigation docs={docs} current={doc.slug}/></details>
+      <div class="docs-content-header"><a href={docsHome}>← Documentation index</a><a href={doc.source} target="_blank" rel="noopener noreferrer">SOURCE @ {sourceRevision.slice(0,7)} ↗</a></div>
+      <article class="prose" set:html={doc.html}></article>
+      <nav class="docs-previous-next" aria-label="Adjacent chapters">{previous ? <a href={sitePath(`/docs/${previous.slug}/`)}>← {previous.title}</a> : <span></span>}{next && <a href={sitePath(`/docs/${next.slug}/`)}>{next.title} →</a>}</nav>
+    </div>
+  </main>
+</Layout>

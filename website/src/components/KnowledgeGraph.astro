@@ -1,0 +1,65 @@
+---
+import type { Copy } from '../data/content';
+import '../styles/knowledge.css';
+import { sitePath } from '../lib/site-path';
+interface Props { c: Copy; }
+const { c } = Astro.props;
+const es = c.lang === 'es';
+const backdrop800 = sitePath('/images/aether-knowledge-architecture-800.webp');
+const backdrop1672 = sitePath('/images/aether-knowledge-architecture-1672.webp');
+const groups = [
+  { id:'code', x:300, y:150, title:es?'Código':'Code', description:es?'Funciones, clases y módulos conectados por sus relaciones. Sirve para ubicar rápido dónde empezar a leer cuando una tarea toca una parte del sistema.':'Functions, classes and modules connected by their relationships. A starting point for finding the relevant code.', path:'M500 300C500 217 363 260 300 150' },
+  { id:'contracts', x:630, y:120, title:es?'Contratos':'Contracts', description:es?'Objetivos, restricciones y criterios de aceptación. El mapa ayuda a encontrarlos; los documentos originales siguen diciendo qué debe cumplir el trabajo.':'Objectives, constraints and acceptance criteria. The map helps locate them; the original documents still define what must be met.', path:'M500 300C525 228 578 223 630 120' },
+  { id:'docs', x:180, y:325, title:es?'Documentación':'Documentation', description:es?'Guías y decisiones que explican por qué el proyecto funciona como funciona. El mapa ayuda a recuperar contexto y regresar a la fuente cuando necesitas detalle.':'Guides and decisions that explain the project. Retrieve context and return to the source when you need the detail.', path:'M500 300C390 307 320 417 180 325' },
+  { id:'tests', x:790, y:285, title:es?'Pruebas':'Tests', description:es?'Relaciona pruebas con el código que cubren o ejercitan. La conexión orienta la revisión, pero no significa por sí sola que una prueba haya pasado.':'Related tests and code. Finding a connection guides review; it does not by itself prove that a test has passed.', path:'M500 300C600 277 676 254 790 285' },
+  { id:'dependencies', x:355, y:480, title:es?'Dependencias':'Dependencies', description:es?'Imports, llamadas y vínculos entre componentes. Ayuda a ver qué otras partes pueden verse afectadas antes de hacer un cambio.':'Imports, calls and connections between components. Explore relationships before making a change.', path:'M500 300C426 325 446 442 355 480' },
+  { id:'architecture', x:690, y:470, title:es?'Arquitectura':'Architecture', description:es?'Agrupa elementos relacionados para mostrar la estructura general del proyecto sin reemplazar las fuentes que la documentan.':'Communities of related elements. Explore the project structure without losing sight of its sources.', path:'M500 300C620 299 622 400 690 470' },
+];
+const intro = es?'Explora cómo se conecta el proyecto.':'Explore the project’s connections.';
+const description = es?'Selecciona un grupo para ver qué información puede recuperar el mapa. Es un ejemplo técnico: las experiencias de cada rol y tus preferencias permanecen fuera de él.':'Select a group to see what it represents. This illustrates a technical map; role experiences and your preferences remain outside it.';
+---
+<figure class="knowledge-graph" data-knowledge-graph data-selected="" aria-labelledby="knowledge-map-title">
+  <div class="knowledge-map-heading"><span id="knowledge-map-title">{es?'EL PROYECTO, CONECTADO':'THE PROJECT, CONNECTED'}</span><span class="knowledge-map-credit">GRAPHIFY</span></div>
+  <div class="knowledge-stage">
+    <picture class="knowledge-backdrop" aria-hidden="true"><source type="image/webp" srcset={`${backdrop800} 800w, ${backdrop1672} 1672w`} sizes="(max-width: 900px) 100vw, 1320px"/><img src={backdrop1672} width="1672" height="941" alt="" loading="lazy" decoding="async"/></picture>
+    <div class="knowledge-spotlight" aria-hidden="true"></div>
+    <svg class="knowledge-svg" viewBox="0 0 1000 600" aria-hidden="true">
+      <defs>
+        <radialGradient id="knowledge-aura"><stop stop-color="#cba6f7" stop-opacity=".18"/><stop offset="1" stop-color="#cba6f7" stop-opacity="0"/></radialGradient>
+        <filter id="knowledge-bloom" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="4"/></filter>
+        <pattern id="knowledge-dots" width="30" height="30" patternUnits="userSpaceOnUse"><circle cx="15" cy="15" r=".65" fill="#9399b2" opacity=".2"/></pattern>
+      </defs>
+      <rect width="1000" height="600" fill="url(#knowledge-dots)"/>
+      <circle cx="500" cy="300" r="255" fill="url(#knowledge-aura)"/>
+      <g class="knowledge-geometry"><ellipse cx="500" cy="300" rx="352" ry="267"/><ellipse cx="500" cy="300" rx="185" ry="259" transform="rotate(41 500 300)"/><path d="M500 19V48M485 34H515M500 552V581M485 566H515"/></g>
+      <g class="knowledge-relationships">
+        {groups.map(group=><g data-relationship={group.id}><path class="knowledge-edge" d={group.path}/><path data-illuminate={group.id} class="knowledge-edge-lit" d={group.path}/></g>)}
+        <path class="knowledge-crosslink" d="M300 150Q482 32 630 120M180 325Q242 447 355 480M790 285Q812 402 690 470M355 480Q535 562 690 470"/>
+      </g>
+      {groups.map((group,i)=><g class="knowledge-cluster" data-cluster={group.id}>
+        <circle class="knowledge-community" cx={group.x} cy={group.y} r="76"/>
+        {[0,1,2,3,4].map(j=>{
+          const a=(j*1.256+i*.37);
+          const r=42+(j%3)*12;
+          const x=group.x+Math.cos(a)*r, y=group.y+Math.sin(a)*r;
+          return <g><path class="knowledge-satellite-link" d={`M${group.x} ${group.y}L${x} ${y}`}/><circle class="knowledge-satellite" cx={x} cy={y} r={j%2?3:4.5}/></g>;
+        })}
+        <circle data-node-light={group.id} class="knowledge-node-light" cx={group.x} cy={group.y} r="24" fill="url(#knowledge-aura)"/>
+        <circle class="knowledge-node-orbit" cx={group.x} cy={group.y} r="18"/>
+        <circle class="knowledge-node" cx={group.x} cy={group.y} r="9"/>
+      </g>)}
+      <g class="knowledge-core"><circle cx="500" cy="300" r="57" fill="url(#knowledge-aura)"/><circle data-core-halo cx="500" cy="300" r="29"/><circle cx="500" cy="300" r="16"/></g>
+      {[0,1].map(i=><g data-knowledge-packet={i} opacity="0"><circle r="8" fill="#cba6f7" opacity=".5" filter="url(#knowledge-bloom)"/><circle r="2.6" fill="#cdd6f4"/></g>)}
+      <text class="knowledge-core-label" x="500" y="345" text-anchor="middle">{es?'CONOCIMIENTO':'KNOWLEDGE'}</text>
+    </svg>
+    <div class="knowledge-node-controls" role="group" aria-label={es?'Explorar el mapa técnico':'Explore the technical map'}>
+      {groups.map(group=><button type="button" class="knowledge-node-button" data-knowledge-node={group.id} data-title={group.title} data-description={group.description} style={`--node-x:${group.x/10}%;--node-y:${group.y/6}%`} aria-pressed="false" aria-describedby="knowledge-detail" disabled><span class="knowledge-hit-ring" aria-hidden="true"></span><span class="knowledge-node-label">{group.title}</span></button>)}
+    </div>
+  </div>
+  <div class="knowledge-detail" id="knowledge-detail" aria-live="polite" aria-atomic="true" data-default-title={intro} data-default-description={description}><div><p class="knowledge-detail-title" data-knowledge-title>{intro}</p><p data-knowledge-description>{description}</p></div><button type="button" class="knowledge-reset" data-knowledge-reset hidden>{es?'Ver todo':'Show all'} <span aria-hidden="true">↺</span></button></div>
+  <figcaption>{c.knowledge.caption}</figcaption>
+</figure>
+<script>
+  import { initKnowledgeGraphs } from '../scripts/knowledge';
+  initKnowledgeGraphs();
+</script>

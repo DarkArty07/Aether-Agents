@@ -1,0 +1,53 @@
+---
+import type { Copy } from '../data/content';
+interface Props { c: Copy; }
+const { c } = Astro.props;
+const ticks = Array.from({ length: 96 }, (_, i) => {
+  const a = i * Math.PI / 48;
+  const hour = i % 4 === 0;
+  const halfHour = i % 2 === 0;
+  const r = hour ? 210 : halfHour ? 218 : 225;
+  return {
+    x1: 280 + Math.sin(a) * r,
+    y1: 280 - Math.cos(a) * r,
+    x2: 280 + Math.sin(a) * 234,
+    y2: 280 - Math.cos(a) * 234,
+    hour,
+  };
+});
+const hourLabels = Array.from({ length: 24 }, (_, hour) => {
+  const a = hour * Math.PI / 12;
+  const r = 193;
+  return {
+    label: String(hour).padStart(2, '0'),
+    x: 280 + Math.sin(a) * r,
+    y: 280 - Math.cos(a) * r,
+    major: hour % 6 === 0,
+  };
+});
+const es = c.lang === 'es';
+---
+<figure class="astrolabe motion-scene" data-scene="astrolabe">
+  <svg viewBox="0 0 560 560" role="img" aria-labelledby="astrolabe-title">
+    <title id="astrolabe-title">{es ? 'Reloj de 24 horas para trabajo autónomo de largo horizonte.' : '24-hour clock for long-horizon autonomous work.'}</title>
+    <defs><radialGradient id="clock-glow"><stop offset="0" stop-color="#cba6f7" stop-opacity=".12"/><stop offset="1" stop-color="#cba6f7" stop-opacity="0"/></radialGradient><path id="orbit-type" d="M 280,280 m -252,0 a252,252 0 1,1 504,0 a252,252 0 1,1 -504,0"/></defs>
+    <circle cx="280" cy="280" r="266" fill="url(#clock-glow)"/>
+    <g class="instrument-grid"><path d="M280 10V550M10 280H550"/><circle cx="280" cy="280" r="254"/><circle cx="280" cy="280" r="236"/><circle cx="280" cy="280" r="207"/><circle cx="280" cy="280" r="124" stroke-dasharray="2 7"/>
+      {ticks.map(t => <line x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} class:list={[t.hour && 'major']} />)}
+      <path d="M25 85V25h60M475 25h60v60M535 475v60h-60M85 535H25v-60"/>
+    </g>
+    <g class="clock-hours" aria-hidden="true">
+      {hourLabels.map(hour => <text x={hour.x} y={hour.y} dy=".34em" text-anchor="middle" class:list={['clock-hour-label', hour.major && 'major']}>{hour.label}</text>)}
+    </g>
+    <g class="clock-orbit orbit-one" data-rotate="10"><ellipse cx="280" cy="280" rx="181" ry="80" transform="rotate(-36 280 280)"/><circle cx="431" cy="180" r="6" class="orbit-body"/><circle cx="280" cy="280" r="181" stroke-dasharray="3 8"/></g>
+    <g class="clock-orbit orbit-two" data-rotate="-7"><ellipse cx="280" cy="280" rx="181" ry="80" transform="rotate(36 280 280)"/><circle cx="132" cy="183" r="5" class="orbit-body lavender"/></g>
+    <circle cx="280" cy="280" r="81" class="clock-face"/>
+    <circle cx="280" cy="280" r="73" class="clock-face-ring"/>
+    <g class="clock-hand clock-hand-hour" data-rotate=".8"><path d="M280 280L280 154"/><path d="M280 148l-4 14h8z"/></g>
+    <g class="clock-hand clock-hand-minute" data-rotate="9.6"><path d="M280 280L280 92"/><path d="M280 86l-4 14h8z"/><circle cx="280" cy="104" r="8" fill="none"/></g>
+    <circle cx="280" cy="280" r="4.5" class="clock-pivot" aria-hidden="true"/>
+    <text x="280" y="232" class="clock-small clock-center-kicker" text-anchor="middle">{es ? 'TRABAJO AUTÓNOMO' : 'AUTONOMOUS WORK'}</text>
+    <text x="280" y="262" class="clock-center" text-anchor="middle">{es ? 'LARGO' : 'LONG'}</text><text x="280" y="316" class="clock-center" text-anchor="middle">{es ? 'HORIZONTE' : 'HORIZON'}</text><text x="280" y="340" class="clock-small" text-anchor="middle">24 H</text>
+    <text class="clock-type"><textPath href="#orbit-type" startOffset="6%">A E T H E R　 /　 Χ Ρ Ο Ν Ο Σ　 /　 {es ? 'TRABAJO DE LARGO HORIZONTE　 /　 CICLO AUTÓNOMO　 /' : 'LONG-HORIZON WORK　 /　 AUTONOMOUS CYCLE　 /'}</textPath></text>
+  </svg>
+</figure>
