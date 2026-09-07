@@ -34,6 +34,17 @@ def isolated_board(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def test_isolated_board_preserves_dispatcher_namespace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, selector: str
 ) -> None:
+    def fixture_environment() -> dict[str, str]:
+        # Hermes may lazily set HERMES_QUIET while importing its CLI.
+        # Compare the fixture-owned namespace and an unrelated control,
+        # not the side effects of every native module loaded by the cycle.
+        return {
+            name: value
+            for name, value in os.environ.items()
+            if name.startswith("HERMES_KANBAN_") or name in {"HERMES_HOME", "AETHER_TEST_SENTINEL"}
+        }
+
+    monkeypatch.delenv("HERMES_QUIET", raising=False)
     # Never use a real inherited board even when exercising the broken fixture.
     for name in tuple(os.environ):
         if name.startswith("HERMES_KANBAN_"):
@@ -67,7 +78,7 @@ def test_isolated_board_preserves_dispatcher_namespace(
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("AETHER_TEST_SENTINEL", "preserve unrelated configuration")
-    inherited = dict(os.environ)
+    inherited = fixture_environment()
 
     inner = tmp_path / "fixture"
     inner.mkdir()
@@ -86,7 +97,7 @@ def test_isolated_board_preserves_dispatcher_namespace(
         finally:
             fixture.close()
 
-    assert dict(os.environ) == inherited
+    assert fixture_environment() == inherited
     after = {
         path.relative_to(outer): path.read_bytes() for path in outer.rglob("*") if path.is_file()
     }
