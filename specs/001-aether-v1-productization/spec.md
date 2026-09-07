@@ -1,5 +1,7 @@
 # Aether 1.0 Productization and Public Release Specification
 
+> **Source-policy amendment, 2026-09-07:** `DESIGN.md` PD-49/61/64/65 now select a maintained Hermes fork for Aether distribution. This supersedes the upstream-by-default and transition-only restrictions throughout this A1 specification. Detailed source-mode requirements, schema, plans and release machinery below have not yet been reconciled and must not be implemented as a maintained-fork contract until that design is complete. Current source behavior, installed baselines and historical qualification evidence are unchanged. Existing isolation, privacy, testing and protected-effect boundaries remain in force.
+
 **Contract ID**: A1
 **Status**: normative product contract active but stabilization-frozen under PD-71 through PD-74; implementation and release evidence remain separately gated
 **Accepted product decisions**: `DESIGN.md` PD-01 through PD-74, including the 2026-08-26 operational simplification

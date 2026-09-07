@@ -12,6 +12,15 @@ The owner accepted PD-48 through PD-64 in conversation before this contract was 
 
 **2026-08-21 amendment:** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The current decision is upstream-by-default with a release-locked `transitional_fork` mode only while indispensable patches remain, and no new Aether capability may add a downstream-only Hermes core dependency.
 
+### Owner amendment — maintained fork (2026-09-07)
+
+- **Need and authority:** the owner explicitly chose a maintained Hermes fork for runtime ownership, future separately scoped frontend adaptations, and inclusion in Aether distribution, without updating to upstream now.
+- **Decision:** DESIGN PD-49/61/64/65 own the new long-lived-fork source policy. The 2026-08-21 transition-only decision above is historical and superseded; the earlier A1-D02/D03/D05 implementation details are not automatically reapproved.
+- **Evidence:** GitHub identifies `DarkArty07/hermes-agent` as a public fork of `NousResearch/hermes-agent`. Its observed main was `2163f7f8ca82f7c892c7e815dadd80a1486cc194`; the locally inspected framework base was `0b288979e2322c02ab42c05f1e183bb31cfa5aa9` with additional local changes. These are distinct observations, not a selected distribution candidate. The framework license permits modification and redistribution subject to retaining the MIT copyright and permission notice; bundled dependencies and frontend assets need their own license review.
+- **Alternatives and trade-off:** upstream-only and a compulsory temporary-patch policy no longer meet the owner's intended product control. A maintained fork gives that control but transfers integration, security maintenance, regression testing and release support to Aether. Keeping Aether-specific changes localized reduces that burden without forbidding justified core changes.
+- **Pending design:** reuse or rename the existing fork, maintained branch/version scheme, upstream integration and contribution rules, source-mode/schema migration, package composition, and treatment of permanent features versus retireable fixes. These are recommendations to settle, not implied execution authority.
+- **Bounded impact:** A1 source policy and release design are reopened for the fork transition. The current encoded baseline, active runtime, frontend, historical tests and release artifacts are not changed. PD-51 release qualification and privacy/isolation requirements remain applicable. Repairing the current TUI incident remains a distinct bounded objective.
+
 ## 2. Observed Aether repository state
 
 Source: the current Aether working tree and GitHub repository <https://github.com/DarkArty07/Aether-Agents>.
