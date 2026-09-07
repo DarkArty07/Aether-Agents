@@ -551,9 +551,18 @@ def _run_github(project_id: str | None, pr_number: int | None) -> dict[str, Any]
             )
             if impact.get("ok") is not True:
                 raise KnowledgeError("GITHUB_UNAVAILABLE", "Read-only PR impact returned an error.")
+            impact_info = impact.get("impact") or {}
+            files_value = impact_info.get("files", 0)
+            files_count = (
+                len(files_value) if isinstance(files_value, list) else int(files_value or 0)
+            )
+            matched = impact_info.get("matched_files") or []
+            unmatched = impact_info.get("unmatched_files") or []
             report["pr_impact"] = {
                 "status": "passed",
-                "files": len(impact.get("impact", {}).get("files", [])),
+                "files": files_count,
+                "matched_files": len(matched) if isinstance(matched, list) else matched,
+                "unmatched_files": len(unmatched) if isinstance(unmatched, list) else unmatched,
             }
         return report
     except KnowledgeError as exc:
