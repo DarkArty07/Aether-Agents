@@ -324,7 +324,7 @@ class KnowledgeService:
                 context, action, arguments
             )
         else:
-            result = WorkMemoryStore(self.state_root, backend.python if backend else None).execute(
+            result = WorkMemoryStore(self.state_root, backend=backend).execute(
                 context, action, arguments
             )
         return result

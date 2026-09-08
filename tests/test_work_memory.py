@@ -8,11 +8,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from test_project_knowledge_engine import OTHER, PROJECT, project
+from test_project_knowledge_engine import OTHER, PROJECT, git_at, project
 
-from aether_agents.knowledge.common import KnowledgeError
+from aether_agents.knowledge.common import KnowledgeError, atomic_json
 from aether_agents.knowledge.context import resolve_context
 from aether_agents.knowledge.memory import WorkMemoryStore
+from aether_agents.knowledge.service import KnowledgeService, validate_arguments
 
 
 @pytest.fixture
@@ -35,6 +36,148 @@ def payload(lesson: str = "Use the committed source revision.", *, key: str | No
         "evidence": [],
         "source_nodes": ["process_order"],
     }
+
+
+def test_evidence_requires_regular_file_at_exact_commit(tmp_path: Path) -> None:
+    root, state = project(tmp_path)
+    (root / "src").mkdir()
+    (root / "src/nested.py").write_text("pass\n")
+    (root / "literal[1].py").write_text("pass\n")
+    (root / "executable.py").write_text("pass\n")
+    (root / "alias.py").symlink_to("module.py")
+    git_at(root, "add", ".")
+    git_at(root, "update-index", "--chmod=+x", "executable.py")
+    git_at(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{git_at(root, 'rev-parse', 'HEAD')},submodule",
+    )
+    git_at(root, "commit", "-qm", "evidence object classes")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    store = WorkMemoryStore(state)
+    expected = {
+        "module.py": True,
+        "src/nested.py": True,
+        "executable.py": True,
+        "literal[1].py": True,
+        "src": False,
+        "src/": False,
+        "alias.py": False,
+        "submodule": False,
+        "missing.py": False,
+        "module*.py": False,
+        ":(glob)*": False,
+        ".": False,
+    }
+    observed = store._evidence(ctx, [{"path": path} for path in expected])
+    assert [item["source_exists"] for item in observed] == list(expected.values())
+    assert all(item["revision"] == ctx.source_revision for item in observed)
+    assert all(item["result_independently_verified"] is False for item in observed)
+
+    tree = git_at(root, "rev-parse", "HEAD^{tree}")
+    blob = git_at(root, "rev-parse", "HEAD:module.py")
+    invalid = store._evidence(
+        ctx, [{"path": "module.py", "revision": rev} for rev in ("0" * 40, tree, blob)]
+    )
+    assert all(item["source_exists"] is False for item in invalid)
+    (root / "module.py").unlink()
+    git_at(root, "add", "-u")
+    git_at(root, "commit", "-qm", "remove evidence from later revision")
+    current = resolve_context(PROJECT, "morfeo", state_root=state)
+    refs = store._evidence(
+        current, [{"path": "module.py"}, {"path": "module.py", "revision": ctx.source_revision}]
+    )
+    assert [item["source_exists"] for item in refs] == [False, True]
+
+
+@pytest.mark.parametrize("field", ["reason", "applicability"])
+@pytest.mark.parametrize("size", [4096, 4097, 5000, 16000, 16001])
+def test_correction_accepts_advertised_lengths(memory, field: str, size: int) -> None:
+    store, state = memory
+    assert store.backend is not None
+    service = KnowledgeService(state, state / "cache")
+    atomic_json(
+        service.config_path,
+        {
+            "schema_version": 1,
+            "enabled": True,
+            "python": str(store.backend.python),
+        },
+    )
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    first = service.execute(ctx, "work_memory", {"action": "save", **payload()})
+    args = {
+        "action": "correct",
+        "note_id": first["note_id"],
+        "expected_revision": 1,
+        "reason": "Verified correction",
+        "replacement": {
+            "lesson": "Corrected lesson",
+            "applicability": "Current sources",
+        },
+        "evidence": [],
+    }
+    text = "r" * size
+    if field == "reason":
+        args["reason"] = text
+    else:
+        args["replacement"]["applicability"] = text
+    if size > 16000:
+        with pytest.raises(KnowledgeError, match="schema"):
+            validate_arguments("work_memory", args)
+        with pytest.raises(KnowledgeError, match="16000"):
+            store.execute(ctx, "correct", args)
+        assert store.execute(ctx, "read", {"note_id": first["note_id"]})["revision"] == 1
+        return
+    assert validate_arguments("work_memory", args) == "correct"
+    assert service.execute(ctx, "work_memory", args)["revision"] == 2
+    note = store.execute(ctx, "export", {})["notes"][0]
+    assert note["correction_reason" if field == "reason" else field] == text
+    assert (
+        service.execute(ctx, "work_memory", {"action": "read", "note_id": first["note_id"]})[
+            "revision"
+        ]
+        == 2
+    )
+
+
+def test_maximum_unicode_correction_is_readable(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    first = store.execute(ctx, "save", payload())
+    text = "🌌" * 16000
+    args = {
+        "action": "correct",
+        "note_id": first["note_id"],
+        "expected_revision": 1,
+        "reason": text,
+        "replacement": {"lesson": text, "applicability": text},
+        "evidence": [],
+    }
+    assert validate_arguments("work_memory", args) == "correct"
+    assert store.execute(ctx, "correct", args)["revision"] == 2
+    note = store.execute(ctx, "export", {})["notes"][0]
+    assert all(note[field] == text for field in ("lesson", "applicability", "correction_reason"))
+    page = store.execute(ctx, "read", {"note_id": first["note_id"]})
+    content = page["content"]
+    while page["next_cursor"]:
+        page = store.execute(
+            ctx, "read", {"note_id": first["note_id"], "cursor": page["next_cursor"]}
+        )
+        content += page["content"]
+    assert text in content
+
+
+def test_save_keeps_its_smaller_applicability_limit(memory) -> None:
+    store, state = memory
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    args = {"action": "save", **payload(), "applicability": "s" * 4097}
+    with pytest.raises(KnowledgeError):
+        validate_arguments("work_memory", args)
+    with pytest.raises(KnowledgeError, match="4096"):
+        store.execute(ctx, "save", args)
 
 
 def test_roles_share_no_personal_notes_or_reflections(memory, tmp_path: Path) -> None:
