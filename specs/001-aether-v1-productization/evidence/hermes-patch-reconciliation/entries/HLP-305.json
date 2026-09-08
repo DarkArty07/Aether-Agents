@@ -12,7 +12,7 @@
     "scripts/qualify_legacy_fts_contention.py"
   ],
   "required_behavior": "A transient SQLite locked or busy error while the current holder refreshes a session turn lease must not be presented as a user interrupt while the existing TTL leaves a complete bounded retry budget. A holder-qualified refresh miss, non-lock persistence error, or exhausted safe retry window must still hard-interrupt before authority can expire. The maintained fork also bounds new legacy-inline FTS tool body prefixes without deleting canonical messages or historical index rows; explicit tool-role queries retain full-body search and failed DDL rolls back atomically.",
-  "local_status": "MAINTAINED_FORK / ACTIVATION_PENDING",
+  "local_status": "MAINTAINED_FORK / LIVE_FTS_ACTIVATED / PROCESS_RELOAD_PENDING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
@@ -88,5 +88,5 @@
     "The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.",
     "Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found."
   ],
-  "summary": "Retain HLP-305 in the maintained fork. The waiter retry and legacy FTS holder repair are integrated at c185ee3bb5b6d609241432fd123c16143f065987; activation needs verified backup/readback. Detailed historical patch receipts remain valid for their original waiter-only delta. Expanded testing retains a baseline failure documented in Aether #349."
+  "summary": "Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349."
 }
