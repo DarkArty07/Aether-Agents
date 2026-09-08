@@ -233,6 +233,28 @@ def test_live_mode_refuses_model_spend_before_invoking_hermes(tmp_path: Path) ->
 def test_public_isolated_hermes_env_scrubs_all_outer_identity_from_native_kanban(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    native_hermes = shutil.which("hermes")
+    if native_hermes is None:
+        pytest.skip("native Hermes runtime is unavailable")
+    native_python = e2e_run._native_python(Path(native_hermes))
+
+    witness_board = tmp_path / "witness_kanban.db"
+    witness_init = r"""
+import sys
+from pathlib import Path
+from hermes_cli import kanban_db
+
+board = Path(sys.argv[1]).resolve()
+kanban_db.init_db(db_path=board)
+with kanban_db.connect(db_path=board) as conn:
+    kanban_db.create_task(conn, title="witness task", assignee="witness")
+"""
+    subprocess.run(
+        [str(native_python), "-c", witness_init, str(witness_board)],
+        check=True,
+    )
+    witness_bytes_before = witness_board.read_bytes()
+
     exact = tmp_path / "candidate" / "hermes"
     exact.parent.mkdir()
     exact.write_text("#!/bin/sh\n", encoding="utf-8")
@@ -242,6 +264,7 @@ def test_public_isolated_hermes_env_scrubs_all_outer_identity_from_native_kanban
         "HERMES_KANBAN_WORKSPACE": "/private/outer-workspace",
         "HERMES_KANBAN_BRANCH": "outer/branch",
         "HERMES_KANBAN_BOARD": "outer-board",
+        "HERMES_KANBAN_DB": str(witness_board),
         "HERMES_KANBAN_CLAIM_LOCK": "outer-claim",
         "HERMES_KANBAN_GOAL_MODE": "1",
         "HERMES_KANBAN_AFFINITY_TOKEN": "outer-token",
@@ -252,6 +275,10 @@ def test_public_isolated_hermes_env_scrubs_all_outer_identity_from_native_kanban
         "HERMES_SESSION_ID": "outer-session",
         "HERMES_SESSION_SOURCE": "kanban",
         "HERMES_SESSION_FUTURE_FIELD": "outer-future-session",
+        "HERMES_DELEGATED_CHILD_CONTEXT": "outer-delegated-child",
+        "HERMES_PROJECT_ID": "outer-project-id",
+        "HERMES_TENANT": "outer-tenant",
+        "AETHER_PROJECT_ID": "outer-aether-project",
     }
     monkeypatch.setenv("TERMINAL_CWD", "/private/tui-cwd")
     monkeypatch.setenv("HERMES_CWD", "/private/hermes-cwd")
@@ -260,25 +287,28 @@ def test_public_isolated_hermes_env_scrubs_all_outer_identity_from_native_kanban
         monkeypatch.setenv(name, value)
     run_root = tmp_path / "run"
     hermes_root = tmp_path / "home"
+    parent_env_before = dict(os.environ)
 
     env = lab.isolated_hermes_env(run_root, hermes_root, exact)
 
+    assert os.environ == parent_env_before
     assert lab.isolated_hermes_env is e2e_run.isolated_hermes_env
     assert env["HERMES_BIN"] == str(exact.resolve())
     assert env["HERMES_HOME"] == str(hermes_root)
     assert env["HERMES_KANBAN_DB"] == str(run_root / "kanban.db")
+    assert env["HERMES_KANBAN_DB"] != str(witness_board)
     assert env["HERMES_KANBAN_WORKSPACES_ROOT"] == str(run_root / "worktrees")
     assert env["XDG_STATE_HOME"] == str(run_root / "xdg-state")
     assert env["XDG_DATA_HOME"] == str(run_root / "xdg-data")
     assert "TERMINAL_CWD" not in env
     assert "HERMES_CWD" not in env
+    assert "HERMES_DELEGATED_CHILD_CONTEXT" not in env
+    assert "HERMES_PROJECT_ID" not in env
+    assert "HERMES_TENANT" not in env
+    assert "AETHER_PROJECT_ID" not in env
     assert all(env.get(name) != sentinel for name, sentinel in outer_identity.items())
     assert env["AETHER_UNRELATED_CONFIGURATION"] == "preserved"
 
-    native_hermes = shutil.which("hermes")
-    if native_hermes is None:
-        pytest.skip("native Hermes runtime is unavailable")
-    native_python = e2e_run._native_python(Path(native_hermes))
     native = r"""
 import json
 import os
@@ -288,13 +318,32 @@ from pathlib import Path
 from hermes_cli import kanban_db
 
 run_root = Path(sys.argv[1]).resolve()
+witness_board = Path(sys.argv[2]).resolve()
 board = Path(os.environ["HERMES_KANBAN_DB"]).resolve()
 workspaces = Path(os.environ["HERMES_KANBAN_WORKSPACES_ROOT"]).resolve()
+
+for leaked in (
+    "HERMES_PROJECT_ID",
+    "HERMES_TENANT",
+    "HERMES_DELEGATED_CHILD_CONTEXT",
+    "AETHER_PROJECT_ID",
+    "TERMINAL_CWD",
+    "HERMES_CWD",
+):
+    assert leaked not in os.environ, f"leaked identity in child: {leaked}"
+
 identity = {
     name: value
     for name, value in os.environ.items()
     if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_"))
-    or name in {"TERMINAL_CWD", "HERMES_CWD"}
+    or name in {
+        "TERMINAL_CWD",
+        "HERMES_CWD",
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_PROJECT_ID",
+        "HERMES_TENANT",
+        "AETHER_PROJECT_ID",
+    }
 }
 expected_identity = {
     "HERMES_KANBAN_DB": str(run_root / "kanban.db"),
@@ -302,6 +351,7 @@ expected_identity = {
 }
 assert identity == expected_identity, identity
 assert board == run_root / "kanban.db"
+assert board != witness_board
 assert workspaces == run_root / "worktrees"
 
 kanban_db.init_db(db_path=board)
@@ -326,6 +376,25 @@ with kanban_db.connect(db_path=board) as connection:
     kanban_db.add_comment(connection, parent, "fixture", "disposable cleanup: parent second")
     assert kanban_db.archive_task(connection, parent)
     archived = [kanban_db.get_task(connection, task_id).status for task_id in (child, parent)]
+
+    probe_task = kanban_db.create_task(
+        connection,
+        title="B267 native probe task",
+        assignee="implementer",
+        workspace_kind="dir",
+        workspace_path=str(workspaces / "probe"),
+    )
+    claimed = kanban_db.claim_task(connection, probe_task, claimer="worker-1")
+    assert claimed is not None and claimed.status == "running"
+    completed = kanban_db.complete_task(
+        connection,
+        probe_task,
+        summary="probe completed successfully",
+    )
+    assert completed is True
+    probe_done = kanban_db.get_task(connection, probe_task)
+    assert probe_done.status == "done"
+
     task_count = connection.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
     event_count = connection.execute("SELECT COUNT(*) FROM task_events").fetchone()[0]
 
@@ -333,12 +402,13 @@ print(json.dumps({
     "board": str(board),
     "workspaces": str(workspaces),
     "archived": archived,
+    "probe_status": probe_done.status,
     "task_count": task_count,
     "event_count": event_count,
 }))
 """
     completed = subprocess.run(
-        [str(native_python), "-c", native, str(run_root)],
+        [str(native_python), "-c", native, str(run_root), str(witness_board)],
         text=True,
         capture_output=True,
         check=False,
@@ -349,9 +419,230 @@ print(json.dumps({
     assert receipt["board"] == str((run_root / "kanban.db").resolve())
     assert receipt["workspaces"] == str((run_root / "worktrees").resolve())
     assert receipt["archived"] == ["archived", "archived"]
-    assert receipt["task_count"] == 2
-    assert receipt["event_count"] >= 4
+    assert receipt["probe_status"] == "done"
+    assert receipt["task_count"] == 3
+    assert receipt["event_count"] >= 6
     assert not (tmp_path / "kanban.db").exists()
+    assert witness_board.read_bytes() == witness_bytes_before
+    assert os.environ == parent_env_before
+
+
+def test_observe_native_affinity_controls_discards_inherited_identity_and_protects_witness_board(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    native_hermes = shutil.which("hermes")
+    if native_hermes is None:
+        pytest.skip("native Hermes runtime is unavailable")
+    native_python = e2e_run._native_python(Path(native_hermes))
+
+    witness_board = tmp_path / "witness_kanban.db"
+    witness_init = r"""
+import sys
+from pathlib import Path
+from hermes_cli import kanban_db
+
+board = Path(sys.argv[1]).resolve()
+kanban_db.init_db(db_path=board)
+with kanban_db.connect(db_path=board) as conn:
+    kanban_db.create_task(conn, title="witness task", assignee="witness")
+"""
+    subprocess.run(
+        [str(native_python), "-c", witness_init, str(witness_board)],
+        check=True,
+    )
+    witness_bytes_before = witness_board.read_bytes()
+
+    lab_dir = tmp_path / "lab"
+    lab_dir.mkdir(parents=True, exist_ok=True)
+    lab_board = lab_dir / "kanban.db"
+    subprocess.run(
+        [str(native_python), "-c", witness_init, str(lab_board)],
+        check=True,
+    )
+
+    supervisor_db = lab_dir / "supervisor.db"
+    implementer_db = lab_dir / "implementer.db"
+    lab_workspace = lab_dir / "worktrees" / "worker"
+
+    outer_identity = {
+        "HERMES_KANBAN_TASK": "t_outer",
+        "HERMES_KANBAN_RUN_ID": "99",
+        "HERMES_KANBAN_WORKSPACE": "/private/outer-workspace",
+        "HERMES_KANBAN_BRANCH": "outer/branch",
+        "HERMES_KANBAN_BOARD": "outer-board",
+        "HERMES_KANBAN_DB": str(witness_board),
+        "HERMES_KANBAN_CLAIM_LOCK": "outer-claim",
+        "HERMES_KANBAN_GOAL_MODE": "1",
+        "HERMES_KANBAN_AFFINITY_TOKEN": "outer-token",
+        "HERMES_KANBAN_AFFINITY_GENERATION": "7",
+        "HERMES_KANBAN_AFFINITY_FLOW_ID": "outer-flow",
+        "HERMES_KANBAN_AFFINITY_PROJECT_ID": "outer-project",
+        "HERMES_KANBAN_FUTURE_FIELD": "outer-future-kanban",
+        "HERMES_SESSION_ID": "outer-session",
+        "HERMES_SESSION_SOURCE": "kanban",
+        "HERMES_SESSION_FUTURE_FIELD": "outer-future-session",
+        "HERMES_DELEGATED_CHILD_CONTEXT": "outer-delegated-child",
+        "HERMES_PROJECT_ID": "outer-project-id",
+        "HERMES_TENANT": "outer-tenant",
+        "AETHER_PROJECT_ID": "outer-aether-project",
+    }
+    monkeypatch.setenv("TERMINAL_CWD", "/private/tui-cwd")
+    monkeypatch.setenv("HERMES_CWD", "/private/hermes-cwd")
+    for name, value in outer_identity.items():
+        monkeypatch.setenv(name, value)
+    parent_env_before = dict(os.environ)
+
+    controls = e2e_run._observe_native_affinity_controls(
+        board=lab_board,
+        supervisor_db=supervisor_db,
+        implementer_db=implementer_db,
+        flow_id="test-flow",
+        project_id="test-project",
+        first_session_id="test-session",
+        resumed_session_id="test-session",
+        first_generation=1,
+        workspace_path=str(lab_workspace),
+        hermes_home=lab_dir / "home",
+        hermes=Path(native_hermes),
+        task_id="t_test",
+    )
+
+    assert controls, "affinity observer subprocess failed or returned empty controls"
+    child_identity = controls.get("child_identity", {})
+    for leaked in (
+        "HERMES_PROJECT_ID",
+        "HERMES_TENANT",
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "AETHER_PROJECT_ID",
+        "TERMINAL_CWD",
+        "HERMES_CWD",
+        "HERMES_SESSION_ID",
+        "HERMES_KANBAN_TASK",
+        "HERMES_KANBAN_BOARD",
+    ):
+        assert leaked not in child_identity, f"leaked identity in affinity observer child: {leaked}"
+
+    child_env = controls.get("child_env", {})
+    assert child_env.get("HERMES_KANBAN_DB") == str(lab_board)
+    assert child_env.get("HERMES_KANBAN_DB") != str(witness_board)
+    assert witness_board.read_bytes() == witness_bytes_before
+    assert os.environ == parent_env_before
+
+    # Also verify that when called with the isolated env from live_run, the child
+    # discards outer identity and uses only the laboratory board.
+    live_env = lab.isolated_hermes_env(lab_dir, lab_dir / "home", Path(native_hermes))
+    controls_with_env = e2e_run._observe_native_affinity_controls(
+        board=lab_board,
+        supervisor_db=supervisor_db,
+        implementer_db=implementer_db,
+        flow_id="test-flow",
+        project_id="test-project",
+        first_session_id="test-session",
+        resumed_session_id="test-session",
+        first_generation=1,
+        workspace_path=str(lab_workspace),
+        hermes_home=lab_dir / "home",
+        hermes=Path(native_hermes),
+        task_id="t_test",
+        env=live_env,
+    )
+    assert controls_with_env, "affinity observer with env failed"
+    child_identity_env = controls_with_env.get("child_identity", {})
+    for leaked in (
+        "HERMES_PROJECT_ID",
+        "HERMES_TENANT",
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "AETHER_PROJECT_ID",
+        "TERMINAL_CWD",
+        "HERMES_CWD",
+        "HERMES_SESSION_ID",
+        "HERMES_KANBAN_TASK",
+        "HERMES_KANBAN_BOARD",
+    ):
+        assert leaked not in child_identity_env, (
+            f"leaked identity in affinity observer child with live_env: {leaked}"
+        )
+    child_env_env = controls_with_env.get("child_env", {})
+    assert child_env_env.get("HERMES_KANBAN_DB") == str(lab_board)
+    assert child_env_env.get("HERMES_KANBAN_DB") != str(witness_board)
+    assert witness_board.read_bytes() == witness_bytes_before
+    assert os.environ == parent_env_before
+
+    # Verify that a symlinked board destination passed to _observe_native_affinity_controls is rejected before launch
+    outside_board = tmp_path / "outside_board.db"
+    outside_board.write_text("outside", encoding="utf-8")
+    symlinked_board = lab_dir / "symlinked_kanban.db"
+    symlinked_board.symlink_to(outside_board)
+    with pytest.raises(lab.HarnessError, match="disposable destination cannot be a symlink"):
+        e2e_run._observe_native_affinity_controls(
+            board=symlinked_board,
+            supervisor_db=supervisor_db,
+            implementer_db=implementer_db,
+            flow_id="test-flow",
+            project_id="test-project",
+            first_session_id="test-session",
+            resumed_session_id="test-session",
+            first_generation=1,
+            workspace_path=str(lab_workspace),
+            hermes_home=lab_dir / "home",
+            hermes=Path(native_hermes),
+            task_id="t_test",
+        )
+    assert witness_board.read_bytes() == witness_bytes_before
+    assert os.environ == parent_env_before
+
+
+def test_isolated_hermes_env_rejects_symlinks_and_escaped_destinations(
+    tmp_path: Path,
+) -> None:
+    exact = tmp_path / "candidate" / "hermes"
+    exact.parent.mkdir(parents=True, exist_ok=True)
+    exact.write_text("#!/bin/sh\n", encoding="utf-8")
+    run_root = tmp_path / "run"
+    run_root.mkdir(parents=True, exist_ok=True)
+    hermes_root = tmp_path / "home"
+
+    outside_db = tmp_path / "outside.db"
+    outside_db.write_text("witness", encoding="utf-8")
+    db_symlink = run_root / "kanban.db"
+    db_symlink.symlink_to(outside_db)
+
+    with pytest.raises(lab.HarnessError, match="disposable destination cannot be a symlink"):
+        lab.isolated_hermes_env(run_root, hermes_root, exact)
+
+    db_symlink.unlink()
+
+    outside_worktrees = tmp_path / "outside_worktrees"
+    outside_worktrees.mkdir(parents=True, exist_ok=True)
+    worktrees_symlink = run_root / "worktrees"
+    worktrees_symlink.symlink_to(outside_worktrees)
+
+    with pytest.raises(lab.HarnessError, match="disposable destination cannot be a symlink"):
+        lab.isolated_hermes_env(run_root, hermes_root, exact)
+
+    worktrees_symlink.unlink()
+
+    with pytest.raises(lab.HarnessError, match="escapes sandbox"):
+        e2e_run.preflight_disposable_destinations(run_root, tmp_path / "escape.db")
+
+
+def test_observation_rebinds_aether_project_id_after_isolation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exact = tmp_path / "candidate" / "hermes"
+    exact.parent.mkdir(parents=True, exist_ok=True)
+    exact.write_text("#!/bin/sh\n", encoding="utf-8")
+    run_root = tmp_path / "run"
+    hermes_root = tmp_path / "home"
+
+    monkeypatch.setenv("AETHER_PROJECT_ID", "poisoned-inherited-project")
+    env = lab.isolated_hermes_env(run_root, hermes_root, exact)
+    assert "AETHER_PROJECT_ID" not in env
+
+    fresh_project_id = "00000000-0000-0000-0000-000000000001"
+    env.update({"AETHER_PROJECT_ID": fresh_project_id})
+    assert env["AETHER_PROJECT_ID"] == fresh_project_id
+    assert env["AETHER_PROJECT_ID"] != "poisoned-inherited-project"
 
 
 def test_dispatch_passes_are_spread_across_the_scenario_timeout(monkeypatch) -> None:
