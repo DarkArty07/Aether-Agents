@@ -46,14 +46,22 @@ Integrated candidate `cd27d426291c5b956310454ecf623e26774d014f` (contains both u
 
 ## GitHub / release / residue
 
-Filled at closeout.
+| Effect | Result |
+| --- | --- |
+| Fork PR | https://github.com/DarkArty07/aether-hermes/pull/3 **MERGED** as `6243e40ea6b06e85061bf3fedffaad43eed51dec` onto `aether-main` |
+| Fork Actions | `actions/permissions.enabled=false`. Inherited workflows **NOT RUN**, not green. `aether-main` is not branch-protected. |
+| Aether PR | https://github.com/DarkArty07/Aether-Agents/pull/358 **MERGED** as `be6bfea60aa32ef94dcc26d20806901c28ae0762` onto `main` |
+| Required Aether checks | `pull-request-target`, `policy (3.11)`, `policy (3.12)`, `policy (3.13)` SUCCESS. No bypass. |
+| Non-required Aether checks | `observation-qualification (3.12)` and `(3.13)` SUCCESS. `(3.11)` still IN_PROGRESS at merge; not a required gate. Do not absorb later flake as this objective. |
+| Issues | #313 remained CLOSED/COMPLETED; merged-evidence comment added. #353 CLOSED/COMPLETED with merged-evidence comments. |
+| Installed runtime | Unmodified and unreloaded. Live `tools/code_execution_tool.py` SHA-256 still `928d7bc88696ee5ee2ca84977ad4909f357aac376fd9312457adf13fe0eab88b`; live `tools/file_tools.py` still `18b40343d3fd890692762e8a434fa7e2e96b953766108a797b4af2caef01dd19`. |
+| Remote merged-branch cleanup | Aether `delete_branch_on_merge=true` already removed the PR head. `git push --delete` of fork `fix/execute-code-helper-search-framing` was a genuine protected-edge denial; remote head remains. Local nested fork worktrees and local unit/integration branches removed after durable merge evidence. |
+| Preserved residue | `morfeo/research-313-353` checkout and Aether research worktree; concurrent HLP-280/Graphify/runtime-reliability worktrees; live editable Hermes; kanban Aether unit worktrees `t_1e09bbc5`/`t_dcec38eb`/`t_88ba2a9a` (runtime-owned). |
 
-Anticipated aggregate conclusions (compatibility evidence supports patch; merge is not a release):
+Aggregate conclusions (compatibility evidence is patch; merge is not a release):
 
 - `release_impact = patch`
 - `release_action = defer`
 - `release_channel = none`
 
-Fork Actions: repository `actions/permissions.enabled=false`. Inherited workflows in-tree are **NOT RUN**, not green.
-
-No live activation, credentials, settings mutation, tags, or package publication.
+No live activation, credentials, settings mutation, tags, package publication, or deployment.
