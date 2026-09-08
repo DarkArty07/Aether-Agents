@@ -1,14 +1,14 @@
 # RR-AUX: B292 Named-Custom Qualification and B301 Header Preservation Evidence
 
-**Objective Contract:** `oc_5c2dad1b37b20a80@v1`  
-**Unit:** RR-AUX (concentrated unit for B292 and B301 in `agent/auxiliary_client.py`)  
-**Assignee:** Implementer  
-**Status:** Implementation complete; handoff for same-card Supervisor review  
-**Aether evidence base:** `0dd27e0eff060f143f80879845f0d76561633f56`  
-**Maintained fork baseline:** `DarkArty07/aether-hermes` `aether-main` (`c185ee3bb5b6d609241432fd123c16143f065987`)  
-**Maintained fork candidate:** `rr-aux-candidate`  
-- Commit 1: `2337bd2d9efbf0421ac121877936e92bb9486e70` (`test(auxiliary): qualify named-custom resolution and fallback routes (#292)`)  
-- Commit 2: `0f56400b1603c8195590a04da47424a0df40b145` (`fix(auxiliary): forward extra_headers in responses adapter and fallback (#301)`)  
+**Objective Contract:** `oc_5c2dad1b37b20a80@v1`
+**Unit:** RR-AUX (concentrated unit for B292 and B301 in `agent/auxiliary_client.py`)
+**Assignee:** Implementer
+**Status:** Implementation complete; handoff for same-card Supervisor review
+**Aether evidence base:** `0dd27e0eff060f143f80879845f0d76561633f56`
+**Maintained fork baseline:** `DarkArty07/aether-hermes` `aether-main` (`c185ee3bb5b6d609241432fd123c16143f065987`)
+**Maintained fork candidate:** `rr-aux-candidate`
+- Commit 1: `2337bd2d9efbf0421ac121877936e92bb9486e70` (`test(auxiliary): qualify named-custom resolution and fallback routes (#292)`)
+- Commit 2: `0f56400b1603c8195590a04da47424a0df40b145` (`fix(auxiliary): forward extra_headers in responses adapter and fallback (#301)`)
 
 ## Dispositions
 
@@ -94,11 +94,11 @@ Commands were executed using the sterile outer launcher (`lab_run`) defined in `
 
 The following ledger paragraph is prepared for incorporation into `HERMES_LOCAL_PATCHES.md` and `AETHER_FORK.md` by the terminal integration unit (RR-INT):
 
-> **B301 — Auxiliary request attribution preservation without authentication leakage (#301)**  
-> **Commit:** `0f56400b1603c8195590a04da47424a0df40b145`  
-> **Scope:** `agent/auxiliary_client.py` (`_CodexCompletionsAdapter.create`, `_safe_request_extra_headers`, `_call_fallback_candidate_sync`, `_call_fallback_candidate_async`, `_call_llm_impl`, `async_call_llm`, `_async_call_llm_impl`), `tests/agent/test_auxiliary_client_extra_headers.py`.  
-> **Upstream Relationship:** Ports the `extra_headers` copy from immutable upstream `NousResearch/hermes-agent@9fd44b4dfc44138b9e5d5689acb56c438364ff7b` `agent/auxiliary_client.py:1367-1370` into `_CodexCompletionsAdapter.create`. Extends safe request-scoped metadata forwarding to auxiliary fallback candidates (`_call_fallback_candidate_sync` and `_call_fallback_candidate_async`) and async callers (`async_call_llm`), while enforcing strict exclusion of authorization, proxy authorization, cookie, and provider-specific key headers across destination boundaries.  
-> **Rollback:** `git revert 0f56400b1603c8195590a04da47424a0df40b145`.  
+> **B301 — Auxiliary request attribution preservation without authentication leakage (#301)**
+> **Commit:** `0f56400b1603c8195590a04da47424a0df40b145`
+> **Scope:** `agent/auxiliary_client.py` (`_CodexCompletionsAdapter.create`, `_safe_request_extra_headers`, `_call_fallback_candidate_sync`, `_call_fallback_candidate_async`, `_call_llm_impl`, `async_call_llm`, `_async_call_llm_impl`), `tests/agent/test_auxiliary_client_extra_headers.py`.
+> **Upstream Relationship:** Ports the `extra_headers` copy from immutable upstream `NousResearch/hermes-agent@9fd44b4dfc44138b9e5d5689acb56c438364ff7b` `agent/auxiliary_client.py:1367-1370` into `_CodexCompletionsAdapter.create`. Extends safe request-scoped metadata forwarding to auxiliary fallback candidates (`_call_fallback_candidate_sync` and `_call_fallback_candidate_async`) and async callers (`async_call_llm`), while enforcing strict exclusion of authorization, proxy authorization, cookie, and provider-specific key headers across destination boundaries.
+> **Rollback:** `git revert 0f56400b1603c8195590a04da47424a0df40b145`.
 > **Retirement Gate:** Retires when upstream releases an artifact containing `extra_headers` forwarding in both Responses adapter and auxiliary fallback routes with destination authentication isolation.
 
 *(Note: B292 has no patch entry because it was qualified as already working on the maintained baseline without code modification.)*

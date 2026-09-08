@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Runtime reliability (laboratory isolation and maintained-fork bugs)
+
+- Isolated disposable-probe laboratory destinations so poisoned parent identity cannot reach a native Kanban child, and rejected symlink/escaped sandbox paths before writes (#267).
+- Qualified named-custom auxiliary resolution as already working on the maintained Hermes fork and added integrated regressions for both admitted spellings (#292).
+- Adapted background-review run-token admission and identity-qualified cleanup so pre-admission cancel and a superseding turn do not send review HTTP (#294).
+- Classified the explicit exhausted-pool `503` phrase before generic overload so an authorized configured fallback is used (#295).
+- Forwarded request-scoped extra headers through the Responses adapter, retries, and configured fallback without leaking destination authentication (#301).
+- Recovered a durable same-run Kanban completion from a read-only snapshot when the transcript receipt is missing, without fabricating a terminal tool receipt (#304).
+- No version bump, package publication, tag, or live runtime activation is part of this delivery (`release_action=defer`, `release_channel=none`).
+
 ### Contract design and execution procedures
 
 - Added the personally authored `objective-contract-design`, `supervisor-decomposition`, and `implementation-evidence` canonical resources and focused role wording: material design before handoff, useful independent decomposition, and requirement-linked unit evidence.
