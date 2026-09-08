@@ -4,6 +4,12 @@
 **Observed**: 2026-08-20T22:47:52-06:00
 **Repository commit inspected**: `00260254b497dc07f0c7d1922831612cc10114a5`
 
+### Source consolidation outcome — owner-authorized operation
+
+The canonical source is now `DarkArty07/aether-hermes`, default branch `aether-main`. Renaming the existing fork preserved its repository identity and all historical refs; its old default branch is explicitly `historical-upstream-2026-08-19`. The local runtime's 39-path delta was preserved at fork commit `c3f275430` and identified by `96f3f59cc`; 9,348 source entries were hash-verified and the existing focused runner passed 453 tests with one Windows-only skip. No upstream checkout was downloaded or upgraded. Five incompletely attributed paths remain explicitly retained as preservation state, not silently certified as product requirements. See the fork's `AETHER_FORK.md` and Aether issue #348.
+
+Inherited scheduled/publication Actions are intentionally disabled on the fork; local evidence is not described as GitHub CI. Distribution packaging, an Aether-specific CI setup, version-lock adoption and future frontend adaptations are not delivered by this source consolidation. Existing installer/release locks remain unchanged. The root AGENTS guidance amendment was refused by the live instruction-file approval guard (#315) and was not retried through another write surface; the accepted DESIGN source policy remains authoritative over that older guidance.
+
 ## 1. Why this contract exists
 
 Aether's three-role method is functioning in Christopher's local environment, but the public repository still distributes a design and a few reconstruction pieces rather than the product that was tested. `v1.0.0` is therefore not a version bump over `v0.24.0`; it is the first release whose promise includes third-party installation, independent credentials and models, updates, rollback, privacy, and public qualification.
@@ -11,6 +17,16 @@ Aether's three-role method is functioning in Christopher's local environment, bu
 The owner accepted PD-48 through PD-64 in conversation before this contract was written, accepted PD-65 through PD-67 during canonical reconciliation, PD-68 on 2026-08-21 for pre-1.0 contract observation, and PD-69 on 2026-08-23 for the single-distribution modular project structure. Those decisions are canonical in `DESIGN.md`; this artifact records why the selected implementation direction is defensible and which alternatives were rejected.
 
 **2026-08-21 amendment:** PD-65 supersedes A1-D02, A1-D03, and A1-D05 wherever they described the fork as Aether's permanent or unconditional runtime path. Their original wording remains below as historical rationale. The current decision is upstream-by-default with a release-locked `transitional_fork` mode only while indispensable patches remain, and no new Aether capability may add a downstream-only Hermes core dependency.
+
+### Owner amendment — maintained fork (2026-09-07)
+
+- **Need and authority:** the owner explicitly chose a maintained Hermes fork for runtime ownership, future separately scoped frontend adaptations, and inclusion in Aether distribution, without updating to upstream now.
+- **Decision:** DESIGN PD-49/61/64/65 own the new long-lived-fork source policy. The 2026-08-21 transition-only decision above is historical and superseded; the earlier A1-D02/D03/D05 implementation details are not automatically reapproved.
+- **Evidence:** GitHub identifies `DarkArty07/hermes-agent` as a public fork of `NousResearch/hermes-agent`. Its observed main was `2163f7f8ca82f7c892c7e815dadd80a1486cc194`; the locally inspected framework base was `0b288979e2322c02ab42c05f1e183bb31cfa5aa9` with additional local changes. These are distinct observations, not a selected distribution candidate. The framework license permits modification and redistribution subject to retaining the MIT copyright and permission notice; bundled dependencies and frontend assets need their own license review.
+- **Alternatives and trade-off:** upstream-only and a compulsory temporary-patch policy no longer meet the owner's intended product control. A maintained fork gives that control but transfers integration, security maintenance, regression testing and release support to Aether. Keeping Aether-specific changes localized reduces that burden without forbidding justified core changes.
+- **Owner clarification:** the initial source is the actual local Hermes installation and its local changes, not the older remote fork branch. Remote fork main was dated 2026-08-19; the local base commit was dated 2026-08-28. The observed local delta included 34 tracked modified paths and five untracked paths; this inventory is not blanket acceptance of every change. Reusing the existing GitHub fork is a hosting proposal only. Preserve source/build state privately, classify changes and qualify the candidate before publication; exclude credentials and user state.
+- **Pending design:** reuse or rename the existing fork, maintained branch/version scheme, upstream integration and contribution rules, source-mode/schema migration, package composition, and treatment of permanent features versus retireable fixes. These are recommendations to settle, not implied execution authority.
+- **Bounded impact:** A1 source policy and release design are reopened for the fork transition. The current encoded baseline, active runtime, frontend, historical tests and release artifacts are not changed. PD-51 release qualification and privacy/isolation requirements remain applicable. Repairing the current TUI incident remains a distinct bounded objective.
 
 ## 2. Observed Aether repository state
 
