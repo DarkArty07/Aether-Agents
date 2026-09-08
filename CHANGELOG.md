@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Execute-code helper contract and search_files JSON framing
+
+- Taught the actual explicit-import contract for `execute_code` helpers `json_parse`, `shell_quote`, and `retry` in schema, CLI tip, and sandbox failure hints (#313).
+- Kept truncated `search_files` output as one JSON document by moving the pagination hint into structured `_hint`, so `execute_code` receives a dictionary instead of `JSONDecodeError` (#353).
+- Exact maintained-fork merge: `DarkArty07/aether-hermes` PR #3, `6243e40ea6b06e85061bf3fedffaad43eed51dec`.
+- No version bump, package publication, tag, or live runtime activation is part of this delivery (`release_action=defer`, `release_channel=none`).
+
 ### Runtime reliability (laboratory isolation and maintained-fork bugs)
 
 - Isolated disposable-probe laboratory destinations so poisoned parent identity cannot reach a native Kanban child, and rejected symlink/escaped sandbox paths before writes (#267).
