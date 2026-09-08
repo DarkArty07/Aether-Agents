@@ -134,8 +134,28 @@ class WorkMemoryStore:
                 )
             source_exists = False
             try:
-                git(ctx.root, "cat-file", "-e", f"{revision}:{path}")
-                source_exists = True
+                if git(ctx.root, "cat-file", "-t", revision).strip() == b"commit":
+                    # Object existence alone also accepts trees, gitlinks and
+                    # symlink blobs. Inspect the exact committed entry instead
+                    # of following the working tree or interpreting path globs.
+                    entries = git(
+                        ctx.root,
+                        "--literal-pathspecs",
+                        "ls-tree",
+                        "--full-tree",
+                        "-z",
+                        revision,
+                        "--",
+                        pure.as_posix(),
+                    )
+                    for entry in entries.split(b"\0"):
+                        metadata, _, name = entry.partition(b"\t")
+                        if name == pure.as_posix().encode() and tuple(metadata.split()[:2]) in {
+                            (b"100644", b"blob"),
+                            (b"100755", b"blob"),
+                        }:
+                            source_exists = True
+                            break
             except KnowledgeError:
                 pass
             fields = {key: str(item.get(key, ""))[:1500] for key in ("locator", "result")}

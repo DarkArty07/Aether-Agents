@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from test_project_knowledge_engine import OTHER, PROJECT, project
+from test_project_knowledge_engine import OTHER, PROJECT, git_at, project
 
 from aether_agents.knowledge.common import KnowledgeError
 from aether_agents.knowledge.context import resolve_context
@@ -35,6 +35,60 @@ def payload(lesson: str = "Use the committed source revision.", *, key: str | No
         "evidence": [],
         "source_nodes": ["process_order"],
     }
+
+
+def test_evidence_requires_regular_file_at_exact_commit(tmp_path: Path) -> None:
+    root, state = project(tmp_path)
+    (root / "src").mkdir()
+    (root / "src/nested.py").write_text("pass\n")
+    (root / "literal[1].py").write_text("pass\n")
+    (root / "executable.py").write_text("pass\n")
+    (root / "alias.py").symlink_to("module.py")
+    git_at(root, "add", ".")
+    git_at(root, "update-index", "--chmod=+x", "executable.py")
+    git_at(
+        root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{git_at(root, 'rev-parse', 'HEAD')},submodule",
+    )
+    git_at(root, "commit", "-qm", "evidence object classes")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    store = WorkMemoryStore(state)
+    expected = {
+        "module.py": True,
+        "src/nested.py": True,
+        "executable.py": True,
+        "literal[1].py": True,
+        "src": False,
+        "src/": False,
+        "alias.py": False,
+        "submodule": False,
+        "missing.py": False,
+        "module*.py": False,
+        ":(glob)*": False,
+        ".": False,
+    }
+    observed = store._evidence(ctx, [{"path": path} for path in expected])
+    assert [item["source_exists"] for item in observed] == list(expected.values())
+    assert all(item["revision"] == ctx.source_revision for item in observed)
+    assert all(item["result_independently_verified"] is False for item in observed)
+
+    tree = git_at(root, "rev-parse", "HEAD^{tree}")
+    blob = git_at(root, "rev-parse", "HEAD:module.py")
+    invalid = store._evidence(
+        ctx, [{"path": "module.py", "revision": rev} for rev in ("0" * 40, tree, blob)]
+    )
+    assert all(item["source_exists"] is False for item in invalid)
+    (root / "module.py").unlink()
+    git_at(root, "add", "-u")
+    git_at(root, "commit", "-qm", "remove evidence from later revision")
+    current = resolve_context(PROJECT, "morfeo", state_root=state)
+    refs = store._evidence(
+        current, [{"path": "module.py"}, {"path": "module.py", "revision": ctx.source_revision}]
+    )
+    assert [item["source_exists"] for item in refs] == [False, True]
 
 
 def test_roles_share_no_personal_notes_or_reflections(memory, tmp_path: Path) -> None:
