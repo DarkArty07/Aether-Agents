@@ -4,6 +4,12 @@
 **Observed**: 2026-08-20T22:47:52-06:00
 **Repository commit inspected**: `00260254b497dc07f0c7d1922831612cc10114a5`
 
+### Source consolidation outcome — owner-authorized operation
+
+The canonical source is now `DarkArty07/aether-hermes`, default branch `aether-main`. Renaming the existing fork preserved its repository identity and all historical refs; its old default branch is explicitly `historical-upstream-2026-08-19`. The local runtime's 39-path delta was preserved at fork commit `c3f275430` and identified by `96f3f59cc`; 9,348 source entries were hash-verified and the existing focused runner passed 453 tests with one Windows-only skip. No upstream checkout was downloaded or upgraded. Five incompletely attributed paths remain explicitly retained as preservation state, not silently certified as product requirements. See the fork's `AETHER_FORK.md` and Aether issue #348.
+
+Inherited scheduled/publication Actions are intentionally disabled on the fork; local evidence is not described as GitHub CI. Distribution packaging, an Aether-specific CI setup, version-lock adoption and future frontend adaptations are not delivered by this source consolidation. Existing installer/release locks remain unchanged. The root AGENTS guidance amendment was refused by the live instruction-file approval guard (#315) and was not retried through another write surface; the accepted DESIGN source policy remains authoritative over that older guidance.
+
 ## 1. Why this contract exists
 
 Aether's three-role method is functioning in Christopher's local environment, but the public repository still distributes a design and a few reconstruction pieces rather than the product that was tested. `v1.0.0` is therefore not a version bump over `v0.24.0`; it is the first release whose promise includes third-party installation, independent credentials and models, updates, rollback, privacy, and public qualification.

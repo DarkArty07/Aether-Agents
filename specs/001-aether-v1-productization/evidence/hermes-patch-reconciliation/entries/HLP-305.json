@@ -4,10 +4,15 @@
   "components": [
     "HLP-305",
     "run_agent.py",
-    "tests/run_agent/test_cross_process_turn_lease.py"
+    "tests/run_agent/test_cross_process_turn_lease.py",
+    "hermes_state_common.py",
+    "hermes_state_schema.py",
+    "hermes_state_search.py",
+    "tests/test_fts_tool_write_bounds.py",
+    "scripts/qualify_legacy_fts_contention.py"
   ],
-  "required_behavior": "A transient SQLite locked or busy error while the current holder refreshes a session turn lease must not be presented as a user interrupt while the existing TTL leaves a complete bounded retry budget. A holder-qualified refresh miss, non-lock persistence error, or exhausted safe retry window must still hard-interrupt before authority can expire.",
-  "local_status": "RELOAD_PENDING",
+  "required_behavior": "A transient SQLite locked or busy error while the current holder refreshes a session turn lease must not be presented as a user interrupt while the existing TTL leaves a complete bounded retry budget. A holder-qualified refresh miss, non-lock persistence error, or exhausted safe retry window must still hard-interrupt before authority can expire. The maintained fork also bounds new legacy-inline FTS tool body prefixes without deleting canonical messages or historical index rows; explicit tool-role queries retain full-body search and failed DDL rolls back atomically.",
+  "local_status": "MAINTAINED_FORK / ACTIVATION_PENDING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
@@ -28,7 +33,7 @@
       {
         "kind": "source",
         "reference": "https://github.com/NousResearch/hermes-agent/blob/4810074d73d9419dc82545202d595507a73f4f0e/agent/turn_facade_lease.py#L174-L203",
-        "result": "The current upstream façade still interrupts the turn for every refresh exception; it does not distinguish a transient locked or busy persistence error from authority loss."
+        "result": "The current upstream fa\u00e7ade still interrupts the turn for every refresh exception; it does not distinguish a transient locked or busy persistence error from authority loss."
       },
       {
         "kind": "api",
@@ -45,6 +50,11 @@
         "kind": "test",
         "reference": "tests/run_agent/test_cross_process_turn_lease.py::test_run_conversation_retries_transient_locked_lease_refresh",
         "result": "Exact loaded-source RED failed with an empty final response after the first locked refresh; the HLP-305 candidate and installed fresh-process run pass. Current upstream source still has the unconditional exception interrupt, so the upstream retirement gate is not satisfied."
+      },
+      {
+        "kind": "test",
+        "reference": "https://github.com/DarkArty07/aether-hermes/pull/1",
+        "result": "Local6focused tests;73FTS/lease compatibility;867expanded pass plus1 unchanged baseline failure (#349). Same384-row synthetic holder workload changes from20slease timeout to2.159s successful refresh; complete canonical data preserved. No upstream download/upgrade and no claimed GitHub CI pass."
       }
     ]
   },
@@ -78,5 +88,5 @@
     "The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.",
     "Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found."
   ],
-  "summary": "Retain HLP-305 and reload gracefully after the Graphify audit. The local patch retries only transient locked or busy refresh failures while the current TTL leaves a full bounded retry budget; every proven or unsafe authority state remains fail-closed."
+  "summary": "Retain HLP-305 in the maintained fork. The waiter retry and legacy FTS holder repair are integrated at c185ee3bb5b6d609241432fd123c16143f065987; activation needs verified backup/readback. Detailed historical patch receipts remain valid for their original waiter-only delta. Expanded testing retains a baseline failure documented in Aether #349."
 }
