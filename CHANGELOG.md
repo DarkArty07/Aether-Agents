@@ -10,6 +10,7 @@
 
 ### Optional shared project knowledge and role experiences
 
+- Fixed #342: work-memory corrections honor the published 16,000-character limits, retain readable maximum-length Unicode records, and reuse the configured component backend so subprocess timeouts are not reset to defaults.
 - Fixed #344: work-memory evidence now checks the exact regular-file entry at a valid Git commit, rejecting directories, symlinks, gitlinks, missing objects and path-pattern expansion without claiming independent verification.
 - Added the native `aether-project-knowledge` plugin with identical `project_knowledge` and `work_memory` action catalogs for Morfeo, Supervisor and Implementer; portable templates remain disabled until explicitly configured.
 - Added revision/worktree-scoped structural Graphify snapshots, stable collaborative publication locks, native-session/operator bindings and explicit dirty-file coverage instead of a global graph or last-project fallback.

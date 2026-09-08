@@ -42,6 +42,45 @@ def test_identical_tool_schema_rejects_identity_injection() -> None:
         validate_arguments("work_memory", {"action": "correct", "note_id": "wn_" + "1" * 32})
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX subprocess timeout fixture")
+@pytest.mark.parametrize("action", ["save", "reflect"])
+def test_memory_honors_configured_timeout_before_publishing(tmp_path: Path, action: str) -> None:
+    _root, state = project(tmp_path)
+    component = tmp_path / "delayed-component"
+    component.write_text(
+        '#!/bin/sh\nsleep 2\nprintf \'%s\' \'{"ok":true,"content":"delayed test fixture","count":0}\'\n'
+    )
+    component.chmod(0o700)
+    service = KnowledgeService(state, tmp_path / "cache")
+    atomic_json(
+        service.config_path,
+        {
+            "schema_version": 1,
+            "enabled": True,
+            "python": str(component),
+            "timeout_seconds": 1,
+        },
+    )
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state)
+    args = {"action": action}
+    if action == "save":
+        args.update(
+            {
+                "idempotency_key": "configured-timeout",
+                "situation": "Slow test component",
+                "lesson": "Keep the configured limit",
+                "applicability": "Subprocess writes",
+                "outcome": "useful",
+                "evidence": [],
+            }
+        )
+    with pytest.raises(KnowledgeError) as failure:
+        service.execute(ctx, "work_memory", args)
+    assert failure.value.code == "TIMEOUT"
+    assert not list(state.rglob("record.json"))
+    assert not list(state.rglob("reflection.json"))
+
+
 def test_operator_binding_conflicts_with_native_session(tmp_path: Path) -> None:
     first, state = project(tmp_path)
     second, _ = project(tmp_path, OTHER, "beta")

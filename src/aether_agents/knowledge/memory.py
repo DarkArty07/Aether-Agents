@@ -42,9 +42,17 @@ def _text(args: dict[str, Any], name: str, maximum: int = 8192) -> str:
 
 
 class WorkMemoryStore:
-    def __init__(self, state_root: Path, backend_python: Path | None = None):
+    def __init__(
+        self,
+        state_root: Path,
+        backend_python: Path | None = None,
+        *,
+        backend: GraphifyBackend | None = None,
+    ):
         self.state_root = state_root
-        self.backend = GraphifyBackend(backend_python) if backend_python else None
+        self.backend = backend
+        if self.backend is None and backend_python is not None:
+            self.backend = GraphifyBackend(backend_python)
 
     def _namespace(self, ctx: KnowledgeContext) -> Path:
         try:
@@ -82,7 +90,10 @@ class WorkMemoryStore:
         if any(parent.is_symlink() for parent in (root / "notes", path.parent, path)):
             raise KnowledgeError("UNSAFE_PATH", "A work-note directory is redirected.")
         try:
-            record = load_json(path / "record.json", limit=100_000)
+            # Valid character-bounded corrections can exceed 100 KB in UTF-8.
+            # Retain the shared bounded artifact limit rather than rejecting
+            # records that our public schema and writer both accept.
+            record = load_json(path / "record.json")
         except FileNotFoundError as exc:
             raise KnowledgeError("NOTE_MISSING", "This work note is not available.") from exc
         if not isinstance(record, dict) or record.get("schema_version") != "aether.work-note.v1":
@@ -182,10 +193,12 @@ class WorkMemoryStore:
             )
         return value
 
-    def _prepare_payload(self, ctx: KnowledgeContext, args: dict[str, Any]) -> dict[str, Any]:
+    def _prepare_payload(
+        self, ctx: KnowledgeContext, args: dict[str, Any], *, correcting: bool = False
+    ) -> dict[str, Any]:
         situation = _text(args, "situation", 4096)
         lesson = _text(args, "lesson", 16000)
-        applicability = _text(args, "applicability", 4096)
+        applicability = _text(args, "applicability", 16000 if correcting else 4096)
         outcome = args.get("outcome")
         if outcome not in ("useful", "dead_end", "corrected"):
             raise KnowledgeError(
@@ -236,7 +249,9 @@ class WorkMemoryStore:
         idempotency_key_sha256: str | None = None,
         creation_payload_sha256: str | None = None,
     ) -> dict[str, Any]:
-        payload = prepared_payload or self._prepare_payload(ctx, args)
+        payload = prepared_payload or self._prepare_payload(
+            ctx, args, correcting=correction is not None
+        )
         situation = payload["situation"]
         lesson = payload["lesson"]
         applicability = payload["applicability"]
@@ -399,7 +414,7 @@ class WorkMemoryStore:
                             note_id,
                             current + 1,
                             payload,
-                            correction=_text(args, "reason", 4096),
+                            correction=_text(args, "reason", 16000),
                             idempotency_key_sha256=old.get("idempotency_key_sha256"),
                             creation_payload_sha256=old.get("creation_payload_sha256"),
                         )

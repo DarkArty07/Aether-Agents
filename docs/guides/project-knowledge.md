@@ -150,6 +150,10 @@ Every save requires an opaque `idempotency_key` of 8–160 supported ASCII chara
 
 An empty evidence list is allowed, but the record is reported, not independently verified. Checking that a referenced file exists does not certify a claimed test result. Prefer references to the actual revision and observations.
 
+`source_exists` checks a literal regular-file entry (including executable files) at the
+referenced Git commit. Directories, symlinks, submodules, missing paths and non-commit
+revisions do not count as source files. It does not follow the working tree or expand globs.
+
 Search returns excerpts and note IDs. Read the original note, following `next_cursor` until the relevant content is complete. Corrections require the revision returned by the read, preserve prior versions, and replace the effective version for search/reflection. Conflicting corrections do not silently overwrite each other.
 
 `reflect` aggregates native Graphify outcome signals. It does not train model weights or synthesize every answer into a new procedure. Aether explicitly invokes `reflect(..., graph_path=None)` in the component process: it never relies on omitting the CLI's `--graph`, which can auto-detect the shared graph. Notes and reflections stay outside shared graph inputs; no personal `.graphify_learning.json` is written there.
@@ -176,6 +180,12 @@ not establish token savings or universal quality superiority.
 
 
 Role search is lexical and limited to 10,000 active notes. Reflection rejects generations above 1,000,000 raw note bytes instead of silently dropping history. Pagination preserves full notes. Further scale and semantic retrieval require separate qualification.
+
+Work-memory `save.applicability` is limited to 4,096 characters; `correct.reason`,
+`correct.replacement.applicability` and lesson text allow 16,000 characters. Runtime
+validation preserves these action-specific schema limits, including Unicode readback.
+Memory component calls reuse the configured backend and its `timeout_seconds` value;
+they do not silently reset to the default timeout.
 
 ## Reproducible qualification
 
