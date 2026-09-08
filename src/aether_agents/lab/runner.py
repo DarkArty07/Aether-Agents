@@ -1030,6 +1030,25 @@ controls = {
     "prior_tool_evidence_observed": False,
     "implementer_session_ids": [],
     "process_id": os.getpid(),
+    "child_identity": {
+        name: value
+        for name, value in os.environ.items()
+        if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_"))
+        or name in {
+            "TERMINAL_CWD",
+            "HERMES_CWD",
+            "HERMES_DELEGATED_CHILD_CONTEXT",
+            "HERMES_PROJECT_ID",
+            "HERMES_TENANT",
+            "AETHER_PROJECT_ID",
+        }
+    },
+    "child_env": {
+        "HERMES_KANBAN_DB": os.environ.get("HERMES_KANBAN_DB"),
+        "HERMES_KANBAN_HOME": os.environ.get("HERMES_KANBAN_HOME"),
+        "HERMES_HOME": os.environ.get("HERMES_HOME"),
+        "HERMES_KANBAN_BOARD": os.environ.get("HERMES_KANBAN_BOARD"),
+    },
 }
 
 if os.path.isfile(board):
@@ -1542,6 +1561,7 @@ def _observe_native_affinity_controls(
     hermes_home: Path | None = None,
     hermes: Path | None = None,
     task_id: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> dict[str, object]:
     """Observe native Hermes DB/process controls in a separate process.
 
@@ -1568,16 +1588,30 @@ def _observe_native_affinity_controls(
         str(board.parent / "affinity-probes"),
     ]
     try:
-        observer_env = os.environ.copy()
+        run_root = board.parent
+        preflight_disposable_destinations(run_root, board)
+        effective_home = hermes_home if hermes_home is not None else run_root / "hermes"
+        effective_hermes = hermes if hermes is not None else Path(sys.executable)
+        if env is not None:
+            observer_env = dict(env)
+        else:
+            observer_env = isolated_hermes_env(run_root, effective_home, effective_hermes)
+        scrub_names = {
+            "TERMINAL_CWD",
+            "HERMES_CWD",
+            "HERMES_DELEGATED_CHILD_CONTEXT",
+            "HERMES_PROJECT_ID",
+            "HERMES_TENANT",
+            "AETHER_PROJECT_ID",
+        }
+        for name in tuple(observer_env):
+            if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_")) or name in scrub_names:
+                observer_env.pop(name)
         if hermes_home is not None:
-            observer_env.update(
-                {
-                    "HERMES_HOME": str(hermes_home),
-                    "HERMES_KANBAN_DB": str(board),
-                    "HERMES_KANBAN_HOME": str(board.parent),
-                }
-            )
-            observer_env.pop("HERMES_KANBAN_BOARD", None)
+            observer_env["HERMES_HOME"] = str(hermes_home)
+        observer_env["HERMES_KANBAN_DB"] = str(board)
+        observer_env["HERMES_KANBAN_HOME"] = str(board.parent)
+        observer_env.pop("HERMES_KANBAN_BOARD", None)
         result = subprocess.run(
             command,
             capture_output=True,
@@ -1800,6 +1834,7 @@ def _live_affinity_lane(
         hermes_home=hermes_root,
         hermes=hermes,
         task_id=task_id,
+        env=env,
     )
     raw_implementer_sessions = controls.get("implementer_session_ids")
     implementer_sessions = (
