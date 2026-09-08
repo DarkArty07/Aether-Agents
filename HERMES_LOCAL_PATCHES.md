@@ -322,6 +322,32 @@ These entries record independently reviewed source on `DarkArty07/aether-hermes`
 - **Rollback:** Revert fork commit `169572a845f30bda0231cb97035bfce5fb9e981d`.
 - **Retirement gate:** Upstream `evaluate_kanban_stop()` natively provides equivalent durable DB completion recovery.
 
+## Execute-code helper contract and search_files JSON framing (2026-09-08)
+
+These entries record independently reviewed source on `DarkArty07/aether-hermes` for Objective Contract `oc_fd2332ffe34aa5f7@v1`. They are not live-runtime activation. Inherited fork Actions remain disabled and are not claimed green. Exact integrated fork merge SHA: `6243e40ea6b06e85061bf3fedffaad43eed51dec` (`DarkArty07/aether-hermes` PR #3). Concurrent runtime-reliability records above are unchanged.
+
+### HLP-313 / #313 — execute_code helper explicit import contract
+
+- **Issue:** [#313](https://github.com/DarkArty07/Aether-Agents/issues/313)
+- **Commit:** `2d89a331f6378f42fc26f7a439e8591101289ca6`
+- **Evidence:** `specs/execute-code-helper-search-framing/evidence/HF-313.md`
+- **Scope:** `tools/code_execution_tool.py`, `hermes_cli/tips.py`, `tests/hermes_cli/test_tips.py`, `tests/tools/test_sandbox_failure_hints.py`, `tests/tools/test_execute_helper_contract.py`
+- **Upstream relationship:** Adapted from merged upstream commit `65f033a1a20e847b7a150fe6168cd345385c7d07` (PR `NousResearch/hermes-agent#83772`).
+- **Behavior:** Schema and CLI tip require `from hermes_tools import json_parse, shell_quote, retry`. NameError hints prescribe that import. Helper ImportError hints report stale generated-module or sys.path skew rather than telling the user to remove the import. Helpers remain generated `hermes_tools.py` exports; they are not injected into globals or builtins.
+- **Rollback:** Revert fork commit `2d89a331f6378f42fc26f7a439e8591101289ca6`.
+- **Retirement gate:** An adopted Hermes release requires the explicit-import contract and `tests/tools/test_execute_helper_contract.py` passes without this patch.
+
+### HLP-353 / #353 — search_files truncated JSON framing
+
+- **Issue:** [#353](https://github.com/DarkArty07/Aether-Agents/issues/353)
+- **Commit:** `8a23d40eb93319ff6ea94e27c68e5643cc6d8852`
+- **Evidence:** `specs/execute-code-helper-search-framing/evidence/HF-353.md`
+- **Scope:** `tools/file_tools.py` (`search_tool` truncation path), `tests/tools/test_file_tools.py`, `tests/agent/test_file_safety_credentials.py`, `tests/tools/test_search_truncation_json.py`
+- **Upstream relationship:** Adapted from upstream PR `NousResearch/hermes-agent#104472` / commit `7a6c3b41c33a61601132c6bbf737735bd4a07207`. Rejected parser-tolerance alternatives: PRs `#74100` and `#81622`.
+- **Behavior:** Truncated and non-truncated `search_tool` output is one JSON document. Pagination guidance is `result_dict["_hint"]` with next offset `offset + limit`. No trailing plain-text suffix. No generic RPC JSON-suffix tolerance. Credential filtering, `_warning`, `_omitted`, and ACP legacy trailing-hint rendering are preserved.
+- **Rollback:** Revert fork commit `8a23d40eb93319ff6ea94e27c68e5643cc6d8852`.
+- **Retirement gate:** An adopted Hermes release contains PR `#104472` equivalent producer framing.
+
 ## Mandatory procedure before updating Hermes
 
 1. Record the target version and commit here; do not activate that revision yet.
