@@ -365,18 +365,57 @@ def _fault_recovered(known_good: Path | None) -> bool:
     return active.is_file() and active.read_bytes() == known_good.read_bytes()
 
 
+def preflight_disposable_destinations(run_root: Path, *destinations: Path) -> tuple[Path, ...]:
+    """Validate and resolve disposable destinations within the owned sandbox.
+
+    Rejects destinations that are symlinks, contain symlinks within the sandbox,
+    or resolve to locations outside the resolved run_root.
+    """
+    resolved_root = run_root.expanduser().resolve()
+    targets = destinations or (run_root / "kanban.db", run_root / "worktrees")
+    resolved_targets: list[Path] = []
+    for dest in targets:
+        expanded = dest.expanduser()
+        if expanded.is_symlink():
+            raise HarnessError(f"disposable destination cannot be a symlink: {dest}")
+        resolved_dest = expanded.resolve()
+        try:
+            if not (resolved_dest == resolved_root or resolved_dest.is_relative_to(resolved_root)):
+                raise HarnessError(
+                    f"disposable destination escapes sandbox: {dest} resolves to {resolved_dest} outside {resolved_root}"
+                )
+        except ValueError:
+            raise HarnessError(
+                f"disposable destination escapes sandbox: {dest} resolves to {resolved_dest} outside {resolved_root}"
+            )
+        chk = expanded
+        while chk != run_root and chk.resolve() != resolved_root and chk != chk.parent:
+            if chk.is_symlink():
+                raise HarnessError(f"disposable destination cannot contain a symlink: {dest}")
+            chk = chk.parent
+        resolved_targets.append(resolved_dest)
+    return tuple(resolved_targets)
+
+
 def isolated_hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict[str, str]:
     """Return the disposable Hermes environment shared by laboratory lanes."""
+
+    preflight_disposable_destinations(run_root, run_root / "kanban.db", run_root / "worktrees")
 
     env = dict(os.environ)
     # The laboratory's --in directory is authoritative. Ambient cwd and
     # dispatcher-worker identity belong to the outer process; carrying either
     # into the isolated home/board would make the canary act on a foreign task.
+    scrub_names = {
+        "TERMINAL_CWD",
+        "HERMES_CWD",
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_PROJECT_ID",
+        "HERMES_TENANT",
+        "AETHER_PROJECT_ID",
+    }
     for name in tuple(env):
-        if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_")) or name in {
-            "TERMINAL_CWD",
-            "HERMES_CWD",
-        }:
+        if name.startswith(("HERMES_KANBAN_", "HERMES_SESSION_")) or name in scrub_names:
             env.pop(name)
     env.update(
         {
