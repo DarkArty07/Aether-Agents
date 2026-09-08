@@ -260,6 +260,68 @@ Activation completed through normal `SessionDB` startup after a consistent read-
 
 After new prefix-indexed rows exist, reverting source alone is not a complete search rollback: retain the full-body fallback until deliberate reconstruction is qualified. Never restore an older whole database over newer conversations. Inherited fork Actions are disabled; these are local test and review receipts, not a claimed remote CI pass. `release_impact=patch`, `release_action=defer`, `release_channel=none`.
 
+## Runtime reliability on the maintained fork (2026-09-08)
+
+These entries record independently reviewed source on `DarkArty07/aether-hermes` for Objective Contract `oc_5c2dad1b37b20a80@v1`. They are not live-runtime activation. Inherited fork Actions remain disabled and are not claimed green. Exact integrated fork merge SHA: `4b5772ff43de70f1222aabbf1daed4eefc7b44cf` (`DarkArty07/aether-hermes` PR #2).
+
+### B267 / #267 — Disposable probe laboratory isolation
+
+- **Issue:** [#267](https://github.com/DarkArty07/Aether-Agents/issues/267)
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-267.md`
+- **Scope:** Aether `src/aether_agents/lab/runner.py`, `tests/test_e2e_harness.py`
+- **Behavior:** `preflight_disposable_destinations` rejects symlinked and escaping database/workspace destinations before writes; `isolated_hermes_env` and `_observe_native_affinity_controls` clear `HERMES_DELEGATED_CHILD_CONTEXT`, `HERMES_PROJECT_ID`, `HERMES_TENANT`, and `AETHER_PROJECT_ID` while preserving parent environment immutability.
+- **Upstream relationship:** Aether-specific laboratory harness isolation; no upstream Hermes patch.
+- **Rollback:** Revert Aether commits `66bb4dd6638ab1da8e9a56fd9e63211906fafeb6` and `a67f3d78bad49cac3c8debf3b5ef118c14590f19`.
+- **Retirement:** Permanent laboratory integrity gate.
+
+### B292 / #292 — Named-custom auxiliary resolution (already working)
+
+- **Issue:** [#292](https://github.com/DarkArty07/Aether-Agents/issues/292)
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-AUX.md`
+- **Disposition:** already-working-with-integrated-evidence on maintained baseline `c185ee3bb5b6d609241432fd123c16143f065987`. No product-code patch. Regression commit `2337bd2d9efbf0421ac121877936e92bb9486e70` (`tests/agent/test_auxiliary_named_custom_providers.py`).
+- **Fake patch entry:** none.
+
+### B294 / #294 — Background review cancellation ownership
+
+- **Issue:** [#294](https://github.com/DarkArty07/Aether-Agents/issues/294)
+- **Commit:** `cf5ff5fe2f51116364a10a9941f58f280e7ff4c4`
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-294.md`
+- **Scope:** `agent/background_review.py`
+- **Upstream relationship:** Adapts upstream `_BackgroundReviewRun`, `prepare_background_review_run`, `finish_background_review_run`, and `_track_review_fork` from `NousResearch/hermes-agent@9fd44b4dfc44138b9e5d5689acb56c438364ff7b` (lines 914-1136).
+- **Behavior:** Reserves run token on parent before `Thread.start()`, atomically denies admission after cancellation, tracks cancellation separately from foreground, and cleans references only when they still name that run.
+- **Rollback:** Revert fork commit `cf5ff5fe2f51116364a10a9941f58f280e7ff4c4`.
+- **Retirement gate:** Retires when an upstream release including `_BackgroundReviewRun` / PR #84423 is adopted in the Aether baseline.
+
+### B295 / #295 — Explicit exhausted-pool 503 fallback
+
+- **Issue:** [#295](https://github.com/DarkArty07/Aether-Agents/issues/295)
+- **Commit:** `b58db22b4968e837a745a42cae5cb007f3819a8c`
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-295.md`
+- **Scope:** `agent/error_classifier.py` (`_classify_by_status` 503/529 branch)
+- **Upstream relationship:** Downstream fix. Phrase-only match of `no available Codex accounts` after overflow and before generic overload sets `should_fallback=True`. Transient overload backoff is preserved.
+- **Rollback:** Revert fork commit `b58db22b4968e837a745a42cae5cb007f3819a8c`.
+- **Retirement gate:** Upstream Hermes adopts equivalent explicit pool-exhaustion classification.
+
+### B301 / #301 — Responses extra_headers without auth leakage
+
+- **Issue:** [#301](https://github.com/DarkArty07/Aether-Agents/issues/301)
+- **Commit:** `0f56400b1603c8195590a04da47424a0df40b145`
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-AUX.md`
+- **Scope:** `agent/auxiliary_client.py` (`_CodexCompletionsAdapter.create`, `_safe_request_extra_headers`, fallback/async callers), `tests/agent/test_auxiliary_client_extra_headers.py`
+- **Upstream relationship:** Ports the `extra_headers` copy from immutable upstream `NousResearch/hermes-agent@9fd44b4dfc44138b9e5d5689acb56c438364ff7b` `agent/auxiliary_client.py:1367-1370`. Destination authentication is not forwarded.
+- **Rollback:** Revert fork commit `0f56400b1603c8195590a04da47424a0df40b145`.
+- **Retirement gate:** Upstream releases equivalent Responses-adapter and fallback header forwarding with destination-auth isolation.
+
+### B304 / #304 — Same-run durable completion recovery
+
+- **Issue:** [#304](https://github.com/DarkArty07/Aether-Agents/issues/304)
+- **Commit:** `169572a845f30bda0231cb97035bfce5fb9e981d`
+- **Evidence:** `specs/runtime-reliability-bugs/evidence/RR-304.md`
+- **Scope:** `agent/kanban_stop.py`, `tests/agent/test_kanban_stop.py`, `tests/agent/test_kanban_stop_durable_recovery.py`
+- **Upstream relationship:** Downstream stop-guard recovery. Transcript `CONFLICT` remains fail-closed; `MISSING` may ALLOW from one read-only SQLite snapshot of the pinned worker board without fabricating a `kanban_complete` receipt.
+- **Rollback:** Revert fork commit `169572a845f30bda0231cb97035bfce5fb9e981d`.
+- **Retirement gate:** Upstream `evaluate_kanban_stop()` natively provides equivalent durable DB completion recovery.
+
 ## Mandatory procedure before updating Hermes
 
 1. Record the target version and commit here; do not activate that revision yet.
