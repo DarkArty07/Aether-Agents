@@ -262,7 +262,7 @@ After new prefix-indexed rows exist, reverting source alone is not a complete se
 
 ## Runtime reliability on the maintained fork (2026-09-08)
 
-These entries record independently reviewed source on `DarkArty07/aether-hermes` for Objective Contract `oc_5c2dad1b37b20a80@v1`. They are not live-runtime activation. Inherited fork Actions remain disabled and are not claimed green. Exact integrated fork SHA is recorded in `specs/runtime-reliability-bugs/evidence/RR-INT.md` after merge.
+These entries record independently reviewed source on `DarkArty07/aether-hermes` for Objective Contract `oc_5c2dad1b37b20a80@v1`. They are not live-runtime activation. Inherited fork Actions remain disabled and are not claimed green. Exact integrated fork merge SHA: `4b5772ff43de70f1222aabbf1daed4eefc7b44cf` (`DarkArty07/aether-hermes` PR #2).
 
 ### B267 / #267 — Disposable probe laboratory isolation
 

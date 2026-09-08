@@ -16,6 +16,7 @@
 | Aether integration branch HEAD (pre-PR) | `fix/runtime-reliability-six-bugs` | `853c9bea7348f989a059c8bed6b790835bcb4164` |
 | Fork `aether-main` | `DarkArty07/aether-hermes` | `c185ee3bb5b6d609241432fd123c16143f065987` |
 | Fork integration branch HEAD (pre-PR) | `fix/runtime-reliability-six-bugs` | `55ab4c0603e6f8a8f7944bdd78d5ef7b7bcbf8bd` |
+| Fork merge to `aether-main` | PR `DarkArty07/aether-hermes#2` | `4b5772ff43de70f1222aabbf1daed4eefc7b44cf` |
 | Exact Hermes baseline (Aether wrapper) | tag `v2026.8.18` | `e624e9fde561e1add9388384012b295fde669ade` |
 | Immutable upstream citation | `NousResearch/hermes-agent` | `9fd44b4dfc44138b9e5d5689acb56c438364ff7b` |
 
