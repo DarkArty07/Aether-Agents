@@ -135,7 +135,7 @@ def _parse_pr_summary(raw: dict[str, Any]) -> dict[str, Any]:
     elif isinstance(rollup, dict):
         ci_status = str(rollup.get("state") or "")
 
-    return {
+    summary = {
         "number": int(raw["number"]),
         "title": str(raw.get("title", "")),
         "head_branch": str(raw.get("headRefName", "")),
@@ -147,6 +147,96 @@ def _parse_pr_summary(raw: dict[str, Any]) -> dict[str, Any]:
         "review_state": raw.get("reviewDecision"),
         "updated_at": str(raw.get("updatedAt", "")),
     }
+    return summary
+
+
+PR_IMPACT_MAX_FILES = 500
+TRIAGE_PRS_MAX_FILES = 200
+DEFAULT_PAGE_SIZE = 100
+
+
+def _require_head_sha(value: Any, description: str) -> str:
+    """Require a non-empty head SHA before presenting impact as current."""
+    head_sha = str(value or "").strip()
+    if not head_sha:
+        raise KnowledgeError("GITHUB_UNAVAILABLE", f"PR head SHA unavailable during {description}.")
+    return head_sha
+
+
+def _fetch_pr_files(
+    root: Path,
+    repo: str,
+    pr_number: int,
+    *,
+    max_files: int,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    known_total: int | None = None,
+    initial_files: list[dict[str, Any]] | None = None,
+) -> tuple[list[str], int, bool]:
+    """Fetch PR files through bounded pagination with honest total and truncated state."""
+    file_paths: list[str] = []
+    seen: set[str] = set()
+
+    if initial_files:
+        for f in initial_files:
+            if isinstance(f, dict):
+                path = str(f.get("path") or f.get("filename") or "").strip()
+                if path and path not in seen:
+                    seen.add(path)
+                    file_paths.append(path)
+
+    # Determine if additional pages are needed:
+    # 1. If known_total indicates more files exist than returned in initial_files, and we haven't reached max_files.
+    # 2. If initial_files is not provided (or empty) and known_total != 0.
+    # 3. If initial_files returned exactly page_size items (GitHub default cap) and known_total is unknown.
+    need_pagination = False
+    if known_total is not None and known_total > len(file_paths) and len(file_paths) < max_files:
+        need_pagination = True
+    elif not initial_files and (known_total is None or known_total > 0):
+        need_pagination = True
+    elif (
+        initial_files
+        and len(initial_files) >= page_size
+        and known_total is None
+        and len(file_paths) < max_files
+    ):
+        need_pagination = True
+
+    if need_pagination:
+        start_page = (len(file_paths) // page_size) + 1
+        page = start_page
+        max_pages = (max_files + page_size - 1) // page_size + 1
+        while len(file_paths) < max_files and page <= max_pages:
+            args = ["api", f"repos/{repo}/pulls/{pr_number}/files?per_page={page_size}&page={page}"]
+            page_data = _run_gh(root, args)
+            items = page_data.get("files") if isinstance(page_data, dict) else page_data
+            if not isinstance(items, list) or not items:
+                break
+            for item in items:
+                if isinstance(item, dict):
+                    path = str(item.get("filename") or item.get("path") or "").strip()
+                    if path and path not in seen:
+                        seen.add(path)
+                        file_paths.append(path)
+                        if len(file_paths) >= max_files:
+                            break
+            if len(items) < page_size:
+                break
+            page += 1
+
+    if known_total is not None:
+        total_files = max(known_total, len(file_paths))
+    else:
+        total_files = len(file_paths)
+
+    truncated = False
+    if len(file_paths) > max_files:
+        file_paths = file_paths[:max_files]
+        truncated = True
+    elif total_files > len(file_paths):
+        truncated = True
+
+    return file_paths, total_files, truncated
 
 
 def execute_list_prs(
@@ -220,28 +310,33 @@ def execute_pr_impact(
         "--repo",
         repo,
         "--json",
-        "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,statusCheckRollup,reviewDecision,updatedAt,files",
+        "number,title,headRefName,baseRefName,headRefOid,baseRefOid,isDraft,statusCheckRollup,reviewDecision,updatedAt,changedFiles,files",
     ]
     raw = _run_gh(root, args)
     if not isinstance(raw, dict):
         raise KnowledgeError("GITHUB_UNAVAILABLE", "Unexpected gh pr view response shape.")
 
     pr_summary = _parse_pr_summary(raw)
-    head_before = pr_summary["head_sha"]
+    head_before = _require_head_sha(pr_summary["head_sha"], "initial analysis")
+    known_total = raw.get("changedFiles")
+    if known_total is not None:
+        try:
+            known_total = int(known_total)
+        except (ValueError, TypeError):
+            known_total = None
 
-    raw_files = raw.get("files", [])
-    file_paths = []
-    if isinstance(raw_files, list):
-        for f in raw_files:
-            if isinstance(f, dict) and f.get("path"):
-                file_paths.append(str(f["path"]))
+    initial_files = raw.get("files")
+    if not isinstance(initial_files, list):
+        initial_files = None
 
-    total_files = len(file_paths)
-    truncated = False
-    # Bounded file pagination check (max 500 files for impact)
-    if len(file_paths) > 500:
-        file_paths = file_paths[:500]
-        truncated = True
+    file_paths, total_files, truncated = _fetch_pr_files(
+        root,
+        repo,
+        pr_number,
+        max_files=PR_IMPACT_MAX_FILES,
+        known_total=known_total,
+        initial_files=initial_files,
+    )
 
     graph_file = location / "graphify-out" / "graph.json"
     source_root = location / "sources"
@@ -256,19 +351,38 @@ def execute_pr_impact(
     # Verify PR head SHA after multi-call analysis
     check_args = ["pr", "view", str(pr_number), "--repo", repo, "--json", "headRefOid"]
     head_check = _run_gh(root, check_args)
-    head_after = head_check.get("headRefOid") if isinstance(head_check, dict) else None
+    head_after = (
+        _require_head_sha(head_check.get("headRefOid"), "post-analysis verification")
+        if isinstance(head_check, dict)
+        else ""
+    )
     if head_after != head_before:
         # Retry once if head moved
         raw = _run_gh(root, args)
+        if not isinstance(raw, dict):
+            raise KnowledgeError(
+                "GITHUB_UNAVAILABLE", "Unexpected gh pr view response shape on retry."
+            )
         pr_summary = _parse_pr_summary(raw)
-        head_retry = pr_summary["head_sha"]
-        file_paths = [
-            str(f["path"]) for f in raw.get("files", []) if isinstance(f, dict) and f.get("path")
-        ]
-        total_files = len(file_paths)
-        truncated = len(file_paths) > 500
-        if truncated:
-            file_paths = file_paths[:500]
+        head_retry = _require_head_sha(pr_summary["head_sha"], "retry analysis")
+        known_total = raw.get("changedFiles")
+        if known_total is not None:
+            try:
+                known_total = int(known_total)
+            except (ValueError, TypeError):
+                known_total = None
+        initial_files = raw.get("files")
+        if not isinstance(initial_files, list):
+            initial_files = None
+
+        file_paths, total_files, truncated = _fetch_pr_files(
+            root,
+            repo,
+            pr_number,
+            max_files=PR_IMPACT_MAX_FILES,
+            known_total=known_total,
+            initial_files=initial_files,
+        )
         worker_res = backend.run(
             "pr_impact",
             source_root=source_root,
@@ -276,11 +390,16 @@ def execute_pr_impact(
             arguments={"files": file_paths},
         )
         head_check = _run_gh(root, check_args)
-        head_final = head_check.get("headRefOid") if isinstance(head_check, dict) else None
+        head_final = (
+            _require_head_sha(head_check.get("headRefOid"), "retry post-analysis verification")
+            if isinstance(head_check, dict)
+            else ""
+        )
         if head_final != head_retry:
             raise KnowledgeError(
                 "GITHUB_UNAVAILABLE", f"PR #{pr_number} head SHA moved during analysis."
             )
+        pr_summary["head_sha"] = head_retry
 
     import time
 
@@ -290,12 +409,12 @@ def execute_pr_impact(
         "graph_revision": ctx.source_revision,
     }
     impact_info = worker_res.get("impact", {})
+    impact_info["truncated"] = bool(truncated)
+    impact_info["total_files"] = total_files
+    impact_info["analyzed_files"] = len(file_paths)
     if truncated:
-        impact_info["truncated"] = True
-        impact_info["total_files"] = total_files
-        impact_info["analyzed_files"] = len(file_paths)
         impact_info["warning"] = (
-            f"PR touches {total_files} files; analysis truncated to first 500 files."
+            f"PR touches {total_files} files; analysis truncated to first {len(file_paths)} files."
         )
 
     unmatched = impact_info.get("unmatched_files", [])
@@ -307,9 +426,7 @@ def execute_pr_impact(
     references = worker_res.get("references", [])
     content = str(worker_res.get("content", ""))
     if truncated:
-        content += (
-            f"\nWarning: PR touches {total_files} files; analysis truncated to first 500 files."
-        )
+        content += f"\nWarning: PR touches {total_files} files; analysis truncated to first {len(file_paths)} files."
     if unmatched:
         content += f"\nNotice: {len(unmatched)} unanalyzed files are not present in the graph."
 
@@ -335,39 +452,124 @@ def execute_triage_prs(
         pr_num = p["number"]
         files: list[str] = []
         truncated = False
+        total_files = 0
+        verified_head = str(p.get("head_sha") or "")
         try:
-            view_raw = _run_gh(
-                root,
-                [
-                    "pr",
-                    "view",
-                    str(pr_num),
-                    "--repo",
-                    repo,
-                    "--json",
-                    "files",
-                ],
-            )
-            files = [
-                str(f["path"])
-                for f in view_raw.get("files", [])
-                if isinstance(f, dict) and f.get("path")
+            view_args = [
+                "pr",
+                "view",
+                str(pr_num),
+                "--repo",
+                repo,
+                "--json",
+                "headRefOid,changedFiles,files",
             ]
-            total_files = len(files)
-            if len(files) > 200:
-                files = files[:200]
-                truncated = True
+            view_raw = _run_gh(root, view_args)
+            if not isinstance(view_raw, dict):
+                raise KnowledgeError(
+                    "GITHUB_UNAVAILABLE",
+                    f"Unexpected gh pr view response shape for PR #{pr_num}.",
+                )
+
+            head_before = _require_head_sha(
+                view_raw.get("headRefOid") or p.get("head_sha"),
+                f"initial triage analysis for PR #{pr_num}",
+            )
+            known_total = view_raw.get("changedFiles")
+            if known_total is not None:
+                try:
+                    known_total = int(known_total)
+                except (ValueError, TypeError):
+                    known_total = None
+
+            initial_files = view_raw.get("files")
+            if not isinstance(initial_files, list):
+                initial_files = None
+
+            files, total_files, truncated = _fetch_pr_files(
+                root,
+                repo,
+                pr_num,
+                max_files=TRIAGE_PRS_MAX_FILES,
+                known_total=known_total,
+                initial_files=initial_files,
+            )
+
             worker_res = backend.run(
                 "pr_impact",
                 source_root=source_root,
                 graph_path=graph_file,
                 arguments={"files": files},
             )
+
+            # Verify PR head SHA after impact analysis
+            check_args = ["pr", "view", str(pr_num), "--repo", repo, "--json", "headRefOid"]
+            head_check = _run_gh(root, check_args)
+            head_after = (
+                _require_head_sha(
+                    head_check.get("headRefOid"),
+                    f"post-analysis verification for PR #{pr_num}",
+                )
+                if isinstance(head_check, dict)
+                else ""
+            )
+            verified_head = head_before
+
+            if head_after != head_before:
+                # Retry once if head moved
+                view_raw = _run_gh(root, view_args)
+                if not isinstance(view_raw, dict):
+                    raise KnowledgeError(
+                        "GITHUB_UNAVAILABLE",
+                        f"Unexpected gh pr view response shape on retry for PR #{pr_num}.",
+                    )
+                head_retry = _require_head_sha(
+                    view_raw.get("headRefOid"),
+                    f"retry triage analysis for PR #{pr_num}",
+                )
+                known_total = view_raw.get("changedFiles")
+                if known_total is not None:
+                    try:
+                        known_total = int(known_total)
+                    except (ValueError, TypeError):
+                        known_total = None
+                initial_files = view_raw.get("files")
+                if not isinstance(initial_files, list):
+                    initial_files = None
+
+                files, total_files, truncated = _fetch_pr_files(
+                    root,
+                    repo,
+                    pr_num,
+                    max_files=TRIAGE_PRS_MAX_FILES,
+                    known_total=known_total,
+                    initial_files=initial_files,
+                )
+                worker_res = backend.run(
+                    "pr_impact",
+                    source_root=source_root,
+                    graph_path=graph_file,
+                    arguments={"files": files},
+                )
+                head_check_final = _run_gh(root, check_args)
+                head_final = (
+                    _require_head_sha(
+                        head_check_final.get("headRefOid"),
+                        f"retry post-analysis verification for PR #{pr_num}",
+                    )
+                    if isinstance(head_check_final, dict)
+                    else ""
+                )
+                if head_final != head_retry:
+                    raise KnowledgeError(
+                        "GITHUB_UNAVAILABLE", f"PR #{pr_num} head SHA moved during analysis."
+                    )
+                verified_head = head_retry
+
             impact = worker_res.get("impact", {})
-            if truncated:
-                impact["truncated"] = True
-                impact["total_files"] = total_files
-                impact["analyzed_files"] = len(files)
+            impact["truncated"] = bool(truncated)
+            impact["total_files"] = total_files
+            impact["analyzed_files"] = len(files)
         except Exception as exc:
             # Failure must NOT masquerade as zero impact
             impact = {
@@ -379,7 +581,8 @@ def execute_triage_prs(
                 "communities": [],
                 "node_count": None,
             }
-        triaged_pr = dict(p, impact=impact)
+            verified_head = str(p.get("head_sha") or "")
+        triaged_pr = dict(p, head_sha=verified_head, impact=impact)
         triaged_prs.append(triaged_pr)
 
     # Detect community overlaps between PR pairs

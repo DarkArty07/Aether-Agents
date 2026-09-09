@@ -658,6 +658,270 @@ def test_d38_github_pr_operations_and_error_boundaries(
     assert "impact analysis unavailable" in triage_fail_res["content"]
 
 
+def _setup_github_project(
+    tmp_path: Path, native_python: Path
+) -> tuple[Path, Path, KnowledgeStore, Any]:
+    root, state = project(tmp_path)
+    project_toml = root / ".aether" / "project.toml"
+    project_toml.write_text(
+        f'schema_version = 1\nproject_id = "{PROJECT}"\nname = "example"\n'
+        'initialized_by = "1.0.0"\nforge = "github"\ncontract_root = "specs"\n\n'
+        '[github]\nrepository = "org/repo-a"\n'
+    )
+    git_at(root, "remote", "add", "origin", "https://github.com/org/repo-a.git")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+    return root, state, store, ctx
+
+
+def test_d38_pr_impact_controlled_pagination_and_analysis_cap(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    # Scenario 1: Controlled >page (150 files: 100 on page 1, 50 on page 2). Cap is 500.
+    # Entire set of 150 files should be fetched across pages and analyzed without truncation.
+    def mock_gh_over_page(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha150"}
+            return {
+                "number": 150,
+                "title": "PR with 150 files",
+                "headRefName": "feat-150",
+                "baseRefName": "main",
+                "headRefOid": "headsha150",
+                "baseRefOid": "basesha00",
+                "isDraft": False,
+                "statusCheckRollup": [],
+                "reviewDecision": None,
+                "updatedAt": "2026-09-06T12:00:00Z",
+                "changedFiles": 150,
+                "files": [{"path": f"module_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            if "page=2" in endpoint:
+                return [{"filename": f"module_{i}.py"} for i in range(100, 150)]
+            if "page=1" in endpoint:
+                return [{"filename": f"module_{i}.py"} for i in range(100)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_over_page)
+    res_150 = store.execute(ctx, "pr_impact", {"pr_number": 150})
+    assert res_150["ok"] is True
+    impact_150 = res_150["impact"]
+    assert impact_150["truncated"] is False
+    assert impact_150["total_files"] == 150
+    assert impact_150["analyzed_files"] == 150
+    assert impact_150["files"] == 150
+    assert "truncated" not in res_150["content"].lower()
+
+    # Scenario 2: Controlled >analysis-cap (650 files > cap 500).
+    # Pages are fetched up to 500 files, then truncated with honest total/truncated state.
+    def mock_gh_over_cap(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha650"}
+            return {
+                "number": 650,
+                "title": "PR with 650 files",
+                "headRefName": "feat-650",
+                "baseRefName": "main",
+                "headRefOid": "headsha650",
+                "baseRefOid": "basesha00",
+                "isDraft": False,
+                "statusCheckRollup": [],
+                "reviewDecision": None,
+                "updatedAt": "2026-09-06T12:00:00Z",
+                "changedFiles": 650,
+                "files": [{"path": f"f_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            for p in range(2, 8):
+                if f"page={p}" in endpoint:
+                    start = (p - 1) * 100
+                    end = min(start + 100, 650)
+                    return [{"filename": f"f_{i}.py"} for i in range(start, end)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_over_cap)
+    res_650 = store.execute(ctx, "pr_impact", {"pr_number": 650})
+    assert res_650["ok"] is True
+    impact_650 = res_650["impact"]
+    assert impact_650["truncated"] is True
+    assert impact_650["total_files"] == 650
+    assert impact_650["analyzed_files"] == 500
+    assert impact_650["files"] == 500
+    assert "truncated" in impact_650["warning"].lower()
+    assert "truncated to first 500 files" in res_650["content"]
+
+
+def test_d38_triage_prs_controlled_pagination_and_analysis_cap(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    prs_list = [
+        {
+            "number": 101,
+            "title": "PR over page size (150 files)",
+            "headRefName": "b1",
+            "baseRefName": "main",
+            "headRefOid": "sha101",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 150,
+        },
+        {
+            "number": 102,
+            "title": "PR over triage cap (250 files)",
+            "headRefName": "b2",
+            "baseRefName": "main",
+            "headRefOid": "sha102",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 250,
+        },
+    ]
+
+    def mock_gh_triage(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            pr_num = args[args.index("view") + 1]
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": f"sha{pr_num}"}
+            total = 150 if pr_num == "101" else 250
+            return {
+                "number": int(pr_num),
+                "headRefOid": f"sha{pr_num}",
+                "changedFiles": total,
+                "files": [{"path": f"file_{pr_num}_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            pr_num = "101" if "pulls/101/" in endpoint else "102"
+            if "page=2" in endpoint:
+                start = 100
+                end = 150 if pr_num == "101" else 200
+                return [{"filename": f"file_{pr_num}_{i}.py"} for i in range(start, end)]
+            if "page=3" in endpoint and pr_num == "102":
+                return [{"filename": f"file_{pr_num}_{i}.py"} for i in range(200, 250)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_triage)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_res["ok"] is True
+    assert len(triage_res["prs"]) == 2
+
+    pr101 = next(p for p in triage_res["prs"] if p["number"] == 101)
+    assert pr101["impact"]["truncated"] is False
+    assert pr101["impact"]["total_files"] == 150
+    assert pr101["impact"]["analyzed_files"] == 150
+
+    pr102 = next(p for p in triage_res["prs"] if p["number"] == 102)
+    assert pr102["impact"]["truncated"] is True
+    assert pr102["impact"]["total_files"] == 250
+    assert pr102["impact"]["analyzed_files"] == 200  # Capped at TRIAGE_PRS_MAX_FILES (200)
+
+
+def test_d38_triage_prs_moving_head_once_and_twice(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    prs_list = [
+        {
+            "number": 201,
+            "title": "PR moving head",
+            "headRefName": "branch-201",
+            "baseRefName": "main",
+            "headRefOid": "head_initial",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 1,
+        }
+    ]
+
+    # Scenario A: Moving head once -> retry succeeds, bound to new verified head SHA
+    head_checks = 0
+
+    def mock_gh_move_once(rt: Path, args: list[str]) -> Any:
+        nonlocal head_checks
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                head_checks += 1
+                if head_checks == 1:
+                    return {"headRefOid": "head_moved_1"}
+                return {"headRefOid": "head_moved_1"}
+            current_head = "head_moved_1" if head_checks >= 1 else "head_initial"
+            return {
+                "number": 201,
+                "headRefOid": current_head,
+                "changedFiles": 1,
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_move_once)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_res["ok"] is True
+    p201 = triage_res["prs"][0]
+    assert p201["head_sha"] == "head_moved_1"
+    assert p201["impact"].get("status") != "unavailable"
+    assert p201["impact"]["node_count"] is not None
+    assert head_checks >= 2
+
+    # Scenario B: Moving head twice -> fails with GITHUB_UNAVAILABLE, impact is unavailable
+    head_checks_b = 0
+
+    def mock_gh_move_twice(rt: Path, args: list[str]) -> Any:
+        nonlocal head_checks_b
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                head_checks_b += 1
+                return {"headRefOid": f"head_moved_check_{head_checks_b}"}
+            return {
+                "number": 201,
+                "headRefOid": f"head_moved_view_{head_checks_b}",
+                "changedFiles": 1,
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_move_twice)
+    triage_fail = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_fail["ok"] is True
+    p_fail = triage_fail["prs"][0]
+    assert p_fail["impact"]["status"] == "unavailable"
+    assert "head SHA moved during analysis" in p_fail["impact"]["error"]
+    assert p_fail["impact"]["node_count"] is None
+    assert "0 nodes affected" not in triage_fail["content"]
+    assert "impact analysis unavailable" in triage_fail["content"]
+
+
 def test_d36_semantic_lifecycle_cache_and_enrichment(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1120,7 +1384,7 @@ def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
 
 
 def test_d38_real_gh_read_only_pr_or_honest_skip() -> None:
-    """Exercise real gh read-only PR if authenticated; skip honestly otherwise."""
+    """Exercise real gh read-only PR probe against this public repository if authenticated; skip honestly otherwise."""
     import shutil
     import subprocess
 
@@ -1139,15 +1403,50 @@ def test_d38_real_gh_read_only_pr_or_honest_skip() -> None:
     except Exception as exc:
         pytest.skip(f"GitHub CLI check failed ({exc}).")
 
-    from aether_agents.knowledge.github import _run_gh
+    from aether_agents.knowledge.github import (
+        _fetch_pr_files,
+        _run_gh,
+        resolve_github_repository,
+    )
 
-    # Read-only test against current repo
+    repo_root = Path(__file__).parents[1]
     try:
-        repo_root = Path(__file__).parents[1]
-        prs = _run_gh(repo_root, ["pr", "list", "--limit", "1", "--json", "number,title"])
+        repo = resolve_github_repository(repo_root)
+        prs = _run_gh(
+            repo_root,
+            [
+                "pr",
+                "list",
+                "--state",
+                "all",
+                "--limit",
+                "1",
+                "--json",
+                "number,title,headRefOid,changedFiles",
+            ],
+        )
         assert isinstance(prs, list)
+        if prs:
+            pr_num = int(prs[0]["number"])
+            # Exercise real read-only PR file pagination probe with page_size=5
+            files, total_files, truncated = _fetch_pr_files(
+                repo_root,
+                repo,
+                pr_num,
+                max_files=10,
+                page_size=5,
+                known_total=prs[0].get("changedFiles"),
+            )
+            assert isinstance(files, list)
+            assert len(files) > 0
+            assert total_files >= len(files)
+            if prs[0].get("changedFiles") is not None:
+                assert total_files == int(prs[0]["changedFiles"])
+            assert isinstance(truncated, bool)
+    except KnowledgeError as exc:
+        pytest.skip(f"gh read-only query could not complete ({exc}).")
     except Exception as exc:
-        pytest.skip(f"gh pr list query could not complete ({exc}).")
+        pytest.skip(f"gh read-only query could not complete ({exc}).")
 
 
 def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python: Path) -> None:
