@@ -985,6 +985,7 @@ def test_plugin_prepare_handoff_provisions_one_project_scoped_board_idempotently
     assert metadata["aether_contract_id"] == final["contract_id"]
     assert metadata["aether_contract_version"] == 1
     assert metadata["default_workdir"] == str(project.resolve())
+    assert metadata["worktree_base_ref"] == first["base_commit"]
     assert Path(metadata["db_path"]).is_file()
     assert first["execution_board"] not in first["envelope"]
     assert runtime_project_id not in first["envelope"]
@@ -1389,3 +1390,368 @@ def test_policy_distinguishes_routine_closeout_from_protected_variants() -> None
     assert "force/history rewrite" in policy
     assert "package publication" in policy
     assert "deployment" in policy
+
+
+def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_base_ref(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A contract authored from an exclusive linked worktree leaves primary untouched."""
+    import sqlite3
+
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+    from aether_agents.objective_contracts import hermes_plugin
+    from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
+
+    registry = ProjectRegistry()
+    primary = _project(tmp_path, registry, PROJECT_A, "alpha")
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=primary, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=primary, check=True)
+    subprocess.run(("git", "add", "."), cwd=primary, check=True)
+    subprocess.run(("git", "commit", "-qm", "chore: initial commit"), cwd=primary, check=True)
+    subprocess.run(("git", "branch", "-M", "primary-branch"), cwd=primary, check=True)
+
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Alpha", primary_path=str(primary)
+        )
+
+    # Create exclusive linked worktree on a separate branch
+    worktree = tmp_path / "worktree-alpha"
+    subprocess.run(
+        ("git", "worktree", "add", "-b", "feature-contract", str(worktree)),
+        cwd=primary,
+        check=True,
+    )
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=worktree, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=worktree, check=True)
+
+    # Advance primary with a divergent commit to ensure HEADs differ
+    dummy = primary / "primary_note.txt"
+    dummy.write_text("primary work", encoding="utf-8")
+    subprocess.run(("git", "add", "primary_note.txt"), cwd=primary, check=True)
+    subprocess.run(("git", "commit", "-qm", "feat: primary change"), cwd=primary, check=True)
+    primary_head = subprocess.run(
+        ("git", "rev-parse", "HEAD"), cwd=primary, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+    # Record primary tree status before authoring
+    primary_status_before = subprocess.run(
+        ("git", "status", "--porcelain"), cwd=primary, capture_output=True, text=True, check=True
+    ).stdout
+
+    # Register session workspace pointing to the linked worktree
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        connection.execute("INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-wt", str(worktree)))
+
+    # 1. Author contract via plugin in session-wt
+    begin_args = {"action": "begin", "project_id": PROJECT_A, "title": "Worktree Contract"}
+    begin_res = json.loads(hermes_plugin._handle(begin_args, session_id="session-wt", author_profile="morfeo"))
+    contract_id = begin_res["contract_id"]
+
+    revision = 1
+    for section in REQUIRED_SECTIONS:
+        res = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "set_section",
+                    "project_id": PROJECT_A,
+                    "contract_id": contract_id,
+                    "expected_revision": revision,
+                    "section": section,
+                    "content": f"Verified {section}.",
+                },
+                session_id="session-wt",
+                author_profile="morfeo",
+            )
+        )
+        revision = res["revision"]
+
+    finalize_res = json.loads(
+        hermes_plugin._handle(
+            {
+                "action": "finalize",
+                "project_id": PROJECT_A,
+                "contract_id": contract_id,
+                "expected_revision": revision,
+            },
+            session_id="session-wt",
+            author_profile="morfeo",
+        )
+    )
+    assert finalize_res["status"] == "final"
+
+    # Verify primary remains 100% untouched
+    primary_status_after = subprocess.run(
+        ("git", "status", "--porcelain"), cwd=primary, capture_output=True, text=True, check=True
+    ).stdout
+    assert primary_status_after == primary_status_before
+    assert not (primary / ".aether" / "drafts").exists()
+    assert not (primary / ".aether" / "objective-contracts" / contract_id).exists()
+
+    # Verify draft and final exist in the worktree
+    assert (worktree / ".aether" / "objective-contracts" / contract_id / "v1.md").is_file()
+
+    # Commit contract in worktree
+    subprocess.run(("git", "add", ".aether/"), cwd=worktree, check=True)
+    subprocess.run(("git", "commit", "-qm", "docs: finalize contract"), cwd=worktree, check=True)
+    worktree_head = subprocess.run(
+        ("git", "rev-parse", "HEAD"), cwd=worktree, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert worktree_head != primary_head
+
+    # 2. Prepare handoff from worktree session
+    handoff_args = {
+        "action": "prepare_handoff",
+        "project_id": PROJECT_A,
+        "contract_id": contract_id,
+        "version": 1,
+    }
+    prepared = json.loads(
+        hermes_plugin._handle(handoff_args, session_id="session-wt", author_profile="morfeo")
+    )
+    assert prepared["handoff_ready"] is True
+    assert prepared["base_commit"] == worktree_head
+    assert prepared["base_commit"] != primary_head
+
+    # 3. Verify execution board metadata
+    board_slug = prepared["execution_board"]
+    metadata = kanban_db.read_board_metadata(board_slug)
+    assert metadata["project_id"] == runtime_project_id
+    assert metadata["default_workdir"] == str(primary.resolve())
+    assert metadata["worktree_base_ref"] == worktree_head
+    assert metadata["aether_project_id"] == PROJECT_A
+    assert metadata["aether_contract_id"] == contract_id
+    assert metadata["aether_contract_version"] == 1
+    assert Path(metadata["db_path"]).is_file()
+
+    # Primary still unchanged
+    assert (
+        subprocess.run(
+            ("git", "status", "--porcelain"), cwd=primary, capture_output=True, text=True, check=True
+        ).stdout
+        == primary_status_before
+    )
+
+
+def test_session_worktree_authoring_supports_subdirectory_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A session whose cwd is a subdirectory within a linked worktree resolves to the worktree root."""
+    import sqlite3
+
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from aether_agents.objective_contracts import hermes_plugin
+
+    registry = ProjectRegistry()
+    primary = _project(tmp_path, registry, PROJECT_A, "alpha")
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=primary, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=primary, check=True)
+    subprocess.run(("git", "add", "."), cwd=primary, check=True)
+    subprocess.run(("git", "commit", "-qm", "chore: initial commit"), cwd=primary, check=True)
+
+    worktree = tmp_path / "worktree-alpha"
+    subprocess.run(
+        ("git", "worktree", "add", "-b", "feature-contract", str(worktree)),
+        cwd=primary,
+        check=True,
+    )
+    subdir = worktree / "some" / "nested" / "dir"
+    subdir.mkdir(parents=True)
+
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        connection.execute("INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-sub", str(subdir)))
+
+    begin_args = {"action": "begin", "project_id": PROJECT_A, "title": "Subdir Session Contract"}
+    res = json.loads(hermes_plugin._handle(begin_args, session_id="session-sub", author_profile="morfeo"))
+    assert "contract_id" in res
+    assert (worktree / ".aether" / "drafts" / f"{res['contract_id']}.json").is_file()
+    assert not (primary / ".aether" / "drafts").exists()
+
+
+def test_session_worktree_authoring_rejects_unrelated_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Authoring rejects a session workspace from an unrelated repository or marker."""
+    import sqlite3
+
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state-home"))
+
+    from aether_agents.objective_contracts import hermes_plugin
+
+    registry = ProjectRegistry()
+    primary = _project(tmp_path, registry, PROJECT_A, "alpha")
+    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=primary, check=True)
+    subprocess.run(("git", "config", "user.name", "Test"), cwd=primary, check=True)
+    subprocess.run(("git", "add", "."), cwd=primary, check=True)
+    subprocess.run(("git", "commit", "-qm", "chore: init"), cwd=primary, check=True)
+
+    # 1. Unrelated git repo without marker
+    unrelated_repo = tmp_path / "unrelated-repo"
+    unrelated_repo.mkdir()
+    subprocess.run(("git", "init", "-q"), cwd=unrelated_repo, check=True)
+
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("s-unrelated", str(unrelated_repo))
+        )
+
+    res = json.loads(
+        hermes_plugin._handle(
+            {"action": "begin", "project_id": PROJECT_A, "title": "Test"},
+            session_id="s-unrelated",
+            author_profile="morfeo",
+        )
+    )
+    assert res["success"] is False
+    assert res["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID"
+
+    # 2. Unrelated git repo with mismatched project marker
+    marker = unrelated_repo / ".aether" / "project.toml"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(
+        "\n".join(
+            (
+                "schema_version = 1",
+                'project_id = "22222222-2222-4222-8222-222222222222"',
+                'name = "other"',
+                'initialized_by = "1.0.0"',
+                'forge = "local"',
+                'contract_root = "specs"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    res_mismatch = json.loads(
+        hermes_plugin._handle(
+            {"action": "begin", "project_id": PROJECT_A, "title": "Test"},
+            session_id="s-unrelated",
+            author_profile="morfeo",
+        )
+    )
+    assert res_mismatch["success"] is False
+    assert res_mismatch["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
+
+    # 3. Unrelated git repo with same project UUID but different git common-dir
+    marker.write_text(
+        "\n".join(
+            (
+                "schema_version = 1",
+                f'project_id = "{PROJECT_A}"',
+                'name = "alpha"',
+                'initialized_by = "1.0.0"',
+                'forge = "local"',
+                'contract_root = "specs"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    res_diff_git = json.loads(
+        hermes_plugin._handle(
+            {"action": "begin", "project_id": PROJECT_A, "title": "Test"},
+            session_id="s-unrelated",
+            author_profile="morfeo",
+        )
+    )
+    assert res_diff_git["success"] is False
+    assert res_diff_git["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
+
+
+def test_execution_board_validates_worktree_base_ref_format_and_equality(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Execution boards enforce exact lowercase 40-char SHA-1 worktree_base_ref."""
+    hermes_home = tmp_path / "hermes-home"
+    hermes_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    for name in ("HERMES_KANBAN_DB", "HERMES_KANBAN_BOARD", "HERMES_KANBAN_HOME"):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+    from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _create_metadata_exclusive,
+        _provision_execution_board,
+        _validate_execution_metadata,
+    )
+
+    project = tmp_path / "repo"
+    project.mkdir()
+    subprocess.run(("git", "init", "-q"), cwd=project, check=True)
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Repo", primary_path=str(project)
+        )
+
+    valid_sha = "a" * 40
+    mismatched_sha = "b" * 40
+    invalid_short_sha = "a" * 39
+    invalid_upper_sha = "A" * 40
+
+    # 1. Invalid SHA rejected during provisioning
+    with pytest.raises(ExecutionBoardError) as exc_short:
+        _provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id="oc_aaaaaaaaaaaaaaaa",
+            version=1,
+            worktree_base_ref=invalid_short_sha,
+        )
+    assert exc_short.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"
+
+    with pytest.raises(ExecutionBoardError) as exc_upper:
+        _provision_execution_board(
+            project_id=PROJECT_A,
+            project_root=project,
+            contract_id="oc_aaaaaaaaaaaaaaaa",
+            version=1,
+            worktree_base_ref=invalid_upper_sha,
+        )
+    assert exc_upper.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"
+
+    # 2. Valid SHA provisions successfully
+    first = _provision_execution_board(
+        project_id=PROJECT_A,
+        project_root=project,
+        contract_id="oc_aaaaaaaaaaaaaaaa",
+        version=1,
+        worktree_base_ref=valid_sha,
+    )
+    metadata = kanban_db.read_board_metadata(first["slug"])
+    assert metadata["worktree_base_ref"] == valid_sha
+
+    # 3. Validation with mismatched ref raises IDENTITY-CONFLICT
+    with pytest.raises(ExecutionBoardError) as exc_mismatch:
+        _validate_execution_metadata(
+            metadata,
+            runtime_project_id=runtime_project_id,
+            project_root=project,
+            aether_project_id=PROJECT_A,
+            contract_id="oc_aaaaaaaaaaaaaaaa",
+            version=1,
+            worktree_base_ref=mismatched_sha,
+        )
+    assert exc_mismatch.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"

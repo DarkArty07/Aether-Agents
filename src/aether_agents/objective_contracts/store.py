@@ -188,10 +188,14 @@ class ObjectiveContractStore:
         registry: ProjectRegistry | None = None,
         clock: Callable[[], datetime] | None = None,
         author_profile: str = "morfeo",
+        authoring_root: Path | None = None,
     ) -> None:
         self.registry = registry or ProjectRegistry()
         self.clock = clock or (lambda: datetime.now().astimezone())
         self.author_profile = author_profile
+        self.authoring_root = (
+            authoring_root.expanduser().resolve() if authoring_root is not None else None
+        )
 
     @staticmethod
     def _session(value: str) -> str:
@@ -212,31 +216,8 @@ class ObjectiveContractStore:
         utc = current.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         return utc, local
 
-    def _project(self, project_id: str) -> tuple[str, Path]:
-        canonical = canonical_project_id(project_id)
-        if canonical is None:
-            raise ContractError(
-                "AETHER-OBJECTIVE-CONTRACT-PROJECT-INVALID", "project_id must be a canonical UUID"
-            )
-        root = self.registry.project_path(canonical)
-        if root is None or not self.registry.knows(canonical):
-            raise ContractError(
-                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
-                "registry and .aether/project.toml do not identify the same project",
-            )
-        if root.is_symlink():
-            raise ContractError(
-                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
-                "registered project root cannot be a symlink",
-            )
-        resolved = root.expanduser().resolve()
-        if not resolved.is_dir():
-            raise ContractError(
-                "AETHER-OBJECTIVE-CONTRACT-PROJECT-UNRESOLVED",
-                "registered project root is unavailable",
-            )
-
-        marker_path = resolved / ".aether" / "project.toml"
+    @staticmethod
+    def _read_and_validate_marker(marker_path: Path, expected_canonical: str) -> None:
         directory_fd = -1
         descriptor = -1
         try:
@@ -270,11 +251,37 @@ class ObjectiveContractStore:
                 "project marker does not conform to the canonical schema",
             ) from exc
         marker_id = canonical_project_id(marker.get("project_id"))
-        if marker_id != canonical:
+        if marker_id != expected_canonical:
             raise ContractError(
                 "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
                 "registry and .aether/project.toml do not identify the same project",
             )
+
+    def _project(self, project_id: str) -> tuple[str, Path]:
+        canonical = canonical_project_id(project_id)
+        if canonical is None:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-INVALID", "project_id must be a canonical UUID"
+            )
+        root = self.registry.project_path(canonical)
+        if root is None or not self.registry.knows(canonical):
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "registry and .aether/project.toml do not identify the same project",
+            )
+        if root.is_symlink():
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "registered project root cannot be a symlink",
+            )
+        resolved = root.expanduser().resolve()
+        if not resolved.is_dir():
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-UNRESOLVED",
+                "registered project root is unavailable",
+            )
+
+        self._read_and_validate_marker(resolved / ".aether" / "project.toml", canonical)
 
         git_root = subprocess.run(
             ("git", "rev-parse", "--show-toplevel"),
@@ -289,7 +296,67 @@ class ObjectiveContractStore:
                 "AETHER-OBJECTIVE-CONTRACT-PROJECT-GIT-ROOT",
                 "registered project root is not exactly one Git repository root",
             )
-        return canonical, resolved
+
+        if self.authoring_root is None or self.authoring_root == resolved:
+            return canonical, resolved
+
+        if self.authoring_root.is_symlink():
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "authoring root cannot be a symlink",
+            )
+        if not self.authoring_root.is_dir():
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-UNRESOLVED",
+                "authoring root is unavailable",
+            )
+
+        self._read_and_validate_marker(self.authoring_root / ".aether" / "project.toml", canonical)
+
+        wt_root = subprocess.run(
+            ("git", "rev-parse", "--show-toplevel"),
+            cwd=self.authoring_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_git_environment(),
+        )
+        if wt_root.returncode != 0 or Path(wt_root.stdout.strip()).resolve() != self.authoring_root:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-GIT-ROOT",
+                "authoring root is not exactly one Git repository or worktree root",
+            )
+
+        primary_common = subprocess.run(
+            ("git", "rev-parse", "--git-common-dir"),
+            cwd=resolved,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_git_environment(),
+        )
+        wt_common = subprocess.run(
+            ("git", "rev-parse", "--git-common-dir"),
+            cwd=self.authoring_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=_git_environment(),
+        )
+        if primary_common.returncode != 0 or wt_common.returncode != 0:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-GIT-ROOT",
+                "failed to inspect Git common directory",
+            )
+        primary_common_dir = (resolved / primary_common.stdout.strip()).resolve()
+        wt_common_dir = (self.authoring_root / wt_common.stdout.strip()).resolve()
+        if primary_common_dir != wt_common_dir:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT",
+                "authoring root does not share Git common directory with registered project root",
+            )
+
+        return canonical, self.authoring_root
 
     @staticmethod
     def _contract_id(value: str) -> str:
@@ -889,7 +956,9 @@ class ObjectiveContractStore:
             "envelope": envelope,
         }
         if on_ready is not None:
-            side_data = dict(on_ready(dict(result), root))
+            primary_path = self.registry.project_path(project_id)
+            primary_root = primary_path.expanduser().resolve() if primary_path else root
+            side_data = dict(on_ready(dict(result), primary_root))
             reserved = set(result) & set(side_data)
             if reserved:
                 raise ContractError(
