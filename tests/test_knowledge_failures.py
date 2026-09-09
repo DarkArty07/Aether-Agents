@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from test_project_knowledge_engine import PROJECT, project
@@ -15,6 +16,7 @@ from aether_agents.cli import _build_parser
 from aether_agents.commands.knowledge import run_knowledge
 from aether_agents.knowledge.common import KnowledgeError
 from aether_agents.knowledge.context import resolve_context
+from aether_agents.knowledge.graphify import GraphifyBackend
 from aether_agents.knowledge.memory import WorkMemoryStore
 from aether_agents.knowledge.service import KnowledgeService
 
@@ -131,6 +133,87 @@ def test_corrupt_notes_are_not_served_and_stale_cursors_are_rejected(
     (root / "index.json").write_text("[]")
     with pytest.raises(KnowledgeError) as failure:
         store.execute(ctx, "search", {"query": "sample"})
+    assert failure.value.code == "MEMORY_CORRUPT"
+
+
+class _FakeGraphify(GraphifyBackend):
+    def __init__(self):
+        super().__init__(Path("/dev/null"))
+
+    def run(
+        self,
+        action: str,
+        *,
+        source_root: Path | None = None,
+        graph_path: Path | None = None,
+        arguments: dict | None = None,
+        timeout: float | None = None,
+    ) -> dict:
+        if action == "memory_save":
+            assert arguments is not None
+            return {
+                "content": f"# Work Note\n\n## Situation\n{arguments['situation']}\n\n## Lesson\n{arguments['lesson']}\n"
+            }
+        if action == "memory_reflect":
+            assert arguments is not None
+            return {
+                "content": "Aggregated reflections.",
+                "count": len(arguments.get("notes", [])),
+            }
+        raise NotImplementedError(action)
+
+
+@pytest.mark.parametrize(
+    "tamper_field,tamper_value",
+    [
+        ("markdown_sha256", "DROP"),
+        ("markdown_sha256", "not-a-sha"),
+        ("source_revision", "DROP"),
+        ("source_revision", "not-a-rev"),
+        ("actor", "DROP"),
+        ("actor", {"session_id": 123}),
+        ("situation", "DROP"),
+        ("lesson", "DROP"),
+        ("applicability", "DROP"),
+        ("outcome", "invalid"),
+        ("source_nodes", "not-a-list"),
+        ("evidence", "not-a-list"),
+        ("verification", "DROP"),
+        ("updated_at", "DROP"),
+    ],
+)
+def test_missing_or_corrupt_immutable_metadata_returns_memory_corrupt(
+    tmp_path: Path, tamper_field: str, tamper_value: Any
+) -> None:
+    _root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    store = WorkMemoryStore(state, backend=_FakeGraphify())
+    saved = store.execute(ctx, "save", payload("Metadata integrity test note."))
+    note_id = saved["note_id"]
+
+    rec_path = (
+        state / "knowledge" / PROJECT / "memory/implementer/notes" / note_id / "1/record.json"
+    )
+    rec = json.loads(rec_path.read_text())
+    if tamper_value == "DROP":
+        rec.pop(tamper_field, None)
+    else:
+        rec[tamper_field] = tamper_value
+    rec_path.write_text(json.dumps(rec))
+
+    for action, args in (
+        ("read", {"note_id": note_id}),
+        ("search", {"query": "Metadata"}),
+        ("reflect", {}),
+    ):
+        with pytest.raises(KnowledgeError) as failure:
+            store.execute(ctx, action, args)
+        assert failure.value.code == "MEMORY_CORRUPT"
+
+    # When backend is None, reflect on corrupt note still returns MEMORY_CORRUPT, never COMPONENT_UNAVAILABLE
+    no_backend_store = WorkMemoryStore(state, backend=None)
+    with pytest.raises(KnowledgeError) as failure:
+        no_backend_store.execute(ctx, "reflect", {})
     assert failure.value.code == "MEMORY_CORRUPT"
 
 

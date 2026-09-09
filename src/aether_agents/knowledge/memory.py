@@ -41,6 +41,55 @@ def _text(args: dict[str, Any], name: str, maximum: int = 8192) -> str:
     return value.strip()
 
 
+def _is_dirty(ctx: KnowledgeContext) -> bool:
+    changed = git(ctx.root, "diff", "--name-only", "-z", ctx.source_revision)
+    new = git(ctx.root, "ls-files", "--others", "--exclude-standard", "-z")
+    return bool(any(p for p in (changed + new).split(b"\0") if p))
+
+
+def _validate_record_metadata(record: dict[str, Any]) -> None:
+    source_rev = record.get("source_revision")
+    if not isinstance(source_rev, str) or not re.fullmatch(r"[a-f0-9]{40,64}", source_rev):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note source revision is invalid.")
+    markdown_sha = record.get("markdown_sha256")
+    if not isinstance(markdown_sha, str) or not re.fullmatch(r"[a-f0-9]{64}", markdown_sha):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note markdown hash is missing or invalid.")
+    actor = record.get("actor")
+    if not isinstance(actor, dict) or not all(
+        isinstance(actor.get(k), str) for k in ("session_id", "task_id", "run_id")
+    ):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note actor metadata is invalid.")
+    for field in ("situation", "lesson", "applicability"):
+        val = record.get(field)
+        if not isinstance(val, str):
+            raise KnowledgeError("MEMORY_CORRUPT", f"Note {field} is invalid.")
+    outcome = record.get("outcome")
+    if outcome not in ("useful", "dead_end", "corrected"):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note outcome is invalid.")
+    source_nodes = record.get("source_nodes")
+    if not isinstance(source_nodes, list) or any(not isinstance(n, str) for n in source_nodes):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note source nodes are invalid.")
+    evidence = record.get("evidence")
+    if not isinstance(evidence, list) or any(not isinstance(e, dict) for e in evidence):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note evidence is invalid.")
+    verification = record.get("verification")
+    if not isinstance(verification, str):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note verification is invalid.")
+    updated_at = record.get("updated_at")
+    if not isinstance(updated_at, (int, float)):
+        raise KnowledgeError("MEMORY_CORRUPT", "Note timestamp is invalid.")
+
+
+def _verify_note_content(path: Path, record: dict[str, Any]) -> bytes:
+    try:
+        raw = read_private_bytes(path / "note.md")
+    except (FileNotFoundError, OSError):
+        raise KnowledgeError("MEMORY_CORRUPT", "A note changed outside its recorded revision.")
+    if hashlib.sha256(raw).hexdigest() != record.get("markdown_sha256"):
+        raise KnowledgeError("MEMORY_CORRUPT", "A note changed outside its recorded revision.")
+    return raw
+
+
 class WorkMemoryStore:
     def __init__(
         self,
@@ -96,6 +145,10 @@ class WorkMemoryStore:
             record = load_json(path / "record.json")
         except FileNotFoundError as exc:
             raise KnowledgeError("NOTE_MISSING", "This work note is not available.") from exc
+        except KnowledgeError as exc:
+            if exc.code == "INDEX_CORRUPT":
+                raise KnowledgeError("MEMORY_CORRUPT", "The work note record is corrupt.") from exc
+            raise
         if not isinstance(record, dict) or record.get("schema_version") != "aether.work-note.v1":
             raise KnowledgeError("MEMORY_CORRUPT", "The work note has an invalid schema.")
         if (
@@ -105,6 +158,7 @@ class WorkMemoryStore:
             or record.get("project_id") != root.parent.parent.name
         ):
             raise KnowledgeError("MEMORY_CORRUPT", "Note identity does not match its storage.")
+        _validate_record_metadata(record)
         return path, record
 
     def _native(self, action: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -456,7 +510,8 @@ class WorkMemoryStore:
                     "SCOPE_UNAVAILABLE", "This namespace exceeds the lexical search limit."
                 )
             for note_id, revision in index["heads"].items():
-                _path, record = self._record(root, note_id, revision)
+                path, record = self._record(root, note_id, revision)
+                _verify_note_content(path, record)
                 corpus = " ".join(
                     str(record[k]) for k in ("situation", "lesson", "applicability", "source_nodes")
                 ).casefold()
@@ -464,7 +519,7 @@ class WorkMemoryStore:
                 if score:
                     candidates.append((score, record["updated_at"], record))
             candidates.sort(key=lambda value: (value[0], value[1]), reverse=True)
-            dirty = bool(git(ctx.root, "diff", "--name-only", "-z", ctx.source_revision))
+            dirty = _is_dirty(ctx)
             matches: list[dict[str, Any]] = []
             budget = args.get("budget_tokens", 2000)
             bounded("", budget)
@@ -501,11 +556,7 @@ class WorkMemoryStore:
                     "NOTE_MISSING", "The note is not in this role/project namespace."
                 )
             path, record = self._record(root, note_id, revision)
-            raw = read_private_bytes(path / "note.md")
-            if hashlib.sha256(raw).hexdigest() != record["markdown_sha256"]:
-                raise KnowledgeError(
-                    "MEMORY_CORRUPT", "A note changed outside its recorded revision."
-                )
+            raw = _verify_note_content(path, record)
             offset = 0
             cursor = args.get("cursor")
             if cursor:
@@ -526,7 +577,7 @@ class WorkMemoryStore:
             next_cursor = (
                 f"{revision}:{offset + consumed}" if offset + consumed < len(raw) else None
             )
-            dirty = bool(git(ctx.root, "diff", "--name-only", "-z", ctx.source_revision))
+            dirty = _is_dirty(ctx)
             result.update(
                 note_id=note_id,
                 revision=revision,
@@ -553,21 +604,11 @@ class WorkMemoryStore:
 
     def _reflect(self, ctx: KnowledgeContext, root: Path, index: dict[str, Any]) -> dict[str, Any]:
         day = int(time.time() // 86400)
-        try:
-            cached = load_json(root / "reflection.json")
-        except FileNotFoundError:
-            cached = {}
-        if cached.get("generation") == index["generation"] and cached.get("day") == day:
-            return {**cached, "reused": True}
         originals = []
         total = 0
         for note_id, revision in index["heads"].items():
             path, record = self._record(root, note_id, revision)
-            raw = read_private_bytes(path / "note.md")
-            if hashlib.sha256(raw).hexdigest() != record["markdown_sha256"]:
-                raise KnowledgeError(
-                    "MEMORY_CORRUPT", "A note changed outside its recorded revision."
-                )
+            raw = _verify_note_content(path, record)
             total += len(raw)
             if total > 1_000_000:
                 raise KnowledgeError(
@@ -575,6 +616,12 @@ class WorkMemoryStore:
                     "The current-note generation exceeds the reflection budget.",
                 )
             originals.append(raw.decode())
+        try:
+            cached = load_json(root / "reflection.json")
+        except FileNotFoundError:
+            cached = {}
+        if cached.get("generation") == index["generation"] and cached.get("day") == day:
+            return {**cached, "reused": True}
         reflected = self._native("memory_reflect", {"notes": originals})
         content, truncated = bounded(reflected["content"], 3000)
         result = {

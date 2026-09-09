@@ -12,6 +12,7 @@ from test_project_knowledge_engine import OTHER, PROJECT, git_at, project
 
 from aether_agents.knowledge.common import KnowledgeError, atomic_json
 from aether_agents.knowledge.context import resolve_context
+from aether_agents.knowledge.graphify import GraphifyBackend
 from aether_agents.knowledge.memory import WorkMemoryStore
 from aether_agents.knowledge.service import KnowledgeService, validate_arguments
 
@@ -354,3 +355,96 @@ def test_sensitive_notes_and_escaping_evidence_are_rejected(memory) -> None:
     data["evidence"] = [{"path": "../other/secret.py"}]
     with pytest.raises(KnowledgeError):
         store.execute(ctx, "save", data)
+
+
+class FakeGraphify(GraphifyBackend):
+    def __init__(self, python: Path | None = None):
+        super().__init__(python or Path("/dev/null"))
+
+    def run(
+        self,
+        action: str,
+        *,
+        source_root: Path | None = None,
+        graph_path: Path | None = None,
+        arguments: dict | None = None,
+        timeout: float | None = None,
+    ) -> dict:
+        if action == "memory_save":
+            assert arguments is not None
+            return {
+                "content": f"# Work Note\n\n## Situation\n{arguments['situation']}\n\n## Lesson\n{arguments['lesson']}\n"
+            }
+        if action == "memory_reflect":
+            assert arguments is not None
+            return {
+                "content": "Aggregated reflections.",
+                "count": len(arguments.get("notes", [])),
+            }
+        raise NotImplementedError(action)
+
+
+def test_untracked_source_changes_mark_freshness_dirty(tmp_path: Path) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    store = WorkMemoryStore(state, backend=FakeGraphify())
+    note = store.execute(ctx, "save", payload("Freshness tracking lesson."))
+    note_id = note["note_id"]
+
+    read_clean = store.execute(ctx, "read", {"note_id": note_id})
+    assert read_clean["freshness"] == "same_revision"
+    search_clean = store.execute(ctx, "search", {"query": "Freshness"})
+    assert search_clean["matches"][0]["freshness"] == "same_revision"
+
+    untracked = root / "untracked_script.py"
+    untracked.write_text("print('untracked')\n")
+
+    read_dirty = store.execute(ctx, "read", {"note_id": note_id})
+    assert read_dirty["freshness"] == "revalidate"
+    search_dirty = store.execute(ctx, "search", {"query": "Freshness"})
+    assert search_dirty["matches"][0]["freshness"] == "revalidate"
+
+    untracked.unlink()
+    read_restored = store.execute(ctx, "read", {"note_id": note_id})
+    assert read_restored["freshness"] == "same_revision"
+
+
+def test_reflection_validates_notes_and_hashes_before_cache_reuse(tmp_path: Path) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    store = WorkMemoryStore(state, backend=FakeGraphify())
+    saved = store.execute(ctx, "save", payload("Reflection validation lesson."))
+    note_id = saved["note_id"]
+
+    first = store.execute(ctx, "reflect", {})
+    assert first["reused"] is False
+    assert first["count"] == 1
+
+    second = store.execute(ctx, "reflect", {})
+    assert second["reused"] is True
+
+    # Tamper with markdown on disk after cache is populated
+    note_md = state / "knowledge" / PROJECT / "memory/implementer/notes" / note_id / "1/note.md"
+    note_md.write_text("Tampered markdown content.")
+
+    with pytest.raises(KnowledgeError) as failure:
+        store.execute(ctx, "reflect", {})
+    assert failure.value.code == "MEMORY_CORRUPT"
+
+
+def test_search_validates_note_hashes(tmp_path: Path) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    store = WorkMemoryStore(state, backend=FakeGraphify())
+    saved = store.execute(ctx, "save", payload("Search hash validation lesson."))
+    note_id = saved["note_id"]
+
+    results = store.execute(ctx, "search", {"query": "Search"})
+    assert len(results["matches"]) == 1
+
+    note_md = state / "knowledge" / PROJECT / "memory/implementer/notes" / note_id / "1/note.md"
+    note_md.write_text("Tampered markdown content.")
+
+    with pytest.raises(KnowledgeError) as failure:
+        store.execute(ctx, "search", {"query": "Search"})
+    assert failure.value.code == "MEMORY_CORRUPT"
