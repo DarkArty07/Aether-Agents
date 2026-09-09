@@ -50,7 +50,9 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-262",
     "HLP-280",
     "HLP-305",
+    "HLP-310",
     "HLP-335",
+    "HLP-354",
 )
 PATCH_DIGESTS = {
     "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
@@ -58,6 +60,8 @@ PATCH_DIGESTS = {
     "HLP-262": "abb3215645f400019c1eb5746f288a5ba517c3ba76547533d3d0693a1acb2f1a",
     "HLP-280": "59f873ad50e0b3386223bac1fbe2a63699a19dd757175879fefc5bf923f1738b",
     "HLP-305": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
+    "HLP-310": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
+    "HLP-354": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
 }
 
 
@@ -156,14 +160,14 @@ def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
     shutil.copy2(LEDGER_PATH, ledger)
     entries = root / "entries"
     shutil.copytree(ENTRIES_PATH, entries)
-    patches = root / "patches" / "hermes"
-    patches.mkdir(parents=True)
-    for identifier in (
-        "HLP-211b-flow-blocker-routing.patch",
-        "HLP-226b-affinity-terminal-project-inheritance.patch",
-        "HLP-262-origin-signal-sticky.patch",
-    ):
-        shutil.copy2(ROOT / "patches" / "hermes" / identifier, patches / identifier)
+    for entry_file in entries.glob("*.json"):
+        data = json.loads(entry_file.read_text(encoding="utf-8"))
+        for artifact in data.get("artifact_verification", {}).get("artifacts", []):
+            if artifact.get("kind") == "patch":
+                ref = Path(artifact["reference"])
+                dest = root / ref
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / ref, dest)
     return ledger, entries
 
 

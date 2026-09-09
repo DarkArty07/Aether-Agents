@@ -1,0 +1,72 @@
+{
+  "id": "HLP-310",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-310--delegated-child-identity-and-kanban-environment-snapshot-exclusion",
+  "components": [
+    "HLP-310",
+    "tools/environments/base.py",
+    "tests/tools/test_snapshot_session_id_leak.py",
+    "tests/tools/test_delegate_kanban_isolation.py"
+  ],
+  "required_behavior": "Reusable terminal snapshots must exclude HERMES_DELEGATED_CHILD_CONTEXT and dispatcher-owned HERMES_KANBAN_* variables so delegated child context does not leak into parent sessions or subsequent commands.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/310"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/environments/base.py",
+        "result": "The inspected upstream revision contains no exclusion for HERMES_DELEGATED_CHILD_CONTEXT or HERMES_KANBAN_* in _export_dump_excluding_session_vars or _SNAPSHOT_EXCLUDED_ENV_REGEX."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted Hermes release excludes HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_* from terminal session snapshots with equivalent tests.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable exact-target source prerequisite control",
+        "result": "The prerequisite failed: inspected upstream lacks delegated child context and Kanban snapshot exclusion primitives; full behavioral regression cannot pass on this revision."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch",
+        "result": "passed",
+        "ledger_sha256": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
+        "computed_sha256": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "full-patch byte reconstruction against fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+        "result": "unavailable"
+      }
+    ],
+    "blocker": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The inspected upstream lacks snapshot exclusions for HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_*.",
+    "Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb is downstream-only; no equivalent upstream change exists."
+  ],
+  "summary": "Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4."
+}

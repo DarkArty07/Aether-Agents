@@ -1,0 +1,434 @@
+diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
+index 64c4efe96b..4d95884336 100644
+--- a/hermes_cli/kanban_db.py
++++ b/hermes_cli/kanban_db.py
+@@ -904,6 +904,7 @@ def write_board_metadata(
+     archived: Optional[bool] = None,
+     default_workdir: Optional[str] = None,
+     project_id: Optional[str] = None,
++    worktree_base_ref: Optional[str] = None,
+ ) -> dict:
+     """Create / update ``board.json`` for ``board``.
+
+@@ -934,6 +935,8 @@ def write_board_metadata(
+         meta["default_workdir"] = str(default_workdir) if default_workdir else None
+     if project_id is not None:
+         meta["project_id"] = str(project_id) if project_id else None
++    if worktree_base_ref is not None:
++        meta["worktree_base_ref"] = str(worktree_base_ref)
+     if not meta.get("created_at"):
+         meta["created_at"] = int(time.time())
+     path = board_metadata_path(slug)
+@@ -8770,8 +8773,47 @@ def _repo_root_for_worktree_target(path: Path) -> Optional[Path]:
+         current = current.parent
+
+
+-def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> None:
++_WORKTREE_BASE_REF_PATTERN = re.compile(r"^[0-9a-f]{40}$")
++
++
++def _resolve_worktree_base_ref(
++    board: Optional[str] = None, *, base_ref: Optional[str] = None
++) -> str:
++    """Resolve the git ref to branch new worktrees from.
++
++    Returns the valid 40-character lowercase hex SHA-1 if present in board
++    metadata (or explicitly passed), or 'HEAD' if absent. Fails closed
++    (raises ValueError) if present but invalid.
++    """
++    if base_ref is not None:
++        candidate = base_ref
++        source_label = "explicit argument"
++    else:
++        board_slug = board if board else get_current_board()
++        meta = read_board_metadata(board_slug)
++        if "worktree_base_ref" not in meta:
++            return "HEAD"
++        candidate = meta["worktree_base_ref"]
++        source_label = f"board {board_slug!r}"
++
++    if not isinstance(candidate, str) or not _WORKTREE_BASE_REF_PATTERN.match(candidate):
++        raise ValueError(
++            f"Invalid worktree_base_ref in {source_label}: {candidate!r}; "
++            "expected lowercase 40-character SHA-1 (^[0-9a-f]{40}$)"
++        )
++    return candidate
++
++
++def _ensure_git_worktree(
++    repo_root: Path,
++    target: Path,
++    branch_name: str,
++    *,
++    board: Optional[str] = None,
++    base_ref: Optional[str] = None,
++) -> None:
+     """Materialize ``target`` as a linked git worktree under ``repo_root``."""
++    target_ref = _resolve_worktree_base_ref(board=board, base_ref=base_ref)
+     target = target.expanduser()
+     repo_common = _git_common_dir(repo_root)
+     if target.exists() and repo_common is not None:
+@@ -8784,7 +8826,7 @@ def _ensure_git_worktree(repo_root: Path, target: Path, branch_name: str) -> Non
+     else:
+         cmd = [
+             "git", "-C", str(repo_root), "worktree", "add", "-b", branch_name,
+-            str(target), "HEAD",
++            str(target), target_ref,
+         ]
+     result = subprocess.run(
+         cmd,
+@@ -8814,11 +8856,11 @@ def _resolve_worktree_workspace(
+     anywhere, we fail loudly rather than guess.
+     """
+     branch_name = (task.branch_name or "").strip() or f"wt/{task.id}"
++    board_slug = board if board else get_current_board()
+     if not task.workspace_path:
+         # Anchor on the board's configured default_workdir, not Path.cwd().
+         # The dispatcher's CWD is incidental (gateway launch dir) and using it
+         # scatters worktrees under whatever repo the gateway started in.
+-        board_slug = board if board else get_current_board()
+         board_default = (read_board_metadata(board_slug).get("default_workdir") or "").strip()
+         if not board_default:
+             raise ValueError(
+@@ -8840,7 +8882,7 @@ def _resolve_worktree_workspace(
+                 f"{board_slug!r} default_workdir {board_default!r} is not inside a git repo"
+             )
+         target = repo_root / ".worktrees" / task.id
+-        _ensure_git_worktree(repo_root, target, branch_name)
++        _ensure_git_worktree(repo_root, target, branch_name, board=board_slug)
+         return target, branch_name
+
+     requested = Path(task.workspace_path).expanduser()
+@@ -8866,7 +8908,7 @@ def _resolve_worktree_workspace(
+         if fallback_root is not None:
+             fallback = fallback_root / ".worktrees" / task.id
+             if fallback.resolve(strict=False) != requested_resolved:
+-                _ensure_git_worktree(fallback_root, fallback, branch_name)
++                _ensure_git_worktree(fallback_root, fallback, branch_name, board=board_slug)
+                 return fallback.resolve(strict=False), branch_name
+         # No repo to anchor a fallback on (or the occupied path IS this
+         # task's own canonical worktree): keep the legacy reuse rather
+@@ -8876,7 +8918,7 @@ def _resolve_worktree_workspace(
+     repo_root = _git_toplevel(requested)
+     if repo_root is not None and requested_resolved == repo_root:
+         target = repo_root / ".worktrees" / task.id
+-        _ensure_git_worktree(repo_root, target, branch_name)
++        _ensure_git_worktree(repo_root, target, branch_name, board=board_slug)
+         return target, branch_name
+
+     repo_root = _repo_root_for_worktree_target(requested.parent)
+@@ -8885,7 +8927,7 @@ def _resolve_worktree_workspace(
+             f"task {task.id} worktree path {task.workspace_path!r} is not inside a git repo "
+             "and does not point at a git repo root"
+         )
+-    _ensure_git_worktree(repo_root, requested, branch_name)
++    _ensure_git_worktree(repo_root, requested, branch_name, board=board_slug)
+     return requested, branch_name
+
+
+diff --git a/tests/hermes_cli/test_kanban_worktree_base_ref.py b/tests/hermes_cli/test_kanban_worktree_base_ref.py
+new file mode 100644
+index 0000000000..c3f402f098
+--- /dev/null
++++ b/tests/hermes_cli/test_kanban_worktree_base_ref.py
+@@ -0,0 +1,300 @@
++"""Tests for Kanban worktree_base_ref materialization (HF-354).
++
++When board metadata carries a valid ``worktree_base_ref``, newly materialized
++Kanban worktrees for new branches start at that commit, not incidental primary HEAD.
++Invalid present refs fail closed. Absent refs keep current HEAD behavior.
++``default_workdir`` still anchors on the board's configured primary path.
++Existing occupied-path fallback and linked-worktree reuse stay intact.
++"""
++
++from __future__ import annotations
++
++import json
++import re
++import subprocess
++from pathlib import Path
++
++import pytest
++
++from hermes_cli import kanban_db as kb
++
++
++@pytest.fixture
++def kanban_home(tmp_path, monkeypatch):
++    """Isolated HERMES_HOME with an empty kanban DB."""
++    home = tmp_path / ".hermes"
++    home.mkdir()
++    monkeypatch.setenv("HERMES_HOME", str(home))
++    monkeypatch.setattr(Path, "home", lambda: tmp_path)
++    kb.init_db()
++    return home
++
++
++def _git(cwd: Path, *args: str) -> str:
++    res = subprocess.run(
++        [
++            "git", "-C", str(cwd),
++            "-c", "user.name=Test User",
++            "-c", "user.email=test@example.com",
++            "-c", "commit.gpgsign=false",
++            *args,
++        ],
++        check=True, capture_output=True, text=True,
++    )
++    return (res.stdout or "").strip()
++
++
++def _make_repo_with_divergent_commits(tmp_path: Path) -> tuple[Path, str, str]:
++    """Return repo_root, commit_a_sha, commit_b_sha (primary is on branch-b at commit_b)."""
++    repo = tmp_path / "repo"
++    repo.mkdir()
++    subprocess.run(
++        ["git", "init", "-b", "main", str(repo)],
++        check=True, capture_output=True, text=True,
++    )
++    (repo / "file_a.txt").write_text("commit a content\n", encoding="utf-8")
++    _git(repo, "add", "file_a.txt")
++    _git(repo, "commit", "-m", "commit A")
++    commit_a = _git(repo, "rev-parse", "HEAD")
++
++    _git(repo, "checkout", "-b", "branch-b")
++    (repo / "file_b.txt").write_text("commit b content\n", encoding="utf-8")
++    _git(repo, "add", "file_b.txt")
++    _git(repo, "commit", "-m", "commit B")
++    commit_b = _git(repo, "rev-parse", "HEAD")
++    assert commit_a != commit_b
++    return repo, commit_a, commit_b
++
++
++def _set_board_metadata_raw(board_slug: str, **kwargs) -> dict:
++    """Helper to write arbitrary fields into board.json directly."""
++    meta = kb.read_board_metadata(board_slug)
++    meta.pop("db_path", None)
++    meta.update(kwargs)
++    path = kb.board_metadata_path(board_slug)
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(
++        json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
++        encoding="utf-8",
++    )
++    return kb.read_board_metadata(board_slug)
++
++
++def test_worktree_base_ref_materializes_at_base_commit(kanban_home, tmp_path):
++    assert kb.__file__ == str(Path(__file__).resolve().parent.parent.parent / "hermes_cli" / "kanban_db.py")
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    board_slug = "test-board"
++    kb.create_board(board_slug, name="Test Board")
++    _set_board_metadata_raw(
++        board_slug,
++        default_workdir=str(repo),
++        worktree_base_ref=commit_a,
++    )
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="task with base ref",
++            workspace_kind="worktree",
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    workspace, branch = kb._resolve_worktree_workspace(task, board=board_slug)
++    assert workspace == (repo / ".worktrees" / tid).resolve()
++    assert branch == f"wt/{tid}"
++
++    # Worktree should be rooted at commit_a, NOT commit_b (which is primary HEAD)
++    wt_head = _git(workspace, "rev-parse", "HEAD")
++    assert wt_head == commit_a
++    assert (workspace / "file_a.txt").exists()
++    assert not (workspace / "file_b.txt").exists()
++
++    # Primary repo remains on branch-b at commit_b
++    primary_head = _git(repo, "rev-parse", "HEAD")
++    assert primary_head == commit_b
++    assert _git(repo, "rev-parse", "--abbrev-ref", "HEAD") == "branch-b"
++
++
++def test_missing_worktree_base_ref_uses_head(kanban_home, tmp_path):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    board_slug = "test-board-no-ref"
++    kb.create_board(board_slug, name="Test Board No Ref")
++    kb.write_board_metadata(board_slug, default_workdir=str(repo))
++
++    meta = kb.read_board_metadata(board_slug)
++    assert "worktree_base_ref" not in meta or meta.get("worktree_base_ref") is None
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="task without base ref",
++            workspace_kind="worktree",
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    workspace, branch = kb._resolve_worktree_workspace(task, board=board_slug)
++    assert workspace == (repo / ".worktrees" / tid).resolve()
++    assert branch == f"wt/{tid}"
++
++    # Worktree should be rooted at primary HEAD (commit_b)
++    wt_head = _git(workspace, "rev-parse", "HEAD")
++    assert wt_head == commit_b
++    assert (workspace / "file_b.txt").exists()
++
++
++@pytest.mark.parametrize(
++    "invalid_ref",
++    [
++        "not-a-sha",
++        "HEAD",
++        "",
++        "6243e40",  # short sha
++        "6243E40EA6B06E85061BF3FEDFFAAD43EED51DEC",  # uppercase
++        "6243e40ea6b06e85061bf3fedffaad43eed51dec ",  # trailing space
++        " 6243e40ea6b06e85061bf3fedffaad43eed51dec",  # leading space
++        "6243e40ea6b06e85061bf3fedffaad43eed51dec0",  # 41 chars
++        "6243e40ea6b06e85061bf3fedffaad43eed51de",   # 39 chars
++    ],
++)
++def test_invalid_worktree_base_ref_fails_closed(kanban_home, tmp_path, invalid_ref):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    board_slug = "test-board-invalid"
++    kb.create_board(board_slug, name="Test Board Invalid")
++    _set_board_metadata_raw(
++        board_slug,
++        default_workdir=str(repo),
++        worktree_base_ref=invalid_ref,
++    )
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="task with invalid base ref",
++            workspace_kind="worktree",
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    with pytest.raises(ValueError, match=r"[Ww]orktree_base_ref"):
++        kb._resolve_worktree_workspace(task, board=board_slug)
++
++
++def test_worktree_base_ref_occupied_fallback_uses_base_ref(kanban_home, tmp_path):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    occupied = repo / ".worktrees" / "sibling"
++    _git(repo, "worktree", "add", str(occupied), "-b", "wt/sibling", "HEAD")
++
++    board_slug = "test-board-fallback"
++    kb.create_board(board_slug, name="Test Board Fallback")
++    _set_board_metadata_raw(
++        board_slug,
++        default_workdir=str(repo),
++        worktree_base_ref=commit_a,
++    )
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="fallback task with base ref",
++            workspace_kind="worktree",
++            workspace_path=str(occupied),  # points to occupied worktree of different branch
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    workspace, branch = kb._resolve_worktree_workspace(task, board=board_slug)
++    assert workspace == (repo / ".worktrees" / tid).resolve()
++    assert branch == f"wt/{tid}"
++
++    # Fallback worktree should be rooted at commit_a, NOT commit_b (primary HEAD)
++    wt_head = _git(workspace, "rev-parse", "HEAD")
++    assert wt_head == commit_a
++
++
++def test_linked_worktree_reuse_preserves_existing_checkout(kanban_home, tmp_path):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    board_slug = "test-board-reuse"
++    kb.create_board(board_slug, name="Test Board Reuse")
++    _set_board_metadata_raw(
++        board_slug,
++        default_workdir=str(repo),
++        worktree_base_ref=commit_a,
++    )
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="reuse task",
++            workspace_kind="worktree",
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    # First resolution: materializes worktree at commit_a on wt/<tid>
++    workspace1, branch1 = kb._resolve_worktree_workspace(task, board=board_slug)
++    assert workspace1 == (repo / ".worktrees" / tid).resolve()
++
++    # Second resolution with explicit workspace_path: reuses existing checkout
++    with kb.connect(board=board_slug) as conn:
++        kb.set_workspace_path(conn, tid, str(workspace1))
++        task_reused = kb.get_task(conn, tid)
++        assert task_reused is not None
++
++    workspace2, branch2 = kb._resolve_worktree_workspace(task_reused, board=board_slug)
++    assert workspace2 == workspace1
++    assert branch2 == branch1
++
++
++def test_worktree_base_ref_nonexistent_commit_fails_closed(kanban_home, tmp_path):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    board_slug = "test-board-nonexistent"
++    kb.create_board(board_slug, name="Test Board Nonexistent")
++    fake_sha = "0000000000000000000000000000000000000000"
++    kb.write_board_metadata(
++        board_slug,
++        default_workdir=str(repo),
++        worktree_base_ref=fake_sha,
++    )
++
++    with kb.connect(board=board_slug) as conn:
++        tid = kb.create_task(
++            conn,
++            title="nonexistent sha task",
++            workspace_kind="worktree",
++            board=board_slug,
++        )
++        task = kb.get_task(conn, tid)
++        assert task is not None
++
++    with pytest.raises(RuntimeError, match=r"git worktree add failed"):
++        kb._resolve_worktree_workspace(task, board=board_slug)
++
++
++def test_write_board_metadata_persists_worktree_base_ref(kanban_home):
++    board_slug = "test-board-write"
++    kb.create_board(board_slug, name="Test Board Write")
++    sha = "6243e40ea6b06e85061bf3fedffaad43eed51dec"
++    meta = kb.write_board_metadata(board_slug, worktree_base_ref=sha)
++    assert meta.get("worktree_base_ref") == sha
++
++    read_meta = kb.read_board_metadata(board_slug)
++    assert read_meta.get("worktree_base_ref") == sha
++
++
++def test_ensure_git_worktree_explicit_base_ref(tmp_path):
++    repo, commit_a, commit_b = _make_repo_with_divergent_commits(tmp_path)
++    target = repo / ".worktrees" / "explicit"
++    kb._ensure_git_worktree(repo, target, "wt/explicit", base_ref=commit_a)
++    assert _git(target, "rev-parse", "HEAD") == commit_a
++
++    # Invalid explicit ref fails closed
++    target_inv = repo / ".worktrees" / "explicit-inv"
++    with pytest.raises(ValueError, match=r"[Ww]orktree_base_ref"):
++        kb._ensure_git_worktree(repo, target_inv, "wt/explicit-inv", base_ref="invalid")
