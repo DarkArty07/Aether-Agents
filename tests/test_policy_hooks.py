@@ -340,6 +340,18 @@ class MinimalPolicyContractTests(unittest.TestCase):
                     "patch": f"*** Begin Patch\n*** Update File: docs/v1.0.0/STAGING_RUNBOOK.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
                 },
             ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/a.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** Update File: docs/b.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Add File: docs/new.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
         ]
         for role in PROFILES:
             for tool_name, tool_input in doc_cases:
@@ -363,6 +375,63 @@ class MinimalPolicyContractTests(unittest.TestCase):
             (
                 "patch",
                 {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "new_string": auth_hdr + "D" * 32},
+            ),
+            (
+                "write_file",
+                {"path": "docs/../src/auth.py", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/..\\src\\auth.py", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {
+                    "path": "../docs/v1.0.0/STAGING_RUNBOOK.md",
+                    "content": auth_hdr + "<staging-token>",
+                },
+            ),
+            (
+                "patch",
+                {"path": "docs/../src/auth.py", "new_string": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/../src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/r.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** Update File: src/auth.py\n@@ ... @@\n+# clean code\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/r.md\n@@ ... @@\n+# clean doc\n*** Update File: src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "mode": "patch",
+                    "path": "docs/v1.0.0/STAGING_RUNBOOK.md",
+                    "patch": f"*** Begin Patch\n*** Update File: src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch",
+                },
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "<monkey>"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "<author>"},
+            ),
+            (
+                "patch",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "new_string": auth_hdr + "<monkey>"},
             ),
         ]
         for role in PROFILES:

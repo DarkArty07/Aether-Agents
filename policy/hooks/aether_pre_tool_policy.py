@@ -37,6 +37,7 @@ PLACEHOLDERS = frozenset(
         "none not-set null password placeholder redacted test test-only"
     ).split()
 )
+PLACEHOLDER_KEYWORDS = frozenset("token placeholder secret key password auth".split())
 
 SENSITIVE_KEYS = re.compile(
     r"(?i)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|"
@@ -146,20 +147,15 @@ def _audit_denial(code: str) -> None:
     if not raw_path:
         return
     try:
-        path = Path(raw_path).expanduser()
-        line = json.dumps(
-            {"role": ROLE, "code": code}, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-        )
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
+        payload = json.dumps({"role": ROLE, "code": code}, sort_keys=True, separators=(",", ":"))
+        Path(raw_path).expanduser().open("a", encoding="utf-8").write(payload + "\n")
     except (OSError, UnicodeError, ValueError):
         return
 
 
 def _block(code: str, reason: str) -> NoReturn:
     _audit_denial(code)
-    payload = {"decision": "block", "reason": f"AETHER-{ROLE.upper()}-{code}: {reason}"}
-    print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+    print(json.dumps({"decision": "block", "reason": f"AETHER-{ROLE.upper()}-{code}: {reason}"}))
     raise SystemExit(BLOCK_EXIT)
 
 
@@ -188,29 +184,38 @@ def _is_placeholder(value: str) -> bool:
         clean.startswith("[") and clean.endswith("]")
     ):
         inner = clean[1:-1].strip()
-        return inner in PLACEHOLDERS or any(
-            t in inner for t in ("token", "placeholder", "secret", "key", "password", "auth")
-        )
+        if inner in PLACEHOLDERS:
+            return True
+        return bool(set(re.split(r"[-_\s]+", inner)) & PLACEHOLDER_KEYWORDS)
     return False
 
 
-def _target_path(tool_name: str, args: dict[str, Any]) -> str | None:
+def _target_paths(tool_name: str, args: dict[str, Any]) -> list[str]:
     if tool_name not in ("write_file", "patch"):
-        return None
-    val = args.get("path") or args.get("file_path")
-    if isinstance(val, str) and val.strip():
-        return val.strip()
-    patch = args.get("patch")
-    if isinstance(patch, str):
-        m = re.search(r"^\*\*\*\s+(?:Update|Add)\s+File:\s*(\S+)", patch, re.MULTILINE)
-        return m.group(1).strip() if m else None
-    return None
+        return []
+    targets: list[str] = []
+    patch_val = args.get("patch")
+    if isinstance(patch_val, str) and patch_val.strip():
+        found = re.findall(
+            r"^\*\*\*\s+(?:Update|Add|Delete)\s+File:\s*(\S+)", patch_val, re.MULTILINE
+        )
+        if not found:
+            return [""]
+        targets.extend(found)
+    for key in ("path", "file_path"):
+        val = args.get(key)
+        if isinstance(val, str) and val.strip():
+            targets.append(val.strip())
+    return targets or [""]
 
 
 def _is_doc_path(path: str | None) -> bool:
-    if not path:
+    if not path or not isinstance(path, str):
         return False
-    norm = path.replace("\\", "/").casefold().strip()
+    parts = [p for p in path.replace("\\", "/").strip().split("/") if p]
+    if not parts or ".." in parts:
+        return False
+    norm = os.path.normpath("/".join(parts)).replace("\\", "/").casefold()
     return (
         norm.startswith(("docs/", "specs/"))
         or "/docs/" in norm
@@ -236,13 +241,13 @@ def _contains_secret(value: Any, *, broad: bool, is_doc: bool = False) -> bool:
 
     if broad and isinstance(value, dict):
         for key, nested in value.items():
-            if SENSITIVE_KEYS.fullmatch(str(key).strip()):
-                if (
-                    isinstance(nested, str)
-                    and not _is_placeholder(nested)
-                    and len(nested.strip()) >= 8
-                ):
-                    return True
+            if (
+                SENSITIVE_KEYS.fullmatch(str(key).strip())
+                and isinstance(nested, str)
+                and not _is_placeholder(nested)
+                and len(nested.strip()) >= 8
+            ):
+                return True
             if _contains_secret(nested, broad=broad, is_doc=is_doc):
                 return True
     elif isinstance(value, (list, tuple, set)):
@@ -251,8 +256,6 @@ def _contains_secret(value: Any, *, broad: bool, is_doc: bool = False) -> bool:
 
 
 def _command_text(tool_name: str, args: dict[str, Any]) -> str | None:
-    """Return only explicit shell command text; never infer program behavior."""
-
     if tool_name != "terminal":
         return None
     for key in ("command", "cmd"):
@@ -283,14 +286,12 @@ def main() -> None:
     # docs name args. Supporting both prevents compatibility drift from becoming
     # a blanket denial; both must still be mappings when present.
     raw_args = payload.get("tool_input")
-    if raw_args is None:
-        raw_args = payload.get("args")
-    if not isinstance(raw_args, dict):
+    args = payload.get("args") if raw_args is None else raw_args
+    if not isinstance(args, dict):
         _block("PAYLOAD", "tool arguments are not an object")
-    args: dict[str, Any] = raw_args
 
-    target_path = _target_path(tool_name, args)
-    is_doc = _is_doc_path(target_path)
+    targets = _target_paths(tool_name, args)
+    is_doc = bool(targets) and all(_is_doc_path(t) for t in targets)
 
     if tool_name in DURABLE_TOOLS and _contains_secret(args, broad=True, is_doc=is_doc):
         _block("DURABLE-SECRET", "credential-shaped content may not enter durable fields")
