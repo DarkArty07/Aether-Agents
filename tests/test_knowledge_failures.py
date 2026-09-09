@@ -29,6 +29,9 @@ from aether_agents.knowledge.service import KnowledgeService
         ({"situation": ""}, "ARGUMENT_INVALID"),
         ({"lesson": "x" * 16001}, "ARGUMENT_INVALID"),
         ({"lesson": "sk-" + "a" * 40}, "SENSITIVE_CONTENT"),
+        ({"lesson": "pass" + "word = 'synthetic_test_pass_123'"}, "SENSITIVE_CONTENT"),
+        ({"lesson": "ghp_" + "a" * 36}, "SENSITIVE_CONTENT"),
+        ({"lesson": "Authorization" + ": Bearer synthetic_bearer_token_123"}, "SENSITIVE_CONTENT"),
         ({"outcome": "invented"}, "ARGUMENT_INVALID"),
         ({"evidence": "not a list"}, "ARGUMENT_INVALID"),
         ({"evidence": [{"path": "module.py", "secret": "unknown"}]}, "ARGUMENT_INVALID"),
@@ -100,6 +103,35 @@ def test_evidence_is_project_relative_and_remains_reported(
             {**payload(), "evidence": [{"path": "module.py", "result": "sk-" + "z" * 40}]},
         )
     assert failure.value.code == "SENSITIVE_CONTENT"
+    with pytest.raises(KnowledgeError) as failure_pass:
+        store.execute(
+            ctx,
+            "save",
+            {**payload(), "evidence": [{"path": "module.py", "result": "pass" + "word=secret123"}]},
+        )
+    assert failure_pass.value.code == "SENSITIVE_CONTENT"
+    with pytest.raises(KnowledgeError) as failure_ghp:
+        store.execute(
+            ctx,
+            "save",
+            {**payload(), "evidence": [{"path": "module.py", "locator": "ghp_" + "a" * 36}]},
+        )
+    assert failure_ghp.value.code == "SENSITIVE_CONTENT"
+    with pytest.raises(KnowledgeError) as failure_bearer:
+        store.execute(
+            ctx,
+            "save",
+            {
+                **payload(),
+                "evidence": [
+                    {
+                        "path": "module.py",
+                        "result": "Authorization" + ": Bearer synthetic_bearer_123",
+                    }
+                ],
+            },
+        )
+    assert failure_bearer.value.code == "SENSITIVE_CONTENT"
 
 
 def test_corrupt_notes_are_not_served_and_stale_cursors_are_rejected(
