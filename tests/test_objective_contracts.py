@@ -239,6 +239,107 @@ def test_finalize_requires_complete_contract_and_preserves_session_boundary(tmp_
     assert "## Testing Standard" in content
 
 
+def test_validate_and_finalize_reject_operator_local_paths(tmp_path: Path) -> None:
+    store, registry = _store(tmp_path)
+    _project(tmp_path, registry, PROJECT_A, "alpha")
+
+    # 1. Unix user home and desktop layout
+    started = store.begin(project_id=PROJECT_A, title="Alpha", session_id="s1")
+    revision = _complete(store, PROJECT_A, started["contract_id"], 1)
+    private_unix = "/" + "home" + "/operator/" + "Desk" + "top/" + "agentes/research-notes"
+    store.set_section(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision,
+        section="in_scope",
+        content=f"Research path: {private_unix}",
+        session_id="s1",
+    )
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.validate(project_id=PROJECT_A, contract_id=started["contract_id"])
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.finalize(
+            project_id=PROJECT_A,
+            contract_id=started["contract_id"],
+            expected_revision=revision + 1,
+            session_id="s1",
+        )
+
+    # 2. Windows user home
+    started_win = store.begin(project_id=PROJECT_A, title="Beta", session_id="s1")
+    rev_win = _complete(store, PROJECT_A, started_win["contract_id"], 1)
+    win_path = "C:\\" + "Users" + "\\operator\\research\\file.txt"
+    store.set_section(
+        project_id=PROJECT_A,
+        contract_id=started_win["contract_id"],
+        expected_revision=rev_win,
+        section="in_scope",
+        content=f"Windows path: {win_path}",
+        session_id="s1",
+    )
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.validate(project_id=PROJECT_A, contract_id=started_win["contract_id"])
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.finalize(
+            project_id=PROJECT_A,
+            contract_id=started_win["contract_id"],
+            expected_revision=rev_win + 1,
+            session_id="s1",
+        )
+
+    # 3. Operator desktop layout without user home prefix
+    started_desk = store.begin(project_id=PROJECT_A, title="Gamma", session_id="s1")
+    rev_desk = _complete(store, PROJECT_A, started_desk["contract_id"], 1)
+    desk_path = "Desk" + "top/" + "agentes/custom-work"
+    store.set_section(
+        project_id=PROJECT_A,
+        contract_id=started_desk["contract_id"],
+        expected_revision=rev_desk,
+        section="in_scope",
+        content=f"Layout path: {desk_path}",
+        session_id="s1",
+    )
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.validate(project_id=PROJECT_A, contract_id=started_desk["contract_id"])
+    with pytest.raises(ContractError, match="AETHER-OBJECTIVE-CONTRACT-OPERATOR-PATH"):
+        store.finalize(
+            project_id=PROJECT_A,
+            contract_id=started_desk["contract_id"],
+            expected_revision=rev_desk + 1,
+            session_id="s1",
+        )
+
+
+def test_validate_and_finalize_accept_portable_paths_and_urls(tmp_path: Path) -> None:
+    store, registry = _store(tmp_path)
+    _project(tmp_path, registry, PROJECT_A, "alpha")
+    started = store.begin(project_id=PROJECT_A, title="Alpha Portable", session_id="s1")
+    revision = _complete(store, PROJECT_A, started["contract_id"], 1)
+    store.set_section(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision,
+        section="canonical_references",
+        content=(
+            "- Spec: `specs/001-aether-v1-productization/spec.md`\n"
+            "- Issue: `https://github.com/DarkArty07/Aether-Agents/issues/364`\n"
+            "- Docs: `https://hermes-agent.nousresearch.com/docs`\n"
+            "- File: `src/aether_agents/objective_contracts/store.py`\n"
+            "- Relative: `./scripts/run_tests.py`\n"
+        ),
+        session_id="s1",
+    )
+    validated = store.validate(project_id=PROJECT_A, contract_id=started["contract_id"])
+    assert validated["valid"] is True
+    finalized = store.finalize(
+        project_id=PROJECT_A,
+        contract_id=started["contract_id"],
+        expected_revision=revision + 1,
+        session_id="s1",
+    )
+    assert finalized["status"] == "final"
+
+
 def test_supersede_creates_v2_without_changing_v1(tmp_path: Path) -> None:
     store, registry = _store(tmp_path)
     project = _project(tmp_path, registry, PROJECT_A, "alpha")
