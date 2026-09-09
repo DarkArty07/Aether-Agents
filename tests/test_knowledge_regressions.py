@@ -1384,11 +1384,18 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
     manifest_inputs = {"README.md": "h1", "doc1.md": "h2", "module.py": "h3"}
     c0_files = chunk0.get("files", [])
     f_hashes = {f: manifest_inputs[f] for f in c0_files if f in manifest_inputs}
+    gx06_config = {"semantic_auxiliary_task": "web_extract"}
+    expected_route = sem_mod.resolve_auxiliary_route(gx06_config, "web_extract")
     fp0 = sem_mod.compute_chunk_fingerprint(
         "regular-tracked-v1",
         chunk0["system_prompt"] + "\n" + chunk0["user_prompt"],
         {"deep": False, "token_budget": 4000},
-        sem_mod.get_model_identity_digest("web_extract"),
+        sem_mod.get_model_identity_digest(
+            "web_extract",
+            provider=expected_route.get("provider"),
+            model=expected_route.get("model"),
+            api_mode=expected_route.get("api_mode"),
+        ),
         f_hashes,
     )
     val_res = backend.run(
