@@ -194,3 +194,100 @@ Necessary serialization is ledger/closeout only (FIX-INT), not a false edge amon
 ## Authority and stop conditions
 
 Follow the Objective Contract. Ordinary Supervisor/Implementer execution and routine Git/GitHub closeout in the two named repositories are authorized. Stop and return `needs-contract-revision` only for a genuine contract defect (target-file hash mismatch that invalidates the approved design, required sandbox/helper-global injection, PD-71/credential/settings change, Graphify reimplementation, or concurrent-flow mutation). Stop and return `needs-owner-input` only for genuine owner input. Protected denials are authoritative. Do not strand a finished phase awaiting a precreated review child; unit review is same-card. Preserve unrelated/pre-existing worktrees, branches, stashes, and processes.
+
+---
+
+# FIX-QUAL — post-merge qualification repair
+
+**Status:** verified corrective decomposition after Aether PR #363 merged.
+
+**Trigger:** workflow run `34301307930` (head `6c63e75`) required policy jobs green; all three non-required `observation-qualification` jobs red identically on Python 3.11/3.12/3.13. Parent FIX-INT is not sufficient terminal evidence.
+
+**Authoritative bases now:** Aether `origin/main` `cc1ea19e267afd4b2d278b6a05afd6526eb5fa42`; maintained fork `origin/aether-main` `28b593efa86bbc674b32f488c35932a4e7e85a51`. Contract bytes unchanged: SHA-256 `7447fd890a24f6c7a82ca03f6b4aa7a992299d1beda2c78e078b5c6f578812cb`. Do not edit or delete finalized `oc_0084270d940c98d9@v1`. Do not mutate live runtime, `aether-main`, or `morfeo/research-310-354` in place.
+
+**Observed failures (do not weaken oracles):**
+
+1. Four `tests/test_hermes_patch_reconciliation.py` failures: ledger headings now include `HLP-310` and `HLP-354`, but `EXPECTED_ACTIVE_IDS` still ends at `HLP-335`, fragments are missing, and `_copy_repository_evidence` does not stage the referenced patch files. Validator correctly raises `missing ledger IDs: HLP-310, HLP-354` and the two HLP-226 negative tests therefore never reach their intended regex.
+2. `tests/test_knowledge_regressions.py::test_d35_cross_project_isolation_and_symbol_collision` (`assert 0 > 0`): empty semantic-cache glob under exact Hermes `v2026.8.18`.
+3. GX-06 cache tests at `tests/test_knowledge_regressions.py:1443` and `:1852`: `state == "pending"` instead of `"partial"` under exact Hermes `v2026.8.18`.
+4. `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths`: immutable finalized contract contains an operator path. Tracked separately as Aether #364. Out of this corrective implementation scope.
+
+## FIX-QUAL receipt
+
+| Check | Observed |
+| --- | --- |
+| Portable project | `.aether/project.toml` `12027989-a08f-41cd-a82c-54ff1bfb6b03` |
+| Contract bytes | SHA-256 matches the envelope; do not rewrite |
+| Aether HEAD / `origin/main` | `cc1ea19e267afd4b2d278b6a05afd6526eb5fa42` |
+| Fork `aether-main` | `28b593efa86bbc674b32f488c35932a4e7e85a51` (PR #4 merged; Actions NOT RUN) |
+| Unit fork commits | HF-310 `25cabeb25327199a03aa3cf1613ed2f815f646cb`; HF-354 `7d3173e1f3dba107f9a389d4e35c95f215775ee1` |
+| Design sufficiency | Original D310/D354/D341/D345 unchanged. Qualification gap is missing portable HLP artifacts/fragments plus semantic-cache tests/behavior under exact public Hermes. #364 is a contract-finalization defect, not a product-repair license |
+| Knowledge index | bound project matches; `available=false`; source inspection used |
+| Profiles | `implementer` and `supervisor` exist; no extra roles |
+| Shared-file collisions | Q-HLP owns reconciliation tests + policy allowlist + both new patch/entry files together. Q-345 owns `test_knowledge_regressions.py` (and `semantic.py` only if a product regression is proven) |
+| Out of scope | #364 contract rewrite/exemption; #362 review-reassignment; validator/schema weakening; live activation; Graphify; credentials |
+
+## FIX-QUAL requirement coverage
+
+| Source | Unit | Notes |
+| --- | --- | --- |
+| HLP-310/HLP-354 missing fragments, patch artifacts, stale `EXPECTED_ACTIVE_IDS`, `_copy_repository_evidence`, policy allowlist | Q-HLP | Materialize exact attributable patches from merged fork unit commits. Do not weaken `scripts/validate_hermes_patch_reconciliation.py` or the schema |
+| D35 cache isolation + GX-06 pending-vs-partial under exact Hermes `v2026.8.18`; AC-345 route-sensitive cache | Q-345 | Distinguish stale fixture fingerprints from a product regression. Recheck D35; do not weaken `len(cache_*) > 0`. Preserve unresolved/mismatch skip-cache |
+| #364 operator path in finalized contract | none here | Report only; Aether #364. Do not edit/delete the contract or exempt it from scanning |
+| Dual closeout, required checks, observation-qualification inspection, issue qualification, residue | FIX-QUAL-INT | After independently reviewed Q-HLP and Q-345 |
+| #362 | preserved separate | Do not absorb |
+
+## FIX-QUAL shared decisions (stamp into every implementation unit)
+
+1. Authority remains Objective Contract `oc_0084270d940c98d9@v1`. Skills grant no authority. Do not edit the canonical Objective Contract. Do not reopen product design for #310/#354/#341/#345.
+2. Start Aether product/evidence from `cc1ea19e267afd4b2d278b6a05afd6526eb5fa42`. Locate the maintained fork by remote `https://github.com/DarkArty07/aether-hermes.git` at merge `28b593efa86bbc674b32f488c35932a4e7e85a51` and unit commits above. Cards remain Aether-project worktrees (`project=p_227bd972`). Nested isolated fork worktrees only; never mutate a checkout whose current branch is `aether-main` or `morfeo/research-310-354`; never copy or edit the live editable runtime.
+3. Do not modify Graphify, lockfiles, profiles, `home/`, credentials, providers, models, settings, or the validator/schema. Do not absorb #364 or #362.
+4. Writable-file ownership below is exclusive.
+5. Regression-first against current `cc1ea19` (RED) then candidate (GREEN). Exact-Hermes lanes must use a disposable public `v2026.8.18` checkout (`e624e9fde561e1add9388384012b295fde669ade` / `scripts/qualify_observation.py checkout`), not the live editable tree. No live paid model and no real/live board.
+6. Unique evidence: `specs/fix-310-341-345-354/evidence/<unit-id>.md`. No secrets, operator paths, credentials, or private model responses.
+7. Local commit on the unit branch; same-card Supervisor review; no push/PR/merge/issue close. Unit compatibility evidence is `patch`.
+8. Return to Supervisor for a shared-file collision, a required validator/schema change, a need to edit the finalized contract, or any credential/settings/activation change.
+
+## FIX-QUAL execution graph
+
+```text
+t_0f56cd39 (Supervisor FIX-QUAL decomposition)
+    → Q-HLP t_d38c0622 (Implementer) HLP-310/HLP-354 portable patches, fragments, reconciliation tests, policy allowlist
+    → Q-345 t_6259a45a (Implementer) D35 + GX-06 semantic-cache qualification under exact Hermes v2026.8.18
+    → same-card Supervisor review on each implementation unit
+    → FIX-QUAL-INT t_2d0414f5 (Supervisor, same flow, terminal=true)
+```
+
+Q-HLP and Q-345 are independent: different writable files, unique evidence paths, no shared module. Necessary serialization is FIX-QUAL-INT only.
+
+## Q-HLP — HLP-310/HLP-354 portable artifacts and reconciliation coverage
+
+- Source: contract Deliverable 3 / HERMES_LOCAL_PATCHES reconciliation; workflow run `34301307930` failures in `tests/test_hermes_patch_reconciliation.py`; this unit.
+- Outcome: active ledger IDs `HLP-310` and `HLP-354` have complete schema-valid fragments and exact attributable portable patch artifacts. `EXPECTED_ACTIVE_IDS` matches `active_detailed_ledger_ids(HERMES_LOCAL_PATCHES.md)` (numeric order inserts `HLP-310` before `HLP-335` and `HLP-354` after it). Repository-set controls pass, including the two HLP-226 negatives which must again raise their original regexes rather than `missing ledger IDs`. Policy allowlist includes the new patch paths. Excludes semantic.py, knowledge tests, contract bytes, validator/schema, ledgers (FIX-QUAL-INT may add portable SHA lines after review), push/PR, activation, #364, #362.
+- Inputs: Aether `cc1ea19e267afd4b2d278b6a05afd6526eb5fa42` with `tests/test_hermes_patch_reconciliation.py` SHA-256 `62e40890133af47820e4a2f36caf28a004302a9ce946744c7349f8ee75e8d686`, `.github/workflows/policy.yml` SHA-256 `224b81824891b78b11f5e04684def63f52819525b693b1091c10e43ed3f2603e`. Fork unit commits `25cabeb25327199a03aa3cf1613ed2f815f646cb` (#310) and `7d3173e1f3dba107f9a389d4e35c95f215775ee1` (#354) vs fork base `6243e40ea6b06e85061bf3fedffaad43eed51dec`. Follow existing fragment shape (`HLP-262.json` / `HLP-305.json`): `inspected_revision` must remain `4f22543509d1b91dc45bcb369447126c5eb14fb7` so reconcile() accepts the set. Preferred patch names: `patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch` and `patches/hermes/HLP-354-kanban-worktree-base-ref.patch`. Generate each as a file-scoped diff of that unit's owned fork files only. Record computed SHA-256 in the fragment `ledger_sha256`/`computed_sha256`. `_copy_repository_evidence` must copy every `kind=patch` artifact referenced by repository entries (the historical three-file copy is now insufficient once missing-ID short-circuit is gone). Do not weaken the validator.
+- Boundaries: writable `patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch`, `patches/hermes/HLP-354-kanban-worktree-base-ref.patch`, `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/entries/HLP-310.json`, `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/entries/HLP-354.json`, `tests/test_hermes_patch_reconciliation.py`, `.github/workflows/policy.yml` (allowlist entries for the two new patches only). Preserve `scripts/validate_hermes_patch_reconciliation.py`, the schema, `HERMES_LOCAL_PATCHES.md`, `semantic.py`, `tests/test_knowledge_regressions.py`, the Objective Contract.
+- Judgement: exact patch filename adjectives if the preferred names collide; whether reconstruction against public `6243e40` can be `passed` or must stay `unavailable` with an honest blocker like HLP-262/HLP-305. Do not invent a second inspected_revision.
+- Verification: fail-first on unchanged `cc1ea19`: the four named reconciliation tests fail as in run `34301307930`. Candidate: `uv run pytest tests/test_hermes_patch_reconciliation.py` all pass; `git apply --stat` / parse of both patches succeeds; `git diff --check`. Do not run or "fix" D35/GX-06 in this unit.
+- Dependencies: FIX-QUAL decomposition root only.
+- Completion: local Aether commit(s); evidence `specs/fix-310-341-345-354/evidence/Q-HLP.md` with patch SHA-256 values; same-card review; unit compatibility `patch`; no push.
+
+## Q-345 — exact-Hermes semantic cache qualification (D35 + GX-06)
+
+- Source: contract D345 / AC-345; workflow run `34301307930` failures in `tests/test_knowledge_regressions.py` at D35 and GX-06 lines 1443/1852; this unit.
+- Outcome: under disposable exact public Hermes `v2026.8.18`, D35 still proves non-empty per-project semantic caches with no cross-project leakage, and the two GX-06 tests return `partial` (not `pending`) when validated cache fragments exist and remaining chunks are deadline-deferred. Route-sensitive cache correctness is preserved: unresolved or mismatched actual routes still skip cache reuse and cache publication; provider/model/api_mode still fingerprint. Excludes HLP artifacts, policy.yml, contract bytes, Graphify implementation, live paid model, push/PR, activation, #364, #362.
+- Inputs: Aether `cc1ea19e267afd4b2d278b6a05afd6526eb5fa42` with `src/aether_agents/knowledge/semantic.py` SHA-256 `dec917ad404b9a3efd51cadf41a7e3a93ace34f25376969deadb5da64f2d1423`, `tests/test_knowledge_regressions.py` SHA-256 `638cf13e03e62d8ab2d4ab7b78cc41b37c023a4edb3a2142b97df89f82c6e3d0`. Reproduce with `PYTHONPATH` to a disposable `scripts/qualify_observation.py checkout` of exact `v2026.8.18`, matching CI. AE-345 made cache lookup/publication depend on `is_route_resolved(expected_route)` and on fingerprint identity that includes provider/model/api_mode. GX-06 currently seeds `SemanticCache.put(fp, fragment)` without route meta and computes `fp` via `resolve_auxiliary_route` at seed time; D35 expects cache files after a mocked configured update. First distinguish stale fixtures (fingerprint/route not matching production lookup under exact Hermes) from a product regression (resolved exact-Hermes route still failing cache). Do not weaken D345. Do not change D35 to accept empty caches.
+- Boundaries: writable `tests/test_knowledge_regressions.py`. `src/aether_agents/knowledge/semantic.py` only if investigation proves a product regression for a resolved exact-Hermes route or an equivalent in-scope cache lookup bug; if the production change would alter D345 skip-cache rules, return to Supervisor. Do not add a new non-`specs/` file. Preserve `memory.py`, `snapshots.py`, objective_contracts, HLP artifacts, policy.yml.
+- Judgement: how to give GX-06/D35 an explicit resolved non-secret route (or identical production fingerprint + optional cached route meta) without constructing a real SDK client; whether `cache.put` without meta remains valid once `expected_route` is resolved (`cached_route is None` is already accepted).
+- Verification: fail-first on unchanged `cc1ea19` with exact-Hermes `PYTHONPATH`: D35 and the two GX-06 tests fail as in CI. Candidate: those three pass; full `uv run pytest tests/test_knowledge_regressions.py` green (skip native Graphify only when `AETHER_GRAPHIFY_PYTHON` is unset; CI sets it — record both); existing AE-345 route-change / finish_reason tests still pass; `git diff --check`. Probe at least one unresolved-route path that still skips cache publication.
+- Dependencies: FIX-QUAL decomposition root only.
+- Completion: local Aether commit(s); evidence `specs/fix-310-341-345-354/evidence/Q-345.md`; same-card review; unit compatibility `patch`; no push.
+
+## FIX-QUAL-INT — corrective qualification closeout
+
+- Source: original Deliverables 1–6 as qualification repair; this unit; Aether #364 remaining known scanner failure.
+- Outcome: independently reviewed Q-HLP and Q-345 commits integrated without squash/amend/rebase/force; corrective Aether PR to `main`; required checks green; non-required `observation-qualification` jobs inspected before merge. If those jobs are red for an objective-owned reason other than the single known #364 contract-path scanner hit, do not merge. #364 reported separately and left OPEN. #362 preserved separate. Prior closeout issue comments qualified if they overclaimed full-suite green. Residue audit limited to this corrective objective. Aggregate release conclusions. No live activation.
+- Inputs: independently reviewed Q-HLP and Q-345 commits plus this `tasks.md`. Preserve each unit as its own commit. No new fork product PR is expected (fork #4 already merged); Aether-side portable patches are derived from those commits. If a fork follow-up is proven necessary, stop and return rather than silently opening one.
+- Boundaries: integration-owned conflict/import/wiring/path repairs that introduce no new behavior; optional portable-SHA lines in `HERMES_LOCAL_PATCHES.md` HLP-310/HLP-354 sections after Q-HLP hashes exist; `specs/fix-310-341-345-354/` evidence and this `tasks.md` if needed. Do not edit the Objective Contract. Do not weaken public-artifact scanning.
+- Verification: focused Q-HLP and Q-345 suites; `git diff --check`; required policy jobs; inspect observation-qualification logs. Known allowed remaining red: only `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths` citing `oc_0084270d940c98d9@v1` (#364). Installed runtime unmodified/unreloaded.
+- Dependencies: FIX-QUAL decomposition root and both independently reviewed implementation units.
+- Completion: `release_impact=patch`, `release_action=defer`, `release_channel=none` unless evidence contradicts. Local integration alone is not success.

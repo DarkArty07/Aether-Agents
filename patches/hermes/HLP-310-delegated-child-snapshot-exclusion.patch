@@ -1,0 +1,198 @@
+diff --git a/tests/tools/test_delegate_kanban_isolation.py b/tests/tools/test_delegate_kanban_isolation.py
+index cc12f62ea0..7caf3af576 100644
+--- a/tests/tools/test_delegate_kanban_isolation.py
++++ b/tests/tools/test_delegate_kanban_isolation.py
+@@ -296,3 +296,103 @@ def test_child_attempting_default_complete_does_not_finish_parent_or_delete_work
+     assert task.status == "running"
+     assert run.status == "running"
+     assert workspace.is_dir()
++
++
++@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash snapshot path")
++def test_delegated_child_terminal_snapshot_does_not_leak_to_parent(monkeypatch, tmp_path):
++    """AC-310: Child runs terminal command with marker & denial; snapshot excludes marker/kanban; parent clean."""
++    kb, tid, _workspace, _attachments_root = _make_running_kanban_task(monkeypatch, tmp_path)
++    from agent.delegation_context import delegated_child_context
++    from tools.environments.local import LocalEnvironment
++
++    env = LocalEnvironment(cwd=str(tmp_path), timeout=30)
++    env.init_session()
++    try:
++        # Child scope: disposable terminal command with HERMES_DELEGATED_CHILD_CONTEXT
++        with delegated_child_context():
++            child_res = env.execute('echo "child_marker=[$HERMES_DELEGATED_CHILD_CONTEXT]"')
++            assert "child_marker=[1]" in child_res.get("output", "")
++
++            # Genuine child Kanban mutation denial intact
++            denial_res = env.execute(
++                _python_with_repo_path(
++                    "from hermes_cli import kanban; "
++                    "import argparse; "
++                    "p=argparse.ArgumentParser(); "
++                    "sub=p.add_subparsers(dest='cmd'); "
++                    "kanban.build_parser(sub); "
++                    "args=p.parse_args(['kanban','boards','rm','victim','--delete']); "
++                    "raise SystemExit(kanban.kanban_command(args))"
++                )
++            )
++            assert denial_res["returncode"] == 1
++            assert "delegate_task child contexts cannot mutate Kanban tasks" in denial_res["output"]
++
++        # Outside child scope: verify snapshot file on disk
++        snap_path = Path(env._snapshot_path)
++        if snap_path.exists():
++            snap_text = snap_path.read_text()
++            assert "HERMES_DELEGATED_CHILD_CONTEXT" not in snap_text
++            assert "HERMES_KANBAN_" not in snap_text
++
++        # Parent later command: must NOT observe marker or stale child kanban vars
++        parent_res = env.execute(
++            'echo "parent_marker=[$HERMES_DELEGATED_CHILD_CONTEXT]" '
++            '"parent_task=[$HERMES_KANBAN_TASK]"'
++        )
++        out = parent_res.get("output", "")
++        assert "parent_marker=[]" in out
++        assert "parent_marker=[1]" not in out
++
++        # Global os.environ is not cleared
++        assert os.environ.get("HERMES_KANBAN_TASK") == tid
++    finally:
++        env.cleanup()
++
++
++@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash snapshot path")
++def test_delegated_child_failed_and_concurrent_snapshot_isolation(tmp_path):
++    """Concurrent and failed/truncated child commands do not leak marker into snapshot."""
++    import threading
++    from agent.delegation_context import delegated_child_context
++    from tools.environments.local import LocalEnvironment
++
++    env = LocalEnvironment(cwd=str(tmp_path), timeout=30)
++    env.init_session()
++    try:
++        # Failed child command (exit 42)
++        with delegated_child_context():
++            res = env.execute('echo "failing_child=$HERMES_DELEGATED_CHILD_CONTEXT"; exit 42')
++            assert res.get("returncode") == 42
++            assert "failing_child=1" in res.get("output", "")
++
++        snap_path = Path(env._snapshot_path)
++        if snap_path.exists():
++            assert "HERMES_DELEGATED_CHILD_CONTEXT" not in snap_path.read_text()
++
++        parent_after_fail = env.execute('echo "marker=[$HERMES_DELEGATED_CHILD_CONTEXT]"')
++        assert "marker=[]" in parent_after_fail.get("output", "")
++
++        # Concurrent parent and child commands
++        results = {}
++
++        def run_child():
++            with delegated_child_context():
++                results["child"] = env.execute('echo "c=[$HERMES_DELEGATED_CHILD_CONTEXT]"')
++
++        def run_parent():
++            results["parent"] = env.execute('echo "p=[$HERMES_DELEGATED_CHILD_CONTEXT]"')
++
++        t1 = threading.Thread(target=run_child)
++        t2 = threading.Thread(target=run_parent)
++        t1.start()
++        t2.start()
++        t1.join()
++        t2.join()
++
++        assert "c=[1]" in results["child"].get("output", "")
++        assert "p=[]" in results["parent"].get("output", "")
++        if snap_path.exists():
++            assert "HERMES_DELEGATED_CHILD_CONTEXT" not in snap_path.read_text()
++    finally:
++        env.cleanup()
+diff --git a/tests/tools/test_snapshot_session_id_leak.py b/tests/tools/test_snapshot_session_id_leak.py
+index 39b13a44fc..2aa7f5ae6f 100644
+--- a/tests/tools/test_snapshot_session_id_leak.py
++++ b/tests/tools/test_snapshot_session_id_leak.py
+@@ -40,6 +40,10 @@ def test_regex_matches_bridged_session_vars():
+         line = f'declare -x {name}="whatever"'
+         assert rx.search(line), f"{name} should be excluded from the snapshot"
+
++    for name in ("HERMES_DELEGATED_CHILD_CONTEXT", "HERMES_KANBAN_TASK", "HERMES_KANBAN_RUN_ID", "HERMES_KANBAN_DB"):
++        line = f'declare -x {name}="whatever"'
++        assert rx.search(line), f"{name} should be excluded from the snapshot"
++
+
+ def test_export_snippet_shape():
+     snippet = _export_dump_excluding_session_vars('"$__hermes_snap_tmp"')
+@@ -49,6 +53,8 @@ def test_export_snippet_shape():
+     assert "unset" in snippet
+     assert "${!HERMES_SESSION_*}" in snippet
+     assert "${!HERMES_CRON_AUTO_DELIVER_*}" in snippet
++    assert "${!HERMES_KANBAN_*}" in snippet
++    assert "HERMES_DELEGATED_CHILD_CONTEXT" in snippet
+     assert "HERMES_UI_SESSION_ID" in snippet
+     assert "grep -vE" not in snippet
+     assert '"$__hermes_snap_tmp"' in snippet
+@@ -106,3 +112,23 @@ def test_shared_snapshot_no_cross_session_leak(tmp_path):
+                 assert "HERMES_SESSION_ID" not in f.read()
+     finally:
+         env.cleanup()
++
++
++@pytest.mark.skipif(sys.platform == "win32", reason="POSIX bash snapshot path")
++def test_snapshot_dump_excludes_delegated_and_kanban_vars(tmp_path):
++    import subprocess
++    dump_file = tmp_path / "dump.sh"
++    snippet = _export_dump_excluding_session_vars(str(dump_file))
++    script = (
++        'export HERMES_DELEGATED_CHILD_CONTEXT="1"\n'
++        'export HERMES_KANBAN_TASK="t_123"\n'
++        'export HERMES_KANBAN_RUN_ID="99"\n'
++        'export HERMES_KANBAN_WORKSPACE="/tmp/ws"\n'
++        'export USER_CUSTOM_VAR="kept_val"\n'
++        f'{snippet}\n'
++    )
++    subprocess.run(["bash", "-c", script], check=True)
++    content = dump_file.read_text()
++    assert "USER_CUSTOM_VAR" in content
++    assert "HERMES_DELEGATED_CHILD_CONTEXT" not in content
++    assert "HERMES_KANBAN_" not in content
+diff --git a/tools/environments/base.py b/tools/environments/base.py
+index dbdb874240..935c5be85c 100644
+--- a/tools/environments/base.py
++++ b/tools/environments/base.py
+@@ -524,12 +524,13 @@ def _cwd_marker(session_id: str) -> str:
+ # should only carry the user's own shell state (PATH, functions, exports they
+ # set), not Hermes' per-turn session identity.
+ #
+-# Kept in sync with gateway.session_context._VAR_MAP: every bridged name starts
+-# with one of these prefixes (or is HERMES_UI_SESSION_ID). Used by unit tests
+-# as the Python-side contract for the exclusion set; the dump path unsets by
+-# name/prefix instead of grepping declare lines (see below / issue #71296).
++# Kept in sync with gateway.session_context._VAR_MAP, delegation markers, and
++# dispatcher Kanban identity: every excluded name starts with one of these
++# prefixes (or is HERMES_UI_SESSION_ID / HERMES_DELEGATED_CHILD_CONTEXT).
++# Used by unit tests as the Python-side contract for the exclusion set; the dump
++# path unsets by name/prefix instead of grepping declare lines (see below / issue #71296).
+ _SNAPSHOT_EXCLUDED_ENV_REGEX = (
+-    "^declare -x (HERMES_SESSION_|HERMES_UI_SESSION_ID|HERMES_CRON_AUTO_DELIVER_|HERMES_CRON_SESSION)"
++    "^declare -x (HERMES_SESSION_|HERMES_UI_SESSION_ID|HERMES_CRON_AUTO_DELIVER_|HERMES_CRON_SESSION|HERMES_DELEGATED_CHILD_CONTEXT|HERMES_KANBAN_)"
+ )
+ _SHELL_ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+@@ -572,14 +573,16 @@ def _export_dump_excluding_session_vars(
+         extra_unset = f" {extra_unset}"
+     return (
+         "{ ( "
+-        "unset ${!HERMES_SESSION_*} ${!HERMES_CRON_AUTO_DELIVER_*} "
++        "unset ${!HERMES_SESSION_*} ${!HERMES_CRON_AUTO_DELIVER_*} ${!HERMES_KANBAN_*} "
+         # AI_AGENT / HERMES_AGENT are per-command attribution markers
+         # (re-exported by every _wrap_command with outer-harness-preserving
+         # ${VAR:-default} semantics).  Persisting them into the snapshot
+         # would make the FIRST command's value override a later outer
+         # harness value arriving via the process env, exactly like the
+         # session-var leak this dump already guards against.
+-        "AI_AGENT HERMES_AGENT "
++        # HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_* are transient
++        # per-command delegation and dispatcher-owned task identity.
++        "AI_AGENT HERMES_AGENT HERMES_DELEGATED_CHILD_CONTEXT "
+         f"HERMES_UI_SESSION_ID{extra_unset} 2>/dev/null; "
+         "export -p; "
+         ") || true; } "
