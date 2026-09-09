@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import subprocess
 import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from .execution_boards import ExecutionBoardError, execution_board_slug
-from .store import REQUIRED_SECTIONS, ContractError, ObjectiveContractStore
+from .store import REQUIRED_SECTIONS, ContractError, ObjectiveContractStore, _git_environment
 
 _ACTIONS = (
     "begin",
@@ -24,6 +26,58 @@ _ACTIONS = (
     "supersede",
     "prepare_handoff",
 )
+
+_BASE_REF_RE: Final = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _native_session_workspace(session_id: str) -> Path | None:
+    """Derive the authoring root from the exact native Hermes session workspace."""
+    if not session_id or not isinstance(session_id, str):
+        return None
+    try:
+        from hermes_constants import get_hermes_home  # type: ignore[import-not-found]
+
+        hermes_home = get_hermes_home()
+    except Exception:
+        env_home = os.environ.get("HERMES_HOME", "").strip()
+        hermes_home = Path(env_home).expanduser().resolve() if env_home else None
+    if hermes_home is None:
+        return None
+    database = hermes_home / "state.db"
+    if not database.is_file():
+        return None
+    try:
+        import sqlite3
+        from urllib.parse import quote
+
+        connection = sqlite3.connect(
+            "file:" + quote(str(database.absolute())) + "?mode=ro", uri=True, timeout=1
+        )
+        try:
+            connection.execute("PRAGMA query_only=ON")
+            row = connection.execute(
+                "SELECT cwd FROM sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+        finally:
+            connection.close()
+    except Exception:
+        return None
+    if row is None or not isinstance(row[0], str) or not row[0]:
+        return None
+    candidate = Path(row[0]).expanduser().resolve()
+    if not candidate.is_dir():
+        return None
+    result = subprocess.run(
+        ("git", "rev-parse", "--show-toplevel"),
+        cwd=candidate,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_git_environment(),
+    )
+    if result.returncode != 0:
+        return None
+    return Path(result.stdout.strip()).resolve()
 
 
 def _required(args: dict[str, Any], name: str) -> Any:
@@ -89,9 +143,10 @@ def _create_metadata_exclusive(
     aether_project_id: str,
     contract_id: str,
     version: int,
+    worktree_base_ref: str | None = None,
 ) -> bool:
     """Create board metadata without ever overwriting a competing writer."""
-    payload = {
+    payload: dict[str, Any] = {
         "slug": slug,
         "name": f"Objective {contract_id}@v{version}",
         "description": "Aether Objective Contract execution board",
@@ -105,6 +160,16 @@ def _create_metadata_exclusive(
         "created_at": int(time.time()),
         "archived": False,
     }
+    if worktree_base_ref is not None:
+        if (
+            not isinstance(worktree_base_ref, str)
+            or _BASE_REF_RE.fullmatch(worktree_base_ref) is None
+        ):
+            raise ExecutionBoardError(
+                "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+                "worktree_base_ref is invalid",
+            )
+        payload["worktree_base_ref"] = worktree_base_ref
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
@@ -145,6 +210,7 @@ def _validate_execution_metadata(
     aether_project_id: str,
     contract_id: str,
     version: int,
+    worktree_base_ref: str | None = None,
 ) -> None:
     if metadata.get("archived"):
         raise ExecutionBoardError(
@@ -171,6 +237,35 @@ def _validate_execution_metadata(
             "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
             "the execution board carries a different Objective Contract identity",
         )
+    if worktree_base_ref is not None:
+        if (
+            not isinstance(worktree_base_ref, str)
+            or _BASE_REF_RE.fullmatch(worktree_base_ref) is None
+        ):
+            raise ExecutionBoardError(
+                "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+                "worktree_base_ref is invalid",
+            )
+        metadata_ref = metadata.get("worktree_base_ref")
+        if (
+            not isinstance(metadata_ref, str)
+            or _BASE_REF_RE.fullmatch(metadata_ref) is None
+            or metadata_ref != worktree_base_ref
+        ):
+            raise ExecutionBoardError(
+                "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+                "the execution board carries a different base commit",
+            )
+    else:
+        metadata_ref = metadata.get("worktree_base_ref")
+        if metadata_ref is not None and (
+            not isinstance(metadata_ref, str)
+            or _BASE_REF_RE.fullmatch(metadata_ref) is None
+        ):
+            raise ExecutionBoardError(
+                "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
+                "the execution board carries an invalid worktree_base_ref",
+            )
 
 
 @contextmanager
@@ -287,7 +382,12 @@ def _provision_lock(board_slug: str) -> Iterator[None]:
 
 
 def _provision_execution_board(
-    *, project_id: str, project_root: Path, contract_id: str, version: int
+    *,
+    project_id: str,
+    project_root: Path,
+    contract_id: str,
+    version: int,
+    worktree_base_ref: str | None = None,
 ) -> dict[str, str]:
     """Create or verify the one Hermes board for an executable contract version."""
     from hermes_cli import kanban_db  # type: ignore[import-untyped,import-not-found]
@@ -317,6 +417,7 @@ def _provision_execution_board(
                         aether_project_id=project_id,
                         contract_id=contract_id,
                         version=version,
+                        worktree_base_ref=worktree_base_ref,
                     )
                     directory, metadata_path, db_path = _safe_board_paths(kanban_db, slug)
 
@@ -328,6 +429,7 @@ def _provision_execution_board(
                     aether_project_id=project_id,
                     contract_id=contract_id,
                     version=version,
+                    worktree_base_ref=worktree_base_ref,
                 )
 
                 # Use the canonical explicit path, never Hermes's raw DB override. Idempotent
@@ -342,6 +444,7 @@ def _provision_execution_board(
                     aether_project_id=project_id,
                     contract_id=contract_id,
                     version=version,
+                    worktree_base_ref=worktree_base_ref,
                 )
                 if not db_path.is_file():
                     raise ExecutionBoardError(
@@ -374,7 +477,11 @@ def _handle(
             )
         action = _required(args, "action")
         project_id = _required(args, "project_id")
-        store = ObjectiveContractStore(author_profile=author_profile)
+        session_workspace = _native_session_workspace(session_id)
+        store = ObjectiveContractStore(
+            author_profile=author_profile,
+            authoring_root=session_workspace,
+        )
         if action == "begin":
             result = store.begin(
                 project_id=project_id,
@@ -426,6 +533,7 @@ def _handle(
                         project_root=project_root,
                         contract_id=str(prepared["contract_id"]),
                         version=int(prepared["version"]),
+                        worktree_base_ref=str(prepared["base_commit"]),
                     )
                 except ExecutionBoardError as exc:
                     raise ContractError(exc.code, str(exc)) from exc

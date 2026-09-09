@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Parent delegation identity, concurrent contract handoff, work-memory integrity, and semantic cache correctness
+
+- Restored delegated-child snapshot isolation so `HERMES_DELEGATED_CHILD_CONTEXT` and dispatcher-owned `HERMES_KANBAN_*` cannot persist into reusable parent terminal snapshots (#310).
+- Allowed Objective Contract authoring from a verified linked worktree without mutating the Project primary checkout, and stamped board `worktree_base_ref` so new Kanban worktrees start at the prepared contract HEAD (#354).
+- Marked work-memory freshness dirty for untracked source changes, validated note metadata and markdown hashes before reflection cache hits, and returned `MEMORY_CORRUPT` for malformed records (#341).
+- Included concrete non-secret auxiliary provider/model/api_mode in semantic fingerprints and refused to cache or apply incomplete explicit finish reasons such as `length` (#345).
+- Exact maintained-fork merge: `DarkArty07/aether-hermes` PR #4, `28b593efa86bbc674b32f488c35932a4e7e85a51`.
+- No version bump, package publication, tag, or live runtime activation is part of this delivery (`release_action=defer`, `release_channel=none`).
+
 ### Execute-code helper contract and search_files JSON framing
 
 - Taught the actual explicit-import contract for `execute_code` helpers `json_parse`, `shell_quote`, and `retry` in schema, CLI tip, and sandbox failure hints (#313).

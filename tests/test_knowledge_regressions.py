@@ -1384,11 +1384,18 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
     manifest_inputs = {"README.md": "h1", "doc1.md": "h2", "module.py": "h3"}
     c0_files = chunk0.get("files", [])
     f_hashes = {f: manifest_inputs[f] for f in c0_files if f in manifest_inputs}
+    gx06_config = {"semantic_auxiliary_task": "web_extract"}
+    expected_route = sem_mod.resolve_auxiliary_route(gx06_config, "web_extract")
     fp0 = sem_mod.compute_chunk_fingerprint(
         "regular-tracked-v1",
         chunk0["system_prompt"] + "\n" + chunk0["user_prompt"],
         {"deep": False, "token_budget": 4000},
-        sem_mod.get_model_identity_digest("web_extract"),
+        sem_mod.get_model_identity_digest(
+            "web_extract",
+            provider=expected_route.get("provider"),
+            model=expected_route.get("model"),
+            api_mode=expected_route.get("api_mode"),
+        ),
         f_hashes,
     )
     val_res = backend.run(
@@ -1883,3 +1890,234 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
     assert res3["observed_usage"]["chunk_counts"]["cached"] == 1
     assert res3["observed_usage"]["chunk_counts"]["validated"] == 1
     assert res3["observed_usage"]["chunk_counts"]["pending"] == 0
+
+
+def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    backend = GraphifyBackend(native_python)
+    source_root = root
+    graph_path = tmp_path / "graph.json"
+    inputs = {"README.md": "sha1"}
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    # 1. Changing effective provider, model, or api_mode changes the semantic fingerprint
+    cfg_base = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3-70b-instruct",
+            "api_mode": "chat_completions",
+        },
+    }
+    cfg_provider = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "anthropic",
+            "model": "meta-llama/llama-3-70b-instruct",
+            "api_mode": "chat_completions",
+        },
+    }
+    cfg_model = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "openrouter",
+            "model": "openai/gpt-4o-mini",
+            "api_mode": "chat_completions",
+        },
+    }
+    cfg_api_mode = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3-70b-instruct",
+            "api_mode": "codex_responses",
+        },
+    }
+
+    fp_base = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
+    fp_provider = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_provider)
+    fp_model = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_model)
+    fp_api_mode = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_api_mode)
+
+    assert fp_base is not None
+    assert fp_base != fp_provider, "Changing provider must change semantic fingerprint"
+    assert fp_base != fp_model, "Changing model must change semantic fingerprint"
+    assert fp_base != fp_api_mode, "Changing api_mode must change semantic fingerprint"
+    assert fp_base == sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
+
+    call_count = 0
+    actual_route: dict[str, str] = {}
+
+    def mock_aux(task: str, *args: Any, route_info: dict[str, Any] | None = None, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        nonlocal call_count
+        call_count += 1
+        if route_info is not None and actual_route:
+            route_info.update(actual_route)
+        fake_llm_json = json.dumps({
+            "nodes": [{"id": "Doc1", "label": "Doc1", "source_file": "README.md", "source_location": "1"}],
+            "edges": [{"source": "Doc1", "target": "module_process_order", "relation": "specifies"}],
+        })
+        return fake_llm_json, {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150, "route": dict(actual_route)}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
+
+    # 2. Unchanged explicit route yields zero model calls on repeat
+    actual_route = {"provider": "openrouter", "model": "meta-llama/llama-3-70b-instruct", "api_mode": "chat_completions"}
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_base})
+    res1 = store.execute(ctx, "update", {"mode": "configured"})
+    assert res1["ok"] is True
+    assert res1["semantic"]["state"] == "complete"
+    assert call_count > 0
+    recorded_calls = call_count
+
+    res2 = store.execute(ctx, "update", {"mode": "configured"})
+    assert res2["ok"] is True
+    assert res2["outcome"] == "unchanged"
+    assert call_count == recorded_calls, "Unchanged explicit route must yield zero model calls"
+
+    # 3. Changing route invalidates fingerprint and triggers new model calls
+    store_new_model = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_model})
+    actual_route = {"provider": "openrouter", "model": "openai/gpt-4o-mini", "api_mode": "chat_completions"}
+    res3 = store_new_model.execute(ctx, "update", {"mode": "configured"})
+    assert res3["ok"] is True
+    assert res3["outcome"] == "updated"
+    assert call_count > recorded_calls, "Changed route must trigger new model calls"
+
+    # 4. Unresolved or mismatched route is not reused or published to cache
+    unresolved_cache_root = tmp_path / "unresolved_cache"
+    unresolved_cfg = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"},
+    }
+    actual_route = {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"}
+    res_unresolved = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=tmp_path / "graph_unres.json",
+        inputs={"README.md": "sha1"},
+        cache_root=unresolved_cache_root,
+        ctx=ctx,
+        configuration=unresolved_cfg,
+    )
+    cache_dir = unresolved_cache_root / "knowledge" / ctx.project_id / "semantic_cache"
+    cached_files = list(cache_dir.glob("*.json")) if cache_dir.exists() else []
+    assert len(cached_files) == 0, "Unresolved route must not publish to cache"
+
+    mismatch_cache_root = tmp_path / "mismatch_cache"
+    mismatch_cfg = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {"provider": "openrouter", "model": "expected-model", "api_mode": "chat_completions"},
+    }
+    actual_route = {"provider": "different_provider", "model": "different_model", "api_mode": "chat_completions"}
+    res_mismatch = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=tmp_path / "graph_mismatch.json",
+        inputs={"README.md": "sha1"},
+        cache_root=mismatch_cache_root,
+        ctx=ctx,
+        configuration=mismatch_cfg,
+    )
+    mismatch_cache_dir = mismatch_cache_root / "knowledge" / ctx.project_id / "semantic_cache"
+    mismatch_cached_files = list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
+    assert len(mismatch_cached_files) == 0, "Mismatched route must not publish to cache"
+
+
+def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state = project(tmp_path)
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    backend = GraphifyBackend(native_python)
+
+    import aether_agents.knowledge.semantic as sem_mod
+
+    # 1. Establish a complete snapshot first
+    def mock_complete(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        fake_llm_json = json.dumps({
+            "nodes": [{"id": "DocGood", "label": "DocGood", "source_file": "README.md", "source_location": "1"}],
+            "edges": [{"source": "DocGood", "target": "module_process_order", "relation": "specifies"}],
+        })
+        return fake_llm_json, {"total_tokens": 100, "finish_reason": "stop"}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_complete)
+    cfg = {
+        "enabled": True,
+        "semantic_enabled": True,
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {"provider": "openrouter", "model": "gpt-4o", "api_mode": "chat_completions"},
+    }
+    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration=cfg)
+    complete_res = store.execute(ctx, "update", {"mode": "configured"})
+    assert complete_res["ok"] is True
+    assert complete_res["semantic"]["state"] == "complete"
+    complete_snap_id = complete_res["snapshot_id"]
+
+    # 2. Attempt refresh with finish_reason="length" and parseable JSON
+    def mock_length_finish(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        fake_llm_json = json.dumps({
+            "nodes": [{"id": "DocTruncated", "label": "DocTruncated", "source_file": "README.md", "source_location": "1"}],
+            "edges": [{"source": "DocTruncated", "target": "module_process_order", "relation": "specifies"}],
+        })
+        return fake_llm_json, {"total_tokens": 100, "finish_reason": "length"}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_length_finish)
+    new_cfg = {
+        "enabled": True,
+        "semantic_enabled": True,
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {"provider": "openrouter", "model": "gpt-4o-new", "api_mode": "chat_completions"},
+    }
+    store_refresh = KnowledgeStore(state, tmp_path / "cache", backend, configuration=new_cfg)
+    refresh_res = store_refresh.execute(ctx, "update", {"mode": "configured"})
+    assert refresh_res["ok"] is True
+    assert refresh_res["snapshot_id"] == complete_snap_id
+    assert refresh_res["outcome"] == "unchanged"
+    assert any("retained" in w.lower() for w in refresh_res["warnings"])
+
+    # Verify directly via run_semantic_extraction that finish_reason="length" does NOT cache
+    isolated_cache = tmp_path / "isolated_cache"
+    res_direct = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=tmp_path / "graph_direct.json",
+        inputs={"README.md": "sha1"},
+        cache_root=isolated_cache,
+        ctx=ctx,
+        configuration=new_cfg,
+    )
+    assert res_direct["state"] != "complete"
+    assert "README.md" not in res_direct["covered_paths"]
+    assert "README.md" in res_direct["failed_paths"] or "README.md" in res_direct["pending_paths"]
+    direct_cache_dir = isolated_cache / "knowledge" / ctx.project_id / "semantic_cache"
+    cached_direct = list(direct_cache_dir.glob("*.json")) if direct_cache_dir.exists() else []
+    assert len(cached_direct) == 0, "Non-terminal finish_reason=length must not cache as complete"
+
+    # 3. Missing/omitted finish_reason remains compatible
+    def mock_legacy_omitted(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        fake_llm_json = json.dumps({
+            "nodes": [{"id": "DocLegacy", "label": "DocLegacy", "source_file": "README.md", "source_location": "1"}],
+            "edges": [{"source": "DocLegacy", "target": "module_process_order", "relation": "specifies"}],
+        })
+        return fake_llm_json, {"total_tokens": 100}
+
+    monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_legacy_omitted)
+    legacy_cache = tmp_path / "legacy_cache"
+    complete_graph = (
+        tmp_path / "cache" / "knowledge" / PROJECT / complete_snap_id / "graphify-out" / "graph.json"
+    )
+    res_legacy = sem_mod.run_semantic_extraction(
+        backend=backend,
+        source_root=root,
+        graph_path=complete_graph,
+        inputs={"README.md": "sha1"},
+        cache_root=legacy_cache,
+        ctx=ctx,
+        configuration=new_cfg,
+    )
+    assert res_legacy["state"] == "complete"
+    assert "README.md" in res_legacy["covered_paths"]
