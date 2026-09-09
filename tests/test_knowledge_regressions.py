@@ -995,6 +995,11 @@ def test_d35_cross_project_isolation_and_symbol_collision(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": {
+                "provider": "openrouter",
+                "model": "meta-llama/llama-3-70b-instruct",
+                "api_mode": "chat_completions",
+            },
         },
     )
     store_b = KnowledgeStore(
@@ -1005,6 +1010,11 @@ def test_d35_cross_project_isolation_and_symbol_collision(
             "enabled": True,
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
+            "semantic": {
+                "provider": "openrouter",
+                "model": "meta-llama/llama-3-70b-instruct",
+                "api_mode": "chat_completions",
+            },
         },
     )
 
@@ -1329,6 +1339,11 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
             "semantic_enabled": True,
             "semantic_auxiliary_task": "web_extract",
             "semantic_deadline_seconds": 0.0,
+            "semantic": {
+                "provider": "openrouter",
+                "model": "meta-llama/llama-3-70b-instruct",
+                "api_mode": "chat_completions",
+            },
         },
     )
     res_empty = store.execute(ctx, "update", {"mode": "configured"})
@@ -1384,7 +1399,14 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
     manifest_inputs = {"README.md": "h1", "doc1.md": "h2", "module.py": "h3"}
     c0_files = chunk0.get("files", [])
     f_hashes = {f: manifest_inputs[f] for f in c0_files if f in manifest_inputs}
-    gx06_config = {"semantic_auxiliary_task": "web_extract"}
+    gx06_config = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3-70b-instruct",
+            "api_mode": "chat_completions",
+        },
+    }
     expected_route = sem_mod.resolve_auxiliary_route(gx06_config, "web_extract")
     fp0 = sem_mod.compute_chunk_fingerprint(
         "regular-tracked-v1",
@@ -1438,6 +1460,11 @@ def test_gx06_deadline_seconds_zero_pending_honest_coverage(
         configuration={
             "semantic_auxiliary_task": "web_extract",
             "semantic_deadline_seconds": 0.0,
+            "semantic": {
+                "provider": "openrouter",
+                "model": "meta-llama/llama-3-70b-instruct",
+                "api_mode": "chat_completions",
+            },
         },
     )
     assert res_partial["state"] == "partial"
@@ -1812,6 +1839,15 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
     monkeypatch.setattr(time, "time", mock_time)
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux_run1)
 
+    gx06_resume_cfg = {
+        "semantic_auxiliary_task": "web_extract",
+        "semantic": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3-70b-instruct",
+            "api_mode": "chat_completions",
+        },
+    }
+
     res1 = sem_mod.run_semantic_extraction(
         backend=MockBackend(backend),
         source_root=root,
@@ -1819,7 +1855,7 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
         inputs={"doc1.md": "h1", "doc2.md": "h2"},
         cache_root=cache_root,
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract"},
+        configuration=gx06_resume_cfg,
         deadline_seconds=500.0,
     )
     assert res1["state"] == "partial"
@@ -1847,7 +1883,7 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
         inputs={"doc1.md": "h1", "doc2.md": "h2"},
         cache_root=cache_root,
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract", "semantic_deadline_seconds": 0.0},
+        configuration=gx06_resume_cfg | {"semantic_deadline_seconds": 0.0},
     )
     assert res2["state"] == "partial"
     assert calls_run2 == 0
@@ -1879,7 +1915,7 @@ def test_gx06_resume_uses_validated_cache_and_progresses_pending(
         inputs={"doc1.md": "h1", "doc2.md": "h2"},
         cache_root=cache_root,
         ctx=ctx,
-        configuration={"semantic_auxiliary_task": "web_extract"},
+        configuration=gx06_resume_cfg,
         deadline_seconds=500.0,
     )
     assert res3["state"] == "complete"
