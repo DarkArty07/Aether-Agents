@@ -44,11 +44,123 @@ def compute_chunk_fingerprint(
 
 
 def get_model_identity_digest(
-    task: str, provider: str | None = None, model: str | None = None
+    task: str,
+    provider: str | None = None,
+    model: str | None = None,
+    api_mode: str | None = None,
 ) -> str:
-    """Non-secret digest of model and task binding."""
-    identity = f"{task}:{provider or 'default'}:{model or 'default'}"
+    """Non-secret digest of model, provider, api_mode, and task binding."""
+    identity = f"{task}:{provider or 'default'}:{model or 'default'}:{api_mode or 'default'}"
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+
+def resolve_auxiliary_route(
+    configuration: dict[str, Any],
+    task: str | None = None,
+) -> dict[str, str | None]:
+    """Resolve non-secret concrete auxiliary route (provider, model, api_mode)."""
+    task = task or resolve_auxiliary_task(configuration)
+    semantic_cfg = configuration.get("semantic", {})
+    if not isinstance(semantic_cfg, dict):
+        semantic_cfg = {}
+
+    provider = (
+        semantic_cfg.get("provider")
+        or configuration.get("semantic_provider")
+        or configuration.get("provider")
+    )
+    model = (
+        semantic_cfg.get("model")
+        or configuration.get("semantic_model")
+        or configuration.get("model")
+    )
+    api_mode = (
+        semantic_cfg.get("api_mode")
+        or configuration.get("semantic_api_mode")
+        or configuration.get("api_mode")
+    )
+
+    if provider is not None:
+        provider = str(provider).strip() or None
+    if model is not None:
+        model = str(model).strip() or None
+    if api_mode is not None:
+        api_mode = str(api_mode).strip() or None
+
+    # Try resolving via Hermes auxiliary client if available and details are missing
+    try:
+        from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]  # pyright: ignore[reportMissingImports]
+            _resolve_task_provider_model,
+            _read_main_provider,
+            _read_main_model,
+        )
+
+        res_provider, res_model, _base_url, _api_key, res_api_mode = _resolve_task_provider_model(
+            task=task,
+            provider=provider,
+            model=model,
+        )
+        if provider is None and res_provider:
+            if res_provider == "auto":
+                main_p = _read_main_provider()
+                provider = str(main_p).strip() if main_p else "auto"
+            else:
+                provider = str(res_provider).strip()
+
+        if model is None and res_model:
+            model = str(res_model).strip()
+        elif model is None and provider and provider != "auto":
+            main_m = _read_main_model()
+            if main_m:
+                model = str(main_m).strip()
+
+        if api_mode is None and res_api_mode:
+            api_mode = str(res_api_mode).strip()
+    except Exception:
+        pass
+
+    if not api_mode and provider and provider not in ("auto", "unresolved"):
+        if provider.lower() in ("anthropic", "claude"):
+            api_mode = "anthropic_messages"
+        else:
+            api_mode = "chat_completions"
+
+    return {
+        "provider": provider or "default",
+        "model": model or "default",
+        "api_mode": api_mode or "default",
+    }
+
+
+def is_route_resolved(route: dict[str, Any] | None) -> bool:
+    """Verify that concrete non-secret provider, model, and api_mode are resolved."""
+    if not route or not isinstance(route, dict):
+        return False
+    provider = route.get("provider")
+    model = route.get("model")
+    api_mode = route.get("api_mode")
+    if not provider or not model or not api_mode:
+        return False
+    unresolved_markers = {"", "none", "null", "auto", "unresolved"}
+    if any(
+        str(v).strip().casefold() in unresolved_markers
+        for v in (provider, model, api_mode)
+    ):
+        return False
+    return True
+
+
+def routes_match(expected: dict[str, Any] | None, actual: dict[str, Any] | None) -> bool:
+    """Check if actual route matches expected route."""
+    if not expected or not actual or not isinstance(expected, dict) or not isinstance(actual, dict):
+        return False
+    for k in ("provider", "model", "api_mode"):
+        exp_v = expected.get(k)
+        act_v = actual.get(k)
+        if exp_v and act_v:
+            if str(exp_v).strip().casefold() != str(act_v).strip().casefold():
+                return False
+    return True
 
 
 def resolve_auxiliary_task(configuration: dict[str, Any]) -> str | None:
@@ -143,7 +255,13 @@ def compute_semantic_fingerprint(
     if not chunks:
         return hashlib.sha256(b"no_chunks").hexdigest()
 
-    model_digest = get_model_identity_digest(aux_task)
+    route = resolve_auxiliary_route(configuration, aux_task)
+    model_digest = get_model_identity_digest(
+        aux_task,
+        provider=route.get("provider"),
+        model=route.get("model"),
+        api_mode=route.get("api_mode"),
+    )
     policy = {"deep": False, "token_budget": 4000}
     scope_version = "regular-tracked-v1"
 
@@ -166,13 +284,19 @@ class SemanticCache:
         ensure_private_dir(self.cache_dir)
 
     def get(self, fingerprint: str) -> dict[str, Any] | None:
+        entry = self.get_entry(fingerprint)
+        if entry is not None and "fragment" in entry:
+            return entry["fragment"]
+        return None
+
+    def get_entry(self, fingerprint: str) -> dict[str, Any] | None:
         path = self.cache_dir / f"{fingerprint}.json"
         if not path.is_file():
             return None
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and "fragment" in data:
-                return data["fragment"]
+            if isinstance(data, dict):
+                return data
         except Exception:
             pass
         return None
@@ -195,6 +319,8 @@ def _call_auxiliary_model(
     system_prompt: str,
     user_prompt: str,
     timeout: float = 120.0,
+    route_info: dict[str, Any] | None = None,
+    api_mode: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Invoke the Hermes profile-scoped auxiliary client."""
     try:
@@ -211,7 +337,15 @@ def _call_auxiliary_model(
         {"role": "user", "content": user_prompt},
     ]
 
+    local_route_info: dict[str, str] = {}
     try:
+        response = call_llm(
+            task=task,
+            messages=messages,
+            timeout=timeout,
+            route_info=local_route_info,
+        )
+    except TypeError:
         response = call_llm(task=task, messages=messages, timeout=timeout)
     except Exception as exc:
         err_msg = str(exc)
@@ -222,15 +356,18 @@ def _call_auxiliary_model(
         raise KnowledgeError("AUXILIARY_FAILED", f"Auxiliary model call failed: {exc}") from exc
 
     content = ""
+    finish_reason = None
     if hasattr(response, "choices") and response.choices:
         msg = response.choices[0].message
         content = getattr(msg, "content", "") or ""
+        finish_reason = getattr(response.choices[0], "finish_reason", None)
     elif isinstance(response, dict):
         choices = response.get("choices", [])
         if choices and isinstance(choices[0], dict):
             content = choices[0].get("message", {}).get("content", "")
+            finish_reason = choices[0].get("finish_reason")
 
-    usage = {}
+    usage: dict[str, Any] = {}
     if not isinstance(response, dict) and hasattr(response, "usage") and response.usage:
         usage = {
             "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
@@ -238,7 +375,17 @@ def _call_auxiliary_model(
             "total_tokens": getattr(response.usage, "total_tokens", 0),
         }
     elif isinstance(response, dict) and "usage" in response:
-        usage = response["usage"]
+        usage = dict(response["usage"])
+
+    if finish_reason is not None:
+        usage["finish_reason"] = finish_reason
+
+    if local_route_info:
+        if api_mode and "api_mode" not in local_route_info:
+            local_route_info["api_mode"] = api_mode
+        usage["route"] = dict(local_route_info)
+        if route_info is not None:
+            route_info.update(local_route_info)
 
     return content, usage
 
@@ -277,7 +424,13 @@ def run_semantic_extraction(
             },
         }
 
-    model_digest = get_model_identity_digest(aux_task)
+    expected_route = resolve_auxiliary_route(configuration, aux_task)
+    model_digest = get_model_identity_digest(
+        aux_task,
+        provider=expected_route.get("provider"),
+        model=expected_route.get("model"),
+        api_mode=expected_route.get("api_mode"),
+    )
     policy = {"deep": False, "token_budget": 4000}
     scope_version = "regular-tracked-v1"
 
@@ -360,7 +513,17 @@ def run_semantic_extraction(
         )
         chunk_fingerprints[cid] = fp
 
-        fragment = cache.get(fp)
+        fragment = None
+        if is_route_resolved(expected_route):
+            cache_entry = cache.get_entry(fp)
+            if cache_entry is not None:
+                cached_meta = cache_entry.get("meta", {})
+                cached_route = cached_meta.get("route")
+                if cached_route is None or (
+                    is_route_resolved(cached_route) and routes_match(expected_route, cached_route)
+                ):
+                    fragment = cache_entry.get("fragment")
+
         if fragment is not None:
             cached_fragments[cid] = fragment
         else:
@@ -415,6 +578,7 @@ def run_semantic_extraction(
                     last_err = None
                     raw_text = ""
                     usage: dict[str, Any] = {}
+                    chunk_route_info: dict[str, Any] = {}
                     attempts_made = 0
                     for attempt in range(2):
                         if cancel_event and cancel_event.is_set():
@@ -430,12 +594,31 @@ def run_semantic_extraction(
                             with lock:
                                 model_calls_made += 1
                             attempts_made += 1
-                            raw_text, usage = _call_auxiliary_model(
-                                task=aux_task,
-                                system_prompt=c["system_prompt"],
-                                user_prompt=c["user_prompt"],
-                                timeout=min(180.0, max(1.0, remaining_time)),
-                            )
+                            chunk_route_info = {}
+                            call_res: Any = None
+                            try:
+                                call_res = _call_auxiliary_model(
+                                    task=aux_task,
+                                    system_prompt=c["system_prompt"],
+                                    user_prompt=c["user_prompt"],
+                                    timeout=min(180.0, max(1.0, remaining_time)),
+                                    route_info=chunk_route_info,
+                                    api_mode=expected_route.get("api_mode"),
+                                )
+                            except TypeError:
+                                call_res = _call_auxiliary_model(
+                                    task=aux_task,
+                                    system_prompt=c["system_prompt"],
+                                    user_prompt=c["user_prompt"],
+                                    timeout=min(180.0, max(1.0, remaining_time)),
+                                )
+
+                            if isinstance(call_res, tuple) and len(call_res) == 3:
+                                raw_text, usage, call_extra = call_res
+                                if isinstance(call_extra, dict):
+                                    usage = {**call_extra, **usage}
+                            elif isinstance(call_res, tuple) and len(call_res) == 2:
+                                raw_text, usage = call_res
                             break
                         except Exception as exc:
                             last_err = exc
@@ -460,8 +643,30 @@ def run_semantic_extraction(
                             auxiliary_failed_chunks.add(cid)
                         return
 
+                    # Check finish_reason: incomplete reasons (e.g. length) must not be applied or cached
+                    finish_reason = usage.get("finish_reason") if isinstance(usage, dict) else None
+                    is_terminal_finish = (
+                        finish_reason is None
+                        or str(finish_reason).strip().lower() in ("stop", "tool_calls")
+                    )
+                    if not is_terminal_finish:
+                        logger.warning(
+                            "Chunk %d has non-terminal finish_reason: %s", cid, finish_reason
+                        )
+                        with lock:
+                            failed_chunks.add(cid)
+                            validation_failed_chunks.add(cid)
+                        return
+
                     with lock:
                         total_tokens += usage.get("total_tokens", 0)
+
+                    # Determine actual route
+                    actual_route = dict(expected_route)
+                    if isinstance(usage, dict) and isinstance(usage.get("route"), dict):
+                        actual_route.update(usage["route"])
+                    if chunk_route_info:
+                        actual_route.update(chunk_route_info)
 
                     # Validate semantic fragment through worker
                     try:
@@ -476,7 +681,18 @@ def run_semantic_extraction(
                             },
                         )
                         frag = val_res.get("fragment", {})
-                        cache.put(fp, frag, meta={"usage": usage})
+                        route_ok = is_route_resolved(actual_route) and routes_match(
+                            expected_route, actual_route
+                        )
+                        if route_ok:
+                            cache.put(fp, frag, meta={"usage": usage, "route": actual_route})
+                        else:
+                            logger.info(
+                                "Chunk %d skipping cache publication (route unresolved or mismatched: %s vs %s)",
+                                cid,
+                                expected_route,
+                                actual_route,
+                            )
                         with lock:
                             newly_validated_fragments[cid] = frag
                     except Exception as exc:
