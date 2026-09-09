@@ -143,6 +143,7 @@ Observed: Ruff check passed, the new test file was already formatted, compileall
 ## 7. Limits and remaining risk
 
 - Verification used the canonical fork runner with retries disabled and an already-provisioned Python environment. The complete legacy `test_model_metadata.py` file contains an unrelated network-bound test that exceeded the runner timeout; the relevant selected cases and all adjacent probe suites passed. This is not reported as a full-file pass.
+- Project-knowledge status was unavailable (`available=false` / empty coverage), and the single configured update attempt timed out; source inspection, Git identity, issue records, and executable tests were used instead.
 - The maintained fork has no CI result for this local-only commit; no Actions run was triggered.
 - Issues #306 and #293 remain OPEN. No issue close, push, PR, merge, publication, deployment, live profile edit, credential use, or remote mutation was performed.
 - Supervisor must independently review the candidate fork commit and this evidence before integration.
