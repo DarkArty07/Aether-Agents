@@ -1,0 +1,71 @@
+{
+  "id": "HLP-354",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-354--kanban-worktree_base_ref-materialization",
+  "components": [
+    "HLP-354",
+    "hermes_cli/kanban_db.py",
+    "tests/hermes_cli/test_kanban_worktree_base_ref.py"
+  ],
+  "required_behavior": "When creating a new branch for a linked git worktree, materialize the worktree from the board's recorded worktree_base_ref commit rather than incidental primary HEAD, and fail closed on invalid base references.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/354"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The inspected upstream revision roots new worktrees at incidental HEAD and does not support board-level worktree_base_ref configuration or validation."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when upstream Hermes adopts board-level worktree base ref configuration with equivalent validation and fail-closed semantics.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "disposable exact-target source prerequisite control",
+        "result": "The prerequisite failed: inspected upstream lacks worktree_base_ref support; new worktrees are rooted at incidental HEAD."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-354-kanban-worktree-base-ref.patch",
+        "result": "passed",
+        "ledger_sha256": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
+        "computed_sha256": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+        "result": "unavailable"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "full-patch byte reconstruction against fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+        "result": "unavailable"
+      }
+    ],
+    "blocker": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The inspected upstream roots new worktrees at incidental HEAD and lacks worktree_base_ref.",
+    "Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 is downstream-only; no equivalent upstream change exists."
+  ],
+  "summary": "Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4."
+}
