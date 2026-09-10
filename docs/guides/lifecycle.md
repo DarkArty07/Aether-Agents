@@ -4,6 +4,8 @@ Aether has two routes for one owner-authorized objective. Route selection is
 Morfeo's judgement over the complete objective, not a classifier, score, fixed
 workflow state, file count, time threshold, or tool-availability test.
 
+For a first reading, begin with [Start here](../start-here.md) and [First objective](first-objective.md). This page records the current lifecycle rules and terminal boundaries.
+
 ## Intake and project readiness
 
 Morfeo inspects the project and establishes or confirms its constitution from
@@ -103,3 +105,7 @@ Completion and terminal reports state actual changes, verification, omissions an
 remaining material risk. A genuine protected-edge denial is authoritative; an
 unexpected denial of ordinary local/reversible work follows the rollback-first
 bounded recovery boundary in [Policy and recovery](policy-and-recovery.md).
+
+## Next step
+
+Read [Execution](execution.md) for the detailed unit and review handoff, or [First objective](first-objective.md) for a concrete route example.

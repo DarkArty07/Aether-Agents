@@ -1,9 +1,28 @@
 ---
-import type { Doc } from '../lib/docs';
+import { DOC_GROUPS, type Doc } from '../lib/docs';
 import { sitePath } from '../lib/site-path';
-interface Props { docs: Doc[]; current?: string; }
-const { docs, current } = Astro.props;
+interface Props { docs: Doc[]; current?: string; idPrefix?: string; }
+const { docs, current, idPrefix = 'docs-nav' } = Astro.props;
+const groups = DOC_GROUPS.map(group => ({
+  ...group,
+  docs: docs.filter(doc => doc.group === group.label).sort((a, b) => a.order - b.order),
+}));
 ---
-<nav aria-label="Documentation chapters" lang="en">
-  {docs.map(d => <a href={sitePath(`/docs/${d.slug}/`)} class:list={[current === d.slug && 'current']} aria-current={current === d.slug ? 'page' : undefined}>{d.title}</a>)}
+<nav class="docs-navigation" aria-label="Documentation chapters" lang="en">
+  {groups.map((group, groupIndex) => <section class="docs-nav-group" data-doc-group={group.label} aria-labelledby={`${idPrefix}-group-${groupIndex}`}>
+    <h3 id={`${idPrefix}-group-${groupIndex}`}>{group.label}</h3>
+    <ol>
+      {group.docs.map(doc => <li>
+        <a
+          href={sitePath(doc.route)}
+          class:list={[current === doc.slug && 'current']}
+          aria-current={current === doc.slug ? 'page' : undefined}
+          data-document={doc.slug}
+          data-doc-route={doc.route}
+          data-doc-source={doc.sourcePath}
+          data-doc-source-url={doc.source}
+        >{doc.navigation.label}</a>
+      </li>)}
+    </ol>
+  </section>)}
 </nav>

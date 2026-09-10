@@ -2,6 +2,8 @@
 
 Aether Contract Observation is a bounded, metadata-oriented view of a contract flow. It is not a workflow controller, a raw log browser, or a provider call.
 
+Read [Getting started](../getting-started.md) first for the provider-free command orientation. This guide describes the current read-only observation surface and its qualification limits.
+
 ## Read one review brief
 
 ```bash
@@ -23,3 +25,7 @@ The plugin entry point and provider-free read behavior are tested. Portable reso
 ## Qualification laboratory
 
 `aether_agents.lab` and the retained `scripts/e2e/` wrappers prepare disposable evidence roots. Deterministic preparation is useful evidence but is not a live provider-backed reliability run or release qualification. Live model execution requires its separately authorized gate, and the known persistent-session wake capability wall is documented in [limitations](../reference/limitations-and-troubleshooting.md).
+
+## Next step
+
+Use [CLI reference](../reference/cli.md) for the complete `observe` options, or return to [Getting started](../getting-started.md) for the safe provider-free exercise.

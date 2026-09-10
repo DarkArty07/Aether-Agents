@@ -2,6 +2,8 @@
 
 This reference describes the parser currently implemented by `aether`, not the larger normative CLI contract. Every command that supports `--json` emits one envelope; parser help and `--version` remain Hermes-free. Generic Hermes CLI behavior belongs to the [Hermes documentation](https://hermes-agent.nousresearch.com/docs/).
 
+Start with [Getting started](../getting-started.md) for prerequisites and safe parser inspection. This page is the exact command reference, including interfaces that are partial, transitional or explicitly unsupported.
+
 ## Implemented commands
 
 | Command | Current behavior | Arguments and options |
@@ -64,3 +66,7 @@ Knowledge commands return JSON objects with `ok`, typed errors and action-specif
 ## Exit and output behavior
 
 For the lifecycle/version/init/observe commands, successful human results use stdout and errors use stderr. A JSON result uses stdout. Their result envelope retains the standard result categories (`ready`, `changed`, `no_change`, `planned`, `blocked`, `unsupported`, and `error`); use output diagnostics rather than assuming a detailed state from an exit code alone.
+
+## Next step
+
+Use [First objective](../guides/first-objective.md) to see when a command belongs in a direct or pipeline objective, then return here for exact options.

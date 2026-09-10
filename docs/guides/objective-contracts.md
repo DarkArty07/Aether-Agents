@@ -2,6 +2,8 @@
 
 An Objective Contract is Morfeo's durable, project-bound statement of one owner-approved pipeline objective. It records the objective, scope, authority, deliverables, acceptance, testing standard, stop conditions, and canonical references. It is not a replacement for the relevant Spec Kit artifacts: Supervisor owns decomposition and `tasks.md`.
 
+This is a working reference after [Start here](../start-here.md) and the [illustrative first-objective walkthrough](first-objective.md). It describes the current contract surface, not a claim that the full provider-backed pipeline is release-qualified.
+
 ## Availability and scope
 
 The `objective_contract` tool is registered only in a configured Morfeo profile. Supervisor and Implementer may inspect a finalized contract as evidence but do not author or modify it. Bounded direct Morfeo work does not need an Objective Contract or a ceremonial card.
@@ -31,3 +33,7 @@ Finalization validates required sections, retains provenance metadata and a dige
 The small Kanban root-card body carries the contract identity/version, portable project binding, project-relative path, digest, base commit, and verification instruction. It does not carry the full contract. `prepare_handoff` also returns opaque local values such as the execution-board slug, native Hermes Project ID, idempotency key, and flow ID. Those values are root-card side data only: pass them unchanged to the root-card integration fields; do not copy them into the portable contract, envelope, or child card bodies.
 
 A handoff refuses on project marker/registry disagreement, missing or ambiguous exact-path native Project, uncommitted/missing final bytes, raw board-database override, unsafe filesystem redirection, or conflicting board identity. See [Execution](execution.md) for the resulting board boundary and [plugins and tools](../reference/plugins-and-tools.md) for the registered tool.
+
+## Next step
+
+For a substantial objective, continue to [Execution](execution.md) after Supervisor receives the handoff. For route selection and the direct alternative, see [First objective](first-objective.md).

@@ -84,11 +84,11 @@ test('documentation search, navigation and safe rendering',async({page})=>{
   const errors:string[]=[]; page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/docs/');
   await page.locator('#docs-search').fill('Graphify');
-  await expect(page.locator('[data-document="guides/project-knowledge"]')).toBeVisible();
+  await expect(page.locator('.docs-index-list [data-document="guides/project-knowledge"]')).toBeVisible();
   await page.locator('#docs-search').fill('zzznomatchzzz');
   await expect(page.locator('#no-results')).toBeVisible();
   await page.locator('#docs-search').fill('');
-  await expect(page.locator('.docs-index-list article:visible')).toHaveCount(16);
+  await expect(page.locator('.docs-index-list article:visible')).toHaveCount(19);
   await page.locator('.docs-index-list [href="/docs/guides/project-knowledge/"]').click();
   await expect(page.locator('.prose h1')).toContainText('Project knowledge');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBeTruthy();

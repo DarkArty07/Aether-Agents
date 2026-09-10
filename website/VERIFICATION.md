@@ -1,5 +1,27 @@
 # Aether Agents website — Local verification
 
+## BGD-WEB grouped documentation candidate — current unit
+
+Status: this section is the current contract-scoped documentation build. It supersedes
+older website-only page counts and review notes below; those entries remain historical
+records of the landing surface. The accepted BGD-CONTENT Markdown commit is consumed as
+an unchanged parent, while this unit owns the renderer, documentation UX and verification.
+
+The documentation surface derives its corpus from tracked `docs/**/*.md` files and an
+explicit five-group manifest. `docs/index.md` maps only to `/docs/`; every other tracked
+Markdown page has one article route. The canonical manual remains English and is rendered
+directly from the tracked source. The index provides Mexican-Spanish orientation terms,
+and every article exposes group/current context, source revision, current-status context,
+heading navigation, search access and within-group adjacency. Search and navigation have
+a deliberate no-JavaScript degradation; code and tables remain local focusable scroll
+regions, and the docs 404 offers index/search recovery.
+
+The final command results, corpus counts, browser captures and remaining limitations for
+this candidate are recorded in `specs/beginner-first-website-docs/evidence/BGD-WEB.md`.
+The site remains a stabilization build and is not evidence of a public release,
+installation, provider-backed execution or deployment.
+
+
 ## Final owner acceptance gate and GitHub Pages readiness — 2026-09-07
 
 Status: the owner accepted the website for integration after one final copy correction

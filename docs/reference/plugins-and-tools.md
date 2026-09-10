@@ -2,6 +2,8 @@
 
 Aether declares three public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
 
+This is reference material for an already understood installation boundary. New readers should begin with [Start here](../start-here.md) and [Getting started](../getting-started.md); the [glossary](glossary.md) defines the role and contract terms used here.
+
 ## Package entry points
 
 | Entry point | Module | Current behavior |
@@ -102,3 +104,7 @@ primary-model fallback or watcher. This is not a token-saving or universal-super
 The observer plugin is fail-open with respect to Hermes lifecycle: callbacks are observers, not directives. It bounds metadata and avoids prompt/result/error copying. Plugin hook support is a generic Hermes capability; inspect the [Hermes hooks documentation](https://hermes-agent.nousresearch.com/docs/) for its host-side interface.
 
 For full source/test traceability and current qualification limits, see [Capability coverage](capabilities.md).
+
+## Next step
+
+For project and role context, read [Project knowledge and role work memory](../guides/project-knowledge.md); for the beginner vocabulary, use the [glossary](glossary.md).
