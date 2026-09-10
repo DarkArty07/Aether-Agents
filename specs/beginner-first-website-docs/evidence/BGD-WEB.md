@@ -11,13 +11,22 @@ GitHub publication claim, or proof of Pages deployment.
 - Unit: BGD-WEB, covering the explicit documentation manifest, grouped routes and
   navigation, article orientation, search, fragments, responsive/no-JavaScript behavior,
   accessibility checks and website verification.
-- The independently reviewed BGD-CONTENT commit `954445f271c12c22dc1ea5a09bb2ac14f62ae499`
-  is preserved as an individual ancestor. It was consumed by the ordinary merge commit
-  `1e222bbbaae7422ea8b6c22129520beb2ef641b6`; it was not amended, squashed or rebased.
-- Website implementation and verification commit: `9f58447585fac049ac687d6c749afea0ab4ea725`.
-- Actual branch base before the website commit included the required content merge. The
-  inherited canonical Markdown and `website/src/data/content.ts` remain in the content
-  commit; this unit changes only its assigned website/evidence boundary.
+- The reviewed BGD-CONTENT changes are preserved as two discrete, patch-identical
+  recovered-lineage commits: `c087de52eacf41aae1d854986ba64e743a327b2b` and
+  `74cc16336d70390d5dfdc14e0d53d252034c2325`. Their original local commits
+  `82a7d7bfb0138b6b6713faa3604b85aa9adcf239` and
+  `954445f271c12c22dc1ea5a09bb2ac14f62ae499` were not amended, rebased or deleted.
+- Website implementation was replayed without content changes as
+  `8c289cd91579513803163d0e3ea13b8c89da0bbe`; its stable patch ID exactly matches the
+  original local implementation commit `9f58447585fac049ac687d6c749afea0ab4ea725`.
+- Recovery was necessary because the original unit worktrees were materialized from an
+  incidental unrelated checkout tip rather than the contract base. The recovered chain
+  starts with the Supervisor decomposition commits on required base
+  `9bce0d222fdf0bfc581a26e282b81b08a1418d7c`; the contract is an ancestor and its exact
+  artifact is present. Original contaminated refs remain preserved outside the candidate
+  rather than being rewritten or merged. The inherited canonical Markdown and
+  `website/src/data/content.ts` remain in the content commits; the website implementation
+  commit changes only its assigned website boundary.
 - Project knowledge status reported `available=false` with no indexed snapshot for this
   revision. Direct source and test inspection was used as the accepted fallback.
 
