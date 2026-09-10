@@ -53,6 +53,7 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-310",
     "HLP-335",
     "HLP-354",
+    "HLP-369",
 )
 PATCH_DIGESTS = {
     "HLP-211": "7dceea9b9561c626fa6106f4bcd049592d9cb3627e2e0caed07a34df7d088bda",
@@ -62,6 +63,7 @@ PATCH_DIGESTS = {
     "HLP-305": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
     "HLP-310": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
     "HLP-354": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
+    "HLP-369": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
 }
 
 
@@ -159,7 +161,12 @@ def _copy_repository_evidence(root: Path) -> tuple[Path, Path]:
     ledger = root / "HERMES_LOCAL_PATCHES.md"
     shutil.copy2(LEDGER_PATH, ledger)
     entries = root / "entries"
-    shutil.copytree(ENTRIES_PATH, entries)
+    entries.mkdir()
+    for identifier in EXPECTED_ACTIVE_IDS:
+        shutil.copy2(
+            ENTRIES_PATH / f"{identifier}.json",
+            entries / f"{identifier}.json",
+        )
     for entry_file in entries.glob("*.json"):
         data = json.loads(entry_file.read_text(encoding="utf-8"))
         for artifact in data.get("artifact_verification", {}).get("artifacts", []):
@@ -200,13 +207,16 @@ def test_active_detailed_ledger_ids_include_hlp247_not_in_summary_table() -> Non
     assert validator.active_detailed_ledger_ids(LEDGER_PATH) == EXPECTED_ACTIVE_IDS
 
 
-def test_repository_fragments_cover_active_ledger_and_bind_patch_digests() -> None:
+def test_repository_fragments_cover_active_ledger_and_bind_patch_digests(
+    tmp_path: Path,
+) -> None:
     validator = _load_validator()
+    ledger, entries = _copy_repository_evidence(tmp_path)
 
     aggregate = validator.reconcile(
-        repository_root=ROOT,
-        ledger_path=LEDGER_PATH,
-        entries_dir=ENTRIES_PATH,
+        repository_root=tmp_path,
+        ledger_path=ledger,
+        entries_dir=entries,
         schema_path=SCHEMA_PATH,
         observed_at_utc=OBSERVED_AT,
         upstream_repository=UPSTREAM_REPOSITORY,
@@ -227,6 +237,27 @@ def test_repository_fragments_cover_active_ledger_and_bind_patch_digests() -> No
         assert artifact["checksum_status"] == "passed"
         assert artifact["parse_status"] == "passed"
         assert records[identifier]["artifact_verification"]["status"] == "unavailable"
+
+
+def test_active_hlp369_fragment_is_schema_valid_and_binds_patch_digest() -> None:
+    validator = _load_validator()
+    entry_path = ENTRIES_PATH / "HLP-369.json"
+    record = json.loads(entry_path.read_text(encoding="utf-8"))
+    schema = validator._load_schema(SCHEMA_PATH)
+    validator._validate_instance(
+        validator._validator_for(schema, "entry"),
+        record,
+        "fragment HLP-369.json",
+    )
+    artifact = next(
+        item for item in record["artifact_verification"]["artifacts"] if item["kind"] == "patch"
+    )
+    assert artifact["ledger_sha256"] == (
+        "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c"
+    )
+    assert artifact["computed_sha256"] == artifact["ledger_sha256"]
+    assert artifact["checksum_status"] == "passed"
+    assert artifact["parse_status"] == "passed"
 
 
 def test_repository_fragments_reject_hlp262_omission(tmp_path: Path) -> None:

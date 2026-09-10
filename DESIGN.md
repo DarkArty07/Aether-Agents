@@ -203,6 +203,22 @@ commits assigned to its unit; it never publishes pipeline work. For bounded dire
 Morfeo owns the authorized routine closeout as part of the same bounded objective and
 does not create a ceremonial pipeline card.
 
+**Owner-approved reception clarification (#379):** Pipeline execution completion is not
+automatically owner-objective acceptance. Before reporting acceptance to the owner,
+Morfeo uses the canonical `contract-result-review` procedure to compare the actual final
+artifact at its exact revision with current owner intent and the finalized Objective
+Contract. Every material criterion needs an artifact location, attributed evidence and
+an explicit result or limitation. Morfeo inspects the result and performs proportionate
+acceptance checks; valid pipeline evidence may be reused with its producer and revision,
+never presented as Morfeo's own execution. Status, green checks or a confident handoff
+alone are insufficient. Supervisor retains independent implementation review,
+integration and terminal closeout; substantive mismatches return through supported
+continuation/rework, while intent changes and acceptance waivers remain owner decisions.
+This is prompt-native reception, not a new role, board state, runtime gate, mandatory
+full-suite rerun or permission to mutate a completed flow. A successful reception ends
+the work without another ceremonial review round. Instruction/resource tests are not
+proof of agent compliance; observe actual reception behavior under #317.
+
 The single GitHub-backed terminal path is:
 
 ```text

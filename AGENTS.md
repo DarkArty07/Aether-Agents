@@ -69,6 +69,9 @@ Current adoption status for the contract/execution procedures is tracked in
 The owner chose organic observation during real work for this adoption; do not claim
 the new behavior is qualified merely because resources are installed, or recreate the
 retired synthetic campaign. This does not alter testing authority for other objectives.
+Morfeo's final result reception uses `contract-result-review` before owner-objective
+acceptance; see `DESIGN.md` section 10.1. Execution closeout remains Supervisor-owned.
+Keep evidence attributed and distinguish resource tests from observed agent behavior.
 
 ## External research sources
 

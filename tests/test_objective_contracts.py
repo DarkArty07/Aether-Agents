@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1507,8 +1508,8 @@ def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_ba
         monkeypatch.delenv(name, raising=False)
 
     from hermes_cli import kanban_db, projects_db
+
     from aether_agents.objective_contracts import hermes_plugin
-    from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
 
     registry = ProjectRegistry()
     primary = _project(tmp_path, registry, PROJECT_A, "alpha")
@@ -1792,9 +1793,9 @@ def test_execution_board_validates_worktree_base_ref_format_and_equality(
         monkeypatch.delenv(name, raising=False)
 
     from hermes_cli import kanban_db, projects_db
+
     from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
     from aether_agents.objective_contracts.hermes_plugin import (
-        _create_metadata_exclusive,
         _provision_execution_board,
         _validate_execution_metadata,
     )
@@ -1856,3 +1857,485 @@ def test_execution_board_validates_worktree_base_ref_format_and_equality(
             worktree_base_ref=mismatched_sha,
         )
     assert exc_mismatch.value.code == "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT"
+
+
+def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintained_resolver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real handoff and maintained resolver keep root/descendant lineage isolated."""
+    import sqlite3
+
+    fork_url = "https://github.com/DarkArty07/aether-hermes.git"
+    fork_head = "8a6b33ae480373015178b80e87c88fe0abda3919"
+    fork_base = "6243e40ea6b06e85061bf3fedffaad43eed51dec"
+    hlp_commit = "7d3173e1f3dba107f9a389d4e35c95f215775ee1"
+    patch_path = (
+        Path(__file__).parents[1] / "patches" / "hermes" / "HLP-354-kanban-worktree-base-ref.patch"
+    )
+
+    def git_text(root: Path, *args: str) -> str:
+        result = subprocess.run(
+            ("git", *args), cwd=root, capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+
+    def git_bytes(root: Path, *args: str) -> bytes:
+        result = subprocess.run(("git", *args), cwd=root, capture_output=True, check=True)
+        return result.stdout
+
+    def tracked_bytes(root: Path) -> dict[str, bytes]:
+        result = subprocess.run(
+            ("git", "ls-files", "-z"), cwd=root, capture_output=True, check=True
+        )
+        paths = [Path(os.fsdecode(value)) for value in result.stdout.split(b"\0") if value]
+        return {path.as_posix(): (root / path).read_bytes() for path in paths}
+
+    def refs(root: Path) -> dict[str, str]:
+        output = git_text(root, "for-each-ref", "--format=%(refname) %(objectname)")
+        return {
+            name: value
+            for name, value in (line.split(maxsplit=1) for line in output.splitlines() if line)
+        }
+
+    def worktrees(root: Path) -> dict[str, tuple[str, str]]:
+        output = git_text(root, "worktree", "list", "--porcelain")
+        result: dict[str, tuple[str, str]] = {}
+        entry: dict[str, str] = {}
+
+        def finish() -> None:
+            if entry:
+                result[entry["path"]] = (entry.get("head", ""), entry.get("branch", ""))
+
+        for line in output.splitlines():
+            if line.startswith("worktree "):
+                finish()
+                entry = {"path": line.removeprefix("worktree ")}
+            elif line.startswith("HEAD "):
+                entry["head"] = line.removeprefix("HEAD ")
+            elif line.startswith("branch "):
+                entry["branch"] = line.removeprefix("branch ")
+            elif line == "detached":
+                entry["branch"] = "(detached)"
+        finish()
+        return result
+
+    def is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
+        return (
+            subprocess.run(
+                ("git", "merge-base", "--is-ancestor", ancestor, descendant),
+                cwd=root,
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        )
+
+    fork_checkout = tmp_path / "maintained-fork"
+    source_hint = os.environ.get("AETHER_MAINTAINED_HERMES_CHECKOUT", "").strip()
+    clone_source = source_hint or fork_url
+    clone_args = [
+        "git",
+        "clone",
+        "--quiet",
+        "--no-tags",
+        "--no-checkout",
+    ]
+    if source_hint:
+        clone_args.insert(4, "--no-local")
+    clone_args.extend((clone_source, str(fork_checkout)))
+    subprocess.run(tuple(clone_args), capture_output=True, text=True, check=True)
+
+    # The configured checkout may have advanced its aether-main branch since the
+    # maintained revision was recorded. Resolve the exact commit object instead
+    # of coupling this qualification to that mutable branch tip.
+    maintained_revision_result = subprocess.run(
+        (
+            "git",
+            "rev-parse",
+            "--verify",
+            f"{fork_head}^{{commit}}",
+        ),
+        cwd=fork_checkout,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if maintained_revision_result.returncode != 0:
+        fetch_result = subprocess.run(
+            ("git", "fetch", "--quiet", "--no-tags", "origin", fork_head),
+            cwd=fork_checkout,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert fetch_result.returncode == 0, fetch_result.stderr
+        maintained_revision_result = subprocess.run(
+            (
+                "git",
+                "rev-parse",
+                "--verify",
+                f"{fork_head}^{{commit}}",
+            ),
+            cwd=fork_checkout,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert maintained_revision_result.returncode == 0, maintained_revision_result.stderr
+    maintained_revision = maintained_revision_result.stdout.strip()
+    assert maintained_revision == fork_head
+
+    baseline_source = tmp_path / "maintained-baseline"
+    hlp_candidate_source = tmp_path / "hlp-354-candidate"
+    maintained_source = tmp_path / "maintained-exact"
+    for source, revision in (
+        (baseline_source, fork_base),
+        (hlp_candidate_source, fork_base),
+        (maintained_source, maintained_revision),
+    ):
+        git_text(
+            fork_checkout,
+            "worktree",
+            "add",
+            "--quiet",
+            "--detach",
+            str(source),
+            revision,
+        )
+    assert git_bytes(baseline_source, "show", "HEAD:hermes_cli/kanban_db.py") == git_bytes(
+        fork_checkout, "show", f"{fork_base}:hermes_cli/kanban_db.py"
+    )
+    subprocess.run(
+        ("git", "apply", "--include=hermes_cli/kanban_db.py", str(patch_path)),
+        cwd=hlp_candidate_source,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert (hlp_candidate_source / "hermes_cli" / "kanban_db.py").read_bytes() == git_bytes(
+        fork_checkout, "show", f"{hlp_commit}:hermes_cli/kanban_db.py"
+    )
+    assert git_text(maintained_source, "rev-parse", "HEAD") == maintained_revision
+
+    hermes_home = tmp_path / "hermes-home"
+    state_home = tmp_path / "state-home"
+    hermes_home.mkdir()
+    state_home.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    for name in (
+        "HERMES_KANBAN_DB",
+        "HERMES_KANBAN_BOARD",
+        "HERMES_KANBAN_HOME",
+        "HERMES_KANBAN_WORKSPACES_ROOT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    from hermes_cli import kanban_db, projects_db
+
+    from aether_agents.objective_contracts import hermes_plugin
+
+    primary = tmp_path / "primary"
+    primary.mkdir()
+    marker = primary / ".aether" / "project.toml"
+    marker.parent.mkdir()
+    marker.write_text(
+        "\n".join(
+            (
+                "schema_version = 1",
+                f'project_id = "{PROJECT_A}"',
+                'name = "primary"',
+                'initialized_by = "1.0.0"',
+                'forge = "local"',
+                'contract_root = "specs"',
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+    (primary / ".gitignore").write_text(".worktrees/\n.aether/drafts/\n", encoding="utf-8")
+    (primary / "specs").mkdir()
+    (primary / "specs" / ".gitkeep").write_text("", encoding="utf-8")
+    (primary / "base.txt").write_text("contract base\n", encoding="utf-8")
+    git_text(primary, "init", "-q", "-b", "main")
+    git_text(primary, "config", "user.name", "Test User")
+    git_text(primary, "config", "user.email", "test@example.invalid")
+    git_text(primary, "add", ".")
+    git_text(primary, "commit", "-qm", "chore: contract base")
+    contract_base = git_text(primary, "rev-parse", "HEAD")
+
+    registry = ProjectRegistry()
+    assert registry.register(PROJECT_A, primary, "primary")
+    with projects_db.connect_closing() as connection:
+        runtime_project_id = projects_db.create_project(
+            connection, name="Primary", primary_path=str(primary)
+        )
+
+    flow_worktrees = {
+        "one": tmp_path / "flow-one",
+        "two": tmp_path / "flow-two",
+    }
+    for label, path in flow_worktrees.items():
+        git_text(primary, "worktree", "add", "-q", "-b", f"flow-{label}", str(path), contract_base)
+
+    (primary / "unrelated-primary.txt").write_text("unrelated concurrent flow\n", encoding="utf-8")
+    git_text(primary, "add", "unrelated-primary.txt")
+    git_text(primary, "commit", "-qm", "chore: unrelated primary flow")
+    primary_head = git_text(primary, "rev-parse", "HEAD")
+    primary_tracked_before = tracked_bytes(primary)
+    primary_status_before = git_text(primary, "status", "--porcelain=v1")
+
+    session_db = hermes_home / "state.db"
+    with sqlite3.connect(session_db) as connection:
+        connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
+        for label, path in flow_worktrees.items():
+            connection.execute(
+                "INSERT INTO sessions (id, cwd) VALUES (?, ?)",
+                (f"session-{label}", str(path)),
+            )
+
+    start_barrier = threading.Barrier(2)
+
+    def author_and_handoff(label: str) -> dict[str, Any]:
+        session_id = f"session-{label}"
+        start_barrier.wait(timeout=30)
+        begin = json.loads(
+            hermes_plugin._handle(
+                {"action": "begin", "project_id": PROJECT_A, "title": f"Flow {label}"},
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        contract_id = begin["contract_id"]
+        revision = 1
+        for section in REQUIRED_SECTIONS:
+            updated = json.loads(
+                hermes_plugin._handle(
+                    {
+                        "action": "set_section",
+                        "project_id": PROJECT_A,
+                        "contract_id": contract_id,
+                        "expected_revision": revision,
+                        "section": section,
+                        "content": f"Concurrent flow {label}: accepted {section}.",
+                    },
+                    session_id=session_id,
+                    author_profile="morfeo",
+                )
+            )
+            revision = updated["revision"]
+        finalized = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "finalize",
+                    "project_id": PROJECT_A,
+                    "contract_id": contract_id,
+                    "expected_revision": revision,
+                },
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        assert finalized["status"] == "final"
+        worktree = flow_worktrees[label]
+        git_text(worktree, "add", ".aether/project.toml", ".aether/objective-contracts")
+        git_text(worktree, "commit", "-qm", f"docs: finalize flow {label}")
+        worktree_head = git_text(worktree, "rev-parse", "HEAD")
+        prepared = json.loads(
+            hermes_plugin._handle(
+                {
+                    "action": "prepare_handoff",
+                    "project_id": PROJECT_A,
+                    "contract_id": contract_id,
+                    "version": 1,
+                },
+                session_id=session_id,
+                author_profile="morfeo",
+            )
+        )
+        assert prepared["handoff_ready"] is True
+        assert prepared["base_commit"] == worktree_head
+        return prepared
+
+    outcomes: dict[str, dict[str, Any]] = {}
+    failures: list[BaseException] = []
+
+    def run_flow(label: str) -> None:
+        try:
+            outcomes[label] = author_and_handoff(label)
+        except BaseException as exc:  # pragma: no cover - asserted empty below.
+            failures.append(exc)
+
+    threads = [threading.Thread(target=run_flow, args=(label,)) for label in flow_worktrees]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=120)
+        assert not thread.is_alive()
+    assert failures == []
+    assert set(outcomes) == set(flow_worktrees)
+
+    for label, prepared in outcomes.items():
+        worktree = flow_worktrees[label]
+        artifact = worktree / prepared["relative_path"]
+        artifact_bytes = artifact.read_bytes()
+        assert prepared["base_commit"] == git_text(worktree, "rev-parse", "HEAD")
+        assert prepared["sha256"] == hashlib.sha256(artifact_bytes).hexdigest()
+        assert (
+            git_bytes(worktree, "show", f"{prepared['base_commit']}:{prepared['relative_path']}")
+            == artifact_bytes
+        )
+        assert not is_ancestor(primary, primary_head, prepared["base_commit"])
+        metadata = kanban_db.read_board_metadata(prepared["execution_board"])
+        assert metadata["project_id"] == runtime_project_id
+        assert metadata["default_workdir"] == str(primary.resolve())
+        assert metadata["worktree_base_ref"] == prepared["base_commit"]
+
+    assert git_text(primary, "rev-parse", "HEAD") == primary_head
+    assert git_text(primary, "status", "--porcelain=v1") == primary_status_before
+    assert tracked_bytes(primary) == primary_tracked_before
+    refs_before = refs(primary)
+    worktrees_before = worktrees(primary)
+
+    resolver_code = textwrap.dedent(
+        """
+        from __future__ import annotations
+
+        import json
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        from hermes_cli import kanban_db as kb
+
+        board = sys.argv[1]
+        metadata = kb.read_board_metadata(board)
+        primary = Path(metadata["default_workdir"]).resolve()
+        source_root = Path(kb.__file__).resolve().parents[1]
+
+        def head(path: Path) -> str:
+            return subprocess.run(
+                ("git", "-C", str(path), "rev-parse", "HEAD"),
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+        with kb.connect(board=board) as connection:
+            root_id = kb.create_task(
+                connection,
+                title="Supervisor root",
+                assignee="supervisor",
+                workspace_kind="worktree",
+                board=board,
+            )
+            child_id = kb.create_task(
+                connection,
+                title="descendant unit",
+                assignee="implementer",
+                workspace_kind="worktree",
+                parents=[root_id],
+                board=board,
+            )
+            root = kb.get_task(connection, root_id)
+            child = kb.get_task(connection, child_id)
+            assert root is not None and child is not None
+            root_workspace, root_branch = kb._resolve_worktree_workspace(root, board=board)
+            child_workspace, child_branch = kb._resolve_worktree_workspace(child, board=board)
+            child_parents = kb.parent_ids(connection, child_id)
+
+        print(json.dumps({
+            "module": str(Path(kb.__file__).resolve()),
+            "source_revision": head(source_root),
+            "primary": str(primary),
+            "root_id": root_id,
+            "child_id": child_id,
+            "child_parents": child_parents,
+            "root_workspace": str(root_workspace),
+            "child_workspace": str(child_workspace),
+            "root_branch": root_branch,
+            "child_branch": child_branch,
+            "root_head": head(root_workspace),
+            "child_head": head(child_workspace),
+            "primary_head": head(primary),
+        }))
+        """
+    )
+
+    def resolve(source: Path, board: str, expected_revision: str) -> dict[str, Any]:
+        environment = os.environ.copy()
+        environment["HERMES_HOME"] = str(hermes_home)
+        environment["PYTHONPATH"] = str(source)
+        for name in (
+            "HERMES_KANBAN_DB",
+            "HERMES_KANBAN_BOARD",
+            "HERMES_KANBAN_HOME",
+            "HERMES_KANBAN_WORKSPACES_ROOT",
+        ):
+            environment.pop(name, None)
+        completed = subprocess.run(
+            (sys.executable, "-c", resolver_code, board),
+            cwd=primary,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+        payload = json.loads(completed.stdout)
+        assert payload["module"] == str((source / "hermes_cli" / "kanban_db.py").resolve())
+        assert payload["source_revision"] == expected_revision
+        assert payload["primary"] == str(primary.resolve())
+        return payload
+
+    baseline = resolve(baseline_source, outcomes["one"]["execution_board"], fork_base)
+    candidate = resolve(
+        maintained_source,
+        outcomes["two"]["execution_board"],
+        maintained_revision,
+    )
+    assert baseline["child_parents"] == [baseline["root_id"]]
+    assert candidate["child_parents"] == [candidate["root_id"]]
+    assert baseline["root_head"] == primary_head
+    assert baseline["child_head"] == primary_head
+    assert baseline["root_head"] != outcomes["one"]["base_commit"]
+    assert baseline["child_head"] != outcomes["one"]["base_commit"]
+    assert not (Path(baseline["root_workspace"]) / outcomes["one"]["relative_path"]).exists()
+    assert not (Path(baseline["child_workspace"]) / outcomes["one"]["relative_path"]).exists()
+
+    candidate_base = outcomes["two"]["base_commit"]
+    assert candidate["root_head"] == candidate_base
+    assert candidate["child_head"] == candidate_base
+    assert candidate["root_head"] != primary_head
+    assert candidate["child_head"] != primary_head
+    assert not is_ancestor(primary, primary_head, candidate["root_head"])
+    assert not is_ancestor(primary, primary_head, candidate["child_head"])
+    candidate_artifact = (flow_worktrees["two"] / outcomes["two"]["relative_path"]).read_bytes()
+    for workspace_key in ("root_workspace", "child_workspace"):
+        workspace = Path(candidate[workspace_key])
+        assert (workspace / outcomes["two"]["relative_path"]).read_bytes() == candidate_artifact
+        assert (
+            hashlib.sha256((workspace / outcomes["two"]["relative_path"]).read_bytes()).hexdigest()
+            == outcomes["two"]["sha256"]
+        )
+
+    refs_after = refs(primary)
+    worktrees_after = worktrees(primary)
+    assert all(refs_after.get(name) == value for name, value in refs_before.items())
+    expected_new_refs = {
+        f"refs/heads/{baseline['root_branch']}",
+        f"refs/heads/{baseline['child_branch']}",
+        f"refs/heads/{candidate['root_branch']}",
+        f"refs/heads/{candidate['child_branch']}",
+    }
+    assert set(refs_after) - set(refs_before) == expected_new_refs
+    assert all(worktrees_after.get(path) == identity for path, identity in worktrees_before.items())
+    assert set(worktrees_after) - set(worktrees_before) == {
+        baseline["root_workspace"],
+        baseline["child_workspace"],
+        candidate["root_workspace"],
+        candidate["child_workspace"],
+    }
+    assert git_text(primary, "rev-parse", "HEAD") == primary_head
+    assert git_text(primary, "status", "--porcelain=v1") == primary_status_before
+    assert tracked_bytes(primary) == primary_tracked_before

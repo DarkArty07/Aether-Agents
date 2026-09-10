@@ -329,3 +329,14 @@ specifications = ["specs/r8-workspaces-and-integration/spec.md", "specs/r13-synt
 implementation = ["src/aether_agents/resources/skills/git-github-closeout/SKILL.md", "src/aether_agents/resources/profiles/morfeo/SOUL.md", "src/aether_agents/resources/profiles/supervisor/SOUL.md"]
 verification = ["tests/test_documentation.py", "tests/test_objective_contracts.py", "tests/test_public_artifacts.py"]
 notes = "Packaged prompt/skill guidance is present, and the merged PR #299 is historical repository evidence for the predecessor objective only, not evidence of this objective's terminal closeout. This unit records no current-objective Issue #300 or cleanup reconciliation evidence before terminal integration; private live-profile activation is runtime evidence only, the public installed lifecycle remains unqualified, and no duplicate or runtime-enforced Issue flow is claimed."
+
+[[capabilities]]
+id = "profiles.headless-worker-tools"
+status = "implemented"
+summary = "Portable worker profiles exclude desktop control and interactive clarification; all role templates select native Exa search/extraction without credentials."
+surfaces = ["policy.headless-worker-tools"]
+documents = ["docs/reference/plugins-and-tools.md"]
+specifications = ["specs/worker-tool-surface/spec.md"]
+implementation = ["src/aether_agents/resources/profiles/implementer/config.yaml", "src/aether_agents/resources/profiles/supervisor/config.yaml", "src/aether_agents/resources/profiles/morfeo/config.yaml"]
+verification = ["tests/test_worker_tool_defaults.py"]
+notes = "Native platform resolution and provisioned web credentials determine runtime availability. Existing running agents/profiles are not migrated by a repository merge; tool selection is not an authority or security boundary."
