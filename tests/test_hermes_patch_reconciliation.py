@@ -251,7 +251,7 @@ def test_pending_hlp369_fragment_is_schema_valid_and_binds_patch_digest() -> Non
         item for item in record["artifact_verification"]["artifacts"] if item["kind"] == "patch"
     )
     assert artifact["ledger_sha256"] == (
-        "cc3316f5def4673822cc149a95c4edfef9eef5196bedae2216b4df9a003ea8fd"
+        "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c"
     )
     assert artifact["computed_sha256"] == artifact["ledger_sha256"]
     assert artifact["checksum_status"] == "passed"

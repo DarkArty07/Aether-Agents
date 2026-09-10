@@ -1,11 +1,183 @@
+diff --git a/hermes_cli/goals.py b/hermes_cli/goals.py
+index 891c3a66b..d2ee219dc 100644
+--- a/hermes_cli/goals.py
++++ b/hermes_cli/goals.py
+@@ -187,6 +187,40 @@ JUDGE_SYSTEM_PROMPT = (
+ )
+
+
++# Review requests are a separate goal phase.  The implementation handoff is
++# ready when it gives a truthful completion claim plus concrete verification
++# evidence; the independent reviewer has not rendered a verdict yet and must
++# never be part of this decision.  Keep this prompt separate from
++# ``JUDGE_SYSTEM_PROMPT`` because that prompt intentionally treats an
++# unachievable/blocked *whole goal* as terminal, while a blocked implementation
++# is not ready for review.
++REVIEW_READINESS_SYSTEM_PROMPT = (
++    "You are a strict implementation-readiness judge. You receive a task goal "
++    "and an implementer's review handoff containing a summary and optional "
++    "structured verification metadata. Decide whether the implementation is "
++    "ready to enter independent review.\n\n"
++    "READY — the handoff truthfully states that the implementation is complete "
++    "and includes concrete verification evidence such as commands, tests, "
++    "checks, changed artifacts, or observed results. Do not require or infer "
++    "an independent reviewer's approval; that verdict comes later.\n\n"
++    "NOT READY — the handoff says the implementation is incomplete, not "
++    "implemented, unverified, tests/checks were not run or failed, is only a "
++    "plan, or is blocked and needs more work/input.\n\n"
++    "Reply ONLY with a single JSON object on one line using one of these shapes:\n"
++    '{"verdict": "done", "reason": "<one sentence>"}\n'
++    '{"verdict": "continue", "reason": "<one sentence>"}\n'
++    'The legacy shape {"done": <true|false>, "reason": "..."} is still accepted (true=ready, false=not ready).'
++)
++
++REVIEW_READINESS_USER_PROMPT_TEMPLATE = (
++    "Task goal:\n{goal}\n\n"
++    "Implementer's review handoff:\n{evidence}\n\n"
++    "Is this implementation handoff ready for an independent reviewer? "
++    "Judge only implementation readiness from the supplied summary and "
++    "structured metadata; do not supply the reviewer's later verdict."
++)
++
++
+ # Rendered into the judge prompt when the agent has background processes
+ # running. Gives the judge the context it needs to decide WAIT vs CONTINUE
+ # (and which pid to wait on) without it having to probe anything itself.
+@@ -1011,6 +1045,7 @@ def judge_goal(
+     subgoals: Optional[List[str]] = None,
+     background_processes: Optional[List[Dict[str, Any]]] = None,
+     contract: Optional[GoalContract] = None,
++    phase: str = "completion",
+ ) -> Tuple[str, str, bool, Optional[Dict[str, Any]], bool]:
+     """Ask the auxiliary model whether the goal is satisfied.
+
+@@ -1043,6 +1078,12 @@ def judge_goal(
+     judge prompt; when none are set, behavior is identical to the original
+     free-form judge.
+
++    ``phase`` is ``"completion"`` for the standing whole-goal loop (the
++    default) or ``"review_readiness"`` for an implementation handoff. The
++    latter uses a separate prompt: it checks only whether the summary and
++    structured metadata are ready for an independent reviewer and never asks
++    the judge to provide that reviewer's verdict.
++
+     This is deliberately fail-open: transport errors return ``("continue", ..., ..., None, True)``
+     — the ``transport_failed=True`` flag lets callers track and auto-pause after
+     N consecutive transport failures (see
+@@ -1061,47 +1102,58 @@ def judge_goal(
+         logger.debug("goal judge: auxiliary client import failed: %s", exc)
+         return "continue", "auxiliary client unavailable", False, None, False
+
+-    # Build the prompt. Priority: contract > subgoals > plain. When both a
+-    # contract and subgoals exist, the subgoals are appended into the
+-    # contract block as extra criteria so the judge sees a single source of
+-    # truth.
+-    clean_subgoals = [s.strip() for s in (subgoals or []) if s and s.strip()]
+-    background_block = _render_background_block(background_processes)
+-    current_time = datetime.now(tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+-
+-    if contract is not None and not contract.is_empty():
+-        contract_block = contract.render_block()
+-        if clean_subgoals:
+-            extra = "\n".join(
+-                f"- Extra criterion {i}: {text}"
+-                for i, text in enumerate(clean_subgoals, start=1)
+-            )
+-            contract_block = f"{contract_block}\n{extra}"
+-        prompt = JUDGE_USER_PROMPT_WITH_CONTRACT_TEMPLATE.format(
+-            goal=_truncate(goal, 2000),
+-            contract_block=_truncate(contract_block, 2500),
+-            response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
+-            background_block=background_block,
+-            current_time=current_time,
+-        )
+-    elif clean_subgoals:
+-        subgoals_block = "\n".join(
+-            f"- {i}. {text}" for i, text in enumerate(clean_subgoals, start=1)
+-        )
+-        prompt = JUDGE_USER_PROMPT_WITH_SUBGOALS_TEMPLATE.format(
++    # Review readiness is deliberately phase-aware. It must not reuse the
++    # completion prompt because completion treats a blocked whole goal as a
++    # terminal outcome, while a blocked implementation cannot enter review.
++    if phase == "review_readiness":
++        prompt = REVIEW_READINESS_USER_PROMPT_TEMPLATE.format(
+             goal=_truncate(goal, 2000),
+-            subgoals_block=_truncate(subgoals_block, 2000),
+-            response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
+-            background_block=background_block,
+-            current_time=current_time,
++            evidence=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
+         )
++        system_prompt = REVIEW_READINESS_SYSTEM_PROMPT
+     else:
+-        prompt = JUDGE_USER_PROMPT_TEMPLATE.format(
+-            goal=_truncate(goal, 2000),
+-            response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
+-            background_block=background_block,
+-            current_time=current_time,
+-        )
++        # Build the completion prompt. Priority: contract > subgoals > plain.
++        # When both a contract and subgoals exist, the subgoals are appended
++        # into the contract block as extra criteria so the judge sees a single
++        # source of truth.
++        clean_subgoals = [s.strip() for s in (subgoals or []) if s and s.strip()]
++        background_block = _render_background_block(background_processes)
++        current_time = datetime.now(tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
++
++        if contract is not None and not contract.is_empty():
++            contract_block = contract.render_block()
++            if clean_subgoals:
++                extra = "\n".join(
++                    f"- Extra criterion {i}: {text}"
++                    for i, text in enumerate(clean_subgoals, start=1)
++                )
++                contract_block = f"{contract_block}\n{extra}"
++            prompt = JUDGE_USER_PROMPT_WITH_CONTRACT_TEMPLATE.format(
++                goal=_truncate(goal, 2000),
++                contract_block=_truncate(contract_block, 2500),
++                response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
++                background_block=background_block,
++                current_time=current_time,
++            )
++        elif clean_subgoals:
++            subgoals_block = "\n".join(
++                f"- {i}. {text}" for i, text in enumerate(clean_subgoals, start=1)
++            )
++            prompt = JUDGE_USER_PROMPT_WITH_SUBGOALS_TEMPLATE.format(
++                goal=_truncate(goal, 2000),
++                subgoals_block=_truncate(subgoals_block, 2000),
++                response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
++                background_block=background_block,
++                current_time=current_time,
++            )
++        else:
++            prompt = JUDGE_USER_PROMPT_TEMPLATE.format(
++                goal=_truncate(goal, 2000),
++                response=_truncate(last_response, _JUDGE_RESPONSE_SNIPPET_CHARS),
++                background_block=background_block,
++                current_time=current_time,
++            )
++        system_prompt = JUDGE_SYSTEM_PROMPT
+
+     try:
+         # Route through call_llm so auxiliary.goal_judge.* config
+@@ -1110,7 +1162,7 @@ def judge_goal(
+         resp = call_llm(
+             task="goal_judge",
+             messages=[
+-                {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
++                {"role": "system", "content": system_prompt},
+                 {"role": "user", "content": prompt},
+             ],
+             temperature=0,
 diff --git a/hermes_cli/kanban.py b/hermes_cli/kanban.py
-index f2964b253..99fb3fb6b 100644
+index f2964b253..a12684f8c 100644
 --- a/hermes_cli/kanban.py
 +++ b/hermes_cli/kanban.py
 @@ -2252,8 +2252,8 @@ def _worker_run_id_for(task_id: str) -> Optional[int]:
          return None
- 
- 
+
+
 -def _goal_mode_handoff_rejection(task: Optional[kb.Task], evidence: str) -> Optional[str]:
 -    """Apply the goal judge to every terminal worker handoff, including review."""
 +def _goal_mode_completion_rejection(task: Optional[kb.Task], evidence: str) -> Optional[str]:
@@ -13,7 +185,90 @@ index f2964b253..99fb3fb6b 100644
      if task is None or not task.goal_mode:
          return None
      try:
-@@ -2316,11 +2316,11 @@ def _cmd_complete(args: argparse.Namespace) -> int:
+@@ -2285,6 +2285,82 @@ def _goal_mode_handoff_rejection(task: Optional[kb.Task], evidence: str) -> Opti
+     return reason if verdict != "done" else None
+
+
++_REVIEW_READINESS_INCOMPLETE_MARKERS = (
++    "not implemented",
++    "unimplemented",
++    "incomplete",
++    "unfinished",
++    "not ready",
++    "not verified",
++    "unverified",
++    "tests not run",
++    "test not run",
++    "checks not run",
++    "verification not run",
++    "work remains",
++    "still working",
++    "plan only",
++    "needs input",
++    "cannot proceed",
++    "not done",
++)
++
++
++def _review_handoff_evidence(summary: str, metadata: Optional[dict[str, Any]]) -> str:
++    """Render the worker's truthful review evidence for the readiness phase."""
++    evidence = [f"Summary:\n{summary.strip()}"]
++    if metadata is not None:
++        evidence.append(
++            "Structured verification metadata:\n"
++            + json.dumps(metadata, sort_keys=True, default=str)
++        )
++    return "\n\n".join(evidence)
++
++
++def _goal_mode_review_rejection(
++    task: Optional[kb.Task],
++    summary: str,
++    metadata: Optional[dict[str, Any]],
++) -> Optional[str]:
++    """Return a rejection when a goal-mode review handoff is not ready."""
++    if task is None or not task.goal_mode:
++        return None
++    summary_text = summary.strip()
++    explicit_incomplete = any(
++        marker in summary_text.casefold()
++        for marker in _REVIEW_READINESS_INCOMPLETE_MARKERS
++    )
++    try:
++        from agent.auxiliary_client import get_text_auxiliary_client
++
++        client, model = get_text_auxiliary_client("goal_judge")
++    except Exception:
++        client, model = None, None
++    if client is not None and model:
++        from hermes_cli.goals import judge_goal
++
++        try:
++            verdict, reason, _, _, _ = judge_goal(
++                goal=f"{task.title}\n\n{task.body or ''}".strip(),
++                last_response=_review_handoff_evidence(summary_text, metadata),
++                phase="review_readiness",
++            )
++        except Exception as judge_exc:
++            import logging as _logging
++
++            _logging.getLogger(__name__).warning(
++                "review readiness judge failed, allowing lifecycle handoff: %s",
++                judge_exc,
++                exc_info=True,
++            )
++        else:
++            if verdict != "done":
++                return reason or "review readiness evidence was rejected"
++    if explicit_incomplete:
++        return "review readiness requires a completed implementation and verification evidence"
++    return None
++
++
+ def _cmd_complete(args: argparse.Namespace) -> int:
+     """Mark one or more tasks done. Supports a single id or a list."""
+     ids = list(args.task_ids or [])
+@@ -2316,11 +2392,11 @@ def _cmd_complete(args: argparse.Namespace) -> int:
      failed: list[str] = []
      with kb.connect_closing() as conn:
          for tid in ids:
@@ -29,7 +284,7 @@ index f2964b253..99fb3fb6b 100644
                  task,
                  (summary or args.result or "").strip(),
              )
-@@ -2383,6 +2383,25 @@ def _cmd_block(args: argparse.Namespace) -> int:
+@@ -2383,6 +2459,25 @@ def _cmd_block(args: argparse.Namespace) -> int:
      failed: list[str] = []
      with kb.connect_closing() as conn:
          for tid in ids:
@@ -55,24 +310,26 @@ index f2964b253..99fb3fb6b 100644
              if reason:
                  kb.add_comment(conn, tid, author, f"BLOCKED: {reason}")
              if not kb.block_task(
-@@ -2487,17 +2506,6 @@ def _cmd_request_review(args: argparse.Namespace) -> int:
+@@ -2487,14 +2582,16 @@ def _cmd_request_review(args: argparse.Namespace) -> int:
              return 2
      reviewer = getattr(args, "reviewer", None)
      with kb.connect_closing() as conn:
 -        rejection = _goal_mode_handoff_rejection(
--            kb.get_task(conn, tid),
--            summary or "",
--        )
--        if rejection is not None:
--            print(
++        rejection = _goal_mode_review_rejection(
+             kb.get_task(conn, tid),
+             summary or "",
++            metadata,
+         )
+         if rejection is not None:
+             print(
 -                f"kanban: goal review handoff of {tid} rejected by judge: "
 -                f"{rejection}. Provide acceptance evidence matching the task.",
--                file=sys.stderr,
--            )
--            return 1
-         ok, reason = kb.request_review(
-             conn,
-             tid,
++                f"kanban: goal review handoff of {tid} rejected by readiness judge: "
++                f"{rejection}. Provide a truthful implementation summary and "
++                "structured verification evidence.",
+                 file=sys.stderr,
+             )
+             return 1
 diff --git a/hermes_cli/kanban_db.py b/hermes_cli/kanban_db.py
 index a5e90579b..dadfbcd7d 100644
 --- a/hermes_cli/kanban_db.py
@@ -82,13 +339,13 @@ index a5e90579b..dadfbcd7d 100644
  # ``None`` = legacy/un-typed block (treated as a generic human blocker).
  VALID_BLOCK_KINDS = {"dependency", "needs_input", "capability", "transient"}
 +GOAL_MODE_BLOCK_ALLOWED_KINDS = frozenset({"dependency", "needs_input"})
- 
+
  # After a task has been blocked, unblocked, and re-blocked this many times for
  # the same (truly-blocked) reason, the unblock-loop breaker stops trusting the
 @@ -5548,6 +5549,35 @@ def _pending_flow_attentions(
      return sorted(pending.values(), key=lambda item: item["event_id"])
- 
- 
+
+
 +def goal_mode_block_allowed(
 +    conn: sqlite3.Connection,
 +    task_id: str,
@@ -138,8 +395,8 @@ index c8425118a..7c0dade78 100644
 +++ b/tests/hermes_cli/test_kanban_cli.py
 @@ -136,6 +136,27 @@ def test_unblock_recover_escalated_refuses_before_explicit_routing(kanban_home):
          )
- 
- 
+
+
 +def test_goal_mode_cli_block_gate_does_not_bypass_completion(kanban_home, monkeypatch):
 +    with kb.connect_closing() as conn:
 +        task_id = kb.create_task(
@@ -165,13 +422,13 @@ index c8425118a..7c0dade78 100644
      kb.create_board("alpha")
      kb.create_board("beta")
 diff --git a/tests/hermes_cli/test_kanban_review_surfaces.py b/tests/hermes_cli/test_kanban_review_surfaces.py
-index fb7f76a1a..7680cb55f 100644
+index fb7f76a1a..e0698f981 100644
 --- a/tests/hermes_cli/test_kanban_review_surfaces.py
 +++ b/tests/hermes_cli/test_kanban_review_surfaces.py
 @@ -286,7 +286,7 @@ def test_cli_reopen_review_is_transition_first_and_redacts_reason(
          assert secret not in comments[0].body
- 
- 
+
+
 -def test_goal_mode_review_handoff_cannot_bypass_judge(
 +def test_goal_mode_completion_handoff_still_requires_judge(
      monkeypatch: pytest.MonkeyPatch,
@@ -189,7 +446,7 @@ index fb7f76a1a..7680cb55f 100644
 @@ -331,7 +331,7 @@ def test_goal_mode_review_handoff_cannot_bypass_judge(
          assert tool_after is not None
          assert tool_after.status == "running"
- 
+
 -    # The shell/CLI path applies the same gate and must not bypass the tool.
 +    # The shell/CLI completion path retains the same whole-objective gate.
      with kb.connect() as conn:
@@ -204,10 +461,10 @@ index fb7f76a1a..7680cb55f 100644
      assert "rejected by judge" in output
      with kb.connect() as conn:
          cli_after = kb.get_task(conn, cli_task)
-@@ -365,6 +365,104 @@ def test_goal_mode_review_handoff_cannot_bypass_judge(
+@@ -365,6 +365,203 @@ def test_goal_mode_review_handoff_cannot_bypass_judge(
          assert cli_after.status == "running"
- 
- 
+
+
 +def test_goal_mode_review_handoff_uses_readiness_not_completion_judge(
 +    monkeypatch: pytest.MonkeyPatch,
 +    tmp_path: Path,
@@ -221,13 +478,26 @@ index fb7f76a1a..7680cb55f 100644
 +
 +    from tools import kanban_tools as tools
 +    from hermes_cli import goals
++    import agent.auxiliary_client as auxiliary_client
 +
-+    def no_completion_judge(*args, **kwargs):
-+        pytest.fail("request-review must not require the completion judge")
++    readiness_calls = []
 +
-+    monkeypatch.setattr(tools, "_goal_judge_available", no_completion_judge)
-+    monkeypatch.setattr(tools, "judge_goal", no_completion_judge)
-+    monkeypatch.setattr(goals, "judge_goal", no_completion_judge)
++    def readiness_judge(*args, **kwargs):
++        readiness_calls.append((args, kwargs))
++        assert kwargs["phase"] == "review_readiness"
++        assert "tests_run" in kwargs["last_response"]
++        if "Not implemented" in kwargs["last_response"]:
++            return "continue", "implementation is incomplete", False, None, False
++        return "done", "handoff is ready", False, None, False
++
++    monkeypatch.setattr(tools, "_goal_judge_available", lambda: True)
++    monkeypatch.setattr(tools, "judge_goal", readiness_judge)
++    monkeypatch.setattr(goals, "judge_goal", readiness_judge)
++    monkeypatch.setattr(
++        auxiliary_client,
++        "get_text_auxiliary_client",
++        lambda purpose: (object(), "judge-model"),
++    )
 +
 +    with kb.connect() as conn:
 +        tool_task = kb.create_task(
@@ -304,6 +574,92 @@ index fb7f76a1a..7680cb55f 100644
 +        assert cli_after is not None
 +        assert cli_after.status == "review"
 +        assert cli_after.assignee == "reviewer"
++    with kb.connect() as conn:
++        incomplete_tool = kb.create_task(
++            conn,
++            title="Goal-mode incomplete tool review",
++            assignee="builder",
++            goal_mode=True,
++        )
++        incomplete_tool_run = kb.claim_task(conn, incomplete_tool, claimer="builder:4")
++        assert incomplete_tool_run is not None
++    monkeypatch.setenv("HERMES_KANBAN_TASK", incomplete_tool)
++    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", str(incomplete_tool_run.current_run_id))
++    rejected_tool = json.loads(
++        tools._handle_request_review(
++            {
++                "summary": "Not implemented; tests not run.",
++                "metadata": {"tests_run": 0},
++                "reviewer": "reviewer",
++            }
++        )
++    )
++    assert "error" in rejected_tool
++    assert "readiness" in rejected_tool["error"]
++    with kb.connect() as conn:
++        incomplete_tool_after = kb.get_task(conn, incomplete_tool)
++        assert incomplete_tool_after is not None
++        assert incomplete_tool_after.status == "running"
++
++    with kb.connect() as conn:
++        incomplete_cli = kb.create_task(
++            conn,
++            title="Goal-mode incomplete CLI review",
++            assignee="builder",
++            goal_mode=True,
++        )
++        incomplete_cli_run = kb.claim_task(conn, incomplete_cli, claimer="builder:5")
++        assert incomplete_cli_run is not None
++    monkeypatch.setenv("HERMES_KANBAN_TASK", incomplete_cli)
++    monkeypatch.setenv("HERMES_KANBAN_RUN_ID", str(incomplete_cli_run.current_run_id))
++    rejected_cli = kc.run_slash(
++        f"request-review {incomplete_cli} --summary 'Not implemented; tests not run.' "
++        "--reviewer reviewer --metadata '{\"tests_run\": 0}'"
++    )
++    assert "readiness" in rejected_cli
++    with kb.connect() as conn:
++        incomplete_cli_after = kb.get_task(conn, incomplete_cli)
++        assert incomplete_cli_after is not None
++        assert incomplete_cli_after.status == "running"
++    assert len(readiness_calls) == 5
++
++
++def test_goal_readiness_phase_uses_a_distinct_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
++    from hermes_cli import goals
++
++    calls = []
++
++    def fake_call_llm(**kwargs):
++        calls.append(kwargs)
++        return type(
++            "Response",
++            (),
++            {
++                "choices": [
++                    type(
++                        "Choice",
++                        (),
++                        {
++                            "message": type(
++                                "Message",
++                                (),
++                                {"content": '{"verdict": "done", "reason": "ready"}'},
++                            )()
++                        },
++                    )()
++                ]
++            },
++        )()
++
++    monkeypatch.setattr("agent.auxiliary_client.call_llm", fake_call_llm)
++    verdict, reason, *_ = goals.judge_goal(
++        "implement the change",
++        "Implemented the change; pytest passed.",
++        phase="review_readiness",
++    )
++    assert (verdict, reason) == ("done", "ready")
++    assert "implementation-readiness" in calls[0]["messages"][0]["content"]
++    assert "independent reviewer" in calls[0]["messages"][1]["content"]
 +
 +
  def test_goal_loop_stops_after_reviewer_requests_changes(
@@ -315,8 +671,8 @@ index 98fa602ac..360a33002 100644
 +++ b/tests/hermes_cli/test_kanban_session_affinity.py
 @@ -576,7 +576,13 @@ def test_unrecoverable_affinity_spawn_failure_routes_flow_terminal(tmp_path, mon
          conn.close()
- 
- 
+
+
 -def _blocked_flow_with_terminal_controller(conn, project_id, workspace):
 +def _blocked_flow_with_terminal_controller(
 +    conn,
@@ -335,11 +691,11 @@ index 98fa602ac..360a33002 100644
 +        goal_mode=controller_goal_mode,
      )
      return unit, controller
- 
+
 @@ -643,6 +650,76 @@ def test_blocked_unit_wakes_terminal_flow_controller(tmp_path, monkeypatch):
          conn.close()
- 
- 
+
+
 +def test_goal_mode_controller_accepts_exact_recovery_signal(
 +    tmp_path,
 +    monkeypatch,
@@ -419,7 +775,7 @@ index 00d28d352..63e919da7 100644
 +++ b/tests/tools/test_kanban_tools.py
 @@ -283,10 +283,18 @@ def test_block_goal_mode_rejects_disallowed_kind(monkeypatch, tmp_path):
      from hermes_cli import kanban_db as kb
- 
+
      tid = _make_goal_mode_worker_env(monkeypatch, tmp_path)
 -    for kind in ("capability", "transient"):
 -        out = kt._handle_block({"reason": "blocked", "kind": kind})
@@ -436,17 +792,17 @@ index 00d28d352..63e919da7 100644
          d = json.loads(out)
 -        assert "error" in d, f"kind={kind} should be rejected for goal_mode"
 +        assert "error" in d, f"block_args={block_args!r} should be rejected for goal_mode"
- 
+
      conn = kb.connect()
      try:
 diff --git a/tools/kanban_tools.py b/tools/kanban_tools.py
-index 9a6f4f509..fe81f9a2d 100644
+index 9a6f4f509..24c62aeba 100644
 --- a/tools/kanban_tools.py
 +++ b/tools/kanban_tools.py
 @@ -251,8 +251,8 @@ def _goal_judge_available() -> bool:
      return client is not None and bool(model)
- 
- 
+
+
 -def _goal_mode_handoff_rejection(task, evidence: str) -> Optional[str]:
 -    """Return a rejection reason when a goal-mode terminal handoff is premature."""
 +def _goal_mode_completion_rejection(task, evidence: str) -> Optional[str]:
@@ -454,7 +810,90 @@ index 9a6f4f509..fe81f9a2d 100644
      if not task or not task.goal_mode or not _goal_judge_available():
          return None
      verdict = "done"
-@@ -752,7 +752,7 @@ def _handle_complete(args: dict, **kw) -> str:
+@@ -273,6 +273,82 @@ def _goal_mode_handoff_rejection(task, evidence: str) -> Optional[str]:
+     return reason if verdict != "done" else None
+
+
++_REVIEW_READINESS_INCOMPLETE_MARKERS = (
++    "not implemented",
++    "unimplemented",
++    "incomplete",
++    "unfinished",
++    "not ready",
++    "not verified",
++    "unverified",
++    "tests not run",
++    "test not run",
++    "checks not run",
++    "verification not run",
++    "work remains",
++    "still working",
++    "plan only",
++    "needs input",
++    "cannot proceed",
++    "not done",
++)
++
++
++def _review_handoff_evidence(summary: str, metadata: Optional[dict]) -> str:
++    """Render the worker's truthful review evidence for the readiness phase."""
++    evidence = [f"Summary:\n{summary.strip()}"]
++    if metadata is not None:
++        evidence.append(
++            "Structured verification metadata:\n"
++            + json.dumps(metadata, sort_keys=True, default=str)
++        )
++    return "\n\n".join(evidence)
++
++
++def _goal_mode_review_rejection(
++    task,
++    summary: str,
++    metadata: Optional[dict],
++) -> Optional[str]:
++    """Return a rejection when a goal-mode review handoff is not ready.
++
++    Review entry has its own judge phase.  It evaluates the implementation's
++    summary and structured evidence, not the independent reviewer's future
++    verdict.  The deterministic marker check keeps an explicitly incomplete
++    handoff rejected even when no auxiliary judge is configured; configured
++    judges then perform the richer readiness assessment.
++    """
++    if not task or not task.goal_mode:
++        return None
++    summary_text = summary.strip()
++    lowered = summary_text.casefold()
++    explicit_incomplete = any(
++        marker in lowered for marker in _REVIEW_READINESS_INCOMPLETE_MARKERS
++    )
++    if _goal_judge_available():
++        try:
++            verdict, reason, _, _, _ = judge_goal(
++                goal=f"{task.title}\n\n{task.body or ''}".strip(),
++                last_response=_review_handoff_evidence(summary_text, metadata),
++                phase="review_readiness",
++            )
++        except Exception as judge_exc:
++            # Keep the established fail-open behavior for an unavailable or
++            # broken auxiliary service. The explicit negative marker check
++            # below still protects the obvious incomplete handoff path.
++            logger.warning(
++                "review readiness judge failed, allowing lifecycle handoff: %s",
++                judge_exc,
++                exc_info=True,
++            )
++        else:
++            if verdict != "done":
++                return reason or "review readiness evidence was rejected"
++    if explicit_incomplete:
++        return "review readiness requires a completed implementation and verification evidence"
++    return None
++
++
+ # ---------------------------------------------------------------------------
+ # Runtime-activity → board-heartbeat bridge (#31752)
+ # ---------------------------------------------------------------------------
+@@ -752,7 +828,7 @@ def _handle_complete(args: dict, **kw) -> str:
              # Only enforce when a judge is actually reachable — see
              # _goal_judge_available for why an unavailable judge fails open.
              task = kb.get_task(conn, tid)
@@ -463,7 +902,7 @@ index 9a6f4f509..fe81f9a2d 100644
                  task,
                  (summary or result or "").strip(),
              )
-@@ -851,21 +851,29 @@ def _handle_block(args: dict, **kw) -> str:
+@@ -851,21 +927,29 @@ def _handle_block(args: dict, **kw) -> str:
          # the goal loop — run_kanban_goal_loop() treats ANY `blocked` status
          # as terminal, identically to `done`, regardless of kind. Without
          # this, a worker that learns kanban_complete is gated can just call
@@ -500,22 +939,20 @@ index 9a6f4f509..fe81f9a2d 100644
                  f"If the task is actually finished or cannot proceed for "
                  f"another reason, call kanban_complete instead — the "
                  f"completion judge will evaluate it."
-@@ -944,14 +952,10 @@ def _handle_request_review(args: dict, **kw) -> str:
-     try:
+@@ -945,12 +1029,12 @@ def _handle_request_review(args: dict, **kw) -> str:
          kb, conn = _connect(board=board)
          try:
--            task = kb.get_task(conn, tid)
+             task = kb.get_task(conn, tid)
 -            rejection = _goal_mode_handoff_rejection(task, summary)
--            if rejection is not None:
--                return tool_error(
++            rejection = _goal_mode_review_rejection(task, summary, metadata)
+             if rejection is not None:
+                 return tool_error(
 -                    f"Goal review handoff rejected by judge: {rejection}. "
 -                    "Provide acceptance evidence matching the card before "
 -                    "requesting review."
--                )
-+            # Review is a distinct phase from completion. The reviewer will
-+            # evaluate the implementation summary/metadata; requiring the
-+            # completion judge here would require the verdict this transition
-+            # exists to obtain.
++                    f"Goal review readiness rejected: {rejection}. "
++                    "Provide a truthful implementation summary and structured "
++                    "verification evidence before requesting review."
+                 )
              ok, fail_reason = kb.request_review(
                  conn, tid,
-                 summary=summary,
