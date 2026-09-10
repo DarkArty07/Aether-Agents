@@ -17,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
-import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -42,6 +41,43 @@ __all__ = [
 _MAX_ERROR_CLASS = 96
 _MAX_MESSAGE_ID = 256
 _MAX_PARTS = 256
+
+# Only these local taxonomy values may cross the durable/public adapter boundary.
+# Native error labels are data, not authority: an arbitrary foreign label must never
+# become a monitor error class merely because it happens to look like a token.
+_SAFE_ERROR_CLASSES = frozenset(
+    {
+        "ack-missing-message-id",
+        "delivery-failure",
+        "delivery-lease-busy",
+        "destination-changed",
+        "destination-invalid",
+        "destination-missing",
+        "destination-unavailable",
+        "destination-unpinned",
+        "dispatch-uncertain",
+        "monitor-disabled",
+        "native-sender-unavailable",
+        "outbox-empty",
+        "outbox-input-invalid",
+        "outbox-missing",
+        "outbox-shape-changed",
+        "outbox-text-changed",
+        "pre-dispatch",
+        "pre-dispatch-failure",
+        "profile-binding-changed",
+        "rate-limit",
+        "retry-limit",
+        "sender-empty-result",
+        "sender-failure",
+        "sender-invalid-outcome",
+        "sender-invalid-result",
+        "service-busy",
+        "telegram-disabled",
+        "temporary",
+        "timeout",
+    }
+)
 
 
 class TelegramDeliveryError(RuntimeError):
@@ -161,22 +197,14 @@ class _NoDispatchResult(Exception):
 
 
 def _safe_token(value: Any, default: str, *, limit: int = _MAX_ERROR_CLASS) -> str:
-    """Convert foreign error labels to a bounded, destination-free token."""
+    """Return only a known local error class, never arbitrary foreign text."""
 
     if not isinstance(value, str):
         return default
     raw = value.strip().lower()
-    # Native senders return a human-readable ``error`` string.  Treat that as an
-    # opaque failure rather than converting arbitrary text (which may contain a
-    # destination, credential, URL, or path) into durable monitor state.  The
-    # structured adapter boundary may still use short taxonomy tokens such as
-    # ``rate-limit`` and ``dispatch-uncertain``.
-    if re.fullmatch(r"[a-z][a-z0-9_.-]{0,95}", raw) is None:
+    if len(raw) > limit or raw not in _SAFE_ERROR_CLASSES:
         return default
-    token = raw
-    if not token or len(token) > limit:
-        return default
-    return token
+    return raw
 
 
 def _safe_message_id(value: Any) -> str | None:
@@ -246,12 +274,119 @@ def _default_target(settings: MonitorSettings) -> PinnedTelegramTarget | None:
     return PinnedTelegramTarget(reference, chat_id, thread_id, settings.profile_binding)
 
 
+def _exact_thread_kwargs(target: PinnedTelegramTarget) -> dict[str, int]:
+    """Mirror Hermes' exact General-topic mapping for one send attempt.
+
+    Hermes' ``TelegramAdapter._message_thread_id_for_send`` omits ``message_thread_id``
+    for the forum General topic (thread ``"1"``) because Bot API ``sendMessage`` rejects
+    ``message_thread_id=1`` with "Message thread not found".  Keeping that exact mapping
+    preserves the pinned home thread instead of failing or falling back to the chat.
+    """
+
+    if target.thread_id is None:
+        return {}
+    if not isinstance(target.thread_id, str) or not target.thread_id.strip():
+        raise DeliveryConfigurationError("destination-invalid")
+    raw = target.thread_id.strip()
+    if raw == "1":
+        return {}
+    try:
+        thread_id = int(raw)
+    except ValueError as exc:
+        raise DeliveryConfigurationError("destination-invalid") from exc
+    if thread_id <= 0:
+        raise DeliveryConfigurationError("destination-invalid")
+    return {"message_thread_id": thread_id}
+
+
+def _configured_telegram_bot(bot_class: Any, token: str) -> Any:
+    """Construct the Bot with the same configured proxy the native sender uses."""
+
+    proxy: Any = None
+    try:
+        from gateway.platforms.base import resolve_proxy_url  # type: ignore[import-not-found]
+
+        proxy = resolve_proxy_url("TELEGRAM_PROXY", target_hosts=["api.telegram.org"])
+    except Exception:
+        proxy = None
+    if proxy:
+        try:
+            from telegram.request import HTTPXRequest  # type: ignore[import-not-found]
+
+            return bot_class(
+                token=token,
+                request=HTTPXRequest(proxy=proxy),
+                get_updates_request=HTTPXRequest(proxy=proxy),
+            )
+        except Exception:
+            # A broken proxy helper must not silently redirect the send; fall back to
+            # the same direct Bot the native path uses.
+            pass
+    try:
+        return bot_class(token=token)
+    except Exception as exc:
+        raise DeliveryConfigurationError("native-sender-unavailable") from exc
+
+
+async def _send_exact_native_telegram(
+    pconfig: Any, target: PinnedTelegramTarget, text: str
+) -> Mapping[str, Any]:
+    """Use Hermes' native Bot API helper for exactly one target/send attempt.
+
+    ``_send_to_platform``/``_send_telegram`` are intentionally not used here: the
+    selected Hermes release chunks, retries internally, and falls back from a missing
+    topic to the general chat.  Its lower-level ``_send_telegram_message_with_retry``
+    seam accepts an existing Bot and an explicit attempt count, so ``attempts=1``
+    preserves this adapter's ambiguity boundary while retaining Hermes' configured
+    Telegram transport family (token, proxy and chat-id normalization included).
+    """
+
+    try:
+        from plugins.platforms.telegram.telegram_ids import (  # type: ignore[import-not-found]
+            normalize_telegram_chat_id,
+        )
+        from telegram import Bot  # type: ignore[import-not-found]
+        from tools.send_message_tool import (  # type: ignore[import-not-found]
+            _send_telegram_message_with_retry,
+        )
+    except ImportError as exc:  # pragma: no cover - manager-only path
+        raise DeliveryConfigurationError("native-sender-unavailable") from exc
+
+    token = getattr(pconfig, "token", None)
+    if not isinstance(token, str) or not token.strip():
+        raise DeliveryConfigurationError("native-sender-unavailable")
+    try:
+        chat_id = normalize_telegram_chat_id(target.chat_id)
+    except Exception as exc:
+        raise DeliveryConfigurationError("destination-invalid") from exc
+
+    thread_kwargs = _exact_thread_kwargs(target)
+    bot = _configured_telegram_bot(Bot, token)
+
+    # The helper returns the native Message only after one Bot API call.  Do not
+    # catch/replay a transport exception here: the adapter records it as uncertain.
+    response = await _send_telegram_message_with_retry(
+        bot,
+        attempts=1,
+        chat_id=chat_id,
+        text=text,
+        **thread_kwargs,
+    )
+    message_id = (
+        response.get("message_id")
+        if isinstance(response, Mapping)
+        else getattr(response, "message_id", None)
+    )
+    if message_id is None:
+        return {"outcome": "uncertain", "error_class": "ack-missing-message-id"}
+    return {"success": True, "message_id": message_id}
+
+
 async def _default_native_sender(target: PinnedTelegramTarget, text: str) -> Mapping[str, Any]:
-    """Call the existing Hermes standalone sender and return its raw result."""
+    """Call the exact existing Hermes Telegram transport lazily."""
 
     try:
         from gateway.config import Platform, load_gateway_config  # type: ignore[import-not-found]
-        from tools.send_message_tool import _send_to_platform  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover - manager-only path
         raise DeliveryConfigurationError("native-sender-unavailable") from exc
 
@@ -262,16 +397,7 @@ async def _default_native_sender(target: PinnedTelegramTarget, text: str) -> Map
         raise DeliveryConfigurationError("native-sender-unavailable") from exc
     if pconfig is None or not getattr(pconfig, "enabled", False):
         raise DeliveryConfigurationError("telegram-disabled")
-    result = await _send_to_platform(
-        Platform.TELEGRAM,
-        pconfig,
-        target.chat_id,
-        text,
-        thread_id=target.thread_id,
-    )
-    if not isinstance(result, Mapping):
-        return {"outcome": "uncertain", "error_class": "sender-invalid-result"}
-    return result
+    return await _send_exact_native_telegram(pconfig, target, text)
 
 
 def _target_from_value(value: Any) -> PinnedTelegramTarget | None:
@@ -445,9 +571,19 @@ class TelegramDeliveryAdapter:
         self.owner_id = owner_id.strip()
         self.lease_ttl_seconds = lease_ttl_seconds
 
-    def _resolve_target(self, settings: MonitorSettings) -> PinnedTelegramTarget:
+    def _resolve_target(
+        self,
+        settings: MonitorSettings,
+        *,
+        expected_reference: str | None = None,
+    ) -> PinnedTelegramTarget:
         if not settings.destination_ref:
             raise DeliveryConfigurationError("destination-unpinned")
+        pinned_reference = (
+            settings.destination_ref if expected_reference is None else expected_reference
+        )
+        if settings.destination_ref != pinned_reference:
+            raise DeliveryConfigurationError("destination-changed")
         resolver = self.target_resolver
         if resolver is None:
             target = _default_target(settings)
@@ -459,7 +595,7 @@ class TelegramDeliveryAdapter:
             target = _target_from_value(target_value)
         if target is None:
             raise DeliveryConfigurationError("destination-missing")
-        if target.reference != settings.destination_ref:
+        if target.reference != pinned_reference:
             raise DeliveryConfigurationError("destination-changed")
         if not target.chat_id.strip() or (
             target.thread_id is not None and not target.thread_id.strip()
@@ -469,7 +605,7 @@ class TelegramDeliveryAdapter:
             target_reference = canonical_target_reference(target.chat_id, target.thread_id)
         except ValueError as exc:
             raise DeliveryConfigurationError("destination-invalid") from exc
-        if target_reference != settings.destination_ref:
+        if target_reference != pinned_reference:
             raise DeliveryConfigurationError("destination-changed")
         if settings.profile_binding is not None and target.profile_binding not in {
             None,
@@ -477,6 +613,40 @@ class TelegramDeliveryAdapter:
         }:
             raise DeliveryConfigurationError("profile-binding-changed")
         return target
+
+    def _target_for_attempt(
+        self,
+        *,
+        pinned_reference: str,
+        pinned_profile: str | None,
+    ) -> tuple[PinnedTelegramTarget | None, _SenderReceipt | None]:
+        """Re-read settings and resolve the exact pin immediately before transport."""
+
+        settings = self.store.get_settings()
+        if not settings.enabled:
+            return None, _SenderReceipt(DeliveryOutcome.SUPPRESSED, error_class="monitor-disabled")
+        if settings.destination_ref != pinned_reference:
+            return None, _SenderReceipt(DeliveryOutcome.FAILED, error_class="destination-changed")
+        if settings.profile_binding != pinned_profile:
+            return None, _SenderReceipt(
+                DeliveryOutcome.FAILED, error_class="profile-binding-changed"
+            )
+        try:
+            return (
+                self._resolve_target(settings, expected_reference=pinned_reference),
+                None,
+            )
+        except TelegramDeliveryError as error:
+            return None, _SenderReceipt(
+                DeliveryOutcome.FAILED,
+                error_class=_safe_token(error.error_class, "destination-unavailable"),
+            )
+        except Exception:
+            # A foreign resolver/configuration exception is never allowed to cross
+            # the public boundary or to be interpreted as a transport retry.
+            return None, _SenderReceipt(
+                DeliveryOutcome.FAILED, error_class="destination-unavailable"
+            )
 
     @staticmethod
     def _verify_parts(deliveries: Sequence[Delivery], parts: Sequence[str]) -> str | None:
@@ -495,16 +665,26 @@ class TelegramDeliveryAdapter:
     def _current_part_results(store: MonitorStore, report_id: str) -> list[dict[str, str]]:
         return [_part_result(delivery) for delivery in store.list_deliveries(report_id)]
 
+    def _persist_setup_receipt(self, lease: Lease, receipt: _SenderReceipt) -> Delivery:
+        if receipt.outcome is DeliveryOutcome.SUPPRESSED:
+            return self.store.suppress_delivery(lease, reason="monitor-disabled")
+        return self._complete(lease, receipt)
+
     def _complete(
         self,
         lease: Lease,
         receipt: _SenderReceipt,
     ) -> Delivery:
+        error_class = (
+            _safe_token(receipt.error_class, "delivery-failure")
+            if receipt.error_class is not None
+            else None
+        )
         return self.store.complete_delivery(
             lease,
             outcome=receipt.outcome.value,
             message_id=receipt.message_id,
-            error_class=receipt.error_class,
+            error_class=error_class,
             error_message=None,
         )
 
@@ -528,13 +708,16 @@ class TelegramDeliveryAdapter:
 
     def _receipt_from_exception(self, error: BaseException) -> _SenderReceipt:
         if isinstance(error, DeliveryConfigurationError):
-            return _SenderReceipt(DeliveryOutcome.FAILED, error_class=error.error_class)
+            return _SenderReceipt(
+                DeliveryOutcome.FAILED,
+                error_class=_safe_token(error.error_class, "destination-unavailable"),
+            )
         if isinstance(error, PreDispatchError):
             return _SenderReceipt(
                 DeliveryOutcome.FAILED,
                 error_class=_safe_token(error.error_class, "pre-dispatch-failure"),
                 retryable=True,
-                retry_after=error.retry_after,
+                retry_after=_retry_after(error.retry_after),
             )
         if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
             return _SenderReceipt(DeliveryOutcome.UNCERTAIN, error_class="dispatch-uncertain")
@@ -578,14 +761,30 @@ class TelegramDeliveryAdapter:
                 False,
                 "monitor-disabled",
             )
+        pinned_reference = settings.destination_ref or ""
+        pinned_profile = settings.profile_binding
         deliveries = self.store.list_deliveries(report_id)
         mismatch = self._verify_parts(deliveries, parts)
         if mismatch is not None:
             return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, mismatch)
         try:
-            target = self._resolve_target(settings)
+            self._resolve_target(settings, expected_reference=pinned_reference)
         except TelegramDeliveryError as error:
-            return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, error.error_class)
+            return DeliveryRun(
+                report_id,
+                DeliveryOutcome.FAILED,
+                tuple(),
+                False,
+                _safe_token(error.error_class, "destination-unavailable"),
+            )
+        except Exception:
+            return DeliveryRun(
+                report_id,
+                DeliveryOutcome.FAILED,
+                tuple(),
+                False,
+                "destination-unavailable",
+            )
         if not deliveries:
             return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, "outbox-empty")
 
@@ -652,6 +851,25 @@ class TelegramDeliveryAdapter:
                         )
                     part_done = True
                     break
+                target, setup_receipt = self._target_for_attempt(
+                    pinned_reference=pinned_reference,
+                    pinned_profile=pinned_profile,
+                )
+                if setup_receipt is not None:
+                    try:
+                        persisted = self._persist_setup_receipt(lease, setup_receipt)
+                    except LeaseLostError:
+                        results.append(
+                            {
+                                "outcome": DeliveryOutcome.UNCERTAIN.value,
+                                "error_class": "dispatch-uncertain",
+                            }
+                        )
+                    else:
+                        results.append(_part_result(persisted))
+                    part_done = True
+                    break
+                assert target is not None
                 try:
                     raw = self._invoke_sender(target, text)
                     receipt = _normalize_sender_result(raw)
@@ -715,14 +933,30 @@ class TelegramDeliveryAdapter:
                 False,
                 "monitor-disabled",
             )
+        pinned_reference = settings.destination_ref or ""
+        pinned_profile = settings.profile_binding
         deliveries = self.store.list_deliveries(report_id)
         mismatch = self._verify_parts(deliveries, parts)
         if mismatch is not None:
             return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, mismatch)
         try:
-            target = self._resolve_target(settings)
+            self._resolve_target(settings, expected_reference=pinned_reference)
         except TelegramDeliveryError as error:
-            return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, error.error_class)
+            return DeliveryRun(
+                report_id,
+                DeliveryOutcome.FAILED,
+                tuple(),
+                False,
+                _safe_token(error.error_class, "destination-unavailable"),
+            )
+        except Exception:
+            return DeliveryRun(
+                report_id,
+                DeliveryOutcome.FAILED,
+                tuple(),
+                False,
+                "destination-unavailable",
+            )
         if not deliveries:
             return DeliveryRun(report_id, DeliveryOutcome.FAILED, tuple(), False, "outbox-empty")
 
@@ -788,6 +1022,25 @@ class TelegramDeliveryAdapter:
                         )
                     part_done = True
                     break
+                target, setup_receipt = self._target_for_attempt(
+                    pinned_reference=pinned_reference,
+                    pinned_profile=pinned_profile,
+                )
+                if setup_receipt is not None:
+                    try:
+                        persisted = self._persist_setup_receipt(lease, setup_receipt)
+                    except LeaseLostError:
+                        results.append(
+                            {
+                                "outcome": DeliveryOutcome.UNCERTAIN.value,
+                                "error_class": "dispatch-uncertain",
+                            }
+                        )
+                    else:
+                        results.append(_part_result(persisted))
+                    part_done = True
+                    break
+                assert target is not None
                 try:
                     raw = await self._invoke_sender_async(target, text)
                     receipt = _normalize_sender_result(raw)
