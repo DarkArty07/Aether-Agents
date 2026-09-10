@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-07T03:39:57Z",
+  "observed_at_utc": "2026-09-10T18:18:11Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -112,7 +112,7 @@
       "kind": "uncertainty"
     },
     {
-      "detail": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence.",
+      "detail": "The documented private backup reconstruction input was approval-denied under #264 and is neither rerun, replaced, nor inferred, so the HLP-226b reconstruction and the record-level artifact verification remain unavailable; the HLP-226c patch checksum, parser control, and byte-for-byte reconstruction against maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 passed and do not establish HLP-226b byte equivalence. No reconstruction has been performed against the inspected upstream revision, which does not contain the required behavior.",
       "id": "HLP-226",
       "kind": "artifact"
     },
@@ -133,6 +133,11 @@
     },
     {
       "detail": "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.",
+      "id": "HLP-226",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7.",
       "id": "HLP-226",
       "kind": "uncertainty"
     },
@@ -212,6 +217,46 @@
       "kind": "uncertainty"
     },
     {
+      "detail": "The exact local reconstruction passed, but the already-modified editable runtime preimages are private and are not public release artifacts. Public readers must not infer clean upstream applicability from the portable patch checksum.",
+      "id": "HLP-305",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-305",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.",
+      "id": "HLP-305",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found.",
+      "id": "HLP-305",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.",
+      "id": "HLP-310",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-310",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The inspected upstream lacks snapshot exclusions for HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_*.",
+      "id": "HLP-310",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb is downstream-only; no equivalent upstream change exists.",
+      "id": "HLP-310",
+      "kind": "uncertainty"
+    },
+    {
       "detail": "No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.",
       "id": "HLP-335",
       "kind": "artifact"
@@ -229,6 +274,41 @@
     {
       "detail": "No public portable patch is checked into patches/hermes; reconstruction uses a private dirty preimage.",
       "id": "HLP-335",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.",
+      "id": "HLP-354",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-354",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The inspected upstream roots new worktrees at incidental HEAD and lacks worktree_base_ref.",
+      "id": "HLP-354",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 is downstream-only; no equivalent upstream change exists.",
+      "id": "HLP-354",
+      "kind": "uncertainty"
+    },
+    {
+      "detail": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.",
+      "id": "HLP-369",
+      "kind": "artifact"
+    },
+    {
+      "detail": "Retirement gate status is failed.",
+      "id": "HLP-369",
+      "kind": "retirement_gate"
+    },
+    {
+      "detail": "The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.",
+      "id": "HLP-369",
       "kind": "uncertainty"
     }
   ],
@@ -834,24 +914,45 @@
             "kind": "reconstruction",
             "reference": "full HLP-226b patch byte reconstruction against the documented backup input",
             "result": "unavailable"
+          },
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418",
+            "kind": "patch",
+            "ledger_sha256": "6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-226c-cross-board-project-inheritance.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "byte-for-byte portable patch reconstruction of the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 (git apply --check plus file SHA-256 and Git blob equality for all three changed files)",
+            "result": "passed"
           }
         ],
-        "blocker": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence.",
+        "blocker": "The documented private backup reconstruction input was approval-denied under #264 and is neither rerun, replaced, nor inferred, so the HLP-226b reconstruction and the record-level artifact verification remain unavailable; the HLP-226c patch checksum, parser control, and byte-for-byte reconstruction against maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 passed and do not establish HLP-226b byte equivalence. No reconstruction has been performed against the inspected upstream revision, which does not contain the required behavior.",
         "status": "unavailable"
       },
       "blocking_uncertainty": [
         "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.",
         "Issue #226 is reopened, and the completing upstream PR remains open.",
-        "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded."
+        "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.",
+        "HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7."
       ],
       "components": [
         "HLP-226",
-        "HLP-226b"
+        "HLP-226b",
+        "HLP-226c"
       ],
       "id": "HLP-226",
-      "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
-      "local_status": "ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL",
-      "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root.",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:168-184",
+      "local_status": "ACTIVE_LOCAL + HLP-226b; HLP-226c MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
+      "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root. A current-board Project/affinity root whose shared worktree was created for a prior board also keeps its Project when the leaf names no task in this board: recovery requires the exact source Project and affinity, exact board metadata binding the same Project to the repository containing the shared path, and exactly one opaque leaf under <board default_workdir>/.worktrees/, while every board/path/Project/affinity mismatch fails closed before an invalid child is persisted.",
       "retirement_gate": {
         "evidence": [
           {
@@ -865,16 +966,21 @@
             "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
           },
           {
+            "kind": "test",
+            "reference": "maintained-fork baseline 415056fee527c5a2302370bd6dba56f84b9a4202 versus reviewed candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d, tests/tools/test_kanban_cross_board_project.py",
+            "result": "The identical 21-test module bytes used at both revisions failed 3 of 21 tests on the unchanged baseline with 'kanban_create: session-affinity tasks require a canonical project_id' (cross-board recurrence, materialized two-step E2E, explicit target board versus process-current decoy board) and passed 21 of 21 on the reviewed candidate; the minimum affected run passed 132 tests with 1 Windows-only skip. Results recorded by the HF-226C fork producer and independently reproduced by the same-card Supervisor review at the exact candidate revision; this Aether unit reconstructed the exact candidate bytes and did not re-run the fork suites."
+          },
+          {
             "kind": "artifact",
             "reference": "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
             "result": "SHA-256 matched and git apply --stat parsed the two-file patch. git apply --check against this Aether repository cannot find the Hermes target files, so it is not an application or reconstruction pass."
           }
         ],
         "status": "failed",
-        "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source."
+        "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source; then verify that a current-board Project/affinity root sharing a prior-board worktree leaf still recovers the board-bound Project/repository identity in the new terminal and its cross-profile worktree child, while every board/path/Project/affinity mismatch fails before invalid persistence."
       },
       "retirement_recommendation": "retain",
-      "summary": "Retain HLP-226 and HLP-226b. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable.",
+      "summary": "Retain HLP-226, HLP-226b and HLP-226c. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable. The new portable HLP-226c patch is bound by digest and reconstructs the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d byte for byte from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 with git apply --check and all three changed files matching on file SHA-256 and Git blob identity.",
       "upstream": {
         "disposition": "upstream_partial",
         "evidence": [
@@ -1180,6 +1286,170 @@
       "artifact_verification": {
         "artifacts": [
           {
+            "checksum_status": "passed",
+            "computed_sha256": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
+            "kind": "patch",
+            "ledger_sha256": "05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-305-tui-lease-refresh-contention.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "private exact loaded-source preimages identified by the SHA-256 values in HERMES_LOCAL_PATCHES.md",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "local exact-preimage application reconstructed both installed file hashes byte for byte",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact local reconstruction passed, but the already-modified editable runtime preimages are private and are not public release artifacts. Public readers must not infer clean upstream applicability from the portable patch checksum.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.",
+        "Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found."
+      ],
+      "components": [
+        "HLP-305",
+        "run_agent.py",
+        "tests/run_agent/test_cross_process_turn_lease.py",
+        "hermes_state_common.py",
+        "hermes_state_schema.py",
+        "hermes_state_search.py",
+        "tests/test_fts_tool_write_bounds.py",
+        "scripts/qualify_legacy_fts_contention.py"
+      ],
+      "id": "HLP-305",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-305--transient-turn-lease-refresh-contention-must-not-impersonate-a-user-interrupt",
+      "local_status": "MAINTAINED_FORK / LIVE_FTS_ACTIVATED / PROCESS_RELOAD_PENDING",
+      "required_behavior": "A transient SQLite locked or busy error while the current holder refreshes a session turn lease must not be presented as a user interrupt while the existing TTL leaves a complete bounded retry budget. A holder-qualified refresh miss, non-lock persistence error, or exhausted safe retry window must still hard-interrupt before authority can expire. The maintained fork also bounds new legacy-inline FTS tool body prefixes without deleting canonical messages or historical index rows; explicit tool-role queries retain full-body search and failed DDL rolls back atomically.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/run_agent/test_cross_process_turn_lease.py::test_run_conversation_retries_transient_locked_lease_refresh",
+            "result": "Exact loaded-source RED failed with an empty final response after the first locked refresh; the HLP-305 candidate and installed fresh-process run pass. Current upstream source still has the unconditional exception interrupt, so the upstream retirement gate is not satisfied."
+          },
+          {
+            "kind": "test",
+            "reference": "https://github.com/DarkArty07/aether-hermes/pull/1",
+            "result": "Local6focused tests;73FTS/lease compatibility;867expanded pass plus1 unchanged baseline failure (#349). Same384-row synthetic holder workload changes from20slease timeout to2.159s successful refresh; complete canonical data preserved. No upstream download/upgrade and no claimed GitHub CI pass."
+          }
+        ],
+        "status": "failed",
+        "summary": "Retire only when an exact upstream revision without HLP-305 completes a transient-lock-then-success turn, fails closed before TTL expiry under persistent contention, and preserves holder-miss, non-lock-error, late-refresh cleanup and real TUI continuation controls."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4810074d73d9419dc82545202d595507a73f4f0e/agent/turn_facade_lease.py#L174-L203",
+            "result": "The current upstream fa\u00e7ade still interrupts the turn for every refresh exception; it does not distinguish a transient locked or busy persistence error from authority loss."
+          },
+          {
+            "kind": "api",
+            "reference": "https://github.com/DarkArty07/Aether-Agents/issues/305#issuecomment-5575740762",
+            "result": "The live recurrence records a lease refresh blocked for more than 20 seconds, followed by a false interrupted_by_user terminal state while the TUI process and background work remained alive."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "state": "open",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/305"
+          },
+          {
+            "kind": "commit",
+            "state": "current source spot-check",
+            "url": "https://github.com/NousResearch/hermes-agent/commit/4810074d73d9419dc82545202d595507a73f4f0e"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
+            "kind": "patch",
+            "ledger_sha256": "85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "full-patch byte reconstruction against fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+            "result": "unavailable"
+          }
+        ],
+        "blocker": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The inspected upstream lacks snapshot exclusions for HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_*.",
+        "Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb is downstream-only; no equivalent upstream change exists."
+      ],
+      "components": [
+        "HLP-310",
+        "tools/environments/base.py",
+        "tests/tools/test_snapshot_session_id_leak.py",
+        "tests/tools/test_delegate_kanban_isolation.py"
+      ],
+      "id": "HLP-310",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-310--delegated-child-identity-and-kanban-environment-snapshot-exclusion",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "Reusable terminal snapshots must exclude HERMES_DELEGATED_CHILD_CONTEXT and dispatcher-owned HERMES_KANBAN_* variables so delegated child context does not leak into parent sessions or subsequent commands.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target source prerequisite control",
+            "result": "The prerequisite failed: inspected upstream lacks delegated child context and Kanban snapshot exclusion primitives; full behavioral regression cannot pass on this revision."
+          }
+        ],
+        "status": "failed",
+        "summary": "Retire only when an adopted Hermes release excludes HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_* from terminal session snapshots with equivalent tests."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/environments/base.py",
+            "result": "The inspected upstream revision contains no exclusion for HERMES_DELEGATED_CHILD_CONTEXT or HERMES_KANBAN_* in _export_dump_excluding_session_vars or _SNAPSHOT_EXCLUDED_ENV_REGEX."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/310"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
             "kind": "reconstruction_input",
             "reference": "private exact dirty preimage SHA-256 10d60a61000b02457381cac3de2b202bf5ecc84bff9ad0f52e4f8f35809a1eb0",
             "result": "unavailable"
@@ -1245,10 +1515,167 @@
         ],
         "repository": "https://github.com/NousResearch/hermes-agent"
       }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
+            "kind": "patch",
+            "ledger_sha256": "d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-354-kanban-worktree-base-ref.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+            "result": "unavailable"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "full-patch byte reconstruction against fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec",
+            "result": "unavailable"
+          }
+        ],
+        "blocker": "The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The inspected upstream roots new worktrees at incidental HEAD and lacks worktree_base_ref.",
+        "Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 is downstream-only; no equivalent upstream change exists."
+      ],
+      "components": [
+        "HLP-354",
+        "hermes_cli/kanban_db.py",
+        "tests/hermes_cli/test_kanban_worktree_base_ref.py"
+      ],
+      "id": "HLP-354",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-354--kanban-worktree_base_ref-materialization",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "When creating a new branch for a linked git worktree, materialize the worktree from the board's recorded worktree_base_ref commit rather than incidental primary HEAD, and fail closed on invalid base references.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "disposable exact-target source prerequisite control",
+            "result": "The prerequisite failed: inspected upstream lacks worktree_base_ref support; new worktrees are rooted at incidental HEAD."
+          }
+        ],
+        "status": "failed",
+        "summary": "Retire only when upstream Hermes adopts board-level worktree base ref configuration with equivalent validation and fail-closed semantics."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "The inspected upstream revision roots new worktrees at incidental HEAD and does not support board-level worktree_base_ref configuration or validation."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/354"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
+    },
+    {
+      "artifact_verification": {
+        "artifacts": [
+          {
+            "checksum_status": "passed",
+            "computed_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
+            "kind": "patch",
+            "ledger_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
+            "parse_status": "passed",
+            "reference": "patches/hermes/HLP-369-goal-mode-review-recovery.patch",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction_input",
+            "reference": "maintained fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+            "result": "passed"
+          },
+          {
+            "kind": "reconstruction",
+            "reference": "byte-for-byte portable patch reconstruction against maintained fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+            "result": "passed"
+          }
+        ],
+        "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.",
+        "status": "unavailable"
+      },
+      "blocking_uncertainty": [
+        "The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route."
+      ],
+      "components": [
+        "HLP-369",
+        "hermes_cli/goals.py",
+        "hermes_cli/kanban.py",
+        "hermes_cli/kanban_db.py",
+        "tools/kanban_tools.py",
+        "tests/hermes_cli/test_kanban_cli.py",
+        "tests/hermes_cli/test_kanban_review_surfaces.py",
+        "tests/hermes_cli/test_kanban_session_affinity.py",
+        "tests/tools/test_kanban_tools.py"
+      ],
+      "id": "HLP-369",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-369--bounded-review-flow-recovery",
+      "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+      "required_behavior": "A complete goal-mode implementation can pass a phase-aware readiness gate and request independent review without requiring the verdict that review will produce; incomplete work remains rejected; completion retains the whole-objective gate; only an independent reviewer can approve or request changes; the exact pending flow-controller recovery signal reaches the origin without allowing arbitrary capability or transient blocks to escape the goal loop.",
+      "retirement_gate": {
+        "evidence": [
+          {
+            "kind": "test",
+            "reference": "tests/hermes_cli/test_kanban_review_surfaces.py and tests/hermes_cli/test_kanban_session_affinity.py on unchanged maintained-fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+            "result": "Baseline RED reproduced circular goal-mode review rejection, goal-mode controller recovery rejection, and CLI capability-block escape before the candidate changes."
+          }
+        ],
+        "status": "failed",
+        "summary": "Retire only when an exact released Hermes revision passes the complete-to-review readiness gate, independent reviewer/re-review cycle, whole-objective completion gate, exact recovery-origin canary, and arbitrary-block negative controls without the local patch."
+      },
+      "retirement_recommendation": "retain",
+      "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.",
+      "upstream": {
+        "disposition": "upstream_missing",
+        "evidence": [
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py",
+            "result": "The exact reconciliation snapshot applies the whole-goal judge to request-review and permits only dependency/needs_input goal-mode block kinds; it does not provide the maintained recovery-controller exception."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban.py",
+            "result": "The exact reconciliation snapshot applies the completion judge to request-review as well as completion, so review entry remains circular."
+          },
+          {
+            "kind": "source",
+            "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+            "result": "The exact reconciliation snapshot has no goal_mode_block_allowed predicate or equivalent exact pending-controller recovery route."
+          }
+        ],
+        "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "linked_refs": [
+          {
+            "kind": "issue",
+            "url": "https://github.com/DarkArty07/Aether-Agents/issues/369"
+          }
+        ],
+        "repository": "https://github.com/NousResearch/hermes-agent"
+      }
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c052209e5c9bf",
+  "source_ledger_sha256": "c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44616dc487",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"
