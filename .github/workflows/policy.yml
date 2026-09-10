@@ -47,6 +47,7 @@ jobs:
           .aether/objective-contracts/oc_59cd48430a56d93c/v5.md
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
           .aether/objective-contracts/oc_75401d18c602d787/v1.md
+          .aether/objective-contracts/oc_7a35eca6393f18a7/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v2.md
           .aether/objective-contracts/oc_8b7b84c924ba0d71/v1.md
@@ -119,6 +120,7 @@ jobs:
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
