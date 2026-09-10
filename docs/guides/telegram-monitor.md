@@ -195,7 +195,10 @@ idle gate and the D12 safety boundary (every live-corpus text — including the 
 instruction — is accepted by the shipped deterministic boundary, while the historical
 instruction-like canary is refused with `REPORTING_UNSAFE_CONTENT` before any prompt is
 built and without leaking its text), and it verifies that no native Hermes module, model
-call or Telegram send occurred. It is not live evidence.
+call or Telegram send occurred. The private workspace this lane uses is removed with a
+verified postcondition: a workspace that cannot be removed is reported as residue and fails
+the run with the bounded `workspace-residue` error instead of a finished qualification. It
+is not live evidence.
 
 The provisioned live lane is owned by the terminal integration step (MON-INT) and is
 invoked as:
@@ -263,7 +266,14 @@ effect. What it does, in order:
    shipped project writer itself (the same registration call with the same arguments, run
    against a private scratch state root the harness creates and removes) and never read back
    out of the operator registry, so a concurrent writer's same-id update can never be captured
-   as this run's entry. Entries this run registered for its own synthetic projects are removed
+   as this run's entry. That derivation is qualification-gating: the scratch state root is
+   removed with a verified postcondition, and a root that survives is a bounded
+   `registry-scope-residue` failure that leaves the synthetic scope unverified instead of
+   returning a successful derivation. Ownership is therefore resolved before the restore can
+   act, and a run that cannot name its own entries never reverts the isolation at all: the
+   restore refuses, the isolated registry is left exactly as it is, and the durable recovery
+   artifacts stay on disk for the operator. Entries this run registered for its own synthetic
+   projects are removed
    only while they still carry exactly that value; an entry for a run-owned id that changed is
    neither deleted nor merged — the restore refuses and keeps the durable evidence. The
    qualification never invents a real
@@ -335,7 +345,11 @@ effect. What it does, in order:
    any — are merged back under them) or `concurrent-kept` (the run found no registry and a
    concurrently created one that never carried a run-owned entry is untouched);
    any other result gates the verdict with `restore-registry` and keeps the durable recovery
-   record for reconciliation.
+   record for reconciliation. A restore whose ownership could not be derived is reported
+   `restore-registry` as well, with nothing reverted at all: without the exact entries this run
+   registered it cannot tell this run's own synthetic registrations from a concurrent writer's,
+   so it reverts nothing rather than deleting a concurrent entry or leaving a synthetic one
+   behind.
 
 Registry recovery after an interruption. Two durable artifacts live next to the operator
 registry for the duration of a live run: `registry.json.qualification-recovery.json` holds
@@ -353,16 +367,32 @@ the artifacts before re-running. A completed run removes exactly the artifacts i
 each verified against the identity and content it installed, and only after the restored
 state — including the absence of every registry entry this run registered for its synthetic
 projects — has been verified; a restore that cannot prove that fails the run and keeps the
-artifacts. The removal never unlinks a documented artifact name: it first moves that name
-with a no-replace rename to a fresh name this run invents in the same private directory, then
-verifies the moved file against the identity and content this run installed, and only that
-fresh name — created by this run moments earlier — is unlinked. A file that does not verify is
-moved straight back to the artifact name (no-replace again) and the removal reports failure:
-an entry that appeared at the artifact name after the reader's check is never replaced and
-never deleted, and the run refuses with the durable evidence intact. If the move back itself
-cannot be performed because the artifact name was taken meanwhile, the moved file stays on
-disk at that fresh name — `<artifact name>.<random>.qualification-quarantine` beside it — so
-nothing is lost.
+artifacts.
+
+No entry of the operator's registry directory is ever unlinked. A removal verifies the artifact
+*through a descriptor* — a real, singly linked regular file with exactly the device/inode
+identity, and the exact bytes, this run installed — moves it into a fresh run-owned private
+staging directory (`0700`, named `.aether-qualification-staging-<random>`) with one no-replace
+rename, verifies the moved entry there through a descriptor again, deletes only inside that
+staging directory, and proves the deletion by descriptor: the verified inode's link count must
+have reached zero and the staged name must be gone. The staging directory itself is removed with
+`rmdir`, which the kernel refuses while any entry is still inside it, so a leftover is never
+removed silently: it stays under that documented name, with its content, for reconciliation and
+the run fails. Every file the harness installs into the registry directory — the durable
+recovery record, the synthetic registry and the restored registry — is staged the same way, so
+that directory only ever sees no-clobber `link` creations and no-replace renames.
+
+An entry that appears at the artifact name after the descriptor check is never replaced and
+never deleted: the move carries it into the staging directory, the staged verification shows it
+is not this run's own file, and it is moved straight back to where it was found while the run
+refuses. A deletion that cannot be proven — the boundary case of a same-user process
+substituting an entry *inside this run's own staging directory* between the staged verification
+and the unlink, which no supported concurrent writer can do, because POSIX offers no delete
+bound to a file identity — never yields a verdict: the run reinstates the exact bytes it
+verified at the artifact name without replacing anything, keeps a diverted run-owned copy
+instead of deleting bytes it cannot prove are its own, and reports the bounded failure with the
+staging directory and its content retained. If the artifact name was taken meanwhile, nothing of
+it is touched and the operator reconciles from the retained copy.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file. The
@@ -408,6 +438,15 @@ Current limits, stated honestly:
 - Until the live lane and the terminal integration complete, this build's live
   hourly/narration/Telegram behavior is **not** qualified. Sample runs, manual ticks and
   the offline lane are not substitutes.
+- **Deletion boundary (POSIX).** No filesystem interface binds a delete to a file identity, so
+  the harness never unlinks a name in the operator's registry directory: it only deletes inside
+  a private `0700` staging directory that this run creates, owns and removes with `rmdir`, and
+  it proves every deletion by descriptor (the verified inode's link count must reach zero).
+  A same-user process that substitutes an entry *inside that staging directory* between the
+  staged verification and the unlink is therefore outside the supported concurrency boundary;
+  it can never yield a verdict — the run refuses, reinstates the verified bytes and retains the
+  staging directory with its content — but the substituted entry itself cannot be protected
+  from that single syscall by any implementation of this harness.
 - **Environment pre-flight.** The monitor never treats a coverage gap as idle. A
   read-only probe therefore runs before anything is enabled, and the run refuses with
   `environment-gaps` when the installation itself reports a gap the qualification cannot

@@ -2159,6 +2159,7 @@ class _FakeBackends:
         self.scope_remove_residue: list[str] = []
         self.scope_remove_verified: dict[str, bool] | None = None
         self.registry_restore_value = "byte-identical"
+        self.restore_isolation: Mapping[str, Any] | None = None
         self.fail_job_removal = False
         self.output_payloads: dict[str, Any] = {}
         self.output_parents: dict[str, Any] = {}
@@ -2359,6 +2360,11 @@ class _FakeBackends:
 
     def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
         self.calls.append("restore_registry")
+        self.restore_isolation = isolation
+        if isinstance(isolation, Mapping) and isolation.get("ownership_available") is False:
+            # Faithful to the shipped helper: a restore whose ownership is unknown never
+            # reverts the isolation, so it can never report success.
+            return "failed"
         return self.registry_restore_value
 
     def write_output(
@@ -5039,7 +5045,7 @@ def test_registry_restore_refuses_an_entry_that_appears_at_the_outgoing_seam(
     assert set(payload["projects"]) == {SYNTHETIC_PROJECT_ONE, SYNTHETIC_PROJECT_TWO}
     record = json.loads(world["recovery_path"].read_text(encoding="utf-8"))
     assert base64.b64decode(record["original_base64"]) == operator
-    assert not list(registry_path.parent.glob("*quarantine*"))
+    assert not list(registry_path.parent.glob(f"{module.REGISTRY_STAGING_PREFIX}*"))
 
 
 def test_registry_artifact_removal_never_deletes_a_replacement(
@@ -5070,7 +5076,7 @@ def test_registry_artifact_removal_never_deletes_a_replacement(
     assert module._remove_private_registry_artifact(held_path, identity, operator) is False
 
     assert held_path.read_bytes() == sentinel
-    assert not list(registry_path.parent.glob("*quarantine*"))
+    assert not list(registry_path.parent.glob(f"{module.REGISTRY_STAGING_PREFIX}*"))
 
 
 def test_registry_restore_gates_when_a_durable_artifact_is_replaced_at_removal(
@@ -5105,4 +5111,327 @@ def test_registry_restore_gates_when_a_durable_artifact_is_replaced_at_removal(
     assert registry_path.read_bytes() == operator
     assert recovery_path.read_bytes() == sentinel
     # ...and the run never reports the registry as restored.
-    assert not list(registry_path.parent.glob("*quarantine*"))
+    assert not list(registry_path.parent.glob(f"{module.REGISTRY_STAGING_PREFIX}*"))
+
+
+# ---------------------------------------------------------------------------
+# Round 14: the removal seam and the run-owned cleanup roots
+# ---------------------------------------------------------------------------
+
+
+def _staging_directories(directory: Path, module: Any) -> list[Path]:
+    """Every run-owned private staging directory currently present in ``directory``."""
+
+    return sorted(path for path in directory.glob(f"{module.REGISTRY_STAGING_PREFIX}*"))
+
+
+def test_registry_cycle_never_unlinks_a_name_in_the_registry_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A complete isolate/register/restore cycle unlinks only inside its own staging directories.
+
+    The round-13 review moved an existing check-then-unlink race to a fresh name: the removal
+    verified a moved artifact and then unlinked the verified name, so a replacement that landed
+    in between was deleted.  The correction removes the class structurally instead of moving it
+    again — no entry of the operator's registry directory is ever unlinked, because every
+    deletion happens inside a fresh run-owned ``0700`` staging directory, which is then removed
+    with ``rmdir`` (the kernel refuses while anything is still inside it).  This regression
+    records every ``os.unlink`` the real helpers perform during the cycle and requires each
+    deletion that lands in the registry directory to be inside one of those staging directories.
+    """
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    directory = registry_path.parent
+    deleted_in: list[Path] = []
+    real_unlink = os.unlink
+
+    def recording_unlink(path: Any, *, dir_fd: int | None = None) -> None:
+        # Resolved while the descriptor is still open, so the recorded parent is the exact
+        # directory the deletion happened in.
+        parent = (
+            Path(os.readlink(f"/proc/self/fd/{dir_fd}"))
+            if dir_fd is not None
+            else Path(os.fspath(path)).parent
+        )
+        deleted_in.append(parent)
+        real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(module.os, "unlink", recording_unlink)
+
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=False
+    )
+    assert module._restore_registry(isolation) == "byte-identical"
+
+    assert registry_path.read_bytes() == operator
+    assert [path.name for path in directory.iterdir()] == ["registry.json"]
+    inside_registry = [
+        parent for parent in deleted_in if parent == directory or directory in parent.parents
+    ]
+    # The cycle does delete the files it staged (a positive control for the recorder)...
+    assert inside_registry
+    # ...and every one of those deletions is inside a run-owned staging directory, so a
+    # concurrent entry that lands at a registry name is never deleted by this harness.
+    for parent in inside_registry:
+        assert parent.name.startswith(module.REGISTRY_STAGING_PREFIX)
+        assert parent.parent == directory
+    assert _staging_directories(directory, module) == []
+
+
+def test_registry_artifact_removal_refuses_an_entry_that_replaces_it_at_the_move_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replacement file that appears at the artifact name at the move seam is never deleted.
+
+    The artifact was verified *through a descriptor* before the move, so the move itself carries
+    the replacement into the run's staging directory; the staged entry is verified there and does
+    not match, so it is moved straight back: the replacement survives at the name it was found
+    at, nothing of it is deleted, and the caller refuses.
+    """
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    held_path = world["held_path"]
+    isolation = module._isolate_registry()
+    identity = isolation["held_identity"]
+    sentinel = b"a concurrent replacement that appeared at the artifact name"
+    real_move = module._rename_no_replace
+
+    def injected(source: Path, destination: Path) -> None:
+        # The verified artifact is replaced by a *different file* immediately before the move.
+        if source == held_path:
+            held_path.unlink()
+            held_path.write_bytes(sentinel)
+        return real_move(source, destination)
+
+    monkeypatch.setattr(module, "_rename_no_replace", injected)
+
+    assert module._remove_private_registry_artifact(held_path, identity, operator) is False
+
+    assert held_path.read_bytes() == sentinel
+    assert _staging_directories(registry_path.parent, module) == []
+    assert registry_path.read_bytes() == module._synthetic_registry_bytes()
+
+
+def test_registry_artifact_removal_never_certifies_a_deletion_it_cannot_prove(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The round-13 probe, re-derived: a staged replacement is never certified as removed.
+
+    The probe moves the verified run-owned staged entry aside and installs a concurrent sentinel
+    at the same name immediately before the real unlink.  That substitution happens inside the
+    run's *own* staging directory, which no supported concurrent writer can write to, and POSIX
+    has no delete bound to a file identity, so this single syscall cannot be refused by any
+    filesystem interface.  What the harness must never do is report success: the deletion is
+    proven by descriptor (the verified inode's link count must have reached zero), so this run
+    refuses, reinstates the exact bytes it verified at the artifact name, keeps the diverted
+    run-owned copy instead of deleting bytes it cannot prove are its own, and leaves the staging
+    directory (holding that copy) in place as reported residue.
+    """
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    held_path = world["held_path"]
+    isolation = module._isolate_registry()
+    identity = isolation["held_identity"]
+    sentinel = b"a concurrent replacement inside the run's own staging directory"
+    diverted: list[Path] = []
+    real_unlink = os.unlink
+
+    def injected(path: Any, *, dir_fd: int | None = None) -> None:
+        if dir_fd is not None:
+            parent = Path(os.readlink(f"/proc/self/fd/{dir_fd}"))
+            staged = parent / os.fspath(path)
+            if parent.name.startswith(module.REGISTRY_STAGING_PREFIX) and staged.is_file():
+                moved = parent / f"diverted.{staged.name}"
+                staged.rename(moved)
+                diverted.append(moved)
+                staged.write_bytes(sentinel)
+        real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(module.os, "unlink", injected)
+
+    assert module._remove_private_registry_artifact(held_path, identity, operator) is False
+
+    # The removal is never certified: the artifact the run was asked to remove is recoverable...
+    assert held_path.read_bytes() == operator
+    # ...its diverted copy is accounted for rather than deleted or lost...
+    assert diverted and all(path.read_bytes() == operator for path in diverted)
+    # ...and the staging directory that still holds it is retained, never removed silently.
+    staging = _staging_directories(registry_path.parent, module)
+    assert len(staging) == 1
+    assert diverted[0].parent == staging[0]
+
+
+def test_registry_restore_refuses_when_the_ownership_derivation_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A restore that cannot name this run's own entries reverts nothing at all."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    isolation = module._isolate_registry()
+    isolation["ownership_available"] = False
+
+    assert module._restore_registry(isolation) == "failed"
+
+    # Nothing was reverted blind: the isolated registry and the durable evidence stay on disk.
+    assert registry_path.read_bytes() == module._synthetic_registry_bytes()
+    assert world["held_path"].is_file()
+    assert world["recovery_path"].is_file()
+
+
+def _record_derivation_scratch(module: Any, monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Record every private scratch state root the ownership derivation creates."""
+
+    roots: list[Path] = []
+    real_mkdtemp = module.tempfile.mkdtemp
+
+    def recording_mkdtemp(*arguments: Any, **keywords: Any) -> str:
+        created = real_mkdtemp(*arguments, **keywords)
+        roots.append(Path(created))
+        return created
+
+    monkeypatch.setattr(module.tempfile, "mkdtemp", recording_mkdtemp)
+    return roots
+
+
+def test_scope_ownership_derivation_gates_when_the_scratch_root_survives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A derivation whose private scratch root remains is a bounded failure, never a success."""
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    manifest = _scope_registration_manifest(tmp_path)
+    roots = _record_derivation_scratch(module, monkeypatch)
+    real_rmtree = shutil.rmtree
+
+    monkeypatch.setattr(module.shutil, "rmtree", lambda *arguments, **keywords: None)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._scope_registry_entries(manifest)
+
+    assert failure.value.code == "registry-scope-residue"
+    assert failure.value.detail["scratch"] == str(roots[0])
+    # The root is retained, with the registry the shipped writer produced, for reconciliation.
+    assert (roots[0] / "projects" / "registry.json").is_file()
+    real_rmtree(roots[0])
+
+
+def test_scope_ownership_derivation_gates_when_the_scratch_removal_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A derivation whose scratch removal raises is a bounded, gating failure as well."""
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    manifest = _scope_registration_manifest(tmp_path)
+    roots = _record_derivation_scratch(module, monkeypatch)
+    real_rmtree = shutil.rmtree
+
+    def failing_rmtree(*arguments: Any, **keywords: Any) -> None:
+        raise OSError("injected: the private scratch state root cannot be removed")
+
+    monkeypatch.setattr(module.shutil, "rmtree", failing_rmtree)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._scope_registry_entries(manifest)
+
+    assert failure.value.code == "registry-scope-residue"
+    assert failure.value.detail["scratch"] == str(roots[0])
+    assert (roots[0] / "projects" / "registry.json").is_file()
+    real_rmtree(roots[0])
+
+
+def test_live_scope_derivation_residue_never_qualifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The whole live lane fails closed when the ownership derivation leaves residue behind.
+
+    Exercises the real derivation through the live orchestration: the private scratch state root
+    is made to survive, the derivation raises its bounded failure, the orchestration marks the
+    ownership unavailable (so the restore refuses instead of reverting the isolation blind), and
+    the public summary the entry point emits carries no verdict at all.
+    """
+
+    world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
+    backends = world["backends"]
+    store = world["store"]
+    real_helper = module._scope_registry_owned_entries
+    real_rmtree = shutil.rmtree
+    roots = _record_derivation_scratch(module, monkeypatch)
+
+    def surviving_rmtree(*arguments: Any, **keywords: Any) -> None:
+        # Only the ownership derivation's own scratch root is left behind; every other removal
+        # (the test fixture's own cleanup) keeps working.
+        target = Path(arguments[0]) if arguments else None
+        if target in roots:
+            return
+        real_rmtree(*arguments, **keywords)
+
+    def deriving(
+        registry_path: Path, manifest: Sequence[Mapping[str, Any]]
+    ) -> tuple[dict[str, Any], list[str]]:
+        backends.calls.append("owned_registry_entries")
+        return real_helper(registry_path, manifest)
+
+    monkeypatch.setattr(module.shutil, "rmtree", surviving_rmtree)
+    backends.owned_registry_entries = deriving  # type: ignore[method-assign]
+    output = tmp_path / "private" / "receipt.json"
+
+    def live_run(args: Any, stream: Any) -> dict[str, Any]:
+        # The same ordering the shipped entry point uses: the target is validated read-only and
+        # then established immediately before the orchestrator; only the test-process refusal of
+        # the real ``run_live`` is replaced here.
+        output_path = module._private_output_path(args.output)
+        module._check_private_output_target(output_path)
+        established = module._establish_private_output_target(output_path)
+        return module._live_run(
+            args,
+            stream,
+            output=output_path,
+            backends=backends,
+            store=store,
+            established_parent=established,
+        )
+
+    monkeypatch.setattr(module, "run_live", live_run)
+
+    code = module.main(["--live", "--json", "--output", str(output)])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "registry-scope-residue"
+    # The public verdict can never be qualified, and the restore never reverted the isolation
+    # blind: the ownership was marked unavailable before the restore was asked to run.
+    assert "qualified" not in payload
+    assert backends.restore_isolation is not None
+    assert backends.restore_isolation.get("ownership_available") is False
+    # The private receipt that was written records the same failure and no qualified verdict.
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["public_summary"]["qualified"] is False
+    assert "registry-scope-residue" in {entry["code"] for entry in receipt["errors"]}
+    for root in roots:
+        real_rmtree(root, ignore_errors=True)

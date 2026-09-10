@@ -4,24 +4,42 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-13 corrections complete for review; self-verified. No `--live` run, no model call,
-no Telegram send, no activation. Rounds 1–12 are preserved below as history; the authoritative
-current state is **"Round-13 corrections"**, **"Round-13 probe"**, **"Round-13 verification
-record"** and **"Round-13 residual risks"**. Round 13 answers the round-12 review's strict
-contract/concurrency finding with four corrections in `scripts/qualify_telegram_monitor.py`:
-ownership of the synthetic registry entries is now *carried* — the exact values are derived from
-the shipped project writer with the run's own registration arguments against a private scratch
-state root, never read back out of the operator registry — so a concurrent same-id update is
-preserved instead of adopted and deleted; an originally absent registry completes the normal
-live-shaped cleanup (its own scope entries are removed, a genuine concurrent entry survives, and an
-otherwise empty registry this run created is removed); every operator-visible or durable registry
-name is moved with a no-replace rename (`renameat2`/`RENAME_NOREPLACE`, one kernel operation, no
-fallback to a clobbering rename) so an entry that appears at the held/outgoing destination at the
-seam is neither overwritten nor deleted; and a durable artifact is never unlinked under its
-documented name — it is moved to a fresh name this run invents, verified against the identity and
-content this run installed, and only that fresh name is unlinked, with a file that does not verify
-moved straight back and the run reporting failure. Eight real-helper regressions cover the four
-sequences, and the guide and this evidence state exactly that behavior.
+**Status:** round-14 corrections complete for review; self-verified. No `--live` run, no model call,
+no Telegram send, no activation. Rounds 1–13 are preserved below as history; the authoritative
+current state is **"Round-14 corrections"**, **"Round-14 probe, regressions and verification
+record"** and **"Round-14 residual risks"**. Round 14 answers the round-13 review's strict
+prior-correction/preservation finding with two corrections in `scripts/qualify_telegram_monitor.py`,
+`tests/test_telegram_monitor_cli_plugin.py` and `docs/guides/telegram-monitor.md`.
+
+First, the final removal seam is closed *structurally* instead of being moved to yet another fresh
+name: **no entry of the operator's registry directory is ever unlinked**. A removal verifies the
+artifact through a descriptor (real, singly linked, exact device/inode identity and exact bytes),
+moves it into a fresh run-owned `0700` staging directory (`.aether-qualification-staging-<random>`)
+with one no-replace rename, verifies the moved entry there through a descriptor again, deletes only
+inside that staging directory, proves the deletion by descriptor (the verified inode's link count
+must have reached zero and the staged name must be gone) and removes the directory with `rmdir`,
+which the kernel refuses while any entry is still inside it. Every file the harness installs into
+that directory (the recovery record, the synthetic registry, the restored registry) is staged the
+same way, so the registry directory only ever sees no-clobber `link` creations and no-replace
+renames. An entry that appears at an artifact name after the descriptor check is moved straight back
+and the run refuses; a deletion that cannot be proven never yields a verdict — the run reinstates
+the exact bytes it verified at the artifact name without replacing anything and retains the staging
+directory with any diverted run-owned copy. Because POSIX has no delete bound to a file identity, a
+same-user process that substitutes an entry *inside the run's own staging directory* between the
+staged verification and the unlink cannot be defended against by any filesystem interface: that
+residual is stated in the guide's limits, is detected by the descriptor postcondition, and can
+never produce a qualified verdict.
+
+Second, the run-owned cleanup roots are qualification-gating. The ownership derivation's private
+scratch state root is removed with a verified postcondition, and a root that survives is a bounded
+`registry-scope-residue` failure instead of a successful derivation; the live orchestration marks
+the ownership unavailable on that failure, so the restore refuses — it never reverts the isolation
+blind — and the durable recovery artifacts stay on disk for the operator. The deterministic lane's
+own workspace is likewise removed with a verified postcondition and fails the run with the bounded
+`workspace-residue` error when it survives. Seven new real-helper/entry-point regressions cover both
+corrections, including a structural regression that records every `os.unlink` of a complete
+isolate/register/restore cycle and requires each deletion inside the registry directory to be inside
+a run-owned staging directory.
 
 **Round-12 state (historical):** round 12 was requested for four preservation defects: the absent
 starting registry could not complete the live-shaped cleanup, the post-hoc readback could adopt and
@@ -2244,7 +2262,7 @@ superseded by round 11, which fences the window instead of only documenting it)
   (routed on card `t_d8a1aad6`); they are identical at the reviewed base and are not evidence
   about this round's change.
 
-## Round-11 corrections (authoritative)
+## Round-11 corrections (historical; superseded by round 13 and round 14 where contradicted)
 
 The round-11 review (strict contract/preservation audit) found that the round-10 candidate's
 restore classified this run's own synthetic registrations as legitimate concurrent work, and that
@@ -2620,7 +2638,7 @@ Deliberate non-effects in run 79: no `--live` invocation, no model call, no Tele
 credential operation, no profile/job/plugin activation, no native Hermes or source-database change,
 no push, PR, merge, issue mutation or publication.
 
-## Round-13 corrections (authoritative)
+## Round-13 corrections (historical; superseded by round 14 where contradicted)
 
 The round-12 review (strict contract/concurrency audit) reported four deterministic real-helper
 probes that contradicted D10 and the fixed preservation contract. All four were reproduced on the
@@ -2820,7 +2838,7 @@ Deliberate non-effects in round 13: no `--live` invocation, no model call, no Te
 credential operation, no profile/job/plugin activation, no native Hermes or source-database change,
 no push, PR, merge, issue mutation or publication.
 
-### Round-13 residual risks
+### Round-13 residual risks (historical; the by-name-unlink bullet is superseded by round 14)
 
 - The live lane still has never been executed end to end; round 13 makes its registry isolation,
   restore and artifact removal non-destructive at every seam, and the first real run against a
@@ -2844,6 +2862,247 @@ no push, PR, merge, issue mutation or publication.
 - The durable recovery artifacts and the scratch state root of the ownership derivation are
   private (`0600` files inside `0700` directories); the scratch root is removed in a `finally` and
   the durable artifacts stay until a completed restore removes them or an operator reconciles them.
+- The clock-dependent monitor-runtime failures remain a separate, pre-existing class (routed on
+  card `t_d8a1aad6`); `tests/test_telegram_monitor_runtime.py` and
+  `src/aether_agents/monitor/runtime.py` are byte-identical to the reviewed base in this round.
+
+## Round-14 corrections (authoritative)
+
+The round-13 review (strict prior-correction/preservation audit) reported two deterministic
+real-helper probes that still contradicted the fixed preservation contract and this evidence:
+
+1. **The check-then-unlink race was moved to a random name, not closed.** The round-13 removal
+   moved the verified artifact to a fresh quarantine name and then called path-based
+   `os.unlink(quarantine)`, so a replacement installed at that name after the verification and
+   before the unlink was deleted while the removal reported success and the run's own artifact was
+   left behind at the diverter's name.
+2. **The ownership-derivation scratch root was deleted fail-open.** `_scope_registry_entries`
+   removed its private scratch state root with `shutil.rmtree(scratch, ignore_errors=True)` and no
+   postcondition, so a removal that did nothing (or raised) still produced a successful ownership
+   derivation while the root and its `projects/registry.json` remained.
+
+Both are corrected in this candidate inside MON-06's writable interface
+(`scripts/qualify_telegram_monitor.py`, `tests/test_telegram_monitor_cli_plugin.py`,
+`docs/guides/telegram-monitor.md`, this file). No production behavior, no option surface, no
+dependency and no policy file changed.
+
+### 1. The removal seam is closed structurally: no entry of the registry directory is unlinked
+
+Round 13 moved the class ("verify an entry, then unlink the name") to a fresh name; round 14
+removes the class from the operator's namespace entirely. The harness never calls `os.unlink` (or
+`os.remove`, or `os.replace`) on any name of the operator's project-registry directory:
+
+- `_remove_private_registry_artifact` first opens the artifact `O_RDONLY|O_NOFOLLOW` and verifies
+  it **through the descriptor** — a real, singly linked regular file with exactly the
+  `(device, inode)` identity this run installed and, when the caller names them, exactly those
+  bytes (`_descriptor_holds_registry_artifact`, `_descriptor_bytes`). A file that does not verify,
+  or an absent artifact with the wrong identity, is refused with nothing touched at all.
+- `_create_registry_staging_directory` creates one fresh run-owned `0700` staging directory
+  (`.aether-qualification-staging-<random>`) in that directory: `mkdir` with no-clobber semantics
+  and a fresh random name on collision, then a verified `O_DIRECTORY|O_NOFOLLOW` descriptor
+  (real directory, mode `0700`, `st_nlink == 2`, owned by this process) before anything is staged.
+- The verified artifact is moved into it with one no-replace rename (the existence test and the
+  move are one kernel operation) and verified **again there through a descriptor**
+  (`_path_holds_registry_artifact`). A file that is not this run's own — a replacement that landed
+  at the artifact name after the descriptor check, or one whose bytes changed — is moved straight
+  back to where it was found (`_put_registry_file_back`, no-replace again) and the caller refuses:
+  a replacement is never deleted, never clobbered and ends up where it was found.
+- Only inside that staging directory is anything unlinked, and the deletion is then proven **by
+  descriptor**: `os.fstat(descriptor).st_nlink` must have reached zero *and* the staged name must
+  be gone. A deletion that cannot be proven (the boundary case below, or any other failure) never
+  yields success: `_reinstate_registry_artifact` puts the artifact back — by no-replace rename when
+  the staged file is still this run's own, otherwise by reinstalling the exact verified bytes at the
+  artifact name through the private no-clobber seam — so the artifact the run was asked to remove
+  always stays recoverable on disk, and the caller reports the bounded failure.
+- The staging directory itself is removed with `os.rmdir` (never an unlink), which the kernel
+  refuses while any entry is still inside it, so a leftover is never removed silently: it stays
+  under its documented name, with its content, and the run fails. `_remove_registry_staging_directory`
+  returns `False` in that case and every removal path treats it as a failed removal.
+- `_install_private_receipt_in_staging` applies the same rule to the files the harness *installs*
+  into the registry directory (the durable recovery record, the synthetic registry, the restored
+  registry): the `0600` temporary is created inside a fresh staging directory on the same
+  filesystem, written before any content exists, verified by descriptor and linked into place with
+  a single no-clobber `link`; it is unlinked only inside that staging directory, which is then
+  removed with `rmdir`. A staging directory that cannot be removed raises the bounded
+  `staging-residue` failure instead of disappearing. The private receipt (`--output`), whose
+  temporary lives inside the private `0700` directory establishment accepted for that one file,
+  keeps its round-6..9 behavior.
+
+**Boundary, stated rather than silently weakened.** POSIX has no delete bound to a file identity;
+`unlink` resolves a name at the instant of the call. A same-user process that substitutes an entry
+*inside this run's own staging directory* between the staged verification and the unlink therefore
+cannot be refused by any implementation of this harness — but it cannot be reached by any supported
+concurrent writer either (the directory is created by this run, mode `0700`, holds only this run's
+own entry, is never published and is removed immediately) and it can never yield a verdict: the
+descriptor postcondition detects it, the run refuses, the verified bytes are reinstated and the
+staging directory with the diverted run-owned copy is retained. The guide states exactly this, in
+the registry-recovery section and as an explicit limit.
+
+### 2. The run-owned cleanup roots are qualification-gating
+
+- `_discard_scratch_state_root(scratch)` removes the ownership derivation's private scratch state
+  root and then verifies it is gone with `lexists` (a symlink counts as residue). A derivation
+  whose root remains raises the bounded `registry-scope-residue` failure — with the retained root
+  in its detail — instead of returning the derived ownership values; the exception path of the
+  derivation removes the root best-effort without masking the original error.
+- The live orchestration marks the ownership unavailable when the derivation fails
+  (`isolation["ownership_available"] = False`) and `_restore_registry` then refuses with `failed`
+  *before touching anything*: the isolated registry is left exactly as it is and the durable
+  recovery artifacts stay on disk, because without the exact entries this run registered it cannot
+  tell this run's own synthetic registrations from a concurrent writer's. (Before this correction
+  that path would have merged the synthetic scope into the operator's registry and reported a
+  clean outcome.) The `restore-registry` gating error is reported and the verdict is cleared.
+- The deterministic lane's own workspace is created lazily (`_create_offline_workspace`) and
+  removed with a verified postcondition (`_discard_offline_workspace`); a workspace that survives
+  replaces the summary with the bounded `workspace-residue` error and `ok: false` instead of a
+  finished qualification. The live lane no longer creates an unused workspace at all.
+
+### Round-14 probe (manual, before the tests)
+
+Throwaway probe `/tmp/mon06/probe_round14_compare.py`: it loads the round-13 candidate's script from
+`git show 2353500:scripts/qualify_telegram_monitor.py` into a disposable tree, builds disposable
+XDG state roots with the real helpers, and injects at the real seams of each round-13 finding; then
+it runs the same scenarios against the candidate's script in this worktree. Output:
+
+```text
+### base 2353500 (round-13 candidate)
+finding1_final_unlink_seam   {"artifact_at_documented_name": false, "reported_removed": true, "run_owned_diverted_survives": true, "sentinel_survives": false}
+finding2_scratch_removal    {"outcome": "returned 2 owned values", "scratch_root_residue": ["/tmp/aether-monitor-qualification-hk9xzixz"]}
+### candidate (working tree)
+finding1_at_move_seam             {"replacement_survives": true, "reported_removed": false, "staging_residue": []}
+finding1_inside_staging_directory {"artifact_reinstated_at_documented_name": true, "diverted_run_owned_copy_survives": true, "reported_removed": false, "staging_retained": true}
+finding2_scratch_removal    {"outcome": "raised QualificationError: registry-scope-residue", "scratch_root_residue": ["/tmp/aether-monitor-qualification-1grtuxte"]}
+```
+
+Reading: the base certifies a removal after deleting the concurrent replacement
+(`reported_removed=true`, `sentinel_survives=false`) and leaks its own artifact
+(`artifact_at_documented_name=false`, diverted copy survives). The candidate never certifies that
+removal (`reported_removed=false`), keeps the replacement at the artifact name untouched when it
+lands at the move seam, reinstates the exact verified bytes at the documented name when a
+substitution lands inside its own staging directory, keeps the diverted run-owned copy (retained
+staging directory), and never deletes a name in the registry directory. For the second finding the
+base returns a successful derivation while the scratch root remains; the candidate raises the
+bounded `registry-scope-residue` and retains the root for reconciliation.
+
+### Round-14 regressions (real helper and entry point)
+
+Seven new cases in `tests/test_telegram_monitor_cli_plugin.py`:
+
+- `test_registry_cycle_never_unlinks_a_name_in_the_registry_directory` — records every `os.unlink`
+  of a complete `_isolate_registry` → real scope registration → `_restore_registry` cycle and
+  requires each deletion that lands anywhere under the registry directory to be inside a run-owned
+  staging directory (with at least one such deletion as a positive control), plus no staging
+  residue and the exact operator bytes back.
+- `test_registry_artifact_removal_refuses_an_entry_that_replaces_it_at_the_move_seam` — a different
+  file replaces the verified artifact immediately before the real move ⇒ removal reports failure,
+  the replacement survives untouched at the artifact name, no staging residue.
+- `test_registry_artifact_removal_never_certifies_a_deletion_it_cannot_prove` — the round-13 probe
+  re-derived: the verified staged entry is diverted and a sentinel installed at the staged name
+  immediately before the real unlink ⇒ removal reports failure, the artifact is reinstated at its
+  documented name from the exact verified bytes, the diverted run-owned copy survives in the
+  retained staging directory, and no success is reported.
+- `test_registry_restore_refuses_when_the_ownership_derivation_is_unavailable` — `ownership_available
+  = False` ⇒ `failed` with the isolated registry and both durable artifacts left untouched.
+- `test_scope_ownership_derivation_gates_when_the_scratch_root_survives` — the real derivation with
+  a no-op removal ⇒ bounded `registry-scope-residue`, the retained root (with its
+  `projects/registry.json`) named in the failure detail.
+- `test_scope_ownership_derivation_gates_when_the_scratch_removal_raises` — the same with a removal
+  that raises `OSError` ⇒ the same bounded failure, the root retained.
+- `test_live_scope_derivation_residue_never_qualifies` — the whole live lane (real orchestration,
+  real derivation, injected backends) with the residue ⇒ the entry point exits `1` with the bounded
+  error summary and no `qualified` key, the written private receipt records `ok: false` and
+  `public_summary.qualified: false`, and the restore received an isolation marked
+  `ownership_available: false` (so it never reverted the isolation blind).
+
+The round-13 regressions for the earlier corrections (no-replace moves, carried ownership, the
+absent-start live-shaped cycle, the artifact-removal replacement cases) are retained unchanged and
+now assert the staging-directory name pattern instead of the retired quarantine suffix.
+
+### Round-14 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-14 candidate (the commit containing this
+file; hash and tree are recorded in the card's review handoff):
+
+- **Direct probe of the reviewer's two findings (manual, before the tests).** The round-13 candidate
+  `2353500` reproduces both defects; the candidate refuses both, as recorded above.
+- Focused docs/CLI lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py
+  tests/test_telegram_monitor_cli_plugin.py`) → **113 passed** (106 before + 7 new round-14 cases).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 126 passed**; the sole failure is the pre-existing issue #364
+  (`tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths` on the
+  unchanged `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`, `git diff 2d49418 -- .aether/`
+  is empty), and the wheel entry-point/resource check passes in this lane.
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 284 passed** (277 before + 7). The 10 are the pre-existing, clock-dependent
+  `tests/test_telegram_monitor_runtime.py` handoff class;
+  `git diff 2d49418 -- tests/test_telegram_monitor_runtime.py src/aether_agents/monitor/runtime.py`
+  is empty (0 lines).
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1367 passed,
+  60 skipped, 373 subtests passed** (126.30 s); the 17 = the same classes as the reviewed base (six
+  accepted-lifecycle wheel/entry-point gates plus issue #364) and the 10 clock-dependent runtime
+  failures; 1367 passed = the 1360 recorded in round 13 + the 7 new cases.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed** (the
+  round-14 guide text, module docstring and this evidence included; no capability surface changed,
+  so `docs/capabilities.toml` and the generated `docs/reference/capabilities.md` are untouched).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `scripts/check_public_artifacts.py --root .` and the same scan with
+  both built artifacts → only the pre-existing #364 findings on the unchanged contract. No private
+  path, destination, session, message, model or credential is reported.
+- Literal policy manifest emulation (the heredoc block parsed from `.github/workflows/policy.yml` vs
+  `git ls-files` minus `specs/`) → **364 = 364, missing [], extra []**; round 14 adds no tracked
+  path and does not edit `policy.yml`, so every MON-01..MON-05 path and the MON-06 paths remain
+  literally listed with no relaxed check and no broadened glob.
+- `uv run --frozen ruff check` and `ruff format --check` on the two touched Python files → **All
+  checks passed / 2 files already formatted**; `uv run --frozen mypy src/aether_agents` → **Success:
+  no issues found in 65 source files**; `python -m compileall` on the two touched Python files →
+  passed; `git diff --check` → passed.
+- Cumulative tracked diff against the reviewed base `2d49418` → exactly the **14 authorized MON-06
+  paths**; round 14 touches four of them (`scripts/qualify_telegram_monitor.py`,
+  `tests/test_telegram_monitor_cli_plugin.py`, `docs/guides/telegram-monitor.md`, this file) and
+  leaves `docs/capabilities.toml`, `docs/reference/capabilities.md`, `docs/reference/cli.md`,
+  `docs/reference/plugins-and-tools.md`, `README.md`, `CHANGELOG.md`, `docs/index.md`,
+  `docs/getting-started.md`, `tests/test_documentation.py` and `.github/workflows/policy.yml`
+  unchanged.
+
+Deliberate non-effects in round 14: no `--live` invocation, no model call, no Telegram send, no
+credential operation, no profile/job/plugin activation, no native Hermes or source-database change,
+no push, PR, merge, issue mutation or publication.
+
+### Round-14 residual risks
+
+- The live lane still has never been executed end to end; round 14 removes every deletion of an
+  operator-namespace name and every fail-open run-owned cleanup root from the harness, and the first
+  real run against a scheduler, model and Telegram transport remains MON-INT's.
+- POSIX has no delete bound to a file identity. A same-user process that substitutes an entry inside
+  this run's own staging directory between the staged verification and the single unlink cannot be
+  refused by any filesystem interface: the run detects it by descriptor, refuses, reinstates the
+  verified bytes and retains the staging directory with its content, but that one substituted entry
+  cannot be preserved. The guide's limits state this; no supported concurrent writer can place an
+  entry there, and no verdict is ever produced in that case.
+- Where `renameat2`/`RENAME_NOREPLACE` is unavailable the live lane still refuses with the bounded
+  `registry-isolation` failure by design (never a clobbering move); the offline lane does not use it.
+- A removal whose staging directory cannot be removed (a substitution inside it, or a filesystem
+  failure) leaves that directory on disk under the documented
+  `.aether-qualification-staging-<random>` name with its content. This is reported residue by
+  design: the run fails, the operator reconciles, and nothing is deleted silently. The private
+  staging content is `0600` inside a `0700` directory, like the durable artifacts.
+- The ownership derivation's scratch root is a system-temporary directory; when it cannot be
+  removed the run fails with `registry-scope-residue` and the root — containing only this run's
+  synthetic registrations — is retained for the operator to remove.
+- The round-11/round-12/round-13 concurrency semantics and residuals are unchanged and recorded
+  above: a concurrent write is merged when it is seen, a write inside a swap's final read-and-move
+  interval is either moved (and detected by the byte comparison, refusing the run) or left
+  untouched in the "the run found no registry" case, and a refusal deliberately leaves
+  *recoverable* rather than always untouched state (`registry.json.qualification-held` plus the
+  recovery record) while the run reports the bounded failure.
 - The clock-dependent monitor-runtime failures remain a separate, pre-existing class (routed on
   card `t_d8a1aad6`); `tests/test_telegram_monitor_runtime.py` and
   `src/aether_agents/monitor/runtime.py` are byte-identical to the reviewed base in this round.

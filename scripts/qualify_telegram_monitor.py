@@ -31,15 +31,31 @@ overwriting a legitimate concurrent registry change.
 
 Every operator-visible or durable registry name is *moved* with a no-replace rename
 (``renameat2`` with ``RENAME_NOREPLACE``, so the existence test and the move are one
-kernel operation) and a durable artifact is never unlinked under its documented name: a
-removal first moves the artifact to a fresh name this run invents, verifies that the moved
-file is the very one this run installed, and only then unlinks that fresh name — an entry
-that appeared at the artifact name after the reader's check is neither replaced nor
-deleted, it is moved back and the run refuses.  The exact registry entries this run
+kernel operation), and no entry of the operator's registry directory is ever unlinked: a
+removal verifies the artifact *through a descriptor*, moves it into a fresh run-owned
+``0700`` staging directory (``.aether-qualification-staging-<random>``), verifies the moved
+entry through a descriptor again, deletes only inside that staging directory, proves the
+deletion by descriptor (the verified inode's link count reached zero and the staged name is
+gone) and finally removes the directory with ``rmdir``, which the kernel refuses while any
+entry is still inside it.  An entry that appeared at the artifact name after the descriptor
+check is neither replaced nor deleted — it is moved straight back and the run refuses — a
+deletion that cannot be proven reinstates the exact bytes this run verified at the artifact
+name without replacing anything and refuses, and a staging directory that cannot be removed
+is never deleted silently: it stays under its documented name and the run refuses.  Every
+file the harness installs into the registry directory is staged the same way, so the
+registry directory only ever sees no-clobber ``link`` creations and no-replace renames, and
+deletions happen only inside a directory this run owns.  POSIX has no delete bound to a file
+identity, so a same-user process that substitutes an entry *inside this run's own staging
+directory* between the staged verification and the unlink cannot be defended against by any
+filesystem interface: that case is outside the supported concurrency boundary, it is
+detected by the descriptor postcondition, its bytes are never certified as removed, and a
+run that hits it refuses instead of emitting a verdict.  The exact registry entries this run
 registered for its synthetic projects are derived from the shipped project writer itself —
-the same registration call with the same arguments against a private scratch state root,
-never a value read out of the operator registry — so a concurrent writer's same-id update
-is preserved rather than mistaken for this run's own scope.
+the same registration call with the same arguments against a private scratch state root that
+this run creates and then removes with a verified postcondition (a root that remains is a
+bounded failure, never a successful derivation) — and never a value read out of the operator
+registry — so a concurrent writer's same-id update is preserved rather than mistaken for
+this run's own scope.
 
 Every external boundary the live lane crosses is reached through :class:`LiveBackends`,
 and every restore invariant is qualification-gating: a run that cannot put the
@@ -103,7 +119,7 @@ import tomllib
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, NoReturn, Sequence
+from typing import Any, Callable, Mapping, NamedTuple, NoReturn, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src"
@@ -1664,9 +1680,15 @@ REGISTRY_HELD_SUFFIX = ".qualification-held"
 #: Fixed suffix of the name a restore moves the current registry to before installing the
 #: restored state; it is removed only after the restored state and the postcondition are verified.
 REGISTRY_OUTGOING_SUFFIX = ".qualification-outgoing"
-#: Fixed suffix of the fresh name a removal moves a durable artifact to before it is deleted:
-#: the documented artifact name itself is never unlinked.
-REGISTRY_QUARANTINE_SUFFIX = ".qualification-quarantine"
+#: Fixed prefix of the run-owned private staging directories a removal and an installation use.
+#: They are the only place in the operator's registry directory where this harness deletes an
+#: entry, they are created ``0700`` and removed with ``rmdir``, and one that cannot be removed is
+#: never deleted silently: it stays under this documented name for reconciliation.
+REGISTRY_STAGING_PREFIX = ".aether-qualification-staging-"
+#: Non-followed, close-on-exec ``open`` flags used for every registry descriptor.
+O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+O_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
+O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
 #: Linux ``renameat2`` flag: move a file only when nothing exists at the destination.  The
 #: kernel performs the existence test and the move in one step, so no read-only check followed
 #: by a clobbering ``rename`` can be raced by an entry that appears in between.
@@ -1851,7 +1873,7 @@ def _install_private_registry_record(
     )
     ensure_private_dir(path.parent)
     try:
-        _install_private_receipt(path, data)
+        _install_private_receipt(path, data, staging_parent=path.parent)
         _verify_private_receipt(path)
         info = os.stat(path, follow_symlinks=False)
     except QualificationError as error:
@@ -1878,68 +1900,237 @@ def _install_private_registry_record(
     return (info.st_dev, info.st_ino), data
 
 
-def _quarantine_path(path: Path) -> Path:
-    """A fresh, run-invented name next to ``path`` that nothing can already occupy."""
+class _StagingDirectory(NamedTuple):
+    """One run-owned private staging directory: the only place this harness deletes in."""
 
-    return path.with_name(f"{path.name}.{uuid.uuid4().hex[:12]}{REGISTRY_QUARANTINE_SUFFIX}")
+    path: Path
+    parent_fd: int
+    staging_fd: int
+
+
+def _descriptor_bytes(descriptor: int) -> bytes:
+    """The exact bytes a descriptor refers to, read through the descriptor and never a name."""
+
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    chunks: list[bytes] = []
+    while True:
+        chunk = os.read(descriptor, 128 * 1024)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _descriptor_holds_registry_artifact(
+    descriptor: int, identity: tuple[int, int], expected: bytes | None
+) -> bool:
+    """Whether a descriptor refers to exactly the artifact this run installed.
+
+    The comparison is made against the descriptor, so no name can be substituted underneath the
+    check: a replacement at the same path is a different file with a different ``(device,
+    inode)`` identity even when its bytes are equal, and a file rewritten in place is caught by
+    the exact byte comparison.  ``expected`` is ``None`` for an artifact whose content is
+    metadata rather than registry bytes.
+    """
+
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            return False
+        if (info.st_dev, info.st_ino) != identity:
+            return False
+        if expected is None:
+            return True
+        return _descriptor_bytes(descriptor) == expected
+    except OSError:
+        return False
+
+
+def _path_holds_registry_artifact(
+    path: Path, identity: tuple[int, int], expected: bytes | None
+) -> bool:
+    """Whether a name refers to exactly the artifact this run installed (descriptor read)."""
+
+    try:
+        descriptor = os.open(path, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    except (OSError, ValueError, NotImplementedError):
+        return False
+    try:
+        return _descriptor_holds_registry_artifact(descriptor, identity, expected)
+    finally:
+        os.close(descriptor)
+
+
+def _create_registry_staging_directory(parent: Path) -> _StagingDirectory | None:
+    """Create one run-owned private ``0700`` staging directory inside ``parent``.
+
+    ``parent`` is the private directory that holds the operator registry, so the staging
+    directory is on the same filesystem as every artifact that is staged in it and a move into it
+    is a rename.  Creation is no-clobber (``mkdir`` fails when the name exists, and a fresh random
+    name is tried again), the created directory is verified to be a real ``0700`` directory with
+    no subdirectory of its own and owned by this process, and nothing is staged before that.
+    ``None`` means the harness refuses instead of staging anything anywhere.
+    """
+
+    try:
+        parent_fd = os.open(parent, os.O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+    except (OSError, ValueError, NotImplementedError):
+        return None
+    for _ in range(3):
+        name = f"{REGISTRY_STAGING_PREFIX}{uuid.uuid4().hex[:12]}"
+        try:
+            os.mkdir(name, DIR_MODE, dir_fd=parent_fd)
+        except FileExistsError:
+            continue
+        except (OSError, ValueError, NotImplementedError):
+            os.close(parent_fd)
+            return None
+        staging_fd = -1
+        try:
+            staging_fd = os.open(
+                name, os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC, dir_fd=parent_fd
+            )
+            info = os.fstat(staging_fd)
+            owner = _effective_uid()
+            if (
+                stat.S_ISDIR(info.st_mode)
+                and stat.S_IMODE(info.st_mode) == DIR_MODE
+                and info.st_nlink == 2
+                and (owner is None or info.st_uid == owner)
+            ):
+                return _StagingDirectory(parent / name, parent_fd, staging_fd)
+        except (OSError, ValueError, NotImplementedError):
+            pass
+        if staging_fd >= 0:
+            with contextlib.suppress(OSError):
+                os.close(staging_fd)
+        with contextlib.suppress(OSError):
+            os.rmdir(name, dir_fd=parent_fd)
+        os.close(parent_fd)
+        return None
+    os.close(parent_fd)
+    return None
+
+
+def _remove_registry_staging_directory(staging: _StagingDirectory) -> bool:
+    """Remove the run's own staging directory with the kernel's own emptiness check.
+
+    ``rmdir`` refuses while any entry is still inside, so an entry that appeared inside this
+    run's own staging directory is never removed by this call: the directory is left in place
+    with its content — retained, under its documented private name, for reconciliation — and the
+    caller refuses.
+    """
+
+    try:
+        os.rmdir(staging.path.name, dir_fd=staging.parent_fd)
+    except (OSError, ValueError, NotImplementedError):
+        return False
+    return not os.path.lexists(staging.path)
+
+
+def _reinstate_registry_artifact(path: Path, staged: Path | None, expected: bytes | None) -> None:
+    """Put the verified artifact back after an unprovable removal; never replace anything.
+
+    A staged file that is still this run's own goes back to the artifact name with a no-replace
+    rename, so it keeps its exact identity; otherwise the exact bytes this run verified are
+    reinstalled at the artifact name through the private no-clobber seam, so the artifact this
+    run was asked to remove stays recoverable on disk for the operator.  A name that is occupied
+    by anything else is never touched; the caller refuses and the operator reconciles.
+    """
+
+    if staged is not None and _put_registry_file_back(staged, path):
+        return
+    if expected is None:
+        return
+    try:
+        _install_private_receipt(path, expected)
+        _verify_private_receipt(path)
+    except (OSError, ValueError, QualificationError):
+        pass
 
 
 def _remove_private_registry_artifact(
     path: Path, identity: tuple[int, int] | None, expected: bytes | None
 ) -> bool:
-    """Remove exactly the artifact this run created, and never by unlinking its own name.
+    """Remove exactly the artifact this run created, never by unlinking a shared name.
 
-    The documented artifact name is never unlinked: it is *moved* to a fresh name this run
-    invents in the same private directory — a no-replace rename, so an entry that appeared
-    there after the caller's read-only check is moved rather than replaced, and a fresh name
-    that is somehow taken only refuses — the moved file is verified against the
-    ``(device, inode)`` identity (and, when ``expected`` names the bytes this run put there,
-    the exact content) this run installed, and only that fresh name, created by this run
-    moments earlier, is unlinked.  A file that does not verify is moved straight back to the
-    artifact name (no-replace again) and the caller reports failure: a replacement is never
-    deleted, never clobbered, and ends up exactly where it was found, with the durable evidence
-    kept for reconciliation.  ``identity`` is ``None`` when the caller never created the
-    artifact, which needs no removal; ``expected`` is ``None`` for an artifact whose content is
-    metadata rather than registry bytes.
+    POSIX has no delete bound to a file identity, so this harness never unlinks an entry of the
+    operator's registry directory at all.  The artifact is first verified *through a descriptor*
+    (``O_NOFOLLOW``): a real, singly linked regular file with exactly the ``(device, inode)``
+    identity this run installed — and, when ``expected`` names the bytes this run wrote there,
+    exactly those bytes.  A file that does not verify is refused with nothing touched at all;
+    ``identity`` is ``None`` when the caller never created the artifact, which needs no removal.
+
+    The verified artifact is then moved, with one no-replace rename (the existence test and the
+    move are a single kernel operation), into a fresh run-owned ``0700`` staging directory next
+    to it, and verified again there through a descriptor: a file that is not the run's own — a
+    concurrent replacement that landed at the name after the descriptor check, or one whose
+    bytes changed — is moved straight back to where it was found and the caller refuses, so a
+    replacement is never deleted and never clobbered.  Only inside that staging directory is
+    anything unlinked, and the deletion is then proven by descriptor: the verified inode's link
+    count must have reached zero and the staged name must be gone.  A deletion that cannot be
+    proven — the boundary case of a same-user process substituting an entry inside this run's own
+    staging directory between the staged verification and the unlink, which no supported
+    concurrent writer can do, or any other failure — reinstates the exact artifact (by identity,
+    or by the bytes this run verified) and returns ``False``, so the caller can never report a
+    qualified run whose removal might have deleted a replacement or lost track of the artifact.
+    The staging directory itself is removed with ``rmdir``, which the kernel refuses while any
+    entry is still inside it, so a leftover is never removed silently: it stays under its
+    documented private name (``REGISTRY_STAGING_PREFIX``) for reconciliation.
     """
 
     if identity is None:
         return True
-    quarantine: Path | None = None
-    for _ in range(3):
-        candidate = _quarantine_path(path)
-        try:
-            _rename_no_replace(path, candidate)
-        except FileNotFoundError:
-            return True
-        except FileExistsError:
-            continue
-        except OSError:
-            return False
-        quarantine = candidate
-        break
-    if quarantine is None:
-        return False
     try:
-        info = os.lstat(quarantine)
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise UnsafeObservationPath("the moved qualification artifact is not a real file")
-        if (info.st_dev, info.st_ino) != identity:
-            raise UnsafeObservationPath(
-                "the moved qualification artifact is not the one this run installed"
-            )
-        if expected is not None and _registry_bytes_or_none(quarantine) != expected:
-            raise UnsafeObservationPath(
-                "the moved qualification artifact no longer holds the bytes this run installed"
-            )
-    except (OSError, ValueError):
-        _put_registry_file_back(quarantine, path)
+        descriptor = os.open(path, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+    except FileNotFoundError:
+        return True
+    except (OSError, ValueError, NotImplementedError):
         return False
+    staging: _StagingDirectory | None = None
+    staged_ours: Path | None = None
+    removed = False
     try:
-        os.unlink(quarantine)
-    except OSError:
-        return False
-    return not os.path.lexists(quarantine)
+        if _descriptor_holds_registry_artifact(descriptor, identity, expected):
+            staging = _create_registry_staging_directory(path.parent)
+            if staging is not None:
+                staged = staging.path / path.name
+                try:
+                    _rename_no_replace(path, staged)
+                except FileNotFoundError:
+                    # The name is free already: nothing of this run's is left there to remove.
+                    removed = True
+                except OSError:
+                    removed = False
+                else:
+                    if _path_holds_registry_artifact(staged, identity, expected):
+                        staged_ours = staged
+                        try:
+                            os.unlink(staged.name, dir_fd=staging.staging_fd)
+                        except (OSError, ValueError, NotImplementedError):
+                            removed = False
+                        else:
+                            removed = False
+                            try:
+                                info = os.fstat(descriptor)
+                            except OSError:
+                                removed = False
+                            else:
+                                removed = info.st_nlink == 0 and not os.path.lexists(staged)
+                    else:
+                        # The moved file is not this run's own: it goes straight back, untouched.
+                        _put_registry_file_back(staged, path)
+                        removed = False
+        if not removed:
+            _reinstate_registry_artifact(path, staged_ours, expected)
+        if staging is not None and not _remove_registry_staging_directory(staging):
+            removed = False
+        return removed
+    finally:
+        os.close(descriptor)
+        if staging is not None:
+            os.close(staging.staging_fd)
+            os.close(staging.parent_fd)
 
 
 def _put_registry_file_back(aside_path: Path, registry_path: Path) -> bool:
@@ -2041,7 +2232,7 @@ def _install_registry_file(registry_path: Path, data: bytes) -> None:
     """
 
     try:
-        _install_private_receipt(registry_path, data)
+        _install_private_receipt(registry_path, data, staging_parent=registry_path.parent)
     except QualificationError as error:
         if error.code == "output-target-exists":
             raise _RegistrySwapError(
@@ -2285,6 +2476,24 @@ def _isolate_registry() -> dict[str, Any]:
     }
 
 
+def _discard_scratch_state_root(scratch: Path) -> bool:
+    """Remove the private scratch state root of an ownership derivation and verify it is gone.
+
+    The root is this run's own: it is created for exactly this derivation, holds only the
+    synthetic registrations the shipped writer produced for this run's arguments, and nothing
+    else is ever staged in it.  The removal is never ignored: after the attempt the root is
+    checked read-only (with ``lexists``, so a symlink counts as residue too), and a root that
+    survives is residue the caller reports as a bounded failure instead of returning a
+    successful ownership derivation.  ``True`` means the scratch root is provably gone.
+    """
+
+    try:
+        shutil.rmtree(scratch)
+    except OSError:
+        pass
+    return not os.path.lexists(scratch)
+
+
 def _scope_registry_entries(manifest: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """The exact registry entries this run's synthetic registrations produce.
 
@@ -2295,6 +2504,10 @@ def _scope_registry_entries(manifest: Sequence[Mapping[str, Any]]) -> dict[str, 
     value the shipped writer produced is what the isolation record carries as this run's own.
     A concurrent writer that later registers its own value for one of these ids therefore can
     never be mistaken for this run's entry and can never be deleted by the restore.
+
+    The scratch root is qualification-gating: the derivation is returned only when the root is
+    provably removed, and a root that survives is a bounded ``registry-scope-residue`` failure
+    that keeps the synthetic scope unverified instead of reporting a successful derivation.
     """
 
     from aether_agents.observation.context import ProjectRegistry
@@ -2349,9 +2562,20 @@ def _scope_registry_entries(manifest: Sequence[Mapping[str, Any]]) -> dict[str, 
                     detail={"project_id": project_id},
                 )
             values[project_id] = projects[project_id]
-        return values
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+        derived = values
+    except BaseException:
+        # The scratch root is never left silently behind, and a failure here never masks the
+        # failure that caused it: the caller's bounded error still describes what went wrong.
+        _discard_scratch_state_root(scratch)
+        raise
+    if not _discard_scratch_state_root(scratch):
+        raise QualificationError(
+            "registry-scope-residue",
+            "the private scratch state root of the synthetic ownership derivation could not be "
+            "removed; it is retained with its content and the synthetic scope is not verified",
+            detail={"scratch": str(scratch)},
+        )
+    return derived
 
 
 def _registry_owned_entries(
@@ -2478,7 +2702,12 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
     the only entries present are its own scope registrations, the registry this run created is
     removed and the outcome is ``removed``.
     ``failed`` is the bounded failure: the registry was left untouched, or the state could not be
-    verified, and the durable recovery artifacts were kept for reconciliation.  No path operation
+    verified, and the durable recovery artifacts were kept for reconciliation.  A restore whose
+    ownership is unknown (``ownership_available`` is ``False``: the run could not derive the
+    exact entries its own registrations produce) never reverts anything at all — the isolated
+    registry is left exactly as it is and the durable recovery artifacts stay on disk — because a
+    blind revert could delete a concurrent writer's entry or leave this run's own behind.
+    No path operation
     in this function replaces an entry that appeared underneath it: the current file is *moved
     aside* with a no-replace rename (never unlinked, never clobbered) and the restored bytes are
     installed with a single no-clobber link, so a concurrent writer's bytes are either merged, put
@@ -2487,6 +2716,12 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
 
     if isolation is None:
         return "not-isolated"
+    if isolation.get("ownership_available") is False:
+        # The exact entries this run registered are unknown, so the restore cannot tell this
+        # run's own synthetic registrations from a concurrent writer's: reverting the isolation
+        # blind could delete a concurrent entry or leave a synthetic one behind.  Nothing is
+        # reverted, the durable recovery artifacts stay on disk, and the operator reconciles.
+        return "failed"
     registry_path = Path(isolation["path"])  # type: ignore[arg-type]
     original = isolation.get("original")
     recorded = bytes(original) if original is not None else None
@@ -4296,9 +4531,19 @@ def _live_run(
         #     carried into the restore, which removes an entry only while it still holds the value
         #     this run registered, so a concurrent writer's same-id update is preserved instead of
         #     being mistaken for this run's own scope.
-        owned_entries, missing_entries = backends.owned_registry_entries(
-            isolation["path"], manifest
-        )
+        try:
+            owned_entries, missing_entries = backends.owned_registry_entries(
+                isolation["path"], manifest
+            )
+        except BaseException:
+            # Ownership is unavailable — for instance because the private scratch state root
+            # the derivation uses could not be removed — so the restore cannot tell this run's
+            # own synthetic entries from a concurrent writer's.  It must never revert the
+            # isolation blind: the record marks the ownership unavailable, the restore refuses
+            # and keeps the durable recovery artifacts for the operator to reconcile.
+            isolation["ownership_available"] = False
+            raise
+        isolation["ownership_available"] = True
         isolation["owned_entries"] = owned_entries
         record["scope"]["registry_entries"] = sorted(owned_entries)
         if missing_entries:
@@ -5252,8 +5497,113 @@ def _install_private_receipt_without_descriptors(
             temporary.unlink()
 
 
+def _install_private_receipt_in_staging(
+    path: Path, data: bytes, *, directory_fd: int, staging_parent: Path
+) -> None:
+    """Install ``path`` from a temporary that lives in one of this run's staging directories.
+
+    Used for every file this harness installs into the operator's registry directory, so that
+    directory is only ever modified by no-clobber ``link`` creations and no-replace renames: the
+    temporary is created inside a fresh run-owned ``0700`` staging directory on the same
+    filesystem, written ``0600`` *before* any content exists, verified by descriptor, linked into
+    place, and unlinked only inside that staging directory.  The directory is then removed with
+    ``rmdir``, which the kernel refuses while any entry is still inside it, so a temporary that
+    somehow survives is never removed silently: the installation is reported as failed and the
+    directory stays under its documented private name for reconciliation.  An entry that appeared
+    at the destination while the harness was installing it is still never replaced and yields the
+    same bounded ``output-target-exists`` refusal as the shared implementation.
+    """
+
+    staging = _create_registry_staging_directory(staging_parent)
+    if staging is None:
+        raise QualificationError(
+            "staging-unavailable",
+            "the private staging directory for the project registry could not be created",
+        )
+    temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
+    descriptor: int | None = None
+    created_identity: tuple[int, int] | None = None
+    failed = False
+    try:
+        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_NOFOLLOW | O_CLOEXEC
+        try:
+            descriptor = os.open(temporary_name, file_flags, FILE_MODE, dir_fd=staging.staging_fd)
+        except FileExistsError:
+            raise UnsafeObservationPath("private receipt temporary already exists") from None
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+            raise UnsafeObservationPath("private receipt temporary is not a private file")
+        created_identity = (opened.st_dev, opened.st_ino)
+        os.fchmod(descriptor, FILE_MODE)
+        view = memoryview(data)
+        written = 0
+        while written < len(view):
+            written += os.write(descriptor, view[written:])
+        os.fsync(descriptor)
+        named = os.stat(temporary_name, dir_fd=staging.staging_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or named.st_nlink != 1
+            or (named.st_dev, named.st_ino) != created_identity
+        ):
+            raise UnsafeObservationPath("private receipt temporary changed before install")
+        try:
+            os.link(
+                temporary_name,
+                path.name,
+                src_dir_fd=staging.staging_fd,
+                dst_dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            raise QualificationError(
+                "output-target-exists",
+                "the project registry target appeared while the harness was installing it; "
+                "nothing that was found there was replaced",
+            ) from None
+        os.unlink(temporary_name, dir_fd=staging.staging_fd)
+        installed = os.stat(path.name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(installed.st_mode)
+            or installed.st_nlink != 1
+            or (installed.st_dev, installed.st_ino) != created_identity
+        ):
+            raise UnsafeObservationPath("the installed project registry is not this run's file")
+        os.fsync(directory_fd)
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if created_identity is not None:
+            try:
+                remaining = os.stat(
+                    temporary_name, dir_fd=staging.staging_fd, follow_symlinks=False
+                )
+            except OSError:
+                remaining = None
+            if remaining is not None and (remaining.st_dev, remaining.st_ino) == created_identity:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary_name, dir_fd=staging.staging_fd)
+                    os.fsync(staging.staging_fd)
+        removed = _remove_registry_staging_directory(staging)
+        os.close(staging.staging_fd)
+        os.close(staging.parent_fd)
+        if not removed and not failed:
+            raise QualificationError(
+                "staging-residue",
+                "the private staging directory of the project registry installation could not "
+                "be removed; it is retained, with its content, under its documented private name",
+                detail={"path": str(staging.path)},
+            )
+
+
 def _install_private_receipt(
-    path: Path, data: bytes, *, established_parent: tuple[int, int] | None = None
+    path: Path,
+    data: bytes,
+    *,
+    established_parent: tuple[int, int] | None = None,
+    staging_parent: Path | None = None,
 ) -> None:
     """Install the receipt without ever replacing an entry that already exists.
 
@@ -5275,6 +5625,12 @@ def _install_private_receipt(
     establishment, the directory is checked read-only *before* anything can be created and
     the opened descriptor is checked again before the temporary exists, so a directory the
     run did not establish can never receive the receipt.
+
+    When ``staging_parent`` is given — every installation into the operator's registry
+    directory does — the temporary is not created next to the target at all: it lives in one of
+    this run's own ``0700`` staging directories (see :func:`_install_private_receipt_in_staging`),
+    so that directory is never unlinked in and a temporary that cannot be removed is reported
+    instead of disappearing.
     """
 
     parent = path.parent
@@ -5290,6 +5646,14 @@ def _install_private_receipt(
         return
 
     directory_fd = _open_private_receipt_directory(parent, established_parent=established_parent)
+    if staging_parent is not None:
+        try:
+            _install_private_receipt_in_staging(
+                path, data, directory_fd=directory_fd, staging_parent=staging_parent
+            )
+        finally:
+            os.close(directory_fd)
+        return
     temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
     descriptor: int | None = None
     created_identity: tuple[int, int] | None = None
@@ -5459,6 +5823,39 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _create_offline_workspace() -> Path:
+    """Create the deterministic lane's own private workspace (named for this process)."""
+
+    workspace = (
+        Path(os.environ.get("TMPDIR", "/tmp")) / f"aether-monitor-qualification-{os.getpid()}"
+    )
+    try:
+        workspace.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise QualificationError(
+            "workspace-unavailable",
+            "the deterministic lane's private workspace could not be created",
+            detail={"error": type(error).__name__},
+        ) from error
+    return workspace
+
+
+def _discard_offline_workspace(workspace: Path) -> bool:
+    """Remove the deterministic lane's own workspace and verify that it is gone.
+
+    The workspace is this run's own private directory, named for this process.  The removal is
+    never ignored: the directory is removed and then checked read-only (with ``lexists``, so a
+    symlink counts as residue too), and a workspace that survives makes the run fail with the
+    bounded ``workspace-residue`` error instead of being reported as a finished qualification.
+    """
+
+    try:
+        shutil.rmtree(workspace)
+    except OSError:
+        pass
+    return not os.path.lexists(workspace)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     try:
@@ -5471,10 +5868,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.live and args.output is None:
         print("qualify-telegram-monitor: --live requires --output", file=sys.stderr)
         return 2
-    workspace = (
-        Path(os.environ.get("TMPDIR", "/tmp")) / f"aether-monitor-qualification-{os.getpid()}"
-    )
-    workspace.mkdir(parents=True, exist_ok=True)
+    workspace: Path | None = None
     receipt_target_ready = False
     established_receipt_parent: tuple[int, int] | None = None
     try:
@@ -5497,6 +5891,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     _private_output_path(args.output)
                 )
                 receipt_target_ready = True
+            workspace = _create_offline_workspace()
             summary = run_offline(workspace)
             ok = all(record["status"] == "pass" for record in summary["checks"])
     except QualificationError as error:
@@ -5513,8 +5908,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             "error": {"code": "qualification-failed", "message": f"{type(error).__name__}"},
         }
         ok = False
-    finally:
-        shutil.rmtree(workspace, ignore_errors=True)
+    if workspace is not None and not _discard_offline_workspace(workspace):
+        # The deterministic lane's own workspace is never left behind silently: a workspace
+        # that cannot be removed is residue, and the run reports the bounded failure instead
+        # of a finished qualification.
+        summary = {
+            "schema_version": SCHEMA_VERSION,
+            "ok": False,
+            "error": {
+                "code": "workspace-residue",
+                "message": "the deterministic lane's private workspace could not be removed; it "
+                "is retained for reconciliation",
+            },
+        }
+        ok = False
     summary["ok"] = ok and "error" not in summary
     if args.output is not None and not args.live and receipt_target_ready:
         # Only a target this run established is written: a refused target keeps its own
