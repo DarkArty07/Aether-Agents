@@ -12,10 +12,13 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
+import sqlite3
 import subprocess
 import sys
 import textwrap
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
@@ -1860,3 +1863,1068 @@ def test_live_state_fingerprint_uses_cutoff_and_relative_paths(
     fingerprint = module._live_state_fingerprint()
     assert fingerprint == {}
     assert not (tmp_path / "xdg").exists()
+
+
+# ---------------------------------------------------------------------------
+# Live orchestration with injected backends (no external effect)
+# ---------------------------------------------------------------------------
+
+START = datetime(2026, 9, 10, 10, 5, tzinfo=timezone.utc)
+STAMP = START.strftime("%Y%m%dT%H%M%SZ")
+CUT_ONE = datetime(2026, 9, 10, 11, 0, tzinfo=timezone.utc)
+CUT_TWO = datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc)
+CUT_IDLE = datetime(2026, 9, 10, 13, 0, tzinfo=timezone.utc)
+SMOKE_CUTOFF = datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc)
+SYNTHETIC_JOB_ID = "native-job-qualification"
+PRIOR_JOB_ID = "prior-job"
+
+
+def _stamp(value: datetime) -> str:
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class _PhaseClock:
+    """A deterministic clock; ``sleep`` advances to the next qualification phase."""
+
+    def __init__(self, start: datetime, phases: Sequence[datetime]) -> None:
+        self.value = start
+        self.phases = sorted(phases)
+        self.sleeps = 0
+
+    def now(self) -> datetime:
+        return self.value
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps += 1
+        pending = [phase for phase in self.phases if phase > self.value]
+        self.value = pending[0] if pending else self.value + timedelta(seconds=seconds)
+
+
+class _EvidenceStore:
+    """A bounded monitor-store double with phase-revealed evidence."""
+
+    def __init__(self, state_root: Path, clock: _PhaseClock, **settings: Any) -> None:
+        self.state_root = state_root
+        self.clock = clock
+        self.snapshots: dict[str, Any] = {}
+        self.narratives: dict[str, Any] = {}
+        self.deliveries: dict[str, Any] = {}
+        self.reveals: list[tuple[datetime, str, str]] = []  # reveal, cutoff text, report id
+        self.configure_calls: list[dict[str, Any]] = []
+        self.settings = SimpleNamespace(
+            enabled=bool(settings.get("enabled", False)),
+            native_job_id=settings.get("native_job_id"),
+            profile_binding=settings.get("profile_binding"),
+            destination_ref=settings.get("destination_ref"),
+            timezone=settings.get("timezone", "UTC"),
+            last_cutoff_utc=None,
+            first_enabled_at_utc=None,
+            paused_at_utc=None,
+        )
+
+    def expose(
+        self,
+        report_id: str,
+        cutoff: datetime,
+        *,
+        payload: Mapping[str, Any],
+        narrative: Any = None,
+        deliveries: Sequence[Any] = (),
+        reveal: datetime | None = None,
+        resolved: bool = False,
+        collected: datetime | None = None,
+    ) -> None:
+        self.snapshots[report_id] = SimpleNamespace(
+            report_id=report_id,
+            cutoff_utc=_stamp(cutoff),
+            previous_cutoff_utc=None,
+            collected_at_utc=_stamp(collected or (cutoff + timedelta(seconds=40))),
+            payload=dict(payload),
+            coverage_gaps=tuple(payload.get("coverage_gaps") or ()),
+            resolved_at_utc=_stamp(cutoff + timedelta(minutes=1)) if resolved else None,
+        )
+        if narrative is not None:
+            released = _stamp(cutoff + timedelta(minutes=1))
+            self.narratives[report_id] = SimpleNamespace(
+                report_id=report_id,
+                structured_result=dict(narrative),
+                narrator_session_id="cron_" + SYNTHETIC_JOB_ID + "_live",
+                attempt_status="accepted",
+                created_at_utc=released,
+                updated_at_utc=released,
+            )
+        self.deliveries[report_id] = list(deliveries)
+        self.reveals.append((reveal or cutoff, _stamp(cutoff), report_id))
+
+    def get_settings(self) -> Any:
+        visible = [item for item in self.reveals if item[0] <= self.clock.now()]
+        if visible:
+            latest = max(visible, key=lambda item: item[0])
+            self.settings.last_cutoff_utc = latest[1]
+        # The shipped surface returns a fresh settings value, never a live view.
+        return SimpleNamespace(**vars(self.settings))
+
+    def list_snapshots(self, *, limit: int | None = None) -> tuple[Any, ...]:
+        visible = [
+            self.snapshots[report_id]
+            for reveal, _cutoff, report_id in self.reveals
+            if reveal <= self.clock.now()
+        ]
+        ordered = list(reversed(visible))
+        return tuple(ordered if limit is None else ordered[:limit])
+
+    def get_narrative(self, report_id: str) -> Any:
+        return self.narratives.get(report_id)
+
+    def list_deliveries(self, report_id: str) -> tuple[Any, ...]:
+        return tuple(self.deliveries.get(report_id, ()))
+
+    def configure(self, **values: Any) -> Any:
+        self.configure_calls.append(dict(values))
+        for key in ("native_job_id", "profile_binding", "destination_ref", "timezone"):
+            if key in values:
+                setattr(self.settings, key, values[key])
+        return self.settings
+
+
+class _FakeBackends:
+    """Every live boundary as a fake: no model, no sender, no native scheduler."""
+
+    def __init__(
+        self,
+        *,
+        module: Any,
+        store: _EvidenceStore,
+        clock: _PhaseClock,
+        hermes_home: Path,
+        worker: Path,
+        scope_root: Path,
+        output_dir: Path,
+        enable_next_cut: datetime,
+        inventory: Sequence[Mapping[str, Any]] = (),
+    ) -> None:
+        self.module = module
+        self.store = store
+        self.clock = clock
+        self.hermes_home_value = hermes_home
+        self.runtime = worker
+        self.scope_root = scope_root
+        self.output_dir = output_dir
+        self.enable_next_cut = enable_next_cut
+        self.jobs: dict[str, dict[str, Any]] = {str(job["id"]): dict(job) for job in inventory}
+        self.calls: list[str] = []
+        self.trigger_calls = 0
+        self.environment_gap_values: list[str] = []
+        self.trigger_result: dict[str, Any] = {"triggered": True, "errors": []}
+        self.scope_failure: str | None = None
+        self.scope_remove_errors: list[str] = []
+        self.registry_restore_value = "byte-identical"
+        self.fail_job_removal = False
+        self.output_payloads: dict[str, Any] = {}
+        self.job_last_run: dict[str, datetime] = {}
+
+    def now(self) -> datetime:
+        return self.clock.now()
+
+    def sleep(self, seconds: float) -> None:
+        self.calls.append(f"sleep:{seconds}")
+        self.clock.sleep(seconds)
+
+    def runtime_python(self) -> Path:
+        self.calls.append("runtime_python")
+        return self.runtime
+
+    def candidate_revision(self) -> str:
+        return "0" * 40
+
+    def owner_language(self, interpreter: Path) -> str | None:
+        return "English"
+
+    def hermes_home(self) -> Path:
+        return self.hermes_home_value
+
+    def control(self, action: str) -> dict[str, Any]:
+        self.calls.append(f"control:{action}")
+        settings = self.store.settings
+        if action == "on":
+            existing = next(
+                (job for job in self.jobs.values() if job["name"] == self.module.NATIVE_JOB_NAME),
+                None,
+            )
+            created = existing is None
+            job_id = str(existing["id"]) if existing is not None else SYNTHETIC_JOB_ID
+            self.jobs[job_id] = {
+                "id": job_id,
+                "name": self.module.NATIVE_JOB_NAME,
+                "paused": False,
+                "behaviour_sha256": "monitor-job",
+            }
+            settings.enabled = True
+            settings.native_job_id = job_id
+            settings.profile_binding = "morfeo"
+            settings.destination_ref = "pinned-destination"
+            return {
+                "result": {
+                    "enabled": True,
+                    "job_created": created,
+                    "destination_pinned": True,
+                    "profile_binding": "morfeo",
+                    "next_cut_utc": _stamp(self.enable_next_cut),
+                    "native_job": {"id": job_id, "schedule": "0 * * * *", "paused": False},
+                }
+            }
+        settings.enabled = False
+        for job in self.jobs.values():
+            if job["name"] == self.module.NATIVE_JOB_NAME:
+                job["paused"] = True
+        return {
+            "result": {
+                "enabled": False,
+                "job_paused": True,
+                "paused_at_utc": _stamp(self.clock.now()),
+            }
+        }
+
+    def job_inventory(self, interpreter: Path) -> list[dict[str, Any]]:
+        self.calls.append("job_inventory")
+        return [dict(job) for job in self.jobs.values()]
+
+    def job_record(self, interpreter: Path, job_id: str) -> dict[str, Any] | None:
+        self.calls.append(f"job_record:{job_id}")
+        job = self.jobs.get(job_id)
+        if job is None:
+            return None
+        # The native scheduler executes the owned job at each scheduled phase boundary.
+        for phase in self.clock.phases:
+            if phase <= self.clock.now():
+                previous = self.job_last_run.get(job_id)
+                self.job_last_run[job_id] = phase if previous is None else max(previous, phase)
+        last_run = self.job_last_run.get(job_id)
+        return {
+            "id": job_id,
+            "name": self.module.NATIVE_JOB_NAME,
+            "script": self.module.PRECHECK_SCRIPT_NAME,
+            "deliver": "local",
+            "schedule": self.module.NATIVE_SCHEDULE,
+            "expected_schedule": self.module.NATIVE_SCHEDULE,
+            "enabled_toolsets": list(runtime_module.REPORTER_JOB_TOOLSETS),
+            "expected_toolsets": list(runtime_module.REPORTER_JOB_TOOLSETS),
+            "no_agent": False,
+            "attach_to_session": False,
+            "prompt_sha256": "prompt",
+            "expected_prompt_sha256": "prompt",
+            "model_set": False,
+            "provider_set": False,
+            "base_url_set": False,
+            "origin_set": False,
+            "skills_set": False,
+            "context_from_set": False,
+            "workdir_set": False,
+            "monitor_script_set": False,
+            "monitor_url_set": False,
+            "next_run_at": _stamp(self.enable_next_cut),
+            "last_run_at": _stamp(last_run) if last_run else None,
+            "last_status": "ok" if last_run else None,
+            "last_error": None,
+            "paused": bool(job.get("paused")),
+            "output_dir": str(self.output_dir),
+        }
+
+    def job_removed(self, interpreter: Path, job_id: str) -> bool:
+        self.calls.append(f"job_removed:{job_id}")
+        if self.fail_job_removal:
+            return False
+        return self.jobs.pop(job_id, None) is not None
+
+    def trigger_job(self, interpreter: Path, job_id: str) -> dict[str, Any]:
+        self.calls.append(f"trigger_job:{job_id}")
+        self.trigger_calls += 1
+        if not self.trigger_result.get("triggered"):
+            return dict(self.trigger_result)
+        # A real native trigger and its scheduler tick take a bounded amount of time.
+        self.clock.value += timedelta(seconds=50)
+        self.job_last_run[job_id] = self.clock.now()
+        return dict(self.trigger_result)
+
+    def scope_materialize(
+        self,
+        interpreter: Path,
+        scope_root: Path,
+        manifest: Sequence[dict[str, Any]],
+        *,
+        state_root: Path,
+        hermes_home: Path,
+        stream: Any,
+    ) -> dict[str, Any]:
+        self.calls.append("scope_materialize")
+        if self.scope_failure is not None:
+            raise self.module.QualificationError(self.scope_failure, "injected scope failure")
+        # The fake native half: a native identity per project and one real board database
+        # per synthetic board, so the between-cut transition writes to a real store.
+        for entry in manifest:
+            entry["native_project_id"] = f"native-{entry['letter'].lower()}"
+            board_dir = self.hermes_home_value / "kanban" / "boards" / entry["board_slug"]
+            board_dir.mkdir(parents=True, exist_ok=True)
+            connection = sqlite3.connect(board_dir / "kanban.db")
+            connection.executescript(self.module._BOARD_DDL)
+            connection.commit()
+            connection.close()
+        return {"boards": [entry["board_slug"] for entry in manifest]}
+
+    def scope_remove(self, interpreter: Path, scope: Mapping[str, Any]) -> dict[str, Any]:
+        self.calls.append("scope_remove")
+        if self.scope_root.exists():
+            shutil.rmtree(self.scope_root, ignore_errors=True)
+        return {
+            "removed": ["scope"],
+            "sessions_removed": [],
+            "errors": list(self.scope_remove_errors),
+        }
+
+    def environment_gaps(self, store: Any) -> list[str]:
+        self.calls.append("environment_gaps")
+        return list(self.environment_gap_values)
+
+    def session_sources(self, hermes_home: Path) -> dict[str, Any]:
+        self.calls.append("session_sources")
+        return {"sess-existing": {"source": "tui"}}
+
+    def isolate_registry(self) -> dict[str, Any]:
+        self.calls.append("isolate_registry")
+        return {
+            "path": self.store.state_root / "projects" / "registry.json",
+            "original": b"{}",
+        }
+
+    def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
+        self.calls.append("restore_registry")
+        return self.registry_restore_value
+
+    def write_output(self, path: Path, payload: Mapping[str, Any]) -> None:
+        self.calls.append("write_output")
+        self.output_payloads[str(path)] = payload
+        self.module._write_private_output(path, payload)
+
+
+def _pipeline_item(entry: Mapping[str, Any], *, state: str, final: bool = False) -> Any:
+    """One synthetic pipeline identity shaped like the shipped source adapter."""
+
+    from aether_agents.monitor.sources import SourceItem
+
+    work_key = f"pipeline:{entry['project_id']}:{entry['contract_id']}:{entry['origin_session']}"
+    current: list[dict[str, Any]] = []
+    resolved: list[dict[str, Any]] = []
+    for task in entry["tasks"]:
+        fact = {
+            "ref": f"board:{entry['board_slug']}:task:{task['task_id']}:result",
+            "text": task["result"],
+            "provenance": "reported",
+            "status": "unverified",
+        }
+        (resolved if final else current).append(fact)
+    if final:
+        resolved.append(
+            {
+                "ref": f"{work_key}:closure",
+                "text": "FLOW_TERMINAL_CONFIRMED",
+                "provenance": "observed",
+                "status": "verified",
+            }
+        )
+    return SourceItem(
+        work_key=work_key,
+        project_id=entry["project_id"],
+        project_name=entry["name"],
+        origin_session_id=entry["origin_session"],
+        origin_session_title=entry["origin_title"],
+        contract={
+            "id": entry["contract_id"],
+            "version": "v1",
+            "title": entry["contract_title"],
+        },
+        observed_state=state,
+        resolved=tuple(resolved),
+        current=tuple(current),
+        active=not final,
+    )
+
+
+def _direct_item(entry: Mapping[str, Any], interval: Mapping[str, Any], state: str) -> Any:
+    from aether_agents.monitor.sources import SourceItem
+
+    ref = f"direct:{entry['project_id']}:{entry['direct']['session_id']}:{interval['interval_id']}"
+    outcome = state.removeprefix("turn_ended_").upper()
+    return SourceItem(
+        work_key=ref,
+        project_id=entry["project_id"],
+        project_name=entry["name"],
+        origin_session_id=entry["direct"]["session_id"],
+        origin_session_title="Synthetic qualification direct session",
+        contract=None,
+        observed_state=state,
+        current=(
+            {
+                "ref": f"{ref}:turn",
+                "text": f"TURN_ENDED_{outcome}",
+                "provenance": "observed",
+                "status": "verified",
+            },
+        ),
+        coverage_gaps=("DIRECT_OUTCOME_UNKNOWN",) if state == "turn_ended_unknown" else (),
+        active=False,
+    )
+
+
+def _snapshot_payload(
+    *,
+    report_id: str,
+    cutoff: datetime,
+    items: Sequence[Any],
+    gaps: Sequence[str] = (),
+) -> dict[str, Any]:
+    from aether_agents.monitor.collector import build_bounded_snapshot
+    from aether_agents.monitor.sources import SourceCollection
+
+    return build_bounded_snapshot(
+        report_id=report_id,
+        cutoff_utc=_stamp(cutoff),
+        collected_at_utc=_stamp(cutoff + timedelta(seconds=40)),
+        previous_cutoff_utc=None,
+        source=SourceCollection(items=tuple(items), watermarks={}, coverage_gaps=tuple(gaps)),
+    )
+
+
+def _narrative_status(state: str) -> str:
+    """The shipped mapping from a source lifecycle token to the narrative vocabulary."""
+
+    from aether_agents.monitor import reporting
+
+    return reporting._canonical_observed_state(state)
+
+
+def _narrative(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """A faithful narrative: every canonical claim is carried with canonical labels."""
+
+    items: list[dict[str, Any]] = []
+    for item in payload["items"]:
+        entry: dict[str, Any] = {
+            "work_key": item["work_key"],
+            # The narrative status vocabulary is the shipped closed lifecycle set.
+            "status": _narrative_status(str(item["observed_state"])),
+            "resolved": [],
+            "current": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+        for section in ("resolved", "current", "next", "complications", "pending"):
+            entry[section] = [
+                {
+                    "ref": fact["ref"],
+                    "text": fact["text"],
+                    "provenance": fact.get("provenance", "observed"),
+                    "status": fact.get("status", "verified"),
+                }
+                for fact in item.get(section) or ()
+            ]
+        items.append(entry)
+    return {
+        "schema_version": "aether.telegram-monitor.narrative.v1",
+        "report_id": payload["report_id"],
+        "items": items,
+    }
+
+
+def _confirmed_parts(payload: Mapping[str, Any], narrative: Mapping[str, Any]) -> list[Any]:
+    from aether_agents.monitor import reporting as reporting_module
+
+    parts = reporting_module.render_parts(payload, narrative)
+    return [
+        SimpleNamespace(
+            part_index=index,
+            state="confirmed",
+            attempts=1,
+            updated_at_utc=_stamp(CUT_ONE + timedelta(minutes=2)),
+            message_id=f"9000{index}",
+            text_hash=hashlib.sha256(part.encode("utf-8")).hexdigest(),
+            report_id=payload["report_id"],
+        )
+        for index, part in enumerate(parts)
+    ]
+
+
+def _native_run(output_dir: Path, moment: datetime, *, report_id: str | None = None) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"run-{int(moment.timestamp())}-{len(list(output_dir.glob('*.md')))}.md"
+    text = (
+        f"digest {report_id}"
+        if report_id is not None
+        else "Script gate returned `wakeAgent=False` — agent skipped."
+    )
+    path.write_text(text.replace("wakeAgent=False", "wakeAgent=false"), encoding="utf-8")
+    stamp = moment.timestamp()
+    os.utime(path, (stamp, stamp))
+    return path
+
+
+def _scope_manifest_for(tmp_path: Path) -> tuple[Path, list[dict[str, Any]]]:
+    module = _qualification_module()
+    state_root = tmp_path / "xdg-state" / "aether"
+    scope_root = state_root / "monitor" / "qualification" / STAMP
+    return scope_root, module._scope_manifest(scope_root, STAMP)
+
+
+def _build_world(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    prior_enabled: bool = False,
+    phases: Sequence[datetime] = (CUT_ONE, CUT_TWO, CUT_IDLE),
+    expose_evidence: bool = True,
+) -> dict[str, Any]:
+    """One complete fake world whose phases mirror a real live qualification."""
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    scope_root, manifest = _scope_manifest_for(tmp_path)
+    clock = _PhaseClock(START, phases)
+    store = _EvidenceStore(
+        tmp_path / "xdg-state" / "aether",
+        clock,
+        enabled=prior_enabled,
+        native_job_id=PRIOR_JOB_ID if prior_enabled else None,
+        profile_binding="morfeo" if prior_enabled else None,
+        destination_ref="pinned-destination" if prior_enabled else None,
+    )
+    hermes_home = tmp_path / "hermes-home"
+    output_dir = tmp_path / "native-runs"
+    inventory: list[Mapping[str, Any]] = [
+        {
+            "id": "unrelated-job",
+            "name": "Unrelated",
+            "paused": False,
+            "behaviour_sha256": "unrelated",
+        }
+    ]
+    if prior_enabled:
+        inventory.append(
+            {
+                "id": PRIOR_JOB_ID,
+                "name": module.NATIVE_JOB_NAME,
+                "paused": True,
+                "behaviour_sha256": "prior-monitor-job",
+            }
+        )
+    world: dict[str, Any] = {
+        "module": module,
+        "manifest": manifest,
+        "scope_root": scope_root,
+        "clock": clock,
+        "store": store,
+        "hermes_home": hermes_home,
+        "output_dir": output_dir,
+    }
+    backends = _FakeBackends(
+        module=module,
+        store=store,
+        clock=clock,
+        hermes_home=hermes_home,
+        worker=tmp_path / "runtime-python",
+        scope_root=scope_root,
+        output_dir=output_dir,
+        enable_next_cut=CUT_ONE,
+        inventory=inventory,
+    )
+    world["backends"] = backends
+    if expose_evidence:
+        entry_a, entry_b = manifest
+        interval_zero = entry_a["direct"]["intervals"][0]
+        interval_one = entry_a["direct"]["intervals"][1]
+
+        smoke_report = "rpt_" + "a" * 32
+        smoke_payload = _snapshot_payload(
+            report_id=smoke_report,
+            cutoff=SMOKE_CUTOFF,
+            items=(
+                _pipeline_item(entry_a, state="running"),
+                _pipeline_item(entry_b, state="review"),
+                _direct_item(entry_a, interval_zero, "turn_ended_unknown"),
+            ),
+        )
+        smoke_narrative = _narrative(smoke_payload)
+        store.expose(
+            smoke_report,
+            SMOKE_CUTOFF,
+            payload=smoke_payload,
+            narrative=smoke_narrative,
+            deliveries=_confirmed_parts(smoke_payload, smoke_narrative),
+            reveal=START + timedelta(seconds=1),
+            collected=START + timedelta(seconds=60),
+        )
+        _native_run(output_dir, START + timedelta(seconds=45), report_id=smoke_report)
+
+        before_report = "rpt_" + "b" * 32
+        before_payload = _snapshot_payload(
+            report_id=before_report,
+            cutoff=CUT_ONE,
+            items=(
+                _pipeline_item(entry_a, state="running"),
+                _pipeline_item(entry_b, state="review"),
+                _direct_item(entry_a, interval_zero, "turn_ended_unknown"),
+            ),
+        )
+        before_narrative = _narrative(before_payload)
+        store.expose(
+            before_report,
+            CUT_ONE,
+            payload=before_payload,
+            narrative=before_narrative,
+            deliveries=_confirmed_parts(before_payload, before_narrative),
+        )
+        _native_run(output_dir, CUT_ONE + timedelta(seconds=5), report_id=before_report)
+
+        after_report = "rpt_" + "c" * 32
+        after_payload = _snapshot_payload(
+            report_id=after_report,
+            cutoff=CUT_TWO,
+            items=(
+                _pipeline_item(entry_a, state="completed", final=True),
+                _pipeline_item(entry_b, state="completed", final=True),
+                _direct_item(entry_a, interval_one, "turn_ended_completed"),
+            ),
+        )
+        after_narrative = _narrative(after_payload)
+        store.expose(
+            after_report,
+            CUT_TWO,
+            payload=after_payload,
+            narrative=after_narrative,
+            deliveries=_confirmed_parts(after_payload, after_narrative),
+        )
+        _native_run(output_dir, CUT_TWO + timedelta(seconds=5), report_id=after_report)
+
+        idle_report = "rpt_" + "d" * 32
+        store.expose(
+            idle_report,
+            CUT_IDLE,
+            payload={
+                "schema_version": "aether.telegram-monitor.snapshot.v1",
+                "report_id": idle_report,
+                "cutoff_utc": _stamp(CUT_IDLE),
+                "collected_at_utc": _stamp(CUT_IDLE + timedelta(seconds=30)),
+                "previous_cutoff_utc": _stamp(CUT_TWO),
+                "items": [],
+                "coverage_gaps": [],
+            },
+            resolved=True,
+        )
+        _native_run(output_dir, CUT_IDLE + timedelta(seconds=4))
+    return world
+
+
+def _live_args(module: Any, output: Path) -> Any:
+    return module._build_parser().parse_args(["--live", "--json", "--output", str(output)])
+
+
+def _run_live(world: Mapping[str, Any], output: Path) -> dict[str, Any]:
+    module = world["module"]
+    return module._live_run(
+        _live_args(module, output),
+        sys.stderr,
+        output=output,
+        backends=world["backends"],
+        store=world["store"],
+    )
+
+
+def test_live_backends_surface_is_fully_injectable() -> None:
+    """Every live boundary the orchestration may cross is replaceable in a test."""
+
+    module = _qualification_module()
+    real = {name for name in dir(module.LiveBackends) if not name.startswith("_")}
+    fake = {name for name in dir(_FakeBackends) if not name.startswith("_")}
+    assert real <= fake
+
+
+def test_scope_manifest_encodes_the_d12_corpus_without_crashing(tmp_path: Path) -> None:
+    """The synthetic manifest carries the fixed corpus as case keys, not prose values."""
+
+    scope_root, manifest = _scope_manifest_for(tmp_path)
+
+    assert [entry["letter"] for entry in manifest] == ["A", "B"]
+    project_a, project_b = manifest
+    assert [task["case"] for task in project_a["tasks"]] == [
+        "root",
+        "contradictory",
+        "deadline",
+        "word_time",
+        "malicious",
+    ]
+    assert [task["case"] for task in project_b["tasks"]] == ["review", "partial"]
+    assert project_a["tasks"][1]["result"] == (
+        "Phase one checks are complete and everything is green."
+    )
+    assert project_b["tasks"][1]["result"] == (
+        "Partial success: three of five checks pass; the source review is still pending."
+    )
+    assert [task["status"] for task in project_b["tasks"]] == ["running", "review"]
+    assert project_a["path"].startswith(str(scope_root))
+    assert project_a["direct"]["intervals"][0]["outcome"] == "unknown"
+
+
+def test_live_preflight_and_full_run_without_external_effects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole live orchestration runs against fakes: enable, smoke, two cuts, idle."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+
+    record = _run_live(world, output)
+
+    assert record["ok"] is True, record["errors"]
+    assert record["environment"] == {"gaps": []}
+    assert record["enable"]["named_job_count"] == 1
+    assert record["enable"]["second_enable_same_job"] is True
+    assert record["enable"]["shape_ok"] is True
+    assert record["smoke"]["confirmed"] is True
+    assert record["smoke"]["narration_writes"] == 1
+    assert record["smoke"]["part_count"] == 3
+    assert [len(boundary["work_keys"]) for boundary in record["boundaries"]] == [3, 3]
+    assert [boundary["coverage_gaps"] for boundary in record["boundaries"]] == [[], []]
+    assert sorted(record["boundaries"][0]["item_states"].values()) == [
+        "review",
+        "running",
+        "turn_ended_unknown",
+    ]
+    assert sorted(record["boundaries"][1]["item_states"].values()) == [
+        "completed",
+        "completed",
+        "turn_ended_completed",
+    ]
+    assert {case["id"]: case["status"] for case in record["cases"]} == {
+        "contradictory-completion": "pass",
+        "forecast-deadline": "pass",
+        "word-based-time": "pass",
+        "malicious-instructions": "pass",
+        "partial-success-pending-review": "pass",
+        "between-cut-final": "pass",
+        "final-after-review": "pass",
+        "direct-no-contract": "pass",
+        "direct-between-cut-final": "pass",
+    }
+    assert record["idle"]["idle_confirmed"] is True
+    assert record["off"]["enabled_after_off"] is False
+    assert record["restore"]["scope_removed"] is True
+    assert record["restore"]["registry_restored"] == "byte-identical"
+    assert record["restore"]["enabled_matches_prior"] is True
+    assert record["restore"]["native_job_id_matches_prior"] is True
+    assert record["restore"]["created_job_removed"] is True
+    assert record["restore"]["unrelated_jobs_preserved"] is True
+    assert backends.trigger_calls == 1
+    order = backends.calls
+    assert order.index("isolate_registry") < order.index("scope_materialize")
+    assert order.index("environment_gaps") < order.index("control:on")
+    assert order.index("trigger_job:" + SYNTHETIC_JOB_ID) < order.index("control:off")
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["boundaries"][0]["narrative_items"]
+    assert receipt["boundaries"][0]["source_facts"]
+    assert receipt["smoke"]["narrative_items"]
+    public = receipt["public_summary"]
+    rendered = json.dumps(public)
+    for private in ("rpt_", "90000", "90001", str(output)):
+        assert private not in rendered, private
+    assert public["qualified"] is True
+    assert public["smoke_confirmed"] is True
+    assert public["job_identity_restored"] is True
+
+
+def test_live_environment_preflight_refuses_installation_gaps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permanent installation gap refuses the qualification before any enable."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    backends.environment_gap_values = [
+        "BOARD_METADATA_UNREADABLE",
+        "SESSION_TITLE_UNAVAILABLE",
+    ]
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+
+    assert error.value.code == "environment-gaps"
+    assert "BOARD_METADATA_UNREADABLE" in error.value.message
+    assert "control:on" not in backends.calls
+    assert backends.trigger_calls == 0
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["restore"]["scope_removed"] is True
+    assert receipt["restore"]["registry_restored"] == "byte-identical"
+
+
+def test_live_scope_setup_failure_leaves_nothing_behind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed native materialization is fully reversed from the manifest already held."""
+
+    world = _build_world(tmp_path, monkeypatch, expose_evidence=False)
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    backends.scope_failure = "scope-create"
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+
+    assert error.value.code == "scope-create"
+    assert backends.calls.count("scope_remove") == 1
+    assert not world["scope_root"].exists()
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["restore"]["scope_removed"] is True
+    assert receipt["restore"]["registry_restored"] == "byte-identical"
+
+
+def test_live_restore_failures_are_qualification_gating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Registry, scope, job-removal and identity restore failures all clear ``ok``."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    backends = world["backends"]
+    store = world["store"]
+    output = tmp_path / "private" / "receipt.json"
+    backends.registry_restore_value = "failed"
+    backends.scope_remove_errors = ["RuntimeError: remove failed"]
+    backends.fail_job_removal = True
+
+    def fail_configure(**values: Any) -> Any:
+        raise RuntimeError("configure failed")
+
+    store.configure = fail_configure  # type: ignore[method-assign]
+
+    record = _run_live(world, output)
+
+    assert record["ok"] is False
+    codes = {entry["code"] for entry in record["errors"]}
+    assert {
+        "restore-scope",
+        "restore-registry",
+        "restore-created-job",
+        "restore-job-identity",
+    } <= codes
+    assert record["restore"]["scope_removed"] is False
+    assert record["restore"]["created_job_removed"] is False
+    assert record["restore"]["native_job_id_matches_prior"] is False
+    public = record["public_summary"]
+    assert public["qualified"] is False
+    assert public["registry_restored"] == "failed"
+    assert public["scope_restored"] is False
+    assert public["created_job_removed"] is False
+    assert public["job_identity_restored"] is False
+
+
+def test_previously_enabled_monitor_is_quiesced_before_registry_isolation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An enabled monitor is paused before the synthetic registry replaces the real one."""
+
+    world = _build_world(tmp_path, monkeypatch, prior_enabled=True)
+    backends = world["backends"]
+    store = world["store"]
+    output = tmp_path / "private" / "receipt.json"
+
+    record = _run_live(world, output)
+
+    assert record["ok"] is True, record["errors"]
+    calls = backends.calls
+    assert calls.index("control:off") < calls.index("isolate_registry")
+    assert record["prior_quiesce"]["enabled_after"] is False
+    assert record["restore"]["enabled_matches_prior"] is True
+    assert store.settings.enabled is True
+    assert store.settings.native_job_id == PRIOR_JOB_ID
+    assert not record["restore"].get("created_job_removed")
+
+
+def test_bounded_smoke_is_required_before_the_hourly_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The smoke is bounded, mandatory and never substitutes for a real boundary."""
+
+    world = _build_world(tmp_path, monkeypatch, expose_evidence=False)
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    backends.trigger_result = {"triggered": False, "errors": ["RuntimeError"]}
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+    assert error.value.code == "smoke-trigger"
+    assert backends.trigger_calls == 1
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["restore"]["enabled_matches_prior"] is True
+    assert "control:off" in backends.calls
+
+    timeout_world = _build_world(
+        tmp_path / "timeout",
+        monkeypatch,
+        expose_evidence=False,
+        phases=(START + timedelta(minutes=20),),
+    )
+    output = tmp_path / "timeout" / "private" / "receipt.json"
+    with pytest.raises(timeout_world["module"].QualificationError) as error:
+        _run_live(timeout_world, output)
+    assert error.value.code == "smoke-timeout"
+    assert timeout_world["backends"].trigger_calls == 1
+
+    close_world = _build_world(
+        tmp_path / "close",
+        monkeypatch,
+        expose_evidence=False,
+        phases=(START + timedelta(minutes=5),),
+    )
+    close_world["backends"].enable_next_cut = START + timedelta(minutes=5)
+    output = tmp_path / "close" / "private" / "receipt.json"
+    with pytest.raises(close_world["module"].QualificationError) as error:
+        _run_live(close_world, output)
+    assert error.value.code == "smoke-window"
+    assert close_world["backends"].trigger_calls == 0
+
+
+def test_d12_case_requires_attribution_and_rejects_invented_percentages() -> None:
+    """The reproduced probes: omitted evidence or an invented percentage cannot pass."""
+
+    module = _qualification_module()
+    work_key = f"pipeline:{PROJECT_ID}:{CONTRACT_ID}:{ORIGIN_SESSION}"
+    fixture_ref = "board:oc-unit:task:t_00000002:result"
+    source_fact = {
+        "ref": fixture_ref,
+        "text": "Partial success: three of five checks pass; the source review is pending.",
+        "provenance": "reported",
+        "status": "unverified",
+        "work_key": work_key,
+        "section": "current",
+    }
+    item = {
+        "work_key": work_key,
+        "observed_state": "review",
+        "contract": {"id": CONTRACT_ID, "version": "v1", "title": "Synthetic"},
+        "current": [dict(source_fact)],
+    }
+    boundary: dict[str, Any] = {
+        "payload_items": {work_key: item},
+        "narrative_items": {},
+        "source_facts": {fixture_ref: source_fact},
+    }
+    case = {
+        "id": "partial-success-pending-review",
+        "boundary_index": 0,
+        "work_key": work_key,
+        "expected_state": "review",
+        "fixture_ref": fixture_ref,
+        "kind": "no-promotion",
+        "tokens": ["three of five checks"],
+    }
+
+    # The review's first reproduced probe: the matching reference with replaced prose.
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "review",
+            "current": [
+                {
+                    "ref": fixture_ref,
+                    "text": "The objective is 75 percent complete.",
+                    "provenance": "reported",
+                    "status": "unverified",
+                }
+            ],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    invented = module._evaluate_cases([case], [boundary])
+    assert invented[0]["status"] == "fail"
+    assert "percentage" in invented[0]["detail"]
+
+    # The review's second reproduced probe: empty omission of the representative evidence.
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "review",
+            "current": [],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    omitted = module._evaluate_cases([case], [boundary])
+    assert omitted[0]["status"] == "fail"
+    assert "omitted" in omitted[0]["detail"]
+
+    # A faithful citation of the canonical claim passes and retains the comparison.
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "review",
+            "current": [
+                {
+                    "ref": fixture_ref,
+                    "text": "A worker reported partial success: three of five checks pass; "
+                    "the source review is pending.",
+                    "provenance": "reported",
+                    "status": "unverified",
+                }
+            ],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    faithful = module._evaluate_cases([case], [boundary])
+    assert faithful[0]["status"] == "pass"
+    assert faithful[0]["expected_text"] == source_fact["text"]
+    assert faithful[0]["cited_texts"] == [
+        "A worker reported partial success: three of five checks pass; "
+        "the source review is pending."
+    ]
+
+
+def test_boundary_record_binds_the_fixture_item_gap() -> None:
+    """The deliberate item-level fixture gap is asserted on its own identity."""
+
+    module = _qualification_module()
+    payload = _live_payload()
+    payload["items"][0]["coverage_gaps"] = ["DIRECT_OUTCOME_UNKNOWN"]
+    narrative = _live_narrative(payload)
+    work_key = payload["items"][0]["work_key"]
+    decision = _confirmed_decision(payload, narrative)
+
+    boundary = module._boundary_record(
+        decision,
+        expected_items={work_key: "running"},
+        expected_gaps=frozenset(),
+        expected_item_gaps={work_key: ("DIRECT_OUTCOME_UNKNOWN",)},
+        language=None,
+        job_record=_job_record(),
+        run_evidence=_run_evidence(payload["report_id"]),
+        expected_cutoff_utc=EXPECTED_CUT,
+    )
+    assert boundary["work_keys"] == [work_key]
+
+    with pytest.raises(module.QualificationError) as mismatch:
+        module._boundary_record(
+            decision,
+            expected_items={work_key: "running"},
+            expected_gaps=frozenset(),
+            expected_item_gaps={work_key: ()},
+            language=None,
+            job_record=_job_record(),
+            run_evidence=_run_evidence(payload["report_id"]),
+            expected_cutoff_utc=EXPECTED_CUT,
+        )
+    assert mismatch.value.code == "scope-item-gaps"
+    assert mismatch.value.detail["work_key"] == work_key

@@ -184,9 +184,11 @@ uv run --frozen python scripts/qualify_telegram_monitor.py --json
 
 The default lane is deterministic and has no external effect: it checks the control
 parser, the plugin registration surface, the single package entry point, the packaged
-resources, the control envelopes over a disposable state root and the packaged pre-check
-idle gate, and it verifies that no native Hermes module, model call or Telegram send
-occurred. It is not live evidence.
+resources, the control envelopes over a disposable state root, the packaged pre-check
+idle gate and the D12 safety boundary (every live-corpus text is accepted by the shipped
+deterministic boundary, while the historical instruction-like canary is refused with
+`REPORTING_UNSAFE_CONTENT`), and it verifies that no native Hermes module, model call or
+Telegram send occurred. It is not live evidence.
 
 The provisioned live lane is owned by the terminal integration step (MON-INT) and is
 invoked as:
@@ -201,42 +203,66 @@ Live mode accepts no token, destination, provider or model input; it resolves on
 provisioned runtime and the existing pinned destination, and it performs no external
 effect until its environment pre-flight passes. What it does, in order:
 
+0. **Quiescing a running monitor.** If the monitor is already enabled, it is durably
+   disabled and its owned job paused *before* the registry is isolated, so no scheduled
+   run can observe the synthetic-only registry while the scope is being prepared. The
+   prior enablement and binding are restored at the end.
 1. **Isolating one synthetic scope.** The operator's project registry is backed up
    byte-for-byte and replaced, for the duration of the run, by a registry containing only
    two honestly labelled synthetic projects (markers, finalized contracts, canonical
-   boards, origin/finalizer sessions) plus one direct no-contract session. Everything the
-   run creates — native project rows, boards, sessions, direct-turn spool files — is
-   removed afterwards and the registry bytes are restored and verified. The
-   qualification never invents a real project identity, never edits a source database and
-   never restarts or kills an agent.
-2. **Proving the fixed native job.** `on` must reconcile exactly one owned job; a second
+   boards, origin/finalizer sessions) plus one direct no-contract session. The manifest
+   and the local project files exist before the first native row is created, so every
+   failure path removes exactly the scope this run holds. Everything the run creates —
+   native project rows, boards, sessions, direct-turn spool files — is removed afterwards
+   and the registry bytes are restored and verified. The qualification never invents a real
+   project identity, never edits a source database and never restarts or kills an agent.
+2. **Environment pre-flight.** The installation's own read-only sources are probed before
+   the fixture introduces its deliberate gap. Any permanent gap refuses the run before it
+   is enabled (see the limits below).
+3. **Proving the fixed native job.** `on` must reconcile exactly one owned job; a second
    `on` must return the same job and create nothing; the job record must carry the fixed
    schedule, pre-check script, `deliver=local`, restricted reporter toolset, no agent
    bypass and no model/provider/origin override.
-3. **Two real hourly boundaries.** Each expected cut must be a fresh report for the
+4. **One bounded initial smoke.** The owned job is triggered once through the shipped
+   native API and must produce exactly one real collected report, one accepted
+   single-write narration, the shipped renderer's parts and one confirmed delivery — a
+   real end-to-end model-plus-transport check before the long wait. It is bounded, it is
+   never a substitute for a real hourly boundary, and it refuses to start when the first
+   boundary is less than fifteen minutes away (a native trigger schedules the job for
+   `now`, which would consume that boundary) and restores the prior state when it fails.
+5. **Two real hourly boundaries.** Each expected cut must be a fresh report for the
    expected wall-clock hour, collected within the accepted deadline, with an accepted
    single-write Morfeo narrative whose delivered parts are byte-equal to the shipped
    renderer's output over that evidence (including the immutable identity headers), every
-   part confirmed with a native message identifier, and at most one native scheduler run
-   record containing that digest identity. Between the two cuts the synthetic work
+   part confirmed with a native message identifier, and exactly one native scheduler run
+   record containing that digest identity. The collection-level coverage gaps must be
+   exactly the pre-flight baseline, and the deliberately created `DIRECT_OUTCOME_UNKNOWN`
+   gap is asserted on its own work identity. Between the two cuts the synthetic work
    transitions — a flow completes, a reviewed flow closes, a direct turn opens a
    continuation — so the second boundary must carry the genuine final reports.
-4. **Comparing the D12 semantic corpus with canonical state.** The synthetic scope
+6. **Comparing the D12 semantic corpus with canonical state.** The synthetic scope
    contains contradictory worker completion claims, a forecast deadline, word-based time,
-   a malicious instruction and a legitimate partial success with pending review. The
-   harness compares the actual Morfeo narrative with the canonical snapshot evidence:
-   typed state must equal the canonical lifecycle state, adversarial text must never be
-   promoted beyond its `reported/unverified` evidence, a completion must be grounded in
-   observed verified evidence, and the direct case must carry no contract. A case cannot
-   pass without the live narrative that produced it.
-5. **One real no-work boundary.** After the final coverage is confirmed, the next cut
+   an unverified claim that the objective is finished and should be accepted as final, and
+   a legitimate partial success with pending review. The harness compares the actual
+   Morfeo narrative with the canonical snapshot evidence: typed state must equal the
+   canonical lifecycle state, the case's representative source evidence must actually be
+   cited (an omitted evidence claim cannot pass), a percentage is rejected because no
+   report claims one, adversarial text must never be promoted beyond its
+   `reported/unverified` evidence, and a completion must be grounded in observed verified
+   evidence. A case cannot pass without the live narrative that produced it, and the
+   private receipt retains the canonical text next to the text the narrator emitted so the
+   comparison can be independently adjudicated.
+7. **One real no-work boundary.** After the final coverage is confirmed, the next cut
    must show the native scheduler's own record of the silent `wakeAgent=false` gate, an
    advanced watermark, a resolved snapshot with no narration of any status, no deliveries,
    no new reporter session and no pending handoff. A fresh rejected or failed narrative
    is a model turn and therefore fails the skip rather than certifying it.
-6. **Manual off and restoration.** `off` must durably disable the monitor and pause the
-   owned job; the prior enablement (and, on an installation that had none, the absence of
-   the created job) and every unrelated job's behaviour-bearing fields must be restored.
+8. **Manual off and restoration.** `off` must durably disable the monitor and pause the
+   owned job; the prior enablement, the exact prior persisted job identity, the absence of
+   a job this run created and every unrelated job's behaviour-bearing fields must all be
+   restored. Every restore invariant is qualification-gating: a run that cannot put the
+   installation back where it found it reports `ok: false` with the specific restore error
+   codes even when every boundary passed.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record) go only to the `--output` file, which must live outside every Git worktree;
@@ -256,9 +282,17 @@ Current limits, stated honestly:
   title). On such an installation the genuine no-work skip cannot occur and enabling the
   monitor would produce an hourly gap report; the live lane must not send that, so it
   stops before the first live effect and reports the gap codes.
+- **Instruction-like source text never reaches the narrator.** D12 keeps the shipped
+  deterministic boundary: a snapshot or narrative containing instruction-like content is
+  refused (`REPORTING_UNSAFE_CONTENT` / `NARRATIVE_UNSAFE`), so the historical
+  instruction-like example cannot be a live corpus text — the live corpus carries an
+  adversarial *claim* the boundary accepts, and the offline lane proves the refusal
+  instead of asking a model to quote it.
 - The narration quality boundary is structural plus representative live review: typed
-  lifecycle/reference/provenance/size/privacy validation is deterministic, while faithful
-  paraphrase of arbitrary prose is judged on real Morfeo output, not by a semantic parser.
+  lifecycle/reference/provenance/size/privacy validation, evidence attribution and the
+  no-percentage rule are deterministic, while faithful paraphrase of arbitrary prose is
+  judged on real Morfeo output (the private receipt keeps the comparison), not by a
+  semantic parser.
 - `_module_problems()` is a capability preflight against the imported runtime. It proves
   the required interfaces exist; it cannot prove that a drifted runtime will schedule the
   job correctly.

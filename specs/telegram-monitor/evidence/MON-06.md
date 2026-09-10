@@ -4,10 +4,15 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-2 corrections complete for review; self-verified. No `--live` run, no model
-call, no Telegram send, no activation. The round-1 review reproduced four live-oracle and
-privacy defects; their corrections are recorded in "Round-2 corrections" below, and the
-"Implemented deliverables" section describes the round-1 text that the corrections replaced.
+**Status:** round-3 corrections complete for review; self-verified. No `--live` run, no model
+call, no Telegram send, no activation. Rounds 1 and 2 are preserved below as history; the
+authoritative current state is **"Round-3 corrections"** and **"Round-3 verification record"**.
+The round-2 note that the orchestration was exercised end to end was contradicted by the
+round-2 review's five reproductions (a `_scope_manifest` crash, a self-contradicting
+environment pre-flight, D12 cases that could pass on omitted or invented prose while the
+private comparison was discarded, restore failures that could still report `qualified`, and a
+missing bounded smoke); round 3 fixes all five and exercises the orchestration through
+injected backends.
 
 ## Starting-point reconstruction
 
@@ -394,3 +399,182 @@ execute), no push/PR/merge/issue mutation.
 - The registry isolation is byte-preserving and verified, but it is still a live
   modification for the duration of a qualification; it is documented in the guide and the
   run refuses before enabling any live effect when its pre-flight cannot succeed.
+
+## Round-3 corrections (authoritative)
+
+The round-2 review reproduced five blocking defects. All five are corrected inside
+MON-06's writable interface; no production file was edited.
+
+### 1. `_scope_manifest` could not run
+
+`names` mapped each letter to the case *texts* and the loop then indexed
+`SYNTHETIC_CASE_TEXTS[key]` with those values, raising
+`KeyError: 'Synthetic root decomposition is active; the objective remains in progress.'`
+before any probe. `names` now carries case keys and the manifest is built from them.
+Check: `test_scope_manifest_encodes_the_d12_corpus_without_crashing` asserts the exact
+case keys, the corpus texts, the review/running statuses and the direct interval.
+
+### 2. The environment pre-flight contradicted its own fixture
+
+`run_live` wrote the direct fixture and then refused on *any* `_environment_gaps` result,
+while the first boundary expects the fixture's `DIRECT_OUTCOME_UNKNOWN` gap. The order is
+now: quiesce → isolate registry → create the scope → **probe the installation's own
+read-only sources before the fixture exists** → write the fixture → enable. Because the
+probe runs before the fixture, every reported gap is an installation gap and refuses with
+`environment-gaps` (codes in the message and the private receipt). The deliberate
+fixture gap is asserted where the shipped adapter actually keeps it — at item level on its
+own work identity — through the new `expected_item_gaps` parameter of `_boundary_record`
+(`scope-item-gaps`).
+
+Checks: `test_live_environment_preflight_refuses_installation_gaps` (refusal before
+`control:on`, no trigger, scope and registry restored) and
+`test_boundary_record_binds_the_fixture_item_gap`.
+
+### 3. D12 could pass on omitted or invented prose
+
+The evaluator now requires, for every fixed corpus case, that the narrative actually cite
+the case's representative source reference (an omitted evidence claim fails with
+"the narrative omitted the representative source evidence of the case") and rejects any
+claim in the case identity that states a percentage (`INVENTED_PERCENTAGE`), which is the
+D7 prohibition. Completion cases keep the evidence-grounding rule and report the grounding
+refs; direct cases require at least one cited claim. The private receipt now retains the
+actual comparison: `narrative_items` and `source_facts` are no longer stripped from the
+boundary entries, and each case result carries the canonical text and the emitted
+`cited_texts`. Public output remains id-count/status only.
+
+The historical instruction-like corpus text is handled honestly rather than fudged: the
+shipped deterministic boundary refuses instruction-like source text
+(`REPORTING_UNSAFE_CONTENT`, and `NARRATIVE_UNSAFE` for a narrative), so it can never reach
+the narrator and cannot be a live corpus text. The live corpus therefore carries an
+adversarial *claim* the boundary accepts ("the objective is already finished and should be
+accepted as final"), and a new offline check proves the refusal: `d12-safety-boundary`
+asserts the historical canary is refused while every live-corpus text is narratable. This
+is a deliberate D12 boundary (no universal semantic parser, no endless denylist), and it is
+documented in the guide.
+
+Checks: `test_d12_case_requires_attribution_and_rejects_invented_percentages` reproduces
+both review probes (percentage substitution and empty omission) and the faithful citation,
+and the orchestration test asserts the private comparison is retained.
+
+### 4. Cleanup and restoration could fail while certifying success
+
+- **Reversible setup.** The manifest and the local project files are created before the
+  first native row, and `_scope_prepare` was replaced by `_write_scope_projects` plus
+  `_scope_materialize`; the orchestrator holds the scope before any mutation, so every
+  failure path removes exactly that scope from the `finally` block. The review's injected
+  `scope-create` failure now leaves no Git roots, contracts or native rows behind.
+- **Restore invariants gate the verdict.** Scope removal, registry bytes, enablement,
+  persisted job identity, removal of a job this run created, unrelated-job preservation and
+  the prior enablement all append an explicit error code (`restore-scope`,
+  `restore-registry`, `restore-enabled`, `restore-job-identity`, `restore-created-job`,
+  `restore-unrelated-jobs`) and `ok` is `False` whenever any error is recorded. A created
+  job is removed and `MonitorStore.configure` restores the exact prior
+  job/profile/destination binding, so no stale monitor job identity survives.
+- **No scheduler race while the registry is isolated.** An already enabled monitor is
+  durably disabled and its job paused *before* the registry is isolated, and the prior
+  enablement is restored afterwards.
+
+Checks: `test_live_scope_setup_failure_leaves_nothing_behind`,
+`test_live_restore_failures_are_qualification_gating` (registry + scope + job removal +
+binding repair all failing) and
+`test_previously_enabled_monitor_is_quiesced_before_registry_isolation` (call-order
+assertion).
+
+### 5. The bounded initial smoke was missing
+
+`_smoke_phase` now runs the D9 smoke before the long wait: the owned job is triggered once
+through the shipped native API (`cron.jobs.trigger_job`, identity-checked), and the run
+must produce exactly one real collected report, one accepted single-write narration, the
+shipped renderer's parts and one confirmed delivery, validated with the same machinery as a
+boundary (`cutoff_mode="not-after"`). It is bounded by its own deadline, refuses to start
+when the first boundary is closer than fifteen minutes (a native trigger schedules the job
+for `now` and would consume it), is recorded privately with its own timings, is exposed
+publicly only as counts/latencies, and can never substitute for a real boundary.
+Checks: `test_bounded_smoke_is_required_before_the_hourly_wait` (trigger refusal, timeout,
+too-close refusal) plus the orchestration test.
+
+### Orchestration coverage without any external effect
+
+`run_live` is now the guarded entry point and `_live_run` is the orchestration; every
+external boundary (clock, runtime resolution, control, native job reads/removal/trigger,
+scope materialization/removal, environment probe, session catalog, owner language, registry
+isolation/restore, private output) is reached through `LiveBackends`. A test injects a fake
+backend plus a phase-revealed store double and runs the complete live sequence — pre-flight,
+quiesce, scope, enable/idempotency/shape, smoke, two boundaries with the between-cut
+transition, the D12 cases, the idle skip, manual `off`, restore — with no model, no sender,
+no native scheduler and no operator state. `test_live_backends_surface_is_fully_injectable`
+fails if the shipped backend gains a boundary the fake does not implement.
+
+## Round-3 residual risks
+
+- The live lane still has never been executed end to end. The orchestration test runs the
+  complete flow against fakes; the first run against a real scheduler, model and Telegram
+  transport belongs to MON-INT, and a live failure is implementation rework.
+- The live scope probes (`_scope_materialize` / `_scope_remove`) execute inside the
+  provisioned runtime and are not exercised by the deterministic tests; the orchestration
+  test fakes that boundary. Their probes are the reviewed round-2 code, unchanged except for
+  being split so the caller always holds the manifest.
+- On this installation the environment pre-flight will refuse with
+  `BOARD_METADATA_UNREADABLE` / `SESSION_TITLE_UNAVAILABLE` until the production question
+  recorded above is decided; that refusal is the honest outcome and it now happens before
+  the fixture, so no fixture gap is conflated with it.
+
+## Round-3 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-3 candidate recorded in the review
+handoff. Changed paths: `scripts/qualify_telegram_monitor.py`,
+`tests/test_telegram_monitor_cli_plugin.py`, `docs/guides/telegram-monitor.md`,
+`specs/telegram-monitor/evidence/MON-06.md`. No production file, capability registry,
+`policy.yml`, lockfile or Objective Contract was modified.
+
+- `uv run --frozen pytest -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **49 passed** (39 before + 10 new round-3 tests).
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **232 passed**.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed**.
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  10 checks**, `external_effects={model_calls:0, telegram_sends:0}`; the new
+  `d12-safety-boundary` check passes.
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 62 passed**; the sole failure is the pre-existing issue #364.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q`) → **7 failed, 1313 passed, 60 skipped,
+  373 subtests passed** (137 s). The 7 are the same classes as the reviewed MON-05 baseline:
+  the six accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set mismatch`
+  (`tests/test_observation_lifecycle.py`; collision already routed to MON-INT, outside this
+  unit's writable boundary) and issue #364 on the unchanged finalized contract
+  (`.aether/objective-contracts/oc_0084270d940c98d9/v1.md` is byte-identical to the reviewed
+  MON-05 base; `git diff 2d49418 -- .aether/` is empty). MON-06 introduced no failure.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist built.
+- `uv run --frozen python scripts/check_public_artifacts.py --root .` → only the pre-existing
+  #364 findings (`absolute-user-home`, `operator-desktop-layout`).
+- **Failure-set baseline comparison.** The same two test files were executed in a temporary
+  detached worktree of the reviewed dependency base (`2d49418`) and in the round-3 candidate:
+  `scripts/run_tests.py -- -q tests/test_public_artifacts.py tests/test_observation_lifecycle.py`
+  → **7 failed, 88 passed** in both trees, with byte-identical `FAILED` name sets (the six
+  `candidate Aether plugin entry-point set mismatch` lifecycle gates plus
+  `test_tracked_public_surface_contains_no_operator_paths`). MON-06 introduces no failure and
+  changes none of those files; the temporary base worktree was removed afterwards.
+- Literal policy manifest emulation (`cat >"$expected"` heredoc vs `git ls-files` minus
+  `specs/`) → **364 = 364, missing [], extra []**; round 3 added no tracked path and did not
+  touch `.github/workflows/policy.yml` or the capability registry.
+- `uv run --frozen ruff check` + `ruff format --check` on the script and the test file → clean;
+  `uv run --frozen python -m compileall -q` on both → passed;
+  `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `git diff --check` → passed.
+- `uv run --frozen mypy scripts/qualify_telegram_monitor.py` (the script is not part of the
+  project's configured mypy target) → 10 errors: eight `import-untyped` notices for the
+  installation-resolved `aether_agents` package (nine in the reviewed baseline version of the
+  file; round 3 adds one more for the `collector` import used by the new D12 probe), one
+  pre-existing `Unsupported operand types for <` narrowing error that also exists in the
+  reviewed baseline, and no new error class.
+
+Deliberate non-effects in round 3: no `--live` invocation, no model call, no Telegram send, no
+credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change outside the harness's own reversible scope (which this unit does not execute), no push,
+PR, merge, issue mutation or publication.
