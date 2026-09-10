@@ -52,17 +52,33 @@ integration, the durable ledgers and closeout.
 | Accepted scope | 3 files, `+805/-0`: `hermes_cli/kanban_db.py` +100, `tools/kanban_tools.py` +6, `tests/tools/test_kanban_cross_board_project.py` +699 (new file) |
 | Producer evidence | fork evidence attachment `hlp226c-fork-evidence-r2.txt`, SHA-256 `294d297cbcae4642866b3c304f28fe6b76606f4a243a57989783185c6602fa10` |
 
-Fork behavioral results are recorded here as reported by that reviewed producer and
-independently reproduced by the same-card supervising review; AE-226C did not execute the
-fork suites and does not restate them as its own result. Identical 21-test module bytes failed
-3 of 21 on the unchanged base with `kanban_create: session-affinity tasks require a canonical
-project_id` and passed 21 of 21 on the accepted candidate; reverting only
-`tools/kanban_tools.py` to its base bytes left 20 passed / 1 failed (the explicit-target-board
-regression); the minimum affected run passed 132 with 1 Windows-only skip; the documented full
-fork suite reported 31020 passed / 2392 failed / 262 skipped with the recorded unrelated
-failing-file set unchanged apart from one attributed parallel-run pytest teardown flake whose
-file passed 3/3 in isolation; `compileall`, Ruff check/format on touched scope and range
-`git diff --check` passed.
+Fork behavioral results are recorded here with their actual producers; AE-226C did not
+execute the fork suites and does not restate them as its own result.
+
+The reviewed HF-226C producer reports (attachment `hlp226c-fork-evidence-r2.txt`): identical
+21-test module bytes failed 3 of 21 on the unchanged base with `kanban_create:
+session-affinity tasks require a canonical project_id` and passed 21 of 21 on the accepted
+candidate (the module contains the two-profile materialized E2E and the fail-closed matrix);
+reverting only `tools/kanban_tools.py` to its base bytes left 20 passed / 1 failed (the
+explicit-target-board regression); the minimum affected run passed 132 with 1 Windows-only
+skip; `compileall`, Ruff check/format on touched scope and range `git diff --check` passed.
+The producer's own documented full fork suite reported 31020 passed / 2392 failed / 262
+skipped, and its only delta against the recorded 424-file baseline failure set was one
+attributed parallel-run `test_coalesce_session_args.py` pytest teardown race whose file passed
+3/3 in isolation.
+
+The accepted same-card Supervisor review (round 2) independently reran at the exact candidate
+revision and reproduced the baseline RED 18 passed / 3 failed, the tool-hunk sensitivity 20
+passed / 1 failed, and the candidate minimum affected run 132 passed with 1 Windows-only
+skip. Its independent documented full runner reported 31022 passed / 2393 failed / 262
+skipped, with the new module passing 21 and `test_coalesce_session_args` passing 3, and its
+sole delta against the recorded failure set was a `test_install_macos_launcher` failure
+induced by the reviewer's sterile HOME lacking any shell configuration; that test passed 1/1
+in an isolated zero-retry rerun under a disposable representative `.bashrc`, leaving the
+recorded unrelated failure set behaviorally unchanged. Both full-suite observations ran once
+each in a local dev environment: their pre-existing environment-driven failures are
+unchanged, not resolved and not a qualification, and neither observation activates a live
+runtime.
 
 ### Portable artifact
 
@@ -72,7 +88,7 @@ file passed 3/3 in isolation; `compileall`, Ruff check/format on touched scope a
 | Path | `patches/hermes/HLP-226c-cross-board-project-inheritance.patch` |
 | SHA-256 | `6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418` |
 | Size | 861 lines; `git apply --numstat` per file `100/0`, `699/0`, `6/0` (805 insertions, 0 deletions) |
-| Corpus whitespace gate | the three whitespace-only context lines of the raw `git diff` text were normalized to empty context lines so the recorded artifact passes the repository's own `git diff --check` / `git diff-tree --check` gate; no added or removed line was touched, and the normalized patch re-passed `git apply --check` and reconstructed all three candidate files to the identical SHA-256 values |
+| Corpus whitespace gate | the three whitespace-only context lines of the raw `git diff` text were normalized to empty context lines so the recorded artifact passes the repository's own `git diff --check` / `git diff-tree --check` gate; no added or removed line was touched, and the normalized patch re-passed `git apply --check` and reconstructed all three candidate files to the identical SHA-256 values. The raw pre-normalization `git diff` text alone hashed to SHA-256 `5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945`; that value identifies only the pre-normalization raw diff and is never the portable artifact digest |
 | Generation | file-scoped `git diff 415056fee527c5a2302370bd6dba56f84b9a4202 7980bbf1f9f75efdcbee2196ae910bb77138541d -- hermes_cli/kanban_db.py tools/kanban_tools.py tests/tools/test_kanban_cross_board_project.py`, run in the maintained-fork clone at the exact base and accepted candidate |
 | Portability | repo-relative Hermes paths only; no operator path, home directory, credential or raw runtime state in the patch text |
 | Preservation | the pre-existing `patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch` is byte-identical to the reviewed revision (SHA-256 `a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040`), and it was not collapsed into or replaced by the new artifact |
@@ -96,19 +112,23 @@ edited, reloaded or activated.
 
 | Item | Change | Control |
 | --- | --- | --- |
-| `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/entries/HLP-226.json` | `components` are now `["HLP-226", "HLP-226b", "HLP-226c"]`; the fragment declares both portable patch artifacts with their own SHA-256 values (HLP-226b `a28fd108…f6c040` unchanged, HLP-226c `5532b346…1bba945` new), plus a `passed` HLP-226c reconstruction input (`415056fee527c5a2302370bd6dba56f84b9a4202`) and reconstruction record; the HLP-226b reconstruction entries and the record-level `unavailable` status and blocker are preserved | the earlier HLP-226b digest was neither overwritten nor collapsed; the record-level blocker still carries the unavailability of the HLP-226b private reconstruction input |
+| `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/entries/HLP-226.json` | `components` are now `["HLP-226", "HLP-226b", "HLP-226c"]`; the fragment declares both portable patch artifacts with their own SHA-256 values (HLP-226b `a28fd108…f6c040` unchanged, HLP-226c `6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418` new), plus a `passed` HLP-226c reconstruction input (`415056fee527c5a2302370bd6dba56f84b9a4202`) and reconstruction record; the HLP-226b reconstruction entries and the record-level `unavailable` status and blocker are preserved | the earlier HLP-226b digest was neither overwritten nor collapsed; the record-level blocker still carries the unavailability of the HLP-226b private reconstruction input |
 | `tests/test_hermes_patch_reconciliation.py` | repository-set coverage now binds per-identifier patch digest tuples; one positive control asserts the exact three components, both patch references and both on-disk digests, and the presence of a passed reconstruction; fail-closed controls cover an absent `HLP-226c` component, an absent `HLP-226c` patch artifact, and digest drift parameterized over both HLP-226 patch artifacts | focused run `23 passed` (was `19 passed`); no assertion, validator rule or skip was weakened |
 | `scripts/validate_hermes_patch_reconciliation.py` | the HLP-226 rule now requires the three declared components and both portable patch references instead of two components and the HLP-226b artifact only; the check is strictly stronger for the same record and no other record's rule changed | `test_repository_fragments_reject_hlp226_without_hlp226c_component`, `…_without_hlp226c_patch_artifact` and the parameterized `…_patch_digest_drift` fail closed through this rule |
 | `.github/workflows/policy.yml` | canonical base manifest gains only `patches/hermes/HLP-226c-cross-board-project-inheritance.patch`, in sorted position | no other manifest line changed |
 | `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation.v1.json` and `…/hermes-patch-preflight.md` | regenerated from the documented generator at observation timestamp `2026-09-10T17:04:30Z` with the recorded upstream revision; the HLP-226 record now shows the three components and both bound patches, and four fragments that had been committed earlier but never aggregated (`HLP-305`, `HLP-310`, `HLP-354`, `HLP-369`) are present for the first time | generated, not hand-edited; the file's ledger SHA-256 advanced to `04df9bc957958e0c62fba7f9d9877850db475b62e32f9218d02b08703741774d`, so H226C-INT must regenerate both outputs again after the HLP-226c ledger paragraph lands |
 
-Local judgement exercised: the card's writable list named the fragment and the tests but not
+Local judgement exercised, with the round-1 review scope recorded: the card's exclusive
+writable list named the fragment and the tests but not
 `scripts/validate_hermes_patch_reconciliation.py`. A fail-closed control over all three
 components is only real if validation requires the third component, so the HLP-226 branch of
 that rule was extended to the same shape the repository already uses for the HLP-211b and
-HLP-226b components. The change is additive, HLP-226-scoped, reversible in one hunk, and
-weakens no existing rule; the reviewing Supervisor can require its removal without affecting
-the artifact, fragment or evidence.
+HLP-226b components: it now requires the three declared components and both portable patch
+references. The change is additive, HLP-226-scoped, reversible in one hunk, and weakens no
+existing rule. In review round 1 the Supervisor explicitly authorized retaining exactly this
+existing HLP-226-scoped one-hunk strengthening for the rework and authorized no other
+validator or schema change; this scope clarification is recorded here and in the AE-226C
+rework handoff.
 
 ### Aether gates executed
 
@@ -128,6 +148,15 @@ the artifact, fragment or evidence.
 | `HERMES_TEST_FILE_RETRIES=0 uv run --frozen python scripts/run_tests.py` | `2 failed, 1175 passed, 64 skipped in 224.37s`. Both failures are the recorded unrelated baseline findings — `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths` (historical `oc_0084270d940c98d9` operator-path finding, excluded #364) and `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer` (known review-lifecycle baseline behavior). Unchanged-baseline equivalence was established directly: the same two tests ran in the unmodified decomposition worktree at `a1f66117c2641266b3e76ea0da370e256b47ed41` and reproduced `2 failed, 14 passed`. The 64 skips match the recorded baseline; the higher pass count reflects tests added by later accepted units |
 | `git diff --check` | clean |
 | Locally simulated canonical base manifest check (workflow `policy.yml` step 1) | the only difference is `.aether/objective-contracts/oc_644c0b407d13366a/v1.md`, which is tracked from the objective base `63dd88790e3a0ec78c465d6d6c85e051502e2428` but was never added to the manifest list (`policy.yml` is unchanged since that base, and 42 of 43 tracked contracts are listed). The new `patches/hermes/HLP-226c-cross-board-project-inheritance.patch` entry is accounted for. This pre-existing gap is outside AE-226C's narrow `policy.yml` scope and is reported for H226C-INT: the objective's policy job cannot pass while the contract path is missing from the manifest |
+
+Rework re-verification (round-1 evidence correction): the validator, the focused reconciliation
+tests, `check_documentation.py`, `tests/test_documentation.py` with
+`tests/test_public_artifacts.py` (`1 failed, 16 passed`, the same pre-existing
+`oc_0084270d940c98d9` #364 finding), the public-artifact scan, the baseline drift check, Ruff
+check/format on the touched Python files, the push-form `git diff-tree --check` and
+`git diff --check` were re-run at the rework revision and returned the same results recorded
+above; the validator regeneration left both generated outputs byte-identical (empty diff). The
+full runner and the build were not re-executed for this documentation-only correction.
 
 Toolchain: Python 3.13.15 through `uv 0.12.3` (`uv run --frozen`), Ruff 0.16.4, MyPy 1.20.2,
 git 2.55.0. GitHub Actions and PR/check state are not claimed here: this unit performs no
