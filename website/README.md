@@ -16,8 +16,9 @@ ambient lighting, sparse particles and pointer parallax, controlled by the same 
 and reduced-motion settings. See [final polish plan](FINAL_POLISH_PLAN.md).
 
 Post-restart verification is complete, including repeated real browser history/cache
-restoration of graph and ambient-motion controls. Evidence and browser limits are
-recorded in [VERIFICATION.md](VERIFICATION.md); the site still awaits owner acceptance.
+restoration of graph and ambient-motion controls. The earlier owner acceptance gate is
+recorded in [VERIFICATION.md](VERIFICATION.md); this documentation candidate remains a
+local worktree subject to same-card Supervisor review.
 
 An animated one-page site in Spanish and English with the approved Greek/modern,
 editorial tech-noir identity and Catppuccin Mocha palette. A separate documentation

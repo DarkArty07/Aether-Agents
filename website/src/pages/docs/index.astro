@@ -21,7 +21,7 @@ const groups = DOC_GROUPS.map(group => ({
         <span class="docs-revision">REV. {sourceRevision.slice(0, 7)}</span>
       </div>
       <header class="docs-index-header">
-        <p class="docs-eyebrow">MANUAL CANÓNICO / ENGLISH SOURCE</p>
+        <p class="docs-eyebrow">MANUAL CANÓNICO / <span lang="en">ENGLISH SOURCE</span></p>
         <h1 class="docs-index-title">El sistema, en detalle.</h1>
         <p class="secondary">Arquitectura, contratos, ejecución y conocimiento. Un punto de entrada a la documentación del proyecto.</p>
       </header>
@@ -38,8 +38,8 @@ const groups = DOC_GROUPS.map(group => ({
       <div class="docs-index-list" id="docs-index-list">
         {groups.map(group => <section class="docs-index-group" data-doc-group={group.label} aria-labelledby={`docs-group-${group.label.replaceAll(' ', '-').toLowerCase()}`}>
           <header class="docs-group-header">
-            <div><p class="docs-eyebrow">GRUPO {DOC_GROUPS.findIndex(item => item.label === group.label) + 1}</p><h2 id={`docs-group-${group.label.replaceAll(' ', '-').toLowerCase()}`}>{group.label}</h2></div>
-            <p>{group.description}</p>
+            <div><p class="docs-eyebrow">GRUPO {DOC_GROUPS.findIndex(item => item.label === group.label) + 1}</p><h2 lang="en" id={`docs-group-${group.label.replaceAll(' ', '-').toLowerCase()}`}>{group.label}</h2></div>
+            <p lang="es-MX">{group.description}</p>
           </header>
           <div class="docs-group-pages">
             {group.docs.map(doc => <article
@@ -50,8 +50,8 @@ const groups = DOC_GROUPS.map(group => ({
               data-doc-order={doc.order}
             >
               <p class="docs-card-meta">{doc.navigation.kind === 'home' ? 'ÍNDICE' : `CAPÍTULO ${doc.navigation.position}`}</p>
-              <h3><a href={sitePath(doc.route)}>{doc.title} <span aria-hidden="true">→</span></a></h3>
-              <p>{doc.description}</p>
+              <h3 lang="en"><a href={sitePath(doc.route)}>{doc.title} <span aria-hidden="true">→</span></a></h3>
+              <p lang="en">{doc.description}</p>
             </article>)}
           </div>
         </section>)}
@@ -59,7 +59,7 @@ const groups = DOC_GROUPS.map(group => ({
       <p class="empty-state" id="no-results" hidden>No hay resultados para esa búsqueda. Prueba con otra palabra, también en inglés.</p>
       <section class="docs-canonical-source" aria-labelledby="docs-canonical-source-label">
         <p id="docs-canonical-source-label" class="docs-eyebrow">CANONICAL ENGLISH SOURCE / TRACKED MARKDOWN</p>
-        <article class="prose docs-index-source" data-doc-content data-source-path={indexDoc.sourcePath} set:html={indexDoc.html}></article>
+        <article class="prose docs-index-source" data-doc-content data-source-path={indexDoc.sourcePath} lang="en" set:html={indexDoc.html}></article>
       </section>
     </div>
   </main>

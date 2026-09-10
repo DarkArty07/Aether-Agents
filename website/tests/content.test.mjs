@@ -173,7 +173,9 @@ test('documentation manifest, grouped routes and revision-pinned sources cover t
     await stat(generated);
   }
   const indexPage=await doc('docs/index.html');
+  assert.equal(indexPage.documentElement.getAttribute('lang'),'es-MX');
   assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('data-source-path'),'docs/index.md');
+  assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('lang'),'en');
   assert.match(normalize(text(indexPage.querySelector('[data-doc-content]'))),/canonical English manual/);
   assert.ok(indexPage.querySelector('[data-doc-content] h1[id][tabindex="-1"]'));
   const groups=[...indexPage.querySelectorAll('.docs-index-group[data-doc-group]')];
@@ -182,6 +184,10 @@ test('documentation manifest, grouped routes and revision-pinned sources cover t
   assert.equal(cards.length,records.length);
   assert.deepEqual(new Set(cards.map(card=>card.dataset.document)),new Set(records.map(record=>record.slug)));
   assert.equal(cards.filter(card=>card.dataset.docRoute==='/docs/').length,1);
+  assert.deepEqual([...indexPage.querySelectorAll('.docs-index-group h2')].map(heading=>heading.getAttribute('lang')),Array(5).fill('en'));
+  assert.deepEqual([...indexPage.querySelectorAll('.docs-group-header > p')].map(description=>description.getAttribute('lang')),Array(5).fill('es-MX'));
+  assert.equal(indexPage.querySelectorAll('.docs-index-list article[data-document] h3[lang="en"]').length,records.length);
+  assert.equal(indexPage.querySelectorAll('.docs-index-list article[data-document] > p[lang="en"]').length,records.length);
   assert.equal(indexPage.querySelectorAll('.docs-navigation').length,2);
   for (const navigation of indexPage.querySelectorAll('.docs-navigation')) {
     assert.equal(navigation.querySelectorAll('[data-document]').length,records.length);

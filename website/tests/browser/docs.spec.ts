@@ -27,6 +27,11 @@ test.describe('grouped documentation UX', () => {
     await expect(page.locator('.docs-navigation').first().locator('[data-document]')).toHaveCount(recordCount);
     await expect(page.locator('.docs-navigation').first().locator('[aria-current="page"]')).toHaveAttribute('href', '/docs/');
     await expect(page.locator('a[href="/docs/index/"]')).toHaveCount(0);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'es-MX');
+    await expect(page.locator('[data-doc-content]')).toHaveAttribute('lang', 'en');
+    expect(await page.locator('.docs-index-group h2').evaluateAll(headings => headings.map(heading => heading.getAttribute('lang')))).toEqual(Array(5).fill('en'));
+    expect(await page.locator('.docs-group-header > p').evaluateAll(descriptions => descriptions.map(description => description.getAttribute('lang')))).toEqual(Array(5).fill('es-MX'));
+    expect(await page.locator('.docs-index-list article[data-document] h3, .docs-index-list article[data-document] > p:not(.docs-card-meta)').evaluateAll(metadata => metadata.map(element => element.getAttribute('lang')))).toEqual(Array(recordCount * 2).fill('en'));
   });
 
   test('article context identifies group/current page, headings and within-group adjacency', async ({ page }) => {
