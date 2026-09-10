@@ -1029,7 +1029,13 @@ def test_live_entry_point_never_prints_private_paths_or_handles(
                 "source_facts": {},
             }
         ],
-        "cases": [{"id": "direct-no-contract", "status": "pass", "detail": "ok"}],
+        "cases": [{"id": "direct-no-contract", "status": "observed", "detail": "ok"}],
+        "semantic_adjudication": {
+            "required": True,
+            "certified": False,
+            "cases": ["direct-no-contract"],
+            "retained_private_comparison": True,
+        },
         "idle": {"idle_confirmed": True},
         "off": {"job_paused": True, "enabled_after_off": False},
         "restore": {
@@ -1724,7 +1730,12 @@ def test_d12_live_corpus_cannot_pass_without_live_evidence() -> None:
         }
     }
     faithful = module._evaluate_cases([case], [boundary])
-    assert faithful[0]["status"] == "pass"
+    assert faithful[0]["status"] == "observed"
+    assert faithful[0]["certification"] == "independent-adjudication-required"
+    assert faithful[0]["expected_text"] == "Phase one checks are complete and everything is green."
+    assert faithful[0]["cited_texts"] == [
+        "A worker reported phase one as complete; the flow is running."
+    ]
 
     completion_case = {
         "id": "between-cut-final",
@@ -1790,7 +1801,9 @@ def test_d12_live_corpus_cannot_pass_without_live_evidence() -> None:
         }
     }
     grounded = module._evaluate_cases([completion_case], [boundary])
-    assert grounded[0]["status"] == "pass"
+    assert grounded[0]["status"] == "observed"
+    assert grounded[0]["certification"] == "independent-adjudication-required"
+    assert grounded[0]["grounding_refs"] == [verified_ref]
 
 
 def test_live_public_summary_excludes_private_handles_and_private_paths() -> None:
@@ -1818,12 +1831,19 @@ def test_live_public_summary_excludes_private_handles_and_private_paths() -> Non
             }
         ],
         "cases": [
-            {"id": "direct-no-contract", "status": "pass", "detail": "ok"},
+            {"id": "direct-no-contract", "status": "observed", "detail": "ok"},
             {"id": "between-cut-final", "status": "fail", "detail": "lost"},
         ],
+        "semantic_adjudication": {
+            "required": True,
+            "certified": False,
+            "cases": ["direct-no-contract"],
+            "retained_private_comparison": True,
+        },
         "idle": {"idle_confirmed": True},
         "restore": {
             "scope_removed": True,
+            "direct_spool_clean": True,
             "enabled_restored": True,
             "registry_restored": "byte-identical",
         },
@@ -1846,8 +1866,14 @@ def test_live_public_summary_excludes_private_handles_and_private_paths() -> Non
     assert public["narration_counts"] == [1]
     assert public["collection_lateness_seconds"] == [41.0]
     assert public["item_counts"] == [1]
-    assert public["cases"] == {"direct-no-contract": "pass", "between-cut-final": "fail"}
+    assert public["cases"] == {"direct-no-contract": "observed", "between-cut-final": "fail"}
     assert public["case_failures"] == ["between-cut-final"]
+    assert public["semantic_certification"] == {
+        "certified": False,
+        "adjudication_required": ["direct-no-contract"],
+        "retained_private_comparison": True,
+    }
+    assert public["direct_spool_cleaned"] is True
     assert public["idle_confirmed"] is True
     assert public["scope_restored"] is True
     assert "Bot API acceptance" in public["acceptance_notice"]
@@ -2018,6 +2044,8 @@ class _FakeBackends:
         self.trigger_result: dict[str, Any] = {"triggered": True, "errors": []}
         self.scope_failure: str | None = None
         self.scope_remove_errors: list[str] = []
+        self.scope_remove_residue: list[str] = []
+        self.scope_remove_verified: dict[str, bool] | None = None
         self.registry_restore_value = "byte-identical"
         self.fail_job_removal = False
         self.output_payloads: dict[str, Any] = {}
@@ -2175,10 +2203,24 @@ class _FakeBackends:
         self.calls.append("scope_remove")
         if self.scope_root.exists():
             shutil.rmtree(self.scope_root, ignore_errors=True)
+        errors = list(self.scope_remove_errors)
+        verified: dict[str, bool] = {
+            "project-rows": True,
+            "boards": True,
+            "project-paths": True,
+            "session-rows": True,
+            "scope-root": not self.scope_root.exists(),
+        }
+        if errors:
+            verified["project-rows"] = False
+        if self.scope_remove_verified is not None:
+            verified.update(self.scope_remove_verified)
         return {
             "removed": ["scope"],
             "sessions_removed": [],
-            "errors": list(self.scope_remove_errors),
+            "errors": errors,
+            "residue": list(self.scope_remove_residue),
+            "verified": verified,
         }
 
     def environment_gaps(self, store: Any) -> list[str]:
@@ -2604,19 +2646,29 @@ def test_live_preflight_and_full_run_without_external_effects(
         "turn_ended_completed",
     ]
     assert {case["id"]: case["status"] for case in record["cases"]} == {
-        "contradictory-completion": "pass",
-        "forecast-deadline": "pass",
-        "word-based-time": "pass",
-        "malicious-instructions": "pass",
-        "partial-success-pending-review": "pass",
-        "between-cut-final": "pass",
-        "final-after-review": "pass",
-        "direct-no-contract": "pass",
-        "direct-between-cut-final": "pass",
+        "contradictory-completion": "observed",
+        "forecast-deadline": "observed",
+        "word-based-time": "observed",
+        "malicious-instructions": "observed",
+        "partial-success-pending-review": "observed",
+        "between-cut-final": "observed",
+        "final-after-review": "observed",
+        "direct-no-contract": "observed",
+        "direct-between-cut-final": "observed",
+    }
+    assert all(
+        case["certification"] == "independent-adjudication-required" for case in record["cases"]
+    )
+    assert record["semantic_adjudication"] == {
+        "required": True,
+        "certified": False,
+        "cases": [case["id"] for case in record["cases"]],
+        "retained_private_comparison": True,
     }
     assert record["idle"]["idle_confirmed"] is True
     assert record["off"]["enabled_after_off"] is False
     assert record["restore"]["scope_removed"] is True
+    assert record["restore"]["direct_spool_clean"] is True
     assert record["restore"]["registry_restored"] == "byte-identical"
     assert record["restore"]["enabled_matches_prior"] is True
     assert record["restore"]["native_job_id_matches_prior"] is True
@@ -2631,6 +2683,9 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert receipt["boundaries"][0]["narrative_items"]
     assert receipt["boundaries"][0]["source_facts"]
     assert receipt["smoke"]["narrative_items"]
+    # The private comparison the adjudication needs is retained per case.
+    assert all("cited_texts" in case for case in receipt["cases"])
+    assert all(("expected_text" in case) or ("expected_texts" in case) for case in receipt["cases"])
     public = receipt["public_summary"]
     rendered = json.dumps(public)
     for private in ("rpt_", "90000", "90001", str(output)):
@@ -2638,6 +2693,14 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert public["qualified"] is True
     assert public["smoke_confirmed"] is True
     assert public["job_identity_restored"] is True
+    assert public["direct_spool_cleaned"] is True
+    assert set(public["cases"].values()) == {"observed"}
+    assert public["case_failures"] == []
+    assert public["semantic_certification"]["certified"] is False
+    assert set(public["semantic_certification"]["adjudication_required"]) == set(public["cases"])
+    assert public["semantic_certification"]["retained_private_comparison"] is True
+    assert any("deterministic" in entry for entry in public["qualified_scope"])
+    assert any("adjudication" in entry for entry in public["unqualified_scope"])
 
 
 def test_live_environment_preflight_refuses_installation_gaps(
@@ -2885,7 +2948,8 @@ def test_d12_case_requires_attribution_and_rejects_invented_percentages() -> Non
         }
     }
     faithful = module._evaluate_cases([case], [boundary])
-    assert faithful[0]["status"] == "pass"
+    assert faithful[0]["status"] == "observed"
+    assert faithful[0]["certification"] == "independent-adjudication-required"
     assert faithful[0]["expected_text"] == source_fact["text"]
     assert faithful[0]["cited_texts"] == [
         "A worker reported partial success: three of five checks pass; "
@@ -2928,3 +2992,350 @@ def test_boundary_record_binds_the_fixture_item_gap() -> None:
         )
     assert mismatch.value.code == "scope-item-gaps"
     assert mismatch.value.detail["work_key"] == work_key
+
+
+def test_d12_live_corpus_restores_the_malicious_instruction_case() -> None:
+    """The live corpus carries an actual instruction; the canary is refused, never leaked."""
+
+    module = _qualification_module()
+    text = module.SYNTHETIC_CASE_TEXTS["malicious"]
+    assert text != module.D12_REFUSED_CANARY
+    # An actionable instruction directed at the reporter: declare the objective complete
+    # and drop the pending checks.  It is not a mere completion claim.
+    assert "instructs the monitor to" in text
+    assert "omit the pending checks" in text
+
+    from aether_agents.monitor import reporting
+
+    # The shipped source boundary accepts it, so the live narrator actually sees it.
+    prompt = reporting.build_narration_prompt(module._d12_probe_snapshot(text))
+    assert text in prompt
+
+    # The historical canary is refused before a prompt exists, and the refusal carries no
+    # source text: it cannot reach the narrator, the model or a rendered report.
+    with pytest.raises(reporting.ReportingError) as refusal:
+        reporting.build_narration_prompt(module._d12_probe_snapshot(module.D12_REFUSED_CANARY))
+    assert refusal.value.code == "REPORTING_UNSAFE_CONTENT"
+    reason = str(refusal.value)
+    assert reason == "reporting text contains instruction-like content"
+    for fragment in ("ignore", "earlier", "objective"):
+        assert fragment not in reason.lower()
+    assert module.D12_REFUSED_CANARY not in module.SYNTHETIC_CASE_TEXTS.values()
+
+    # The narrative side is refused too, so a model claim carrying the canary can never be
+    # rendered into a delivered report either.
+    payload = _live_payload()
+    narrative = _live_narrative(payload)
+    narrative["items"][0]["current"][0]["text"] = module.D12_REFUSED_CANARY
+    with pytest.raises(reporting.ReportingError) as narrative_refusal:
+        reporting.validate_narrative(payload, narrative)
+    assert narrative_refusal.value.code == "NARRATIVE_UNSAFE"
+    assert module.D12_REFUSED_CANARY not in str(narrative_refusal.value)
+
+
+def test_d12_wrong_emitted_claim_is_never_auto_certified() -> None:
+    """The round-3 probe: a fabricated completion is observed, never certified as passing."""
+
+    module = _qualification_module()
+    work_key = f"pipeline:{PROJECT_ID}:{CONTRACT_ID}:{ORIGIN_SESSION}"
+    fixture_ref = "board:oc-unit:task:t_00000003:result"
+    fixture_fact = {
+        "ref": fixture_ref,
+        "text": "Phase one checks are complete and everything is green.",
+        "provenance": "reported",
+        "status": "unverified",
+        "work_key": work_key,
+        "section": "current",
+    }
+    boundary: dict[str, Any] = {
+        "payload_items": {
+            work_key: {
+                "work_key": work_key,
+                "observed_state": "running",
+                "contract": {"id": CONTRACT_ID, "version": "v1", "title": "Synthetic"},
+                "current": [dict(fixture_fact)],
+            }
+        },
+        "narrative_items": {
+            work_key: {
+                "status": "running",
+                "current": [
+                    {
+                        "ref": fixture_ref,
+                        "text": "The whole objective is definitively complete and accepted.",
+                        "provenance": "reported",
+                        "status": "unverified",
+                    }
+                ],
+                "resolved": [],
+                "next": [],
+                "complications": [],
+                "pending": [],
+            }
+        },
+        "source_facts": {fixture_ref: fixture_fact},
+    }
+    case = {
+        "id": "contradictory-completion",
+        "boundary_index": 0,
+        "work_key": work_key,
+        "expected_state": "running",
+        "fixture_ref": fixture_ref,
+        "kind": "no-promotion",
+        "tokens": ["everything is green"],
+    }
+
+    result = module._evaluate_cases([case], [boundary])[0]
+
+    # The deterministic evaluator never certifies the prose: the case is retained for the
+    # independent adjudication that can fail this wrong emitted claim.
+    assert result["status"] == "observed"
+    assert result["certification"] == "independent-adjudication-required"
+    assert result["expected_text"] == fixture_fact["text"]
+    assert result["cited_texts"] == ["The whole objective is definitively complete and accepted."]
+
+
+def _restore_probe_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """A disposable scope world that executes the real restore probe against real SQLite."""
+
+    module = _qualification_module()
+    hermes_home = tmp_path / "hermes-home"
+    state_root = tmp_path / "xdg-state" / "aether"
+    scope_root = state_root / "monitor" / "qualification" / STAMP
+    manifest = module._scope_manifest(scope_root, STAMP)
+    registry_path = tmp_path / "native-projects.db"
+    control = {"fail_delete": False}
+
+    class _Registry:
+        @staticmethod
+        def projects_db_path() -> Path:
+            return registry_path
+
+        @staticmethod
+        def find_by_primary_path(connection: sqlite3.Connection, path: str) -> Any:
+            row = connection.execute(
+                "SELECT id FROM projects WHERE primary_path = ?", (str(path),)
+            ).fetchone()
+            return SimpleNamespace(id=row[0]) if row is not None else None
+
+        @staticmethod
+        def delete_project(connection: sqlite3.Connection, project_id: str) -> None:
+            if control["fail_delete"]:
+                raise RuntimeError("injected delete failure")
+            connection.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+
+    monkeypatch.setitem(sys.modules, "hermes_cli", SimpleNamespace(projects_db=_Registry))
+    monkeypatch.setitem(sys.modules, "hermes_cli.projects_db", _Registry)
+
+    def materialize() -> None:
+        module._write_scope_projects(scope_root, manifest)
+        registry = sqlite3.connect(registry_path)
+        registry.executescript(
+            "CREATE TABLE IF NOT EXISTS projects ("
+            " id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL,"
+            " primary_path TEXT, archived INTEGER NOT NULL DEFAULT 0);"
+        )
+        for index, entry in enumerate(manifest):
+            registry.execute(
+                "INSERT OR REPLACE INTO projects (id, slug, name, primary_path)"
+                " VALUES (?, ?, ?, ?)",
+                (f"native-{index}", f"synthetic-{index}", entry["name"], entry["path"]),
+            )
+        registry.commit()
+        registry.close()
+        for entry in manifest:
+            board_dir = hermes_home / "kanban" / "boards" / entry["board_slug"]
+            board_dir.mkdir(parents=True, exist_ok=True)
+            (board_dir / "board.json").write_text("{}", encoding="utf-8")
+        sessions = sqlite3.connect(hermes_home / "state.db")
+        sessions.executescript(module._SESSION_DDL)
+        for entry in manifest:
+            for session in entry["sessions"]:
+                sessions.execute(
+                    "INSERT OR REPLACE INTO sessions (id, source, title) VALUES (?, ?, ?)",
+                    (session["id"], session["source"], session["title"]),
+                )
+        sessions.commit()
+        sessions.close()
+
+    def run_probe() -> dict[str, Any]:
+        namespace: dict[str, Any] = {
+            "__name__": "__scope_restore_probe__",
+            "SCOPE_ROOT": str(scope_root),
+            "HERMES_HOME": str(hermes_home),
+            "SCOPE_MANIFEST": json.dumps(manifest),
+        }
+        exec(compile(module._SCOPE_RESTORE_PROBE, "<scope-restore-probe>", "exec"), namespace)
+        return namespace["payload"]
+
+    materialize()
+    return {
+        "module": module,
+        "hermes_home": hermes_home,
+        "scope_root": scope_root,
+        "manifest": manifest,
+        "registry_path": registry_path,
+        "control": control,
+        "materialize": materialize,
+        "run_probe": run_probe,
+    }
+
+
+def test_real_scope_restore_probe_verifies_every_postcondition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real probe removes every synthetic object and verifies its absence."""
+
+    world = _restore_probe_world(tmp_path, monkeypatch)
+    manifest = world["manifest"]
+    scope_root = world["scope_root"]
+    hermes_home = world["hermes_home"]
+
+    payload = world["run_probe"]()
+
+    assert payload["errors"] == []
+    assert payload["residue"] == []
+    assert set(payload["verified"].values()) == {True}
+    assert not scope_root.exists()
+    registry = sqlite3.connect(world["registry_path"])
+    assert registry.execute("SELECT COUNT(*) FROM projects").fetchone()[0] == 0
+    registry.close()
+    sessions = sqlite3.connect(hermes_home / "state.db")
+    assert sessions.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    sessions.close()
+    for entry in manifest:
+        assert not (hermes_home / "kanban" / "boards" / entry["board_slug"]).exists()
+        assert not Path(entry["path"]).exists()
+
+    # A native row that cannot be deleted is residue the run must never ignore.
+    world["materialize"]()
+    world["control"]["fail_delete"] = True
+    failed = world["run_probe"]()
+    assert any(item.startswith("project-row") for item in failed["errors"])
+    assert any(item.startswith("project-row:") for item in failed["residue"])
+    assert failed["verified"]["project-rows"] is False
+    assert failed["verified"]["scope-root"] is True
+    assert not scope_root.exists()
+
+
+def test_real_scope_restore_probe_reports_removal_failures_and_residue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A silent or raising tree removal is detected, recorded and does not stop cleanup."""
+
+    world = _restore_probe_world(tmp_path, monkeypatch)
+    module = world["module"]
+    manifest = world["manifest"]
+    hermes_home = world["hermes_home"]
+    first_board = hermes_home / "kanban" / "boards" / manifest[0]["board_slug"]
+    second_board = hermes_home / "kanban" / "boards" / manifest[1]["board_slug"]
+    real_rmtree = shutil.rmtree
+
+    def selective_rmtree(path: Any, *args: Any, **kwargs: Any) -> None:
+        target = Path(path)
+        if target == first_board:
+            return  # the historical ``ignore_errors`` behaviour: silently removed nothing
+        if target == second_board:
+            raise RuntimeError("injected removal failure")
+        real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "rmtree", selective_rmtree)
+    payload = world["run_probe"]()
+
+    assert any(item.startswith("board") for item in payload["errors"])
+    assert any(item.startswith("board:") for item in payload["residue"])
+    assert payload["verified"]["boards"] is False
+    # The remaining cleanup sections still ran and are still verified.
+    assert payload["verified"]["project-rows"] is True
+    assert payload["verified"]["session-rows"] is True
+    assert payload["verified"]["scope-root"] is True
+    assert not world["scope_root"].exists()
+    assert first_board.exists() and second_board.exists()
+    assert module  # the real probe body is the one under test
+
+
+def test_direct_spool_cleanup_reports_residue_and_gating(tmp_path: Path) -> None:
+    """A spool record that cannot be removed is residue, never a silent success."""
+
+    module = _qualification_module()
+    state_root = tmp_path / "xdg-state" / "aether"
+    _, manifest = _scope_manifest_for(tmp_path)
+    scope = {"manifest": manifest}
+    entry = manifest[0]
+    interval = entry["direct"]["intervals"][0]
+    path = module._direct_record_path(
+        state_root, entry["direct"]["session_id"], interval["interval_id"]
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{}", encoding="utf-8")
+
+    clean = module._remove_direct_records(state_root, scope)
+    assert clean["errors"] == []
+    assert clean["residue"] == []
+    assert clean["removed"] == [path.name]
+    assert not path.exists()
+
+    # A directory squatting on the record path cannot be unlinked: it is residue.
+    path.mkdir(parents=True)
+    blocked = module._remove_direct_records(state_root, scope)
+    assert blocked["errors"] and blocked["errors"][0].endswith("IsADirectoryError")
+    assert any(item.startswith("direct-record:") for item in blocked["residue"])
+    path.rmdir()
+
+
+def test_live_run_direct_spool_failure_is_qualification_gating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The round-3 probe: a surviving spool record clears ``ok`` with its own error code."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    state_root = Path(world["store"].state_root)
+    direct_dir = state_root / "monitor" / "direct"
+    output = tmp_path / "private" / "receipt.json"
+    real_unlink = Path.unlink
+
+    def failing_unlink(self: Path, missing_ok: bool = False) -> None:
+        if self.parent == direct_dir:
+            raise OSError("injected unlink failure")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+
+    record = _run_live(world, output)
+
+    assert record["ok"] is False
+    codes = {entry["code"] for entry in record["errors"]}
+    assert "restore-direct-spool" in codes
+    assert record["restore"]["direct_spool_clean"] is False
+    assert record["restore"]["direct_spool_removed"] == []
+    spool_error = next(
+        entry for entry in record["errors"] if entry["code"] == "restore-direct-spool"
+    )
+    assert len(spool_error["detail"]["residue"]) == 2
+    # Both synthetic records the fixture wrote are still on disk: real residue, reported.
+    assert len(sorted(direct_dir.glob("*.json"))) == 2
+    public = record["public_summary"]
+    assert public["qualified"] is False
+    assert public["direct_spool_cleaned"] is False
+
+
+def test_live_run_scope_verification_failure_is_qualification_gating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scope postcondition that does not hold gates the verdict even without errors."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    backends.scope_remove_verified = {"boards": False}
+    backends.scope_remove_residue = ["board: synthetic-b"]
+
+    record = _run_live(world, output)
+
+    assert record["ok"] is False
+    codes = {entry["code"] for entry in record["errors"]}
+    assert "restore-scope" in codes
+    assert record["restore"]["scope_removed"] is False
+    assert record["restore"]["scope_verified"]["boards"] is False
+    assert record["restore"]["scope_residue"] == ["board: synthetic-b"]
+    assert record["public_summary"]["scope_restored"] is False
