@@ -1,0 +1,87 @@
+{
+  "id": "HLP-369",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-369--bounded-review-flow-recovery",
+  "components": [
+    "HLP-369",
+    "hermes_cli/goals.py",
+    "hermes_cli/kanban.py",
+    "hermes_cli/kanban_db.py",
+    "tools/kanban_tools.py",
+    "tests/hermes_cli/test_kanban_cli.py",
+    "tests/hermes_cli/test_kanban_review_surfaces.py",
+    "tests/hermes_cli/test_kanban_session_affinity.py",
+    "tests/tools/test_kanban_tools.py"
+  ],
+  "required_behavior": "A complete goal-mode implementation can pass a phase-aware readiness gate and request independent review without requiring the verdict that review will produce; incomplete work remains rejected; completion retains the whole-objective gate; only an independent reviewer can approve or request changes; the exact pending flow-controller recovery signal reaches the origin without allowing arbitrary capability or transient blocks to escape the goal loop.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "6e07eb48387044dbcaf12490931c2b8ca7ec8653",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/369"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/tools/kanban_tools.py",
+        "result": "The exact inspected upstream source applies the goal judge to request-review and permits only dependency/needs_input goal-mode block kinds; it does not provide the maintained recovery-controller exception."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/hermes_cli/kanban.py",
+        "result": "The exact inspected upstream CLI applies the completion judge to request-review as well as completion, so review entry remains circular."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/hermes_cli/kanban_db.py",
+        "result": "The exact inspected upstream controller context requests capability/recovery, while the goal-mode boundary lacks a native exact-route predicate for that signal."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an exact released Hermes revision passes the complete-to-review readiness gate, independent reviewer/re-review cycle, whole-objective completion gate, exact recovery-origin canary, and arbitrary-block negative controls without the local patch.",
+    "status": "failed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/hermes_cli/test_kanban_review_surfaces.py and tests/hermes_cli/test_kanban_session_affinity.py on unchanged maintained-fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+        "result": "Baseline RED reproduced circular goal-mode review rejection, goal-mode controller recovery rejection, and CLI capability-block escape before the candidate changes."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "unavailable",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-369-goal-mode-review-recovery.patch",
+        "result": "passed",
+        "ledger_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
+        "computed_sha256": "f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "byte-for-byte portable patch reconstruction against maintained fork base 8a6b33ae480373015178b80e87c88fe0abda3919",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction and focused candidate checks passed, but the public upstream revision is not an equivalent reconstruction input and the durable HLP-369 ledger paragraph remains terminal-integration owned."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.",
+    "The terminal integration phase must add the HLP-369 ledger paragraph before the pending fragment becomes part of the active aggregate reconciliation set."
+  ],
+  "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; the maintained-fork candidate separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention."
+}
