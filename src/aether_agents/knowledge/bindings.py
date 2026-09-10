@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
+import subprocess
 from pathlib import Path
 from urllib.parse import quote
 
 from aether_agents.observation.context import read_project_marker
 
-from .common import ROLES, KnowledgeError, atomic_json, git, load_json, stable_lock
+from .common import (
+    ROLES,
+    KnowledgeError,
+    atomic_json,
+    clean_environment,
+    git,
+    load_json,
+    stable_lock,
+)
 from .context import KnowledgeContext, resolve_context
 
 
@@ -56,8 +66,57 @@ def bind_session(
     return context
 
 
+def _apparent_git_metadata(path: Path) -> bool:
+    """Report whether ``path`` or an ancestor still carries a ``.git`` entry."""
+    for directory in (path, *path.parents):
+        entry = directory / ".git"
+        if entry.is_dir() or entry.is_file() or entry.is_symlink():
+            return True
+    return False
+
+
+def _repository_context(path: Path) -> bool:
+    """Classify one recorded workspace before an explicit binding may take precedence.
+
+    Git metadata in this directory or an ancestor, or a Git discovery that reports a
+    repository here, means the recorded workspace is real project evidence. Only a
+    directory with neither is an ordinary non-Git workspace that may fall through, and
+    even then an unclear probe keeps the conservative failure path instead of guessing.
+    """
+    if _apparent_git_metadata(path):
+        return True
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(path),
+                "-c",
+                "core.hooksPath=" + os.devnull,
+                "rev-parse",
+                "--git-dir",
+            ],
+            capture_output=True,
+            timeout=20.0,
+            env=clean_environment(),
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise KnowledgeError(
+            "VIEW_MISMATCH", "Cannot classify the native session workspace."
+        ) from exc
+    return completed.returncode == 0 and bool(completed.stdout.strip())
+
+
 def _native_workspace(home: Path, session: str) -> Path | None:
-    """Read one exact native session row, never the active/last session or cwd."""
+    """Read one exact native session row, never the active/last session or cwd.
+
+    ``None`` means the exact session carries no usable project evidence: no recorded
+    workspace, or an ordinary existing directory with no Git repository context. The
+    exact-session explicit binding decides precedence then, as it does for absent or
+    empty metadata. Missing, unreadable, contradictory or unusable Git evidence stays
+    an error and is never silently treated as an absent workspace.
+    """
     database = home / "state.db"
     if not database.is_file():
         return None
@@ -79,6 +138,13 @@ def _native_workspace(home: Path, session: str) -> Path | None:
     candidate = Path(row[0])
     if not candidate.is_absolute():
         raise KnowledgeError("VIEW_MISMATCH", "The native session workspace is not absolute.")
+    if not candidate.is_dir():
+        raise KnowledgeError(
+            "VIEW_MISMATCH", "The native session workspace is missing or unreadable."
+        )
+    if not _repository_context(candidate):
+        # An ordinary directory identifies no project, so only an explicit binding can.
+        return None
     # This is the workspace persisted for the exact session, not a process cwd heuristic.
     try:
         return Path(git(candidate, "rev-parse", "--show-toplevel").decode().strip()).resolve()
