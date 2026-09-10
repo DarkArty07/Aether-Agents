@@ -4,12 +4,21 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-14 corrections complete for review; self-verified. No `--live` run, no model call,
-no Telegram send, no activation. Rounds 1–13 are preserved below as history; the authoritative
-current state is **"Round-14 corrections"**, **"Round-14 probe, regressions and verification
-record"** and **"Round-14 residual risks"**. Round 14 answers the round-13 review's strict
-prior-correction/preservation finding with two corrections in `scripts/qualify_telegram_monitor.py`,
-`tests/test_telegram_monitor_cli_plugin.py` and `docs/guides/telegram-monitor.md`.
+**Status:** round-15 corrections complete and the unit **returned for a design decision**; the live
+lane now refuses instead of hiding the operator registry. Self-verified. No `--live` run, no model
+call, no Telegram send, no activation.
+
+The authoritative current state is **"Round-15"**, **"Round-15 probe, regressions and verification
+record"** and **"Round-15 residual risks"** below; rounds 1–14 are preserved as history. Round 15
+answers the round-14 review's three findings and its explicit alternative: two of them are corrected
+in code (the deterministic lane's workspace and the always-visible staging residue), and the first —
+the live lane replacing the installation-wide operator registry for the whole multi-hour run — is a
+missing native capability, not an implementation defect. That lane now refuses with the bounded
+`scope-isolation-unsupported` error before it probes or changes anything: no quiesce, no registry
+byte, no native job, no model or sender call, no receipt. The material limitation and the candidate
+resolutions are recorded in **"Round-15 material limitation returned to Supervisor/Morfeo"** and on
+the card; the live hourly/narration/idle/activation evidence stays unqualified until that decision is
+made.
 
 First, the final removal seam is closed *structurally* instead of being moved to yet another fresh
 name: **no entry of the operator's registry directory is ever unlinked**. A removal verifies the
@@ -3106,3 +3115,245 @@ no push, PR, merge, issue mutation or publication.
 - The clock-dependent monitor-runtime failures remain a separate, pre-existing class (routed on
   card `t_d8a1aad6`); `tests/test_telegram_monitor_runtime.py` and
   `src/aether_agents/monitor/runtime.py` are byte-identical to the reviewed base in this round.
+
+## Round-15
+
+The round-14 review found three reproducible defects and stated its own alternative: *"If the
+provisioned native interfaces cannot support that, return the material limitation to
+Supervisor/Morfeo instead of documenting the interruption as acceptable."* Two findings are
+corrected here; the third is returned as a material missing capability, and the harness no longer
+performs the defect at all.
+
+### Finding 2 — the deterministic lane's workspace (corrected)
+
+`_create_offline_workspace` used the predictable `$TMPDIR/aether-monitor-qualification-<pid>` with
+`mkdir(parents=True, exist_ok=True)` and `_discard_offline_workspace` recursively deleted that whole
+path, so a pre-existing unrelated directory was adopted, filled and deleted with a successful
+summary. Reproduced on the handed-over candidate `859ac50` before the correction
+(`probe_round15.py`, finding 2: `exit_code=0`, `summary_ok=true`,
+`directory_exists_after=false`, `sentinel_exists_after=false`).
+
+Correction: the workspace name is an unguessable run-owned token
+(`aether-monitor-qualification-<32 hex>`) created with `os.mkdir(path, 0o700)` — never
+`exist_ok` — and an entry already present at a chosen name is never adopted, hardened, filled or
+removed: another unguessable name is tried, and every attempt colliding is the bounded
+`workspace-unavailable` refusal. The created directory is verified through a descriptor as a real
+`0700`, empty, owner-owned directory, and its exact `(device, inode)` identity is returned. The
+removal is bound to that identity: the path is re-opened `O_NOFOLLOW`, checked against the recorded
+identity, mode and owner, every entry is removed *through the verified descriptor* (a nested
+symlink is unlinked as a link, never followed), the directory itself is removed with `rmdir` in the
+bound parent (the kernel's own emptiness check), and a path that no longer names this run's
+directory is never deleted by name — that outcome is the bounded `workspace-residue` failure.
+
+### Finding 3 — the staging cleanup failure (corrected)
+
+`_install_private_receipt_in_staging` reported its retained staging directory only under
+`if not removed and not failed`, so a cleanup failure was hidden whenever an earlier operation had
+already failed. Reproduced on `859ac50` (`probe_round15.py`, finding 3:
+`raised_code="output-target-exists"`, `raised_detail=None`,
+`.aether-qualification-staging-65c4be709214` left on disk and reported nowhere).
+
+Correction: a surviving staging directory is never hidden. The primary bounded failure keeps its own
+code and message and carries the retained path explicitly as `detail.staging_residue`
+(`path`, `primary_error`); a cleanup failure without an earlier failure keeps the bounded
+`staging-residue` code with the same detail. The re-coding callers carry the report forward instead
+of dropping it (`_carry_staging_residue` in `_install_private_registry_record` and
+`_install_registry_file`, both of which re-code the staging failure), and a staging directory the
+*restore* could not remove is recorded on the run's own restore record
+(`restore.retained_staging`) and appended as a gating `staging-residue` error, because the restore
+reports a single bounded `failed` code. No run in that state can report itself qualified.
+
+### Finding 1 — the live scope's isolation (returned, not implemented)
+
+The lane used to replace the installation-wide operator registry
+(`aether_agents.paths.state_root()/projects/registry.json`) with an empty synthetic one for the
+entire multi-hour run, restoring it at the end. The review reproduced that unrelated concurrent
+Aether work (project registration, objective contracts, knowledge queries — all of which read that
+same registry) cannot see its own projects while the run is active, and rejected the documented
+interruption as a violation of D10 and of the preservation half of the live contract.
+
+The provisioned native interfaces cannot provide the isolated namespace the fixed contract needs:
+
+- the monitor's scope is, by design, **every project registered in this installation's Aether
+  registry** (D3) — there is no per-run scope, enrollment file or namespace selector in the
+  product, and inventing one would be a product change outside this unit;
+- the hourly job executes inside the **already-running native Hermes runtime**: its gate script and
+  reporter turn resolve the Aether state root from that process's environment
+  (`aether_agents.paths.state_root()` reads `XDG_STATE_HOME`, or an explicit argument the shipped
+  entry points never pass — `src/aether_agents/paths.py:63-78`, `MonitorStore.__init__`
+  `src/aether_agents/monitor/store.py:329-337`);
+- a native cron job record carries **no environment or namespace field** — the job schema's fields
+  are `prompt`, `schedule`, `name`, `repeat`, `deliver`, `origin`, `skill(s)`, `model`, `provider`,
+  `base_url`, `script`, `context_from`, `enabled_toolsets`, `workdir`, `no_agent`,
+  `attach_to_session`, `monitor_script`, `monitor_url`
+  (`cron/jobs.py`, job creation signature), and `cron/scheduler.py:_run_job_script` runs the gate
+  script with the scheduler's own (sanitized) environment — so the harness cannot redirect the job
+  to a run-owned state root;
+- the running gateway's own environment is fixed by its service definition (the installed unit sets
+  only `PATH`, `VIRTUAL_ENV` and `HERMES_HOME`), so the registry the monitor reads is the
+  operator's, whatever the harness does;
+- giving the qualification its own isolated runtime would require a **second runtime and its own
+  recurring scheduler** (quickstart §4 fixes that the harness never introduces one), the
+  provisioned route/destination/credentials inside it (the harness accepts no credential input and
+  copies none), and profile/service activation outside this unit's authority (D10 keeps unrelated
+  runtime/profile changes out of scope; the card forbids activating a profile or service).
+
+Within the provisioned interfaces the only remaining mechanism is therefore the one the review
+rejected, and the review's own alternative is explicit. The lane now refuses at its first step:
+
+- `LiveBackends.scope_isolation_available()` reports the shipped boundary (`False`) and
+  `_live_run` raises `scope-isolation-unsupported` with the fixed `SCOPE_ISOLATION_REFUSAL` message
+  **before any probe**: no runtime probe, no quiesce, no monitor/pause change, no registry read or
+  write, no staging or recovery artifact, no native job, no model or sender call, and no receipt
+  (the private `--output` target is left exactly as the operator selected it).
+- The refusal is public and bounded: `{"ok": false, "error": {"code":
+  "scope-isolation-unsupported"}}`, exit code `1`, no `qualified` key.
+- The registry replacement/restore machinery, the durable recovery artifacts and the staging
+  mechanism are **retained but unreachable** from every shipped entry point, so the decision below
+  can re-enable them without re-deriving the rounds-10..14 corrections; the guide marks them as
+  withheld, and the real-helper regressions keep exercising them.
+- No entry point can hide or replace the operator registry while the refusal stands.
+
+### Round-15 probe, regressions and verification record
+
+Probe (`/tmp/mon06/probe_round15.py`, outside the repository, disposable `XDG_STATE_HOME`/`TMPDIR`
+only) on the corrected candidate:
+
+```text
+finding_1_live_scope_isolation: exit_code=1, ok=false,
+  error_code="scope-isolation-unsupported", qualified_key_present=false,
+  receipt_written=false, registry_bytes_unchanged=true,
+  registry_directory_entries=["registry.json"]
+finding_2_offline_workspace: run_exit_code=0, run_ok=true,
+  legacy_predictable_directory_exists_after=true, legacy_sentinel_exists_after=true,
+  workspace_names_left_in_tmpdir=["aether-monitor-qualification-2319669"],
+  collision_exit_code=1, collision_error_code="workspace-unavailable",
+  collision_directory_survives=true, collision_sentinel_survives=true
+finding_3_staging_residue: raised_code="output-target-exists",
+  raised_detail={"staging_residue": {"path": ".../.aether-qualification-staging-bacfb77aefb0",
+  "primary_error": "QualificationError"}}, residue_path_exists=true
+```
+
+Eleven new regressions in `tests/test_telegram_monitor_cli_plugin.py`:
+
+- Finding 1: `test_shipped_backend_reports_no_scope_isolation_and_the_refusal_names_the_gap`;
+  `test_live_scope_isolation_refusal_precedes_every_live_effect` (whole orchestration: the only
+  backend call recorded is the capability probe, the enabled monitor is untouched, the seeded
+  operator registry is byte-identical, no staging/recovery artifact exists, no receipt is written);
+  `test_live_entry_point_refuses_against_the_provisioned_backend_without_touching_anything` (the
+  real `main()` with the real backend: exit 1, bounded code, registry byte-identical, no artifacts,
+  monitor disabled, no receipt byte).
+- Finding 2: `test_offline_workspace_is_unguessable_exclusive_private_and_removed`;
+  `test_offline_workspace_collision_is_refused_and_never_removed`;
+  `test_offline_workspace_collision_is_skipped_for_a_fresh_run_owned_name` (real child process at
+  the entry point: the unrelated directory and its sentinel survive, the run uses a fresh
+  unguessable name and removes exactly that one);
+  `test_offline_workspace_removal_is_bound_to_the_directory_this_run_created` (a replacement at the
+  name is never deleted); `test_offline_workspace_residue_gates_the_verdict`.
+- Finding 3: `test_staging_cleanup_failure_is_reported_with_the_primary_failure` (the review's
+  probe re-derived through the real `_isolate_registry`);
+  `test_staging_cleanup_failure_is_reported_without_an_earlier_failure`;
+  `test_live_staging_residue_never_qualifies` (whole live lane with a real isolation and an injected
+  staging-removal failure: bounded failure, no qualified verdict, receipt records the retained
+  path).
+
+Verification at this revision (worktree `aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`,
+one local commit on the handed-over `859ac50`; the exact SHAs are in the review handoff):
+
+- `uv run --frozen pytest -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **124 passed** (113 before this round + the 11 new regressions).
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`) →
+  **10 failed, 295 passed**; the ten failures are exactly the pre-existing clock-dependent
+  `tests/test_telegram_monitor_runtime.py` handoff class, reproduced byte-identically on the
+  untouched base commit `859ac50` in a detached worktree (**10 failed, 45 passed** there).
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q`) → **17 failed, 1378 passed, 60 skipped, 373
+  subtests passed**; the same lane on the untouched base `859ac50` → **17 failed, 1367 passed, 60
+  skipped, 373 subtests passed** with the **identical failing set** (six
+  `tests/test_observation_lifecycle.py` entry-point allow-list tests — the accepted-lifecycle
+  collision MON-05 routed to MON-INT — ten pre-existing clock-dependent monitor-runtime tests, and
+  `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths`, issue
+  #364). This round adds 11 passing tests and no failing one.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed**
+  (after `--write` regenerated `docs/reference/capabilities.md` for the updated monitor notes).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → `dist/aether_agents-0.24.0-py3-none-any.whl` + `dist/aether_agents-0.24.0.tar.gz`;
+  `uv run --frozen python scripts/check_public_artifacts.py --root . --artifact <wheel> --artifact
+  <sdist>` → only the pre-existing issue #364 findings on the unchanged finalized contract.
+- Literal policy manifest emulation (the heredoc block parsed out of `.github/workflows/policy.yml`
+  against `git ls-files` minus `specs/`) → **364 = 364, missing [], extra []**; round 15 adds no
+  tracked path and does not edit `policy.yml`.
+- `uv run --frozen ruff check` / `ruff format --check` on the two touched Python files → clean;
+  `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `python -m compileall` on the two touched Python files → passed; `git diff --check` → passed.
+- Cumulative tracked diff against the reviewed base `2d49418` → exactly the **14 authorized MON-06
+  paths**; round 15 touches five of them (`scripts/qualify_telegram_monitor.py`,
+  `tests/test_telegram_monitor_cli_plugin.py`, `docs/guides/telegram-monitor.md`,
+  `docs/capabilities.toml`, the regenerated `docs/reference/capabilities.md`) plus this file, and
+  leaves `docs/reference/cli.md`, `docs/reference/plugins-and-tools.md`, `README.md`,
+  `CHANGELOG.md`, `docs/index.md`, `docs/getting-started.md`, `tests/test_documentation.py` and
+  `.github/workflows/policy.yml` unchanged.
+
+Deliberate non-effects in round 15: no `--live` invocation (the probe's live entry-point call was
+refused before any effect, against a disposable state root), no model call, no Telegram send, no
+credential operation, no profile/job/plugin/service activation, no native Hermes or
+source-database change, no registry byte changed anywhere, no push, PR, merge, issue mutation or
+publication.
+
+### Round-15 material limitation returned to Supervisor/Morfeo
+
+**Question.** How must the live qualification present a synthetic-only monitored scope without
+hiding or replacing this installation's shared Aether project registry, given that the monitor's
+scope is installation-wide by design (D3) and its hourly job runs inside the already-running
+Hermes runtime with no per-job namespace (evidence above)?
+
+**Candidate resolutions and consequences.**
+
+1. **Product scope/isolation primitive (new production unit).** Add a supported, product-owned way
+   for the monitor path to resolve a run-owned state root or an explicit scope selector (for
+   example a namespace the monitor honors for qualification), so the shipped pre-check, reporter
+   turn and delivery read the synthetic scope while the operator registry stays visible. This is a
+   Morfeo design decision and a new unit outside MON-06's writable boundary; MON-06 then re-enables
+   or reworks its live lane against it, and the withheld machinery is either reused or retired.
+2. **Isolated qualification runtime (amend quickstart §4 / D10).** Define the live qualification to
+   run in a disposable installation (own `HERMES_HOME` + `XDG_STATE_HOME`, its own native
+   scheduler) that reuses the provisioned route and destination without copying credentials. Needs
+   explicit authority to create/activate a profile or service (today out of scope), a decision on
+   the second scheduler the current §4 forbids, and a statement of how the provisioned destination
+   is reached without credential material moving.
+3. **Explicit bounded interruption (amend D10/quickstart §4.6 wording).** Morfeo records that, on
+   this single-owner installation, the qualification may present a synthetic-only registry for the
+   run, with the durability/no-clobber/restore guarantees already implemented in rounds 10–14 (the
+   operator's bytes stay recoverable, concurrent writes are detected and never overwritten, and a
+   concurrent registration during the swap window refuses the run). The preservation guarantee is
+   explicitly waived for that window rather than silently narrowed, and the guide/documents must
+   say so. This is the cheapest path but must be an explicit design decision, not an
+   implementation-only choice.
+4. **Defer the live qualification.** Keep the deterministic lane as this unit's delivered
+   qualification, mark the live hourly/narration/idle/activation evidence unqualified, and revise
+   MON-INT's activation criteria accordingly. AC-7 then stays unmet and the monitor cannot be
+   activated as qualified.
+
+**Recommendation.** Resolve 1 or 2 if the objective still requires the live evidence; 3 only with
+an explicit recorded rationale; 4 is the honest terminal state otherwise. MON-06 does not choose
+between them and has no authority to run the lane in the meantime.
+
+### Round-15 residual risks
+
+- The live lane is now **refused end to end**: no live hourly, narration, idle-skip, transport or
+  activation evidence exists for this build, and none can be produced until the decision above is
+  made. The offline lane, the packaging checks and the real-helper regressions remain the only
+  qualification evidence this unit delivers.
+- The withheld registry machinery is unreachable from every shipped entry point; its rounds-10..14
+  guarantees are therefore unexercised in production. When the decision re-enables or replaces it,
+  a real review of that path (including the POSIX deletion boundary already documented) is required
+  before any live run.
+- The offline workspace's `rmdir`-by-name step inside the verified parent is the same
+  check-then-remove class as the staging machinery, bounded to a run-owned unguessable name inside
+  a directory whose identity was verified by descriptor; a same-user process substituting the
+  directory at that name in the final instant is outside the supported boundary, and the run then
+  reports the bounded `workspace-residue` failure instead of a finished lane.
+- The pre-existing clock-dependent monitor-runtime failures and the accepted-lifecycle entry-point
+  allow-list failures remain exactly as recorded by the reviewed MON-05 and round-14 baselines and
+  are routed on their own cards; this round changes neither file class.

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import base64
 import configparser
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -2160,6 +2162,7 @@ class _FakeBackends:
         self.scope_remove_verified: dict[str, bool] | None = None
         self.registry_restore_value = "byte-identical"
         self.restore_isolation: Mapping[str, Any] | None = None
+        self.scope_isolation_supported = True
         self.fail_job_removal = False
         self.output_payloads: dict[str, Any] = {}
         self.output_parents: dict[str, Any] = {}
@@ -2351,6 +2354,14 @@ class _FakeBackends:
             "path": self.store.state_root / "projects" / "registry.json",
             "original": b"{}",
         }
+
+    def scope_isolation_available(self) -> bool:
+        # The shipped backend cannot give the live scope a private namespace (round-15 finding:
+        # the provisioned interfaces only offer hiding the shared registry); this in-memory
+        # backend implements real isolation, so the orchestration below it is exercised, and a
+        # test can flip `scope_isolation_supported` to reproduce the shipped refusal.
+        self.calls.append("scope_isolation_available")
+        return bool(self.scope_isolation_supported)
 
     def owned_registry_entries(
         self, registry_path: Path, manifest: Sequence[Mapping[str, Any]]
@@ -5435,3 +5446,397 @@ def test_live_scope_derivation_residue_never_qualifies(
     assert "registry-scope-residue" in {entry["code"] for entry in receipt["errors"]}
     for root in roots:
         real_rmtree(root, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Round 15: the scope-isolation refusal, the run-owned offline workspace and
+# the always-visible staging residue
+# ---------------------------------------------------------------------------
+
+
+def test_shipped_backend_reports_no_scope_isolation_and_the_refusal_names_the_gap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The provisioned interfaces cannot isolate the scope, and the refusal says why.
+
+    The fixed live contract requires a synthetic-only monitored scope sourced from an isolated
+    artifact/registry namespace.  The shipped backend cannot provide one — the monitor reads
+    every project registered in the installation-wide Aether registry, and its hourly job runs
+    inside the already-running Hermes runtime, whose process environment fixes that registry —
+    so the lane must say that instead of hiding the registry.  An injected backend that
+    implements real isolation reports ``True`` and keeps the orchestration exercised.
+    """
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+
+    assert module.LiveBackends().scope_isolation_available() is False
+    refusal = module.SCOPE_ISOLATION_REFUSAL
+    assert "isolated" in refusal
+    assert "project registry" in refusal
+    assert "no registry byte was changed" in refusal
+
+
+def test_live_scope_isolation_refusal_precedes_every_live_effect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lane refuses before the quiesce, the registry, the job and every model/sender call.
+
+    The round-14 review reproduced the defect: the lane replaced the installation-wide operator
+    registry with an empty synthetic one for the whole multi-hour run, so unrelated concurrent
+    Aether work could not see its own projects.  The corrected lane refuses at its first step:
+    an already enabled monitor is not quiesced, no registry byte (not even the durable recovery
+    record) is written, no scope is materialized, no native job is enabled or triggered, no
+    model or sender is called, and the private receipt records the refusal with no verdict.
+    """
+
+    world = _build_world(tmp_path, monkeypatch, prior_enabled=True)
+    module = world["module"]
+    backends = world["backends"]
+    store = world["store"]
+    output = tmp_path / "private" / "receipt.json"
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    registry_path = store.state_root / "projects" / "registry.json"
+    ensure_private_dir(registry_path.parent)
+    atomic_private_write(registry_path, operator)
+    backends.scope_isolation_supported = False
+
+    with pytest.raises(module.QualificationError) as failure:
+        _run_live(world, output)
+
+    assert failure.value.code == "scope-isolation-unsupported"
+    # Nothing ran at all: the capability is the lane's first step, so not even the runtime
+    # probe happened, and no receipt was written for a run that never began.
+    assert backends.calls == ["scope_isolation_available"]
+    assert store.settings.enabled is True
+    # The operator registry is exactly as it was found, with no isolation artifact beside it.
+    assert registry_path.read_bytes() == operator
+    assert _staging_directories(registry_path.parent, module) == []
+    assert not module._registry_recovery_path(registry_path).exists()
+    assert not module._registry_held_path(registry_path).exists()
+    assert not output.exists()
+    assert backends.output_payloads == {}
+
+
+def test_live_entry_point_refuses_against_the_provisioned_backend_without_touching_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real entry point refuses with the provisioned backend and leaves the registry alone."""
+
+    module = _qualification_module()
+    state_home = tmp_path / "xdg-state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    registry_path = state_home / "aether" / "projects" / "registry.json"
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    ensure_private_dir(registry_path.parent)
+    atomic_private_write(registry_path, operator)
+    # The shipped test-process guard would refuse before the provisioned backend is reached;
+    # only that guard is neutralized here, never the real backend or the lane.
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(module, "sys", SimpleNamespace(modules={}, stderr=sys.stderr))
+
+    target = tmp_path / "operator-private" / "live.json"
+    code = module.main(["--live", "--json", "--output", str(target)])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "scope-isolation-unsupported"
+    assert "qualified" not in payload
+    # The operator's registry, its directory and the durable artifacts are untouched.
+    assert registry_path.read_bytes() == operator
+    assert _staging_directories(registry_path.parent, module) == []
+    assert not module._registry_recovery_path(registry_path).exists()
+    assert not module._registry_held_path(registry_path).exists()
+    # The monitor was never enabled and no native job was created.
+    assert MonitorStore().get_settings().enabled is False
+    # The refusal precedes the lane's receipt: no receipt byte exists for a run that never began.
+    assert not target.exists()
+
+
+def test_offline_workspace_is_unguessable_exclusive_private_and_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deterministic lane's workspace is its own ``0700`` directory, removed on the way out."""
+
+    module = _qualification_module()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+
+    workspace = module._create_offline_workspace()
+
+    info = os.lstat(workspace.path)
+    assert stat.S_ISDIR(info.st_mode)
+    assert stat.S_IMODE(info.st_mode) == 0o700
+    assert info.st_uid == os.geteuid()
+    assert (info.st_dev, info.st_ino) == workspace.identity
+    token = workspace.path.name[len(module.OFFLINE_WORKSPACE_PREFIX) :]
+    # Unguessable and run-owned: not the process id, and nothing a concurrent writer predicts.
+    assert len(token) == 32 and all(character in "0123456789abcdef" for character in token)
+    assert token != str(os.getpid())
+    assert sorted(path.name for path in scratch.iterdir()) == [workspace.path.name]
+
+    assert module._discard_offline_workspace(workspace) is True
+    assert not workspace.path.exists()
+    assert list(scratch.iterdir()) == []
+
+
+def test_offline_workspace_collision_is_refused_and_never_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An entry already present at a chosen name is refused, never adopted or deleted."""
+
+    module = _qualification_module()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    collision = scratch / f"{module.OFFLINE_WORKSPACE_PREFIX}an-unrelated-operator-directory"
+    collision.mkdir()
+    sentinel = collision / "unrelated-operator-sentinel.txt"
+    sentinel.write_text("an unrelated operator directory that must survive\n", encoding="utf-8")
+    monkeypatch.setattr(module, "_offline_workspace_name", lambda: collision.name)
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        code = module.main(["--json"])
+    payload = json.loads(captured.getvalue())
+
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "workspace-unavailable"
+    # The unrelated directory and its contents survive exactly as they were found.
+    assert collision.is_dir()
+    assert sentinel.read_text(encoding="utf-8") == (
+        "an unrelated operator directory that must survive\n"
+    )
+    assert sorted(path.name for path in scratch.iterdir()) == [collision.name]
+
+
+def test_offline_workspace_collision_is_skipped_for_a_fresh_run_owned_name(tmp_path: Path) -> None:
+    """A colliding name is never reused: the lane runs elsewhere and leaves that directory alone.
+
+    Runs as a real child process at the entry point, because the defect the round-14 review
+    reproduced was a whole-run one: the lane adopted the predictable name, filled it, and
+    deleted it — with the unrelated operator directory inside — while reporting success.
+    """
+
+    module = _qualification_module()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    collision = scratch / f"{module.OFFLINE_WORKSPACE_PREFIX}an-unrelated-operator-directory"
+    collision.mkdir()
+    sentinel = collision / "unrelated-operator-sentinel.txt"
+    sentinel.write_text("an unrelated operator directory that must survive\n", encoding="utf-8")
+    fresh = f"{module.OFFLINE_WORKSPACE_PREFIX}{'f' * 32}"
+    script = textwrap.dedent(
+        f"""
+        import contextlib, importlib.util, io, json, os
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location(
+            "qualify_telegram_monitor", {str(QUALIFICATION)!r}
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        names = iter([{collision.name!r}, {fresh!r}])
+        module._offline_workspace_name = lambda: next(names)
+        captured = io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            code = module.main(["--json"])
+        payload = json.loads(captured.getvalue())
+        print(json.dumps({{"code": code, "ok": payload.get("ok"),
+                          "names": sorted(p.name for p in Path({str(scratch)!r}).iterdir())}}))
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_qualification_environment(tmp_path, poison_native=False) | {"TMPDIR": str(scratch)},
+        timeout=300,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    observed = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert observed["code"] == 0
+    assert observed["ok"] is True
+    # The colliding directory is never adopted, filled or deleted; the run used its own name and
+    # removed exactly that one again (so only the unrelated directory is left).
+    assert collision.is_dir()
+    assert sentinel.read_text(encoding="utf-8") == (
+        "an unrelated operator directory that must survive\n"
+    )
+    assert observed["names"] == [collision.name]
+
+
+def test_offline_workspace_removal_is_bound_to_the_directory_this_run_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A path that no longer names this run's own directory is never deleted by name."""
+
+    module = _qualification_module()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    workspace = module._create_offline_workspace()
+
+    # The run's own directory is moved away and an unrelated one takes its place at the name.
+    workspace.path.rename(scratch / "diverted-run-owned-workspace")
+    replacement = scratch / workspace.path.name
+    replacement.mkdir()
+    sentinel = replacement / "unrelated-operator-sentinel.txt"
+    sentinel.write_text("a replacement that must survive\n", encoding="utf-8")
+
+    assert module._discard_offline_workspace(workspace) is False
+    assert replacement.is_dir()
+    assert sentinel.read_text(encoding="utf-8") == "a replacement that must survive\n"
+    assert (scratch / "diverted-run-owned-workspace").is_dir()
+
+
+def test_offline_workspace_residue_gates_the_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A workspace the lane cannot remove is reported as residue, never as a finished lane."""
+
+    module = _qualification_module()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    monkeypatch.setattr(module, "_remove_owned_directory_contents", lambda descriptor: False)
+
+    captured = io.StringIO()
+    with contextlib.redirect_stdout(captured):
+        code = module.main(["--json"])
+    payload = json.loads(captured.getvalue())
+
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "workspace-residue"
+    retained = list(scratch.iterdir())
+    assert retained and all(
+        path.name.startswith(module.OFFLINE_WORKSPACE_PREFIX) for path in retained
+    )
+
+
+def test_staging_cleanup_failure_is_reported_with_the_primary_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The retained staging directory is explicit even when an earlier operation failed.
+
+    The round-14 review reproduced ``output-target-exists`` with
+    ``.aether-qualification-staging-<random>`` left on disk and reported nowhere.  The primary
+    bounded failure keeps its own code and message and now carries the retained path, so the
+    receipt names what must be reconciled and nothing that failed can look successful.
+    """
+
+    module = _qualification_module()
+    world = _registry_world(
+        tmp_path,
+        monkeypatch,
+        operator_bytes=_operator_registry_bytes(
+            {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+        ),
+    )
+    registry_path = world["registry_path"]
+    operator = registry_path.read_bytes()
+    # A durable record already exists: the no-clobber install fails with the normal primary
+    # failure, and the staging directory of that install cannot be removed.
+    ensure_private_dir(registry_path.parent)
+    atomic_private_write(module._registry_recovery_path(registry_path), b"an earlier record\n")
+    monkeypatch.setattr(module, "_remove_registry_staging_directory", lambda staging: False)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-recovery-exists"
+    residue = failure.value.detail["staging_residue"]
+    retained = Path(residue["path"])
+    assert retained.is_dir()
+    assert retained.name.startswith(module.REGISTRY_STAGING_PREFIX)
+    assert residue["primary_error"] == "QualificationError"
+    # The primary failure is preserved on the re-coded error's context, and nothing of the
+    # operator's registry was lost.
+    context = failure.value.__context__
+    assert isinstance(context, module.QualificationError) and context.code == (
+        "output-target-exists"
+    )
+    assert registry_path.read_bytes() == operator
+
+
+def test_staging_cleanup_failure_is_reported_without_an_earlier_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staging directory that survives a successful install is still a bounded failure."""
+
+    module = _qualification_module()
+    parent = tmp_path / "registry-directory"
+    ensure_private_dir(parent)
+    target = parent / "registry.json"
+    monkeypatch.setattr(module, "_remove_registry_staging_directory", lambda staging: False)
+    descriptor = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+
+    try:
+        with pytest.raises(module.QualificationError) as failure:
+            module._install_private_receipt_in_staging(
+                target,
+                b"synthetic registry bytes\n",
+                directory_fd=descriptor,
+                staging_parent=parent,
+            )
+    finally:
+        os.close(descriptor)
+
+    assert failure.value.code == "staging-residue"
+    retained = Path(failure.value.detail["path"])
+    assert retained.is_dir() and retained.name.startswith(module.REGISTRY_STAGING_PREFIX)
+    assert failure.value.detail["primary_error"] is None
+    # The install itself was verified before the residue was reported: no byte was replaced.
+    assert target.read_bytes() == b"synthetic registry bytes\n"
+
+
+def test_live_staging_residue_never_qualifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staging directory the isolation could not remove gates the whole live lane."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
+    backends = world["backends"]
+    store = world["store"]
+    output = tmp_path / "private" / "receipt.json"
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    registry_path = store.state_root / "projects" / "registry.json"
+    ensure_private_dir(registry_path.parent)
+    atomic_private_write(registry_path, operator)
+    real_isolate = module._isolate_registry
+
+    def isolating() -> dict[str, Any]:
+        backends.calls.append("isolate_registry")
+        return real_isolate()
+
+    backends.isolate_registry = isolating  # type: ignore[method-assign]
+    monkeypatch.setattr(module, "_remove_registry_staging_directory", lambda staging: False)
+
+    with pytest.raises(module.QualificationError) as failure:
+        _run_live(world, output)
+
+    assert failure.value.code == "registry-recovery"
+    retained = Path(failure.value.detail["staging_residue"]["path"])
+    assert retained.is_dir()
+    # The whole lane never qualified, and the receipt records the retained path explicitly.
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["public_summary"]["qualified"] is False
+    recorded = [entry for entry in receipt["errors"] if entry["code"] == "registry-recovery"]
+    assert recorded and recorded[0]["detail"]["staging_residue"]["path"] == str(retained)

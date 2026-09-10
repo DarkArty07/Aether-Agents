@@ -235,6 +235,12 @@ JOB_BEHAVIOR_FIELDS = (
     "enabled",
 )
 
+#: The deterministic lane's own workspace: an unguessable run-owned name, created exclusively
+#: (never ``exist_ok``) under the temporary directory and removed only when the path still names
+#: exactly the directory this invocation created.
+OFFLINE_WORKSPACE_PREFIX = "aether-monitor-qualification-"
+OFFLINE_WORKSPACE_ATTEMPTS = 3
+
 
 class QualificationError(RuntimeError):
     """A bounded qualification failure with a stable public code.
@@ -740,9 +746,14 @@ def run_offline(workspace: Path) -> dict[str, Any]:
             "two real native wall-clock hourly boundaries and the live idle skip",
             "semantic fidelity of the observed D12 cases (independent adjudication required)",
             "native cron activation of this installation",
+            "the live lane itself: it refuses with scope-isolation-unsupported while the "
+            "synthetic scope cannot be isolated from this installation's registered projects",
         ],
         "notes": [
             "Live qualification is owned by MON-INT and requires --live with --output.",
+            "The live lane currently refuses before any effect: the provisioned interfaces "
+            "cannot present the synthetic-only monitored scope without hiding the shared "
+            "Aether project registry (see the Telegram Monitor guide's qualification limits).",
             "Telegram Bot API acceptance is not proof that a human read a message.",
             "Live D12 cases are observed, not machine-certified: the private receipt retains "
             "the canonical/emitted comparison for independent adjudication.",
@@ -1794,6 +1805,52 @@ REGISTRY_SWAP_CODES = {
 }
 
 
+def _staging_residue_of(source: BaseException) -> Mapping[str, Any] | None:
+    """The retained-staging report a bounded failure carries, in either of its two shapes."""
+
+    detail = getattr(source, "detail", None)
+    if not isinstance(detail, Mapping):
+        return None
+    nested = detail.get("staging_residue")
+    if isinstance(nested, Mapping):
+        return nested
+    # The staging installation's own bounded failure carries the retained path as its detail.
+    if getattr(source, "code", None) == "staging-residue" and "path" in detail:
+        return detail
+    return None
+
+
+def _carry_staging_residue(source: BaseException, detail: dict[str, Any]) -> dict[str, Any]:
+    """Carry a retained staging directory into the detail of a re-coded bounded failure.
+
+    A staging directory this run could not remove is never hidden by a caller that re-codes the
+    failure — the durable recovery record and the registry install both do — so the residue entry
+    already reported by the staging installation is copied onto the new detail unchanged.
+    """
+
+    residue = _staging_residue_of(source)
+    if residue is not None and "staging_residue" not in detail:
+        detail["staging_residue"] = dict(residue)
+    return detail
+
+
+def _record_retained_staging(isolation: Mapping[str, Any] | None, error: BaseException) -> None:
+    """Record a retained staging directory on the run's own isolation record, when it can hold it.
+
+    The restore reports one bounded code (``failed``), so the retained path a re-coded staging
+    failure carries would otherwise be invisible in the receipt.  The isolation mapping is the
+    orchestrator's own run record and is written only when it is a mutable mapping; a read-only
+    record is left untouched and the directory stays under its documented private name.
+    """
+
+    residue = _staging_residue_of(error)
+    if residue is None or not isinstance(isolation, dict):
+        return
+    retained = isolation.setdefault("retained_staging", [])
+    if isinstance(retained, list):
+        retained.append(dict(residue))
+
+
 def _synthetic_registry_bytes() -> bytes:
     """The exact synthetic registry the live lane installs while the scope is isolated."""
 
@@ -1882,13 +1939,13 @@ def _install_private_registry_record(
                 "registry-recovery-exists",
                 "a durable project-registry recovery record already exists: reconcile the "
                 "interrupted earlier run before a new live qualification replaces the registry",
-                detail={"record": str(path)},
+                detail=_carry_staging_residue(error, {"record": str(path)}),
             ) from None
         raise QualificationError(
             "registry-recovery",
             "the durable project-registry recovery record could not be installed; the "
             "operator registry was not changed",
-            detail={"error": error.code},
+            detail=_carry_staging_residue(error, {"error": error.code}),
         ) from error
     except (OSError, ValueError) as error:
         raise QualificationError(
@@ -2239,12 +2296,12 @@ def _install_registry_file(registry_path: Path, data: bytes) -> None:
                 "changed",
                 "another project registry appeared at the operator path while this run was "
                 "installing one; nothing that was found there was replaced",
-                detail={"path": str(registry_path)},
+                detail=_carry_staging_residue(error, {"path": str(registry_path)}),
             ) from None
         raise _RegistrySwapError(
             "unsafe",
             "the project registry could not be installed safely at the operator path",
-            detail={"error": error.code},
+            detail=_carry_staging_residue(error, {"error": error.code}),
         ) from error
     except (OSError, ValueError) as error:
         raise _RegistrySwapError(
@@ -2782,9 +2839,12 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
                 )
                 if expected_final is not None:
                     _install_registry_file(registry_path, expected_final)
-    except _RegistrySwapError:
+    except _RegistrySwapError as error:
         # Nothing this run moved aside was destroyed: the file is at the registry path or at the
-        # aside name, and the durable artifacts stay for reconciliation.
+        # aside name, and the durable artifacts stay for reconciliation.  A staging directory the
+        # restore could not remove is never hidden by this single bounded code: the retained path
+        # is recorded on the run's own isolation record for the receipt.
+        _record_retained_staging(isolation, error)
         return "failed"
     # Postcondition before any artifact is removed: the operator registry holds exactly the
     # expected state and no entry this run registered as a synthetic project remains.
@@ -4336,6 +4396,23 @@ class LiveBackends:
     def isolate_registry(self) -> dict[str, Any]:
         return _isolate_registry()
 
+    def scope_isolation_available(self) -> bool:
+        """Whether the provisioned interfaces can give the live scope a private namespace.
+
+        They cannot, and this is the shipped boundary the live lane refuses on
+        (``scope-isolation-unsupported``): the monitor's scope is every project registered in
+        this installation's Aether registry, and its hourly job runs inside the already-running
+        Hermes runtime — a native job record carries no environment or namespace field, and the
+        packaged pre-check, the reporter turn and the delivery all resolve the Aether state root
+        from that process's environment.  Nothing in the provisioned interfaces can hand the job
+        a private registry, so the only way to show the real product a synthetic-only scope is
+        to hide or replace the shared registry for the whole multi-hour lane, which the fixed
+        contract (D10, quickstart section 4.6) does not allow.  A test backend that implements
+        real isolation may report ``True``; the shipped one must not.
+        """
+
+        return False
+
     def owned_registry_entries(
         self, registry_path: Path, manifest: Sequence[Mapping[str, Any]]
     ) -> tuple[dict[str, Any], list[str]]:
@@ -4352,6 +4429,33 @@ class LiveBackends:
         established_parent: tuple[int, int] | None = None,
     ) -> None:
         _write_private_output(path, payload, established_parent=established_parent)
+
+
+#: The live lane's fatal scope-isolation refusal.  The fixed live contract requires the
+#: synthetic monitored scope to be sourced from native isolated artifacts (quickstart section
+#: 4.2) while the previous scope, other jobs and concurrent work are preserved (section 4.6, D3
+#: and D10).  The monitor's scope is, by design, every project registered in this installation's
+#: Aether registry (D3), and the hourly job executes inside the already-running native Hermes
+#: runtime: a native job record carries no environment or namespace field, and the packaged
+#: pre-check, the reporter turn and the delivery all resolve the Aether state root from that
+#: process's own environment (`aether_agents.paths.state_root()` reads `XDG_STATE_HOME`, or an
+#: explicit argument the shipped entry points never pass).  Inside those interfaces the only way
+#: to present a synthetic-only scope to the real product is to hide or replace the shared
+#: operator registry for the whole multi-hour lane — reproduced by the round-14 review and
+#: rejected there as a violation of D10 and of the preservation half of the live contract.
+#: The lane therefore refuses before its first effect-bearing step.  This is not a qualification
+#: result and grants nothing: the missing isolation capability is a material design question for
+#: Morfeo through Supervisor (product scope primitive, isolated qualification runtime, or an
+#: explicitly accepted bounded interruption), and the live hourly/narration/idle evidence stays
+#: unqualified until it is resolved.
+SCOPE_ISOLATION_REFUSAL = (
+    "the live qualification requires one synthetic monitored scope sourced from an isolated "
+    "artifact/registry namespace; the provisioned native interfaces cannot provide that "
+    "namespace for the shipped monitor without hiding or replacing this installation's shared "
+    "Aether project registry, so the live lane refuses before its first effect: the monitor was "
+    "not enabled or paused, no native job was created, no model or Telegram call was made and no "
+    "registry byte was changed"
+)
 
 
 def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
@@ -4422,7 +4526,22 @@ def _live_run(
     so a rename that lands after that descriptor is bound cannot redirect the write: the
     receipt stays inside the established directory and the final path verification fails
     with the bounded ``private-output`` error, never a qualified verdict.
+
+    The very first step is the scope-isolation capability of the provisioned interfaces: while
+    they cannot give the live scope a private namespace, the lane refuses with
+    ``scope-isolation-unsupported`` before it probes or changes anything at all (see
+    ``SCOPE_ISOLATION_REFUSAL``).
     """
+
+    if not backends.scope_isolation_available():
+        # 0. The synthetic scope of the fixed live contract must come from a namespace isolated
+        #    from this installation's registered projects.  The provisioned interfaces cannot
+        #    provide one, so the lane refuses here — before the runtime probe, the quiesce, the
+        #    registry, the native job and every model/sender effect — instead of hiding the
+        #    operator's registry behind a synthetic one for hours.  This refusal is a material
+        #    design question, not a qualification result: nothing is recorded as qualified and
+        #    no receipt is written for a run that never began.
+        raise QualificationError("scope-isolation-unsupported", SCOPE_ISOLATION_REFUSAL)
 
     interpreter = backends.runtime_python()
     started = backends.now()
@@ -4503,7 +4622,12 @@ def _live_run(
                 )
         # 1. Isolate one honestly labelled synthetic scope.  The manifest and the local
         #    project files exist before the first native row is created, so every path
-        #    below stays reversible from exactly the scope this run already holds.
+        #    below stays reversible from exactly the scope this run already holds.  The
+        #    shipped entry point refuses this step before any probe while the provisioned
+        #    interfaces cannot isolate the scope (`LiveBackends.scope_isolation_available`):
+        #    this body stays the orchestration for injected backends and for the decision that
+        #    resolves the architecture question, and an injected backend may implement
+        #    isolation without touching the operator's registry at all.
         isolation = backends.isolate_registry()
         manifest = _scope_manifest(scope_root, stamp)
         scope = {"manifest": manifest, "boards": []}
@@ -4891,6 +5015,21 @@ def _live_run(
         else:
             restore["direct_spool_clean"] = True
         restore["registry_restored"] = backends.restore_registry(isolation)
+        retained_staging = (
+            list(isolation.get("retained_staging") or []) if isinstance(isolation, Mapping) else []
+        )
+        if retained_staging:
+            # A staging directory the restore could not remove is recorded with its retained path
+            # and gates the verdict: the bounded restore code alone would not name it.
+            restore["retained_staging"] = retained_staging
+            record["errors"].append(
+                {
+                    "code": "staging-residue",
+                    "message": "a private staging directory of this run could not be removed and "
+                    "is retained for reconciliation",
+                    "detail": {"retained": retained_staging},
+                }
+            )
         if restore["registry_restored"] not in {
             "byte-identical",
             "removed",
@@ -5523,7 +5662,7 @@ def _install_private_receipt_in_staging(
     temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
     descriptor: int | None = None
     created_identity: tuple[int, int] | None = None
-    failed = False
+    primary: BaseException | None = None
     try:
         file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_NOFOLLOW | O_CLOEXEC
         try:
@@ -5569,8 +5708,8 @@ def _install_private_receipt_in_staging(
         ):
             raise UnsafeObservationPath("the installed project registry is not this run's file")
         os.fsync(directory_fd)
-    except BaseException:
-        failed = True
+    except BaseException as error:
+        primary = error
         raise
     finally:
         if descriptor is not None:
@@ -5589,13 +5728,32 @@ def _install_private_receipt_in_staging(
         removed = _remove_registry_staging_directory(staging)
         os.close(staging.staging_fd)
         os.close(staging.parent_fd)
-        if not removed and not failed:
+        if not removed:
+            # The staging cleanup failure is never hidden behind an earlier failure (the round-14
+            # review reproduced ``output-target-exists`` with the retained staging directory
+            # reported nowhere): the primary bounded failure keeps its own code and message and
+            # carries the retained directory explicitly as ``staging_residue`` in its detail, so
+            # the private receipt names the path that must be reconciled.  A primary failure that
+            # is not a bounded qualification failure is preserved as the raised error's cause.
+            residue = {
+                "path": str(staging.path),
+                "primary_error": type(primary).__name__ if primary is not None else None,
+            }
+            if isinstance(primary, QualificationError):
+                if isinstance(primary.detail, Mapping):
+                    detail: dict[str, Any] = dict(primary.detail)
+                elif primary.detail is None:
+                    detail = {}
+                else:
+                    detail = {"primary_detail": primary.detail}
+                detail["staging_residue"] = residue
+                raise QualificationError(primary.code, primary.message, detail=detail) from primary
             raise QualificationError(
                 "staging-residue",
                 "the private staging directory of the project registry installation could not "
                 "be removed; it is retained, with its content, under its documented private name",
-                detail={"path": str(staging.path)},
-            )
+                detail=residue,
+            ) from primary
 
 
 def _install_private_receipt(
@@ -5787,7 +5945,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--live",
         action="store_true",
-        help="Run the provisioned qualification (owned by MON-INT; real model and Telegram).",
+        help=(
+            "Run the provisioned qualification (owned by MON-INT; real model and Telegram). "
+            "The lane currently refuses with scope-isolation-unsupported, without enabling the "
+            "monitor, changing any registry byte, creating a native job or making a model or "
+            "Telegram call: the synthetic scope cannot be isolated from this installation's "
+            "registered projects — see the Telegram Monitor guide's qualification limits."
+        ),
     )
     parser.add_argument("--json", action="store_true", help="Print the summary as one JSON object.")
     parser.add_argument(
@@ -5823,37 +5987,193 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _create_offline_workspace() -> Path:
-    """Create the deterministic lane's own private workspace (named for this process)."""
+class _OfflineWorkspace(NamedTuple):
+    """The deterministic lane's own workspace, bound to the directory this run created."""
 
-    workspace = (
-        Path(os.environ.get("TMPDIR", "/tmp")) / f"aether-monitor-qualification-{os.getpid()}"
+    path: Path
+    identity: tuple[int, int]
+
+
+def _offline_workspace_name() -> str:
+    """Return one unguessable, run-owned name for the deterministic lane's workspace."""
+
+    return f"{OFFLINE_WORKSPACE_PREFIX}{uuid.uuid4().hex}"
+
+
+def _create_offline_workspace() -> _OfflineWorkspace:
+    """Create the deterministic lane's own private workspace exclusively, never reusing one.
+
+    The name is unguessable and the directory is created with ``mkdir`` — never ``exist_ok``:
+    an entry that already exists at a chosen name is never adopted, hardened, filled or removed,
+    so an unrelated operator directory can never be mistaken for this run's workspace (the
+    round-14 review reproduced a pre-existing ``aether-monitor-qualification-<pid>`` directory,
+    and its content, being deleted with a successful summary).  The created directory is
+    verified to be a real ``0700`` directory owned by this process, and its exact identity is
+    returned so that the removal deletes that directory and nothing else.  A directory that fails
+    that verification is never removed or reused — it may no longer be this run's own entry — and
+    the lane refuses with the bounded ``workspace-unavailable`` error instead.
+    """
+
+    base = Path(os.environ.get("TMPDIR", "/tmp")).expanduser()
+    last_collision: str | None = None
+    for _ in range(OFFLINE_WORKSPACE_ATTEMPTS):
+        name = _offline_workspace_name()
+        path = base / name
+        try:
+            os.mkdir(path, DIR_MODE)
+        except FileExistsError:
+            # A collision with an unguessable name is never resolved by reuse: another name is
+            # tried, and every attempt colliding is a bounded refusal below.
+            last_collision = name
+            continue
+        except OSError as error:
+            raise QualificationError(
+                "workspace-unavailable",
+                "the deterministic lane's private workspace could not be created; nothing was "
+                "reused or removed",
+                detail={"error": type(error).__name__},
+            ) from error
+        descriptor = -1
+        try:
+            descriptor = os.open(path, os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            os.fchmod(descriptor, DIR_MODE)
+            info = os.fstat(descriptor)
+            owner = _effective_uid()
+            if (
+                not stat.S_ISDIR(info.st_mode)
+                or stat.S_IMODE(info.st_mode) != DIR_MODE
+                or info.st_nlink != 2
+                or (owner is not None and info.st_uid != owner)
+            ):
+                raise QualificationError(
+                    "workspace-unavailable",
+                    "the deterministic lane's private workspace is not a private directory "
+                    "owned by this process; nothing was reused",
+                    detail={"path": str(path)},
+                )
+            return _OfflineWorkspace(path, (info.st_dev, info.st_ino))
+        except QualificationError:
+            raise
+        except OSError as error:
+            raise QualificationError(
+                "workspace-unavailable",
+                "the deterministic lane's private workspace could not be verified; nothing was "
+                "reused",
+                detail={"error": type(error).__name__, "path": str(path)},
+            ) from error
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+    raise QualificationError(
+        "workspace-unavailable",
+        "every unguessable name for the deterministic lane's private workspace already exists in "
+        "the temporary directory; nothing was reused or removed",
+        detail={"collision": last_collision},
     )
-    try:
-        workspace.mkdir(parents=True, exist_ok=True)
-    except OSError as error:
-        raise QualificationError(
-            "workspace-unavailable",
-            "the deterministic lane's private workspace could not be created",
-            detail={"error": type(error).__name__},
-        ) from error
-    return workspace
 
 
-def _discard_offline_workspace(workspace: Path) -> bool:
-    """Remove the deterministic lane's own workspace and verify that it is gone.
+def _remove_owned_directory_contents(descriptor: int) -> bool:
+    """Remove every entry reachable from one already-verified directory descriptor.
 
-    The workspace is this run's own private directory, named for this process.  The removal is
-    never ignored: the directory is removed and then checked read-only (with ``lexists``, so a
-    symlink counts as residue too), and a workspace that survives makes the run fail with the
-    bounded ``workspace-residue`` error instead of being reported as a finished qualification.
+    Each child is inspected and opened relative to the verified descriptor with
+    ``O_NOFOLLOW``, so a symlink is unlinked as a link and never followed.  A directory child is
+    opened by descriptor, checked to still be the named directory, and recursed into; a child
+    that cannot be verified or removed fails the whole removal instead of being skipped.
     """
 
     try:
-        shutil.rmtree(workspace)
+        names = sorted(entry.name for entry in os.scandir(descriptor))
+    except (OSError, ValueError):
+        return False
+    for name in names:
+        try:
+            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+        except OSError:
+            return False
+        if stat.S_ISDIR(info.st_mode):
+            child = -1
+            try:
+                child = os.open(
+                    name,
+                    os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC,
+                    dir_fd=descriptor,
+                )
+                opened = os.fstat(child)
+                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    return False
+                if not _remove_owned_directory_contents(child):
+                    return False
+            except OSError:
+                return False
+            finally:
+                if child >= 0:
+                    os.close(child)
+            try:
+                os.rmdir(name, dir_fd=descriptor)
+            except OSError:
+                return False
+        else:
+            try:
+                os.unlink(name, dir_fd=descriptor)
+            except OSError:
+                return False
+    return True
+
+
+def _discard_offline_workspace(workspace: _OfflineWorkspace) -> bool:
+    """Remove exactly the workspace this invocation created and verify that it is gone.
+
+    The removal is bound to the identity recorded at creation: a path that no longer names the
+    same real ``0700`` directory owned by this process — replaced, renamed or already removed —
+    is never deleted by name, and a workspace that survives makes the run fail with the bounded
+    ``workspace-residue`` error instead of being reported as a finished qualification.  Every
+    entry is removed through the verified directory descriptor, so a nested workspace link is
+    unlinked rather than followed, and the directory itself is removed with ``rmdir`` in the
+    bound parent, which the kernel refuses while any entry is still inside.
+    """
+
+    if os.name != "posix":  # pragma: no cover - exercised by platform CI
+        try:
+            shutil.rmtree(workspace.path)
+        except OSError:
+            pass
+        return not os.path.lexists(workspace.path)
+    try:
+        parent_descriptor = os.open(
+            workspace.path.parent, os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+        )
     except OSError:
-        pass
-    return not os.path.lexists(workspace)
+        return not os.path.lexists(workspace.path)
+    try:
+        try:
+            descriptor = os.open(
+                workspace.path.name,
+                os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC,
+                dir_fd=parent_descriptor,
+            )
+        except OSError:
+            return not os.path.lexists(workspace.path)
+        try:
+            info = os.fstat(descriptor)
+            owner = _effective_uid()
+            if (
+                (info.st_dev, info.st_ino) != workspace.identity
+                or not stat.S_ISDIR(info.st_mode)
+                or stat.S_IMODE(info.st_mode) != DIR_MODE
+                or (owner is not None and info.st_uid != owner)
+            ):
+                return False
+            if not _remove_owned_directory_contents(descriptor):
+                return False
+        finally:
+            os.close(descriptor)
+        try:
+            os.rmdir(workspace.path.name, dir_fd=parent_descriptor)
+        except OSError:
+            return False
+        return not os.path.lexists(workspace.path)
+    finally:
+        os.close(parent_descriptor)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -5868,7 +6188,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.live and args.output is None:
         print("qualify-telegram-monitor: --live requires --output", file=sys.stderr)
         return 2
-    workspace: Path | None = None
+    workspace: _OfflineWorkspace | None = None
     receipt_target_ready = False
     established_receipt_parent: tuple[int, int] | None = None
     try:
@@ -5892,7 +6212,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 receipt_target_ready = True
             workspace = _create_offline_workspace()
-            summary = run_offline(workspace)
+            summary = run_offline(workspace.path)
             ok = all(record["status"] == "pass" for record in summary["checks"])
     except QualificationError as error:
         summary = {

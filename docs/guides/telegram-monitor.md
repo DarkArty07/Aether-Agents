@@ -167,6 +167,12 @@ Activation is a deliberate, installation-local, reversible step:
    next cut and the pinned destination.
 4. Verify the first real report before treating the capability as qualified.
 
+Activation is **not** available yet: the live qualification is refused while the synthetic
+scope cannot be isolated (see *Qualification status and limits*), so the live hourly,
+narration, idle-skip and Telegram evidence has not been produced and this build must not be
+activated as qualified. Steps 1–4 describe the intended reversible activation once that
+evidence exists.
+
 The monitor never restarts or kills active agents, never replaces the gateway, never
 creates a second scheduler and never touches jobs it does not own.
 
@@ -195,9 +201,12 @@ idle gate and the D12 safety boundary (every live-corpus text — including the 
 instruction — is accepted by the shipped deterministic boundary, while the historical
 instruction-like canary is refused with `REPORTING_UNSAFE_CONTENT` before any prompt is
 built and without leaking its text), and it verifies that no native Hermes module, model
-call or Telegram send occurred. The private workspace this lane uses is removed with a
-verified postcondition: a workspace that cannot be removed is reported as residue and fails
-the run with the bounded `workspace-residue` error instead of a finished qualification. It
+call or Telegram send occurred. The private workspace this lane uses is created
+exclusively under an unguessable run-owned name (`0700`, verified as a real directory
+owned by this process) and is removed only while the path still names exactly that
+directory: an entry that already exists at a chosen name is never reused, adopted or
+deleted, and a workspace that cannot be removed is reported as residue and fails the run
+with the bounded `workspace-residue` error instead of a finished qualification. It
 is not live evidence.
 
 The provisioned live lane is owned by the terminal integration step (MON-INT) and is
@@ -221,20 +230,59 @@ uv run --frozen python scripts/qualify_telegram_monitor.py --live \
 ```
 
 Live mode accepts no token, destination, provider or model input; it resolves only the
-provisioned runtime and the existing pinned destination, and it performs no external
-effect until its environment pre-flight passes. `--wait-hourly-boundaries` is fixed at
-exactly `2` — the accepted qualification waits for two real wall-clock boundaries — and
-every other value is refused with exit code 2 before the lane, an output file or any other
-effect. The `--output` receipt target is validated and established first (see *Private
-receipts* below), so an invocation whose target could never capture the private handles is
-refused with exit code 1 and a bounded error before any model, sender or native job
-effect. What it does, in order:
+provisioned runtime and the existing pinned destination. `--wait-hourly-boundaries` is
+fixed at exactly `2` — the accepted qualification waits for two real wall-clock
+boundaries — and every other value is refused with exit code 2 before the lane, an output
+file or any other effect. The `--output` receipt target is validated and established first
+(see *Private receipts* below), so an invocation whose target could never capture the
+private handles is refused with exit code `1` and a bounded error before any model,
+sender or native job effect.
+
+**Live qualification is currently refused: `scope-isolation-unsupported`.** The fixed
+contract requires the synthetic monitored scope to be sourced from native isolated
+artifacts while the previous scope, other jobs and concurrent work stay untouched. The
+monitor's scope is, by design, every project registered in this installation's Aether
+registry, and its hourly job runs inside the already-running Hermes runtime: a native job
+record carries no environment or namespace field, and the packaged pre-check, the reporter
+turn and the delivery all resolve the Aether state root from that process's own
+environment (`aether_agents.paths.state_root()` reads `XDG_STATE_HOME`, or an explicit
+argument the shipped entry points never pass). Inside those interfaces the only way to
+show the real product a synthetic-only scope is to hide or replace the shared registry for
+the whole multi-hour lane, which D10 and the preservation half of this contract do not
+allow — an hours-long replacement also blinds unrelated concurrent Aether work that uses
+the same registry (project registration, objective contracts, knowledge queries).
+
+The lane therefore refuses at its first step, before it probes or changes anything:
+
+- the monitor is **not** enabled, paused or otherwise touched;
+- **no registry byte** is read-modify-written, hidden or replaced — the durable recovery
+  artifacts and staging directories described below are not created either;
+- no native job is created, changed, triggered or removed, and no unrelated job is read
+  or altered;
+- no model call, no Telegram call and no receipt file: the private `--output` target is
+  left as the operator selected it (the run writes nothing, not even the refusal record);
+- the refusal is reported as `{"ok": false, "error": {"code": "scope-isolation-unsupported"}}`
+  with exit code `1`, and no `qualified` key is ever present.
+
+This is not a qualification result and grants nothing: the missing isolation capability is
+a material design question (a supported monitor scope/namespace primitive, an isolated
+qualification runtime, or an explicitly accepted bounded interruption), so the live
+hourly, narration, idle-skip and activation evidence below stays unqualified until it is
+resolved. The ordered description that follows is the fixed contract the lane implements;
+its steps — quiesce, registry isolation, scope materialization, job, boundaries, idle and
+restore, together with the durable registry recovery artifacts — are implemented but
+**unreachable** from every shipped entry point while the refusal above stands, and the
+final integration step (MON-INT) cannot run the lane until the question is resolved. What
+it does, in order:
 
 0. **Quiescing a running monitor.** If the monitor is already enabled, it is durably
    disabled and its owned job paused *before* the registry is isolated, so no scheduled
    run can observe the synthetic-only registry while the scope is being prepared. The
    prior enablement and binding are restored at the end.
-1. **Isolating one synthetic scope.** The operator's project registry is read with the
+1. **Isolating one synthetic scope — withheld while the refusal above stands.** This step is
+   not performed by any shipped entry point today: the isolation it needs does not exist in
+   the provisioned interfaces, so the lane stops before it (see above). Described for the
+   decision that resolves it: the operator's project registry is read with the
    private reader — only a genuinely missing registry counts as "no registry"; an
    unreadable, symlinked, multi-linked or unstably replaced one refuses the run with the
    bounded `registry-unreadable` error before anything is changed — and its bytes are then
@@ -351,8 +399,9 @@ effect. What it does, in order:
    so it reverts nothing rather than deleting a concurrent entry or leaving a synthetic one
    behind.
 
-Registry recovery after an interruption. Two durable artifacts live next to the operator
-registry for the duration of a live run: `registry.json.qualification-recovery.json` holds
+Registry recovery after an interruption (withheld with the isolation step above). Two durable
+artifacts live next to the operator registry for the duration of a live run:
+`registry.json.qualification-recovery.json` holds
 the operator's registry state exactly as the run found it — its bytes in base64 with their
 SHA-256 and file identity, or the recorded true absence — plus the SHA-256 of the synthetic
 registry the run installs, and `registry.json.qualification-held` *is* the operator's own
@@ -369,8 +418,10 @@ state — including the absence of every registry entry this run registered for 
 projects — has been verified; a restore that cannot prove that fails the run and keeps the
 artifacts.
 
-No entry of the operator's registry directory is ever unlinked. A removal verifies the artifact
-*through a descriptor* — a real, singly linked regular file with exactly the device/inode
+No entry of the operator's registry directory is ever unlinked (withheld with the isolation
+step above; the mechanism is retained for the decision and is exercised by the real-helper
+regressions). A removal verifies the artifact *through a descriptor* — a real, singly linked
+regular file with exactly the device/inode
 identity, and the exact bytes, this run installed — moves it into a fresh run-owned private
 staging directory (`0700`, named `.aether-qualification-staging-<random>`) with one no-replace
 rename, verifies the moved entry there through a descriptor again, deletes only inside that
@@ -394,6 +445,16 @@ instead of deleting bytes it cannot prove are its own, and reports the bounded f
 staging directory and its content retained. If the artifact name was taken meanwhile, nothing of
 it is touched and the operator reconciles from the retained copy.
 
+A staging directory that survives is *never* hidden behind another failure. The primary bounded
+failure keeps its own code and message and carries the retained path explicitly
+(`detail.staging_residue`), including when the cleanup failed while an earlier operation was
+already failing — the case in which an earlier revision reported only the primary error and said
+nothing about the directory it left behind. The re-coding callers (the durable recovery record
+and the registry install) carry that report forward, and a staging directory the *restore* could
+not remove is recorded on the run's own restore record and appended as a gating
+`staging-residue` error instead of disappearing behind the single restore code. A run in this
+state can never report itself qualified.
+
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file. The
 target must be an absolute, literally spelled path outside every Git worktree pointing at
@@ -415,7 +476,9 @@ fresh capture rather than a replacement of an operator file. Every other
 target — a non-literal spelling, an existing file, a symlinked or shared/foreign
 parent, or more than one missing level — is refused with exit code `1` and a bounded error
 code (`output-unsafe-target`, `output-target-exists`, `output-parent-missing`,
-`output-parent-not-private`) before anything is created, changed or sent. The accepted
+`output-parent-not-private`) before anything is created, changed or sent. Note that while
+the live refusal above stands, a refused live invocation never reaches the receipt write at
+all: nothing is created for it. The accepted
 receipt is then written fail-closed: one non-followed temporary file is created `0600`
 *before* any content exists, the content is made durable, and the receipt name is
 installed with a single no-clobber `link`. No installation step ever replaces an entry:
@@ -435,6 +498,19 @@ the semantic fidelity cases that still require independent adjudication.
 
 Current limits, stated honestly:
 
+- **Missing scope-isolation namespace (the reason the live lane refuses).** The fixed live
+  contract needs one synthetic monitored scope sourced from native isolated artifacts while
+  the previous scope and concurrent work are preserved. The provisioned interfaces cannot
+  provide that namespace: the monitor's scope is every project registered in this
+  installation's Aether registry, and its hourly job runs inside the already-running Hermes
+  runtime, whose process environment fixes the state root the pre-check, the reporter turn and
+  the delivery resolve. The only mechanism those interfaces leave is hiding or replacing the
+  shared registry for the whole multi-hour lane — an hours-long interruption of unrelated
+  concurrent Aether work — so the lane refuses with `scope-isolation-unsupported` and no
+  effect instead. Resolving it (a supported monitor scope/namespace primitive, an isolated
+  qualification runtime, or an explicitly accepted bounded interruption) is a design decision
+  for Morfeo through Supervisor; until it is made, the live lane cannot run and MON-INT cannot
+  produce the live evidence.
 - Until the live lane and the terminal integration complete, this build's live
   hourly/narration/Telegram behavior is **not** qualified. Sample runs, manual ticks and
   the offline lane are not substitutes.
