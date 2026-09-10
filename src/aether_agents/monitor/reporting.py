@@ -181,10 +181,31 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
 )
 
 _DURATION_CLAIM_RE: Final = re.compile(
-    r"\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
-    r"a|an|un[oa]?|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*"
+    # The quantity slot is intentionally lexical-neutral: a duration expressed with a
+    # number, a number word, or an imprecise quantifier is still not a source-authoritative
+    # elapsed-time field.  Deterministic observed elapsed time is rendered from timestamps.
+    r"\b(?:\d+(?:[.,]\d+)?|[A-Za-zÁÉÍÓÚáéíóúÑñ]+)\s*"
     r"(?:[-–—]\s*)?(?:seconds?|minutes?|hours?|days?|secs?|mins?|hrs?|"
     r"segundos?|minutos?|horas?|d[ií]as?)\b",
+    re.IGNORECASE,
+)
+
+_FORECAST_DATE: Final = (
+    r"(?:today|tomorrow|yesterday|this\s+(?:hour|morning|afternoon|week|month)|"
+    r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"
+    r"hoy|mañana|ayer|este\s+(?:mes|año|fin\s+de\s+semana)|esta\s+semana|"
+    r"(?:el\s+|la\s+|pr[oó]xim[oa]\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|"
+    r"viernes|s[aá]bado|sabado|domingo)|\d)"
+)
+_FORECAST_COMPLETION_RE: Final = re.compile(
+    r"(?:"
+    r"\b(?:should|could|may|might)\b.{0,40}\b(?:done|complete\w*|finished|ready|"
+    r"deliver\w*|ship\w*|conclud\w*|resolv\w*)\b.{0,40}\b" + _FORECAST_DATE + r"\b|"
+    r"\b(?:work|task|item|delivery|completion|finish|resolution|change|project|report|"
+    r"entrega|tarea|trabajo|cambio|resoluci[oó]n|proyecto|informe)\b.{0,30}\b"
+    r"(?:scheduled|programmed|programad[oa]s?|plan(?:ned|ificado|ificada|ificados|ificadas)?)\b"
+    r".{0,30}\b(?:for|on|by|para|el|la)\b.{0,12}\b" + _FORECAST_DATE + r"\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -194,7 +215,11 @@ _GATE_READINESS_RE: Final = re.compile(
     r"(?:ready|list[oa]s?)\s+para\s+(?:revisi[oó]n|inspecci[oó]n|pruebas?|test(?:ing)?|verificaci[oó]n|qa|auditor[ií]a|aprobaci[oó]n|evaluaci[oó]n)\b|"
     r"(?:preparad[oa]s?)\s+para\s+(?:revisi[oó]n|inspecci[oó]n|pruebas?|verificaci[oó]n)\b|"
     r"(?:ready|list[oa]s?)\s+to\s+(?:be\s+reviewed|review|be\s+tested|test|be\s+verified|verify|be\s+inspected|inspect)\b|"
-    r"list[oa]s?\s+para\s+(?:ser\s+revisad[oa]s?|revisar|ser\s+probad[oa]s?|probar|ser\s+verificad[oa]s?|verificar)"
+    r"list[oa]s?\s+para\s+(?:ser\s+revisad[oa]s?|revisar|ser\s+probad[oa]s?|probar|ser\s+verificad[oa]s?|verificar)|"
+    r"(?:ready|list[oa]s?)\s*(?:[,;]|\band\b)?\s*(?:awaiting|waiting\s+for|pending)\s+"
+    r"(?:review|inspection|testing|verification|qa|audit|approval|evaluation|merge)\b|"
+    r"list[oa]s?\s*(?:[,;]|\by\b)?\s*pendient[ae]s?\s+de\s+"
+    r"(?:revisi[oó]n|inspecci[oó]n|pruebas?|verificaci[oó]n|auditor[ií]a|aprobaci[oó]n)\b"
     r")",
     re.IGNORECASE,
 )
@@ -227,12 +252,23 @@ _DELIVERY_DEGRADATION_RE: Final = re.compile(
 _COMPLETION_ASSERTION_RE: Final = re.compile(
     r"(?<![A-Za-zÁÉÍÓÚáéíóúÑñ])(?:"
     r"wrapped\s+up|wrap\s+up|"
-    r"(?:complete|accomplish|finish|resolv|accept|clos|succeed|pass|finaliz|ready|"
+    r"(?:end|achiev|complete|accomplish|finish|resolv|accept|clos|succeed|pass|finaliz|ready|"
     r"ship|deploy|release|conclud|culminat|fulfill|wrap)\w*|"
     r"deliver(?:ed|s|ing)?|success(?:ful)?|done|met|over|"
-    r"(?:complet|termin|finaliz|resolv|hech|acept|cerr|aprob|list|entreg|"
+    r"(?:achiev|cumpl|complet|termin|finaliz|resolv|hech|acept|cerr|aprob|list|entreg|"
     r"despleg|liber|conclu|culmin|acab)\w*"
     r")(?![A-Za-zÁÉÍÓÚáéíóúÑñ])",
+    re.IGNORECASE,
+)
+
+_REMAINING_WORK_RE: Final = re.compile(
+    r"(?:"
+    r"\bno\s+qued(?:a|an)\s+(?:m[aá]s\s+)?(?:trabajo|tareas?|proyecto|actividad(?:es)?)"
+    r"(?:\s+por\s+hacer)?\b|"
+    r"\b(?:no|nothing)\s+(?:work|tasks?|items?|jobs?|objectives?|goals?)\s+"
+    r"(?:remain(?:s)?|is\s+left|are\s+left)(?:\s+to\s+do)?\b|"
+    r"\bnothing\s+(?:remain(?:s)?|is\s+left)\s+to\s+do\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -267,21 +303,43 @@ _SUBFACT_MARKER_RE: Final = re.compile(
 )
 
 
-def _has_completion_assertion(text: str) -> bool:
-    """Return True if text asserts terminal completion rather than pending/readiness/diagnostics."""
-    normalized = re.sub(r"[-_]+", " ", text)
+def _normalized_claim_text(text: str) -> str:
+    """Normalize separators without changing the words used by the claim policy."""
+
+    return re.sub(r"[-_]+", " ", text)
+
+
+def _has_completion_language(text: str) -> bool:
+    """Return whether text contains a completion-shaped predicate or terminal assertion."""
+
+    normalized = _normalized_claim_text(text)
+    return bool(
+        _REMAINING_WORK_RE.search(normalized) or _COMPLETION_ASSERTION_RE.search(normalized)
+    )
+
+
+def _mask_nonterminal_completion_context(text: str) -> str:
+    """Mask forms that explicitly preserve pending, gate, or delivery state."""
+
+    normalized = _normalized_claim_text(text)
     masked = _EXPLICIT_NEGATION_RE.sub(" ", normalized)
     masked = _GATE_READINESS_RE.sub(" ", masked)
-    masked = _DELIVERY_DEGRADATION_RE.sub(" ", masked)
-    return bool(_COMPLETION_ASSERTION_RE.search(masked))
+    return _DELIVERY_DEGRADATION_RE.sub(" ", masked)
+
+
+def _has_completion_assertion(text: str) -> bool:
+    """Return True if text asserts terminal completion rather than pending/readiness/diagnostics."""
+
+    masked = _mask_nonterminal_completion_context(text)
+    return bool(_REMAINING_WORK_RE.search(masked) or _COMPLETION_ASSERTION_RE.search(masked))
 
 
 def _has_forbidden_claim(text: str) -> bool:
     """Return True for forecast, metric, or human-time accounting claims."""
-    normalized = re.sub(r"[-_]+", " ", text)
+    normalized = _normalized_claim_text(text)
     return any(
         pattern.search(candidate)
-        for pattern in (_FORBIDDEN_CLAIM_RE, _DURATION_CLAIM_RE)
+        for pattern in (_FORBIDDEN_CLAIM_RE, _DURATION_CLAIM_RE, _FORECAST_COMPLETION_RE)
         for candidate in (text, normalized)
     )
 
@@ -291,10 +349,9 @@ def _has_whole_item_completion_assertion(text: str) -> bool:
 
     if not _has_completion_assertion(text):
         return False
-    normalized = re.sub(r"[-_]+", " ", text)
-    masked = _EXPLICIT_NEGATION_RE.sub(" ", normalized)
-    masked = _GATE_READINESS_RE.sub(" ", masked)
-    masked = _DELIVERY_DEGRADATION_RE.sub(" ", masked)
+    masked = _mask_nonterminal_completion_context(text)
+    if _REMAINING_WORK_RE.search(masked):
+        return True
     leading = _COMPLETION_ASSERTION_RE.match(masked)
     if leading is not None and _WHOLE_ITEM_OBJECT_RE.match(masked[leading.end() :]):
         return True
@@ -591,6 +648,16 @@ def _is_terminal_observed_state(item: Mapping[str, Any]) -> bool:
     return observed_state in _TERMINAL_OBSERVED_STATES
 
 
+def _is_nonterminal_completion_context(text: str) -> bool:
+    """Return whether completion vocabulary is explicitly bounded by a nonterminal context."""
+
+    normalized = _normalized_claim_text(text)
+    return any(
+        pattern.search(normalized)
+        for pattern in (_EXPLICIT_NEGATION_RE, _GATE_READINESS_RE, _DELIVERY_DEGRADATION_RE)
+    )
+
+
 def _is_authoritative_source_completion(
     item: Mapping[str, Any], section: str, fact: Mapping[str, Any]
 ) -> bool:
@@ -607,18 +674,31 @@ def _is_authoritative_source_completion(
     )
 
 
+def _source_claim_is_allowed(
+    item: Mapping[str, Any], section: str, fact: Mapping[str, Any]
+) -> bool:
+    """Apply source section, evidence authority, and lifecycle policy to completion language."""
+
+    text = cast(str, fact["text"])
+    if not _has_completion_language(text):
+        return True
+    # A safe phrase is sufficient only when it accounts for every completion signal in the
+    # claim.  Mixed text such as "not completed, but the work ended" remains fail-closed.
+    if _is_nonterminal_completion_context(text) and not _has_completion_assertion(text):
+        return True
+    return _is_authoritative_source_completion(item, section, fact)
+
+
 def _validate_source_claim_boundaries(item: Mapping[str, Any]) -> None:
-    """Reject unsupported terminal claims while preserving verified resolved sub-facts."""
+    """Reject unsupported completion claims before source text reaches the model."""
 
     for section in _SECTION_NAMES:
         for fact in item[section]:
-            if not _has_whole_item_completion_assertion(fact["text"]):
-                continue
-            if _is_authoritative_source_completion(item, section, fact):
-                continue
-            _fail(
-                "REPORTING_FORBIDDEN_CLAIM", "source fact contains an unsupported completion claim"
-            )
+            if not _source_claim_is_allowed(item, section, fact):
+                _fail(
+                    "REPORTING_FORBIDDEN_CLAIM",
+                    "source fact contains an unsupported completion claim",
+                )
 
 
 def _is_authoritative_completion_claim(
@@ -631,7 +711,7 @@ def _is_authoritative_completion_claim(
 
     return (
         source.section == section
-        and _is_authoritative_source_completion(
+        and _source_claim_is_allowed(
             item,
             section,
             {
@@ -1254,7 +1334,7 @@ def validate_narrative(
             normalized_claims: list[dict[str, str]] = []
             for claim_value in claims:
                 claim = _narrative_claim(claim_value)
-                completion_shaped = _has_whole_item_completion_assertion(claim["text"])
+                completion_shaped = _has_completion_language(claim["text"])
                 ref = claim["ref"]
                 source = sources.get(ref)
                 if source is None:

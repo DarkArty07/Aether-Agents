@@ -315,10 +315,21 @@ def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_c
         "It required one hour.",
         "One hour was spent on the task.",
         "La tarea consumió una hora.",
+        "The work has ended.",
+        "The objective has been achieved.",
+        "El objetivo se ha cumplido.",
+        "No queda trabajo por hacer.",
+        "It should be done Friday.",
+        "Delivery is scheduled for Friday.",
+        "La entrega está programada para el viernes.",
+        "The task took eleven hours.",
+        "El trabajo duró once horas.",
     )
     for claim in claims:
         source_item = _item(state="in_progress")
-        source_item["current"] = [_fact("work_alpha_current", claim)]
+        source_item["current"] = [
+            _fact("work_alpha_current", claim, provenance="reported", status="unverified")
+        ]
         with pytest.raises(reporting.ReportingError) as source_error:
             reporting.build_narration_prompt(_snapshot(source_item))
         assert source_error.value.code == "REPORTING_FORBIDDEN_CLAIM"
@@ -576,6 +587,26 @@ def test_legitimate_pending_readiness_and_delivery_controls_preserved() -> None:
     assert validated_current["items"][0]["current"][0]["text"] == "The change is ready for review."
     rendered_current = reporting.render_report(current_snapshot, current_narrative)
     assert "The change is ready for review." in rendered_current
+
+    # Natural pending-review wording remains nonterminal in both authorized output languages.
+    for ready_text in (
+        "The task is ready, awaiting review.",
+        "La tarea está lista, pendiente de revisión.",
+    ):
+        ready_item = _item(state="in_progress")
+        ready_item["current"] = [_fact("work_alpha_ready_pending", ready_text)]
+        ready_snapshot = _snapshot(ready_item)
+        ready_narrative_item = _narrative_item()
+        ready_narrative_item["current"] = [{"ref": "work_alpha_ready_pending", "text": ready_text}]
+        ready_narrative = _narrative(ready_narrative_item)
+
+        ready_prompt = reporting.build_narration_prompt(ready_snapshot)
+        ready_accepted = reporting.validate_narrative(ready_snapshot, ready_narrative)
+        ready_rendered = reporting.render_report(ready_snapshot, ready_accepted)
+
+        assert ready_text in ready_prompt
+        assert ready_accepted["items"][0]["current"][0]["text"] == ready_text
+        assert ready_text in ready_rendered
 
     # 2. Negated completion in pending: "The work is not completed."
     pending_item = _item(state="in_progress")

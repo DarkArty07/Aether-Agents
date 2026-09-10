@@ -30,6 +30,12 @@ be copied from a source candidate belonging to the same work item. Keep each cla
 600 characters and never invent a result, completion, identity, time, source, recipient,
 percentage, ETA, forecast, budget, CPU-hour, or agent-hour claim. A planned next step is
 not an executed result. Preserve unresolved complications and pending owner action.
+Completion wording is evidence-sensitive: retain a verified observed resolved/complication
+sub-fact only under its matching source ref, and never turn a milestone into whole-work
+completion. Pending negation, review-gate readiness, and delivery uncertainty remain
+nonterminal when their source text supports them. For all other completion-shaped wording,
+the snapshot's source section, provenance/status, and canonical observed lifecycle must
+provide exact support; otherwise leave the claim out rather than rephrasing it.
 Use only these canonical lifecycle values for `status`: `queued`, `running`, `in_progress`,
 `review`, `waiting`, `blocked`, `triage`, `completed`, `failed`, `cancelled`, `timed_out`,
 `interrupted`, or `unknown`. Use `completed` only when the snapshot's observed state is
