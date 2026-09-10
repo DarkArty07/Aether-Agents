@@ -16,7 +16,7 @@
   "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
-    "inspected_revision": "6e07eb48387044dbcaf12490931c2b8ca7ec8653",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "linked_refs": [
       {
         "kind": "issue",
@@ -27,18 +27,18 @@
     "evidence": [
       {
         "kind": "source",
-        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/tools/kanban_tools.py",
-        "result": "The exact inspected upstream source applies the goal judge to request-review and permits only dependency/needs_input goal-mode block kinds; it does not provide the maintained recovery-controller exception."
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/kanban_tools.py",
+        "result": "The exact reconciliation snapshot applies the whole-goal judge to request-review and permits only dependency/needs_input goal-mode block kinds; it does not provide the maintained recovery-controller exception."
       },
       {
         "kind": "source",
-        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/hermes_cli/kanban.py",
-        "result": "The exact inspected upstream CLI applies the completion judge to request-review as well as completion, so review entry remains circular."
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban.py",
+        "result": "The exact reconciliation snapshot applies the completion judge to request-review as well as completion, so review entry remains circular."
       },
       {
         "kind": "source",
-        "reference": "https://github.com/NousResearch/hermes-agent/blob/6e07eb48387044dbcaf12490931c2b8ca7ec8653/hermes_cli/kanban_db.py",
-        "result": "The exact inspected upstream controller context requests capability/recovery, while the goal-mode boundary lacks a native exact-route predicate for that signal."
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The exact reconciliation snapshot has no goal_mode_block_allowed predicate or equivalent exact pending-controller recovery route."
       }
     ]
   },
@@ -76,12 +76,11 @@
         "result": "passed"
       }
     ],
-    "blocker": "The exact maintained-fork reconstruction and focused candidate checks passed, but the public upstream revision is not an equivalent reconstruction input and the durable HLP-369 ledger paragraph remains terminal-integration owned."
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable."
   },
   "retirement_recommendation": "retain",
   "blocking_uncertainty": [
-    "The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.",
-    "The terminal integration phase must add the HLP-369 ledger paragraph before the pending fragment becomes part of the active aggregate reconciliation set."
+    "The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route."
   ],
-  "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; the maintained-fork candidate separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention."
+  "summary": "Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention."
 }
