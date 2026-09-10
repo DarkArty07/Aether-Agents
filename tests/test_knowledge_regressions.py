@@ -2471,7 +2471,7 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         "semantic": {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"},
     }
     actual_route = {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"}
-    res_unresolved = sem_mod.run_semantic_extraction(
+    sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
         graph_path=tmp_path / "graph_unres.json",
@@ -2490,7 +2490,7 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         "semantic": {"provider": "openrouter", "model": "expected-model", "api_mode": "chat_completions"},
     }
     actual_route = {"provider": "different_provider", "model": "different_model", "api_mode": "chat_completions"}
-    res_mismatch = sem_mod.run_semantic_extraction(
+    sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
         graph_path=tmp_path / "graph_mismatch.json",
