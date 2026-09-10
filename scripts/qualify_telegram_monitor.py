@@ -23,6 +23,11 @@ Every external boundary the live lane crosses is reached through :class:`LiveBac
 and every restore invariant is qualification-gating: a run that cannot put the
 installation back where it found it never reports itself qualified.
 
+``--live`` requires ``--output`` outside every Git worktree and the fixed
+``--wait-hourly-boundaries 2``: the accepted qualification is exactly two real native
+wall-clock boundaries, and every other count is refused with exit status 2 before the
+live lane, an output file or any other effect.
+
 Live mode is bounded, never kills or restarts an agent, and never accepts a token,
 destination, provider or model input: it uses only the existing configured
 destination and the existing model route.  Evidence is bound to the native scheduler's
@@ -37,7 +42,9 @@ acceptance is recorded as acceptance, never as proof that a human read the messa
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -45,6 +52,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import uuid
@@ -76,8 +84,17 @@ from aether_agents.monitor.service import (  # noqa: E402
 from aether_agents.monitor.store import MonitorStore  # noqa: E402
 
 SCHEMA_VERSION = "aether.telegram-monitor.qualification.v1"
-DEFAULT_WAIT_HOURLY_BOUNDARIES = 2
-MAX_WAIT_HOURLY_BOUNDARIES = 24
+#: The accepted qualification waits for exactly two real native hourly boundaries; the
+#: option value is fixed at that count and every other value is refused before any effect.
+REQUIRED_WAIT_HOURLY_BOUNDARIES = 2
+#: Boundary counts the entry point must refuse without an output file or any live effect.
+REFUSED_BOUNDARY_COUNTS = (-1, 0, 1, 3, 24, 25)
+#: Stable refusal text shared by the entry point and the offline self-check.
+BOUNDARY_COUNT_REFUSAL = (
+    "--wait-hourly-boundaries is fixed at exactly "
+    f"{REQUIRED_WAIT_HOURLY_BOUNDARIES}: the accepted qualification waits for two real "
+    "native hourly boundaries"
+)
 PRECHECK_RESOURCE = "resources/monitor/precheck.py"
 NARRATION_RESOURCE = "resources/monitor/narration-context.md"
 MONITOR_PLUGIN_ID = "aether-telegram-monitor"
@@ -430,6 +447,41 @@ def _check_precheck_resource(workspace: Path) -> tuple[str, str]:
     return "pass", 'disabled monitor emits {"wakeAgent": false} with no native import'
 
 
+def _boundary_contract_defect() -> str | None:
+    """Describe how the fixed boundary count was not enforced, or ``None`` when it is.
+
+    The fixed contract is exactly two real native hourly boundaries.  Every other count
+    must be refused at the entry point with exit ``2`` and the stable message, before the
+    workspace, the output policy and the live lane, so the probe redirects ``TMPDIR`` and
+    asserts no file and no stdout were produced.
+    """
+
+    with tempfile.TemporaryDirectory(prefix="aether-monitor-boundary-probe-") as scratch:
+        previous_tmpdir = os.environ.get("TMPDIR")
+        os.environ["TMPDIR"] = scratch
+        try:
+            for count in REFUSED_BOUNDARY_COUNTS:
+                out = io.StringIO()
+                err = io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    code = main(["--live", "--wait-hourly-boundaries", str(count), "--json"])
+                if code != 2:
+                    return f"count {count} exited {code} instead of 2"
+                if out.getvalue():
+                    return f"count {count} printed to stdout instead of refusing"
+                if BOUNDARY_COUNT_REFUSAL not in err.getvalue():
+                    return f"count {count} was refused with the wrong message"
+        finally:
+            if previous_tmpdir is None:
+                os.environ.pop("TMPDIR", None)
+            else:
+                os.environ["TMPDIR"] = previous_tmpdir
+        residue = sorted(path.name for path in Path(scratch).iterdir())
+    if residue:
+        return f"the refusal created files: {residue}"
+    return None
+
+
 def _check_harness_options() -> tuple[str, str]:
     """The harness itself accepts no token, destination, provider or model input."""
 
@@ -447,9 +499,15 @@ def _check_harness_options() -> tuple[str, str]:
     if leaked:
         return "fail", f"the harness accepts external-identity options: {leaked}"
     defaults = {action.dest: action.default for action in parser._actions}
-    if defaults.get("wait_hourly_boundaries") != DEFAULT_WAIT_HOURLY_BOUNDARIES:
-        return "fail", "the default hourly-boundary count changed"
-    return "pass", "--live/--json/--output/--wait-hourly-boundaries, no external identity"
+    if defaults.get("wait_hourly_boundaries") != REQUIRED_WAIT_HOURLY_BOUNDARIES:
+        return "fail", "the fixed hourly-boundary count changed"
+    defect = _boundary_contract_defect()
+    if defect is not None:
+        return "fail", defect
+    return "pass", (
+        "--live/--json/--output/--wait-hourly-boundaries (fixed at exactly two boundaries), "
+        "no external identity, non-contract counts refused before any effect"
+    )
 
 
 def _live_state_fingerprint() -> dict[str, Any]:
@@ -3150,7 +3208,7 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
             "test-process-refused",
             "the live qualification refuses to run inside a test process",
         )
-    if args.wait_hourly_boundaries != DEFAULT_WAIT_HOURLY_BOUNDARIES:
+    if args.wait_hourly_boundaries != REQUIRED_WAIT_HOURLY_BOUNDARIES:
         raise QualificationError(
             "boundaries-unsupported",
             "--live implements exactly two real hourly boundaries; the option surface stays fixed",
@@ -3882,11 +3940,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--wait-hourly-boundaries",
         type=int,
-        default=DEFAULT_WAIT_HOURLY_BOUNDARIES,
+        default=REQUIRED_WAIT_HOURLY_BOUNDARIES,
         metavar="N",
         help=(
-            "Real native hourly boundaries required by --live "
-            f"(1-{MAX_WAIT_HOURLY_BOUNDARIES}, default {DEFAULT_WAIT_HOURLY_BOUNDARIES})."
+            "Real native hourly boundaries required by --live. The accepted "
+            f"qualification is fixed at exactly {REQUIRED_WAIT_HOURLY_BOUNDARIES}; every "
+            "other value is refused before any file or live effect."
         ),
     )
     return parser
@@ -3898,12 +3957,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         args = parser.parse_args(list(argv) if argv is not None else sys.argv[1:])
     except SystemExit as error:
         return int(error.code) if isinstance(error.code, int) else 2
-    if not 1 <= args.wait_hourly_boundaries <= MAX_WAIT_HOURLY_BOUNDARIES:
-        print(
-            f"qualify-telegram-monitor: --wait-hourly-boundaries must be between 1 and "
-            f"{MAX_WAIT_HOURLY_BOUNDARIES}",
-            file=sys.stderr,
-        )
+    if args.wait_hourly_boundaries != REQUIRED_WAIT_HOURLY_BOUNDARIES:
+        print(f"qualify-telegram-monitor: {BOUNDARY_COUNT_REFUSAL}", file=sys.stderr)
         return 2
     if args.live and args.output is None:
         print("qualify-telegram-monitor: --live requires --output", file=sys.stderr)

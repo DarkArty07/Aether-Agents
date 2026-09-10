@@ -906,6 +906,13 @@ def test_qualification_options_are_exactly_the_fixed_contract(tmp_path: Path) ->
     assert defaults["wait_hourly_boundaries"] == 2
     assert defaults["live"] is False
     assert not [option for option in options if option in FORBIDDEN_QUALIFICATION_OPTIONS]
+    boundary_action = next(
+        action for action in parser._actions if "--wait-hourly-boundaries" in action.option_strings
+    )
+    assert module.REQUIRED_WAIT_HOURLY_BOUNDARIES == 2
+    assert not hasattr(module, "MAX_WAIT_HOURLY_BOUNDARIES")
+    assert "1-24" not in boundary_action.help
+    assert "fixed at exactly 2" in boundary_action.help
 
 
 def test_offline_qualification_makes_no_model_or_sender_call(tmp_path: Path) -> None:
@@ -932,7 +939,7 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
     assert missing_output.returncode == 2
     assert "--live requires --output" in missing_output.stderr
 
-    for value in ("0", "25", "not-a-number"):
+    for value in ("0", "1", "3", "24", "25", "not-a-number"):
         bounded = _run_qualification(tmp_path, "--wait-hourly-boundaries", value, "--json")
         assert bounded.returncode == 2, value
 
@@ -965,6 +972,47 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
         "runtime-unavailable",
     }
     assert not outside.exists()
+
+
+def test_boundary_count_is_fixed_at_two_at_the_entry_point(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only exactly two boundaries reaches the live lane; every other count is refused."""
+
+    module = _qualification_module()
+    calls: list[int] = []
+
+    def tripwire(args: Any, stream: Any) -> dict[str, Any]:
+        calls.append(int(args.wait_hourly_boundaries))
+        return {"public_summary": {"qualified": False}}
+
+    monkeypatch.setattr(module, "run_live", tripwire)
+    scratch = tmp_path / "scratch-tmp"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    output = tmp_path / "private" / "receipt.json"
+
+    for value in ("-1", "0", "1", "3", "24", "25"):
+        code = module.main(
+            ["--live", "--output", str(output), "--wait-hourly-boundaries", value, "--json"]
+        )
+        captured = capsys.readouterr()
+        assert code == 2, value
+        assert "wait-hourly-boundaries is fixed at exactly 2" in captured.err, value
+        assert captured.out == "", value
+    assert calls == []
+    assert not output.exists()
+    assert not (tmp_path / "private").exists()
+    assert not list(scratch.iterdir())
+
+    # Positive control: the tripwire is reachable, so the refusals above are real.
+    accepted = module.main(
+        ["--live", "--output", str(output), "--wait-hourly-boundaries", "2", "--json"]
+    )
+    assert accepted == 1  # the stub is not a real qualification
+    assert calls == [2]
+    assert not output.exists()
+    assert not list(scratch.iterdir())
 
 
 def test_git_containment_rejects_every_worktree_or_repository(tmp_path: Path) -> None:

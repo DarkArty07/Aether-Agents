@@ -202,7 +202,10 @@ uv run --frozen python scripts/qualify_telegram_monitor.py --live \
 
 Live mode accepts no token, destination, provider or model input; it resolves only the
 provisioned runtime and the existing pinned destination, and it performs no external
-effect until its environment pre-flight passes. What it does, in order:
+effect until its environment pre-flight passes. `--wait-hourly-boundaries` is fixed at
+exactly `2` — the accepted qualification waits for two real wall-clock boundaries — and
+every other value is refused with exit code 2 before the lane, an output file or any other
+effect. What it does, in order:
 
 0. **Quiescing a running monitor.** If the monitor is already enabled, it is durably
    disabled and its owned job paused *before* the registry is isolated, so no scheduled

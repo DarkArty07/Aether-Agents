@@ -57,12 +57,15 @@ native Hermes file, lockfile or Objective Contract was modified.
 ### Qualification harness (`scripts/qualify_telegram_monitor.py`)
 
 Fixed option surface: `--live`, `--json`, `--output PATH`, `--wait-hourly-boundaries N`
-(default `2`, bounded `1..24`). The harness accepts no token, destination, provider, model,
+(fixed at exactly `2`). The harness accepts no token, destination, provider, model,
 credential or session/profile input (a check enforces the parser surface against that
-denylist).
+denylist), and the entry point refuses every other boundary count with exit code `2`
+before the live lane, an output file or any other effect (round 5).
 
 **Default (no `--live`) lane** — deterministic, no external effect. Ten checks:
-`harness-options`, `cli-surface` (exact `aether monitor` parser surface and options, no
+`harness-options` (exact script option surface and denylist; drives `main()` in-process for
+`-1, 0, 1, 3, 24, 25` and requires exit `2`, the fixed-count message, no stdout and no
+file), `cli-surface` (exact `aether monitor` parser surface and options, no
 native import while building it), `plugin-surface` (exactly two tools/toolsets, three
 hooks, Morfeo-only opt-in), `plugin-entry-point` (exactly one monitor entry point),
 `packaged-resources`, `control-service` (envelope validity, empty history, invalid limit,
@@ -78,7 +81,9 @@ fingerprint of the operator's durable monitor state and project registry is iden
 before and after; the lane uses disposable roots).
 
 **Live lane** (`--live`, owned by MON-INT) — refuses to run inside a test process, requires
-`--output` outside every Git worktree, resolves only the provisioned runtime
+`--output` outside every Git worktree and the fixed `--wait-hourly-boundaries 2` (every
+other count is refused at the entry point before the lane starts), resolves only the
+provisioned runtime
 (`AETHER_HERMES_PYTHON` → `hermes`-sibling → manager interpreter, each probed), then runs
 bounded phases in this order: quiesce an already enabled monitor → isolate the operator
 registry byte-for-byte → create an honestly labelled synthetic scope (two synthetic Aether
@@ -124,10 +129,10 @@ check/ruff format file lists.
 
 | Obligation (source) | Check executed | Observed result |
 | --- | --- | --- |
-| Task: harness with exact `--live`, `--json`, `--output`, `--wait-hourly-boundaries 2`; no external identity/credential input | `test_qualification_options_are_exactly_the_fixed_contract` (imports the script, inspects `_build_parser`) | options exactly `--json`, `--live`, `--output`, `--wait-hourly-boundaries`; default boundary count `2`; denylist options absent |
+| Task: harness with exact `--live`, `--json`, `--output`, `--wait-hourly-boundaries 2`; no external identity/credential input | `test_qualification_options_are_exactly_the_fixed_contract` (imports the script, inspects `_build_parser`), `test_boundary_count_is_fixed_at_two_at_the_entry_point` | options exactly `--json`, `--live`, `--output`, `--wait-hourly-boundaries`; `REQUIRED_WAIT_HOURLY_BOUNDARIES == 2` and no upper-bound constant survives; help text carries no range; default `2`; denylist options absent; with a `run_live` tripwire only `2` enters the lane (`calls == [2]`) |
 | Task/quickstart §4: without `--live` zero model or sender calls | `test_offline_qualification_makes_no_model_or_sender_call` (subprocess with `cron`/`hermes_cli`/`gateway` import tripwires and a disposable `XDG_STATE_HOME`) | exit 0; `mode=offline`, all checks `pass`, `external_effects={model_calls:0,telegram_sends:0}`, no `monitor/` state created |
 | Task: offline mode exercises deterministic validation and never external effects | `uv run --frozen python scripts/qualify_telegram_monitor.py --json` | 10/10 checks pass; `live-state-untouched` reports the operator's durable state byte-identical |
-| Task: parser/options/error paths | `test_live_qualification_refuses_unsafe_invocations_without_effects` | missing `--output` → exit 2; boundary count `0`/`25`/non-integer → exit 2; repository-internal output → exit 1 `output-inside-repository`; test-process live run → exit 1 `test-process-refused`; no file created in any case |
+| Task: parser/options/error paths | `test_live_qualification_refuses_unsafe_invocations_without_effects` (subprocess), `test_boundary_count_is_fixed_at_two_at_the_entry_point` (entry point with a `run_live` tripwire), offline `harness-options` | missing `--output` → exit 2; boundary counts `0`/`1`/`3`/`24`/`25`/non-integer → exit 2 with the fixed-count message on stderr and nothing on stdout; repository-internal output → exit 1 `output-inside-repository`; test-process live run → exit 1 `test-process-refused`; no file, no output directory, no `TMPDIR` residue and no `run_live` entry in any refusal |
 | Task: live contract is bounded and honest (due/cut/narration/ack times, ≤1 narration per digest, no-work skip, scope/unrelated-job restore) | implemented in `run_live`/`_live_run`/`_inspect_boundary`/`_inspect_idle`/`_smoke_phase`/`_evaluate_cases`/`_scope_remove`/`_remove_direct_records`; the orchestration is exercised end to end against injected backends by `test_live_preflight_and_full_run_without_external_effects`; **not executed against a real scheduler by this unit** | deterministic parts covered by the offline lane and the oracle/orchestration tests; the live execution itself is MON-INT's |
 | TM-001/spec: principal capability documented with implemented surface and limits | `test_monitor_guide_documents_controls_state_and_limits`, review of `docs/guides/telegram-monitor.md` | guide carries the fixed controls/envelope/tools/job/retention/rollback/exclusions and states that live qualification is not yet qualified |
 | AC-8 documentation half: capability registry, generated reference, CLI/plugin docs agree | `scripts/check_documentation.py` (validates derived-vs-registered surface parity and reference staleness) | `documentation validation passed`; 11 surfaces registered, generated reference regenerated |
@@ -597,7 +602,7 @@ credential operation, no profile/job/plugin activation, no native Hermes or sour
 change outside the harness's own reversible scope (which this unit does not execute), no push,
 PR, merge, issue mutation or publication.
 
-## Round-4 corrections (authoritative)
+## Round-4 corrections (historical; superseded by round 5 where contradicted)
 
 The round-3 review (strict contract lens) reproduced three blocking defects. All three are
 corrected inside MON-06's writable interface; no production file was edited, no option
@@ -767,3 +772,131 @@ PR, merge, issue mutation or publication.
   `BOARD_METADATA_UNREADABLE` / `SESSION_TITLE_UNAVAILABLE` until the production question
   recorded above is decided; that refusal is the honest outcome and it happens before the
   fixture, so no fixture gap is conflated with it.
+
+## Round-5 corrections (authoritative)
+
+The round-4 review (strict contract lens) found one blocking defect: the live count option
+advertised and accepted every value `1..24`, although the accepted qualification — and
+`_live_run`'s fixed two-entry boundary plan — is exactly two real hourly boundaries, and a
+no-effect probe showed `main()` entering the live lane for `1`, `3` and `24`. The correction
+is confined to the entry point, the help text, the offline self-check and the documentation;
+the live scenario was not generalized to arbitrary counts, and the accepted qualification
+remains exactly two boundaries.
+
+### 1. Exactly two boundaries, enforced before the live lane
+
+`MAX_WAIT_HOURLY_BOUNDARIES` (the advertised `1..24` range) is gone. A single constant,
+`REQUIRED_WAIT_HOURLY_BOUNDARIES = 2`, is the parser default and the only accepted value.
+`main()` compares the parsed value to it immediately after `parse_args` — before the
+workspace path is created, before the `--output` policy and before `run_live` — and any
+other value prints the stable `--wait-hourly-boundaries is fixed at exactly 2: the accepted
+qualification waits for two real native hourly boundaries` to stderr and exits `2` (in both
+lanes). `run_live` keeps its `boundaries-unsupported` guard as defense in depth for direct
+callers, so no path reaches the live orchestration with another count, and the option
+surface (`--live`, `--json`, `--output`, `--wait-hourly-boundaries`) is unchanged.
+
+### 2. The refusal is part of the deterministic lane
+
+`_check_harness_options` (offline `harness-options`) additionally drives `main()` in-process
+for `-1, 0, 1, 3, 24, 25` with a redirected `TMPDIR`, and requires exit `2`, the fixed-count
+message, empty stdout and an empty scratch directory; a refusal that exits differently,
+prints to stdout, uses another message or creates a file fails the check. The option's help
+text now states the fixed count and carries no range.
+
+### 3. Documentation corrected
+
+`docs/guides/telegram-monitor.md` states that `--wait-hourly-boundaries` is fixed at exactly
+`2` and that every other value is refused with exit code 2 before the lane, an output file or
+any other effect; this evidence replaces the former "(default `2`, bounded `1..24`)" claim,
+and the live-lane section records the fixed count next to the `--output` requirement.
+
+### Round-5 checks
+
+- `test_boundary_count_is_fixed_at_two_at_the_entry_point` — the entry point is driven
+  in-process with a `run_live` tripwire: `-1, 0, 1, 3, 24, 25` each exit `2` with the
+  fixed-count message, nothing on stdout, no `run_live` call, no output file or directory and
+  no `TMPDIR` residue; the positive control (`calls == [2]`) proves the tripwire is
+  reachable, so only the contract value enters the lane.
+- `test_qualification_options_are_exactly_the_fixed_contract` — additionally asserts
+  `REQUIRED_WAIT_HOURLY_BOUNDARIES == 2`, that no upper-bound constant survives, and that
+  the help text carries neither a `1-24` range nor a stale default.
+- `test_live_qualification_refuses_unsafe_invocations_without_effects` — extended to
+  `0, 1, 3, 24, 25, not-a-number` at the subprocess level (all exit `2`).
+- offline `harness-options` check (above), exercised by
+  `uv run --frozen python scripts/qualify_telegram_monitor.py --json`.
+
+## Round-5 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-5 candidate recorded in the review
+handoff. Changed paths: `scripts/qualify_telegram_monitor.py`,
+`tests/test_telegram_monitor_cli_plugin.py`, `docs/guides/telegram-monitor.md`,
+`specs/telegram-monitor/evidence/MON-06.md`. No production file, `policy.yml`, capability
+registry, lockfile or Objective Contract was modified in round 5.
+
+- `uv run --frozen pytest -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **57 passed** (56 before + 1 new round-5 test).
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **240 passed** (239 before + 1 new round-5 test).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 70 passed**; the sole failure is the pre-existing issue #364.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q`) → **7 failed, 1321 passed, 60 skipped,
+  373 subtests passed** (224.99 s). The 7 are the same classes as the reviewed base: the six
+  accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set mismatch`
+  (collision already routed to MON-INT, outside this unit's writable boundary) and issue #364
+  on the unchanged finalized contract.
+- **Failure-set baseline comparison (round 5).** The same two files were executed with the
+  same command (`scripts/run_tests.py -- -q --tb=no tests/test_public_artifacts.py
+  tests/test_observation_lifecycle.py`) in a temporary detached worktree of the reviewed
+  dependency base (`2d49418`): **7 failed, 88 passed in both trees**, and the sorted `FAILED`
+  name sets are byte-identical (`diff` empty). The temporary worktree was removed afterwards.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation
+  passed**.
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true,
+  mode=offline, 10 checks**, `external_effects={model_calls:0, telegram_sends:0}`; the
+  strengthened `harness-options` check passes with its new entry-point probe.
+- Refusal probes on the final content: `--live --wait-hourly-boundaries 3 --json` and
+  `--wait-hourly-boundaries 1 --json` → exit `2`, stderr carries the fixed-count message and
+  stdout is empty (no JSON envelope, no file).
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist built;
+  `uv run --frozen python scripts/check_public_artifacts.py --root . --artifact <wheel>
+  --artifact <sdist>` and the tree-only scan → only the pre-existing #364 findings on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/` is
+  empty).
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364, missing [],
+  extra []**; `.github/workflows/policy.yml` is unchanged in round 5 and no tracked path was
+  added.
+- `uv run --frozen ruff check` + `ruff format --check` on the two touched Python files →
+  clean; `uv run --frozen python -m compileall -q` on `src tests scripts/qualify_telegram_monitor.py`
+  and the touched test files → passed; `uv run --frozen mypy src/aether_agents` → **Success:
+  no issues found in 65 source files**; `git diff --check` → passed.
+- **Pre-existing lint observation (out of scope, unchanged from the base).** The literal
+  full-list ruff commands from `policy.yml` report 7 findings and 4 unformatted files in
+  `src/aether_agents/knowledge/semantic.py`,
+  `src/aether_agents/objective_contracts/hermes_plugin.py`,
+  `tests/test_knowledge_regressions.py` and `tests/test_objective_contracts.py`. All four are
+  byte-identical to the reviewed base (`git diff 2d49418 -- <those paths>` is empty), so the
+  findings are pre-existing on the dependency branch and outside MON-06's writable boundary.
+
+Deliberate non-effects in round 5: no `--live` invocation, no model call, no Telegram send,
+no credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change outside the harness's own reversible scope (which this unit does not execute), no push,
+PR, merge, issue mutation or publication.
+
+## Round-5 residual risks
+
+- The live lane still has never been executed end to end. The orchestration and every oracle
+  run against injected backends; the first run against a real scheduler, model and Telegram
+  transport belongs to MON-INT, and a live failure is implementation rework. Round-5 changed
+  only what the lane accepts as its boundary count, not what it does.
+- Everything round 4 recorded remains true: the live scope probes execute only inside the
+  provisioned runtime (their real semantics are exercised in-process against real SQLite),
+  the malicious-instruction case is one the fixed filter does not classify, and on this
+  installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
+  `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
