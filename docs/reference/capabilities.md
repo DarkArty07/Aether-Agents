@@ -976,3 +976,60 @@ Project Canonical Skills are discoverable by direct project-relative reads from 
 ### Notes / current limits
 
 Disposable-project discovery and brownfield guidance preservation are focused checks; private live-profile activation and the public installed lifecycle remain separate, unqualified runtime boundaries.
+
+## `telegram-monitor.hourly-progress`
+
+**Status:** `partial`
+
+One native hourly Morfeo job collects bounded read-only evidence from explicitly project-bound work and delivers a validated narrative to the already configured Telegram conversation, controlled through `aether monitor` and the `aether_monitor` tool.
+
+### Surfaces
+- `cli.command.aether.monitor`
+- `cli.command.aether.monitor.history`
+- `cli.command.aether.monitor.off`
+- `cli.command.aether.monitor.on`
+- `cli.command.aether.monitor.status`
+- `cli.option.aether.monitor.history.--json`
+- `cli.option.aether.monitor.history.--limit`
+- `cli.option.aether.monitor.off.--json`
+- `cli.option.aether.monitor.on.--json`
+- `cli.option.aether.monitor.status.--json`
+- `plugin.aether-telegram-monitor`
+
+### Current documentation
+- [docs/guides/telegram-monitor.md](../guides/telegram-monitor.md)
+- [docs/reference/cli.md](cli.md)
+- [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
+
+### Owning specifications
+- [specs/telegram-monitor/plan.md](../../specs/telegram-monitor/plan.md)
+- [specs/telegram-monitor/quickstart.md](../../specs/telegram-monitor/quickstart.md)
+- [specs/telegram-monitor/spec.md](../../specs/telegram-monitor/spec.md)
+
+### Implementation
+- [src/aether_agents/cli.py](../../src/aether_agents/cli.py)
+- [src/aether_agents/monitor/collector.py](../../src/aether_agents/monitor/collector.py)
+- [src/aether_agents/monitor/commands.py](../../src/aether_agents/monitor/commands.py)
+- [src/aether_agents/monitor/delivery.py](../../src/aether_agents/monitor/delivery.py)
+- [src/aether_agents/monitor/hermes_plugin.py](../../src/aether_agents/monitor/hermes_plugin.py)
+- [src/aether_agents/monitor/reporting.py](../../src/aether_agents/monitor/reporting.py)
+- [src/aether_agents/monitor/runtime.py](../../src/aether_agents/monitor/runtime.py)
+- [src/aether_agents/monitor/service.py](../../src/aether_agents/monitor/service.py)
+- [src/aether_agents/monitor/sources.py](../../src/aether_agents/monitor/sources.py)
+- [src/aether_agents/monitor/store.py](../../src/aether_agents/monitor/store.py)
+- [src/aether_agents/resources/monitor/narration-context.md](../../src/aether_agents/resources/monitor/narration-context.md)
+- [src/aether_agents/resources/monitor/precheck.py](../../src/aether_agents/resources/monitor/precheck.py)
+
+### Verification
+- [scripts/qualify_telegram_monitor.py](../../scripts/qualify_telegram_monitor.py)
+- [tests/test_documentation.py](../../tests/test_documentation.py)
+- [tests/test_telegram_monitor_cli_plugin.py](../../tests/test_telegram_monitor_cli_plugin.py)
+- [tests/test_telegram_monitor_delivery.py](../../tests/test_telegram_monitor_delivery.py)
+- [tests/test_telegram_monitor_reporting.py](../../tests/test_telegram_monitor_reporting.py)
+- [tests/test_telegram_monitor_runtime.py](../../tests/test_telegram_monitor_runtime.py)
+- [tests/test_telegram_monitor_sources.py](../../tests/test_telegram_monitor_sources.py)
+- [tests/test_telegram_monitor_state.py](../../tests/test_telegram_monitor_state.py)
+
+### Notes / current limits
+
+The implementation, the deterministic control/plugin/packaging surface and the offline qualification lane (zero model calls, zero Telegram sends, untouched operator state) are covered by tests and `scripts/qualify_telegram_monitor.py`. The real provisioned hourly qualification — two native wall-clock boundaries, live Morfeo narration, real Bot API message identifiers, the live no-work wake skip and reversible activation of this installation — is owned by the terminal integration step and remains pending; sample runs and manual ticks are not substitutes, and no live hourly, narration-quality or exactly-once claim is made here. Delivery acceptance is Telegram Bot API acceptance, never proof that a human read the message; `on`/`off` report RUNTIME_UNAVAILABLE until a Hermes-capable interpreter resolves.

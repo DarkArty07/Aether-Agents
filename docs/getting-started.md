@@ -33,4 +33,14 @@ The command validates or writes `.aether/project.toml`, maps its portable UUID t
 
 The package has local lifecycle candidate commands (`setup`, `update`, `rollback`, and `uninstall`), but these are not a complete public installation path. Do not run a state-changing lifecycle command merely to explore the documentation. The current supported discovery commands are `--help`, `--version`, `observe --help`, and read-only `doctor`; see [CLI reference](reference/cli.md) and [limitations](reference/limitations-and-troubleshooting.md).
 
+## Inspect the Telegram Monitor without changing anything
+
+`aether monitor status --json` and `aether monitor history --json` read durable monitor state and are safe to run before deciding anything; `aether monitor on` and `aether monitor off` change the installation and require the provisioned runtime. The deterministic qualification lane performs no model call and no Telegram send:
+
+```bash
+uv run --frozen python scripts/qualify_telegram_monitor.py --json
+```
+
+Read [Telegram Monitor](guides/telegram-monitor.md) before enabling the feature, and treat live hourly/Telegram qualification as pending until the terminal integration reports it.
+
 For the intended operational model after an initialized project exists, read [Lifecycle](guides/lifecycle.md), [Objective Contracts](guides/objective-contracts.md), and [Execution](guides/execution.md).

@@ -818,3 +818,171 @@ def test_wheel_exposes_the_fourth_entry_point_and_monitor_resources(tmp_path: Pa
                 ROOT / "src" / "aether_agents" / "resources" / "monitor" / "precheck.py"
             ).read_bytes()
         )
+
+
+# ---------------------------------------------------------------------------
+# Offline qualification harness (MON-06)
+# ---------------------------------------------------------------------------
+
+QUALIFICATION = ROOT / "scripts" / "qualify_telegram_monitor.py"
+FORBIDDEN_QUALIFICATION_OPTIONS = (
+    "--token",
+    "--bot-token",
+    "--chat-id",
+    "--destination",
+    "--recipient",
+    "--provider",
+    "--model",
+    "--api-key",
+    "--credential",
+)
+
+
+def _qualification_environment(tmp_path: Path, *, poison_native: bool) -> dict[str, str]:
+    """A disposable state root plus optional native-import tripwires."""
+
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": os.environ.get("HOME", ""),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "XDG_STATE_HOME": str(tmp_path / "state-home"),
+        # The live lane must never run from a test process; make that explicit here so a
+        # Hermes-capable test lane cannot turn a qualification test into a live effect.
+        "PYTEST_CURRENT_TEST": "tests/test_telegram_monitor_cli_plugin.py",
+    }
+    if poison_native:
+        shim = tmp_path / "native-shim"
+        shim.mkdir(parents=True, exist_ok=True)
+        for name in ("cron", "hermes_cli", "gateway"):
+            (shim / f"{name}.py").write_text(
+                "raise ImportError('offline qualification imported a native module')\n",
+                encoding="utf-8",
+            )
+        environment["PYTHONPATH"] = str(shim)
+    return environment
+
+
+def _run_qualification(
+    tmp_path: Path, *arguments: str, poison_native: bool = False
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(QUALIFICATION), *arguments],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_qualification_environment(tmp_path, poison_native=poison_native),
+        timeout=300,
+    )
+
+
+def _qualification_module() -> Any:
+    spec = importlib.util.spec_from_file_location("qualify_telegram_monitor", QUALIFICATION)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_qualification_options_are_exactly_the_fixed_contract(tmp_path: Path) -> None:
+    """The harness accepts --live/--json/--output/--wait-hourly-boundaries and nothing else."""
+
+    module = _qualification_module()
+
+    parser = module._build_parser()
+    options = sorted(
+        option
+        for action in parser._actions
+        for option in action.option_strings
+        if option not in {"-h", "--help"}
+    )
+    assert options == ["--json", "--live", "--output", "--wait-hourly-boundaries"]
+    defaults = {action.dest: action.default for action in parser._actions}
+    assert defaults["wait_hourly_boundaries"] == 2
+    assert defaults["live"] is False
+    assert not [option for option in options if option in FORBIDDEN_QUALIFICATION_OPTIONS]
+
+
+def test_offline_qualification_makes_no_model_or_sender_call(tmp_path: Path) -> None:
+    """No --live run passes with native imports poisoned and live state untouched."""
+
+    completed = _run_qualification(tmp_path, "--json", poison_native=True)
+
+    assert completed.returncode == 0, completed.stderr
+    summary = json.loads(completed.stdout)
+    assert summary["schema_version"] == "aether.telegram-monitor.qualification.v1"
+    assert summary["mode"] == "offline" and summary["ok"] is True
+    assert summary["external_effects"] == {"model_calls": 0, "telegram_sends": 0}
+    assert [record["status"] for record in summary["checks"]] == ["pass"] * len(summary["checks"])
+    checks = {record["check"] for record in summary["checks"]}
+    assert {"harness-options", "cli-surface", "plugin-surface", "packaged-precheck"} <= checks
+    assert not (tmp_path / "state-home" / "aether" / "monitor").exists()
+    assert "real provisioned model narration and Telegram delivery" in summary["unqualified_scope"]
+
+
+def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path: Path) -> None:
+    """Missing output, invalid bounds and repository-internal output all fail closed."""
+
+    missing_output = _run_qualification(tmp_path, "--live", "--json")
+    assert missing_output.returncode == 2
+    assert "--live requires --output" in missing_output.stderr
+
+    for value in ("0", "25", "not-a-number"):
+        bounded = _run_qualification(tmp_path, "--wait-hourly-boundaries", value, "--json")
+        assert bounded.returncode == 2, value
+
+    inside = ROOT / "qualification-should-not-exist.json"
+    repository_output = _run_qualification(tmp_path, "--live", "--output", str(inside), "--json")
+    assert repository_output.returncode == 1
+    envelope = json.loads(repository_output.stdout)
+    assert envelope["ok"] is False
+    assert envelope["error"]["code"] in {"output-inside-repository", "runtime-unavailable"}
+    assert not inside.exists()
+
+    outside = tmp_path / "private" / "receipts.json"
+    no_runtime = _run_qualification(tmp_path, "--live", "--output", str(outside), "--json")
+    # The live lane must fail closed in a test process and write nothing.
+    assert no_runtime.returncode == 1
+    envelope = json.loads(no_runtime.stdout)
+    assert envelope["ok"] is False
+    assert envelope["error"]["code"] in {
+        "test-process-refused",
+        "runtime-unavailable",
+    }
+    assert not outside.exists()
+
+
+def test_live_public_summary_excludes_private_handles_and_private_paths() -> None:
+    """Only sanitized timings, counts and case results may leave a live run."""
+
+    module = _qualification_module()
+    record = {
+        "candidate_revision": "0" * 40,
+        "runtime_interpreter": "/private/operator/runtime/python3",
+        "boundaries": {
+            "boundaries": [
+                {
+                    "cutoff_utc": "2026-09-10T13:00:00Z",
+                    "report_id": "monitor-report-1",
+                    "message_ids": ["424242"],
+                    "delivery_states": ["confirmed"],
+                    "narration_count": 1,
+                }
+            ]
+        },
+        "idle": {"idle_confirmed": True},
+        "restore": {"scope_removed": True, "enabled_restored": True},
+        "errors": [],
+    }
+
+    public = module._public_live_summary(record)
+
+    rendered = json.dumps(public)
+    for private in ("424242", "monitor-report-1", "/private/operator", "2026-09-10T13:00:00Z"):
+        assert private not in rendered, private
+    assert public["boundaries_observed"] == 1
+    assert public["confirmed_deliveries"] == 1
+    assert public["narration_counts"] == [1]
+    assert public["idle_confirmed"] is True
+    assert public["scope_restored"] is True
+    assert "Bot API acceptance" in public["acceptance_notice"]

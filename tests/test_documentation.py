@@ -270,6 +270,7 @@ def test_policy_workflow_admits_the_documentation_inventory_and_runs_the_checker
         "docs/guides/execution.md",
         "docs/guides/observation.md",
         "docs/guides/policy-and-recovery.md",
+        "docs/guides/telegram-monitor.md",
         "docs/reference/cli.md",
         "docs/reference/plugins-and-tools.md",
         "docs/reference/limitations-and-troubleshooting.md",
@@ -394,4 +395,94 @@ def test_stewardship_capabilities_are_distinct_and_honest() -> None:
     assert (
         "docs/roles-and-authority.md"
         in records["lifecycle.conditional-issue-intake-reconciliation"]["documents"]
+    )
+
+
+def test_monitor_capability_is_registered_statused_and_traceable() -> None:
+    """The Telegram Monitor surface is registered with truthful status and traceability."""
+
+    registry = tomllib.loads((ROOT / "docs/capabilities.toml").read_text(encoding="utf-8"))
+    records = {record["id"]: record for record in registry["capabilities"]}
+    record = records["telegram-monitor.hourly-progress"]
+
+    assert record["status"] == "partial"
+    for surface in (
+        "cli.command.aether.monitor",
+        "cli.command.aether.monitor.status",
+        "cli.command.aether.monitor.on",
+        "cli.command.aether.monitor.off",
+        "cli.command.aether.monitor.history",
+        "cli.option.aether.monitor.history.--limit",
+        "plugin.aether-telegram-monitor",
+    ):
+        assert surface in record["surfaces"], surface
+    assert "docs/guides/telegram-monitor.md" in record["documents"]
+    assert "specs/telegram-monitor/spec.md" in record["specifications"]
+    assert "src/aether_agents/monitor/runtime.py" in record["implementation"]
+    assert "scripts/qualify_telegram_monitor.py" in record["verification"]
+    notes = record["notes"]
+    for marker in ("remains pending", "Bot API acceptance", "not substitutes"):
+        assert marker in notes, marker
+
+    reference = (ROOT / "docs/reference/capabilities.md").read_text(encoding="utf-8")
+    assert "## `telegram-monitor.hourly-progress`" in reference
+    assert "**Status:** `partial`" in reference
+
+
+def test_monitor_guide_documents_controls_state_and_limits() -> None:
+    """The user guide carries the fixed control surface, data limits and rollback."""
+
+    guide = (ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8")
+
+    for phrase in (
+        "aether monitor status",
+        "aether monitor history",
+        "aether.telegram-monitor.v1",
+        "aether_monitor_report_snapshot",
+        "aether_monitor_reporting",
+        "`0 * * * *`",
+        "aether monitor off --json",
+        "Bot API",
+        "--live",
+    ):
+        assert phrase in guide or phrase.replace("`", "") in guide, phrase
+    assert "thirty days" in guide
+    # The guide must not promise live qualification this unit cannot evidence.
+    assert "not** qualified" in guide or "not qualified" in guide
+
+
+def test_policy_manifest_admits_every_monitor_path_literally() -> None:
+    """Every new non-spec path is listed literally; no check or glob was widened."""
+
+    workflow = (ROOT / ".github/workflows/policy.yml").read_text(encoding="utf-8")
+
+    for path in (
+        "docs/guides/telegram-monitor.md",
+        "scripts/qualify_telegram_monitor.py",
+        "src/aether_agents/monitor/__init__.py",
+        "src/aether_agents/monitor/commands.py",
+        "src/aether_agents/monitor/delivery.py",
+        "src/aether_agents/monitor/hermes_plugin.py",
+        "src/aether_agents/monitor/reporting.py",
+        "src/aether_agents/monitor/runtime.py",
+        "src/aether_agents/monitor/service.py",
+        "src/aether_agents/monitor/sources.py",
+        "src/aether_agents/monitor/store.py",
+        "src/aether_agents/resources/monitor/narration-context.md",
+        "src/aether_agents/resources/monitor/precheck.py",
+        "tests/test_telegram_monitor_cli_plugin.py",
+        "tests/test_telegram_monitor_runtime.py",
+    ):
+        assert path in workflow, path
+    # The literal manifest stays literal: no wildcard was introduced for the new paths.
+    for glob in (
+        "src/aether_agents/monitor/*",
+        "tests/test_telegram_monitor_*",
+        "docs/guides/telegram-monitor*",
+        "scripts/qualify_telegram_monitor*",
+    ):
+        assert glob not in workflow, glob
+    assert (
+        "scripts/qualify_telegram_monitor.py"
+        in workflow.split("Static, format and bytecode gates")[1]
     )

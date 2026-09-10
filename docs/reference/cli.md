@@ -10,6 +10,7 @@ This reference describes the parser currently implemented by `aether`, not the l
 | `aether version` | Reports the package version and warns that managed Hermes/profile-policy detail is unavailable. | `--json` |
 | `aether init` | Initializes an existing Git repository root after exact native Project resolution. | `[PATH]`, `--name NAME`, `--forge local|github`, `--hermes-project ID`, `--dry-run`, `--json` |
 | `aether observe` | Reads a deterministic observation brief or stable JSON envelope. | `[REF]`, `--project PATH`, `--since SUMMARY_ID`, `--watch`, `--json` |
+| `aether monitor` | Controls and reads the Telegram Monitor: state, owned native hourly job, next cut, coverage gaps, last report and delivery outcomes. | `status`, `on`, `off`, `history`; `--json` on every action; `history --limit N` |
 | `aether doctor` | Inspects candidate lifecycle coherence without importing Hermes. | `--project PATH`, `--json` |
 
 Top-level `aether [--project PATH] [--json]` accepts an explicit project selector for the bare command. In the source tree it delegates to the local Morfeo launcher when no `--json` flag is used; the complete installed project-aware launch contract is not yet qualified. Top-level `--json` returns an explicit unsupported result instead of claiming a launch plan.
@@ -21,6 +22,25 @@ Top-level `aether [--project PATH] [--json]` accepts an explicit project selecto
 ### `observe` details
 
 `REF` identifies an observation trace, contract, or bound task. `--watch` and `--json` are mutually exclusive. The command is read-only and provider-free. Read [Observation](../guides/observation.md).
+
+### `monitor` details
+
+`aether monitor` requires one of the four actions. Every action accepts `--json`; `history` also accepts `--limit N` (1–200, default 20). No action accepts a token, destination, provider or model argument: the destination and the model route come from the existing installation configuration.
+
+```bash
+aether monitor status --json
+aether monitor on --json
+aether monitor off --json
+aether monitor history --limit 10 --json
+```
+
+Each action prints one envelope `{"schema_version": "aether.telegram-monitor.v1", "ok", "action", "result"|"error"}`. `status` and `history` read durable monitor state and remain available without Hermes; `on` and `off` need the provisioned runtime and otherwise return `RUNTIME_UNAVAILABLE` without changing state. Malformed actions, extra arguments and out-of-range limits fail closed (`INVALID_ARGUMENT`/`INVALID_LIMIT`, argparse exit 2). Offline qualification of this surface:
+
+```bash
+uv run --frozen python scripts/qualify_telegram_monitor.py --json
+```
+
+Read [Telegram Monitor](../guides/telegram-monitor.md) for activation, rollback, privacy and the current qualification limits.
 
 ## Local lifecycle candidates
 

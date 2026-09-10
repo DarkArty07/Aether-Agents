@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Hourly Telegram Monitor — implementation, offline qualification and documentation
+
+- Added the principal `aether monitor status|on|off|history` control surface and the matching Morfeo-only `aether_monitor` tool over one private monitor state (`<state>/monitor/monitor.sqlite3`, 0700/0600) with an opaque pin on the existing Telegram destination, durable per-part delivery outcomes and thirty-day resolved retention.
+- Added one native hourly job (`0 * * * *`, packaged pre-check, `deliver=local`, per-run `["aether_monitor_reporting", "no_mcp"]`) whose deterministic pre-check emits the native `{"wakeAgent": false}` gate for genuine idle before any inference, plus `aether_monitor_report_snapshot`, readable only by the monitor's own run.
+- Added bounded read-only sources (registered, marker-verified projects; execution boards; exact user sessions) opened `mode=ro` with `query_only`, keeping project/origin-session/contract identity exact, labeling direct work as no-contract, and reporting coverage gaps instead of guessing.
+- Added the `aether-telegram-monitor` plugin entry point, packaged pre-check and narration-context resources, and the type-named plugin tools; the portable opt-in remains Morfeo-only.
+- Added `scripts/qualify_telegram_monitor.py`: the default lane is deterministic and provably free of model calls, Telegram sends and live-state writes; `--live --wait-hourly-boundaries 2 --output <protected path>` is the bounded provisioned lane owned by terminal integration.
+- Documented capability, control surface, privacy, failure, rollback, activation and qualification limits in `docs/guides/telegram-monitor.md`, registered the capability in `docs/capabilities.toml`, and reconciled the literal non-`specs/` policy manifest with every new path without weakening a check.
+- No live activation, model call, Telegram send, credential or provider change is part of this delivery; real hourly Morfeo narration, real Bot API acceptance and installation-local activation remain pending terminal integration (`release_action=defer`, `release_channel=none`).
+
 ### Parent delegation identity, concurrent contract handoff, work-memory integrity, and semantic cache correctness
 
 - Restored delegated-child snapshot isolation so `HERMES_DELEGATED_CHILD_CONTEXT` and dispatcher-owned `HERMES_KANBAN_*` cannot persist into reusable parent terminal snapshots (#310).
