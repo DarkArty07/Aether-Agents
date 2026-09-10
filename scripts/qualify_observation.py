@@ -82,6 +82,30 @@ _PYTEST_FAILURE_NODE_RE = re.compile(
 )
 MAX_FAILURE_NODE_IDS = 4
 MAX_FAILURE_NODE_ID_CHARS = 160
+MAX_GIT_DIAGNOSTIC_LINES = 8
+MAX_GIT_DIAGNOSTIC_LINE_CHARS = 512
+MAX_GIT_DIAGNOSTIC_CHARS = 2048
+_GIT_DIAGNOSTIC_LINE_RE = re.compile(
+    r"^(?P<prefix>(?:fatal|error|warning|remote|hint):)\s*(?P<body>.*)$",
+    re.IGNORECASE,
+)
+_GIT_URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/\s@]+@")
+_GIT_AUTH_VALUE_RE = re.compile(
+    r"(?i)\b(?:authorization|proxy-authorization|password|passwd|token|secret|"
+    r"api[-_ ]?key|credentials?)\b\s*(?:=|:)\s*[^\s,;]+"
+)
+_GIT_BEARER_VALUE_RE = re.compile(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
+_GIT_TOKEN_VALUE_RE = re.compile(
+    r"(?i)\b(?:gh[pousr]_|github_pat_|glpat-|xox[baprs]-|sk-)[A-Za-z0-9._-]+"
+)
+_GIT_PRIVATE_PATH_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])(?:/(?:home|users|root|tmp|private|var/tmp)/[^\s'\\\"<>]+"
+    r"|[A-Z]:\\Users\\[^\s'\\\"<>]+)"
+)
+_GIT_WINDOWS_PRIVATE_PATH_RE = re.compile(
+    r"(?i)(?<![A-Za-z0-9])[A-Z]:" + re.escape(chr(92) + "Users" + chr(92)) + r"[^\s'\"<>]+"
+)
+_GIT_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
 
 def contract() -> dict[str, Any]:
@@ -126,12 +150,61 @@ def _run(
     if completed.returncode != 0:
         executable = Path(str(arguments[0])).name or "command"
         stdout_tail = _content_free_stream_tail(completed.stdout)
-        stderr_tail = _content_free_stream_tail(completed.stderr)
+        stderr_tail = (
+            _git_diagnostic_tail(completed.stderr)
+            if _is_git_command(arguments)
+            else _content_free_stream_tail(completed.stderr)
+        )
         raise RuntimeError(
             f"command failed ({executable} exit {completed.returncode}): "
             f"stdout_tail={stdout_tail}; stderr_tail={stderr_tail}"
         )
     return completed
+
+
+def _is_git_command(arguments: Sequence[str]) -> bool:
+    return bool(arguments) and Path(str(arguments[0])).name.lower() in ("git", "git.exe")
+
+
+def _sanitize_git_diagnostic_line(line: str) -> str | None:
+    """Keep useful Git severity lines while removing credentials and local paths."""
+    normalized = _GIT_CONTROL_RE.sub(" ", line).strip()
+    match = _GIT_DIAGNOSTIC_LINE_RE.match(normalized)
+    if match is None:
+        return None
+    body = re.sub(r"\s+", " ", match.group("body")).strip()
+    body = _GIT_URL_CREDENTIAL_RE.sub(lambda value: f"{value.group(1)}<redacted>@", body)
+    body = _GIT_AUTH_VALUE_RE.sub("<redacted>", body)
+    body = _GIT_BEARER_VALUE_RE.sub("<redacted>", body)
+    body = _GIT_TOKEN_VALUE_RE.sub("<redacted>", body)
+    body = _GIT_WINDOWS_PRIVATE_PATH_RE.sub("<path>", body)
+    body = _GIT_PRIVATE_PATH_RE.sub("<path>", body)
+    body = body[:MAX_GIT_DIAGNOSTIC_LINE_CHARS]
+    return f"{match.group('prefix').lower()} {body}".rstrip()
+
+
+def _git_diagnostic_tail(stream: str | None) -> str:
+    """Retain bounded, sanitized Git diagnostics instead of only opaque hashes."""
+    if not stream:
+        return "[empty]"
+    lines = stream[-8192:].splitlines()[-MAX_GIT_DIAGNOSTIC_LINES:]
+    diagnostics = [
+        diagnostic
+        for line in lines
+        if (diagnostic := _sanitize_git_diagnostic_line(line)) is not None
+    ]
+    if not diagnostics:
+        return _content_free_stream_tail(stream)
+    retained: list[str] = []
+    budget = MAX_GIT_DIAGNOSTIC_CHARS - 2
+    used = 0
+    for diagnostic in reversed(diagnostics):
+        separator = 1 if retained else 0
+        if used + separator + len(diagnostic) > budget:
+            break
+        retained.append(diagnostic)
+        used += separator + len(diagnostic)
+    return "[" + ",".join(reversed(retained)) + "]"
 
 
 def _content_free_stream_tail(stream: str | None) -> str:
