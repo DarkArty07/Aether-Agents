@@ -164,6 +164,17 @@ Aether writable files. FU-357 and FU-352 are independent after the risk-order ga
 qualification runner/plugin versus lifecycle test/product surfaces. FBUG-INT is the only
 ledger/publication/integration owner and does not replace unit review.
 
+### FU-352 review-continuation recovery
+
+FU-352 card `t_380c3e40` completed from its Implementer run without the required
+same-card `review_requested` transition. Preserve that completed record; do not rewrite it
+or claim that a same-card review occurred. The one-time downstream card `t_456a4924`
+prospectively reviews exact candidate `83ad2a50a37b54ec5cdf78d4fbc05f197d51f295` and
+records a distinct Supervisor verdict before FBUG-INT continues. This routing repair does
+not weaken FU-352 acceptance or replace the normal same-card review lane. Terminal closeout
+must name both the original omission and the separate recovery verdict; issue #385 tracks
+the lifecycle defect.
+
 ## FU-354 — contract-root and descendant worktree lineage
 
 - **Source:** Objective Contract AC-2, deliverable 4, #354; this unit.
