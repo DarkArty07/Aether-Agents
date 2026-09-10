@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -20,7 +21,7 @@ from copy import deepcopy
 from math import ceil
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 for source_root in (ROOT / "src", ROOT / "tests"):
@@ -125,6 +126,230 @@ _GIT_WINDOWS_PRIVATE_PATH_RE = re.compile(
 )
 _GIT_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
+QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION = 1
+QUALIFICATION_DIAGNOSTIC_PREFIX = "AETHER_QUALIFICATION_DIAGNOSTIC="
+QUALIFICATION_DIAGNOSTIC_NONCE_ENV = "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"
+# Markerless failures retain only this fixed, content-free class.  The runner
+# never derives a class from raw stdout/stderr: a class-shaped allowlist is not
+# provenance, and an assertion value or payload token ending in ``Error``,
+# ``Exception`` or ``Failure`` would otherwise be retained verbatim.
+QUALIFICATION_FALLBACK_FAILURE_CLASS = "SubprocessFailure"
+_QUALIFICATION_DIAGNOSTIC_NONCE_RE = re.compile(r"^[0-9a-f]{32}$", re.ASCII)
+QUALIFICATION_FAILURE_PHASES = frozenset(
+    {
+        "registration",
+        "tool_capture",
+        "api_capture",
+        "unload",
+        "persisted_event_privacy",
+    }
+)
+_RUNNER_FAILURE_PHASES = frozenset(
+    {
+        "checkout",
+        "collection",
+        "core_execution",
+        "qualification_harness",
+        "harness_result",
+        "unknown",
+    }
+)
+_SAFE_QUALIFICATION_CLASS_RE = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+    re.ASCII,
+)
+_SAFE_QUALIFICATION_VERSION_RE = re.compile(r"^[0-9]{1,3}(?:\.[0-9]{1,3}){1,3}$", re.ASCII)
+_SAFE_QUALIFICATION_IMPLEMENTATION_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$", re.ASCII)
+_SAFE_SOURCE_COMMIT_RE = re.compile(r"^[a-f0-9]{40}$", re.ASCII)
+
+
+class QualificationFailure(RuntimeError):
+    """A qualification failure with bounded, content-free structured evidence."""
+
+    def __init__(self, message: str, diagnostic: dict[str, Any]) -> None:
+        self.diagnostic = diagnostic
+        encoded = json.dumps(diagnostic, sort_keys=True, separators=(",", ":"))
+        super().__init__(f"{message}; diagnostic={encoded}")
+
+
+def _safe_qualification_class(value: Any) -> str | None:
+    if not isinstance(value, str) or _SAFE_QUALIFICATION_CLASS_RE.fullmatch(value) is None:
+        return None
+    return value
+
+
+def _safe_qualification_phase(value: Any) -> str | None:
+    return value if isinstance(value, str) and value in QUALIFICATION_FAILURE_PHASES else None
+
+
+def _safe_qualification_test_node(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return _safe_pytest_failure_node(f"FAILED {value}")
+
+
+def _safe_qualification_runtime(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    python_version = value.get("python")
+    implementation = value.get("implementation")
+    if (
+        not isinstance(python_version, str)
+        or _SAFE_QUALIFICATION_VERSION_RE.fullmatch(python_version) is None
+        or not isinstance(implementation, str)
+        or _SAFE_QUALIFICATION_IMPLEMENTATION_RE.fullmatch(implementation) is None
+    ):
+        return None
+    return {"python": python_version, "implementation": implementation}
+
+
+def _qualification_diagnostic(
+    *,
+    phase: str,
+    exception_class: str,
+    assertion_class: str | None = None,
+    test_node: str | None = None,
+    source_commit: str | None = None,
+    runtime: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Build the bounded diagnostic schema used by the real PluginContext lane."""
+    safe_exception = _safe_qualification_class(exception_class) or "UnknownException"
+    safe_assertion = _safe_qualification_class(assertion_class)
+    if safe_assertion is not None:
+        failure_kind = "assertion"
+    else:
+        failure_kind = "exception"
+    normalized_phase = (
+        phase
+        if phase in QUALIFICATION_FAILURE_PHASES or phase in _RUNNER_FAILURE_PHASES
+        else "unknown"
+    )
+    diagnostic: dict[str, Any] = {
+        "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
+        "phase": normalized_phase,
+        "failure_kind": failure_kind,
+        "failure_class": safe_assertion or safe_exception,
+        "exception_class": safe_exception,
+        "assertion_class": safe_assertion,
+    }
+    safe_node = _safe_qualification_test_node(test_node)
+    if safe_node is not None:
+        diagnostic["test_node"] = safe_node
+    if _SAFE_SOURCE_COMMIT_RE.fullmatch(source_commit or ""):
+        diagnostic["source_commit"] = source_commit
+    safe_runtime = _safe_qualification_runtime(runtime)
+    if safe_runtime is not None:
+        diagnostic["runtime"] = safe_runtime
+    return diagnostic
+
+
+def _diagnostic_from_marker(
+    marker: str,
+    *,
+    fallback_node: str | None,
+    environment: Mapping[str, str],
+) -> dict[str, Any] | None:
+    """Parse one harness-emitted marker while discarding all unallowlisted fields.
+
+    A marker influences retained state only when its provenance is established:
+    it must carry the per-invocation nonce the runner provisioned for this
+    subprocess and it must agree with the runner-verified exact source identity.
+    Raw output that merely looks like a marker can never forge the phase, the
+    class, the source commit or the runtime.
+    """
+    try:
+        payload = json.loads(marker)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict) or payload.get("schema_version") != (
+        QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION
+    ):
+        return None
+    nonce = payload.get("nonce")
+    expected_nonce = environment.get(QUALIFICATION_DIAGNOSTIC_NONCE_ENV)
+    if (
+        not isinstance(nonce, str)
+        or _QUALIFICATION_DIAGNOSTIC_NONCE_RE.fullmatch(nonce) is None
+        or not isinstance(expected_nonce, str)
+        or nonce != expected_nonce
+    ):
+        return None
+    source_commit = payload.get("source_commit")
+    expected_commit = environment.get("AETHER_QUALIFICATION_SOURCE_COMMIT")
+    if (
+        not isinstance(source_commit, str)
+        or _SAFE_SOURCE_COMMIT_RE.fullmatch(source_commit) is None
+        or source_commit != expected_commit
+    ):
+        return None
+    phase = _safe_qualification_phase(payload.get("phase"))
+    exception_class = _safe_qualification_class(payload.get("exception_class"))
+    assertion_class = _safe_qualification_class(payload.get("assertion_class"))
+    failure_class = _safe_qualification_class(payload.get("failure_class"))
+    failure_kind = payload.get("failure_kind")
+    if phase is None or exception_class is None or failure_kind not in {"assertion", "exception"}:
+        return None
+    if failure_kind == "assertion":
+        assertion_class = assertion_class or failure_class
+        if assertion_class is None:
+            return None
+    else:
+        assertion_class = None
+    # The provenance-qualified harness process reports its own exact runtime.
+    # The runner cannot reconstruct that identity from raw output, so runtime
+    # is retained only from this signal and otherwise omitted.
+    runtime = _safe_qualification_runtime(payload.get("runtime"))
+    return _qualification_diagnostic(
+        phase=phase,
+        exception_class=exception_class,
+        assertion_class=assertion_class,
+        test_node=payload.get("test_node") or fallback_node,
+        source_commit=source_commit,
+        runtime=runtime,
+    )
+
+
+def _qualification_failure_diagnostic(
+    stdout: str | None,
+    stderr: str | None,
+    *,
+    phase: str | None,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return one bounded diagnostic without retaining subprocess content.
+
+    Only the runner's own ``qualification_harness`` invocation can carry a
+    provenance-qualified harness marker.  Every other phase, and any marker that
+    fails provenance or exact-identity qualification, falls back to the
+    runner-assigned phase plus a fixed generic class, so untrusted raw output
+    can never populate actionable class or runtime state.
+    """
+    streams = (stdout or "", stderr or "")
+    markers = [
+        stream_line[len(QUALIFICATION_DIAGNOSTIC_PREFIX) :]
+        for stream in streams
+        for stream_line in stream.splitlines()
+        if stream_line.startswith(QUALIFICATION_DIAGNOSTIC_PREFIX)
+    ]
+    nodes = _safe_pytest_failure_nodes([line for stream in streams for line in stream.splitlines()])
+    fallback_phase = phase if phase in _RUNNER_FAILURE_PHASES else "unknown"
+    if phase == "qualification_harness" and len(markers) == 1:
+        parsed = _diagnostic_from_marker(
+            markers[0],
+            fallback_node=nodes[0] if nodes else None,
+            environment=environment,
+        )
+        if parsed is not None:
+            return parsed
+    diagnostic = _qualification_diagnostic(
+        phase=fallback_phase,
+        exception_class=QUALIFICATION_FALLBACK_FAILURE_CLASS,
+        test_node=nodes[0] if nodes else None,
+        source_commit=environment.get("AETHER_QUALIFICATION_SOURCE_COMMIT"),
+    )
+    diagnostic["marker_count"] = len(markers)
+    return diagnostic
+
 
 def contract() -> dict[str, Any]:
     return {
@@ -156,6 +381,7 @@ def _run(
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
     capture: bool = True,
+    phase: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
         list(arguments),
@@ -173,9 +399,17 @@ def _run(
             if _is_git_command(arguments)
             else _content_free_stream_tail(completed.stderr)
         )
-        raise RuntimeError(
+        environment = env if env is not None else os.environ
+        diagnostic = _qualification_failure_diagnostic(
+            completed.stdout,
+            completed.stderr,
+            phase=phase,
+            environment=environment,
+        )
+        raise QualificationFailure(
             f"command failed ({executable} exit {completed.returncode}): "
-            f"stdout_tail={stdout_tail}; stderr_tail={stderr_tail}"
+            f"stdout_tail={stdout_tail}; stderr_tail={stderr_tail}",
+            diagnostic,
         )
     return completed
 
@@ -274,6 +508,22 @@ def _safe_pytest_failure_nodes(lines: Sequence[str]) -> list[str]:
     )[:MAX_FAILURE_NODE_IDS]
 
 
+def _harness_result_failure(message: str) -> QualificationFailure:
+    """Classify harness-result mismatches without retaining result or payload values."""
+    return QualificationFailure(
+        message,
+        _qualification_diagnostic(
+            phase="harness_result",
+            exception_class="QualificationHarnessResultError",
+            # The runner has already verified the checkout is exactly this commit,
+            # so the exact source identity is known even without a child marker.
+            # The child runtime is not runner-verified, so it is omitted rather
+            # than replaced with the runner's own interpreter identity.
+            source_commit=HERMES_BASELINE.commit,
+        ),
+    )
+
+
 def _require_single_passed_harness(completed: subprocess.CompletedProcess[str]) -> None:
     outcomes: dict[str, int] = {}
     for match in _PYTEST_OUTCOME_RE.finditer(
@@ -283,7 +533,7 @@ def _require_single_passed_harness(completed: subprocess.CompletedProcess[str]) 
         outcomes[outcome] = outcomes.get(outcome, 0) + int(match.group("count"))
     if outcomes != {"passed": 1}:
         safe_outcomes = ",".join(f"{name}={outcomes[name]}" for name in sorted(outcomes))
-        raise RuntimeError(
+        raise _harness_result_failure(
             "qualification harness must execute exactly one passed test without skips "
             f"(outcomes={safe_outcomes or 'none'})"
         )
@@ -299,11 +549,17 @@ def checkout_exact(path: Path) -> dict[str, Any]:
         if not (target / ".git").is_dir():
             raise RuntimeError("checkout target exists and is not a Git checkout")
         status = _run(
-            ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=target
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=target,
+            phase="checkout",
         ).stdout.strip()
         if status:
             raise RuntimeError("refusing to alter a dirty Hermes checkout")
-        _run(["git", "fetch", "--force", "origin", f"refs/tags/{HERMES_BASELINE.tag}"], cwd=target)
+        _run(
+            ["git", "fetch", "--force", "origin", f"refs/tags/{HERMES_BASELINE.tag}"],
+            cwd=target,
+            phase="checkout",
+        )
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
         _run(
@@ -316,8 +572,13 @@ def checkout_exact(path: Path) -> dict[str, Any]:
                 str(target),
             ],
             cwd=target.parent,
+            phase="checkout",
         )
-    _run(["git", "checkout", "--detach", HERMES_BASELINE.commit], cwd=target)
+    _run(
+        ["git", "checkout", "--detach", HERMES_BASELINE.commit],
+        cwd=target,
+        phase="checkout",
+    )
     evidence = verify_clean_checkout(
         target,
         expected_tag=HERMES_BASELINE.tag,
@@ -377,6 +638,10 @@ def _qualification_environment(source: Path) -> dict[str, str]:
     environment["PYTHONPATH"] = str(resolved)
     environment["AETHER_QUALIFICATION_TRACKED_SOURCE"] = str(resolved)
     environment["AETHER_QUALIFICATION_SOURCE_COMMIT"] = HERMES_BASELINE.commit
+    # A fresh per-invocation nonce makes the harness failure marker
+    # unforgeable by output that does not know it.  It is provisioned here,
+    # never parsed back from a stream, and re-qualified before retention.
+    environment[QUALIFICATION_DIAGNOSTIC_NONCE_ENV] = secrets.token_hex(16)
     return environment
 
 
@@ -398,11 +663,11 @@ def _measured_harness(stdout: str) -> dict[str, Any]:
     prefix = "AETHER_HARNESS_RESULT="
     rows = [line[len(prefix) :] for line in stdout.splitlines() if line.startswith(prefix)]
     if len(rows) != 1:
-        raise RuntimeError("qualification harness did not emit one measured result")
+        raise _harness_result_failure("qualification harness did not emit one measured result")
     try:
         result = json.loads(rows[0])
     except json.JSONDecodeError as error:
-        raise RuntimeError("qualification harness result is malformed") from error
+        raise _harness_result_failure("qualification harness result is malformed") from error
     expected = {
         "plugin_callback_count": PLUGIN_CALLBACK_COUNT,
         "unload_hook_count": 0,
@@ -411,7 +676,7 @@ def _measured_harness(stdout: str) -> dict[str, Any]:
         "raw_payload_absent": True,
     }
     if result != expected:
-        raise RuntimeError("qualification harness measured contract mismatch")
+        raise _harness_result_failure("qualification harness measured contract mismatch")
     return result
 
 
@@ -429,6 +694,7 @@ def run_tests(checkout: Path, python: Path) -> dict[str, Any]:
         collected = _run(
             [str(python), "-m", "pytest", "--collect-only", "-q", *CORE_TESTS],
             env=environment,
+            phase="collection",
         )
         collected_count, node_manifest_sha256 = _collection_manifest(collected.stdout)
         if collected_count != EXPECTED_CORE_TESTS:
@@ -444,6 +710,7 @@ def run_tests(checkout: Path, python: Path) -> dict[str, Any]:
         completed = _run(
             [str(python), "-m", "pytest", "-q", *CORE_TESTS],
             env=environment,
+            phase="core_execution",
         )
         outcomes: dict[str, int] = {}
         for match in _PYTEST_OUTCOME_RE.finditer(completed.stdout):
@@ -470,6 +737,7 @@ def run_tests(checkout: Path, python: Path) -> dict[str, Any]:
                 ),
             ],
             env=environment,
+            phase="qualification_harness",
         )
         _require_single_passed_harness(harness)
         measured = _measured_harness(harness.stdout)
