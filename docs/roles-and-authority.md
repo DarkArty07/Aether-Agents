@@ -6,6 +6,8 @@ isolation, tests, review, Git history, and rollback govern ordinary reversible
 work. The pre-tool policy protects a narrow external/destructive edge; it is not
 an operating-system separation between roles.
 
+For a zero-context introduction, start with [Start here](start-here.md); this page is the detailed role and authority reference. Definitions also appear in the [glossary](reference/glossary.md).
+
 | Participant | Owns | Local or pipeline authority | Must not silently do |
 | --- | --- | --- | --- |
 | Owner | Product intent, constitutional principles, acceptance, and protected external effects | Decide objectives, constraints, and delegated authority | Delegate an unstated product decision by omission |
@@ -77,3 +79,7 @@ reversible work enter bounded recovery rather than being bypassed.
 See [Lifecycle](guides/lifecycle.md), [Execution](guides/execution.md), and
 [Policy and recovery](guides/policy-and-recovery.md) for the reader-facing
 route and evidence details.
+
+## Next step
+
+Read the [illustrative first objective](guides/first-objective.md) to see these boundaries in a complete example.

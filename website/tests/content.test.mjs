@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, rm, stat, writeFile, mkdtemp } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
 
@@ -10,7 +11,8 @@ const normalize = s => s.replace(/\s+/g, ' ').trim();
 const doc = file => readFile(path.join(output,file),'utf8').then(s => parseHTML(s).document);
 const text = node => node.nodeType === 3 ? node.textContent : node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.getAttribute?.('aria-hidden') === 'true' ? '' : ` ${[...node.childNodes].map(text).join(' ')} `;
 const homepage = await doc('index.html');
-const proposal = await readFile('COPY_REFINEMENT_MX.md','utf8');
+const repository = execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
+const trackedDocs = execFileSync('git',['ls-files','--','docs'],{cwd:repository,encoding:'utf8'}).split('\n').filter(file => file.endsWith('.md'));
 
 test('eight ordered sections and only the owner-selected opening, graph decoration and finale images', () => {
   const sections = [...homepage.querySelectorAll('main section[data-section]')];
@@ -24,22 +26,21 @@ test('eight ordered sections and only the owner-selected opening, graph decorati
   assert.doesNotMatch(normalize(text(sections[7])),/Aether 1\.0|EN CALIFICACIÓN|ESTADO/);
 });
 
-for (const section of ['00','01','02','03','04','05','06','07']) {
-  test(`section ${section}: literal current Spanish review candidate`, () => {
-    const sectionText = proposal.split(new RegExp(`### ${section}\\.`))[1]?.split(/\n### \d\d\./)[0];
-    assert.ok(sectionText,`Missing approved section ${section}`);
-    let blocks = [...sectionText.matchAll(/```text\n([\s\S]*?)\n```/g)].map(m=>m[1]);
-    if (section === '01') blocks=blocks.slice(0,2); // The third block was optional metadata.
-    const scope = section === '00' ? homepage.querySelector('main') : homepage.querySelector(`[data-section='${section}']`);
-    const actual = normalize(text(scope));
-    for (const block of blocks) {
-      for (const paragraph of block.split(/\n\s*\n|\]\s*\[/)) {
-        const expected = normalize(paragraph.replace(/^\[\s*|\s*\]$/g,''));
-        assert.ok(actual.includes(expected),`Missing or changed copy: ${expected}`);
-      }
-    }
-  });
-}
+test('landing labels intended scope, current inspection and provider-free limits', () => {
+  const development = normalize(text(homepage.querySelector('#desarrollo')));
+  for (const phrase of [
+    'Este checkout es una build de estabilización',
+    'no un lanzamiento público',
+    'inspeccionar el código fuente sin hacer llamadas a proveedores',
+    'repositorio Git existente',
+    'coincidencia exacta de ruta',
+  ]) assert.ok(development.includes(phrase), `Missing current boundary copy: ${phrase}`);
+  const process = normalize(text(homepage.querySelector('#proceso')));
+  assert.match(process, /El flujo descrito para un objetivo sustancial/);
+  assert.match(process, /no evidencia de una ejecución respaldada por un proveedor/);
+  const foundations = normalize(text(homepage.querySelector('#fundamentos')));
+  assert.match(foundations, /no configura proveedores ni prueba una ejecución respaldada/);
+});
 
 test('knowledge distinguishes optional graph, role experience and owner preferences', () => {
   const actual = normalize(text(homepage.querySelector('#conocimiento')));
@@ -151,15 +152,109 @@ test('all generated local links, resources and anchors resolve', async () => {
   assert.deepEqual(failures,[]);
 });
 
-test('documentation is rendered, linked to revision and searchable', async () => {
-  const index=JSON.parse(await readFile(path.join(output,'docs/search.json'),'utf8'));
-  assert.equal(index.length,16);
-  assert.ok(index.find(d=>d.slug==='guides/project-knowledge').text.includes('Graphify'));
-  const manual=await doc('docs/guides/execution/index.html');
-  assert.ok(manual.querySelector('.prose h1'));
+test('documentation manifest, grouped routes and revision-pinned sources cover the tracked corpus', async () => {
+  const records=JSON.parse(await readFile(path.join(output,'docs/search.json'),'utf8'));
   const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  const expectedGroups=['Start here','Core concepts','Working with Aether','Operations and safety','Reference'];
+  assert.equal(records.length,trackedDocs.length);
+  assert.deepEqual(new Set(records.map(record=>record.sourcePath)),new Set(trackedDocs));
+  assert.equal(new Set(records.map(record=>record.slug)).size,records.length);
+  assert.equal(new Set(records.map(record=>record.route)).size,records.length);
+  for (const record of records) {
+    assert.ok(expectedGroups.includes(record.group),`Unknown group: ${record.group}`);
+    assert.equal(typeof record.order,'number');
+    assert.ok(record.title && record.description);
+    assert.ok(Array.isArray(record.search) && record.search.length > 0);
+    assert.equal(record.navigation.position,record.order);
+    assert.ok(record.navigation.label);
+    assert.equal(record.sourceRevision,revision);
+    assert.match(record.source,new RegExp(`/blob/${revision}/${record.sourcePath}$`));
+    const generated=path.join(output,record.route.slice(1),'index.html');
+    await stat(generated);
+  }
+  const indexPage=await doc('docs/index.html');
+  assert.equal(indexPage.documentElement.getAttribute('lang'),'es-MX');
+  assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('data-source-path'),'docs/index.md');
+  assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('lang'),'en');
+  assert.equal(indexPage.querySelector('#docs-canonical-source-label').getAttribute('lang'),'en');
+  assert.match(normalize(text(indexPage.querySelector('[data-doc-content]'))),/canonical English manual/);
+  assert.ok(indexPage.querySelector('[data-doc-content] h1[id][tabindex="-1"]'));
+  const groups=[...indexPage.querySelectorAll('.docs-index-group[data-doc-group]')];
+  assert.deepEqual(groups.map(group=>group.dataset.docGroup),expectedGroups);
+  const cards=[...indexPage.querySelectorAll('.docs-group-pages article[data-document]')];
+  assert.equal(cards.length,records.length);
+  assert.deepEqual(new Set(cards.map(card=>card.dataset.document)),new Set(records.map(record=>record.slug)));
+  assert.equal(cards.filter(card=>card.dataset.docRoute==='/docs/').length,1);
+  assert.deepEqual([...indexPage.querySelectorAll('.docs-index-group h2')].map(heading=>heading.getAttribute('lang')),Array(5).fill('en'));
+  assert.deepEqual([...indexPage.querySelectorAll('.docs-group-header > p')].map(description=>description.getAttribute('lang')),Array(5).fill('es-MX'));
+  assert.equal(indexPage.querySelectorAll('.docs-index-list article[data-document] h3[lang="en"]').length,records.length);
+  assert.equal(indexPage.querySelectorAll('.docs-index-list article[data-document] > p[lang="en"]').length,records.length);
+  assert.equal(indexPage.querySelectorAll('.docs-navigation').length,2);
+  for (const navigation of indexPage.querySelectorAll('.docs-navigation')) {
+    assert.equal(navigation.querySelectorAll('[data-document]').length,records.length);
+    assert.deepEqual([...navigation.querySelectorAll('.docs-nav-group')].map(group=>group.dataset.docGroup),expectedGroups);
+    for (const link of navigation.querySelectorAll('[data-document]')) assert.match(link.dataset.docSourceUrl, new RegExp(`/blob/${revision}/`));
+  }
+  assert.ok(indexPage.querySelector('#documentation-search'));
+  assert.ok(indexPage.querySelector('.docs-status-notice'));
+  assert.ok(indexPage.querySelector('.docs-search-status'));
+  assert.ok(indexPage.querySelector('noscript .docs-search-unavailable'));
+  await assert.rejects(stat(path.join(output,'docs/index/index.html')));
+
+  const graphify=records.find(record=>record.slug==='guides/project-knowledge');
+  assert.ok(graphify.text.includes('Graphify'));
+  assert.ok(graphify.search.includes('conocimiento'));
+  const manual=await doc('docs/guides/execution/index.html');
+  assert.ok(manual.querySelector('.prose h1[id]'));
+  assert.ok(manual.querySelector('.docs-toc'));
+  assert.equal(manual.querySelectorAll('[data-adjacent]').length,2);
+  assert.equal(manual.querySelector('[data-doc-group]').getAttribute('data-doc-group'),'Working with Aether');
+  assert.ok(manual.querySelector('.docs-article-actions a[href*="#documentation-search"]'));
   assert.ok(manual.querySelector(`a[href*="/blob/${revision}/"]`));
   assert.ok(manual.querySelector('.docs-sidebar'));
+});
+
+test('manifest validation fails closed for unknown, duplicate and stale records', async () => {
+  const source = (await readFile(path.resolve('src/lib/docs.ts'),'utf8')).replace(
+    "import { sitePath } from './site-path';",
+    'const sitePath = pathname => pathname;',
+  );
+  const temp = await mkdtemp(path.resolve('tests/.aether-docs-manifest-'));
+  const modulePath = path.join(temp,'docs.ts');
+  await writeFile(modulePath,source);
+  try {
+    const manifest = await import(`${pathToFileURL(modulePath).href}?case=${Date.now()}`);
+    assert.doesNotThrow(() => manifest.validateManifest(trackedDocs));
+    assert.throws(() => manifest.validateManifest([...trackedDocs,'docs/unclassified.md']),/Unclassified tracked documentation/);
+    assert.throws(() => manifest.validateManifest(trackedDocs.filter(file => file !== 'docs/index.md'),manifest.DOC_MANIFEST),/Unclassified tracked documentation|manifest entry has no tracked source/);
+    const duplicate = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    duplicate[1] = {...duplicate[1],source:duplicate[0].source};
+    assert.throws(() => manifest.validateManifest(trackedDocs,duplicate),/Duplicate documentation manifest source/);
+    const duplicateSlug = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    duplicateSlug[1] = {...duplicateSlug[1],slug:duplicateSlug[0].slug,route:duplicateSlug[0].route};
+    assert.throws(() => manifest.validateManifest(trackedDocs,duplicateSlug),/Duplicate documentation slug|Duplicate documentation route/);
+    const duplicateRoute = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    duplicateRoute[1] = {...duplicateRoute[1],route:duplicateRoute[0].route};
+    assert.throws(() => manifest.validateManifest(trackedDocs,duplicateRoute),/Duplicate documentation route/);
+    const missingRoute = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    missingRoute[1] = {...missingRoute[1],route:''};
+    assert.throws(() => manifest.validateManifest(trackedDocs,missingRoute),/Missing documentation route|Route does not match slug/);
+    const wrongNavigationKind = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    wrongNavigationKind[1] = {...wrongNavigationKind[1],navigation:{...wrongNavigationKind[1].navigation,kind:'home'}};
+    assert.throws(() => manifest.validateManifest(trackedDocs,wrongNavigationKind),/Incomplete documentation navigation metadata/);
+    const invalidSlug = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    invalidSlug[1] = {...invalidSlug[1],slug:'guides/../unsafe',route:'/docs/guides/../unsafe/'};
+    assert.throws(() => manifest.validateManifest(trackedDocs,invalidSlug),/Invalid documentation slug/);
+    const skippedOrder = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    skippedOrder[2] = {...skippedOrder[2],order:4,navigation:{...skippedOrder[2].navigation,position:4}};
+    assert.throws(() => manifest.validateManifest(trackedDocs,skippedOrder),/contiguous|Duplicate order/);
+    const stale = [...manifest.DOC_MANIFEST].map(record => ({...record,navigation:{...record.navigation},search:[...record.search]}));
+    stale[0] = {...stale[0],source:'docs/not-tracked.md',slug:'not-tracked',route:'/docs/not-tracked/',navigation:{...stale[0].navigation,label:'Not tracked'}};
+    assert.throws(() => manifest.validateManifest(trackedDocs,stale),/Unclassified tracked documentation|manifest entry has no tracked source/);
+    assert.throws(() => manifest.assertUniqueHeadingIds([{depth:2,id:'same',text:'One'},{depth:2,id:'same',text:'Two'}]),/Duplicate heading id/);
+  } finally {
+    await rm(temp,{recursive:true,force:true});
+  }
 });
 
 test('no remote script/font/image dependencies or runtime endpoints in the site', async () => {
@@ -169,6 +264,7 @@ test('no remote script/font/image dependencies or runtime endpoints in the site'
       const src=el.getAttribute('src')||el.getAttribute('href');
       assert.ok(!/^https?:/.test(src),`${file}: unexpected remote asset ${src}`);
     }
+    for (const link of d.querySelectorAll('a[href]')) assert.ok(!/^(?:javascript|data|vbscript|file):/i.test(link.getAttribute('href')),`${file}: unsafe link scheme`);
   }
 });
 

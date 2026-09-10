@@ -5,6 +5,8 @@ tests, review, and rollback protect ordinary local work. The shared pre-tool
 policy is deliberately small and does not interpret product ownership, task
 size, route selection, board state, or arbitrary command semantics.
 
+New readers should follow [Start here](../start-here.md) before this policy reference. For the runnable, provider-free diagnostic path, see [Getting started](../getting-started.md).
+
 ## What the policy protects
 
 The versioned policy for all three role resources blocks only high-confidence edge
@@ -54,3 +56,7 @@ logic. They are candidate lifecycle surfaces, not proof of a public release. In
 particular, `uninstall --export` returns an explicit unavailable error, and a
 destructive purge requires confirmation. See [CLI reference](../reference/cli.md)
 and [limitations](../reference/limitations-and-troubleshooting.md).
+
+## Next step
+
+Read [Limitations and troubleshooting](../reference/limitations-and-troubleshooting.md) for safe diagnostics, or [First objective](../guides/first-objective.md) for the route examples.

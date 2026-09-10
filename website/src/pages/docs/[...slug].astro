@@ -3,22 +3,50 @@ import Layout from '../../layouts/Layout.astro';
 import DocsNavigation from '../../components/DocsNavigation.astro';
 import { loadDocs, sourceRevision, type Doc } from '../../lib/docs';
 import { sitePath } from '../../lib/site-path';
+
 export async function getStaticPaths() {
   const docs = await loadDocs();
-  return docs.map((doc,i) => ({params:{slug:doc.slug},props:{doc,docs,previous:docs[i-1],next:docs[i+1]}}));
+  return docs.filter(doc => doc.slug !== 'index').map(doc => {
+    const groupDocs = docs.filter(candidate => candidate.group === doc.group && candidate.slug !== 'index').sort((a, b) => a.order - b.order);
+    const position = groupDocs.findIndex(candidate => candidate.slug === doc.slug);
+    return {
+      params: { slug: doc.slug },
+      props: { doc, docs, previous: groupDocs[position - 1], next: groupDocs[position + 1], position: position + 1, groupSize: groupDocs.length },
+    };
+  });
 }
-interface Props { doc: Doc; docs: Doc[]; previous?: Doc; next?: Doc; }
-const { doc, docs, previous, next } = Astro.props;
+
+interface Props { doc: Doc; docs: Doc[]; previous?: Doc; next?: Doc; position: number; groupSize: number; }
+const { doc, docs, previous, next, position, groupSize } = Astro.props;
 const docsHome = sitePath('/docs/');
+const toc = doc.headings.filter(heading => heading.depth >= 2 && heading.depth <= 3);
+const showToc = toc.length >= 3;
 ---
 <Layout title={`${doc.title} — Aether Agents`} description={doc.description} lang="en" docs>
-  <main id="main" class="wrap docs-shell">
-    <aside class="docs-sidebar"><h2><a href={docsHome}>AETHER / DOCS</a></h2><DocsNavigation docs={docs} current={doc.slug}/></aside>
+  <main id="main" class="wrap docs-shell docs-article" data-doc-page data-doc-slug={doc.slug} data-doc-route={doc.route} data-doc-group={doc.group} data-doc-source={doc.sourcePath} data-doc-revision={doc.sourceRevision}>
+    <aside class="docs-sidebar"><h2><a href={docsHome}>AETHER / DOCS</a></h2><DocsNavigation docs={docs} current={doc.slug} idPrefix="docs-sidebar-nav"/></aside>
     <div class="docs-content">
-      <details class="docs-menu-mobile"><summary>Explore documentation</summary><DocsNavigation docs={docs} current={doc.slug}/></details>
-      <div class="docs-content-header"><a href={docsHome}>← Documentation index</a><a href={doc.source} target="_blank" rel="noopener noreferrer">SOURCE @ {sourceRevision.slice(0,7)} ↗</a></div>
-      <article class="prose" set:html={doc.html}></article>
-      <nav class="docs-previous-next" aria-label="Adjacent chapters">{previous ? <a href={sitePath(`/docs/${previous.slug}/`)}>← {previous.title}</a> : <span></span>}{next && <a href={sitePath(`/docs/${next.slug}/`)}>{next.title} →</a>}</nav>
+      <details class="docs-menu-mobile"><summary>Explore documentation <span aria-hidden="true">·</span> {doc.navigation.label}</summary><DocsNavigation docs={docs} current={doc.slug} idPrefix="docs-mobile-nav"/></details>
+      <div class="docs-content-header">
+        <nav class="docs-breadcrumb" aria-label="Breadcrumb"><a href={docsHome}>Documentation</a><span aria-hidden="true">/</span><span>{doc.group}</span><span aria-hidden="true">/</span><span aria-current="page">{doc.navigation.label}</span></nav>
+        <div class="docs-article-actions"><a href={docsHome}>← Documentation index</a><a href={`${docsHome}#documentation-search`}>Search documentation</a><a href={doc.source} target="_blank" rel="noopener noreferrer">SOURCE @ {sourceRevision.slice(0, 7)} ↗</a></div>
+      </div>
+      <header class="docs-article-header">
+        <div><p class="docs-eyebrow">{doc.group}</p><p class="docs-position">CHAPTER {position} OF {groupSize}</p></div>
+        <p class="docs-article-summary">{doc.description}</p>
+      </header>
+      <aside class="docs-notice docs-status-notice" data-status-context>
+        <strong>Canonical English manual.</strong> This page is rendered directly from tracked Markdown at revision <code>{sourceRevision.slice(0, 12)}</code>. It documents the current stabilization build; implementation status remains authoritative in the <a href={sitePath('/docs/reference/capabilities/')}>capability registry</a>. The site is not a public release or installation path.
+      </aside>
+      {showToc && <nav class="docs-toc" aria-labelledby="docs-toc-title">
+        <h2 id="docs-toc-title">On this page</h2>
+        <ol>{toc.map(heading => <li class:list={[heading.depth === 3 && 'docs-toc-subitem']}><a href={`#${heading.id}`}>{heading.text}</a></li>)}</ol>
+      </nav>}
+      <article class="prose" data-doc-content data-source-path={doc.sourcePath} set:html={doc.html}></article>
+      <nav class="docs-previous-next" aria-label="Adjacent pages in this group">
+        {previous ? <a rel="prev" href={sitePath(previous.route)} data-adjacent="previous"><span aria-hidden="true">←</span><span><small>{doc.group} · previous</small>{previous.title}</span></a> : <span class="docs-adjacent-placeholder" aria-hidden="true"></span>}
+        {next ? <a rel="next" href={sitePath(next.route)} data-adjacent="next"><span><small>{doc.group} · next</small>{next.title}</span><span aria-hidden="true">→</span></a> : <span class="docs-adjacent-placeholder" aria-hidden="true"></span>}
+      </nav>
     </div>
   </main>
 </Layout>

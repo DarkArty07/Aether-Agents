@@ -4,6 +4,8 @@ Aether separates design intent, stage requirements, execution coordination, curr
 
 When artifacts appear to conflict, resolve the question at the artifact that owns that semantic domain, update that owner first, and reconcile dependent derived artifacts. Historical evidence is preserved rather than rewritten to match present conditions.
 
+New to Aether? Begin with [Start here](start-here.md) for the mental model and route choice before using this authority map.
+
 ## Architectural principles
 
 1. **Ownership by semantic question** — No single artifact holds universal precedence. Each artifact has an explicit domain of authority and explicit non-ownership.
@@ -175,3 +177,7 @@ Active stage specifications (`specs/<stage>/spec.md`) are living normative owner
 1. **No private data in public artifacts** — Never commit or document owner identifiers, private usernames, credentials, API keys, provider/model bindings, absolute machine paths, or local profile state.
 2. **Portability** — Public documentation and specifications must remain independent of machine environments, local paths, and private setups.
 3. **No premature capability or mission claims** — Documentation describes current-build behavior without anticipating unapproved mission, autonomy envelopes, or unverified capabilities.
+
+## Next step
+
+Return to [Start here](start-here.md) for the learning path, or use the [glossary](reference/glossary.md) to decode artifact and status terms.

@@ -1,7 +1,8 @@
 # Aether Agents — Website
 
-Status: implemented local review candidate on `feat/website-onepage`.
-Not merged, committed, pushed, published or deployed. The owner reviews before integration.
+Status: local review candidate for the BGD-WEB documentation unit in an isolated worktree.
+Not merged, pushed, published or deployed; the implementation and evidence are committed
+locally for same-card Supervisor review.
 
 The first polish pass removes visible sketch numbering, refines supporting Spanish,
 adds the @DarkArty07 profile link and replaces the flattened knowledge graph with a
@@ -15,12 +16,18 @@ ambient lighting, sparse particles and pointer parallax, controlled by the same 
 and reduced-motion settings. See [final polish plan](FINAL_POLISH_PLAN.md).
 
 Post-restart verification is complete, including repeated real browser history/cache
-restoration of graph and ambient-motion controls. Evidence and browser limits are
-recorded in [VERIFICATION.md](VERIFICATION.md); the site still awaits owner acceptance.
+restoration of graph and ambient-motion controls. The earlier owner acceptance gate is
+recorded in [VERIFICATION.md](VERIFICATION.md); this documentation candidate remains a
+local worktree subject to same-card Supervisor review.
 
 An animated one-page site in Spanish and English with the approved Greek/modern,
 editorial tech-noir identity and Catppuccin Mocha palette. A separate documentation
-surface renders the existing canonical Markdown corpus directly from this checkout.
+surface renders the tracked canonical Markdown corpus directly from this checkout.
+The current BGD-WEB candidate groups all 19 tracked Markdown pages into a beginner-first
+manual: `docs/index.md` is the `/docs/` landing route, and every other page has exactly
+one article route. The canonical pages remain English; Spanish is orientation and search
+vocabulary, not a duplicated translation. This remains a stabilization build, not a
+public release or installation path.
 
 ## Preview and development
 
@@ -83,11 +90,16 @@ Spanish supporting copy was refined on the owner's explicit first-review request
 `COPY_REFINEMENT.md` owns this candidate. The headline “Del éter al software.” and the
 hero description remain unchanged. Section numbers exist only as internal design IDs.
 
-The documentation index introduces 16 canonical documents in Spanish. The original
-technical text stays in English, visibly labeled, and is rendered at `/docs/<slug>/`.
-Search runs locally against a generated static index. Relative document links and
-heading anchors resolve locally; other repository links point at the inspected Git
-revision. No private profiles, graph snapshots, sessions or runtime databases are read.
+The documentation index groups the 19 tracked canonical Markdown documents in five
+pedagogical groups. The original technical text stays in English, visibly labeled, and
+is rendered directly at `/docs/` (the `docs/index.md` landing) or `/docs/<slug>/` for
+all other pages. The explicit manifest keeps route, group, order, title, description,
+search terms, navigation and source metadata aligned with `git ls-files`; unknown or
+unclassified tracked pages fail the build. Search runs locally against a generated static
+index, including English body text and Mexican-Spanish orientation terms. Relative
+document links and heading anchors resolve locally; other repository links point at the
+inspected Git revision. No private profiles, graph snapshots, sessions or runtime
+databases are read.
 
 ## Maintain and verify
 

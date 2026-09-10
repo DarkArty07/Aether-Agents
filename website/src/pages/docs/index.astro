@@ -1,50 +1,132 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import DocsNavigation from '../../components/DocsNavigation.astro';
-import { loadDocs, sourceRevision } from '../../lib/docs';
+import { DOC_GROUPS, loadDocs, sourceRevision } from '../../lib/docs';
 import { sitePath } from '../../lib/site-path';
 const docs = await loadDocs();
+const indexDoc = docs.find(doc => doc.slug === 'index');
+if (!indexDoc) throw new Error('Documentation index is missing from the manifest');
+const groups = DOC_GROUPS.map(group => ({
+  ...group,
+  docs: docs.filter(doc => doc.group === group.label).sort((a, b) => a.order - b.order),
+}));
 ---
 <Layout title="Documentación — Aether Agents" description="Conceptos, guías y referencia técnica de Aether Agents." docs>
-  <main id="main" class="wrap docs-shell">
-    <aside class="docs-sidebar"><h2>AETHER / DOCS</h2><DocsNavigation docs={docs}/></aside>
+  <main id="main" class="wrap docs-shell docs-index" data-doc-index data-doc-source={indexDoc.sourcePath} data-doc-revision={indexDoc.sourceRevision}>
+    <aside class="docs-sidebar"><h2><a href={sitePath('/docs/')}>AETHER / DOCS</a></h2><DocsNavigation docs={docs} current="index" idPrefix="docs-sidebar-nav" /></aside>
     <div class="docs-content">
-      <details class="docs-menu-mobile"><summary>Explorar documentación</summary><DocsNavigation docs={docs}/></details>
-      <div class="docs-content-header"><span>DOCUMENTACIÓN / ÍNDICE</span><span>REV. {sourceRevision.slice(0,7)}</span></div>
-      <h1 class="docs-index-title">El sistema, en detalle.</h1>
-      <p class="secondary">Arquitectura, contratos, ejecución y conocimiento. Un punto de entrada a la documentación del proyecto.</p>
-      <div class="docs-notice" style="margin-top:25px">El manual canónico está en inglés. Se genera directamente desde los documentos del repositorio en la revisión indicada, sin duplicarlos ni traducirlos automáticamente. Sus notas de estado describen esa revisión.</div>
-      <div class="docs-search"><label for="docs-search">BUSCAR EN LA DOCUMENTACIÓN</label><input id="docs-search" type="search" placeholder="Contratos, Graphify, worktrees…" autocomplete="off" aria-describedby="search-count"/><p id="search-count" class="docs-results-count" role="status" aria-live="polite">{docs.length} documentos</p></div>
-      <div class="docs-index-list">{docs.map(d => <article data-document={d.slug}><h2 lang="en"><a href={sitePath(`/docs/${d.slug}/`)}>{d.title} <span aria-hidden="true">→</span></a></h2><p>{d.description}</p></article>)}</div>
-      <p class="empty-state" id="no-results" hidden>No hay resultados. Prueba con otra palabra, también en inglés.</p>
+      <details class="docs-menu-mobile"><summary>Explorar documentación</summary><DocsNavigation docs={docs} current="index" idPrefix="docs-mobile-nav" /></details>
+      <div class="docs-content-header">
+        <nav class="docs-breadcrumb" aria-label="Ruta de documentación"><a href={sitePath('/docs/')}>Documentación</a><span aria-hidden="true">/</span><span aria-current="page">Índice</span></nav>
+        <span class="docs-revision">REV. {sourceRevision.slice(0, 7)}</span>
+      </div>
+      <header class="docs-index-header">
+        <p class="docs-eyebrow">MANUAL CANÓNICO / <span lang="en">ENGLISH SOURCE</span></p>
+        <h1 class="docs-index-title">El sistema, en detalle.</h1>
+        <p class="secondary">Arquitectura, contratos, ejecución y conocimiento. Un punto de entrada a la documentación del proyecto.</p>
+      </header>
+      <div class="docs-notice docs-status-notice" data-status-context>
+        <strong>Manual canónico en inglés.</strong> Esta interfaz orienta en español, pero el contenido técnico se genera directamente desde el Markdown rastreado del repositorio en la revisión <code>{sourceRevision.slice(0, 12)}</code>. Es un <strong>build de estabilización</strong>, no un lanzamiento público; el estado actual de implementación pertenece a <a href={sitePath('/docs/reference/capabilities/')}>la cobertura de capacidades</a>.
+      </div>
+      <section class="docs-search js-only" id="documentation-search" data-doc-search hidden aria-labelledby="docs-search-label">
+        <label id="docs-search-label" for="docs-search">BUSCAR EN LA DOCUMENTACIÓN</label>
+        <input id="docs-search" type="search" placeholder="contrato, worktree, empezar…" autocomplete="off" aria-controls="docs-index-list" aria-describedby="search-count search-status" />
+        <p id="search-count" class="docs-results-count" role="status" aria-live="polite">{docs.length} documentos disponibles</p>
+        <p id="search-status" class="docs-search-status" role="status" aria-live="polite">Escribe un término en español o en inglés para filtrar el manual.</p>
+      </section>
+      <noscript><p class="docs-search-unavailable">La búsqueda requiere JavaScript; el índice agrupado y todos sus enlaces siguen disponibles.</p></noscript>
+      <div class="docs-index-list" id="docs-index-list">
+        {groups.map(group => <section class="docs-index-group" data-doc-group={group.label} aria-labelledby={`docs-group-${group.label.replaceAll(' ', '-').toLowerCase()}`}>
+          <header class="docs-group-header">
+            <div><p class="docs-eyebrow">GRUPO {DOC_GROUPS.findIndex(item => item.label === group.label) + 1}</p><h2 lang="en" id={`docs-group-${group.label.replaceAll(' ', '-').toLowerCase()}`}>{group.label}</h2></div>
+            <p lang="es-MX">{group.description}</p>
+          </header>
+          <div class="docs-group-pages">
+            {group.docs.map(doc => <article
+              data-document={doc.slug}
+              data-doc-route={doc.route}
+              data-doc-source={doc.sourcePath}
+              data-doc-group={doc.group}
+              data-doc-order={doc.order}
+            >
+              <p class="docs-card-meta">{doc.navigation.kind === 'home' ? 'ÍNDICE' : `CAPÍTULO ${doc.navigation.position}`}</p>
+              <h3 lang="en"><a href={sitePath(doc.route)}>{doc.title} <span aria-hidden="true">→</span></a></h3>
+              <p lang="en">{doc.description}</p>
+            </article>)}
+          </div>
+        </section>)}
+      </div>
+      <p class="empty-state" id="no-results" hidden>No hay resultados para esa búsqueda. Prueba con otra palabra, también en inglés.</p>
+      <section class="docs-canonical-source" aria-labelledby="docs-canonical-source-label">
+        <p id="docs-canonical-source-label" class="docs-eyebrow" lang="en">CANONICAL ENGLISH SOURCE / TRACKED MARKDOWN</p>
+        <article class="prose docs-index-source" data-doc-content data-source-path={indexDoc.sourcePath} lang="en" set:html={indexDoc.html}></article>
+      </section>
     </div>
   </main>
   <script>
+    type SearchRecord = {slug:string; title:string; description:string; group:string; groupDescription?:string; search?:string[]; text?:string};
+    const searchPanel = document.querySelector<HTMLElement>('[data-doc-search]');
+    searchPanel?.removeAttribute('hidden');
     const input = document.querySelector<HTMLInputElement>('#docs-search');
-    const counter = document.querySelector('#search-count');
+    const counter = document.querySelector<HTMLElement>('#search-count');
+    const status = document.querySelector<HTMLElement>('#search-status');
     const empty = document.querySelector<HTMLElement>('#no-results');
-    const items = [...document.querySelectorAll<HTMLElement>('[data-document]')];
-    const normalized = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-    let index: {slug:string;text:string;title:string;description:string}[] | undefined;
-    let loading: Promise<void> | undefined;
+    const items = [...document.querySelectorAll<HTMLElement>('.docs-index-list article[data-document]')];
+    const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    let index: SearchRecord[] | undefined;
+    let searchState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+
+    function setStatus(message: string) {
+      if (status) status.textContent = message;
+    }
+
     function filter() {
-      const words = normalized(input?.value.trim() || '').split(/\s+/).filter(Boolean);
+      const query = input?.value.trim() || '';
+      const words = normalized(query).split(/\s+/).filter(Boolean);
       let count = 0;
-      items.forEach(el => {
-        const record = index?.find(d => d.slug === el.dataset.document);
-        const haystack = normalized(record ? `${record.title} ${record.description} ${record.text}` : el.textContent || '');
-        el.hidden = !words.every(word => haystack.includes(word));
-        if (!el.hidden) count++;
+      items.forEach(item => {
+        const record = index?.find(candidate => candidate.slug === item.dataset.document);
+        const haystack = normalized([
+          record?.title || item.textContent || '',
+          record?.description || '',
+          record?.group || item.dataset.docGroup || '',
+          record?.groupDescription || '',
+          ...(record?.search || []),
+          record?.text || '',
+        ].join(' '));
+        item.hidden = searchState !== 'error' && !words.every(word => haystack.includes(word));
+        if (!item.hidden) count += 1;
       });
-      if (counter) counter.textContent = `${count} ${count === 1 ? 'documento' : 'documentos'}`;
-      if (empty) empty.hidden = count !== 0;
+      if (counter) counter.textContent = `${count} ${count === 1 ? 'documento' : 'documentos'}${searchState === 'error' ? ' visibles' : ''}`;
+      if (empty) empty.hidden = count !== 0 || words.length === 0;
+      if (searchState === 'error') {
+        setStatus('No se pudo cargar el índice de búsqueda. La navegación completa sigue disponible.');
+      } else if (words.length > 0) {
+        setStatus(count === 0 ? 'No hay resultados. Prueba con otra palabra.' : `${count} ${count === 1 ? 'resultado encontrado' : 'resultados encontrados'}.`);
+      } else if (searchState === 'ready') {
+        setStatus('Escribe un término en español o en inglés para filtrar el manual.');
+      }
     }
+
     async function ensureIndex() {
-      if (index) return;
-      loading ||= fetch(`${import.meta.env.BASE_URL}docs/search.json`).then(r => { if (!r.ok) throw new Error('Search unavailable'); return r.json(); }).then(data => { index=data; filter(); }).catch(() => { loading=undefined; });
-      await loading;
+      if (index || searchState === 'loading' || searchState === 'error') return;
+      searchState = 'loading';
+      setStatus('Cargando el índice de búsqueda…');
+      try {
+        const response = await fetch(new URL(`${import.meta.env.BASE_URL}docs/search.json`, document.baseURI));
+        if (!response.ok) throw new Error('Search index unavailable');
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('Invalid search index');
+        index = data as SearchRecord[];
+        searchState = 'ready';
+        filter();
+      } catch {
+        searchState = 'error';
+        filter();
+      }
     }
-    input?.addEventListener('focus',ensureIndex);
-    input?.addEventListener('input',() => { filter(); void ensureIndex(); });
+
+    input?.addEventListener('focus', () => { void ensureIndex(); });
+    input?.addEventListener('input', () => { filter(); void ensureIndex(); });
   </script>
 </Layout>

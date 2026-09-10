@@ -1,51 +1,78 @@
 # Aether Agents documentation
 
-Aether is a multi-agent software-engineering product built on [Hermes Agent](https://hermes-agent.nousresearch.com/docs/) and the GitHub Spec Kit method. This documentation describes the behavior present in this repository's current build. It is not a release claim: the project remains in operational-reliability stabilization, and its release path is not qualified.
+This is the canonical English manual for the current Aether Agents build. It is a
+navigation page, not a second authority: current behavior is explained in `docs/`,
+implementation status belongs to [`docs/capabilities.toml`](capabilities.toml), and
+accepted product intent belongs to `DESIGN.md` and the applicable specifications.
 
-This index is navigation only and routes reader questions to the appropriate guide, reference, or authority artifact. For the complete reader-facing placement and conflict-resolution map across all artifact classes, see [Authority and artifact ownership](authority.md).
+> **Before you begin:** this repository is an operational-reliability stabilization build,
+> not a public release or release-qualified installation. The guaranteed exercise is a
+> provider-free source checkout. Read [Start here](start-here.md) before attempting any
+> project command.
 
-## Navigate by question
+The manual follows five groups so a reader can learn the model before opening deep
+reference material. Every group is ordered for learning, not by filesystem order.
 
-### Architectural authority and product boundaries
-- **Which artifact owns which decision, where does information belong, and how are conflicts resolved?**
-  See [Authority and artifact ownership](authority.md).
-- **What does Aether add to Hermes, and what are the system boundaries?**
-  See [Product boundary](product-boundary.md).
-- **What are the product roles (Morfeo, Supervisor, Implementer) and their authority limits?**
-  See [Roles and authority](roles-and-authority.md).
+## Start here
 
-### Getting started and project setup
-- **How do I explore Aether locally without provider calls or credentials?**
-  See [Getting started](getting-started.md).
-- **How do I bind an existing Git repository root to a Hermes Project?**
-  See [Project initialization](guides/project-initialization.md).
+1. **[Start here](start-here.md)** — A zero-context mental model, role boundaries and the
+   direct-versus-pipeline route choice.
+2. **[Getting started](getting-started.md)** — Prerequisites, safe parser inspection,
+   expected observations and the boundary before project initialization.
 
-### Project knowledge and learning
-- **How do all three roles reuse and maintain a project's technical map?**
-  See [Project knowledge and role work memory](guides/project-knowledge.md).
-- **How are experiences kept separate and the two canonical skills used?**
-  See the same guide's experience, storage and tool sections, plus [Plugins and tools](reference/plugins-and-tools.md).
+## Core concepts
 
-### Objective handoffs, execution, and lifecycle
-- **How are objective outcomes, acceptance criteria, and handoffs structured?**
-  See [Objective Contracts](guides/objective-contracts.md).
-- **How do multi-agent task execution, worktree isolation, and review cycles operate?**
-  See [Execution](guides/execution.md).
-- **What is the current lifecycle execution flow and evidence model?**
-  See [Lifecycle](guides/lifecycle.md).
+1. **[Product boundary](product-boundary.md)** — What Aether adds to Hermes and what it
+   deliberately does not own.
+2. **[Roles and authority](roles-and-authority.md)** — Owner, Morfeo, Supervisor and
+   Implementer responsibilities and decision limits.
+3. **[Authority and artifact ownership](authority.md)** — Where design intent, current
+   behavior, status, runtime state and evidence belong.
+4. **[Glossary](reference/glossary.md)** — Concise definitions for Aether-specific terms.
 
-### Operations, safety, and diagnostics
-- **How do I run read-only system observations or qualification checks?**
-  See [Observation](guides/observation.md).
-- **What are the edge safety guards and rollback-first recovery policies?**
-  See [Policy and recovery](guides/policy-and-recovery.md).
-- **What CLI commands and options are supported in this build?**
-  See [CLI reference](reference/cli.md).
-- **What plugins and registered tools are included in Aether?**
-  See [Plugins and tools](reference/plugins-and-tools.md).
-- **What are the known current limits and safe diagnostic steps?**
-  See [Limitations and troubleshooting](reference/limitations-and-troubleshooting.md).
+## Working with Aether
 
-### Capability implementation status
-- **What is the verified implementation status of each public surface?**
-  See [Capability coverage](reference/capabilities.md), generated from the authoritative registry in [`docs/capabilities.toml`](capabilities.toml).
+1. **[Project initialization](guides/project-initialization.md)** — The current
+   existing-Git-root and exact native Hermes Project prerequisites.
+2. **[Objective Contracts and handoff](guides/objective-contracts.md)** — How a substantial
+   pipeline objective is recorded and handed to Supervisor.
+3. **[First objective](guides/first-objective.md)** — A clearly illustrative, non-normative
+   pipeline walkthrough and a contrasting bounded direct example.
+4. **[Execution](guides/execution.md)** — Boards, sessions, isolated worktrees, review and
+   unit evidence.
+5. **[Lifecycle](guides/lifecycle.md)** — Direct and pipeline routes, recovery and the
+   GitHub-backed terminal sequence.
+6. **[Project knowledge and role work memory](guides/project-knowledge.md)** — Optional
+   technical graph context and separate role experiences.
+
+## Operations and safety
+
+1. **[Observation](guides/observation.md)** — Provider-free, read-only contract observation
+   and its bounded outcomes.
+2. **[Policy and recovery](guides/policy-and-recovery.md)** — Protected edges,
+   reversibility-first local work and rollback-first recovery.
+3. **[Limitations and troubleshooting](reference/limitations-and-troubleshooting.md)** —
+   Current boundaries, safe diagnostics and explicit non-success conditions.
+
+## Reference
+
+1. **[CLI reference](reference/cli.md)** — Parser commands, options, output and exit
+   behavior in this build.
+2. **[Plugins and tools](reference/plugins-and-tools.md)** — Aether's registered Hermes
+   plugin surfaces and action boundaries.
+3. **[Capability coverage](reference/capabilities.md)** — Generated current-status and
+   traceability reference; do not edit it directly.
+
+## How to use this manual
+
+Use the first two groups when learning the system. Use the working guides when an
+objective is authorized and the operations/reference pages when you need a diagnostic or
+exact interface detail. If a statement about what exists conflicts with a future design
+statement, consult the capability registry and [Authority and artifact ownership](authority.md)
+for the owning source instead of inferring readiness from a page, example or historical
+record.
+
+The website renders this tracked corpus directly. Its Spanish landing and orientation
+copy are a guide into this English manual, not a duplicate translation. Generic Hermes
+installation, provider setup and credential management belong to the [official Hermes
+Agent documentation](https://hermes-agent.nousresearch.com/docs/).

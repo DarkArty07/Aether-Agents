@@ -32,8 +32,21 @@ try {
           style:'.site-header, .motion-toggle, .skip-link { visibility: hidden !important; }',
         });
       }
-      await page.goto('http://127.0.0.1:4321/docs/');
-      await page.screenshot({path:`test-results/visual/${width}-docs.png`});
+      for(const [slug, route] of [
+        ['docs-index','/docs/'],
+        ['docs-start','/docs/start-here/'],
+        ['docs-walkthrough','/docs/guides/first-objective/'],
+        ['docs-reference','/docs/reference/capabilities/'],
+      ]) {
+        await page.goto(`http://127.0.0.1:4321${route}`,{waitUntil:'networkidle'});
+        await page.evaluate(()=>document.fonts.ready);
+        const docsOverflow=await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(el=>{
+          const r=el.getBoundingClientRect();
+          return r.width>0 && (r.right>innerWidth+2 || r.left < -2) && getComputedStyle(el).position !== 'absolute';
+        }).map(el=>({tag:el.tagName,cls:el.getAttribute('class')})));
+        findings.push({width,surface:slug,route,documentWidth:await page.evaluate(()=>document.documentElement.scrollWidth),overflow:docsOverflow});
+        await page.screenshot({path:`test-results/visual/${width}-${slug}.png`,fullPage:true});
+      }
     }
     await page.close();
   }
