@@ -76,6 +76,7 @@ file passed 3/3 in isolation; `compileall`, Ruff check/format on touched scope a
 | Generation | file-scoped `git diff 415056fee527c5a2302370bd6dba56f84b9a4202 7980bbf1f9f75efdcbee2196ae910bb77138541d -- hermes_cli/kanban_db.py tools/kanban_tools.py tests/tools/test_kanban_cross_board_project.py`, run in the maintained-fork clone at the exact base and accepted candidate |
 | Portability | repo-relative Hermes paths only; no operator path, home directory, credential or raw runtime state in the patch text |
 | Preservation | the pre-existing `patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch` is byte-identical to the reviewed revision (SHA-256 `a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040`), and it was not collapsed into or replaced by the new artifact |
+| Both-artifact controls | the HLP-226b artifact was re-verified at its recorded SHA-256 and parsed with `git apply --numstat/--stat` (2 files, `+144/-7`); the HLP-226c artifact parses with the same controls (3 files, `+805/-0`). Neither parse is an application or reconstruction pass against this Aether tree, which does not contain the Hermes target files |
 
 ### Reconstruction against the exact fork base
 
