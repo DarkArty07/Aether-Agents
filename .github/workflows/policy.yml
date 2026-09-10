@@ -119,6 +119,7 @@ jobs:
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
