@@ -336,8 +336,9 @@ def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_c
 
         narrative = _narrative(_narrative_item())
         narrative["items"][0]["current"] = [{"ref": "work_alpha_current", "text": claim}]
-        with pytest.raises(reporting.ReportingError):
+        with pytest.raises(reporting.ReportingError) as narrative_error:
             reporting.render_report(_snapshot(_item(state="in_progress")), narrative)
+        assert narrative_error.value.code in {"NARRATIVE_FABRICATED_COMPLETION", "NARRATIVE_UNSAFE"}
 
     snapshot = _snapshot(_item(state="in_progress"))
 
