@@ -122,6 +122,38 @@ def _stable_contract(task) -> dict:
     }
 
 
+def test_initial_review_requires_an_independent_reviewer(isolated_board) -> None:
+    """A same-card implementer cannot leave its review run self-claimable."""
+    conn = isolated_board
+    task_id = kb.create_task(
+        conn,
+        title="Require independent review",
+        body="The implementing profile must not approve its own candidate.",
+        assignee="implementer",
+        created_by="supervisor",
+    )
+    implementation = kb.claim_task(conn, task_id, claimer="implementer:1")
+    assert implementation is not None
+
+    ok, reason = kb.request_review(
+        conn,
+        task_id,
+        summary="Implementation and focused tests are ready.",
+        expected_run_id=implementation.current_run_id,
+        with_reason=True,
+    )
+
+    assert ok is False
+    assert reason is not None
+    assert "reviewer" in reason
+    task = kb.get_task(conn, task_id)
+    assert task is not None
+    assert task.status == "running"
+    assert task.assignee == "implementer"
+    assert task.current_run_id == implementation.current_run_id
+    assert task.claim_lock is not None
+
+
 def test_same_card_cycle_preserves_contract_candidate_budget_and_history(
     isolated_board,
 ) -> None:
