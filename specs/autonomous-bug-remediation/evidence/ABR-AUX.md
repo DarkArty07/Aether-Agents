@@ -13,15 +13,17 @@
 | Item | Observed |
 | --- | --- |
 | Aether starting revision | `b52afd17a93d25e31a48e5c86bd569f45f2f04d4` |
-| Supervisor breakdown source | `specs/autonomous-bug-remediation/tasks.md` at `5834212cfe8d6cb96325ab9d97671a637eef71c0` (inspected from the Supervisor branch) |
+| Supervisor breakdown source | `specs/autonomous-bug-remediation/tasks.md` at `5834212cfe8d6cb96325ab9d97671a637eef71c0` |
 | Contract digest | Rechecked from `.aether/objective-contracts/oc_ddebf175a40251f7/v1.md`; matched the assigned digest |
 | Maintained fork baseline | `DarkArty07/aether-hermes` `aether-main` at `28b593efa86bbc674b32f488c35932a4e7e85a51` |
-| Fork candidate | Local commit `b1e3ca80a9a79cf8e0482d6621d329c7ae88e236` on `wt/t_57e549db` |
+| Code correction commit | `b1e3ca80a9a79cf8e0482d6621d329c7ae88e236` |
+| Test-environment correction commits | `a134c9c4f4d4963c811a30bad72e4be6ae67254a`, `1ccfb08b8bb86c215c09bc8ee3e45f7c290ae6fc` |
+| Fork candidate HEAD | `1ccfb08b8bb86c215c09bc8ee3e45f7c290ae6fc` on `wt/t_57e549db` |
 | Imported source check | `import agent.auxiliary_client` resolved to the candidate fork's `agent/auxiliary_client.py` |
-| Runtime | Python 3.11.15; OpenAI SDK 2.24.0; pytest 9.1.1; already-provisioned test environment |
-| Candidate tree | Clean after the fork commit; no push, PR, merge, issue mutation or publication |
+| Runtime | Python 3.11.15; OpenAI SDK 2.24.0; pytest 9.1.1; pytest-asyncio 1.3.0; Anthropic SDK 0.87.0 |
+| Candidate tree | Clean after the final fork commit; no push, PR, merge, issue mutation or publication |
 
-The selected Hermes public release source `NousResearch/hermes-agent@e624e9fde561e1add9388384012b295fde669ade` was inspected before adapting the fork. Its auxiliary Responses adapter includes the existing request-header forwarding behavior used by #301, but does not negotiate a clear Chat-only surface directive or preserve configured fallback attribution query metadata. No dependency upgrade or new provider/protocol was introduced. Tracked Aether profile YAML, live `home/` state, `model_metadata.py`, and `error_classifier.py` were not modified.
+The Supervisor breakdown identifies #296 and #303 as the concentrated `agent/auxiliary_client.py` hotspot and requires distinct dispositions. The selected Hermes public release source `NousResearch/hermes-agent@e624e9fde561e1add9388384012b295fde669ade` was inspected before adapting the fork: its auxiliary Responses adapter has request-header forwarding but no Chat-only directive negotiation and no request-scoped `extra_query` fallback attribution. No dependency upgrade or new provider/protocol was introduced. Tracked Aether profile YAML, live `home/` state, `model_metadata.py`, and `error_classifier.py` were not modified.
 
 ## 2. Implementation
 
@@ -37,21 +39,23 @@ Relevant candidate locations:
 
 - `agent/auxiliary_client.py:1450` — directive classifier.
 - `agent/auxiliary_client.py:1543-1548` — request query forwarding into Responses requests.
-- `agent/auxiliary_client.py:1789-1851` — Chat fallback and response-shape preservation.
+- `agent/auxiliary_client.py:1812-1851` — Chat fallback and response-shape preservation.
 - `agent/auxiliary_client.py:4989-5053` — bounded fallback attribution query extraction.
 - `agent/auxiliary_client.py:5212-5382` — sync/async fallback and refresh retry propagation.
 - `tests/agent/test_auxiliary_client_chat_and_attribution.py` — loopback controls and regressions.
 
+The test-only follow-up replaced a `pytest.mark.asyncio` test with the repository's established `asyncio.run()` bridge because the canonical runner's initially selected venv lacked pytest-asyncio. The final test file is formatted; no production behavior changed in those follow-up commits.
+
 ## 3. Baseline versus candidate
 
-The identical new regression file was copied into a disposable fork worktree at the exact baseline and candidate was run from the committed fork tree. Both runs used the fork's canonical runner with retries disabled:
+The identical final regression file was copied into a disposable fork worktree at the exact baseline and the committed candidate was run with the fork's canonical runner and retries disabled:
 
 `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh tests/agent/test_auxiliary_client_chat_and_attribution.py`
 
 | Revision | Result | Meaning |
 | --- | --- | --- |
 | Baseline `28b593e` | **1 passed, 4 failed** | Chat-only sync/async requests raised the directive; direct and genuine title fallback lost the configured attribution query. The Responses-only control passed. |
-| Candidate `b1e3ca8` | **5 passed, 0 failed** | Chat-only requests reached Chat Completions after the directive; Responses-only remained on Responses; direct and genuine title fallback carried attribution. |
+| Candidate `1ccfb08` | **5 passed, 0 failed** | Chat-only requests reached Chat Completions after the directive; Responses-only remained on Responses; direct and genuine title fallback carried attribution. |
 
 The candidate loopback tests use no live model or paid endpoint. The genuine fallback test runs `call_llm(task="title_generation")` against a local HTTP server, returns a synthetic primary 429, and observes the configured fallback request.
 
@@ -64,22 +68,20 @@ The candidate loopback tests use no live model or paid endpoint. The genuine fal
 | #303 configured fallback attribution | Direct fallback seam and full primary-rate-limit → configured-fallback `call_llm` path observed `aether_service=morfeo` and `aether_operation=title_generation` on the fallback request. | `test_title_fallback_preserves_attribution_without_primary_auth`; `test_genuine_title_generation_fallback_uses_entry_attribution` |
 | #303 destination/auth separation | Fallback HTTP request carried the synthetic fallback client's bearer credential and safe trace header, while primary Authorization, Proxy-Authorization, Cookie and API-key headers were absent. | The two #303 loopback tests above; existing `test_auxiliary_client_extra_headers.py` controls |
 | Query preservation | An existing destination `api-version` query was retained alongside the two attribution values; request query order was not assumed. | `test_title_fallback_preserves_attribution_without_primary_auth` |
-| Existing auxiliary compatibility | 24 auxiliary-focused files, 359 tests, 0 failures. | Canonical fork runner output below |
+| Existing auxiliary compatibility | 25 auxiliary-focused files, 371 tests, 0 failures. | Final canonical fork runner output below |
 
 ## 5. Verification record
 
-All commands below were run against the candidate fork unless marked baseline.
+All commands below were run against the final candidate fork unless marked baseline. The runner used an already-provisioned Hermes development environment via `HERMES_PYTHON`; no package installation or dependency change was performed.
 
 1. **Focused baseline reproduction:** canonical fork runner on the identical five-test file at `28b593e`: **1 passed, 4 failed** (exit 1). Failures were the two Chat-only surface tests and both #303 attribution tests; the Responses-only control passed.
 2. **Focused candidate:** `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh tests/agent/test_auxiliary_client_chat_and_attribution.py`: **5 passed, 0 failed** (exit 0).
-3. **Required auxiliary suite:** `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh` over the 24 owned auxiliary test files (`test_auxiliary_client*.py`, auxiliary fallback/config/transport/concurrency/streaming controls and `test_minimax_auxiliary_url.py`): **359 passed, 0 failed** (exit 0).
+3. **Required auxiliary suite:** `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh` over the 25 files selected by `tests/agent/test_auxiliary*.py` plus `tests/agent/test_minimax_auxiliary_url.py`: **371 passed, 0 failed** (exit 0).
 4. **Candidate import:** `python -c 'import agent.auxiliary_client as m; print(m.__file__)'`: resolved to the candidate fork source.
-5. **Static checks:** `python -m compileall -q agent/auxiliary_client.py tests/agent/test_auxiliary_client_chat_and_attribution.py`, candidate Ruff check on both touched Python files, and `git diff --check`: all **exit 0**. `git show --check b1e3ca80a9...`: **exit 0**.
-6. **Broader context check:** the canonical `tests/agent` run at the candidate reached **4552 passed, 27 skipped**. It exited nonzero because the unrelated/excluded `tests/agent/test_model_metadata.py` process exceeded the runner's 300-second per-file cap after partial progress; `model_metadata.py` is outside this unit and unchanged. No other `tests/agent` file failed.
-7. **Issue state:** read-only GitHub checks with `-R DarkArty07/Aether-Agents` observed #296 and #303 **OPEN**. This unit did not close or mutate issues.
-8. **Knowledge tools:** `project_knowledge` status reported `available=false` with empty coverage; source inspection and executable tests were used. `work_memory` search returned no matching prior note. No graph or memory update was fabricated.
-
-The fork's `ruff format --check` reports pre-existing formatting differences throughout the large baseline `agent/auxiliary_client.py`; the touched test file is formatted. No formatter-wide rewrite was applied to this hotspot.
+5. **Static checks:** `python -m compileall -q agent/auxiliary_client.py tests/agent/test_auxiliary_client_chat_and_attribution.py`, Ruff check on both touched Python files, `ruff format --check tests/agent/test_auxiliary_client_chat_and_attribution.py`, `git diff --check 28b593e..HEAD`, and `git show --check` for the final commits: all **exit 0**. Full two-file `ruff format --check` still reports pre-existing formatting differences throughout the large baseline `agent/auxiliary_client.py`; no formatter-wide rewrite was applied to this hotspot.
+6. **Broader context check:** the canonical `tests/agent` run at the final candidate reached **4552 passed, 27 skipped** and exited nonzero only because the unrelated `tests/agent/test_model_metadata.py` process exceeded the runner's 300-second per-file cap after partial progress. No other `tests/agent` file failed; `model_metadata.py` is outside this unit and unchanged.
+7. **Issue state:** read-only GitHub checks observed #296 and #303 **OPEN**. This unit did not close or mutate issues.
+8. **Knowledge tools:** `project_knowledge` status reported `available=false` with empty coverage at source revision `77741465385deca65340b6f0008f69388e130578`; source inspection and executable tests were used. `work_memory` search returned no matching prior note. No graph or memory update was fabricated.
 
 ## 6. Distinct dispositions and compatibility
 
@@ -87,12 +89,12 @@ The fork's `ruff format --check` reports pre-existing formatting differences thr
 - **#303:** reproduced-and-fixed. Configured fallback attribution is made request-scoped and bounded; destination authentication is not copied from the primary request. No profile activation, live configuration edit, new provider, or protocol was added.
 - **Unit compatibility:** `patch`. Aggregate release and publication decisions remain with Supervisor.
 
-### Ledger paragraph for ABR-INT (not applied here)
+### Ledger paragraph for ABR-INT handoff (not applied here)
 
-> Issues #296/#303 — reproduced-and-fixed in maintained-fork commit `b1e3ca80a9a79cf8e0482d6621d329c7ae88e236`; evidence `specs/autonomous-bug-remediation/evidence/ABR-AUX.md`; scope `agent/auxiliary_client.py` plus `tests/agent/test_auxiliary_client_chat_and_attribution.py`; narrow downstream compatibility correction on maintained baseline `28b593efa86bbc674b32f488c35932a4e7e85a51`, with no new provider/protocol and no live profile edits; rollback is reverting the fork commit; retire when an adopted exact Hermes release provides equivalent per-model Chat/Responses negotiation and preserves configured fallback attribution query metadata with the same boundary tests.
+> Issues #296/#303 — reproduced-and-fixed in maintained-fork commits `b1e3ca80a9a79cf8e0482d6621d329c7ae88e236`, `a134c9c4f4d4963c811a30bad72e4be6ae67254a`, and `1ccfb08b8bb86c215c09bc8ee3e45f7c290ae6fc`; evidence `specs/autonomous-bug-remediation/evidence/ABR-AUX.md`; scope `agent/auxiliary_client.py` plus `tests/agent/test_auxiliary_client_chat_and_attribution.py`; narrow downstream compatibility correction on maintained baseline `28b593efa86bbc674b32f488c35932a4e7e85a51`, with no new provider/protocol and no live profile edits; rollback is reverting the three fork commits; retire when an adopted exact Hermes release provides equivalent per-model Chat/Responses negotiation and preserves configured fallback attribution query metadata with the same boundary tests.
 
 ## 7. Publication and remaining risk
 
-No remote or irreversible action was taken: no push, PR, merge, issue close, release, package publication, credential acquisition, live profile mutation, or paid model request. The unit branch has no upstream publication target.
+No remote or irreversible action was taken: no push, PR, merge, issue close, release, package publication, credential acquisition, live profile mutation, or paid model request. The Aether evidence commit and maintained-fork commits are local unit work only; the unit has no upstream publication target.
 
 The remaining qualification limit is that attribution was proven on a controlled loopback HTTP seam and through the real Hermes `call_llm` fallback path, not against the live paid router/profile. Live activation is explicitly outside this unit and remains a separate Supervisor-owned gate. The unrelated model-metadata timeout remains visible and unmodified.
