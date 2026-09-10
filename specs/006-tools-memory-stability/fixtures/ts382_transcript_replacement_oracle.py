@@ -49,8 +49,10 @@ Scale knobs (env, never raise a product timeout — they shorten the fixture):
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import os
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -70,7 +72,9 @@ if not FORK_SRC or not (Path(FORK_SRC) / "hermes_state.py").is_file():
     )
 
 # Isolate every Hermes home lookup before importing the state modules.
-os.environ.setdefault("HERMES_HOME", tempfile.mkdtemp(prefix="ts382-home-"))
+_HOME = tempfile.mkdtemp(prefix="ts382-home-")
+os.environ.setdefault("HERMES_HOME", _HOME)
+atexit.register(shutil.rmtree, _HOME, ignore_errors=True)
 sys.path.insert(0, FORK_SRC)
 
 from hermes_state import SessionDB  # noqa: E402
@@ -166,8 +170,9 @@ _TEMPLATES: dict[str, Path] = {}
 
 
 @pytest.fixture(scope="session")
-def template_dir() -> Path:
-    return Path(tempfile.mkdtemp(prefix="ts382-fixture-"))
+def template_dir(tmp_path_factory) -> Path:
+    """Pytest-managed scratch for the per-layout template stores."""
+    return tmp_path_factory.mktemp("ts382-templates")
 
 
 def _template(layout: str, template_dir: Path) -> Path:

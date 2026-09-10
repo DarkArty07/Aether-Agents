@@ -126,7 +126,8 @@ Observed at fork `266e412f` (three consecutive repetitions of the acceptance tes
 produced the same failure):
 
 - `[legacy] longest write-lock hold: 2.137 s of 1 transaction` for a 2,400-row
-  publication against a 1.0 s append budget → **RED**.
+  publication against a 1.0 s append budget → **RED** (repeat runs: 2.137 s, 2.058 s,
+  2.074 s — stable).
 - The concurrent `append_message` raised
   `sqlite3.OperationalError: database is locked (another Hermes process held the
   state.db write lock for over 1s — likely a long maintenance operation …; the
@@ -245,7 +246,7 @@ HERMES_FORK_SRC=<fork-checkout> <fork-checkout>/.venv/bin/python -m pytest -q \
 |---|---|---|
 | `test_generic_short_lock_is_waited_out` | a 0.2 s generic lock never starves an append | passes (control) |
 | `test_replacement_does_not_starve_concurrent_append` | a real append lands within its budget while a publication runs | **RED on the legacy store shape** (`database is locked …`, `hermes_state.py:4029`) |
-| `test_replacement_lock_hold_within_budget` | no single publication transaction exceeds the append budget | **RED on the legacy store shape** (2.137 s > 1.0 s) |
+| `test_replacement_lock_hold_within_budget` | no single publication transaction exceeds the append budget | **RED on the legacy store shape** (2.06-2.14 s > 1.0 s over repeated runs) |
 | `test_replacement_preserves_visibility_counters_archive_and_search` | atomic visible replacement (sampled concurrently), counters, soft-archive + archived-row searchability, `model_config` patch | passes; must stay green |
 | `test_failed_replacement_rolls_back_visible_transcript` | injected mid-publication failure leaves the old transcript visible, counters unchanged, failed text unsearchable | passes; must stay green |
 
