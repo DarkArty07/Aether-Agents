@@ -164,8 +164,8 @@ summary = "The observer plugin records bounded metadata and offers a curated Mor
 surfaces = ["plugin.aether-contract-observer", "tool.aether_observe", "tool_action.aether_observe.changes", "tool_action.aether_observe.diagnose", "tool_action.aether_observe.status"]
 documents = ["docs/guides/observation.md", "docs/reference/plugins-and-tools.md"]
 specifications = ["specs/002-aether-contract-observation/spec.md"]
-implementation = ["src/aether_agents/observation/brief.py", "src/aether_agents/observation/capture/hermes_plugin.py", "src/aether_agents/resources/profiles/morfeo/config.yaml"]
-verification = ["tests/test_observation_brief_tool.py", "tests/test_observation_cli_plugin.py", "tests/test_observation_packaging.py"]
+implementation = ["src/aether_agents/observation/brief.py", "src/aether_agents/observation/capture/hermes_plugin.py", "src/aether_agents/resources/profiles/morfeo/config.yaml", "src/aether_agents/resources/profiles/morfeo/SOUL.md"]
+verification = ["tests/test_observation_brief_tool.py", "tests/test_observation_cli_plugin.py", "tests/test_observation_packaging.py", "tests/test_observation_usage_guidance.py"]
 notes = "The entry point and provider-free behavior are tested, but managed-profile activation and the full live observation lifecycle are not release-qualified."
 
 [[capabilities]]

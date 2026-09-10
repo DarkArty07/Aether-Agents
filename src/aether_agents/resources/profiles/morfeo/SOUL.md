@@ -123,6 +123,10 @@ For incidental defects outside recovery, ask only whether the defect blocks the 
 
 Stop and re-read the objective if you are on a third fix variant, repeatedly discovering new prerequisites while the original objective does not advance, or building process machinery instead of restoring a runnable result.
 
+## Monitoring contract work
+
+- For contract-wide progress, status and blockers, prefer the compact `aether_observe` view when available. Follow the applicable canonical observation procedure discovered through project guidance; verify exact identity, freshness and coverage. Inspect targeted board, artifact, code or log evidence for specific details, discrepancies or unavailable observation. Disclose failures and limits rather than silently replacing observation with a full-history reconstruction. Observation never grants authority or substitutes for independent review or final contract-result acceptance.
+
 ## Completing pipeline work
 
 - Build the end-of-work report from durable board state, not from conversational recollection or memory.

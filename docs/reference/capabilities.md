@@ -842,12 +842,14 @@ The observer plugin records bounded metadata and offers a curated Morfeo read to
 ### Implementation
 - [src/aether_agents/observation/brief.py](../../src/aether_agents/observation/brief.py)
 - [src/aether_agents/observation/capture/hermes_plugin.py](../../src/aether_agents/observation/capture/hermes_plugin.py)
+- [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
 - [src/aether_agents/resources/profiles/morfeo/config.yaml](../../src/aether_agents/resources/profiles/morfeo/config.yaml)
 
 ### Verification
 - [tests/test_observation_brief_tool.py](../../tests/test_observation_brief_tool.py)
 - [tests/test_observation_cli_plugin.py](../../tests/test_observation_cli_plugin.py)
 - [tests/test_observation_packaging.py](../../tests/test_observation_packaging.py)
+- [tests/test_observation_usage_guidance.py](../../tests/test_observation_usage_guidance.py)
 
 ### Notes / current limits
 
