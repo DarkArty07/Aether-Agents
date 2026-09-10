@@ -19,7 +19,7 @@ def _fact(
     *,
     provenance: str = "observed",
     status: str = "verified",
-) -> dict[str, str]:
+) -> dict[str, Any]:
     return {"ref": ref, "text": text, "provenance": provenance, "status": status}
 
 
@@ -207,7 +207,10 @@ def test_model_status_matches_canonical_observed_state_or_unknown_mapping() -> N
     assert error.value.code == "NARRATIVE_STATE_MISMATCH"
 
 
-@pytest.mark.parametrize("source_state", ["IN_PROGRESS", "in-progress", "COMPLETED", "timed-out"])
+@pytest.mark.parametrize(
+    "source_state",
+    ["IN_PROGRESS", "in-progress", "COMPLETED", "completed ", " in_progress", "timed-out"],
+)
 def test_noncanonical_source_states_map_to_unknown_without_completion_authority(
     source_state: str,
 ) -> None:
@@ -215,11 +218,21 @@ def test_noncanonical_source_states_map_to_unknown_without_completion_authority(
 
     accepted = reporting.validate_narrative(snapshot, _narrative(_narrative_item(status="unknown")))
     assert accepted["items"][0]["status"] == "unknown"
+    assert accepted["items"][0]["work_key"] == "work_alpha"
+    assert reporting.validate_snapshot(snapshot)["items"][0]["observed_state"] == "unknown"
 
-    if source_state == "COMPLETED":
-        with pytest.raises(reporting.ReportingError) as error:
-            reporting.validate_narrative(snapshot, _narrative(_narrative_item(status="completed")))
-        assert error.value.code == "NARRATIVE_STATE_MISMATCH"
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(snapshot, _narrative(_narrative_item(status="completed")))
+    assert error.value.code == "NARRATIVE_STATE_MISMATCH"
+
+
+def test_model_status_tokens_require_exact_canonical_spelling() -> None:
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(
+            _snapshot(_item(state="in_progress")),
+            _narrative(_narrative_item(status="IN_PROGRESS")),
+        )
+    assert error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
 
 
 def test_state_evidence_refs_cannot_be_narrative_claim_refs() -> None:
@@ -836,6 +849,40 @@ def test_compaction_omits_excess_state_refs_before_identity_limit() -> None:
     ]
     assert all(item["state_evidence_refs"] == [] for item in compact["items"])
     assert any("state evidence reference(s) are omitted" in gap for gap in compact["coverage_gaps"])
+
+
+def test_compaction_preserves_relation_closure_or_drops_links_with_coverage() -> None:
+    item = _item()
+    item["current"] = []
+    item["next"] = []
+    item["pending"] = []
+    item["resolved"] = [_fact("work_alpha_remedy", "r" * reporting.MAX_SOURCE_EXCERPT_CHARS)]
+    item["complications"] = [
+        _fact(f"work_alpha_comp_{index:03d}", "c" * 700) for index in range(40)
+    ]
+    item["complications"][0]["remedy_refs"] = ["work_alpha_remedy"]
+    snapshot = _snapshot(item)
+
+    compact = reporting.compact_model_snapshot(snapshot)
+    assert len(reporting.model_snapshot_json(snapshot)) <= reporting.MAX_MODEL_SNAPSHOT_CHARS
+
+    compact_facts = {
+        fact["ref"]: fact
+        for compact_item in compact["items"]
+        for section in ("resolved", "current", "next", "complications", "pending")
+        for fact in compact_item[section]
+    }
+    for fact in compact_facts.values():
+        for related_field in ("remedy_refs", "verification_refs"):
+            assert set(fact.get(related_field, [])) <= set(compact_facts)
+
+    complication = compact_facts.get("work_alpha_comp_000")
+    if complication is not None:
+        assert "work_alpha_remedy" in complication.get("remedy_refs", [])
+    else:
+        assert any("fact(s) omitted" in gap for gap in compact["coverage_gaps"])
+    if "work_alpha_remedy" not in compact_facts:
+        assert any("relation" in gap for gap in compact["coverage_gaps"])
 
 
 def test_parts_are_ordered_bounded_unicode_and_repeat_identity_without_second_narration() -> None:

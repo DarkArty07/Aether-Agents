@@ -312,19 +312,19 @@ def _version(value: Any) -> int | str:
 def _status(value: Any) -> str:
     if not isinstance(value, str) or _STATUS_RE.fullmatch(value) is None:
         _fail("REPORTING_SCHEMA_INVALID", "narrative status is invalid")
-    normalized = _bounded_text(
+    _bounded_text(
         value,
         max_chars=64,
         code="NARRATIVE_UNSAFE",
         check_injection=True,
-    ).lower()
-    if normalized not in _NARRATIVE_STATUSES:
+    )
+    if value not in _NARRATIVE_STATUSES:
         # Status is a typed lifecycle field, not free-form prose.  Rejecting an
         # unrecognised token is structural validation rather than a claim classifier.
         _fail(
             "NARRATIVE_FABRICATED_COMPLETION", "narrative status is not a canonical lifecycle value"
         )
-    return normalized
+    return value
 
 
 def _canonical_observed_state(value: Any) -> str:
@@ -487,9 +487,13 @@ def _normalize_item(value: Any) -> tuple[dict[str, Any], datetime | None, dateti
             "title": _bounded_text(origin["title"], max_chars=_MAX_DISPLAY_CHARS),
         },
         "contract": _normalize_contract(mapping["contract"]),
+        # Validate privacy/shape as source text, then keep only the exact canonical
+        # typed lifecycle token.  Whitespace, case, separator, and translated variants
+        # are source data outside the closed vocabulary and therefore map to ``unknown``.
         "observed_state": _bounded_text(mapping["observed_state"], max_chars=128),
         "state_evidence_refs": _ref_list(mapping["state_evidence_refs"], field="state evidence"),
     }
+    item["observed_state"] = _canonical_observed_state(mapping["observed_state"])
     if started_text is not None:
         item["started_at_utc"] = started_text
     if ended_text is not None:
@@ -672,6 +676,9 @@ def compact_model_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     """
 
     normalized = validate_snapshot(snapshot)
+    # Validate all relation targets before compaction can remove any detail.  This keeps
+    # malformed or cross-work source structure fail-closed at the prompt boundary too.
+    _source_index(normalized)
     if len(_canonical_json(normalized)) <= MAX_MODEL_SNAPSHOT_CHARS:
         return normalized
 
@@ -750,34 +757,136 @@ def compact_model_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     if len(_canonical_json(compact)) > MAX_MODEL_SNAPSHOT_CHARS:
         _fail("REPORTING_SNAPSHOT_LIMIT", "work identities cannot fit the model snapshot limit")
 
-    # Admit complete fact candidates one at a time.  This makes compaction stable and leaves
-    # a known source ref available to the model rather than truncating a fact's text.
-    omitted_by_work: dict[str, int] = {item["work_key"]: 0 for item in compact_items}
+    # Admit complete fact candidates in deterministic order.  A related evidence edge is
+    # a closure requirement: retain its target atomically, or omit the edge explicitly
+    # when the whole closure cannot fit.  This prevents a model-facing mapping from
+    # naming evidence that compaction removed.
     fact_entries: list[tuple[str, str, dict[str, Any]]] = []
+    fact_by_ref: dict[str, tuple[str, str, dict[str, Any]]] = {}
     for item in normalized["items"]:
+        work_key = cast(str, item["work_key"])
         for section in _SECTION_NAMES:
             for fact in item[section]:
-                fact_entries.append((item["work_key"], section, fact))
+                fact_entries.append((work_key, section, fact))
+                fact_by_ref[fact["ref"]] = (work_key, section, fact)
     fact_entries.sort(key=lambda entry: (entry[0], entry[1], entry[2]["ref"]))
     item_by_work = {item["work_key"]: item for item in compact_items}
-    for work_key, section, fact in fact_entries:
-        target = item_by_work[work_key][section]
-        target.append(fact)
+    selected_refs: set[str] = set()
+    dropped_relations_by_work: dict[str, int] = {item["work_key"]: 0 for item in compact_items}
+
+    def _related_refs(fact: Mapping[str, Any]) -> list[str]:
+        return sorted(
+            {ref for field in ("remedy_refs", "verification_refs") for ref in fact.get(field, [])}
+        )
+
+    def _relation_closure(start_ref: str) -> set[str]:
+        closure: set[str] = set()
+        pending = [start_ref]
+        while pending:
+            ref = pending.pop()
+            if ref in closure:
+                continue
+            entry = fact_by_ref.get(ref)
+            if entry is None:
+                # State-only refs are renderer/header evidence and are deliberately not
+                # admitted as model narrative candidates.
+                continue
+            closure.add(ref)
+            pending.extend(
+                related
+                for related in reversed(_related_refs(entry[2]))
+                if related in fact_by_ref and related not in closure
+            )
+        return closure
+
+    def _copy_fact(ref: str, allowed_refs: set[str]) -> tuple[dict[str, Any], int]:
+        original = fact_by_ref[ref][2]
+        copied = dict(original)
+        dropped = 0
+        for field in ("remedy_refs", "verification_refs"):
+            if field not in original:
+                continue
+            related = list(original[field])
+            kept = [candidate for candidate in related if candidate in allowed_refs]
+            dropped += len(related) - len(kept)
+            copied[field] = kept
+        return copied, dropped
+
+    def _append_fact(ref: str, allowed_refs: set[str]) -> tuple[str, str, int]:
+        work_key, section, _original = fact_by_ref[ref]
+        copied, dropped = _copy_fact(ref, allowed_refs)
+        item_by_work[work_key][section].append(copied)
+        return work_key, section, dropped
+
+    for work_key, _section, fact in fact_entries:
+        ref = fact["ref"]
+        if ref in selected_refs:
+            continue
+        closure = _relation_closure(ref)
+        missing = closure - selected_refs
+        ordered_missing = sorted(
+            missing,
+            key=lambda candidate: (
+                fact_by_ref[candidate][0],
+                fact_by_ref[candidate][1],
+                candidate,
+            ),
+        )
+        before_lengths: dict[tuple[str, str], int] = {}
+        for candidate in ordered_missing:
+            candidate_work, candidate_section, _ = fact_by_ref[candidate]
+            key = (candidate_work, candidate_section)
+            before_lengths.setdefault(key, len(item_by_work[candidate_work][candidate_section]))
+        tentative_drops: dict[str, int] = {}
+        allowed_refs = selected_refs | closure
+        for candidate in ordered_missing:
+            candidate_work, _candidate_section, dropped = _append_fact(candidate, allowed_refs)
+            tentative_drops[candidate_work] = tentative_drops.get(candidate_work, 0) + dropped
+        if len(_canonical_json(compact)) <= MAX_MODEL_SNAPSHOT_CHARS:
+            selected_refs.update(ordered_missing)
+            for candidate_work, dropped in tentative_drops.items():
+                dropped_relations_by_work[candidate_work] += dropped
+            continue
+
+        # The complete relation closure does not fit.  Roll it back and retry only the
+        # root with links to facts already retained; dropped links are covered explicitly.
+        for (candidate_work, candidate_section), length in before_lengths.items():
+            del item_by_work[candidate_work][candidate_section][length:]
+        root_before = len(item_by_work[work_key][_section])
+        root_work, root_section, dropped = _append_fact(ref, selected_refs)
         if len(_canonical_json(compact)) > MAX_MODEL_SNAPSHOT_CHARS:
-            target.pop()
+            del item_by_work[root_work][root_section][root_before:]
+            continue
+        selected_refs.add(ref)
+        dropped_relations_by_work[root_work] += dropped
+
+    omitted_by_work: dict[str, int] = {item["work_key"]: 0 for item in compact_items}
+    for work_key, _section, fact in fact_entries:
+        if fact["ref"] not in selected_refs:
             omitted_by_work[work_key] += 1
+    for item in compact_items:
+        for section in _SECTION_NAMES:
+            item[section].sort(key=lambda fact: fact["ref"])
 
     omitted = sum(omitted_by_work.values())
+    dropped_relations = sum(dropped_relations_by_work.values())
     compact_notices = [
         f"[COMPACTED] Source detail was bounded for narration; {omitted} fact(s) omitted and "
-        f"{total_gaps} coverage gap(s) require explicit coverage handling; {state_notice}. "
-        "Observed state and work identity remain authoritative."
+        f"{dropped_relations} linked evidence relation(s) omitted; {total_gaps} coverage gap(s) "
+        f"require explicit coverage handling; {state_notice}. Observed state and work identity "
+        "remain authoritative."
     ]
     for work_key in sorted(omitted_by_work):
         count = omitted_by_work[work_key]
+        relation_count = dropped_relations_by_work[work_key]
         if count:
             compact_notices.append(
                 f"[COMPACTED] {work_key}: {count} source fact(s) omitted; coverage is incomplete."
+            )
+        if relation_count:
+            compact_notices.append(
+                f"[COMPACTED] {work_key}: {relation_count} linked evidence relation(s) omitted; "
+                "remaining references are closed."
             )
     if (
         len(_canonical_json({**compact, "coverage_gaps": compact_notices}))
