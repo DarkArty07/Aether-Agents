@@ -1,7 +1,8 @@
 # Aether Agents — Website
 
-Status: implemented local review candidate on `feat/website-onepage`.
-Not merged, committed, pushed, published or deployed. The owner reviews before integration.
+Status: local review candidate for the BGD-WEB documentation unit in an isolated worktree.
+Not merged, pushed, published or deployed; the implementation and evidence are committed
+locally for same-card Supervisor review.
 
 The first polish pass removes visible sketch numbering, refines supporting Spanish,
 adds the @DarkArty07 profile link and replaces the flattened knowledge graph with a
