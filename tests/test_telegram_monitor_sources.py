@@ -458,6 +458,35 @@ def _write_bound_board(
     return board_db
 
 
+def _write_conflicting_session_db(
+    tmp_path: Path, session_ids: tuple[str, ...] = (ORIGIN, FINALIZER)
+) -> Path:
+    conflict_db = tmp_path / "conflicting-sessions.db"
+    foreign = tmp_path / "conflicting-session-project"
+    foreign.mkdir()
+    _sqlite(conflict_db, _SESSION_SCHEMA)
+    with sqlite3.connect(conflict_db) as connection:
+        connection.executemany(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    session_id,
+                    "tui",
+                    f"Conflicting {session_id} session",
+                    f"Conflicting {session_id} session",
+                    str(foreign),
+                    str(foreign),
+                    1788955200.0,
+                    None,
+                    1788958800.0,
+                )
+                for session_id in session_ids
+            ],
+        )
+        connection.commit()
+    return conflict_db
+
+
 def _monitor_store(root: Path, *, now: str = "2026-09-09T11:00:00+00:00") -> MonitorStore:
     instant = datetime.fromisoformat(now)
     store = MonitorStore(state_root=root, clock=lambda: instant)
@@ -560,6 +589,113 @@ def test_board_requires_canonical_native_project_id_and_root_path(
 
     assert source.items == ()
     assert expected_gap in source.coverage_gaps
+    assert not source.idle
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_gap"),
+    (
+        ("contract_id", "BOARD_CONTRACT_CONFLICT"),
+        ("contract_version", "BOARD_CONTRACT_CONFLICT"),
+        ("slug", "BOARD_IDENTITY_CONFLICT"),
+    ),
+)
+def test_board_contract_aliases_and_metadata_slug_must_agree(
+    tmp_path: Path, mutation: str, expected_gap: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    metadata_path = fixture["board_dir"] / "board.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if mutation == "contract_id":
+        metadata["contract_id"] = CONTRACT_B
+    elif mutation == "contract_version":
+        metadata["contract_version"] = 2
+    else:
+        metadata["slug"] = BOARD_SLUG_B
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert source.items == ()
+    assert expected_gap in source.coverage_gaps
+    assert not source.idle
+
+
+@pytest.mark.parametrize(
+    ("conflicted_session", "pipeline_gap"),
+    (
+        (ORIGIN, "CONTRACT_ORIGIN_SESSION_MISSING"),
+        (FINALIZER, "CONTRACT_FINALIZED_SESSION_MISSING"),
+    ),
+)
+def test_conflicted_session_ids_are_not_used_for_pipeline_or_direct_resolution(
+    tmp_path: Path, conflicted_session: str, pipeline_gap: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    conflict_db = _write_conflicting_session_db(tmp_path, (conflicted_session,))
+    direct = {
+        "project_id": PROJECT_ID,
+        "native_project_id": NATIVE_PROJECT,
+        "project_path": str(fixture["project"]),
+        "session_id": conflicted_session,
+        "interval_id": "conflicted-direct",
+        "outcome": "completed",
+    }
+    source = ReadOnlySources(
+        registry=fixture["registry"],
+        native_projects_path=fixture["projects_db"],
+        board_paths=[(BOARD_SLUG, fixture["board_db"])],
+        session_db_paths=[fixture["session_db"], conflict_db],
+        hermes_home=fixture["hermes"],
+    ).collect(cutoff_utc="2026-09-09T14:00:00Z", direct_records=[direct])
+
+    assert source.items == ()
+    assert "SESSION_ID_CONFLICT" in source.coverage_gaps
+    assert pipeline_gap in source.coverage_gaps
+    assert "DIRECT_SESSION_MISSING" in source.coverage_gaps
+    assert not source.idle
+
+
+@pytest.mark.parametrize(
+    ("role", "session_id", "pipeline_gap"),
+    (
+        ("creator", "supervisor-session", "TASK_CREATOR_SESSION_MISSING"),
+        ("worker", "worker-session", "WORKER_SESSION_MISSING"),
+    ),
+)
+def test_conflicted_creator_or_worker_session_is_not_used(
+    tmp_path: Path, role: str, session_id: str, pipeline_gap: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    _insert_session(fixture, session_id, fixture["project"], title=f"{role} session")
+    with sqlite3.connect(fixture["board_db"]) as connection:
+        if role == "creator":
+            connection.execute("UPDATE tasks SET session_id = ?", (session_id,))
+        else:
+            connection.execute("ALTER TABLE task_runs ADD COLUMN worker_session_id TEXT")
+            connection.execute("UPDATE task_runs SET worker_session_id = ?", (session_id,))
+        connection.commit()
+    conflict_db = _write_conflicting_session_db(tmp_path, (session_id,))
+    direct = {
+        "project_id": PROJECT_ID,
+        "native_project_id": NATIVE_PROJECT,
+        "project_path": str(fixture["project"]),
+        "session_id": session_id,
+        "interval_id": f"conflicted-{role}",
+        "outcome": "completed",
+    }
+    source = ReadOnlySources(
+        registry=fixture["registry"],
+        native_projects_path=fixture["projects_db"],
+        board_paths=[(BOARD_SLUG, fixture["board_db"])],
+        session_db_paths=[fixture["session_db"], conflict_db],
+        hermes_home=fixture["hermes"],
+    ).collect(cutoff_utc="2026-09-09T14:00:00Z", direct_records=[direct])
+
+    assert source.items == ()
+    assert "SESSION_ID_CONFLICT" in source.coverage_gaps
+    assert pipeline_gap in source.coverage_gaps
+    assert "DIRECT_SESSION_MISSING" in source.coverage_gaps
     assert not source.idle
 
 

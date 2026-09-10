@@ -579,29 +579,47 @@ def _contract_metadata(
     return _ContractMetadata(contract_id, version, title, created, finalized, trace)
 
 
-def _extract_contract_fields(metadata: Mapping[str, Any]) -> tuple[str | None, str | None]:
-    nested = metadata.get("contract")
-    if not isinstance(nested, Mapping):
-        nested = metadata.get("objective_contract")
-    if not isinstance(nested, Mapping):
-        nested = {}
-    contract_id = (
-        metadata.get("aether_contract_id")
-        or metadata.get("contract_id")
-        or nested.get("id")
-        or nested.get("contract_id")
-    )
-    version = (
-        metadata.get("aether_contract_version")
-        or metadata.get("contract_version")
-        or metadata.get("version")
-        or nested.get("version")
-        or nested.get("contract_version")
-    )
-    return (
-        contract_id if isinstance(contract_id, str) else None,
-        _version_text(version),
-    )
+def _extract_contract_fields(
+    metadata: Mapping[str, Any],
+) -> tuple[str | None, str | None, bool]:
+    """Extract corroborated contract identity fields from board metadata.
+
+    Board serializers have used a few names for the same portable contract fields.
+    They are safe to accept only when every supplied alias agrees after version
+    normalization; selecting the first truthy value would let contradictory metadata
+    establish an arbitrary source binding.
+    """
+    nested_values: list[Mapping[str, Any]] = []
+    for key in ("contract", "objective_contract"):
+        nested = metadata.get(key)
+        if isinstance(nested, Mapping):
+            nested_values.append(nested)
+
+    contract_values: list[Any] = [
+        metadata[key] for key in ("aether_contract_id", "contract_id") if key in metadata
+    ]
+    version_values: list[Any] = [
+        metadata[key]
+        for key in ("aether_contract_version", "contract_version", "version")
+        if key in metadata
+    ]
+    for nested in nested_values:
+        contract_values.extend(nested[key] for key in ("id", "contract_id") if key in nested)
+        version_values.extend(
+            nested[key] for key in ("version", "contract_version") if key in nested
+        )
+
+    if not contract_values or not version_values:
+        return None, None, False
+    contract_ids = {
+        value if isinstance(value, str) and value else None for value in contract_values
+    }
+    versions = {_version_text(value) for value in version_values}
+    if None in contract_ids or len(contract_ids) != 1:
+        return None, None, True
+    if None in versions or len(versions) != 1:
+        return None, None, True
+    return next(iter(contract_ids)), next(iter(versions)), False
 
 
 def _resolve_board_paths(
@@ -661,6 +679,9 @@ def _read_board_bindings(
         if metadata is None:
             gaps.append("BOARD_METADATA_UNREADABLE")
             continue
+        if "slug" in metadata and metadata["slug"] != slug:
+            gaps.append("BOARD_IDENTITY_CONFLICT")
+            continue
         portable_values = [
             metadata[key] for key in ("aether_project_id", "portable_project_id") if key in metadata
         ]
@@ -673,7 +694,10 @@ def _read_board_bindings(
             gaps.append("BOARD_PROJECT_UNBOUND")
             continue
         project = project_map[portable_id]
-        contract_id, version = _extract_contract_fields(metadata)
+        contract_id, version, contract_conflict = _extract_contract_fields(metadata)
+        if contract_conflict:
+            gaps.append("BOARD_CONTRACT_CONFLICT")
+            continue
         if contract_id is None or version is None:
             gaps.append("BOARD_CONTRACT_UNBOUND")
             continue
@@ -760,6 +784,7 @@ def _session_catalog(
     paths: Sequence[Path],
 ) -> tuple[dict[str, SessionRecord], dict[str, int], tuple[str, ...]]:
     records: dict[str, SessionRecord] = {}
+    conflicted_ids: set[str] = set()
     watermarks: dict[str, int] = {}
     gaps: list[str] = []
     columns = (
@@ -814,8 +839,13 @@ def _session_catalog(
             existing = records.get(session_id)
             if existing is not None and existing != record:
                 gaps.append("SESSION_ID_CONFLICT")
+                conflicted_ids.add(session_id)
                 continue
             records[session_id] = record
+    # Never retain whichever native row happened to be read first: an exact ID
+    # with contradictory source records cannot safely establish any attribution.
+    for session_id in conflicted_ids:
+        records.pop(session_id, None)
     return records, watermarks, tuple(sorted(set(gaps)))
 
 

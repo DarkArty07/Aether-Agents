@@ -33,8 +33,10 @@ source test module.
   portable Aether project, exact native Hermes Project ID, exact project-root
   `default_workdir`, Objective Contract ID/version, and a readable finalized contract
   with exact `created_in_session`/`finalized_in_session` provenance. Missing or conflicting
-  native ID/path metadata fails closed with a coverage gap. Supports the native metadata
-  keys `aether_project_id`, `aether_contract_id`, and `aether_contract_version`.
+  native ID/path metadata fails closed with a coverage gap. Every supplied contract ID or
+  version alias must corroborate the others, and a present `board.json` slug must match
+  the enumerated canonical slug. Supports the native metadata keys `aether_project_id`,
+  `aether_contract_id`, and `aether_contract_version`.
 - Opens existing projects, board, and SessionDB SQLite files through `mode=ro` URIs,
   asserts `PRAGMA query_only=ON`, validates a singly-linked non-aliased source file, and
   selects explicit bounded columns. No native mutator, migration, materialization, or
@@ -45,7 +47,9 @@ source test module.
   project-bound evidence but does not replace the finalized contract's exact authored
   origin session; the exact finalized session is separately required, non-reporter and
   project-bound. Optional worker-session/affinity evidence is validated separately.
-  Reporter sessions are excluded. A root task completing without the exact
+  Conflicted exact native session IDs are removed from the catalog, so dependent origin,
+  finalizer, creator, worker and direct records fail closed rather than using an arbitrary
+  SessionDB row. Reporter sessions are excluded. A root task completing without the exact
   terminal-affinity flow remains `waiting` with a visible `TERMINAL_CLOSURE_UNRESOLVED`
   gap rather than being treated as closed.
 - Reconciles task runs/events after persisted per-board run/event cursors and uses the
@@ -78,8 +82,9 @@ source test module.
 | Obligation | Check executed | Observed result |
 | --- | --- | --- |
 | Exact registered/marker/native Project identity and colliding names | `test_project_and_board_identity_is_exact_and_root_done_is_not_closure`; `test_two_bound_projects_with_colliding_names_are_kept_separate`; `test_same_project_multiple_contracts_and_origins_stay_distinct` | Exact UUID/path/native IDs attributed two concurrent projects and two contracts in one project independently; same display name did not merge them. |
-| Final contract, authored/finalized sessions, and exact origin/contract/version correlation | `test_contract_origin_and_finalizer_are_distinct_verified_sessions`; `test_finalized_contract_session_must_be_present_nonreporter_and_project_bound`; `test_contract_origin_creator_and_worker_sessions_are_separately_bound` | The finalized contract's authored origin remains the report header while a distinct finalized session is required to exist, be non-reporter and project-bound; Supervisor creator and worker sessions remain separate evidence. |
+| Final contract, authored/finalized sessions, and exact origin/contract/version correlation | `test_contract_origin_and_finalizer_are_distinct_verified_sessions`; `test_finalized_contract_session_must_be_present_nonreporter_and_project_bound`; `test_contract_origin_creator_and_worker_sessions_are_separately_bound`; `test_conflicted_session_ids_are_not_used_for_pipeline_or_direct_resolution`; `test_conflicted_creator_or_worker_session_is_not_used` | The finalized contract's authored origin remains the report header while a distinct finalized session is required to exist, be non-reporter and project-bound; Supervisor creator and worker sessions remain separate evidence; conflicting IDs fail closed for each dependent resolution. |
 | Canonical board native project/path binding | `test_board_requires_canonical_native_project_id_and_root_path` | Missing/conflicting native Hermes Project ID or `default_workdir` fails closed with a visible gap and never reports the item. |
+| Consistent board contract aliases and canonical slug | `test_board_contract_aliases_and_metadata_slug_must_agree` | Conflicting contract ID/version aliases and a metadata slug that disagrees with the enumerated board slug produce coverage gaps and no source item. |
 | Review/root-vs-terminal lifecycle | `test_project_and_board_identity_is_exact_and_root_done_is_not_closure`; `test_root_done_without_terminal_affinity_is_not_closed`; `test_task_lifecycle_states_and_stale_failure_diagnostics` | Review, queued, triage, blocked, stale/running, failure and authoritative terminal states remain visible; root-only completion remains `waiting` with `TERMINAL_CLOSURE_UNRESOLVED`. |
 | Direct no-contract, exact binding, continuation and reporter exclusion | `test_direct_turn_ended_without_contract_and_reporter_are_normalized`; `test_direct_work_requires_exact_native_project_and_session_binding`; `test_direct_continuation_intervals_remain_distinct_and_no_contract`; `test_direct_previous_cutoff_filters_old_intervals_but_keeps_continuations` | Direct intervals are distinct `turn_ended_*` identities with no contract, project acceptance remains unobserved, missing/conflicting native binding wakes with a gap, old completed intervals are cut, continuations remain, and cron reporter input is excluded. |
 | Strict SQLite read-only opening and source preservation | `test_read_only_open_fails_closed_and_does_not_change_source`; `test_collector_persists_snapshot_and_preserves_all_native_sources` | Query-only mutation fails; source bytes, inode, size and mtime remained unchanged for projects, SessionDB and board databases. Symlink open fails closed. |
@@ -92,8 +97,8 @@ source test module.
 
 Commands were run in the assigned worktree with the locked `uv` environment:
 
-- `env -i PATH="$PATH" HOME="$HOME" UV_CACHE_DIR="$HOME/.cache/uv" uv run --frozen pytest -q tests/test_telegram_monitor_sources.py` → **32 passed**; this clean-environment form removes all inherited variables, including every `HERMES_KANBAN_*` variable.
-- `env -i PATH="$PATH" HOME="$HOME" UV_CACHE_DIR="$HOME/.cache/uv" uv run --frozen pytest -q tests/test_telegram_monitor_sources.py tests/test_telegram_monitor_state.py` → **52 passed**.
+- `env -i PATH="$PATH" HOME="$HOME" UV_CACHE_DIR="$HOME/.cache/uv" uv run --frozen pytest -q tests/test_telegram_monitor_sources.py` → **39 passed**; this clean-environment form removes all inherited variables, including every `HERMES_KANBAN_*` variable.
+- `env -i PATH="$PATH" HOME="$HOME" UV_CACHE_DIR="$HOME/.cache/uv" uv run --frozen pytest -q tests/test_telegram_monitor_sources.py tests/test_telegram_monitor_state.py` → **59 passed**.
 - `uv run --frozen ruff check src/aether_agents/monitor tests/test_telegram_monitor_sources.py` → **All checks passed**.
 - `uv run --frozen ruff format --check src/aether_agents/monitor tests/test_telegram_monitor_sources.py` → **6 files already formatted**.
 - `uv run --frozen mypy src/aether_agents/monitor` → **Success: no issues found in 5 source files**. The command emitted only the existing unused optional-module override note.
