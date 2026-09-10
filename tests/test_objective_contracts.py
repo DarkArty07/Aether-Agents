@@ -1508,8 +1508,8 @@ def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_ba
         monkeypatch.delenv(name, raising=False)
 
     from hermes_cli import kanban_db, projects_db
+
     from aether_agents.objective_contracts import hermes_plugin
-    from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
 
     registry = ProjectRegistry()
     primary = _project(tmp_path, registry, PROJECT_A, "alpha")
@@ -1793,9 +1793,9 @@ def test_execution_board_validates_worktree_base_ref_format_and_equality(
         monkeypatch.delenv(name, raising=False)
 
     from hermes_cli import kanban_db, projects_db
+
     from aether_agents.objective_contracts.execution_boards import ExecutionBoardError
     from aether_agents.objective_contracts.hermes_plugin import (
-        _create_metadata_exclusive,
         _provision_execution_board,
         _validate_execution_metadata,
     )
