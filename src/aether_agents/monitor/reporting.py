@@ -128,6 +128,12 @@ _PROMPT_INJECTION_RE: Final = re.compile(
     r"(?:previous|earlier|system|developer|assistant|instruction|prompt)s?\b|"
     r"\b(?:call|use|invoke|run|execute)\b.{0,40}\b(?:tool|command|function|terminal)\b|"
     r"\b(?:send|post|deliver)\b.{0,60}\b(?:message|telegram|chat|recipient)\b|"
+    r"\b(?:ignora|ignore|desatiende|omite|omita)\b.{0,100}\b"
+    r"(?:instrucciones|indicaciones|órdenes|ordenes|prompt|sistema)s?\b|"
+    r"\b(?:envía|envie|manda|envíe|publica|entrega|reenvía|reenviar)\b.{0,80}\b"
+    r"(?:informe|reporte|mensaje)\b.{0,80}\b"
+    r"(?:otro|otra|alternativo|alternativa|diferente)\b.{0,40}\b"
+    r"(?:chat|destino|destinatario|conversación|conversacion)\b|"
     r"(?<![A-Za-z0-9_])(?:system|developer|assistant|user|tool)\s*:\s*|"
     r"(?<![A-Za-z0-9_])\[(?:system|developer|assistant|user|tool)\]\s*"
     r")",
@@ -153,7 +159,9 @@ _NARRATIVE_STATUSES: Final = frozenset(
 
 _SECTION_NAMES: Final = ("resolved", "current", "next", "complications", "pending")
 _CLAIM_SOURCE_SECTIONS: Final = {
-    "resolved": frozenset({"resolved", "state"}),
+    # State references are renderer-owned header evidence.  They are never narrative
+    # prose candidates, even when a model labels them as a resolved claim.
+    "resolved": frozenset({"resolved"}),
     "current": frozenset({"current"}),
     "next": frozenset({"next"}),
     "complications": frozenset({"complications"}),
@@ -324,8 +332,10 @@ def _canonical_observed_state(value: Any) -> str:
 
     if not isinstance(value, str):
         return "unknown"
-    normalized = value.strip().lower().replace("-", "_")
-    return normalized if normalized in _NARRATIVE_STATUSES else "unknown"
+    # The source state is typed data, not prose.  Only the exact canonical token is
+    # authoritative; case changes, separators and translated/readiness synonyms must
+    # remain unknown rather than silently becoming whole-work lifecycle states.
+    return value if value in _NARRATIVE_STATUSES else "unknown"
 
 
 def _timestamp(value: Any, *, required: bool) -> tuple[str | None, datetime | None]:
@@ -671,9 +681,17 @@ def compact_model_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     total_gaps = len(normalized["coverage_gaps"]) + sum(
         len(item["coverage_gaps"]) for item in normalized["items"]
     )
+    total_state_refs = sum(len(item["state_evidence_refs"]) for item in normalized["items"])
+    if total_state_refs:
+        state_notice = (
+            f"{total_state_refs} state evidence reference(s) are omitted from model context"
+        )
+    else:
+        state_notice = "state evidence references remain available"
     notice = (
         f"[COMPACTED] Source detail was bounded for narration; {total_facts} fact(s) and "
-        f"{total_gaps} coverage gap(s) require explicit coverage handling."
+        f"{total_gaps} coverage gap(s) require explicit coverage handling; {state_notice}. "
+        "Observed state and work identity remain authoritative."
     )
 
     compact_items: list[dict[str, Any]] = []
@@ -690,7 +708,10 @@ def compact_model_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
             },
             "contract": item["contract"],
             "observed_state": item["observed_state"],
-            "state_evidence_refs": item["state_evidence_refs"],
+            # State refs are immutable renderer/header evidence, not narrative claim
+            # candidates.  When compaction is required they are the first detail to
+            # omit so every active identity and its canonical state can remain visible.
+            "state_evidence_refs": [],
             "resolved": [],
             "current": [],
             "next": [],
@@ -749,7 +770,8 @@ def compact_model_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     omitted = sum(omitted_by_work.values())
     compact_notices = [
         f"[COMPACTED] Source detail was bounded for narration; {omitted} fact(s) omitted and "
-        f"{total_gaps} coverage gap(s) require explicit coverage handling."
+        f"{total_gaps} coverage gap(s) require explicit coverage handling; {state_notice}. "
+        "Observed state and work identity remain authoritative."
     ]
     for work_key in sorted(omitted_by_work):
         count = omitted_by_work[work_key]
@@ -951,7 +973,7 @@ def _is_authoritative_completion(
         source = sources[claim["ref"]]
         if (
             source.work_key == item["work_key"]
-            and source.section in {"resolved", "state"}
+            and source.section == "resolved"
             and source.provenance == "observed"
             and source.status == "verified"
         ):
