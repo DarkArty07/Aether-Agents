@@ -26,7 +26,12 @@ installation back where it found it never reports itself qualified.
 ``--live`` requires an absolute ``--output`` outside every Git worktree and the fixed
 ``--wait-hourly-boundaries 2``: the accepted qualification is exactly two real native
 wall-clock boundaries, and every other count is refused with exit status 2 before the
-live lane, an output file or any other effect.
+live lane, an output file or any other effect.  The receipt target itself is validated
+and established before the first live effect: it must be a new, literally spelled file
+whose immediate parent is already a private ``0700`` directory owned by the current
+user, or one missing level the harness creates as its own dedicated private leaf.  An
+existing directory is never hardened, and a target that cannot capture the private
+handles is refused with exit status 1 and no effect.
 
 Live mode is bounded, never kills or restarts an agent, and never accepts a token,
 destination, provider or model input: it uses only the existing configured
@@ -91,6 +96,7 @@ from aether_agents.paths import (  # noqa: E402
     FILE_MODE,
     UnsafeObservationPath,
     atomic_private_write,
+    ensure_private_dir,
 )
 
 SCHEMA_VERSION = "aether.telegram-monitor.qualification.v1"
@@ -3211,6 +3217,12 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
             "output-inside-repository",
             "the live output file must live outside every Git worktree and repository",
         )
+    # Read-only receipt-target validation runs before the test-process and lane guards: a
+    # target that can never capture the private handles is refused without creating or
+    # changing anything.  The full establishment (including the one dedicated private
+    # leaf the harness owns) then runs immediately before the orchestrator, so no model,
+    # sender or native job effect can be spent on a receipt that cannot be written.
+    _check_private_output_target(output)
     if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
         # A test process must never enable the monitor, create a native job or send a
         # real message: refuse before the first live effect, after output policy.
@@ -3223,6 +3235,7 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
             "boundaries-unsupported",
             "--live implements exactly two real hourly boundaries; the option surface stays fixed",
         )
+    _establish_private_output_target(output)
     return _live_run(
         args,
         stream,
@@ -3927,6 +3940,173 @@ def _private_output_path(raw: str | os.PathLike[str]) -> Path:
     return path
 
 
+def _effective_uid() -> int | None:
+    """The process's effective user id, or ``None`` where the platform has no owner model."""
+
+    getter = getattr(os, "geteuid", None)
+    if getter is None:  # pragma: no cover - non-POSIX platforms
+        return None
+    return int(getter())
+
+
+def _receipt_directory_chain(path: Path) -> list[Path]:
+    """Every literal directory component of the receipt target, deepest last.
+
+    The operator spells the target; the harness only accepts wording it can resolve
+    exactly once.  A ``..`` or empty component would let the same string mean different
+    files at different moments, so it is refused before anything is examined.
+    """
+
+    if not path.is_absolute() or path.name in ("", ".", ".."):
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt file must be an absolute path with a literal name",
+        )
+    if any(component in ("", ".", "..") for component in path.parts[1:]):
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt path must be spelled literally: '.', '..' and empty "
+            "components are refused before any effect",
+        )
+    chain: list[Path] = []
+    current = Path(path.anchor)
+    for component in path.parts[1:-1]:
+        current = current / component
+        chain.append(current)
+    return chain
+
+
+def _private_parent_problem(info: os.stat_result) -> tuple[str, str] | None:
+    """Why the receipt's immediate parent is not already private, if it is not."""
+
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        return (
+            "output-unsafe-target",
+            "the private receipt path must contain only real directories: a symlink or a "
+            "non-directory component is refused before any effect",
+        )
+    if stat.S_IMODE(info.st_mode) != DIR_MODE:
+        return (
+            "output-parent-not-private",
+            "the immediate parent of the private receipt must already be a private 0700 "
+            "directory: the harness never changes the mode of an existing directory",
+        )
+    uid = _effective_uid()
+    if uid is not None and info.st_uid != uid:
+        return (
+            "output-parent-not-private",
+            "the immediate parent of the private receipt must be owned by the current "
+            "user: the harness never relies on a shared or foreign directory",
+        )
+    return None
+
+
+def _verify_private_parent(parent: Path, *, allow_missing: bool) -> None:
+    """Require the receipt's immediate parent to be a real, private, owned directory."""
+
+    try:
+        info = os.lstat(parent)
+    except FileNotFoundError:
+        if allow_missing:
+            return
+        raise QualificationError(
+            "output-parent-missing",
+            "only the immediate parent of the private receipt may be missing: the harness "
+            "creates that single level as its own dedicated 0700 leaf and nothing deeper",
+        ) from None
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt path could not be examined",
+            detail={"error": type(error).__name__},
+        ) from error
+    problem = _private_parent_problem(info)
+    if problem is not None:
+        raise QualificationError(*problem)
+
+
+def _check_private_output_target(path: Path) -> None:
+    """Read-only validation of the complete private receipt target; it creates nothing.
+
+    The receipt is private output, so the whole target must be known usable before the
+    run spends smoke, model or Telegram effects producing the handles it captures: every
+    component must be a real directory (never a symlink), exactly one missing level is
+    tolerated (the dedicated leaf established below), and the receipt is a fresh path
+    this run owns rather than an operator file the harness would replace.
+    """
+
+    chain = _receipt_directory_chain(path)
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt target could not be examined",
+            detail={"error": type(error).__name__},
+        ) from error
+    else:
+        raise QualificationError(
+            "output-target-exists",
+            "the private receipt file must not already exist: a receipt is a one-shot "
+            "private capture and the harness never replaces an operator file",
+        )
+    for directory in chain[:-1]:
+        try:
+            info = os.lstat(directory)
+        except FileNotFoundError:
+            raise QualificationError(
+                "output-parent-missing",
+                "only the immediate parent of the private receipt may be missing: create "
+                "the intermediate directory yourself or choose another protected path",
+            ) from None
+        except OSError as error:
+            raise QualificationError(
+                "output-unsafe-target",
+                "the private receipt path could not be examined",
+                detail={"error": type(error).__name__},
+            ) from error
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+            raise QualificationError(
+                "output-unsafe-target",
+                "the private receipt path must contain only real directories: a symlink or "
+                "a non-directory component is refused before any effect",
+            )
+    _verify_private_parent(path.parent, allow_missing=True)
+
+
+def _establish_private_output_target(path: Path) -> None:
+    """Establish the complete protected receipt target before any live effect.
+
+    Validates first (read-only), then creates exactly one dedicated ``0700`` leaf when
+    the immediate parent does not exist yet.  An existing parent is never hardened: if it
+    is not already a private directory owned by this user the run is refused rather than
+    changing the mode of a directory the harness did not create.
+    """
+
+    _check_private_output_target(path)
+    parent = path.parent
+    try:
+        os.lstat(parent)
+    except FileNotFoundError:
+        try:
+            ensure_private_dir(parent)
+        except (OSError, ValueError) as error:
+            raise QualificationError(
+                "output-parent-not-private",
+                "the dedicated private receipt directory could not be created",
+                detail={"error": type(error).__name__},
+            ) from error
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt path could not be examined",
+            detail={"error": type(error).__name__},
+        ) from error
+    _verify_private_parent(parent, allow_missing=False)
+
+
 def _verify_private_receipt(path: Path) -> None:
     """Final-mode verification: a private receipt is real, single and private.
 
@@ -3961,12 +4141,19 @@ def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
     linked, ``0600`` inside private ``0700``), and every hardening, write or
     verification failure is raised as a bounded ``private-output`` failure: a run that
     cannot guarantee the private postcondition can never report itself qualified.
+
+    The containing directory is either the harness's own missing dedicated leaf (the
+    primitive creates it private) or a directory that is already private.  An existing
+    directory that is not a private ``0700`` directory owned by this user is refused
+    before the primitive runs, so writing a receipt never changes the mode of a
+    directory the harness did not create.
     """
 
     data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
         "utf-8"
     )
     try:
+        _verify_private_parent(path.parent, allow_missing=True)
         atomic_private_write(path, data)
         _verify_private_receipt(path)
     except QualificationError:
@@ -4003,8 +4190,11 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Absolute operator-selected protected file for private live receipts "
-            "(required with --live)."
+            "Absolute operator-selected new file for private receipts (required with "
+            "--live), outside every Git worktree. Its immediate parent must already be a "
+            "private 0700 directory owned by the current user, or be missing so the "
+            "harness creates that one dedicated private leaf before any effect; an "
+            "existing directory is never hardened."
         ),
     )
     parser.add_argument(
@@ -4037,6 +4227,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         Path(os.environ.get("TMPDIR", "/tmp")) / f"aether-monitor-qualification-{os.getpid()}"
     )
     workspace.mkdir(parents=True, exist_ok=True)
+    receipt_target_ready = False
     try:
         if args.live:
             record = run_live(args, sys.stderr)
@@ -4047,6 +4238,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             }
             ok = bool(summary.get("qualified"))
         else:
+            if args.output is not None:
+                # The deterministic lane's receipt is private output too: establish the
+                # same complete target before the checks, so a directory the harness did
+                # not create is never hardened and an unusable target fails immediately.
+                _establish_private_output_target(_private_output_path(args.output))
+                receipt_target_ready = True
             summary = run_offline(workspace)
             ok = all(record["status"] == "pass" for record in summary["checks"])
     except QualificationError as error:
@@ -4066,7 +4263,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
     summary["ok"] = ok and "error" not in summary
-    if args.output is not None and not args.live:
+    if args.output is not None and not args.live and receipt_target_ready:
+        # Only a target this run established is written: a refused target keeps its own
+        # bounded error instead of being masked by a second failed write to that path.
         try:
             _write_private_output(_private_output_path(args.output), summary)
         except QualificationError as error:

@@ -934,7 +934,7 @@ def test_offline_qualification_makes_no_model_or_sender_call(tmp_path: Path) -> 
 
 
 def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path: Path) -> None:
-    """Missing output, invalid bounds and repository-internal output all fail closed."""
+    """Missing output, invalid bounds, unsafe targets and repo-internal output fail closed."""
 
     missing_output = _run_qualification(tmp_path, "--live", "--json")
     assert missing_output.returncode == 2
@@ -970,6 +970,33 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
     assert foreign_output.returncode == 1
     assert json.loads(foreign_output.stdout)["error"]["code"] == "output-inside-repository"
     assert not (other_repo / "receipts.json").exists()
+
+    # The complete private receipt target is validated before the lane: a non-literal
+    # spelling, an operator-owned directory that is not already private, and an existing
+    # file are all refused in the child process without creating or changing anything.
+    traversal = tmp_path / "escape" / ".." / "receipts.json"
+    traversal_output = _run_qualification(tmp_path, "--live", "--output", str(traversal), "--json")
+    assert traversal_output.returncode == 1
+    assert json.loads(traversal_output.stdout)["error"]["code"] == "output-unsafe-target"
+    assert not (tmp_path / "receipts.json").exists()
+
+    shared = tmp_path / "shared-parent"
+    shared.mkdir()
+    os.chmod(shared, 0o755)
+    shared_output = _run_qualification(
+        tmp_path, "--live", "--output", str(shared / "receipts.json"), "--json"
+    )
+    assert shared_output.returncode == 1
+    assert json.loads(shared_output.stdout)["error"]["code"] == "output-parent-not-private"
+    assert stat.S_IMODE(os.stat(shared).st_mode) == 0o755
+    assert not (shared / "receipts.json").exists()
+
+    occupied = tmp_path / "operator-receipt.json"
+    occupied.write_text("operator receipt\n", encoding="utf-8")
+    occupied_output = _run_qualification(tmp_path, "--live", "--output", str(occupied), "--json")
+    assert occupied_output.returncode == 1
+    assert json.loads(occupied_output.stdout)["error"]["code"] == "output-target-exists"
+    assert occupied.read_text(encoding="utf-8") == "operator receipt\n"
 
     outside = tmp_path / "private" / "receipts.json"
     no_runtime = _run_qualification(tmp_path, "--live", "--output", str(outside), "--json")
@@ -3551,3 +3578,226 @@ def test_offline_receipt_failure_is_reported_instead_of_success(
     assert payload["ok"] is False
     assert payload["error"]["code"] == "private-output"
     assert not output.exists()
+
+
+# ---------------------------------------------------------------------------
+# The private receipt target is established before any effect (MON-06 round 7)
+# ---------------------------------------------------------------------------
+
+
+def _tree_snapshot(root: Path) -> list[tuple[str, str, int]]:
+    """Every path under ``root`` with its kind and mode, for unchanged-state checks."""
+
+    snapshot: list[tuple[str, str, int]] = []
+    for path in sorted(root.rglob("*")):
+        info = os.lstat(path)
+        if stat.S_ISLNK(info.st_mode):
+            kind = "symlink"
+        elif stat.S_ISDIR(info.st_mode):
+            kind = "directory"
+        elif stat.S_ISREG(info.st_mode):
+            kind = "file"
+        else:
+            kind = "other"
+        snapshot.append((str(path.relative_to(root)), kind, stat.S_IMODE(info.st_mode)))
+    return snapshot
+
+
+def test_live_receipt_target_is_refused_before_the_live_orchestrator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An unsupported absolute receipt target never enters the live lane or changes anything.
+
+    Reproduces the round-6 review probe: ``/tmp/<file>``, a non-literal spelling and an
+    existing operator directory all passed every old ``run_live`` precheck and reached the
+    orchestrator, and the directory was hardened only after the smoke and the two hourly
+    sends.  The target is now validated and established before the lane exists.
+    """
+
+    module = _qualification_module()
+    entered: list[str] = []
+
+    def tripwire(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        entered.append(str(kwargs.get("output")))
+        return {"public_summary": {"qualified": False}}
+
+    monkeypatch.setattr(module, "_live_run", tripwire)
+    monkeypatch.setattr(module, "LiveBackends", lambda: entered.append("backends"))
+    monkeypatch.setattr(module, "MonitorStore", lambda: entered.append("store"))
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+
+    operator_directory = tmp_path / "operator-directory"
+    operator_directory.mkdir()
+    operator_directory.chmod(0o755)
+    operator_receipt = tmp_path / "operator-receipt.json"
+    operator_receipt.write_text("operator receipt\n", encoding="utf-8")
+    real_private = tmp_path / "real-private"
+    real_private.mkdir()
+    real_private.chmod(0o700)
+    linked = tmp_path / "linked"
+    linked.symlink_to(real_private, target_is_directory=True)
+
+    untouched = _tree_snapshot(tmp_path)
+    refusals = (
+        (tmp_path / "escape" / ".." / "receipt.json", "output-unsafe-target"),
+        (operator_directory / "receipt.json", "output-parent-not-private"),
+        (operator_receipt, "output-target-exists"),
+        (linked / "receipt.json", "output-unsafe-target"),
+        (tmp_path / "missing" / "leaf" / "receipt.json", "output-parent-missing"),
+    )
+    for target, expected in refusals:
+        code = module.main(["--live", "--json", "--output", str(target)])
+        captured = capsys.readouterr()
+        assert code == 1, (str(target), captured.out)
+        payload = json.loads(captured.out)
+        assert payload["ok"] is False, target
+        assert payload["error"]["code"] == expected, target
+        assert str(target) not in captured.out, target
+
+    uid = module._effective_uid()
+    host_tmp = Path("/tmp")
+    if (
+        os.name == "posix"
+        and host_tmp.is_dir()
+        and (
+            uid is None
+            or os.stat(host_tmp).st_uid != uid
+            or stat.S_IMODE(os.stat(host_tmp).st_mode) != 0o700
+        )
+    ):
+        # A shared, foreign-owned host directory is refused too, and its mode is untouched:
+        # the reviewer's ``/tmp/<file>`` probe can no longer reach the lane.
+        shared = host_tmp / f"aether-monitor-review-{os.getpid()}.json"
+        mode_before = stat.S_IMODE(os.stat(host_tmp).st_mode)
+        code = module.main(["--live", "--json", "--output", str(shared)])
+        captured = capsys.readouterr()
+        assert code == 1
+        assert json.loads(captured.out)["error"]["code"] == "output-parent-not-private"
+        assert not shared.exists()
+        assert stat.S_IMODE(os.stat(host_tmp).st_mode) == mode_before
+
+    assert entered == []
+    assert _tree_snapshot(tmp_path) == untouched
+    assert operator_receipt.read_text(encoding="utf-8") == "operator receipt\n"
+
+
+def test_live_receipt_target_leaf_is_established_private_before_the_lane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing leaf is created ``0700`` before the lane; existing ancestors keep their mode.
+
+    The read-only validation creates nothing, the entry point establishes exactly the one
+    dedicated leaf (the tripwire proves that accepted target reaches the orchestrator), and
+    the receipt then round-trips ``0600`` inside that ``0700`` leaf while the operator's
+    ``0755`` ancestor keeps its mode.
+    """
+
+    module = _qualification_module()
+    entered: list[str] = []
+    constructed: list[str] = []
+
+    def tripwire(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        entered.append(str(kwargs.get("output")))
+        return {"public_summary": {"qualified": False}}
+
+    monkeypatch.setattr(module, "_live_run", tripwire)
+    monkeypatch.setattr(module, "LiveBackends", lambda: constructed.append("backends"))
+    monkeypatch.setattr(module, "MonitorStore", lambda: constructed.append("store"))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    # The lane's own test-process guard would refuse before the tripwire; the stub keeps
+    # that guard truthful for this injected world while the real orchestrator never runs.
+    monkeypatch.setattr(module, "sys", SimpleNamespace(modules={}, stderr=sys.stderr))
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+
+    ancestor = tmp_path / "operator-ancestor"
+    ancestor.mkdir()
+    ancestor.chmod(0o755)
+    target = ancestor / "telegram-monitor-receipts" / "live.json"
+    tmp_mode = stat.S_IMODE(os.stat(tmp_path).st_mode)
+
+    module._check_private_output_target(target)
+    assert not target.parent.exists()
+    assert stat.S_IMODE(os.stat(ancestor).st_mode) == 0o755
+
+    code = module.main(["--live", "--json", "--output", str(target)])
+    captured = capsys.readouterr()
+
+    assert code == 1, captured.out  # the tripwire is not a real qualification
+    assert entered == [str(target)]
+    assert constructed == ["backends", "store"]
+    assert stat.S_IMODE(os.stat(target.parent).st_mode) == 0o700
+    assert stat.S_IMODE(os.stat(ancestor).st_mode) == 0o755
+    assert stat.S_IMODE(os.stat(tmp_path).st_mode) == tmp_mode
+    assert not target.exists()
+
+    module._write_private_output(target, {"ok": True, "handles": {"message_id": "7"}})
+    info = os.stat(target, follow_symlinks=False)
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(target.parent).st_mode) == 0o700
+    assert stat.S_IMODE(os.stat(ancestor).st_mode) == 0o755
+
+
+def test_private_receipt_writer_never_hardens_an_existing_directory(tmp_path: Path) -> None:
+    """An existing non-private parent is refused, never ``chmod``-ed into a private one."""
+
+    module = _qualification_module()
+    parent = tmp_path / "existing-operator-directory"
+    parent.mkdir()
+    parent.chmod(0o755)
+    payload = {
+        "schema_version": module.SCHEMA_VERSION,
+        "handles": {"message_id": PRIVATE_RECEIPT_SENTINEL},
+    }
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(parent / "receipt.json", payload)
+
+    assert failure.value.code == "output-parent-not-private"
+    assert stat.S_IMODE(os.stat(parent).st_mode) == 0o755
+    assert list(parent.iterdir()) == []
+
+
+def test_offline_receipt_is_written_to_the_established_private_target(tmp_path: Path) -> None:
+    """The deterministic lane establishes the same target and writes a verified receipt."""
+
+    target = tmp_path / "operator-receipts" / "offline.json"
+
+    completed = _run_qualification(tmp_path, "--json", "--output", str(target))
+
+    assert completed.returncode == 0, completed.stdout
+    payload = json.loads(completed.stdout)
+    assert payload["ok"] is True and payload["mode"] == "offline"
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(target.parent).st_mode) == 0o700
+    assert json.loads(target.read_text(encoding="utf-8"))["mode"] == "offline"
+
+
+def test_offline_receipt_target_refusals_leave_no_effect(tmp_path: Path) -> None:
+    """The deterministic lane refuses the same unsupported targets and changes nothing."""
+
+    shared = tmp_path / "offline-shared"
+    shared.mkdir()
+    os.chmod(shared, 0o755)
+    occupied = tmp_path / "offline-occupied.json"
+    occupied.write_text("operator receipt\n", encoding="utf-8")
+
+    for target, expected in (
+        (shared / "receipt.json", "output-parent-not-private"),
+        (occupied, "output-target-exists"),
+        (tmp_path / "one" / ".." / "traversal.json", "output-unsafe-target"),
+    ):
+        completed = _run_qualification(tmp_path, "--json", "--output", str(target))
+        assert completed.returncode == 1, target
+        payload = json.loads(completed.stdout)
+        assert payload["ok"] is False, target
+        assert payload["error"]["code"] == expected, target
+
+    assert stat.S_IMODE(os.stat(shared).st_mode) == 0o755
+    assert list(shared.iterdir()) == []
+    assert occupied.read_text(encoding="utf-8") == "operator receipt\n"
+    assert not (tmp_path / "traversal.json").exists()

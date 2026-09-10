@@ -195,8 +195,12 @@ The provisioned live lane is owned by the terminal integration step (MON-INT) an
 invoked as:
 
 ```bash
-# $PRIVATE_EVIDENCE is an absolute operator-selected protected directory outside every
-# Git worktree; the receipt is written there as a verified-private file.
+# $PRIVATE_EVIDENCE is an absolute operator-selected protected location outside every
+# Git worktree. It must either already be a private 0700 directory you own, or not exist
+# yet: the harness then creates that single level as its own dedicated 0700 leaf before
+# any live effect and writes the receipt there as a verified-private file. The target is
+# a new file (a receipt is a one-shot capture), and an existing directory is never
+# chmod-ed by the harness.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
@@ -206,6 +210,9 @@ provisioned runtime and the existing pinned destination, and it performs no exte
 effect until its environment pre-flight passes. `--wait-hourly-boundaries` is fixed at
 exactly `2` — the accepted qualification waits for two real wall-clock boundaries — and
 every other value is refused with exit code 2 before the lane, an output file or any other
+effect. The `--output` receipt target is validated and established first (see *Private
+receipts* below), so an invocation whose target could never capture the private handles is
+refused with exit code 1 and a bounded error before any model, sender or native job
 effect. What it does, in order:
 
 0. **Quiescing a running monitor.** If the monitor is already enabled, it is durably
@@ -282,12 +289,24 @@ effect. What it does, in order:
    `restore-unrelated-jobs`) even when every boundary passed.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
-run record, the canonical/emitted D12 comparison) go only to the `--output` file, which
-must be an absolute path outside every Git worktree and is written fail-closed through the
-repository's atomic private-write primitive: the file is created `0600` before any content
-exists and the written receipt is verified `0600` inside a private `0700` containing
-directory, so a write that cannot be verified private fails the run instead of qualifying
-it. The public summary carries revisions, counts, latencies, case statuses, the
+run record, the canonical/emitted D12 comparison) go only to the `--output` file. The
+target must be an absolute, literally spelled path outside every Git worktree pointing at
+a new file, and the harness resolves and establishes the whole target *before* the first
+live effect: every component must be a real directory (a symlink is refused), the
+immediate parent must already be a private `0700` directory owned by the current user, and
+exactly one missing level is tolerated — that single dedicated leaf is created `0700` by
+the harness itself. An existing directory is never hardened (its mode is never changed),
+and the receipt is a fresh capture rather than a replacement of an operator file. Every
+other target — a non-literal spelling, an existing file, a symlinked or shared/foreign
+parent, or more than one missing level — is refused with exit code `1` and a bounded error
+code (`output-unsafe-target`, `output-target-exists`, `output-parent-missing`,
+`output-parent-not-private`) before anything is created, changed or sent. The accepted
+receipt is then written fail-closed through the repository's atomic private-write
+primitive: the file is created `0600` before any content exists and the written receipt is
+verified `0600` inside a private `0700` containing directory, so a write that cannot be
+verified private fails the run instead of qualifying it. The deterministic lane applies
+the same target rule before its checks and reports the same bounded codes. The public
+summary carries revisions, counts, latencies, case statuses, the
 `semantic_certification` block and the qualified scope only, and states that Telegram Bot
 API acceptance is not proof the human read a message. The public `qualified` verdict covers
 the deterministic scope listed in `qualified_scope`; the `unqualified_scope` entry names
