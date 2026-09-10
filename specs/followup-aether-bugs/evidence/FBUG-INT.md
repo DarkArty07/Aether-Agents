@@ -90,6 +90,14 @@ the reviewed optional/provider environment baseline: 20 files with failures (80 
 tests) and one collection/no-tests file. No FU-369 focused file appears in that set. This
 is reported as red; it is not represented as passing fork CI.
 
+The first Aether PR #386 run failed all three required policy jobs in `Validate canonical
+base manifest`: the accepted Objective Contract path was tracked but missing from the
+workflow's exact non-`specs/` allowlist. The terminal applied the mechanically implied
+one-line manifest correction without changing policy behavior. The locally reproduced
+manifest then matched all `347` tracked non-`specs/` paths, the spec secret/mode boundary
+passed, and the 50-test policy/TUI/documentation focus plus 434 subtests passed before a
+normal follow-up push. No failed check was bypassed or relabelled.
+
 ## Issue dispositions
 
 The final GitHub mutations occur only after the Aether PR is durably merged:
