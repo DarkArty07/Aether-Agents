@@ -3,70 +3,41 @@
 
 The default lane is deterministic.  It exercises the shipped control parser, the
 plugin registration surface, the packaged pre-check resource and the private monitor
-state over disposable roots, and it proves by construction that it never imports a
-native Hermes module, never calls a model and never invokes the Telegram sender.  It
-therefore performs no external effect and can run anywhere.
+state over disposable roots, proves the D13 laboratory bootstrap and its fail-closed
+preflight, and proves by construction that it never imports a native Hermes module, never
+calls a model and never invokes the Telegram sender.  It therefore performs no external
+effect and can run anywhere.
 
-``--live`` adds the provisioned qualification: it resolves the already provisioned
-Morfeo runtime, isolates one honestly labelled synthetic scope (two synthetic
-contract-bound projects, one direct no-contract session and the D12 live semantic
-corpus) by replacing the operator's project registry with a synthetic one — after the
-original bytes have been captured in a durable, verified-private, no-clobber recovery
-record and the operator file itself has been *moved aside* rather than replaced — runs
-one bounded native model+transport
-smoke, enables the single owned native hourly job, waits for two real wall-clock
-hourly boundaries executed by the native scheduler, transitions the synthetic work
-between those cuts, then observes one real no-work boundary whose scheduler run must
-show the native ``wakeAgent=false`` gate, and finally verifies manual ``off``,
-restores the previous enablement and puts the registry, native rows, boards, sessions
-and spool files back exactly.  Only a genuinely missing registry counts as "no
-registry": an unreadable, symlinked, multi-linked or unstable registry refuses the live
-lane with the bounded ``registry-unreadable`` failure before anything is changed, a
-recovery record or held file left by an interrupted run refuses it with
-``registry-recovery-exists`` / ``registry-held-exists`` until it is reconciled, a
-concurrent write detected while the registry is captured or replaced refuses it with
-``registry-changed`` (the operator's bytes stay on disk), and the restore removes the
-entries this run itself registered for its synthetic projects while never deleting or
-overwriting a legitimate concurrent registry change.
+``--live`` adds the provisioned qualification, and it runs only inside the isolated
+native-runtime laboratory owned by ``specs/telegram-monitor/qualification-isolation.md``:
+one private, exclusive root outside every Git worktree that gives the monitor's own native
+code a private ``HOME``, ``HERMES_HOME``, XDG roots, temporary directory, working directory
+and Aether state root.  Inside it the shipped writers seed an honestly labelled synthetic
+scope, the shipped control service installs and enables the one lab monitor job, and one
+bounded supervised instance of the native ``InProcessCronScheduler`` executes one bounded
+model/transport smoke, two natural wall-clock hourly cuts with the synthetic lifecycle
+completed between them through its supported callbacks, and a later natural no-work cut
+whose scheduler run must show the native ``wakeAgent=false`` gate.  Manual ``off`` is
+verified, the lab scheduler is stopped cooperatively, and the laboratory root and its
+private receipt are *retained* as declared objective evidence.
 
-Every operator-visible or durable registry name is *moved* with a no-replace rename
-(``renameat2`` with ``RENAME_NOREPLACE``, so the existence test and the move are one
-kernel operation), and no entry of the operator's registry directory is ever unlinked: a
-removal verifies the artifact *through a descriptor*, moves it into a fresh run-owned
-``0700`` staging directory (``.aether-qualification-staging-<random>``), verifies the moved
-entry through a descriptor again, deletes only inside that staging directory, proves the
-deletion by descriptor (the verified inode's link count reached zero and the staged name is
-gone) and finally removes the directory with ``rmdir``, which the kernel refuses while any
-entry is still inside it.  An entry that appeared at the artifact name after the descriptor
-check is neither replaced nor deleted — it is moved straight back and the run refuses — a
-deletion that cannot be proven reinstates the exact bytes this run verified at the artifact
-name without replacing anything and refuses, and a staging directory that cannot be removed
-is never deleted silently: it stays under its documented name and the run refuses.  Every
-file the harness installs into the registry directory is staged the same way, so the
-registry directory only ever sees no-clobber ``link`` creations and no-replace renames, and
-deletions happen only inside a directory this run owns.  POSIX has no delete bound to a file
-identity, so a same-user process that substitutes an entry *inside this run's own staging
-directory* between the staged verification and the unlink cannot be defended against by any
-filesystem interface: that case is outside the supported concurrency boundary, it is
-detected by the descriptor postcondition, its bytes are never certified as removed, and a
-run that hits it refuses instead of emitting a verdict.  The exact registry entries this run
-registered for its synthetic projects are derived from the shipped project writer itself —
-the same registration call with the same arguments against a private scratch state root that
-this run creates and then removes with a verified postcondition (a root that remains is a
-bounded failure, never a successful derivation) — and never a value read out of the operator
-registry — so a concurrent writer's same-id update is preserved rather than mistaken for
-this run's own scope.
+The harness never replaces, restores, quarantines, merges or deletes this installation's
+project registry: the isolation is containment, not swapping, so no operator state has to
+be put back.  The monitor of this installation is not quiesced, no existing job is read or
+changed and no unrelated work is interrupted.
 
-Every external boundary the live lane crosses is reached through :class:`LiveBackends`,
-and every restore invariant is qualification-gating: a run that cannot put the
-installation back where it found it never reports itself qualified.
+Every external boundary the live lane crosses is reached through :class:`LiveBackends`
+and the child context is built by ``scripts/telegram_monitor_lab.py``; every containment,
+retention and shutdown invariant is qualification-gating, so a run that cannot prove its
+private context, its exact candidate/route/destination or its own shutdown never reports
+itself qualified.
 
 ``--live`` requires an absolute ``--output`` outside every Git worktree and the fixed
-``--wait-hourly-boundaries 2``: the accepted qualification is exactly two real native
-wall-clock boundaries, and every other count is refused with exit status 2 before the
-live lane, an output file or any other effect.  The receipt target itself is validated
-and established before the first live effect: it must be a new, literally spelled file
-whose immediate parent is already a private ``0700`` directory owned by the current
+``--wait-hourly-boundaries 2``: the accepted qualification is exactly two natural native
+wall-clock cuts plus the later idle cut, and every other count is refused with exit status
+2 before the live lane, an output file or any other effect.  The receipt target itself is
+validated and established before the first live effect: it must be a new, literally spelled
+file whose immediate parent is already a private ``0700`` directory owned by the current
 user, or one missing level the harness creates as its own dedicated private leaf.  An
 existing directory is never hardened, and a target that cannot capture the private
 handles is refused with exit status 1 and no effect.  Establishment records the identity
@@ -81,34 +52,33 @@ redirect the write: the receipt is installed inside the established directory it
 bounded ``private-output`` error, so no qualified verdict is emitted and the private
 receipt can only remain inside the established ``0700`` directory.
 
-Live mode is bounded, never kills or restarts an agent, and never accepts a token,
-destination, provider or model input: it uses only the existing configured
-destination and the existing model route.  Evidence is bound to the native scheduler's
-own run output, the durable monitor records and the shipped renderer, so a boundary
-cannot be reported PASS without the real run that produced it.  Private handles
-(message/session identifiers, report identifiers, paths) stay in the operator-selected
-``--output`` file outside every Git worktree, written fail-closed and installed with a
-single no-clobber link into the exact directory establishment accepted: created ``0600``
-before any content exists, never replacing an entry that appeared at the target, and
-verified ``0600`` inside a private ``0700`` containing directory (a write that cannot be
-verified private fails the run);
-the public summary carries revisions,
-counts, latencies, case results and the qualified scope only.  Telegram Bot API
-acceptance is recorded as acceptance, never as proof that a human read the message.
+Live mode reuses only the access this installation already provisioned for the exact route
+and destination, carries it to lab children through their process environment only, and
+never accepts a token, destination, provider or model input: no credential is acquired,
+refreshed, widened or written into the laboratory, a test file or a receipt.  Evidence is
+bound to the native scheduler's own run output, the durable monitor records and the shipped
+renderer, so a cut cannot be reported PASS without the real run that produced it.  Private
+handles (message/session identifiers, report identifiers, paths) stay in the
+operator-selected ``--output`` file outside every Git worktree, written fail-closed and
+installed with a single no-clobber link into the exact directory establishment accepted:
+created ``0600`` before any content exists, never replacing an entry that appeared at the
+target, and verified ``0600`` inside a private ``0700`` containing directory (a write that
+cannot be verified private fails the run); the public summary carries revisions, counts,
+latencies, case results and the qualified scope only.  Telegram Bot API acceptance is
+recorded as acceptance, never as proof that a human read the message.
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import contextlib
-import errno
 import hashlib
 import io
 import json
 import os
 import re
 import shutil
+import signal
 import sqlite3
 import stat
 import subprocess
@@ -125,6 +95,14 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
+import telegram_monitor_lab  # noqa: E402
+from telegram_monitor_lab import (  # noqa: E402
+    plan_record,
+)
 
 from aether_agents.monitor import commands as monitor_commands  # noqa: E402
 from aether_agents.monitor import hermes_plugin  # noqa: E402
@@ -148,6 +126,7 @@ from aether_agents.paths import (  # noqa: E402
     FILE_MODE,
     UnsafeObservationPath,
     ensure_private_dir,
+    state_root,
 )
 
 SCHEMA_VERSION = "aether.telegram-monitor.qualification.v1"
@@ -203,15 +182,17 @@ SMOKE_POLL_SECONDS = 15
 #: schedules the job for `now`, so a boundary too close by would consume that boundary.
 SMOKE_MIN_LEAD_SECONDS = 900.0
 
+#: Bounds of the one supervised native scheduler instance the laboratory starts and stops.
+LAB_SCHEDULER_READY_SECONDS = 120.0
+LAB_SCHEDULER_STOP_SECONDS = 120.0
+LAB_SCHEDULER_POLL_SECONDS = 1.0
+
 #: The native scheduler's own record that the pre-check gate suppressed the agent run.
 NATIVE_SILENT_MARKER = "Script gate returned `wakeAgent=false` — agent skipped."
 
 #: D7/D12: a report never claims overall percentages, so the fixed live corpus rejects
 #: any percentage the narrator would have invented for those case identities.
 INVENTED_PERCENTAGE = re.compile(r"\d+(?:[.,]\d+)?\s*%|percent|por ciento", re.IGNORECASE)
-
-#: Private direct-turn spool schema written by the shipped runtime hooks.
-DIRECT_SCHEMA_VERSION = "aether.telegram-monitor.direct.v1"
 
 #: Behaviour-bearing native job fields; unrelated jobs are compared through these only.
 JOB_BEHAVIOR_FIELDS = (
@@ -706,6 +687,200 @@ def _check_d12_safety_boundary() -> tuple[str, str]:
     )
 
 
+def _writer_probe_sample(plan: Any) -> dict[str, Any]:
+    """A synthetic writer-probe payload the offline lane can evaluate without a runtime."""
+
+    return {
+        "writers": {
+            name: {"present": True, "parameters": list(parameters)}
+            for name, parameters in telegram_monitor_lab.WRITER_REQUIREMENTS
+        },
+        "artifacts": {
+            module: {"file": f"/lab/{module}.py", "sha256": "0" * 64, "size": 1}
+            for module in telegram_monitor_lab.WRITER_ARTIFACT_MODULES
+        },
+        "effective": {
+            name: str(plan.hermes_home / f"{name}.state")
+            for name, _ in telegram_monitor_lab.WRITER_EFFECTIVE_ROOTS
+        },
+        "distribution": {"hermes-agent": "0.0.0", "aether-agents": "0.0.0"},
+        "entry_points": ["aether-telegram-monitor=aether_agents.monitor.hermes_plugin"],
+    }
+
+
+def _check_lab_writer_surface(plan: Any) -> str | None:
+    """The offline proof of the fail-closed native writer gate; no native import at all."""
+
+    lab_module = telegram_monitor_lab
+    sample = _writer_probe_sample(plan)
+    if lab_module.writer_problems(sample, lab_root=plan.root):
+        return "a compatible writer surface was refused"
+    summary = lab_module.writer_summary(sample)
+    if sorted(summary["required_interfaces"]) != sorted(
+        name for name, _ in lab_module.WRITER_REQUIREMENTS
+    ):
+        return "the writer summary dropped a required interface"
+    if len(summary["artifact_digests"]) != len(lab_module.WRITER_ARTIFACT_MODULES):
+        return "the writer summary dropped a loaded artifact digest"
+    if str(plan.root) in json.dumps(summary):
+        return "the writer summary leaked a private path"
+
+    unsupported = json.loads(json.dumps(sample))
+    unsupported["writers"]["hermes_cli.kanban_db.request_review"] = {
+        "present": False,
+        "parameters": [],
+    }
+    missing = lab_module.writer_problems(unsupported, lab_root=plan.root)
+    if "writer-interface-missing:hermes_cli.kanban_db.request_review" not in missing:
+        return "an unsupported runtime was not refused for a missing writer interface"
+
+    narrowed = json.loads(json.dumps(sample))
+    narrowed["writers"]["hermes_state.SessionDB.create_session"]["parameters"].remove("cwd")
+    parameters = lab_module.writer_problems(narrowed, lab_root=plan.root)
+    if "writer-parameter-missing:hermes_state.SessionDB.create_session:cwd" not in parameters:
+        return "an unsupported writer parameter was not refused"
+
+    digestless = json.loads(json.dumps(sample))
+    digestless["artifacts"]["hermes_state"]["sha256"] = None
+    if "writer-artifact-missing:hermes_state" not in lab_module.writer_problems(
+        digestless, lab_root=plan.root
+    ):
+        return "a module without a loaded artifact digest was not refused"
+
+    escaped = json.loads(json.dumps(sample))
+    escaped["effective"]["kanban_db"] = str(plan.root.parent / "outside" / "kanban.db")
+    if "writer-root-escape:kanban_db" not in lab_module.writer_problems(
+        escaped, lab_root=plan.root
+    ):
+        return "a lab child whose effective board root escaped was not refused"
+    return None
+
+
+def _check_lab_context(workspace: Path) -> tuple[str, str]:
+    """Prove the D13 laboratory bootstrap and preflight without any external effect.
+
+    The check builds a real plan, refuses an in-repository root through the read-only
+    preflight itself (no runtime interpreter, no access value, nothing created), proves the
+    decision-only configuration carries no secret, redirects every mutable child root inside
+    the private root, refuses an escaped selector, resolves the native writer gate from a
+    synthetic probe payload (compatible accepted, unsupported refused), creates the root
+    exclusively with private modes and writes its record and configuration ``0600``.
+    Nothing here imports a native module, starts a scheduler, enables the monitor or spends
+    anything.
+    """
+
+    state_root = workspace / "lab-host"
+    stamp = _utc_now().strftime("%Y%m%dT%H%M%SZ")
+    plan = telegram_monitor_lab.build_plan(state_root, stamp, token="0123456789ab")
+    problems = telegram_monitor_lab.path_problems(plan, inside_repository=_inside_repository)
+    if problems:
+        return "fail", f"the laboratory layout was refused: {problems}"
+    inside = telegram_monitor_lab.build_plan(ROOT, stamp, token="0123456789ab")
+    in_repository = telegram_monitor_lab.path_problems(inside, inside_repository=_inside_repository)
+    if "lab-root-inside-repository" not in in_repository:
+        return "fail", "a laboratory root inside this repository was not refused"
+    # The read-only phase refuses a refused layout itself, before the provisioned runtime
+    # or the borrowed access is touched (the interpreter below does not exist, and no
+    # access value is supplied): nothing is created and no credential is read for it.
+    refused = _lab_preflight(
+        inside,
+        interpreter=workspace / "no-such-runtime-interpreter",
+        profile_home=workspace / "no-such-profile",
+        environ={},
+    )
+    if refused["problems"] != ["lab-root-inside-repository"]:
+        return (
+            "fail",
+            f"the read-only preflight did not refuse the layout first: {refused['problems']}",
+        )
+    if inside.root.exists() or inside.root.is_symlink():
+        return "fail", "the read-only preflight created the laboratory root it refused"
+    names = telegram_monitor_lab.required_access(
+        {
+            "providers": {
+                "aether-router": {
+                    "base_url": "https://example.invalid",
+                    "key_env": "AETHER_ROUTER_API_KEY",
+                }
+            },
+            "model": {"default": "candidate"},
+        }
+    )
+    for required in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_HOME_CHANNEL", "AETHER_ROUTER_API_KEY"):
+        if required not in names:
+            return "fail", f"the laboratory access names omit {required}"
+    decisions = telegram_monitor_lab.minimal_config(
+        {
+            "model": {
+                "default": "candidate",
+                "provider": "aether-router",
+                "api_key": "SECRET-MODEL",
+            },
+            "providers": {
+                "aether-router": {
+                    "base_url": "https://example.invalid",
+                    "key_env": "AETHER_ROUTER_API_KEY",
+                }
+            },
+            "gateway": {"platforms": {"telegram": {"enabled": True, "token": "SECRET-BOT"}}},
+            "agent": {"name": "Morfeo", "max_turns": 7, "sessions_dir": "/private/sessions"},
+            "sessions": {"shared": "/private/shared"},
+        }
+    )
+    serialized = telegram_monitor_lab.serialize_config(decisions)
+    if "SECRET-MODEL" in serialized or "SECRET-BOT" in serialized:
+        return "fail", "the laboratory configuration projected a credential"
+    if "sessions" in decisions or decisions["agent"].get("sessions_dir"):
+        return "fail", "the laboratory configuration copied operator runtime state"
+    if decisions["agent"].get("max_turns") != 7 or "aether-router" not in decisions["providers"]:
+        return "fail", "the laboratory configuration dropped a provisioned decision"
+    environment = telegram_monitor_lab.child_environment(
+        plan,
+        base={
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": "/production/home",
+            "HERMES_HOME": "/production/hermes",
+            "HERMES_KANBAN_BOARD": "production-board",
+            "XDG_STATE_HOME": "/production/state",
+        },
+        access={"TELEGRAM_BOT_TOKEN": "borrowed-in-memory"},
+        repository_src=SOURCE_ROOT,
+    )
+    if telegram_monitor_lab.context_problems(plan, environment):
+        return "fail", "a laboratory child context did not stay inside the private root"
+    if environment["HOME"] != str(plan.home) or "HERMES_KANBAN_BOARD" in environment:
+        return "fail", "the laboratory child context kept a production routing selector"
+    escaped = dict(environment)
+    escaped["HOME"] = "/production/home"
+    if not telegram_monitor_lab.context_problems(plan, escaped):
+        return "fail", "an escaped child root was not refused"
+    writer_problem = _check_lab_writer_surface(plan)
+    if writer_problem is not None:
+        return "fail", writer_problem
+    telegram_monitor_lab.create_root(plan)
+    config_path = telegram_monitor_lab.write_config(plan, serialized)
+    record_path = plan.root / telegram_monitor_lab.LAB_RECORD_NAME
+    for path in (plan.root, plan.profile_home, plan.lab_state_root):
+        if not path.is_dir() or path.is_symlink() or stat.S_IMODE(path.stat().st_mode) != DIR_MODE:
+            return "fail", "a laboratory root is not a private real directory"
+    for path in (config_path, record_path):
+        if not path.is_file() or stat.S_IMODE(path.stat().st_mode) != FILE_MODE:
+            return "fail", "a laboratory file is not private"
+    try:
+        telegram_monitor_lab.create_root(plan)
+    except telegram_monitor_lab.LabError as error:
+        if error.code != "lab-root-exists":
+            return "fail", f"an existing laboratory root was not refused: {error.code}"
+    else:
+        return "fail", "an existing laboratory root was adopted instead of refused"
+    return (
+        "pass",
+        "the private laboratory root, its decision-only configuration, the borrowed access "
+        "names, the fail-closed child containment and the read-only preflight refusal that "
+        "creates nothing are proven with no external effect",
+    )
+
+
 def run_offline(workspace: Path) -> dict[str, Any]:
     """Run the deterministic lane and return the qualification summary."""
 
@@ -720,6 +895,7 @@ def run_offline(workspace: Path) -> dict[str, Any]:
         ("packaged-resources", _check_packaged_resources),
         ("control-service", lambda: _check_control_service(workspace)),
         ("packaged-precheck", lambda: _check_precheck_resource(workspace)),
+        ("lab-bootstrap-preflight", lambda: _check_lab_context(workspace)),
         ("d12-safety-boundary", _check_d12_safety_boundary),
         ("no-external-effects", lambda: _check_no_external_effects(modules_before)),
         ("live-state-untouched", lambda: _check_live_state_untouched(live_state_before)),
@@ -740,45 +916,28 @@ def run_offline(workspace: Path) -> dict[str, Any]:
         "qualified_scope": [
             "deterministic control surface, plugin registration and packaging",
             "packaged pre-check idle gate without a native Hermes import",
+            "the D13 laboratory bootstrap and fail-closed preflight (private root, "
+            "decision-only configuration, borrowed access names, child containment, and a "
+            "read-only phase that refuses a bad layout without creating the root) plus the "
+            "in-laboratory native writer gate (required interfaces and keywords, "
+            "loaded-artifact digests, effective roots) resolved inside the created root",
         ],
         "unqualified_scope": [
             "real provisioned model narration and Telegram delivery",
-            "two real native wall-clock hourly boundaries and the live idle skip",
-            "semantic fidelity of the observed D12 cases (independent adjudication required)",
-            "native cron activation of this installation",
-            "the live lane itself: it refuses with scope-isolation-unsupported while the "
-            "synthetic scope cannot be isolated from this installation's registered projects",
+            "two real native wall-clock hourly cuts and the live idle skip",
+            "the bounded supervised native scheduler instance and the semantic fidelity of "
+            "the observed D12 cases (independent adjudication required)",
+            "the installation's own production scope, activation and first delivery",
         ],
         "notes": [
-            "Live qualification is owned by MON-INT and requires --live with --output.",
-            "The live lane currently refuses before any effect: the provisioned interfaces "
-            "cannot present the synthetic-only monitored scope without hiding the shared "
-            "Aether project registry (see the Telegram Monitor guide's qualification limits).",
+            "Live qualification is owned by the integrated terminal phase and requires "
+            "--live with --output; it runs only inside the D13 isolated native-runtime "
+            "laboratory and never touches this installation's project registry.",
             "Telegram Bot API acceptance is not proof that a human read a message.",
             "Live D12 cases are observed, not machine-certified: the private receipt retains "
             "the canonical/emitted comparison for independent adjudication.",
         ],
     }
-
-
-# ---------------------------------------------------------------------------
-# Live provisioned lane (bounded; owned by MON-INT)
-# ---------------------------------------------------------------------------
-
-
-def _control(action: str, *, limit: int | None = None) -> dict[str, Any]:
-    """Execute one control action through the shipped validated boundary."""
-
-    envelope = monitor_commands.execute_action(action, limit=limit)
-    if not isinstance(envelope, dict) or envelope.get("schema_version") != MONITOR_SCHEMA_VERSION:
-        raise QualificationError("control-envelope", f"monitor {action} returned no envelope")
-    if not envelope.get("ok"):
-        error = envelope.get("error") or {}
-        raise QualificationError(
-            str(error.get("code") or "control-failed"),
-            str(error.get("message") or f"monitor {action} failed"),
-        )
-    return envelope
 
 
 def _runtime_python() -> Path:
@@ -792,19 +951,33 @@ def _runtime_python() -> Path:
     return interpreter
 
 
-def _runtime_execute(interpreter: Path, body: str, *, timeout: int = 300) -> dict[str, Any]:
-    """Run a bounded JSON probe inside the provisioned runtime interpreter."""
+def _runtime_execute(
+    interpreter: Path,
+    body: str,
+    *,
+    timeout: int = 300,
+    environment: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Run a bounded JSON probe inside the provisioned runtime interpreter.
 
-    environment = {
-        "PATH": os.environ.get("PATH", ""),
-        "HOME": os.environ.get("HOME", ""),
-        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
-        "PYTHONDONTWRITEBYTECODE": "1",
-    }
-    for name in ("HERMES_HOME", "XDG_STATE_HOME", "AETHER_HERMES_PYTHON", "HERMES_TIMEZONE"):
-        value = os.environ.get(name)
-        if value:
-            environment[name] = value
+    ``environment`` selects the private laboratory context for a probe that must run as a
+    lab child; ``None`` runs the probe with this process's own provisioned context.
+    """
+
+    if environment is None:
+        child_environment = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": os.environ.get("HOME", ""),
+            "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        for name in ("HERMES_HOME", "XDG_STATE_HOME", "AETHER_HERMES_PYTHON", "HERMES_TIMEZONE"):
+            value = os.environ.get(name)
+            if value:
+                child_environment[name] = value
+    else:
+        child_environment = dict(environment)
+    environment = child_environment
     completed = subprocess.run(
         [str(interpreter), "-c", body],
         check=False,
@@ -1042,10 +1215,12 @@ def _job_probe_body(mode: str, *, job_id: str = "") -> str:
     )
 
 
-def _job_inventory(interpreter: Path) -> list[dict[str, Any]]:
+def _job_inventory(
+    interpreter: Path, *, environment: Mapping[str, str] | None = None
+) -> list[dict[str, Any]]:
     """Read the native job inventory through a bounded runtime probe."""
 
-    payload = _runtime_execute(interpreter, _job_probe_body("list"))
+    payload = _runtime_execute(interpreter, _job_probe_body("list"), environment=environment)
     if payload.get("errors"):
         raise QualificationError(
             "job-inventory-failed",
@@ -1060,10 +1235,14 @@ def _job_inventory(interpreter: Path) -> list[dict[str, Any]]:
     return [dict(job) for job in jobs if isinstance(job, Mapping)]
 
 
-def _job_record(interpreter: Path, job_id: str) -> dict[str, Any] | None:
+def _job_record(
+    interpreter: Path, job_id: str, *, environment: Mapping[str, str] | None = None
+) -> dict[str, Any] | None:
     """Read one native job record (and its output directory) through a probe."""
 
-    payload = _runtime_execute(interpreter, _job_probe_body("get", job_id=job_id))
+    payload = _runtime_execute(
+        interpreter, _job_probe_body("get", job_id=job_id), environment=environment
+    )
     if payload.get("errors"):
         raise QualificationError(
             "job-read-failed",
@@ -1076,364 +1255,6 @@ def _job_record(interpreter: Path, job_id: str) -> dict[str, Any] | None:
         record["output_dir"] = payload.get("output_dir")
     return record
 
-
-def _job_removed(interpreter: Path, job_id: str) -> bool:
-    """Remove exactly the monitor job this run created (identity-checked probe)."""
-
-    payload = _runtime_execute(interpreter, _job_probe_body("remove", job_id=job_id))
-    return bool(payload.get("removed")) and not payload.get("errors")
-
-
-_SCOPE_PROBE = r"""
-import json
-import sqlite3
-from pathlib import Path
-
-scope_root = Path(SCOPE_ROOT)
-hermes = Path(HERMES_HOME)
-state_root = Path(STATE_ROOT)
-manifest = json.loads(SCOPE_MANIFEST)
-board_schema = json.loads(BOARD_SCHEMA_JSON)
-session_schema = json.loads(SESSION_SCHEMA_JSON)
-payload = {"projects": [], "boards": [], "sessions": [], "errors": []}
-
-
-def record_error(code, error=None):
-    payload["errors"].append(f"{code}: {type(error).__name__}" if error else code)
-
-
-try:
-    from aether_agents.observation.context import ProjectRegistry
-    from hermes_cli import projects_db
-
-    registry = ProjectRegistry(state_root)
-    connection = sqlite3.connect(projects_db.projects_db_path())
-    try:
-        connection.executescript(
-            "CREATE TABLE IF NOT EXISTS projects ("
-            " id TEXT PRIMARY KEY, slug TEXT NOT NULL, name TEXT NOT NULL,"
-            " primary_path TEXT, archived INTEGER NOT NULL DEFAULT 0);"
-            "CREATE TABLE IF NOT EXISTS project_folders ("
-            " project_id TEXT, path TEXT, label TEXT, is_primary INTEGER, added_at TEXT);"
-        )
-    except sqlite3.Error as error:
-        record_error("native-projects-schema", error)
-
-    sessions_path = hermes / "state.db"
-    sessions_path.parent.mkdir(parents=True, exist_ok=True)
-    sessions = sqlite3.connect(sessions_path)
-    sessions.executescript(session_schema)
-    session_columns = [
-        str(row[1]) for row in sessions.execute('PRAGMA table_info("sessions")')
-    ]
-    wanted = [
-        "id",
-        "source",
-        "title",
-        "display_name",
-        "cwd",
-        "git_repo_root",
-        "started_at",
-        "ended_at",
-    ]
-    insert_columns = [column for column in wanted if column in session_columns]
-    if {"id", "source", "started_at"} - set(insert_columns):
-        record_error("native-sessions-schema")
-        insert_columns = []
-        insert_sql = None
-    else:
-        insert_sql = (
-            'INSERT OR REPLACE INTO sessions ('
-            + ", ".join(insert_columns)
-            + ") VALUES ("
-            + ", ".join("?" for _ in insert_columns)
-            + ")"
-        )
-
-    for entry in manifest:
-        project_id = entry["project_id"]
-        project_root = Path(entry["path"])
-        if not project_root.is_dir():
-            record_error("scope-project-missing")
-            continue
-        existing = projects_db.find_by_primary_path(connection, str(project_root))
-        if existing is not None:
-            native_id = str(existing.id)
-        else:
-            created = projects_db.create_project(
-                connection,
-                name=entry["name"],
-                primary_path=str(project_root),
-                board_slug=entry["board_slug"],
-            )
-            native_id = str(getattr(created, "id", created))
-        if not registry.register(project_id, project_root, entry["name"], native_id):
-            record_error("registry-register")
-        entry["native_project_id"] = native_id
-        payload["projects"].append(
-            {"project_id": project_id, "native_project_id": native_id}
-        )
-
-        if insert_sql is not None:
-            for session in entry["sessions"]:
-                sessions.execute(
-                    insert_sql, tuple(session[column] for column in insert_columns)
-                )
-                payload["sessions"].append(session["id"])
-
-        board_dir = hermes / "kanban" / "boards" / entry["board_slug"]
-        board_dir.mkdir(parents=True, exist_ok=True)
-        (board_dir / "board.json").write_text(
-            json.dumps(
-                {
-                    "slug": entry["board_slug"],
-                    "name": entry["name"],
-                    "project_id": native_id,
-                    "default_workdir": str(project_root.resolve()),
-                    "aether_project_id": project_id,
-                    "aether_contract_id": entry["contract_id"],
-                    "aether_contract_version": 1,
-                }
-            ),
-            encoding="utf-8",
-        )
-        board = sqlite3.connect(board_dir / "kanban.db")
-        board.executescript(board_schema)
-        board.execute("DELETE FROM task_links")
-        board.execute("DELETE FROM task_runs")
-        board.execute("DELETE FROM task_events")
-        board.execute("DELETE FROM tasks")
-        for task in entry["tasks"]:
-            board.execute(
-                "INSERT OR REPLACE INTO tasks (id, title, status, project_id, session_id,"
-                " created_at, started_at, completed_at, workspace_path, current_run_id,"
-                " session_affinity, last_heartbeat_at, max_runtime_seconds, result,"
-                " consecutive_failures) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    task["task_id"],
-                    task["title"],
-                    task["status"],
-                    native_id,
-                    entry["origin_session"],
-                    task["created_at"],
-                    task["created_at"],
-                    None,
-                    str(project_root),
-                    1,
-                    json.dumps({"flow_id": entry["flow_id"]}),
-                    None,
-                    None,
-                    task["result"],
-                    0,
-                ),
-            )
-        for parent, child in entry["links"]:
-            board.execute(
-                "INSERT OR REPLACE INTO task_links (parent_id, child_id) VALUES (?, ?)",
-                (parent, child),
-            )
-        board.commit()
-        board.close()
-        payload["boards"].append(entry["board_slug"])
-
-    sessions.commit()
-    sessions.close()
-    connection.commit()
-    connection.close()
-except Exception as error:  # surfaced to the operator, never swallowed
-    record_error("scope-probe", error)
-print(json.dumps(payload))
-"""
-
-_SCOPE_RESTORE_PROBE = r"""
-import json
-import shutil
-import sqlite3
-from pathlib import Path
-
-scope_root = Path(SCOPE_ROOT)
-hermes = Path(HERMES_HOME)
-manifest = json.loads(SCOPE_MANIFEST)
-payload = {"removed": [], "sessions_removed": [], "errors": [], "residue": [], "verified": {}}
-
-
-def fail(code, target, error=None):
-    detail = target if error is None else f"{target}: {type(error).__name__}"
-    payload["errors"].append(f"{code}: {detail}")
-
-
-def remove_tree(kind, target):
-    # Never ignore a removal error: each tree is removed, then its absence is verified and
-    # anything that survives is recorded as residue.
-    path = Path(target)
-    try:
-        if path.is_symlink() or path.exists():
-            shutil.rmtree(path)
-    except Exception as error:
-        fail(kind, path.name, error)
-    if path.is_symlink() or path.exists():
-        payload["residue"].append(f"{kind}: {path.name}")
-
-
-def rows_remaining(connection):
-    remaining = []
-    for entry in manifest:
-        try:
-            if projects_db.find_by_primary_path(connection, entry["path"]) is not None:
-                remaining.append(entry["letter"])
-        except Exception as error:
-            fail("project-row-verify", entry["letter"], error)
-            remaining.append(entry["letter"])
-    return remaining
-
-
-try:
-    from hermes_cli import projects_db
-except Exception as error:
-    projects_db = None
-    fail("probe-import", "hermes_cli", error)
-
-if projects_db is not None:
-    try:
-        connection = sqlite3.connect(projects_db.projects_db_path())
-        try:
-            for entry in manifest:
-                try:
-                    row = projects_db.find_by_primary_path(connection, entry["path"])
-                    if row is not None:
-                        projects_db.delete_project(connection, row.id)
-                        payload["removed"].append(entry["board_slug"])
-                except Exception as error:
-                    fail("project-row", entry["letter"], error)
-            connection.commit()
-            remaining_rows = rows_remaining(connection)
-            for letter in remaining_rows:
-                payload["residue"].append(f"project-row: {letter}")
-            payload["verified"]["project-rows"] = not remaining_rows
-        finally:
-            connection.close()
-    except Exception as error:
-        fail("project-rows", "registry", error)
-        payload["verified"].setdefault("project-rows", False)
-
-try:
-    for entry in manifest:
-        remove_tree("board", hermes / "kanban" / "boards" / entry["board_slug"])
-        remove_tree("project-path", entry["path"])
-    payload["verified"]["boards"] = not any(
-        item.startswith("board:") for item in payload["residue"]
-    )
-    payload["verified"]["project-paths"] = not any(
-        item.startswith("project-path:") for item in payload["residue"]
-    )
-except Exception as error:
-    fail("boards-paths", "scope", error)
-    payload["verified"]["boards"] = False
-    payload["verified"]["project-paths"] = False
-
-try:
-    sessions_path = hermes / "state.db"
-    session_ids = [
-        session["id"] for entry in manifest for session in entry.get("sessions", ())
-    ]
-    if sessions_path.is_file():
-        sessions = sqlite3.connect(sessions_path)
-        try:
-            for session_id in session_ids:
-                try:
-                    sessions.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-                    payload["sessions_removed"].append(session_id)
-                except Exception as error:
-                    fail("session-row", session_id, error)
-            sessions.commit()
-            for session_id in session_ids:
-                row = sessions.execute(
-                    "SELECT 1 FROM sessions WHERE id = ?", (session_id,)
-                ).fetchone()
-                if row is not None:
-                    payload["residue"].append(f"session-row: {session_id}")
-        finally:
-            sessions.close()
-    payload["verified"]["session-rows"] = not any(
-        item.startswith("session-row:") for item in payload["residue"]
-    )
-except Exception as error:
-    fail("sessions", "state", error)
-    payload["verified"]["session-rows"] = False
-
-try:
-    remove_tree("scope-root", str(scope_root))
-    payload["verified"]["scope-root"] = not any(
-        item.startswith("scope-root:") for item in payload["residue"]
-    )
-except Exception as error:
-    fail("scope-root", "scope", error)
-    payload["verified"]["scope-root"] = False
-
-print(json.dumps(payload))
-"""
-
-_BOARD_DDL = """
-CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    status TEXT NOT NULL,
-    project_id TEXT,
-    session_id TEXT,
-    created_at REAL,
-    started_at REAL,
-    completed_at REAL,
-    workspace_path TEXT,
-    current_run_id INTEGER,
-    session_affinity TEXT,
-    block_kind TEXT,
-    last_heartbeat_at REAL,
-    max_runtime_seconds INTEGER,
-    result TEXT,
-    consecutive_failures INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS task_links (parent_id TEXT NOT NULL, child_id TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS task_runs (
-    id INTEGER PRIMARY KEY,
-    task_id TEXT,
-    status TEXT,
-    outcome TEXT,
-    started_at REAL,
-    ended_at REAL,
-    last_heartbeat_at REAL,
-    summary TEXT,
-    error TEXT,
-    profile TEXT
-);
-CREATE TABLE IF NOT EXISTS task_events (
-    id INTEGER PRIMARY KEY,
-    task_id TEXT,
-    run_id INTEGER,
-    kind TEXT,
-    payload TEXT,
-    created_at REAL
-);
-"""
-
-_SESSION_DDL = """
-CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    source TEXT NOT NULL,
-    title TEXT,
-    display_name TEXT,
-    cwd TEXT,
-    git_repo_root TEXT,
-    started_at REAL,
-    ended_at REAL
-);
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY,
-    session_id TEXT,
-    role TEXT,
-    content TEXT,
-    timestamp REAL
-);
-"""
 
 #: The historical instruction-like canary reclassified by D12.  The shipped deterministic
 #: boundary refuses the fixed prompt-injection forms (``REPORTING_UNSAFE_CONTENT``), so this
@@ -1465,15 +1286,27 @@ SYNTHETIC_CASE_TEXTS: Mapping[str, str] = {
 }
 
 
-def _task_id(stamp: str, letter: str, index: int) -> str:
-    return "t_" + uuid.uuid5(uuid.NAMESPACE_URL, f"task-{stamp}-{letter}-{index}").hex[:8]
+def _bound_task_id(entry: Mapping[str, Any], task: Mapping[str, Any]) -> str:
+    """The identity the shipped kanban writer assigned to one synthetic task.
+
+    The manifest never carries a guessed task id: the id exists only after the shipped
+    writer returned it, so an unbound identity is a fail-closed case fixture defect, not a
+    value this file may invent.
+    """
+
+    task_id = task.get("task_id")
+    if not isinstance(task_id, str) or not task_id:
+        raise QualificationError(
+            "case-fixture",
+            "the synthetic scope was evaluated before its shipped-writer identities were bound",
+            detail={"key": task.get("key")},
+        )
+    return task_id
 
 
 def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
     """Build the honest synthetic scope: two contract projects and one direct turn."""
 
-    now = _utc_now()
-    created = now.timestamp()
     manifest: list[dict[str, Any]] = []
     for letter in ("A", "B"):
         project_id = str(
@@ -1488,54 +1321,58 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
         finalizer_session = f"qualification-finalizer-{stamp}-{letter.lower()}"
         direct_session = f"qualification-direct-{stamp}"
         # Case *keys* into SYNTHETIC_CASE_TEXTS: project A carries the adversarial
-        # corpus, project B the legitimate partial success with pending review.
+        # corpus, project B the legitimate partial success with a pending review.  Each
+        # corpus claim is delivered through the shipped kanban completion writer, so the
+        # text the monitor reads is a real board outcome rather than an injected row; the
+        # open work that keeps the contract visible is created through the same writer and
+        # completed between the two cuts.
         names = {
             "A": ("root", "contradictory", "deadline", "word_time", "malicious"),
-            "B": ("review", "partial"),
+            "B": ("root", "partial", "review"),
         }[letter]
+        claimed = {"contradictory", "deadline", "word_time", "malicious", "partial"}
         tasks: list[dict[str, Any]] = []
-        links: list[tuple[str, str]] = []
-        root_id = _task_id(stamp, letter, 1)
-        for index, key in enumerate(names, start=1):
-            task_id = _task_id(stamp, letter, index)
-            status = "review" if (letter == "B" and index == 2) else "running"
+        # Links and the between-cut transition are expressed by *key*, never by a guessed
+        # task id: the shipped kanban writer owns task identity, so the manifest can only
+        # reference the ids the writer returns after seeding.
+        links: list[tuple[int, int]] = []
+        for index, key in enumerate(names):
+            if key in claimed:
+                status = "done"
+            elif key == "review":
+                status = "review"
+            else:
+                status = "running"
             tasks.append(
                 {
-                    "task_id": task_id,
+                    "key": f"{letter}{index + 1}",
                     "title": (
                         f"[synthetic] qualification root {letter}"
-                        if index == 1
-                        else f"[synthetic] qualification case {letter}{index}"
+                        if index == 0
+                        else f"[synthetic] qualification case {letter}{index + 1}"
                     ),
                     "status": status,
                     "result": SYNTHETIC_CASE_TEXTS[key],
-                    "created_at": created,
-                    "case": key,
+                    "case": key if key in claimed else None,
                 }
             )
-            if index > 1:
-                links.append((root_id, task_id))
+            if index > 0:
+                links.append((0, index))
         sessions = [
             {
                 "id": origin_session,
                 "source": "tui",
                 "title": f"Synthetic qualification origin session {letter}",
-                "display_name": f"Synthetic qualification origin session {letter}",
                 "cwd": str(project_root),
                 "git_repo_root": str(project_root),
-                "started_at": created,
-                "ended_at": None,
                 "role": "origin",
             },
             {
                 "id": finalizer_session,
                 "source": "tui",
                 "title": f"Synthetic qualification finalizer session {letter}",
-                "display_name": f"Synthetic qualification finalizer session {letter}",
                 "cwd": str(project_root),
                 "git_repo_root": str(project_root),
-                "started_at": created + 60,
-                "ended_at": created + 120,
                 "role": "finalizer",
             },
         ]
@@ -1545,11 +1382,8 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
                     "id": direct_session,
                     "source": "tui",
                     "title": "Synthetic qualification direct session",
-                    "display_name": "Synthetic qualification direct session",
                     "cwd": str(project_root),
                     "git_repo_root": str(project_root),
-                    "started_at": created,
-                    "ended_at": None,
                     "role": "direct",
                 }
             )
@@ -1569,6 +1403,20 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
             "sessions": sessions,
             "tasks": tasks,
             "links": links,
+            # The open work this run completes between the two natural cuts through the
+            # shipped kanban writer: the decomposition root plus the pending review.  The
+            # second cut must therefore carry the genuine final outcomes.  Every entry is
+            # bound to a manifest key, so the probe completes exactly the identities the
+            # shipped writer returned for those keys.
+            "transition": [
+                {
+                    "key": task["key"],
+                    "title": task["title"],
+                    "result": task["result"],
+                }
+                for task in tasks
+                if task["status"] in {"running", "review"}
+            ],
         }
         if letter == "A":
             entry["direct"] = {
@@ -1681,1394 +1529,10 @@ def _git(root: Path, *arguments: str) -> None:
         )
 
 
-#: Fixed suffix of the durable, no-clobber recovery record the live lane installs next to
-#: the operator registry before it is replaced, so an interrupted run stays recoverable.
-REGISTRY_RECOVERY_SUFFIX = ".qualification-recovery.json"
-#: Fixed suffix of the name the operator registry itself is *moved* to for the duration of the
-#: live lane (a single no-replace ``rename``, never an unlink and never a replacement), so the
-#: operator's exact bytes stay on disk.
-REGISTRY_HELD_SUFFIX = ".qualification-held"
-#: Fixed suffix of the name a restore moves the current registry to before installing the
-#: restored state; it is removed only after the restored state and the postcondition are verified.
-REGISTRY_OUTGOING_SUFFIX = ".qualification-outgoing"
-#: Fixed prefix of the run-owned private staging directories a removal and an installation use.
-#: They are the only place in the operator's registry directory where this harness deletes an
-#: entry, they are created ``0700`` and removed with ``rmdir``, and one that cannot be removed is
-#: never deleted silently: it stays under this documented name for reconciliation.
-REGISTRY_STAGING_PREFIX = ".aether-qualification-staging-"
-#: Non-followed, close-on-exec ``open`` flags used for every registry descriptor.
+#: Non-followed, close-on-exec ``open`` flags used for every private descriptor.
 O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 O_CLOEXEC = getattr(os, "O_CLOEXEC", 0)
 O_DIRECTORY = getattr(os, "O_DIRECTORY", 0)
-#: Linux ``renameat2`` flag: move a file only when nothing exists at the destination.  The
-#: kernel performs the existence test and the move in one step, so no read-only check followed
-#: by a clobbering ``rename`` can be raced by an entry that appears in between.
-RENAME_NOREPLACE = 1
-#: ``AT_FDCWD``: resolve both paths of :func:`_rename_no_replace` against the working directory.
-_AT_FDCWD = -100
-_RENAMEAT2_UNSET: Any = object()
-_RENAMEAT2_LIBRARY: Any = _RENAMEAT2_UNSET
-
-
-def _renameat2_library() -> Any:
-    """The C library providing ``renameat2``, or ``None`` where no-replace moves are absent.
-
-    Resolved once.  Where the platform cannot move a file without replacing the destination,
-    the live lane refuses with the bounded ``registry-isolation`` failure instead of falling
-    back to a clobbering ``rename`` or a ``link`` + ``unlink`` pair: both of those can destroy
-    an entry that appeared at the destination after the reader's last check.
-    """
-
-    global _RENAMEAT2_LIBRARY
-    if _RENAMEAT2_LIBRARY is _RENAMEAT2_UNSET:
-        library: Any = None
-        if os.name == "posix" and sys.platform.startswith("linux"):
-            try:
-                import ctypes
-                import ctypes.util
-
-                resolved = ctypes.util.find_library("c") or "libc.so.6"
-                candidate = ctypes.CDLL(resolved, use_errno=True)
-                candidate.renameat2.argtypes = [
-                    ctypes.c_int,
-                    ctypes.c_char_p,
-                    ctypes.c_int,
-                    ctypes.c_char_p,
-                    ctypes.c_uint,
-                ]
-                candidate.renameat2.restype = ctypes.c_int
-                library = candidate
-            except (ImportError, OSError, AttributeError):
-                library = None
-        _RENAMEAT2_LIBRARY = library
-    return _RENAMEAT2_LIBRARY
-
-
-def _rename_no_replace(source: Path, destination: Path) -> None:
-    """Move ``source`` to ``destination`` without ever replacing an existing entry.
-
-    Every operator-visible or durable registry name is moved with this primitive: the
-    existence test and the move are a single kernel operation (``renameat2`` with
-    ``RENAME_NOREPLACE``), so an entry that appears at ``destination`` after any earlier
-    read-only check is never replaced — the call fails with ``FileExistsError`` and the caller
-    refuses while leaving the entry exactly as it was found.  The source is *moved*, never
-    unlinked: a file a concurrent writer put at the source between the reader's verification
-    and this call is not destroyed, it is moved (and the caller detects it by comparing the
-    moved bytes).  Where the platform cannot perform a no-replace move, ``ENOTSUP`` is raised
-    and the caller fails closed instead of degrading to a clobbering sequence.
-    """
-
-    import ctypes
-
-    library = _renameat2_library()
-    if library is None:
-        raise OSError(
-            errno.ENOTSUP,
-            "this platform cannot move a project-registry file without replacing the "
-            "destination, so the live qualification refuses to run",
-            str(source),
-            str(destination),
-        )
-    result = library.renameat2(
-        _AT_FDCWD,
-        os.fsencode(source),
-        _AT_FDCWD,
-        os.fsencode(destination),
-        RENAME_NOREPLACE,
-    )
-    if result != 0:
-        error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), str(source), str(destination))
-
-
-class _RegistrySwapError(RuntimeError):
-    """A bounded failure while moving, installing, merging or restoring the project registry.
-
-    ``kind`` is one of ``changed`` (the registry is not the state this run decided on),
-    ``held-exists`` (durable qualification state from an interrupted earlier run is present) or
-    ``unsafe`` (the move or install could not be performed safely); the caller maps it to a
-    public error code.
-    """
-
-    def __init__(self, kind: str, message: str, *, detail: Any = None) -> None:
-        super().__init__(message)
-        self.kind = kind
-        self.message = message
-        self.detail = detail
-
-
-#: Public error code for each swap failure kind.
-REGISTRY_SWAP_CODES = {
-    "changed": "registry-changed",
-    "held-exists": "registry-held-exists",
-    "unsafe": "registry-isolation",
-}
-
-
-def _staging_residue_of(source: BaseException) -> Mapping[str, Any] | None:
-    """The retained-staging report a bounded failure carries, in either of its two shapes."""
-
-    detail = getattr(source, "detail", None)
-    if not isinstance(detail, Mapping):
-        return None
-    nested = detail.get("staging_residue")
-    if isinstance(nested, Mapping):
-        return nested
-    # The staging installation's own bounded failure carries the retained path as its detail.
-    if getattr(source, "code", None) == "staging-residue" and "path" in detail:
-        return detail
-    return None
-
-
-def _carry_staging_residue(source: BaseException, detail: dict[str, Any]) -> dict[str, Any]:
-    """Carry a retained staging directory into the detail of a re-coded bounded failure.
-
-    A staging directory this run could not remove is never hidden by a caller that re-codes the
-    failure — the durable recovery record and the registry install both do — so the residue entry
-    already reported by the staging installation is copied onto the new detail unchanged.
-    """
-
-    residue = _staging_residue_of(source)
-    if residue is not None and "staging_residue" not in detail:
-        detail["staging_residue"] = dict(residue)
-    return detail
-
-
-def _record_retained_staging(isolation: Mapping[str, Any] | None, error: BaseException) -> None:
-    """Record a retained staging directory on the run's own isolation record, when it can hold it.
-
-    The restore reports one bounded code (``failed``), so the retained path a re-coded staging
-    failure carries would otherwise be invisible in the receipt.  The isolation mapping is the
-    orchestrator's own run record and is written only when it is a mutable mapping; a read-only
-    record is left untouched and the directory stays under its documented private name.
-    """
-
-    residue = _staging_residue_of(error)
-    if residue is None or not isinstance(isolation, dict):
-        return
-    retained = isolation.setdefault("retained_staging", [])
-    if isinstance(retained, list):
-        retained.append(dict(residue))
-
-
-def _synthetic_registry_bytes() -> bytes:
-    """The exact synthetic registry the live lane installs while the scope is isolated."""
-
-    return json.dumps({"schema_version": 1, "projects": {}}, indent=2, sort_keys=True).encode(
-        "utf-8"
-    )
-
-
-def _registry_recovery_path(registry_path: Path) -> Path:
-    """The fixed durable recovery-record path next to the operator's project registry."""
-
-    return registry_path.with_name(registry_path.name + REGISTRY_RECOVERY_SUFFIX)
-
-
-def _registry_held_path(registry_path: Path) -> Path:
-    """The fixed name the operator registry is moved to while the live lane replaces it."""
-
-    return registry_path.with_name(registry_path.name + REGISTRY_HELD_SUFFIX)
-
-
-def _registry_outgoing_path(registry_path: Path) -> Path:
-    """The fixed name a restore moves the current registry to before installing the restored one."""
-
-    return registry_path.with_name(registry_path.name + REGISTRY_OUTGOING_SUFFIX)
-
-
-def _registry_bytes_or_none(path: Path) -> bytes | None:
-    """Read a registry file privately; ``None`` means it genuinely does not exist.
-
-    ``read_private_bytes`` refuses a symlinked, multi-linked or unstably replaced file, so a
-    registry the harness cannot read *safely* raises instead of being treated as an empty one:
-    only the real absence of the file (and of its directory chain) is ``None``.
-    """
-
-    from aether_agents.paths import read_private_bytes
-
-    try:
-        return read_private_bytes(path)
-    except FileNotFoundError:
-        return None
-
-
-def _registry_file_identity(path: Path) -> tuple[int, int] | None:
-    """The ``(device, inode)`` identity of a registry file; ``None`` when it does not exist.
-
-    The identity binds the capture, the move and the restore to the very file this run read: a
-    replacement at the same name has a different identity even when its bytes are equal.
-    """
-
-    try:
-        info = os.lstat(path)
-    except FileNotFoundError:
-        return None
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
-        raise UnsafeObservationPath("the project registry is not a real regular file")
-    return (info.st_dev, info.st_ino)
-
-
-def _install_private_registry_record(
-    path: Path, payload: Mapping[str, Any]
-) -> tuple[tuple[int, int], bytes]:
-    """Install the durable recovery record private-before-content, never replacing an entry.
-
-    The record is the only durable copy of the operator's registry bytes while the synthetic
-    registry is in place, so it reuses the audited no-clobber seam: one non-followed temporary
-    file is created ``0600`` *before* any content exists, the content is made durable, and the
-    record name is installed with a single ``link``.  An entry already present at the record
-    path — a file, a symlink, a hard link or a directory — is the durable evidence of an
-    interrupted earlier run: it is never replaced, and the caller receives the bounded
-    ``registry-recovery-exists`` refusal instead.  Returns the ``(device, inode)`` identity *and*
-    the exact bytes the caller removes the record by, after verifying the installed record is a
-    real, singly linked ``0600`` file inside its private ``0700`` directory.
-    """
-
-    data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
-        "utf-8"
-    )
-    ensure_private_dir(path.parent)
-    try:
-        _install_private_receipt(path, data, staging_parent=path.parent)
-        _verify_private_receipt(path)
-        info = os.stat(path, follow_symlinks=False)
-    except QualificationError as error:
-        if error.code == "output-target-exists":
-            raise QualificationError(
-                "registry-recovery-exists",
-                "a durable project-registry recovery record already exists: reconcile the "
-                "interrupted earlier run before a new live qualification replaces the registry",
-                detail=_carry_staging_residue(error, {"record": str(path)}),
-            ) from None
-        raise QualificationError(
-            "registry-recovery",
-            "the durable project-registry recovery record could not be installed; the "
-            "operator registry was not changed",
-            detail=_carry_staging_residue(error, {"error": error.code}),
-        ) from error
-    except (OSError, ValueError) as error:
-        raise QualificationError(
-            "registry-recovery",
-            "the durable project-registry recovery record could not be installed; the "
-            "operator registry was not changed",
-            detail={"error": type(error).__name__},
-        ) from error
-    return (info.st_dev, info.st_ino), data
-
-
-class _StagingDirectory(NamedTuple):
-    """One run-owned private staging directory: the only place this harness deletes in."""
-
-    path: Path
-    parent_fd: int
-    staging_fd: int
-
-
-def _descriptor_bytes(descriptor: int) -> bytes:
-    """The exact bytes a descriptor refers to, read through the descriptor and never a name."""
-
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    chunks: list[bytes] = []
-    while True:
-        chunk = os.read(descriptor, 128 * 1024)
-        if not chunk:
-            break
-        chunks.append(chunk)
-    return b"".join(chunks)
-
-
-def _descriptor_holds_registry_artifact(
-    descriptor: int, identity: tuple[int, int], expected: bytes | None
-) -> bool:
-    """Whether a descriptor refers to exactly the artifact this run installed.
-
-    The comparison is made against the descriptor, so no name can be substituted underneath the
-    check: a replacement at the same path is a different file with a different ``(device,
-    inode)`` identity even when its bytes are equal, and a file rewritten in place is caught by
-    the exact byte comparison.  ``expected`` is ``None`` for an artifact whose content is
-    metadata rather than registry bytes.
-    """
-
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            return False
-        if (info.st_dev, info.st_ino) != identity:
-            return False
-        if expected is None:
-            return True
-        return _descriptor_bytes(descriptor) == expected
-    except OSError:
-        return False
-
-
-def _path_holds_registry_artifact(
-    path: Path, identity: tuple[int, int], expected: bytes | None
-) -> bool:
-    """Whether a name refers to exactly the artifact this run installed (descriptor read)."""
-
-    try:
-        descriptor = os.open(path, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    except (OSError, ValueError, NotImplementedError):
-        return False
-    try:
-        return _descriptor_holds_registry_artifact(descriptor, identity, expected)
-    finally:
-        os.close(descriptor)
-
-
-def _create_registry_staging_directory(parent: Path) -> _StagingDirectory | None:
-    """Create one run-owned private ``0700`` staging directory inside ``parent``.
-
-    ``parent`` is the private directory that holds the operator registry, so the staging
-    directory is on the same filesystem as every artifact that is staged in it and a move into it
-    is a rename.  Creation is no-clobber (``mkdir`` fails when the name exists, and a fresh random
-    name is tried again), the created directory is verified to be a real ``0700`` directory with
-    no subdirectory of its own and owned by this process, and nothing is staged before that.
-    ``None`` means the harness refuses instead of staging anything anywhere.
-    """
-
-    try:
-        parent_fd = os.open(parent, os.O_RDONLY | O_DIRECTORY | O_CLOEXEC)
-    except (OSError, ValueError, NotImplementedError):
-        return None
-    for _ in range(3):
-        name = f"{REGISTRY_STAGING_PREFIX}{uuid.uuid4().hex[:12]}"
-        try:
-            os.mkdir(name, DIR_MODE, dir_fd=parent_fd)
-        except FileExistsError:
-            continue
-        except (OSError, ValueError, NotImplementedError):
-            os.close(parent_fd)
-            return None
-        staging_fd = -1
-        try:
-            staging_fd = os.open(
-                name, os.O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC, dir_fd=parent_fd
-            )
-            info = os.fstat(staging_fd)
-            owner = _effective_uid()
-            if (
-                stat.S_ISDIR(info.st_mode)
-                and stat.S_IMODE(info.st_mode) == DIR_MODE
-                and info.st_nlink == 2
-                and (owner is None or info.st_uid == owner)
-            ):
-                return _StagingDirectory(parent / name, parent_fd, staging_fd)
-        except (OSError, ValueError, NotImplementedError):
-            pass
-        if staging_fd >= 0:
-            with contextlib.suppress(OSError):
-                os.close(staging_fd)
-        with contextlib.suppress(OSError):
-            os.rmdir(name, dir_fd=parent_fd)
-        os.close(parent_fd)
-        return None
-    os.close(parent_fd)
-    return None
-
-
-def _remove_registry_staging_directory(staging: _StagingDirectory) -> bool:
-    """Remove the run's own staging directory with the kernel's own emptiness check.
-
-    ``rmdir`` refuses while any entry is still inside, so an entry that appeared inside this
-    run's own staging directory is never removed by this call: the directory is left in place
-    with its content — retained, under its documented private name, for reconciliation — and the
-    caller refuses.
-    """
-
-    try:
-        os.rmdir(staging.path.name, dir_fd=staging.parent_fd)
-    except (OSError, ValueError, NotImplementedError):
-        return False
-    return not os.path.lexists(staging.path)
-
-
-def _reinstate_registry_artifact(path: Path, staged: Path | None, expected: bytes | None) -> None:
-    """Put the verified artifact back after an unprovable removal; never replace anything.
-
-    A staged file that is still this run's own goes back to the artifact name with a no-replace
-    rename, so it keeps its exact identity; otherwise the exact bytes this run verified are
-    reinstalled at the artifact name through the private no-clobber seam, so the artifact this
-    run was asked to remove stays recoverable on disk for the operator.  A name that is occupied
-    by anything else is never touched; the caller refuses and the operator reconciles.
-    """
-
-    if staged is not None and _put_registry_file_back(staged, path):
-        return
-    if expected is None:
-        return
-    try:
-        _install_private_receipt(path, expected)
-        _verify_private_receipt(path)
-    except (OSError, ValueError, QualificationError):
-        pass
-
-
-def _remove_private_registry_artifact(
-    path: Path, identity: tuple[int, int] | None, expected: bytes | None
-) -> bool:
-    """Remove exactly the artifact this run created, never by unlinking a shared name.
-
-    POSIX has no delete bound to a file identity, so this harness never unlinks an entry of the
-    operator's registry directory at all.  The artifact is first verified *through a descriptor*
-    (``O_NOFOLLOW``): a real, singly linked regular file with exactly the ``(device, inode)``
-    identity this run installed — and, when ``expected`` names the bytes this run wrote there,
-    exactly those bytes.  A file that does not verify is refused with nothing touched at all;
-    ``identity`` is ``None`` when the caller never created the artifact, which needs no removal.
-
-    The verified artifact is then moved, with one no-replace rename (the existence test and the
-    move are a single kernel operation), into a fresh run-owned ``0700`` staging directory next
-    to it, and verified again there through a descriptor: a file that is not the run's own — a
-    concurrent replacement that landed at the name after the descriptor check, or one whose
-    bytes changed — is moved straight back to where it was found and the caller refuses, so a
-    replacement is never deleted and never clobbered.  Only inside that staging directory is
-    anything unlinked, and the deletion is then proven by descriptor: the verified inode's link
-    count must have reached zero and the staged name must be gone.  A deletion that cannot be
-    proven — the boundary case of a same-user process substituting an entry inside this run's own
-    staging directory between the staged verification and the unlink, which no supported
-    concurrent writer can do, or any other failure — reinstates the exact artifact (by identity,
-    or by the bytes this run verified) and returns ``False``, so the caller can never report a
-    qualified run whose removal might have deleted a replacement or lost track of the artifact.
-    The staging directory itself is removed with ``rmdir``, which the kernel refuses while any
-    entry is still inside it, so a leftover is never removed silently: it stays under its
-    documented private name (``REGISTRY_STAGING_PREFIX``) for reconciliation.
-    """
-
-    if identity is None:
-        return True
-    try:
-        descriptor = os.open(path, os.O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
-    except FileNotFoundError:
-        return True
-    except (OSError, ValueError, NotImplementedError):
-        return False
-    staging: _StagingDirectory | None = None
-    staged_ours: Path | None = None
-    removed = False
-    try:
-        if _descriptor_holds_registry_artifact(descriptor, identity, expected):
-            staging = _create_registry_staging_directory(path.parent)
-            if staging is not None:
-                staged = staging.path / path.name
-                try:
-                    _rename_no_replace(path, staged)
-                except FileNotFoundError:
-                    # The name is free already: nothing of this run's is left there to remove.
-                    removed = True
-                except OSError:
-                    removed = False
-                else:
-                    if _path_holds_registry_artifact(staged, identity, expected):
-                        staged_ours = staged
-                        try:
-                            os.unlink(staged.name, dir_fd=staging.staging_fd)
-                        except (OSError, ValueError, NotImplementedError):
-                            removed = False
-                        else:
-                            removed = False
-                            try:
-                                info = os.fstat(descriptor)
-                            except OSError:
-                                removed = False
-                            else:
-                                removed = info.st_nlink == 0 and not os.path.lexists(staged)
-                    else:
-                        # The moved file is not this run's own: it goes straight back, untouched.
-                        _put_registry_file_back(staged, path)
-                        removed = False
-        if not removed:
-            _reinstate_registry_artifact(path, staged_ours, expected)
-        if staging is not None and not _remove_registry_staging_directory(staging):
-            removed = False
-        return removed
-    finally:
-        os.close(descriptor)
-        if staging is not None:
-            os.close(staging.staging_fd)
-            os.close(staging.parent_fd)
-
-
-def _put_registry_file_back(aside_path: Path, registry_path: Path) -> bool:
-    """Move a moved-aside file back to the registry path, never replacing an entry there.
-
-    Used when a swap discovers that the file it moved aside is not the state this run decided
-    on, and when a removal discovers that the artifact it moved aside is not the one this run
-    installed: the file goes back exactly as it was found (the move never destroyed a byte) and
-    the caller refuses.  ``False`` means another file appeared at the registry path in the
-    meantime, or the move could not be performed at all; that file is left in place and the
-    moved file stays at the aside name as recoverable state.  The move is a no-replace rename,
-    so neither name can be overwritten or destroyed by this call.
-    """
-
-    try:
-        _rename_no_replace(aside_path, registry_path)
-    except OSError:
-        return False
-    return True
-
-
-def _move_registry_file_aside(
-    registry_path: Path, aside_path: Path, *, expected: bytes
-) -> tuple[int, int]:
-    """Move the file at the registry path aside without destroying a single byte of it.
-
-    The move is one no-replace ``rename``: whatever the path holds at that instant is moved to
-    the private aside name — never unlinked, never replaced — and is then compared with
-    ``expected``, the exact state this run read and decided on.  The destination is tested by
-    the kernel inside the same operation, so a durable file left behind by an interrupted
-    earlier run, or any entry that appears at the aside name at that seam, is neither examined
-    and then raced nor overwritten: the call fails and the run refuses with
-    ``registry-held-exists``.  A concurrent write that landed before the move is detected by the
-    byte comparison afterwards: the file is moved back to the registry path (no-replace again,
-    when the path is still free) and the caller refuses, so no concurrent writer's bytes are ever
-    silently replaced or destroyed.  Raises :class:`_RegistrySwapError` instead of proceeding
-    whenever the moved state is not the expected one.
-    """
-
-    try:
-        _rename_no_replace(registry_path, aside_path)
-    except FileExistsError as error:
-        raise _RegistrySwapError(
-            "held-exists",
-            "a durable qualification file already exists next to the operator project registry: "
-            "reconcile the interrupted earlier run before a new live qualification replaces it",
-            detail={"path": str(aside_path)},
-        ) from error
-    except FileNotFoundError as error:
-        raise _RegistrySwapError(
-            "changed",
-            "the operator project registry disappeared while the qualification was preparing to "
-            "replace it; nothing was replaced",
-            detail={"error": type(error).__name__},
-        ) from error
-    except OSError as error:
-        raise _RegistrySwapError(
-            "unsafe",
-            "the operator project registry could not be moved aside safely; nothing was replaced",
-            detail={"error": type(error).__name__},
-        ) from error
-    try:
-        info = os.lstat(aside_path)
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-            raise _RegistrySwapError(
-                "unsafe",
-                "the moved operator project registry is not a real, singly linked file",
-                detail={"path": str(aside_path)},
-            )
-        moved = _registry_bytes_or_none(aside_path)
-    except _RegistrySwapError:
-        _put_registry_file_back(aside_path, registry_path)
-        raise
-    except (OSError, ValueError) as error:
-        _put_registry_file_back(aside_path, registry_path)
-        raise _RegistrySwapError(
-            "changed",
-            "the moved operator project registry could not be read safely; it was put back",
-            detail={"error": type(error).__name__},
-        ) from error
-    if moved != expected:
-        put_back = _put_registry_file_back(aside_path, registry_path)
-        raise _RegistrySwapError(
-            "changed",
-            "the operator project registry changed while the qualification was preparing to "
-            "replace it; the live run stopped without replacing it",
-            detail={"put_back": put_back},
-        )
-    return (info.st_dev, info.st_ino)
-
-
-def _install_registry_file(registry_path: Path, data: bytes) -> None:
-    """Install ``data`` at the registry path with a single no-clobber link.
-
-    The bytes are written to one non-followed ``0600`` temporary file and made durable before the
-    registry name is created with ``link``, so an entry that appeared at the path since the state
-    this run decided on was read is never replaced: the link fails, the caller refuses, and no
-    byte of the concurrent registry is destroyed.  Only the harness's own temporary is removed.
-    """
-
-    try:
-        _install_private_receipt(registry_path, data, staging_parent=registry_path.parent)
-    except QualificationError as error:
-        if error.code == "output-target-exists":
-            raise _RegistrySwapError(
-                "changed",
-                "another project registry appeared at the operator path while this run was "
-                "installing one; nothing that was found there was replaced",
-                detail=_carry_staging_residue(error, {"path": str(registry_path)}),
-            ) from None
-        raise _RegistrySwapError(
-            "unsafe",
-            "the project registry could not be installed safely at the operator path",
-            detail=_carry_staging_residue(error, {"error": error.code}),
-        ) from error
-    except (OSError, ValueError) as error:
-        raise _RegistrySwapError(
-            "unsafe",
-            "the project registry could not be installed safely at the operator path",
-            detail={"error": type(error).__name__},
-        ) from error
-
-
-def _registry_preserves_all_entries(captured: bytes, current: bytes) -> bool:
-    """Whether ``current`` still carries every project entry of ``captured``."""
-
-    try:
-        captured_object = json.loads(captured.decode("utf-8"))
-        current_object = json.loads(current.decode("utf-8"))
-    except (UnicodeError, ValueError):
-        return False
-    if not isinstance(captured_object, dict) or not isinstance(current_object, dict):
-        return False
-    captured_projects = captured_object.get("projects")
-    current_projects = current_object.get("projects")
-    if not isinstance(captured_projects, dict) or not isinstance(current_projects, dict):
-        return False
-    return all(current_projects.get(key) == value for key, value in captured_projects.items())
-
-
-def _registry_has_owned_entries(data: bytes | None, owned: Mapping[str, Any]) -> bool:
-    """Whether a registry still carries an entry this run's synthetic projects registered.
-
-    An entry only counts when it still holds *exactly* the value this run registered for that id
-    (carried in ``owned``, never read back out of the registry); a run-owned id whose entry
-    changed is handled by the restore decision (which refuses rather than deletes it), and an
-    unreadable or unexpected final state is never certified as clean.
-    """
-
-    if not owned:
-        return False
-    if data is None:
-        return False
-    try:
-        payload = json.loads(data.decode("utf-8"))
-    except (UnicodeError, ValueError):
-        return True
-    projects = payload.get("projects") if isinstance(payload, dict) else None
-    if not isinstance(projects, dict):
-        return True
-    return any(projects.get(key) == value for key, value in owned.items())
-
-
-def _discard_registry_artifacts_when_unused(
-    registry_path: Path,
-    recovery_path: Path,
-    recovery_identity: tuple[int, int] | None,
-    recovery_bytes: bytes | None,
-    held_path: Path,
-    held_identity: tuple[int, int] | None,
-    captured: bytes | None,
-) -> None:
-    """Drop this run's durable artifacts only when the operator registry provably still exists.
-
-    A failure between installing the record and knowing that the synthetic registry is in place
-    ordinarily leaves the operator registry where it was, and the artifacts are then not needed.
-    They are kept whenever the registry cannot be read, or no longer carries the operator's
-    entries, because the durable bytes are then the only safe recovery source.  Each removal is
-    bound to the exact identity and bytes this run installed, so a file that appeared at an
-    artifact name is neither replaced nor deleted.
-    """
-
-    try:
-        current = _registry_bytes_or_none(registry_path)
-    except (OSError, ValueError):
-        return
-    if captured is None:
-        # Nothing of the operator's existed when this run captured the registry: the state on
-        # disk is either this run's own synthetic file (never installed on these paths) or a
-        # concurrently created registry, and nothing of the operator's needs recovering here.
-        intact = True
-    else:
-        intact = current is not None and _registry_preserves_all_entries(captured, current)
-    if not intact:
-        return
-    _remove_private_registry_artifact(recovery_path, recovery_identity, recovery_bytes)
-    _remove_private_registry_artifact(held_path, held_identity, captured)
-
-
-def _isolate_registry() -> dict[str, Any]:
-    """Replace the operator registry with a synthetic one, durably and without destroying state.
-
-    The operator registry is read privately — only a genuinely missing file counts as "no
-    registry"; every unreadable, symlinked, multi-linked or unstable state refuses with the
-    bounded ``registry-unreadable`` failure before anything changes — and its bytes are captured
-    together with their file identity.  A verified-private, no-clobber recovery record carrying
-    that state is installed next to it; durable evidence left by an interrupted earlier run
-    refuses the run with ``registry-recovery-exists`` and is never replaced.  The replacement
-    itself never destroys a byte: the operator file is *moved aside* (one no-replace ``rename``
-    that fails instead of overwriting an entry at the held name), the moved bytes are verified
-    against the capture, and the exact synthetic registry this run owns is installed at the
-    operator path with a single no-clobber ``link``.  A concurrent write that lands anywhere in
-    that sequence is detected — the moved file is put back and the run refuses with the bounded
-    ``registry-changed`` failure — instead of being silently replaced by the synthetic registry;
-    the operator's bytes stay recoverable on disk in every outcome.
-    """
-
-    try:
-        import aether_agents.paths as paths
-
-        registry_path = paths.state_root() / "projects" / "registry.json"
-    except Exception as error:  # noqa: BLE001 - fail closed on any resolution error
-        raise QualificationError(
-            "registry-unavailable",
-            "the Aether project registry could not be resolved; nothing was changed",
-            detail={"error": type(error).__name__},
-        ) from error
-    try:
-        original = _registry_bytes_or_none(registry_path)
-        original_identity = _registry_file_identity(registry_path)
-    except (OSError, ValueError) as error:
-        raise QualificationError(
-            "registry-unreadable",
-            "the existing Aether project registry could not be read safely; nothing was "
-            "changed and no synthetic registry was installed",
-            detail={"error": type(error).__name__},
-        ) from error
-    installed = _synthetic_registry_bytes()
-    recovery_path = _registry_recovery_path(registry_path)
-    held_path = _registry_held_path(registry_path)
-    try:
-        ensure_private_dir(registry_path.parent)
-    except (OSError, ValueError) as error:
-        raise QualificationError(
-            "registry-unavailable",
-            "the private project-registry directory could not be prepared; nothing was changed",
-            detail={"error": type(error).__name__},
-        ) from error
-    payload: dict[str, Any] = {
-        "schema_version": 1,
-        "kind": "aether.telegram-monitor.qualification-registry-recovery",
-        "created_at_utc": _utc_text(_utc_now()),
-        "registry_path": str(registry_path),
-        "original_state": "present" if original is not None else "absent",
-        "original_identity": list(original_identity) if original_identity is not None else None,
-        "original_sha256": hashlib.sha256(original).hexdigest() if original is not None else None,
-        "original_base64": (
-            base64.b64encode(original).decode("ascii") if original is not None else None
-        ),
-        "installed_sha256": hashlib.sha256(installed).hexdigest(),
-    }
-    recovery_identity, recovery_bytes = _install_private_registry_record(recovery_path, payload)
-    # Ownership fence: the file this run decided on must still be the file at the path.
-    try:
-        current = _registry_bytes_or_none(registry_path)
-        current_identity = _registry_file_identity(registry_path)
-    except (OSError, ValueError) as error:
-        _discard_registry_artifacts_when_unused(
-            registry_path,
-            recovery_path,
-            recovery_identity,
-            recovery_bytes,
-            held_path,
-            None,
-            original,
-        )
-        raise QualificationError(
-            "registry-isolation",
-            "the operator project registry could not be re-read before it was replaced; "
-            "nothing was replaced",
-            detail={"error": type(error).__name__},
-        ) from error
-    if current != original or current_identity != original_identity:
-        _discard_registry_artifacts_when_unused(
-            registry_path,
-            recovery_path,
-            recovery_identity,
-            recovery_bytes,
-            held_path,
-            None,
-            original,
-        )
-        raise QualificationError(
-            "registry-changed",
-            "the operator project registry changed while the qualification was capturing it; "
-            "the live run stopped before replacing it",
-            detail={"captured_identity": original_identity, "current_identity": current_identity},
-        )
-    held_identity: tuple[int, int] | None = None
-    try:
-        if original is not None:
-            held_identity = _move_registry_file_aside(registry_path, held_path, expected=original)
-        _install_registry_file(registry_path, installed)
-    except _RegistrySwapError as error:
-        _discard_registry_artifacts_when_unused(
-            registry_path,
-            recovery_path,
-            recovery_identity,
-            recovery_bytes,
-            held_path,
-            held_identity,
-            original,
-        )
-        raise QualificationError(
-            REGISTRY_SWAP_CODES[error.kind], error.message, detail=error.detail
-        ) from None
-    try:
-        written = _registry_bytes_or_none(registry_path)
-    except (OSError, ValueError) as error:
-        raise QualificationError(
-            "registry-isolation",
-            "the installed synthetic project registry could not be verified; the durable "
-            "recovery state was kept",
-            detail={"error": type(error).__name__, "recovery_record": str(recovery_path)},
-        ) from error
-    if written != installed:
-        raise QualificationError(
-            "registry-isolation",
-            "the installed synthetic project registry could not be verified; the durable "
-            "recovery state was kept",
-            detail={"recovery_record": str(recovery_path)},
-        )
-    return {
-        "path": registry_path,
-        "original": original,
-        "original_identity": original_identity,
-        "installed": installed,
-        "recovery_path": recovery_path,
-        "recovery_identity": recovery_identity,
-        "recovery_bytes": recovery_bytes,
-        "held_path": held_path,
-        "held_identity": held_identity,
-    }
-
-
-def _discard_scratch_state_root(scratch: Path) -> bool:
-    """Remove the private scratch state root of an ownership derivation and verify it is gone.
-
-    The root is this run's own: it is created for exactly this derivation, holds only the
-    synthetic registrations the shipped writer produced for this run's arguments, and nothing
-    else is ever staged in it.  The removal is never ignored: after the attempt the root is
-    checked read-only (with ``lexists``, so a symlink counts as residue too), and a root that
-    survives is residue the caller reports as a bounded failure instead of returning a
-    successful ownership derivation.  ``True`` means the scratch root is provably gone.
-    """
-
-    try:
-        shutil.rmtree(scratch)
-    except OSError:
-        pass
-    return not os.path.lexists(scratch)
-
-
-def _scope_registry_entries(manifest: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """The exact registry entries this run's synthetic registrations produce.
-
-    Ownership is derived from the shipped writer itself and never inferred from a later read of
-    the operator's registry: the very ``ProjectRegistry.register`` call the scope probe performs
-    is executed once here against a private scratch state root this harness creates and removes,
-    with the same project id, project path, name and native project id the probe uses, and the
-    value the shipped writer produced is what the isolation record carries as this run's own.
-    A concurrent writer that later registers its own value for one of these ids therefore can
-    never be mistaken for this run's entry and can never be deleted by the restore.
-
-    The scratch root is qualification-gating: the derivation is returned only when the root is
-    provably removed, and a root that survives is a bounded ``registry-scope-residue`` failure
-    that keeps the synthetic scope unverified instead of reporting a successful derivation.
-    """
-
-    from aether_agents.observation.context import ProjectRegistry
-
-    try:
-        scratch = Path(tempfile.mkdtemp(prefix="aether-monitor-qualification-"))
-    except OSError as error:
-        raise QualificationError(
-            "registry-scope",
-            "a private scratch state root for the synthetic registrations could not be created",
-            detail={"error": type(error).__name__},
-        ) from error
-    try:
-        registry = ProjectRegistry(scratch)
-        for entry in manifest:
-            project_id = str(entry.get("project_id") or "")
-            native_id = entry.get("native_project_id")
-            if not registry.register(
-                project_id,
-                Path(str(entry.get("path") or "")),
-                str(entry.get("name") or ""),
-                str(native_id) if native_id is not None else None,
-            ):
-                raise QualificationError(
-                    "registry-scope",
-                    "a synthetic project identity could not be registered with the shipped "
-                    "project writer; the synthetic scope cannot be verified",
-                    detail={"project_id": project_id},
-                )
-        data = _registry_bytes_or_none(registry.path)
-        payload: Any = None
-        if data is not None:
-            try:
-                payload = json.loads(data.decode("utf-8"))
-            except (UnicodeError, ValueError):
-                payload = None
-        projects = payload.get("projects") if isinstance(payload, dict) else None
-        if not isinstance(projects, dict):
-            raise QualificationError(
-                "registry-scope",
-                "the shipped project writer produced no readable registry for the synthetic "
-                "scope; the synthetic scope cannot be verified",
-            )
-        values: dict[str, Any] = {}
-        for entry in manifest:
-            project_id = str(entry.get("project_id") or "")
-            if project_id not in projects:
-                raise QualificationError(
-                    "registry-scope",
-                    "the shipped project writer did not record a synthetic project; the "
-                    "synthetic scope cannot be verified",
-                    detail={"project_id": project_id},
-                )
-            values[project_id] = projects[project_id]
-        derived = values
-    except BaseException:
-        # The scratch root is never left silently behind, and a failure here never masks the
-        # failure that caused it: the caller's bounded error still describes what went wrong.
-        _discard_scratch_state_root(scratch)
-        raise
-    if not _discard_scratch_state_root(scratch):
-        raise QualificationError(
-            "registry-scope-residue",
-            "the private scratch state root of the synthetic ownership derivation could not be "
-            "removed; it is retained with its content and the synthetic scope is not verified",
-            detail={"scratch": str(scratch)},
-        )
-    return derived
-
-
-def _registry_owned_entries(
-    registry_path: Path, expected: Mapping[str, Any]
-) -> tuple[dict[str, Any], list[str]]:
-    """Verify the isolated registry carries exactly the entries this run registered.
-
-    Ownership itself is *carried in* — ``expected``, derived from the shipped writer before the
-    scope was materialized — and is never read out of the registry.  This helper only proves that
-    the scope in place is the scope this run created: an id the isolated registry does not carry
-    with exactly the expected value is reported as missing, and the caller refuses the run rather
-    than adopting whatever value it found as its own.  A concurrent writer's same-id update can
-    therefore never be captured as this run's entry and never be deleted.  Returns the exact
-    expected map together with the ids the isolated registry does not carry with exactly that
-    value.
-    """
-
-    try:
-        data = _registry_bytes_or_none(registry_path)
-    except (OSError, ValueError) as error:
-        raise QualificationError(
-            "registry-scope",
-            "the isolated project registry could not be read back after the synthetic scope was "
-            "materialized",
-            detail={"error": type(error).__name__},
-        ) from error
-    payload: Any = None
-    if data is not None:
-        try:
-            payload = json.loads(data.decode("utf-8"))
-        except (UnicodeError, ValueError):
-            payload = None
-    projects = payload.get("projects") if isinstance(payload, dict) else None
-    missing: list[str] = []
-    for project_id, value in expected.items():
-        if not isinstance(projects, dict) or projects.get(project_id) != value:
-            missing.append(project_id)
-    return dict(expected), missing
-
-
-def _scope_registry_owned_entries(
-    registry_path: Path, manifest: Sequence[Mapping[str, Any]]
-) -> tuple[dict[str, Any], list[str]]:
-    """Derive this run's exact synthetic entries and verify the isolated registry carries them."""
-
-    return _registry_owned_entries(registry_path, _scope_registry_entries(manifest))
-
-
-def _restore_target(
-    recorded: bytes | None, current: bytes, owned: Mapping[str, Any]
-) -> tuple[str, bytes | None] | None:
-    """The outcome and final registry bytes a restore may produce, or ``None`` when it cannot.
-
-    Every entry the current registry carries is either a legitimate concurrent change that must
-    survive or an entry this run itself registered for one of its synthetic projects.  This run's
-    own entries are recognised *only* by the exact value carried in ``owned`` (the value the
-    shipped writer produced for this run's registration arguments), and they are removed rather
-    than merged back, so the synthetic scope leaves no project behind.  An entry for a run-owned
-    id that carries anything else is not this run's entry: it is neither deleted nor merged, the
-    caller refuses and keeps the durable evidence.  When the run found no registry at all, only
-    the entries it registered itself may disappear: nothing left of the concurrent state means
-    the registry this run created is removed, and a genuine concurrent registry that also carries
-    this run's registrations keeps its own entries with the run's entries removed from it.
-    """
-
-    try:
-        current_object = json.loads(current.decode("utf-8"))
-    except (UnicodeError, ValueError):
-        return None
-    if not isinstance(current_object, dict):
-        return None
-    current_projects = current_object.get("projects")
-    if not isinstance(current_projects, dict):
-        return None
-    for project_id, value in owned.items():
-        if project_id in current_projects and current_projects[project_id] != value:
-            return None
-    concurrent = {key: value for key, value in current_projects.items() if key not in owned}
-    if recorded is None:
-        if not concurrent:
-            return "removed", None
-        if len(concurrent) == len(current_projects):
-            # Nothing of this run's was in the registry: the concurrent state is left untouched.
-            return "concurrent-kept", current
-        merged = dict(current_object)
-        merged["projects"] = concurrent
-        return "merged-concurrent", json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
-    try:
-        recorded_object = json.loads(recorded.decode("utf-8"))
-    except (UnicodeError, ValueError):
-        return None
-    if not isinstance(recorded_object, dict):
-        return None
-    recorded_projects = recorded_object.get("projects")
-    if not isinstance(recorded_projects, dict):
-        return None
-    merged = dict(recorded_object)
-    merged.update({key: value for key, value in current_object.items() if key != "projects"})
-    merged["projects"] = {**recorded_projects, **concurrent}
-    result = json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
-    return ("byte-identical" if result == recorded else "merged-concurrent"), result
-
-
-def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
-    """Put the operator registry back, preserving every concurrent change; never clobber.
-
-    The restore is bound to the exact synthetic registry this run installed and to the exact
-    entries this run registered, so only a state this run owns is reverted; anything else is left
-    exactly as it is found.  Codes: ``byte-identical`` (the registry now holds exactly the bytes
-    the run found), ``removed`` (the run found no registry and none is left), ``merged-concurrent``
-    (a legitimate concurrent update appeared during isolation: its entries survive, this run's own
-    scope registrations are removed from it, and the operator's original entries — when the run
-    found any — are merged back under it), ``concurrent-kept`` (the run found no registry and a
-    concurrently created one that never carried a run-owned entry is untouched),
-    ``not-isolated`` (no isolation was reported).  An entry this run registered for its own
-    synthetic project is removed only while it still carries exactly the value this run registered
-    for it — the value the shipped writer produced for this run's registration arguments, carried
-    in ``owned`` and never read back out of the registry — and an entry for a run-owned id that
-    changed is never deleted and never merged: the restore refuses instead.  A merge whose result
-    is exactly the captured bytes — the only difference the isolation carried was this run's own
-    scope registrations — is reported ``byte-identical`` because that is what the registry holds,
-    and ``merged-concurrent`` is reserved for a genuine concurrent update whose entries were
-    preserved alongside the operator's original ones; when the run found no registry at all and
-    the only entries present are its own scope registrations, the registry this run created is
-    removed and the outcome is ``removed``.
-    ``failed`` is the bounded failure: the registry was left untouched, or the state could not be
-    verified, and the durable recovery artifacts were kept for reconciliation.  A restore whose
-    ownership is unknown (``ownership_available`` is ``False``: the run could not derive the
-    exact entries its own registrations produce) never reverts anything at all — the isolated
-    registry is left exactly as it is and the durable recovery artifacts stay on disk — because a
-    blind revert could delete a concurrent writer's entry or leave this run's own behind.
-    No path operation
-    in this function replaces an entry that appeared underneath it: the current file is *moved
-    aside* with a no-replace rename (never unlinked, never clobbered) and the restored bytes are
-    installed with a single no-clobber link, so a concurrent writer's bytes are either merged, put
-    back, or left in place.
-    """
-
-    if isolation is None:
-        return "not-isolated"
-    if isolation.get("ownership_available") is False:
-        # The exact entries this run registered are unknown, so the restore cannot tell this
-        # run's own synthetic registrations from a concurrent writer's: reverting the isolation
-        # blind could delete a concurrent entry or leave a synthetic one behind.  Nothing is
-        # reverted, the durable recovery artifacts stay on disk, and the operator reconciles.
-        return "failed"
-    registry_path = Path(isolation["path"])  # type: ignore[arg-type]
-    original = isolation.get("original")
-    recorded = bytes(original) if original is not None else None
-    installed = isolation.get("installed")
-    installed = _synthetic_registry_bytes() if installed is None else bytes(installed)
-    owned = isolation.get("owned_entries") or {}
-    recovery_value = isolation.get("recovery_path")
-    recovery_path = Path(recovery_value) if recovery_value is not None else None
-    recovery_identity = isolation.get("recovery_identity")
-    recovery_value = isolation.get("recovery_bytes")
-    recovery_bytes = bytes(recovery_value) if recovery_value is not None else None
-    held_value = isolation.get("held_path")
-    held_path = Path(held_value) if held_value is not None else None
-    held_identity = isolation.get("held_identity")
-    outgoing_path = _registry_outgoing_path(registry_path)
-
-    code: str
-    expected_final: bytes | None
-    outgoing_identity: tuple[int, int] | None = None
-    outgoing_expected: bytes | None = None
-    try:
-        current = _registry_bytes_or_none(registry_path)
-    except (OSError, ValueError):
-        return "failed"
-    try:
-        if current == installed:
-            # The synthetic registry this run installed is still at the operator path: it is this
-            # run's own file, so it is moved aside (never blindly unlinked) and the state the run
-            # found is installed back with a single no-clobber link.
-            outgoing_expected = installed
-            outgoing_identity = _move_registry_file_aside(
-                registry_path, outgoing_path, expected=installed
-            )
-            if recorded is None:
-                code, expected_final = "removed", None
-            else:
-                _install_registry_file(registry_path, recorded)
-                code, expected_final = "byte-identical", recorded
-        elif current is None:
-            if recorded is None:
-                code, expected_final = "removed", None
-            else:
-                _install_registry_file(registry_path, recorded)
-                code, expected_final = "byte-identical", recorded
-        else:
-            # The registry changed while the synthetic one was in place.  The decision is made
-            # from the exact entries this run registered, never from what the registry holds:
-            # this run's own entries disappear, every other entry survives, and an entry for a
-            # run-owned id that changed refuses the restore instead of being deleted.
-            decision = _restore_target(recorded, current, owned)
-            if decision is None:
-                return "failed"
-            code, expected_final = decision
-            if expected_final != current:
-                outgoing_expected = current
-                outgoing_identity = _move_registry_file_aside(
-                    registry_path, outgoing_path, expected=current
-                )
-                if expected_final is not None:
-                    _install_registry_file(registry_path, expected_final)
-    except _RegistrySwapError as error:
-        # Nothing this run moved aside was destroyed: the file is at the registry path or at the
-        # aside name, and the durable artifacts stay for reconciliation.  A staging directory the
-        # restore could not remove is never hidden by this single bounded code: the retained path
-        # is recorded on the run's own isolation record for the receipt.
-        _record_retained_staging(isolation, error)
-        return "failed"
-    # Postcondition before any artifact is removed: the operator registry holds exactly the
-    # expected state and no entry this run registered as a synthetic project remains.
-    try:
-        final = _registry_bytes_or_none(registry_path)
-    except (OSError, ValueError):
-        return "failed"
-    if final != expected_final or _registry_has_owned_entries(final, owned):
-        return "failed"
-    if outgoing_identity is not None and not _remove_private_registry_artifact(
-        outgoing_path, outgoing_identity, outgoing_expected
-    ):
-        return "failed"
-    if held_path is not None and not _remove_private_registry_artifact(
-        held_path, held_identity, recorded
-    ):
-        return "failed"
-    if recovery_path is not None and not _remove_private_registry_artifact(
-        recovery_path, recovery_identity, recovery_bytes
-    ):
-        return "failed"
-    return code
-
-
-def _scope_materialize(
-    interpreter: Path,
-    scope_root: Path,
-    manifest: Sequence[dict[str, Any]],
-    *,
-    state_root: Path,
-    hermes_home: Path,
-    stream: Any,
-) -> dict[str, Any]:
-    """Materialize the native half of the synthetic scope through the runtime.
-
-    The caller owns the manifest and the synthetic project files before this probe
-    runs, so a failure here is always fully reversible: the orchestrator removes the
-    scope from exactly the manifest it already holds.
-    """
-
-    body = (
-        f"SCOPE_ROOT = {str(scope_root)!r}\n"
-        f"HERMES_HOME = {str(hermes_home)!r}\n"
-        f"STATE_ROOT = {str(state_root)!r}\n"
-        f"BOARD_SCHEMA_JSON = {json.dumps(_BOARD_DDL)!r}\n"
-        f"SESSION_SCHEMA_JSON = {json.dumps(_SESSION_DDL)!r}\n"
-        f"SCOPE_MANIFEST = {json.dumps(json.dumps(list(manifest)))!r}\n" + _SCOPE_PROBE
-    )
-    payload = _runtime_execute(interpreter, body)
-    if payload.get("errors"):
-        raise QualificationError(
-            "scope-create",
-            "the synthetic qualification scope could not be materialized; it was removed",
-            detail=payload.get("errors"),
-        )
-    native_ids = {
-        str(item.get("project_id")): str(item.get("native_project_id"))
-        for item in payload.get("projects", [])
-        if isinstance(item, Mapping)
-    }
-    for entry in manifest:
-        entry["native_project_id"] = native_ids.get(entry["project_id"])
-        if entry["native_project_id"] is None:
-            raise QualificationError(
-                "scope-create",
-                "a synthetic project never received a native identity; the scope was removed",
-            )
-    print(
-        f"synthetic scope ready: {len(manifest)} projects, {len(payload.get('boards', []))} boards",
-        file=stream,
-        flush=True,
-    )
-    return {"boards": list(payload.get("boards", []))}
-
-
-def _scope_remove(interpreter: Path, scope: Mapping[str, Any]) -> dict[str, Any]:
-    """Remove the synthetic native rows, boards, sessions and files.
-
-    The probe verifies every postcondition (native project rows, board directories,
-    project paths, session rows and the scope root) and reports residue explicitly, so a
-    removal that silently fails can never pass for cleanup.
-    """
-
-    manifest = list(scope.get("manifest", []))
-    scope_root = (
-        Path(manifest[0]["path"]).parents[1] if manifest else Path(scope.get("root") or ".")
-    )
-    body = (
-        f"SCOPE_ROOT = {str(scope_root)!r}\n"
-        f"HERMES_HOME = {str(monitor_runtime.hermes_home())!r}\n"
-        f"SCOPE_MANIFEST = {json.dumps(json.dumps(manifest))!r}\n" + _SCOPE_RESTORE_PROBE
-    )
-    return _runtime_execute(interpreter, body)
-
-
-def _remove_direct_records(state_root: Path, scope: Mapping[str, Any]) -> dict[str, Any]:
-    """Delete every private direct-turn spool record the fixture wrote, then verify.
-
-    ``unlink`` failures are never swallowed: a record that cannot be removed (or that
-    survives the attempt) is residue, and the caller must refuse to report the run
-    qualified while a synthetic record remains on disk.
-    """
-
-    removed: list[str] = []
-    errors: list[str] = []
-    residue: list[str] = []
-    for entry in scope.get("manifest", ()):
-        direct = entry.get("direct")
-        if not isinstance(direct, Mapping):
-            continue
-        for interval in direct.get("intervals", ()):
-            path = _direct_record_path(
-                state_root, str(direct.get("session_id")), str(interval.get("interval_id"))
-            )
-            try:
-                path.unlink()
-                removed.append(path.name)
-            except FileNotFoundError:
-                pass  # nothing was written (an aborted run); nothing is left behind
-            except OSError as error:
-                errors.append(f"{path.name}: {type(error).__name__}")
-            if path.is_symlink() or path.exists():
-                residue.append(f"direct-record: {path.name}")
-    return {"removed": removed, "errors": errors, "residue": residue}
-
-
-def _direct_record_path(state_root: Path, session_id: str, interval_id: str) -> Path:
-    digest = hashlib.sha256(f"{session_id}\0{interval_id}".encode("utf-8")).hexdigest()
-    return state_root / "monitor" / "direct" / f"{digest}.json"
-
-
-def _write_direct_interval(
-    state_root: Path,
-    scope: Mapping[str, Any],
-    *,
-    index: int,
-    moment: datetime,
-) -> Path:
-    """Write one private direct-turn spool record the shipped hooks would write."""
-
-    entry = next(item for item in scope["manifest"] if isinstance(item.get("direct"), Mapping))
-    direct = entry["direct"]
-    interval = direct["intervals"][index]
-    record: dict[str, Any] = {
-        "session_id": direct["session_id"],
-        "interval_id": interval["interval_id"],
-        "project_id": entry["project_id"],
-        "native_project_id": entry["native_project_id"],
-        "project_path": entry["path"],
-        "started_at": _utc_text(moment),
-        "outcome": interval["outcome"],
-    }
-    if index > 0:
-        record["summary"] = interval["summary"]
-        record["ended_at"] = _utc_text(moment)
-    directory = state_root / "monitor" / "direct"
-    directory.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(directory, 0o700)
-    except OSError:
-        pass
-    path = _direct_record_path(state_root, direct["session_id"], interval["interval_id"])
-    path.write_text(
-        json.dumps(
-            {"schema_version": DIRECT_SCHEMA_VERSION, "record": record},
-            ensure_ascii=False,
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-    return path
-
-
-def _finalize_scope(state_root: Path, scope: Mapping[str, Any], *, hermes_home: Path) -> None:
-    """Complete the synthetic flows between two real cuts (a genuine between-cut final)."""
-
-    hermes = hermes_home
-    moment = _utc_now().timestamp()
-    for entry in scope["manifest"]:
-        board_path = hermes / "kanban" / "boards" / entry["board_slug"] / "kanban.db"
-        if not board_path.is_file():
-            raise QualificationError(
-                "scope-transition",
-                "a synthetic board disappeared before the between-cut transition",
-            )
-        connection = sqlite3.connect(board_path)
-        try:
-            for task in entry["tasks"]:
-                connection.execute(
-                    "UPDATE tasks SET status = ?, completed_at = ?, session_affinity = ? "
-                    "WHERE id = ?",
-                    (
-                        "done",
-                        moment,
-                        json.dumps({"flow_id": entry["flow_id"], "terminal": True}),
-                        task["task_id"],
-                    ),
-                )
-            if entry["letter"] == "A":
-                first_case = entry["tasks"][1]["task_id"]
-                connection.execute(
-                    "INSERT OR REPLACE INTO task_runs (id, task_id, status, outcome,"
-                    " started_at, ended_at, last_heartbeat_at, summary, error, profile)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        1,
-                        first_case,
-                        "completed",
-                        "completed",
-                        moment - 600,
-                        moment,
-                        moment,
-                        "phase one checks finished",
-                        None,
-                        "implementer",
-                    ),
-                )
-            connection.commit()
-        finally:
-            connection.close()
 
 
 # ---------------------------------------------------------------------------
@@ -3281,7 +1745,9 @@ print(json.dumps(payload))
 """
 
 
-def _smoke_trigger(interpreter: Path, job_id: str) -> dict[str, Any]:
+def _smoke_trigger(
+    interpreter: Path, job_id: str, *, environment: Mapping[str, str] | None = None
+) -> dict[str, Any]:
     """Trigger exactly the owned monitor job once through the shipped native API."""
 
     body = (
@@ -3289,7 +1755,7 @@ def _smoke_trigger(interpreter: Path, job_id: str) -> dict[str, Any]:
         f"NAME_JSON = {NATIVE_JOB_NAME!r}\n"
         f"SCRIPT_JSON = {PRECHECK_SCRIPT_NAME!r}\n" + _SMOKE_TRIGGER_PROBE
     )
-    return _runtime_execute(interpreter, body)
+    return _runtime_execute(interpreter, body, environment=environment)
 
 
 def _smoke_phase(
@@ -3305,6 +1771,7 @@ def _smoke_phase(
     expected_items: Mapping[str, str],
     expected_item_gaps: Mapping[str, Sequence[str]],
     stream: Any,
+    environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """One bounded provisioned model+transport smoke before the long hourly wait.
 
@@ -3324,7 +1791,7 @@ def _smoke_phase(
             "smoke; the monitor is returned to its prior state",
             detail={"lead_seconds": round(lead, 3)},
         )
-    trigger = backends.trigger_job(interpreter, job_id)
+    trigger = backends.trigger_job(interpreter, job_id, environment)
     triggered_at = backends.now()
     if not trigger.get("triggered"):
         raise QualificationError(
@@ -3341,7 +1808,7 @@ def _smoke_phase(
             baseline_report_ids=baseline_report_ids,
         )
         if decision.get("state") == "ready":
-            job_record = backends.job_record(interpreter, job_id)
+            job_record = backends.job_record(interpreter, job_id, environment)
             run_evidence = _job_run_evidence(
                 output_dir,
                 window_start=triggered_at - timedelta(minutes=1),
@@ -3731,7 +2198,9 @@ def _pipeline_work_key(entry: Mapping[str, Any]) -> str:
 
 
 def _claim_ref(entry: Mapping[str, Any], task: Mapping[str, Any]) -> str:
-    return f"board:{entry['board_slug']}:task:{task['task_id']}:result"
+    """The source reference of one synthetic claim, bound to the writer's own task id."""
+
+    return f"board:{entry['board_slug']}:task:{_bound_task_id(entry, task)}:result"
 
 
 def _case_task(entry: Mapping[str, Any], case_key: str) -> Mapping[str, Any]:
@@ -4248,12 +2717,15 @@ def _environment_gaps(store: MonitorStore) -> list[str]:
     return sorted({str(gap) for gap in collection.coverage_gaps})
 
 
-def _owner_language(interpreter: Path) -> str | None:
+def _owner_language(
+    interpreter: Path, *, environment: Mapping[str, str] | None = None
+) -> str | None:
     payload = _runtime_execute(
         interpreter,
         "from aether_agents.monitor import runtime as monitor_runtime\n"
         "print(__import__('json').dumps("
         "{'language': monitor_runtime.configured_owner_language()}))\n",
+        environment=environment,
     )
     value = payload.get("language")
     return value if isinstance(value, str) and value.strip() else None
@@ -4290,46 +2762,1234 @@ def _job_shape_ok(job: Mapping[str, Any] | None) -> bool:
     return not job.get("paused")
 
 
-def _inventory_preserved(
-    baseline: Sequence[Mapping[str, Any]],
-    current: Sequence[Mapping[str, Any]],
-    *,
-    monitor_job_id: str | None,
-) -> dict[str, Any]:
-    """Compare every unrelated native job's behaviour-bearing digest before/after."""
+# ---------------------------------------------------------------------------
+# D13 isolated native-runtime laboratory
+#
+# The laboratory is one private, exclusive root outside every Git worktree that gives the
+# monitor's own native code a private HOME, HERMES_HOME, XDG roots, temporary directory,
+# working directory and Aether state root.  Inside it the shipped product and native
+# Hermes code run unchanged: the shipped project/board/session writers seed honestly
+# labelled synthetic records, the shipped control service installs the one lab job, and
+# one bounded supervised instance of the native cron scheduler executes the hourly cuts.
+#
+# Nothing in this file renames, unlinks, quarantines, replaces or restores an entry of the
+# operator's project registry: this installation's registry, boards, sessions, cron jobs
+# and monitor state are read-only to the qualification, which is why the laboratory exists.
+# ---------------------------------------------------------------------------
 
-    baseline_map = {
-        str(job.get("id")): job
-        for job in baseline
-        if isinstance(job, Mapping) and str(job.get("id"))
+#: The provisioned runtime probe that projects the operator's profile onto lab decisions.
+_LAB_CONFIG_PROBE = r"""
+import json
+import sys
+from pathlib import Path
+
+SCRIPT_ROOT = SCRIPT_ROOT_JSON
+SOURCE_ROOT = SOURCE_ROOT_JSON
+for entry in (SOURCE_ROOT, SCRIPT_ROOT):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
+import telegram_monitor_lab as lab
+
+PROFILE = Path(PROFILE_JSON)
+payload = {
+    "profile": PROFILE.name,
+    "config_digest": None,
+    "text": None,
+    "access_names": [],
+    "problems": [],
+}
+config_path = PROFILE / "config.yaml"
+try:
+    import yaml
+
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+except Exception as error:  # noqa: BLE001 - the probe reports its own failure
+    payload["problems"].append(f"config-unreadable: {type(error).__name__}")
+else:
+    if not isinstance(raw, dict):
+        payload["problems"].append("config-not-a-mapping")
+    else:
+        decisions = lab.minimal_config(raw)
+        payload["config_digest"] = lab.config_digest(decisions)
+        payload["access_names"] = sorted(lab.required_access(decisions))
+        try:
+            payload["text"] = yaml.safe_dump(decisions, sort_keys=True)
+        except Exception as error:  # noqa: BLE001
+            payload["problems"].append(f"config-unserializable: {type(error).__name__}")
+print(json.dumps(payload))
+"""
+
+#: Read-only native compatibility probe: the loaded artifacts and their digests, the
+#: installed distribution versions, the native interfaces and their signatures the
+#: laboratory depends on, plus the destination this route resolves to.  The provisioned
+#: variant (``LAB_ROOT_JSON = None``) resolves the route, the interfaces and the
+#: destination; in a laboratory child context (a lab root) it additionally resolves the
+#: native writer surface the shipped-writer fixture will use and the roots those writers
+#: effectively resolve.  The laboratory variant runs *inside the created private root*,
+#: before the first write and before any effect; it is the in-laboratory gate.
+_LAB_NATIVE_PROBE = r"""
+import hashlib
+import importlib
+import inspect
+import json
+import sys
+from pathlib import Path
+
+SOURCE_ROOT = SOURCE_ROOT_JSON
+SCRIPT_ROOT = SCRIPT_ROOT_JSON
+LAB_ROOT_JSON = LAB_ROOT_JSON
+for entry in (SOURCE_ROOT, SCRIPT_ROOT):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
+
+payload = {"problems": [], "interfaces": {}, "destination_digest": None}
+
+try:
+    from cron.scheduler_provider import InProcessCronScheduler
+
+    signature = str(inspect.signature(InProcessCronScheduler.start))
+    # ``name`` is an instance property in the supported revisions, so the class attribute is
+    # a descriptor object and never a JSON value: reading it on the class would make this
+    # probe unserializable.  The descriptor is reported, not guessed.
+    name_descriptor = getattr(InProcessCronScheduler, "name", None)
+    payload["interfaces"]["scheduler"] = {
+        "class": "cron.scheduler_provider.InProcessCronScheduler",
+        "name": name_descriptor if isinstance(name_descriptor, str) else None,
+        "name_is_instance_property": isinstance(name_descriptor, property),
+        "start_signature": signature,
     }
-    current_map = {
-        str(job.get("id")): job
-        for job in current
-        if isinstance(job, Mapping) and str(job.get("id"))
+    if "stop_event" not in signature:
+        payload["problems"].append("scheduler-start-signature")
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"scheduler-unavailable: {type(error).__name__}")
+
+try:
+    from cron import jobs as cron_jobs
+
+    payload["interfaces"]["jobs"] = {
+        "list_jobs": callable(getattr(cron_jobs, "list_jobs", None))
     }
-    changed: list[str] = []
-    for job_id, job in baseline_map.items():
-        if monitor_job_id is not None and job_id == str(monitor_job_id):
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"cron-jobs-unavailable: {type(error).__name__}")
+
+try:
+    import aether_agents.monitor.delivery as monitor_delivery
+    from aether_agents.monitor import runtime as monitor_runtime
+
+    payload["interfaces"]["delivery"] = {
+        "canonical_target_reference": callable(
+            getattr(monitor_delivery, "canonical_target_reference", None)
+        )
+    }
+    payload["interfaces"]["runtime"] = {
+        "hermes_home": str(monitor_runtime.hermes_home()),
+        "hermes_available": bool(monitor_runtime.hermes_available()),
+    }
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"product-runtime-unavailable: {type(error).__name__}")
+
+try:
+    from gateway.config import Platform, load_gateway_config
+
+    config = load_gateway_config()
+    home = config.get_home_channel(Platform.TELEGRAM)
+    if home is None:
+        payload["problems"].append("destination-missing")
+    else:
+        chat_id = str(getattr(home, "chat_id", "") or "").strip()
+        thread_raw = getattr(home, "thread_id", None)
+        thread_id = str(thread_raw).strip() if thread_raw is not None else None
+        if not chat_id:
+            payload["problems"].append("destination-invalid")
+        else:
+            payload["destination_digest"] = hashlib.sha256(
+                f"{chat_id}\0{thread_id or ''}".encode("utf-8")
+            ).hexdigest()
+            payload["destination_thread_present"] = thread_id is not None
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"destination-unavailable: {type(error).__name__}")
+
+if LAB_ROOT_JSON:
+    import telegram_monitor_lab as lab
+
+    def _resolve(qualified):
+        parts = qualified.split(".")
+        for index in range(len(parts) - 1, 0, -1):
+            try:
+                loaded = importlib.import_module(".".join(parts[:index]))
+            except Exception:  # noqa: BLE001 - an unimportable prefix is not the target
+                continue
+            target = loaded
+            for attribute in parts[index:]:
+                target = getattr(target, attribute, None)
+                if target is None:
+                    return None
+            return target
+        return None
+
+    writers = {}
+    for name, _required in lab.WRITER_REQUIREMENTS:
+        entry = {"present": False, "parameters": []}
+        target = _resolve(name)
+        if callable(target):
+            entry["present"] = True
+            accepted = set()
+            for candidate in (target, *(_resolve(funnel) for funnel in lab.WRITER_PARAMETER_FUNNELS.get(name, ()))):
+                if candidate is None:
+                    continue
+                try:
+                    accepted.update(inspect.signature(candidate).parameters)
+                except (TypeError, ValueError):
+                    continue
+            entry["parameters"] = sorted(accepted)
+        writers[name] = entry
+    payload["writers"] = writers
+
+    entry_points = []
+    installed = {}
+    for module in lab.WRITER_ARTIFACT_MODULES:
+        entry = {"file": None, "sha256": None, "size": None}
+        try:
+            loaded = importlib.import_module(module)
+            path = Path(str(getattr(loaded, "__file__", "") or ""))
+            raw = path.read_bytes()
+            entry["file"] = str(path)
+            entry["sha256"] = hashlib.sha256(raw).hexdigest()
+            entry["size"] = len(raw)
+        except Exception:  # noqa: BLE001 - a module without a readable artifact fails open here
+            entry["sha256"] = None
+        payload.setdefault("artifacts", {})[module] = entry
+    try:
+        from importlib.metadata import entry_points as _entry_points, version as _version
+
+        # Informational: the installed distributions of the interpreter that resolved the
+        # modules.  The loaded-artifact digests above are the authoritative loading
+        # evidence; a version string alone is not.
+        for name in ("hermes-agent", "aether-agents"):
+            try:
+                installed[name] = _version(name)
+            except Exception:  # noqa: BLE001 - an uninstalled distribution is recorded as absent
+                installed[name] = None
+        for item in _entry_points(group="hermes_agent.plugins"):
+            entry_points.append(f"{item.name}={item.value}")
+    except Exception:  # noqa: BLE001
+        entry_points = []
+    payload["installed_distributions"] = installed
+    payload["entry_points"] = sorted(entry_points)
+
+    effective = {}
+    for name, qualified in lab.WRITER_EFFECTIVE_ROOTS:
+        module_name, _, attribute = qualified.partition(":")
+        value = None
+        try:
+            loaded = importlib.import_module(module_name)
+            target = getattr(loaded, attribute, None)
+            if callable(target):
+                value = str(target())
+        except Exception:  # noqa: BLE001 - an unresolvable root is reported, never guessed
+            value = None
+        effective[name] = value
+    payload["effective"] = effective
+
+print(json.dumps(payload))
+"""
+
+
+#: One control action executed inside the laboratory context through the shipped service.
+_LAB_CONTROL_PROBE = r"""
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, SRC_ROOT_JSON)
+from aether_agents.monitor.runtime import execute_action
+from aether_agents.monitor.store import MonitorStore
+
+print(
+    json.dumps(
+        execute_action(ACTION_JSON, store=MonitorStore(Path(STATE_ROOT_JSON)))
+    )
+)
+"""
+
+
+def _lab_control(interpreter: Path, lab: Mapping[str, Any], action: str) -> dict[str, Any]:
+    """Execute one control action in the laboratory context, through the shipped service."""
+
+    body = (
+        f"STATE_ROOT_JSON = {json.dumps(str(lab['state_root']))}\n"
+        f"SRC_ROOT_JSON = {json.dumps(str(SOURCE_ROOT))}\n"
+        f"ACTION_JSON = {json.dumps(action)}\n" + _LAB_CONTROL_PROBE
+    )
+    envelope = _runtime_execute(interpreter, body, environment=dict(lab["environment"]))
+    if not isinstance(envelope, dict) or envelope.get("schema_version") != MONITOR_SCHEMA_VERSION:
+        raise QualificationError(
+            "control-envelope", f"the laboratory monitor {action} returned no envelope"
+        )
+    if not envelope.get("ok"):
+        error = envelope.get("error") or {}
+        raise QualificationError(
+            str(error.get("code") or "control-failed"),
+            str(error.get("message") or f"the laboratory monitor {action} failed"),
+        )
+    return envelope
+
+
+#: The shipped-writer fixture: synthetic projects, contracts, boards, tasks and native
+#: sessions, plus the direct-turn interval the shipped product callbacks enroll.  Every
+#: call is one the provisioned revision supports (the read-only preflight resolved them
+#: first), every identity is the one the shipped writer returned, and the child verifies
+#: its own effective roots inside the laboratory before its first write.
+_LAB_FIXTURE_PROBE = r"""
+import json
+import sys
+from pathlib import Path
+
+MANIFEST = json.loads(MANIFEST_JSON)
+STATE_ROOT = Path(STATE_ROOT_JSON)
+HERMES = Path(HERMES_HOME_JSON)
+LAB_ROOT = Path(LAB_ROOT_JSON)
+payload = {
+    "projects": [],
+    "boards": [],
+    "sessions": [],
+    "tasks": [],
+    "direct": [],
+    "errors": [],
+}
+
+
+def fail(code, error=None):
+    payload["errors"].append(f"{code}: {type(error).__name__}" if error else code)
+
+
+def escapes(path):
+    # True when a resolved native path would write outside the private laboratory.
+    try:
+        resolved = Path(path).resolve(strict=False)
+        root = LAB_ROOT.resolve(strict=False)
+    except OSError:
+        return True
+    return resolved != root and root not in resolved.parents
+
+
+try:
+    from aether_agents.monitor import runtime as monitor_runtime
+    from aether_agents.monitor.store import MonitorStore
+    from aether_agents.observation.context import ProjectRegistry
+    from hermes_cli import kanban_db, projects_db
+    from hermes_state import SessionDB
+except Exception as error:  # noqa: BLE001
+    fail("fixture-imports", error)
+    print(json.dumps(payload))
+    raise SystemExit(0)
+
+# Before the first write: the writers this fixture uses must effectively resolve inside the
+# laboratory.  An inherited explicit board/session selector would otherwise send these
+# writes back into the operator's installation.
+try:
+    effective = {
+        "kanban_db": kanban_db.kanban_db_path(),
+        "boards_root": kanban_db.boards_root(),
+        "projects_db": projects_db.projects_db_path(),
+        "session_db": STATE_DB_JSON,
+    }
+except Exception as error:  # noqa: BLE001
+    fail("fixture-root-probe", error)
+    print(json.dumps(payload))
+    raise SystemExit(0)
+escaped = sorted(name for name, path in effective.items() if escapes(path))
+if escaped:
+    fail("fixture-root-escape")
+    payload["escaped"] = escaped
+    print(json.dumps(payload))
+    raise SystemExit(0)
+
+store = MonitorStore(STATE_ROOT)
+state_db = HERMES / "state.db"
+state_db.parent.mkdir(parents=True, exist_ok=True)
+registry = ProjectRegistry(STATE_ROOT)
+
+try:
+    # The native project store is opened through its own shipped writer, which owns the
+    # schema; the fixture never hand-writes a native table.
+    connection = projects_db.connect()
+except Exception as error:  # noqa: BLE001
+    fail("fixture-projects-db", error)
+    print(json.dumps(payload))
+    raise SystemExit(0)
+
+for entry in MANIFEST:
+    project_root = Path(entry["path"])
+    if not project_root.is_dir():
+        fail("fixture-project-missing")
+        continue
+    try:
+        # The laboratory root is created exclusively for this run, so its project store
+        # starts empty: each synthetic project is created once through the shipped writer,
+        # which owns the schema, the slug and the duplicate-path policy.  No native table is
+        # ever hand-written and no project is looked up or adopted.
+        created = projects_db.create_project(
+            connection,
+            name=entry["name"],
+            primary_path=str(project_root),
+            board_slug=entry["board_slug"],
+        )
+        native_id = str(getattr(created, "id", created))
+        if not registry.register(entry["project_id"], project_root, entry["name"], native_id):
+            fail("fixture-registry-register")
             continue
-        other = current_map.get(job_id)
-        if other is None or other.get("behaviour_sha256") != job.get("behaviour_sha256"):
-            changed.append(job_id)
-    for job_id in current_map:
-        if job_id in baseline_map or (monitor_job_id is not None and job_id == str(monitor_job_id)):
+        entry["native_project_id"] = native_id
+        payload["projects"].append(
+            {"project_id": entry["project_id"], "native_project_id": native_id}
+        )
+    except Exception as error:  # noqa: BLE001
+        fail("fixture-project", error)
+        continue
+
+    # Native sessions through the shipped session store, with the source metadata the
+    # collector reads.  Only parameters the provisioned revision accepts are passed: the
+    # store owns the row's timestamps, and the title is written through the shipped title
+    # writer, never through a guessed column or an unsupported keyword.
+    try:
+        sessions = SessionDB(db_path=state_db)
+        for session in entry["sessions"]:
+            sessions.create_session(
+                session["id"],
+                session["source"],
+                cwd=session["cwd"],
+                git_repo_root=session["git_repo_root"],
+                profile_name="morfeo",
+            )
+            sessions.set_session_title(session["id"], session["title"])
+            payload["sessions"].append(session["id"])
+    except Exception as error:  # noqa: BLE001
+        fail("fixture-sessions", error)
+
+    # Canonical native board + tasks + links through the shipped kanban writers.  The task
+    # identity the writer returns is the identity the whole lane must use afterwards, so it
+    # is reported back per manifest key.
+    try:
+        kanban_db.create_board(
+            entry["board_slug"],
+            name=entry["name"],
+            default_workdir=str(project_root),
+            project_id=native_id,
+        )
+        board_connection = kanban_db.connect(board=entry["board_slug"])
+    except Exception as error:  # noqa: BLE001
+        fail("fixture-board", error)
+        continue
+    payload["boards"].append(entry["board_slug"])
+    open_descendant = None
+    try:
+        written: dict[str, str] = {}
+        for index, task in enumerate(entry["tasks"]):
+            task_id = kanban_db.create_task(
+                board_connection,
+                title=task["title"],
+                body=task.get("body") or task["title"],
+                assignee="implementer",
+                created_by="morfeo",
+                workspace_kind="dir",
+                workspace_path=str(project_root),
+                board=entry["board_slug"],
+                session_id=entry["origin_session"],
+                initial_status="running",
+            )
+            if not isinstance(task_id, str) or not task_id:
+                fail("fixture-task-identity")
+                continue
+            if task_id in written.values():
+                # A writer that returns a duplicate identity cannot seed distinct work.
+                fail("fixture-task-identity-duplicate")
+                continue
+            written[task["key"]] = task_id
+            status = str(task["status"])
+            if status == "done":
+                if not kanban_db.complete_task(
+                    board_connection,
+                    task_id,
+                    result=task["result"],
+                    summary=task["title"],
+                ):
+                    fail("fixture-complete-refused")
+            elif status == "review":
+                if not kanban_db.request_review(
+                    board_connection,
+                    task_id,
+                    summary=task["result"],
+                    with_reason=True,
+                )[0]:
+                    fail("fixture-review-refused")
+            else:
+                open_descendant = task["key"]
+            payload["tasks"].append(
+                {"key": task["key"], "task_id": task_id, "status": status}
+            )
+        for parent_index, child_index in entry["links"]:
+            parent_key = entry["tasks"][int(parent_index)]["key"]
+            child_key = entry["tasks"][int(child_index)]["key"]
+            if parent_key not in written or child_key not in written:
+                fail("fixture-link-identity")
+                continue
+            kanban_db.link_tasks(
+                board_connection, written[parent_key], written[child_key]
+            )
+        row = board_connection.execute("SELECT COUNT(*) FROM tasks").fetchone()
+        if not row or int(row[0]) != len(entry["tasks"]):
+            fail("fixture-task-count")
+        if open_descendant is None:
+            fail("fixture-open-descendant")
+    except Exception as error:  # noqa: BLE001
+        fail("fixture-tasks", error)
+    finally:
+        board_connection.close()
+
+    # Direct project-bound intervals travel through the shipped product callbacks, never a
+    # hand-written spool record.
+    direct = entry.get("direct")
+    if isinstance(direct, dict):
+        for index, interval in enumerate(direct["intervals"]):
+            try:
+                monitor_runtime.handle_post_tool_call(
+                    {
+                        "session_id": direct["session_id"],
+                        "turn_id": interval["interval_id"],
+                        "tool_name": "terminal",
+                        "platform": "tui",
+                    },
+                    store=store,
+                    profile_name="morfeo",
+                )
+                if index > 0:
+                    monitor_runtime.handle_post_llm_call_direct(
+                        {
+                            "session_id": direct["session_id"],
+                            "turn_id": interval["interval_id"],
+                            "platform": "tui",
+                            "assistant_response": interval["summary"],
+                        },
+                        store=store,
+                        profile_name="morfeo",
+                    )
+                    monitor_runtime.handle_session_end_direct(
+                        {
+                            "session_id": direct["session_id"],
+                            "turn_id": interval["interval_id"],
+                            "platform": "tui",
+                            "completed": interval["outcome"] == "completed",
+                        },
+                        store=store,
+                        profile_name="morfeo",
+                    )
+                payload["direct"].append(interval["interval_id"])
+            except Exception as error:  # noqa: BLE001
+                fail("fixture-direct", error)
+
+connection.close()
+print(json.dumps(payload))
+"""
+
+
+#: The between-cut lifecycle transition, driven through the shipped kanban writers.
+_LAB_TRANSITION_PROBE = r"""
+import json
+from pathlib import Path
+
+MANIFEST = json.loads(MANIFEST_JSON)
+payload = {"completed": [], "errors": []}
+
+
+def fail(code, error=None):
+    payload["errors"].append(f"{code}: {type(error).__name__}" if error else code)
+
+
+try:
+    from aether_agents.monitor import runtime as monitor_runtime
+    from aether_agents.monitor.store import MonitorStore
+    from hermes_cli import kanban_db
+except Exception as error:  # noqa: BLE001
+    fail("transition-imports", error)
+    print(json.dumps(payload))
+    raise SystemExit(0)
+
+store = MonitorStore(Path(STATE_ROOT_JSON))
+for entry in MANIFEST:
+    try:
+        connection = kanban_db.connect(board=entry["board_slug"])
+    except Exception as error:  # noqa: BLE001
+        fail("transition-board", error)
+        continue
+    try:
+        identities = {
+            str(task["key"]): str(task.get("task_id") or "")
+            for task in entry["tasks"]
+        }
+        for task in entry["transition"]:
+            key = str(task["key"])
+            task_id = identities.get(key, "")
+            if not task_id:
+                # The transition may only complete the identity the shipped writer
+                # returned for this key; a manifest key without one is a fixture defect.
+                fail("transition-identity")
+                continue
+            if not kanban_db.complete_task(
+                connection, task_id, result=task["result"], summary=task["title"]
+            ):
+                fail("transition-complete-refused")
+            else:
+                payload["completed"].append(task_id)
+    except Exception as error:  # noqa: BLE001
+        fail("transition-complete", error)
+    finally:
+        connection.close()
+
+direct = next(
+    (entry["direct"] for entry in MANIFEST if isinstance(entry.get("direct"), dict)), None
+)
+if direct is not None:
+    interval = direct["intervals"][1]
+    try:
+        monitor_runtime.handle_post_tool_call(
+            {
+                "session_id": direct["session_id"],
+                "turn_id": interval["interval_id"],
+                "tool_name": "terminal",
+                "platform": "tui",
+            },
+            store=store,
+            profile_name="morfeo",
+        )
+        monitor_runtime.handle_post_llm_call_direct(
+            {
+                "session_id": direct["session_id"],
+                "turn_id": interval["interval_id"],
+                "platform": "tui",
+                "assistant_response": interval["summary"],
+            },
+            store=store,
+            profile_name="morfeo",
+        )
+        monitor_runtime.handle_session_end_direct(
+            {
+                "session_id": direct["session_id"],
+                "turn_id": interval["interval_id"],
+                "platform": "tui",
+                "completed": interval["outcome"] == "completed",
+            },
+            store=store,
+            profile_name="morfeo",
+        )
+        payload["direct"] = interval["interval_id"]
+    except Exception as error:  # noqa: BLE001
+        fail("transition-direct", error)
+
+print(json.dumps(payload))
+"""
+
+#: The bounded supervised native scheduler: one in-process ticker in its own process,
+#: cooperatively stopped through a run-owned stop file or a signal.
+_LAB_SCHEDULER_BODY = r"""
+import json
+import os
+import signal
+import sys
+import threading
+import time
+from pathlib import Path
+
+READY = Path(READY_JSON)
+STOP = Path(STOP_JSON)
+INTERVAL = INTERVAL_JSON
+stop_event = threading.Event()
+watch_stop = threading.Event()
+
+
+def _request_stop(signum, frame):
+    stop_event.set()
+
+
+signal.signal(signal.SIGTERM, _request_stop)
+signal.signal(signal.SIGINT, _request_stop)
+
+
+def _watch():
+    while not watch_stop.is_set():
+        if STOP.exists():
+            stop_event.set()
+            return
+        time.sleep(0.5)
+
+
+threading.Thread(target=_watch, daemon=True).start()
+
+from cron.scheduler_provider import InProcessCronScheduler  # noqa: E402
+
+scheduler = InProcessCronScheduler()
+READY.write_text(
+    json.dumps({"pid": os.getpid(), "scheduler": scheduler.name}), encoding="utf-8"
+)
+try:
+    scheduler.start(stop_event, interval=INTERVAL)
+finally:
+    watch_stop.set()
+print(json.dumps({"stopped": True, "pid": os.getpid()}))
+"""
+
+
+def _script_root() -> Path:
+    return Path(__file__).resolve().parent
+
+
+def _provisioned_profile_home() -> Path:
+    """Resolve the provisioned Morfeo profile directory of this installation."""
+
+    try:
+        home = monitor_runtime.hermes_home()
+    except Exception as error:  # noqa: BLE001 - a broken installation fails closed below
+        raise QualificationError(
+            "lab-context",
+            "the provisioned Hermes home could not be resolved; the laboratory cannot "
+            "borrow the existing route without it",
+        ) from error
+    return Path(home) / "profiles" / "morfeo"
+
+
+def _provisioned_env_files(profile_home: Path) -> tuple[Path, ...]:
+    """The operator's own access files, read into memory and never copied."""
+
+    candidates = [profile_home / ".env", profile_home.parent.parent / ".env"]
+    return tuple(path for path in candidates if path.is_file())
+
+
+def _lab_plan(state_root: Path, stamp: str) -> Any:
+    try:
+        return telegram_monitor_lab.build_plan(state_root, stamp)
+    except telegram_monitor_lab.LabError as error:
+        raise QualificationError(error.code, error.message, detail=error.detail) from error
+
+
+def _lab_config(interpreter: Path, profile_home: Path) -> dict[str, Any]:
+    """Project the provisioned profile onto the decision-only laboratory configuration."""
+
+    body = (
+        f"SCRIPT_ROOT_JSON = {json.dumps(str(_script_root()))}\n"
+        f"SOURCE_ROOT_JSON = {json.dumps(str(SOURCE_ROOT))}\n"
+        f"PROFILE_JSON = {json.dumps(str(profile_home))}\n" + _LAB_CONFIG_PROBE
+    )
+    payload = _runtime_execute(interpreter, body)
+    if payload.get("problems"):
+        raise QualificationError(
+            "lab-config",
+            "the provisioned Morfeo configuration could not be projected onto the "
+            "laboratory; the laboratory was not created",
+            detail={"problems": payload.get("problems")},
+        )
+    if not payload.get("text") or not payload.get("access_names"):
+        raise QualificationError(
+            "lab-config",
+            "the provisioned Morfeo configuration carries no usable decisions",
+        )
+    return payload
+
+
+def _python_literal(value: str | None) -> str:
+    """Render one optional string as a Python literal for a generated child body.
+
+    ``None`` becomes the Python name ``None``: a JSON ``null`` in a generated body is a
+    ``NameError`` in the child, which is exactly how the provisioned probe variant broke.
+    """
+
+    return "None" if value is None else json.dumps(value)
+
+
+def _native_probe_body(*, lab_root: Path | None = None) -> str:
+    """The exact native probe body for one bounded child process.
+
+    The provisioned variant (``lab_root=None``, used with this process's own context)
+    resolves the route, the destination and the native interfaces.  The laboratory variant
+    (a lab root) additionally resolves the writer surface the fixture depends on, the loaded
+    artifact digests/entry points and the roots a lab child effectively resolves.
+    """
+
+    return (
+        f"SCRIPT_ROOT_JSON = {json.dumps(str(_script_root()))}\n"
+        f"LAB_ROOT_JSON = {_python_literal(str(lab_root) if lab_root is not None else None)}\n"
+        f"SOURCE_ROOT_JSON = {json.dumps(str(SOURCE_ROOT))}\n" + _LAB_NATIVE_PROBE
+    )
+
+
+def _lab_destination(
+    interpreter: Path,
+    *,
+    environment: Mapping[str, str] | None,
+    lab_root: Path | None = None,
+) -> dict[str, Any]:
+    """Resolve the exact destination and native interfaces in one bounded probe.
+
+    ``lab_root`` selects the laboratory child context: only then does the probe resolve the
+    native writer surface, the loaded artifact digests and the effective roots a lab child
+    actually resolves.
+    """
+
+    return _runtime_execute(
+        interpreter, _native_probe_body(lab_root=lab_root), environment=environment
+    )
+
+
+def _lab_access(
+    *, names: Sequence[str], profile_home: Path, environ: Mapping[str, str]
+) -> dict[str, str]:
+    try:
+        return telegram_monitor_lab.collect_access(
+            names=names,
+            environ=environ,
+            env_files=_provisioned_env_files(profile_home),
+        )
+    except telegram_monitor_lab.LabError as error:
+        raise QualificationError(error.code, error.message, detail=error.detail) from error
+
+
+def _lab_child_environment(
+    plan: Any, *, access: Mapping[str, str], environ: Mapping[str, str]
+) -> dict[str, str]:
+    environment = telegram_monitor_lab.child_environment(
+        plan, base=environ, access=access, repository_src=SOURCE_ROOT
+    )
+    problems = telegram_monitor_lab.context_problems(plan, environment)
+    if problems:
+        raise QualificationError(
+            "lab-context-escape",
+            "a laboratory child context would resolve a mutable root outside the private "
+            "laboratory; the laboratory was not created",
+            detail={"problems": problems},
+        )
+    return environment
+
+
+def _lab_preflight(
+    plan: Any, *, interpreter: Path, profile_home: Path, environ: Mapping[str, str]
+) -> dict[str, Any]:
+    """Read-only fail-closed preflight; nothing here creates, changes or spends anything.
+
+    It runs *before* the private root exists and resolves only what can be resolved without
+    one: the layout, the provisioned configuration decisions, the borrowed access, the
+    verified child context and the provisioned route/destination.  A refused layout stops
+    here, so nothing is created and no credential is read for it.  The native writer
+    surface, the loaded artifacts and the writers' effective roots are resolved by
+    :func:`_lab_context_preflight` **inside the created laboratory**, because those roots
+    only exist once the private root does (D13 bootstrap 1 before 2/5).
+    """
+
+    problems = list(telegram_monitor_lab.path_problems(plan, inside_repository=_inside_repository))
+    if problems:
+        return {
+            "problems": problems,
+            "config_digest": None,
+            "config_text": None,
+            "access": {},
+            "interfaces": {},
+            "destination_digest": None,
+            "destination_thread_present": None,
+            "_access": {},
+            "_environment": {},
+        }
+    config = _lab_config(interpreter, profile_home)
+    access = _lab_access(names=config["access_names"], profile_home=profile_home, environ=environ)
+    environment = _lab_child_environment(plan, access=access, environ=environ)
+    provisioned = _lab_destination(interpreter, environment=None)
+    problems.extend(f"provisioned-{problem}" for problem in provisioned.get("problems", ()))
+    provisioned_digest = provisioned.get("destination_digest")
+    if not provisioned_digest:
+        # Without a resolved provisioned destination there is nothing to compare the
+        # laboratory against, so configuration drift could not be detected.
+        problems.append("destination-missing")
+    return {
+        "problems": problems,
+        "config_digest": config["config_digest"],
+        "config_text": config["text"],
+        "access": telegram_monitor_lab.access_fingerprint(access),
+        "interfaces": provisioned.get("interfaces") or {},
+        "destination_digest": provisioned_digest,
+        "destination_thread_present": bool(provisioned.get("destination_thread_present")),
+        "_access": access,
+        "_environment": environment,
+    }
+
+
+def _lab_context_preflight(
+    plan: Any, preflight: Mapping[str, Any], *, interpreter: Path
+) -> dict[str, Any]:
+    """The in-laboratory fail-closed gate: resolved inside the created private root.
+
+    D13 bootstrap 1 creates the private root before bootstrap 2 and 5 resolve the loaded
+    artifacts, the native interfaces and the roots the writers effectively use; the
+    laboratory is retained even when a later stage refuses.  The isolated probe is what
+    makes those roots real rather than assumed — resolving them materializes the Hermes
+    home structure it reads — so it must run *after* the exclusive creator, never before it.
+
+    Nothing is spent here: the refusal happens before the synthetic scope is seeded, the
+    monitor job is enabled, the native scheduler starts, a model is called or a message is
+    sent.  The laboratory root created for the run is reported and retained either way.
+    """
+
+    environment = preflight.get("_environment")
+    if not isinstance(environment, Mapping) or not environment:
+        raise QualificationError(
+            "lab-context-preflight",
+            "the verified laboratory child context was not established; the "
+            "in-laboratory gate cannot run",
+        )
+    isolated = _lab_destination(interpreter, environment=environment, lab_root=plan.root)
+    problems = [f"isolated-{problem}" for problem in isolated.get("problems", ())]
+    provisioned_digest = preflight.get("destination_digest")
+    isolated_digest = isolated.get("destination_digest")
+    if not provisioned_digest or provisioned_digest != isolated_digest:
+        # Configuration drift invalidates qualification: the laboratory must resolve the
+        # exact same route and destination as the provisioned installation.
+        problems.append("destination-drift")
+    if not isolated.get("interfaces", {}).get("scheduler"):
+        problems.append("scheduler-unavailable")
+    problems.extend(telegram_monitor_lab.writer_problems(isolated, lab_root=plan.root))
+    return {
+        "problems": problems,
+        "interfaces": isolated.get("interfaces") or {},
+        "writers": telegram_monitor_lab.writer_summary(isolated),
+        "artifacts": isolated.get("artifacts") or {},
+        "effective": isolated.get("effective") or {},
+        "destination_digest": isolated_digest,
+        "destination_thread_present": bool(isolated.get("destination_thread_present")),
+    }
+
+
+def _lab_create(plan: Any, preflight: Mapping[str, Any]) -> dict[str, Any]:
+    """Create the private laboratory root and write its decision-only configuration."""
+
+    record = dict(plan_record(plan))
+    try:
+        telegram_monitor_lab.create_root(plan)
+        config_path = telegram_monitor_lab.write_config(plan, str(preflight["config_text"]))
+    except telegram_monitor_lab.LabError as error:
+        raise QualificationError(error.code, error.message, detail=error.detail) from error
+    record.update(
+        {
+            "created_at_utc": _utc_text(_utc_now()),
+            "config_digest": preflight["config_digest"],
+            "config_written": str(config_path.name),
+            "profiles_morfeo": [str(plan.profile_home)],
+            "environment": dict(preflight.get("_environment") or {}),
+            "scope_root": str(plan.root / "scope"),
+            "state_root": str(plan.lab_state_root),
+            "hermes_home": str(plan.hermes_home),
+            "retained": True,
+        }
+    )
+    return record
+
+
+def _lab_fixture(
+    interpreter: Path, lab: Mapping[str, Any], manifest: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """Seed the synthetic scope through the shipped product and native writers.
+
+    The shipped kanban writer owns task identity, so the ids it returns are bound back into
+    the manifest by key.  Links, the between-cut transition and every case reference are
+    derived from those returned identities; a fixture that cannot bind each manifest key to
+    exactly one writer-assigned id fails closed and retains the laboratory.
+    """
+
+    environment = dict(lab["environment"])
+    state_db = Path(str(lab["hermes_home"])) / "state.db"
+    body = (
+        f"STATE_ROOT_JSON = {json.dumps(str(lab['state_root']))}\n"
+        f"HERMES_HOME_JSON = {json.dumps(str(lab['hermes_home']))}\n"
+        f"STATE_DB_JSON = {json.dumps(str(state_db))}\n"
+        f"LAB_ROOT_JSON = {json.dumps(str(lab['root']))}\n"
+        f"MANIFEST_JSON = {json.dumps(json.dumps(list(manifest)))}\n" + _LAB_FIXTURE_PROBE
+    )
+    payload = _runtime_execute(interpreter, body, environment=environment, timeout=900)
+    if payload.get("errors"):
+        raise QualificationError(
+            "lab-fixture",
+            "the synthetic laboratory scope could not be materialized through the shipped "
+            "writers; the laboratory root is retained for reconciliation",
+            detail={"errors": payload.get("errors")},
+        )
+    native_ids = {
+        str(item.get("project_id")): str(item.get("native_project_id"))
+        for item in payload.get("projects", [])
+        if isinstance(item, Mapping)
+    }
+    for entry in manifest:
+        entry["native_project_id"] = native_ids.get(entry["project_id"])
+        if entry["native_project_id"] is None:
+            raise QualificationError(
+                "lab-fixture",
+                "a synthetic project never received a native identity; the laboratory root "
+                "is retained for reconciliation",
+            )
+    _bind_writer_identities(manifest, payload.get("tasks"))
+    return {
+        "projects": list(payload.get("projects", [])),
+        "boards": list(payload.get("boards", [])),
+        "sessions": list(payload.get("sessions", [])),
+        "tasks": list(payload.get("tasks", [])),
+        "direct": list(payload.get("direct", [])),
+    }
+
+
+def _bind_writer_identities(manifest: Sequence[dict[str, Any]], seeded: Any) -> dict[str, str]:
+    """Bind the ids the shipped kanban writer returned into the manifest, by task key.
+
+    Nothing is guessed and nothing is left half-bound: the returned identities must cover
+    every manifest task key exactly once with a distinct non-empty id, or the whole binding
+    is refused and the manifest keeps no fabricated identity at all.
+    """
+
+    by_key: dict[str, str] = {}
+    for item in seeded if isinstance(seeded, Sequence) else ():
+        if not isinstance(item, Mapping):
             continue
-        changed.append(job_id)
-    return {"preserved": not changed, "changed_ids": sorted(changed)}
+        key = item.get("key")
+        task_id = item.get("task_id")
+        if not isinstance(key, str) or not key:
+            raise QualificationError(
+                "lab-fixture",
+                "the shipped writers reported a synthetic task without a manifest key",
+                detail={"task_id": task_id},
+            )
+        if not isinstance(task_id, str) or not task_id:
+            raise QualificationError(
+                "lab-fixture",
+                "the shipped kanban writer returned no usable task identity",
+                detail={"key": key},
+            )
+        if key in by_key:
+            raise QualificationError(
+                "lab-fixture",
+                "the shipped kanban writer reported one manifest key more than once",
+                detail={"key": key},
+            )
+        if task_id in by_key.values():
+            raise QualificationError(
+                "lab-fixture",
+                "the shipped kanban writer returned the same identity for two tasks",
+                detail={"task_id": task_id},
+            )
+        by_key[key] = task_id
+    wanted = {str(task["key"]) for entry in manifest for task in entry["tasks"]}
+    if set(by_key) != wanted:
+        raise QualificationError(
+            "lab-fixture",
+            "the shipped writer identities do not cover the synthetic scope; the "
+            "laboratory root is retained for reconciliation",
+            detail={
+                "unbound": sorted(wanted - set(by_key)),
+                "unexpected": sorted(set(by_key) - wanted),
+            },
+        )
+    for entry in manifest:
+        for task in entry["tasks"]:
+            task["task_id"] = by_key[str(task["key"])]
+    return by_key
+
+
+def _lab_transition(
+    interpreter: Path, lab: Mapping[str, Any], manifest: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """Complete the open synthetic work between two natural cuts, through shipped writers."""
+
+    environment = dict(lab["environment"])
+    body = (
+        f"STATE_ROOT_JSON = {json.dumps(str(lab['state_root']))}\n"
+        f"MANIFEST_JSON = {json.dumps(json.dumps(list(manifest)))}\n" + _LAB_TRANSITION_PROBE
+    )
+    payload = _runtime_execute(interpreter, body, environment=environment, timeout=900)
+    if payload.get("errors"):
+        raise QualificationError(
+            "lab-transition",
+            "the between-cut synthetic lifecycle could not be completed through the shipped "
+            "writers",
+            detail={"errors": payload.get("errors")},
+        )
+    return payload
+
+
+def _lab_scheduler_start(interpreter: Path, lab: Mapping[str, Any]) -> dict[str, Any]:
+    """Start one bounded, supervised instance of the native cron scheduler."""
+
+    root = Path(lab["root"])
+    control = root / "control"
+    control.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(control, DIR_MODE)
+    except OSError:
+        pass
+    ready = control / "scheduler-ready.json"
+    stop = control / "scheduler-stop"
+    for path in (ready, stop):
+        with contextlib.suppress(FileNotFoundError):
+            path.unlink()
+    body = (
+        f"READY_JSON = {json.dumps(str(ready))}\n"
+        f"STOP_JSON = {json.dumps(str(stop))}\n"
+        f"INTERVAL_JSON = {json.dumps(60)}\n" + _LAB_SCHEDULER_BODY
+    )
+    try:
+        process = subprocess.Popen(  # noqa: S603 - a fixed, self-authored interpreter body
+            [str(interpreter), "-c", body],
+            cwd=str(lab.get("cwd") or root),
+            env=dict(lab["environment"]),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        raise QualificationError(
+            "lab-scheduler",
+            "the bounded native scheduler instance could not be started",
+            detail={"error": type(error).__name__},
+        ) from error
+    deadline = time.monotonic() + LAB_SCHEDULER_READY_SECONDS
+    while time.monotonic() < deadline:
+        if ready.is_file():
+            break
+        if process.poll() is not None:
+            detail = (process.stderr.read() or "").strip().splitlines()[-1:]
+            raise QualificationError(
+                "lab-scheduler",
+                "the bounded native scheduler instance exited before it was ready",
+                detail={"returncode": process.returncode, "stderr_tail": detail},
+            )
+        time.sleep(LAB_SCHEDULER_POLL_SECONDS)
+    else:
+        _terminate(process)
+        raise QualificationError(
+            "lab-scheduler",
+            "the bounded native scheduler instance did not become ready inside the bounded wait",
+        )
+    try:
+        payload = json.loads(ready.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        _terminate(process)
+        raise QualificationError(
+            "lab-scheduler",
+            "the bounded native scheduler instance reported no usable readiness record",
+        ) from error
+    return {
+        "pid": int(payload.get("pid") or process.pid),
+        "scheduler": payload.get("scheduler"),
+        "stop_file": str(stop),
+        "ready": True,
+    }
+
+
+def _terminate(process: subprocess.Popen[str]) -> None:
+    with contextlib.suppress(OSError):
+        process.terminate()
+
+
+def _lab_scheduler_stop(lab: Mapping[str, Any], scheduler: Mapping[str, Any]) -> dict[str, Any]:
+    """Stop the lab scheduler cooperatively and verify that it really stopped."""
+
+    stop = Path(str(scheduler.get("stop_file") or ""))
+    pid = int(scheduler.get("pid") or 0)
+    result: dict[str, Any] = {"stopped": False, "signal": None, "cooperative": False}
+    with contextlib.suppress(OSError):
+        stop.write_text("stop\n", encoding="utf-8")
+    deadline = time.monotonic() + LAB_SCHEDULER_STOP_SECONDS
+    while time.monotonic() < deadline:
+        if not _pid_alive(pid):
+            result["stopped"] = True
+            result["cooperative"] = True
+            break
+        time.sleep(LAB_SCHEDULER_POLL_SECONDS)
+    if not result["stopped"]:
+        result["signal"] = "SIGTERM"
+        with contextlib.suppress(OSError, ProcessLookupError):
+            os.kill(pid, signal.SIGTERM)
+        deadline = time.monotonic() + LAB_SCHEDULER_STOP_SECONDS
+        while time.monotonic() < deadline:
+            if not _pid_alive(pid):
+                result["stopped"] = True
+                break
+            time.sleep(LAB_SCHEDULER_POLL_SECONDS)
+    if not result["stopped"]:
+        # A runner that fails to stop is not success: no verdict, evidence retained.
+        raise QualificationError(
+            "lab-scheduler-stop",
+            "the bounded native scheduler instance did not stop inside the bounded wait; "
+            "the objective evidence is retained and the laboratory must be reconciled",
+        )
+    return result
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _lab_release(plan: Any) -> dict[str, Any]:
+    """Verify the retained laboratory evidence; the laboratory is never self-deleted."""
+
+    problems: list[str] = []
+    for path in (plan.root, plan.profile_home, plan.lab_state_root):
+        if not path.exists():
+            problems.append(f"missing:{path.name}")
+    record_path = plan.root / telegram_monitor_lab.LAB_RECORD_NAME
+    if not record_path.is_file():
+        problems.append("missing:record")
+    config_path = plan.profile_home / telegram_monitor_lab.LAB_CONFIG_NAME
+    if not config_path.is_file():
+        problems.append("missing:config")
+    for path in (record_path, config_path):
+        with contextlib.suppress(OSError):
+            if stat.S_IMODE(path.stat().st_mode) != telegram_monitor_lab.LAB_FILE_MODE:
+                problems.append(f"not-private:{path.name}")
+    return {
+        "retained": True,
+        "root_digest": hashlib.sha256(str(plan.root).encode("utf-8")).hexdigest(),
+        "removed": False,
+        "problems": problems,
+    }
+
+
+def _sanitize_lab(record: Mapping[str, Any]) -> dict[str, Any]:
+    """Reduce a laboratory record to what may leave the private receipt."""
+
+    environment = record.get("environment") or {}
+    return {
+        "root_digest": hashlib.sha256(str(record.get("root", "")).encode("utf-8")).hexdigest(),
+        "stamp": record.get("stamp"),
+        "profile": record.get("profile"),
+        "config_digest": record.get("config_digest"),
+        "created_at_utc": record.get("created_at_utc"),
+        "redirected_roots": sorted(
+            name
+            for name in ("HOME", "HERMES_HOME", "TMPDIR", *telegram_monitor_lab.LAB_XDG_DIRS)
+            if environment.get(name)
+        ),
+        "retained": True,
+    }
 
 
 class LiveBackends:
     """Every external boundary the live qualification may cross.
 
     The live orchestration reaches a model, the Telegram sender, the native scheduler,
-    the provisioned runtime and the operator's durable state only through this object.
-    An orchestration test injects a fake backend, so it can reach the whole live
-    pre-flight and every later phase without any external effect or real state change;
-    the shipped default delegates to the module functions that own each native probe.
+    the provisioned runtime and the laboratory state only through this object.  An
+    orchestration test injects a fake backend, so it can reach the whole live pre-flight
+    and every later phase without any external effect or real state change; the shipped
+    default delegates to the module functions that own each native probe.
     """
 
     def now(self) -> datetime:
@@ -4344,82 +4004,88 @@ class LiveBackends:
     def candidate_revision(self) -> str:
         return _candidate_revision()
 
-    def control(self, action: str) -> dict[str, Any]:
-        return _control(action)
+    def state_root(self) -> Path:
+        return Path(state_root())
 
-    def job_inventory(self, interpreter: Path) -> list[dict[str, Any]]:
-        return _job_inventory(interpreter)
+    def profile_home(self) -> Path:
+        return _provisioned_profile_home()
 
-    def job_record(self, interpreter: Path, job_id: str) -> dict[str, Any] | None:
-        return _job_record(interpreter, job_id)
+    def environ(self) -> Mapping[str, str]:
+        return dict(os.environ)
 
-    def job_removed(self, interpreter: Path, job_id: str) -> bool:
-        return _job_removed(interpreter, job_id)
+    def lab_plan(self, state_root: Path, stamp: str) -> Any:
+        return _lab_plan(state_root, stamp)
 
-    def trigger_job(self, interpreter: Path, job_id: str) -> dict[str, Any]:
-        return _smoke_trigger(interpreter, job_id)
-
-    def scope_materialize(
-        self,
-        interpreter: Path,
-        scope_root: Path,
-        manifest: Sequence[dict[str, Any]],
-        *,
-        state_root: Path,
-        hermes_home: Path,
-        stream: Any,
-    ) -> dict[str, Any]:
-        return _scope_materialize(
-            interpreter,
-            scope_root,
-            manifest,
-            state_root=state_root,
-            hermes_home=hermes_home,
-            stream=stream,
+    def lab_preflight(self, plan: Any, *, interpreter: Path) -> dict[str, Any]:
+        return _lab_preflight(
+            plan,
+            interpreter=interpreter,
+            profile_home=self.profile_home(),
+            environ=self.environ(),
         )
 
-    def scope_remove(self, interpreter: Path, scope: Mapping[str, Any]) -> dict[str, Any]:
-        return _scope_remove(interpreter, scope)
+    def lab_context_preflight(
+        self, plan: Any, preflight: Mapping[str, Any], *, interpreter: Path
+    ) -> dict[str, Any]:
+        return _lab_context_preflight(plan, preflight, interpreter=interpreter)
+
+    def lab_create(self, plan: Any, preflight: Mapping[str, Any]) -> dict[str, Any]:
+        return _lab_create(plan, preflight)
+
+    def lab_fixture(
+        self, interpreter: Path, lab: Mapping[str, Any], manifest: Sequence[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return _lab_fixture(interpreter, lab, manifest)
+
+    def lab_transition(
+        self, interpreter: Path, lab: Mapping[str, Any], manifest: Sequence[dict[str, Any]]
+    ) -> dict[str, Any]:
+        return _lab_transition(interpreter, lab, manifest)
+
+    def lab_scheduler_start(self, interpreter: Path, lab: Mapping[str, Any]) -> dict[str, Any]:
+        return _lab_scheduler_start(interpreter, lab)
+
+    def lab_scheduler_stop(
+        self, lab: Mapping[str, Any], scheduler: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return _lab_scheduler_stop(lab, scheduler)
+
+    def lab_release(self, plan: Any) -> dict[str, Any]:
+        return _lab_release(plan)
+
+    def lab_store(self, lab: Mapping[str, Any]) -> Any:
+        return MonitorStore(Path(str(lab["state_root"])))
+
+    def lab_control(self, lab: Mapping[str, Any], action: str) -> dict[str, Any]:
+        return _lab_control(self.runtime_python(), lab, action)
+
+    def job_inventory(
+        self, interpreter: Path, environment: Mapping[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        return _job_inventory(interpreter, environment=environment)
+
+    def job_record(
+        self, interpreter: Path, job_id: str, environment: Mapping[str, str] | None = None
+    ) -> dict[str, Any] | None:
+        return _job_record(interpreter, job_id, environment=environment)
+
+    def trigger_job(
+        self, interpreter: Path, job_id: str, environment: Mapping[str, str] | None = None
+    ) -> dict[str, Any]:
+        return _smoke_trigger(interpreter, job_id, environment=environment)
+
+    def session_sources(
+        self, hermes_home: Path, environment: Mapping[str, str] | None = None
+    ) -> dict[str, Any]:
+        return _session_sources(hermes_home)
+
+    def owner_language(
+        self, interpreter: Path, environment: Mapping[str, str] | None = None
+    ) -> str | None:
+        return _owner_language(interpreter, environment=environment)
 
     def environment_gaps(self, store: Any) -> list[str]:
         return _environment_gaps(store)
-
-    def session_sources(self, hermes_home: Path) -> dict[str, Any]:
-        return _session_sources(hermes_home)
-
-    def owner_language(self, interpreter: Path) -> str | None:
-        return _owner_language(interpreter)
-
-    def hermes_home(self) -> Path:
-        return monitor_runtime.hermes_home()
-
-    def isolate_registry(self) -> dict[str, Any]:
-        return _isolate_registry()
-
-    def scope_isolation_available(self) -> bool:
-        """Whether the provisioned interfaces can give the live scope a private namespace.
-
-        They cannot, and this is the shipped boundary the live lane refuses on
-        (``scope-isolation-unsupported``): the monitor's scope is every project registered in
-        this installation's Aether registry, and its hourly job runs inside the already-running
-        Hermes runtime — a native job record carries no environment or namespace field, and the
-        packaged pre-check, the reporter turn and the delivery all resolve the Aether state root
-        from that process's environment.  Nothing in the provisioned interfaces can hand the job
-        a private registry, so the only way to show the real product a synthetic-only scope is
-        to hide or replace the shared registry for the whole multi-hour lane, which the fixed
-        contract (D10, quickstart section 4.6) does not allow.  A test backend that implements
-        real isolation may report ``True``; the shipped one must not.
-        """
-
-        return False
-
-    def owned_registry_entries(
-        self, registry_path: Path, manifest: Sequence[Mapping[str, Any]]
-    ) -> tuple[dict[str, Any], list[str]]:
-        return _scope_registry_owned_entries(registry_path, manifest)
-
-    def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
-        return _restore_registry(isolation)
 
     def write_output(
         self,
@@ -4431,35 +4097,8 @@ class LiveBackends:
         _write_private_output(path, payload, established_parent=established_parent)
 
 
-#: The live lane's fatal scope-isolation refusal.  The fixed live contract requires the
-#: synthetic monitored scope to be sourced from native isolated artifacts (quickstart section
-#: 4.2) while the previous scope, other jobs and concurrent work are preserved (section 4.6, D3
-#: and D10).  The monitor's scope is, by design, every project registered in this installation's
-#: Aether registry (D3), and the hourly job executes inside the already-running native Hermes
-#: runtime: a native job record carries no environment or namespace field, and the packaged
-#: pre-check, the reporter turn and the delivery all resolve the Aether state root from that
-#: process's own environment (`aether_agents.paths.state_root()` reads `XDG_STATE_HOME`, or an
-#: explicit argument the shipped entry points never pass).  Inside those interfaces the only way
-#: to present a synthetic-only scope to the real product is to hide or replace the shared
-#: operator registry for the whole multi-hour lane — reproduced by the round-14 review and
-#: rejected there as a violation of D10 and of the preservation half of the live contract.
-#: The lane therefore refuses before its first effect-bearing step.  This is not a qualification
-#: result and grants nothing: the missing isolation capability is a material design question for
-#: Morfeo through Supervisor (product scope primitive, isolated qualification runtime, or an
-#: explicitly accepted bounded interruption), and the live hourly/narration/idle evidence stays
-#: unqualified until it is resolved.
-SCOPE_ISOLATION_REFUSAL = (
-    "the live qualification requires one synthetic monitored scope sourced from an isolated "
-    "artifact/registry namespace; the provisioned native interfaces cannot provide that "
-    "namespace for the shipped monitor without hiding or replacing this installation's shared "
-    "Aether project registry, so the live lane refuses before its first effect: the monitor was "
-    "not enabled or paused, no native job was created, no model or Telegram call was made and no "
-    "registry byte was changed"
-)
-
-
 def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
-    """Run the bounded provisioned qualification. Owned by MON-INT."""
+    """Run the bounded isolated laboratory qualification."""
 
     if args.output is None:
         raise QualificationError(
@@ -4479,7 +4118,7 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
     # sender or native job effect can be spent on a receipt that cannot be written.
     _check_private_output_target(output)
     if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        # A test process must never enable the monitor, create a native job or send a
+        # A test process must never start a lab scheduler, create a native job or send a
         # real message: refuse before the first live effect, after output policy.
         raise QualificationError(
             "test-process-refused",
@@ -4496,7 +4135,6 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
         stream,
         output=output,
         backends=LiveBackends(),
-        store=MonitorStore(),
         established_parent=established_parent,
     )
 
@@ -4507,57 +4145,30 @@ def _live_run(
     *,
     output: Path,
     backends: LiveBackends,
-    store: Any,
     established_parent: tuple[int, int] | None,
 ) -> dict[str, Any]:
-    """Orchestrate the live qualification through the injected backends.
+    """Orchestrate the isolated laboratory through the injected backends.
 
-    Ordering is part of the contract: an already enabled monitor is quiesced before the
-    registry is isolated, the installation's own read-only sources are probed before
-    the fixture introduces its deliberate gap, and the bounded smoke runs before the
-    two real hourly boundaries.  Every restore invariant either holds or is recorded as
-    an error, and any recorded error clears ``ok``.
+    Ordering is part of the contract: the read-only preflight runs before the lab root
+    exists, the lab root is created before its configuration is written, the in-laboratory
+    gate (writer surface, loaded artifacts, effective roots, destination drift) runs inside
+    the created root before anything is seeded or spent, the synthetic scope is seeded
+    through the shipped writers before the job is enabled, the bounded supervised native
+    scheduler starts before the smoke, and one bounded smoke runs before the two real hourly
+    boundaries.  The laboratory root and its receipt are retained as declared objective
+    evidence — nothing is restored or deleted — and any recorded error clears ``ok``.
 
     ``established_parent`` is the identity of the private receipt directory the caller
     established before this orchestrator could spend any effect; the final receipt write
     passes it on, so a directory renamed or replaced at the same name before that write is
     refused read-only with the bounded ``output-unsafe-target`` error instead of receiving
-    the receipt.  The receipt itself is written relative to the bound directory descriptor,
-    so a rename that lands after that descriptor is bound cannot redirect the write: the
-    receipt stays inside the established directory and the final path verification fails
-    with the bounded ``private-output`` error, never a qualified verdict.
-
-    The very first step is the scope-isolation capability of the provisioned interfaces: while
-    they cannot give the live scope a private namespace, the lane refuses with
-    ``scope-isolation-unsupported`` before it probes or changes anything at all (see
-    ``SCOPE_ISOLATION_REFUSAL``).
+    the receipt.
     """
-
-    if not backends.scope_isolation_available():
-        # 0. The synthetic scope of the fixed live contract must come from a namespace isolated
-        #    from this installation's registered projects.  The provisioned interfaces cannot
-        #    provide one, so the lane refuses here — before the runtime probe, the quiesce, the
-        #    registry, the native job and every model/sender effect — instead of hiding the
-        #    operator's registry behind a synthetic one for hours.  This refusal is a material
-        #    design question, not a qualification result: nothing is recorded as qualified and
-        #    no receipt is written for a run that never began.
-        raise QualificationError("scope-isolation-unsupported", SCOPE_ISOLATION_REFUSAL)
 
     interpreter = backends.runtime_python()
     started = backends.now()
     stamp = started.strftime("%Y%m%dT%H%M%SZ")
-    state_root = Path(store.state_root)
-    scope_root = state_root / "monitor" / "qualification" / stamp
-    hermes = backends.hermes_home()
-    prior = store.get_settings()
-    prior_enabled = bool(prior.enabled)
-    baseline_snapshots = tuple(store.list_snapshots(limit=None))
-    baseline_reports = frozenset(snapshot.report_id for snapshot in baseline_snapshots)
-    unresolved = [
-        snapshot.report_id for snapshot in baseline_snapshots if snapshot.resolved_at_utc is None
-    ]
-    baseline_jobs = backends.job_inventory(interpreter)
-    language = backends.owner_language(interpreter)
+    plan = backends.lab_plan(backends.state_root(), stamp)
     record: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "mode": "live",
@@ -4565,24 +4176,17 @@ def _live_run(
         "started_at_utc": _utc_text(started),
         "runtime_interpreter": str(interpreter),
         "output_file": str(output),
-        "prior_state": {
-            "enabled": prior_enabled,
-            "native_job_id": prior.native_job_id,
-            "destination_pinned": bool(prior.destination_ref),
-            "timezone": prior.timezone,
-            "reports": len(baseline_reports),
-            "unresolved_reports": len(unresolved),
-        },
-        "prior_quiesce": None,
+        "preflight": None,
+        "lab": None,
         "scope": None,
-        "environment": None,
         "enable": None,
+        "scheduler": None,
         "smoke": None,
         "boundaries": [],
         "cases": [],
         "idle": None,
         "off": None,
-        "restore": {},
+        "retention": {},
         "errors": [],
         "ok": False,
     }
@@ -4590,129 +4194,99 @@ def _live_run(
     def abort(code: str, message: str, *, detail: Any = None) -> NoReturn:
         raise QualificationError(code, message, detail=detail)
 
-    isolation: dict[str, Any] | None = None
+    lab: dict[str, Any] | None = None
+    store: Any = None
+    scheduler: dict[str, Any] | None = None
     scope: dict[str, Any] | None = None
-    enabled_by_harness = False
-    job_created_by_harness = False
     job_id: str | None = None
-    off_checked = False
     try:
-        if unresolved:
+        # 0. Read-only, fail-closed preflight: nothing exists yet and nothing is spent.
+        preflight = backends.lab_preflight(plan, interpreter=interpreter)
+        record["preflight"] = {
+            key: value for key, value in preflight.items() if not key.startswith("_")
+        }
+        if preflight["problems"]:
             abort(
-                "prior-monitor-work",
-                "the monitor has unresolved reports; deliver or resolve them before "
-                "the live qualification",
-                detail={"unresolved_reports": len(unresolved)},
+                "lab-preflight",
+                "the isolated laboratory preflight refused before any effect: "
+                + ", ".join(sorted(set(preflight["problems"]))),
+                detail={"problems": preflight["problems"]},
             )
-        # 0. An already enabled monitor is quiesced first, so no native run can observe
-        #    the synthetic-only registry while the scope is being prepared.
-        if prior_enabled:
-            quiesce = backends.control(ACTION_OFF)
-            quiesced = store.get_settings()
-            record["prior_quiesce"] = {
-                "requested": True,
-                "enabled_after": bool(quiesced.enabled),
-                "job_paused": bool((quiesce.get("result") or {}).get("job_paused")),
-            }
-            if quiesced.enabled or not record["prior_quiesce"]["job_paused"]:
-                abort(
-                    "prior-quiesce",
-                    "an already enabled monitor could not be durably disabled and paused "
-                    "before the qualification",
-                )
-        # 1. Isolate one honestly labelled synthetic scope.  The manifest and the local
-        #    project files exist before the first native row is created, so every path
-        #    below stays reversible from exactly the scope this run already holds.  The
-        #    shipped entry point refuses this step before any probe while the provisioned
-        #    interfaces cannot isolate the scope (`LiveBackends.scope_isolation_available`):
-        #    this body stays the orchestration for injected backends and for the decision that
-        #    resolves the architecture question, and an injected backend may implement
-        #    isolation without touching the operator's registry at all.
-        isolation = backends.isolate_registry()
+        # 1. Create the private laboratory root and write its decision-only configuration.
+        lab = backends.lab_create(plan, preflight)
+        record["lab"] = _sanitize_lab(lab)
+        # 1a. In-laboratory fail-closed gate: the writer surface, the loaded artifact
+        #     digests, the writers' effective roots and the destination drift are resolved
+        #     inside the created private root, before the synthetic scope is seeded and
+        #     before any effect (no enable, no scheduler, no model, no send).
+        gate = backends.lab_context_preflight(plan, preflight, interpreter=interpreter)
+        record["preflight"] = {**record["preflight"], **gate}
+        if gate["problems"]:
+            abort(
+                "lab-context-preflight",
+                "the in-laboratory gate refused before any effect: "
+                + ", ".join(sorted(set(gate["problems"]))),
+                detail={"problems": gate["problems"]},
+            )
+        store = backends.lab_store(lab)
+        scope_root = Path(str(lab["scope_root"]))
         manifest = _scope_manifest(scope_root, stamp)
-        scope = {"manifest": manifest, "boards": []}
         _write_scope_projects(scope_root, manifest)
-        materialized = backends.scope_materialize(
-            interpreter,
-            scope_root,
-            manifest,
-            state_root=state_root,
-            hermes_home=hermes,
-            stream=stream,
-        )
-        scope["boards"] = list(materialized.get("boards", []))
+        # 2. Seed the synthetic scope through the shipped product and native writers.  The
+        #    kanban writer owns task identity: the ids it returned are bound into the
+        #    manifest here, and every later reference (links, transition, case references)
+        #    is derived from them.
+        seeded = backends.lab_fixture(interpreter, lab, manifest)
+        scope = {"manifest": manifest, "boards": list(seeded.get("boards", []))}
+        identities = [
+            {"key": str(task["key"]), "task_id": _bound_task_id(entry, task)}
+            for entry in manifest
+            for task in entry["tasks"]
+        ]
         record["scope"] = {
             "projects": [entry["project_id"] for entry in manifest],
             "boards": list(scope["boards"]),
-            "root": str(scope_root),
-            "registry_isolated": True,
+            "root_digest": hashlib.sha256(str(scope_root).encode("utf-8")).hexdigest(),
+            "task_identities": identities,
+            "identity_source": "shipped-kanban-writer",
+            "seeded": {
+                "projects": len(seeded.get("projects", [])),
+                "boards": len(seeded.get("boards", [])),
+                "sessions": len(seeded.get("sessions", [])),
+                "tasks": len(seeded.get("tasks", [])),
+                "direct": len(seeded.get("direct", [])),
+            },
         }
-        # 1a. The runtime probe registered both synthetic projects through the shipped
-        #     `ProjectRegistry`.  The exact entry values those registrations produce are derived
-        #     here from the shipped writer itself — the same call with the same arguments against
-        #     a private scratch state root, never a value read out of the operator registry — and
-        #     the isolated registry is then checked to carry exactly them.  Those exact values are
-        #     carried into the restore, which removes an entry only while it still holds the value
-        #     this run registered, so a concurrent writer's same-id update is preserved instead of
-        #     being mistaken for this run's own scope.
-        try:
-            owned_entries, missing_entries = backends.owned_registry_entries(
-                isolation["path"], manifest
-            )
-        except BaseException:
-            # Ownership is unavailable — for instance because the private scratch state root
-            # the derivation uses could not be removed — so the restore cannot tell this run's
-            # own synthetic entries from a concurrent writer's.  It must never revert the
-            # isolation blind: the record marks the ownership unavailable, the restore refuses
-            # and keeps the durable recovery artifacts for the operator to reconcile.
-            isolation["ownership_available"] = False
-            raise
-        isolation["ownership_available"] = True
-        isolation["owned_entries"] = owned_entries
-        record["scope"]["registry_entries"] = sorted(owned_entries)
-        if missing_entries:
-            abort(
-                "registry-scope",
-                "the isolated project registry does not carry a synthetic project this run "
-                "registered; the synthetic scope cannot be verified",
-                detail={"missing": sorted(missing_entries)},
-            )
-        # 1b. The installation's own read-only sources are probed *before* the fixture
-        #     introduces its deliberate item-level gap.  Anything reported here is a
-        #     permanent installation gap that would fabricate an hourly gap report, so
-        #     it refuses the qualification instead of sending one.
+        # 2a. The laboratory's own read-only sources are probed *after* the fixture: a gap
+        #     the fixture did not deliberately create would fabricate an hourly gap report
+        #     and cannot be distinguished from a coverage failure, so it refuses here.
         environment_gaps = backends.environment_gaps(store)
         record["environment"] = {"gaps": environment_gaps}
         if environment_gaps:
             abort(
                 "environment-gaps",
-                "the installation's read-only sources still report coverage gaps that "
-                "prevent the genuine no-work skip: " + ", ".join(environment_gaps),
+                "the laboratory sources report coverage gaps that prevent the genuine "
+                "no-work skip: " + ", ".join(environment_gaps),
                 detail={"gaps": environment_gaps},
             )
-        # 1c. The synthetic fixture: direct interval zero.  The shipped adapter keeps its
-        #     DIRECT_OUTCOME_UNKNOWN gap at item level, and the first cut asserts exactly
-        #     that identity-level gap.
-        _write_direct_interval(state_root, scope, index=0, moment=backends.now())
-        # 2. Enable the single owned native job; prove idempotency and the fixed shape.
-        enable = backends.control(ACTION_ON)
-        enabled_by_harness = True
+        # 3. Install the one lab monitor job through the shipped control service.
+        enable = backends.lab_control(lab, ACTION_ON)
         result = enable["result"]
         job_id = str((result.get("native_job") or {}).get("id") or "")
-        job_created_by_harness = bool(result.get("job_created"))
         if not job_id:
             abort("enable-invalid", "the monitor reported no owned native job")
         next_cut = _parse_utc(result.get("next_cut_utc"))
         if next_cut is None:
             abort("enable-invalid", "the monitor reported no next cut")
-        second = backends.control(ACTION_ON)
+        second = backends.lab_control(lab, ACTION_ON)
         second_id = str((second["result"].get("native_job") or {}).get("id") or "")
-        inventory = backends.job_inventory(interpreter)
+        environment = lab["environment"]
+        inventory = backends.job_inventory(interpreter, environment)
         named = [job for job in inventory if job.get("name") == NATIVE_JOB_NAME]
-        job_record = backends.job_record(interpreter, job_id)
+        job_record = backends.job_record(interpreter, job_id, environment)
         record["enable"] = {
             "job_id": job_id,
-            "created": job_created_by_harness,
+            "created": bool(result.get("job_created")),
             "next_cut_utc": result.get("next_cut_utc"),
             "destination_pinned": bool(result.get("destination_pinned")),
             "profile_binding": result.get("profile_binding"),
@@ -4729,7 +4303,7 @@ def _live_run(
         if record["enable"]["named_job_count"] != 1:
             abort(
                 "job-count",
-                "the monitor must own exactly one native job",
+                "the laboratory monitor must own exactly one native job",
                 detail={"named_job_count": record["enable"]["named_job_count"]},
             )
         if not record["enable"]["second_enable_same_job"]:
@@ -4738,6 +4312,7 @@ def _live_run(
             abort("job-shape", "the owned native job does not carry the fixed monitor shape")
         output_dir_value = job_record.get("output_dir") if job_record else None
         output_dir = Path(str(output_dir_value)) if output_dir_value else None
+        language = backends.owner_language(interpreter, environment)
         cut_one = next_cut
         cut_two = cut_one + timedelta(hours=1)
         cut_idle = cut_one + timedelta(hours=2)
@@ -4756,7 +4331,13 @@ def _live_run(
             _pipeline_work_key(manifest[1]): "completed",
             direct_one_key: "turn_ended_completed",
         }
-        # 2b. One bounded initial native model+transport smoke before the long wait.
+        # 4. One bounded supervised instance of the native scheduler owns due selection,
+        #    execution and receipts for the whole laboratory; closing the test TUI never
+        #    stops it and no custom scheduling loop exists here.
+        scheduler = backends.lab_scheduler_start(interpreter, lab)
+        record["scheduler"] = dict(scheduler)
+        # 5. One bounded initial native model+transport smoke before the long wait.
+        baseline_reports = frozenset()
         record["smoke"] = _smoke_phase(
             backends,
             store,
@@ -4769,8 +4350,9 @@ def _live_run(
             expected_items=expected_before,
             expected_item_gaps={direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)},
             stream=stream,
+            environment=environment,
         )
-        # 3. Two real wall-clock hourly boundaries executed by the native scheduler.
+        # 6. Two natural wall-clock hourly cuts executed by the native scheduler.
         boundaries: list[dict[str, Any]] = []
         boundary_plan: tuple[tuple[datetime, dict[str, str], dict[str, Sequence[str]]], ...] = (
             (cut_one, expected_before, {direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)}),
@@ -4817,7 +4399,7 @@ def _live_run(
                 backends.sleep(BOUNDARY_POLL_SECONDS)
             run_window_start = expected_cut - timedelta(minutes=1)
             run_window_end = expected_cut + timedelta(hours=1)
-            fresh_job = backends.job_record(interpreter, job_id)
+            fresh_job = backends.job_record(interpreter, job_id, environment)
             run_evidence = _job_run_evidence(
                 output_dir, window_start=run_window_start, window_end=run_window_end
             )
@@ -4843,16 +4425,17 @@ def _live_run(
                 flush=True,
             )
             if index == 0:
-                # 4. The between-cut transition: a genuine final that must be reported
-                # by the next real cut, plus the direct continuation interval.
-                _finalize_scope(state_root, scope, hermes_home=hermes)
-                _write_direct_interval(state_root, scope, index=1, moment=backends.now())
+                # 7. The between-cut transition: the open synthetic work is completed and
+                #    one direct interval is opened and finished, through the shipped
+                #    writers and the shipped product callbacks — never by editing SQL.
+                backends.lab_transition(interpreter, lab, manifest)
                 print(
-                    "synthetic work transitioned between cuts; waiting for its final report",
+                    "synthetic work transitioned between cuts through its supported "
+                    "lifecycle; waiting for its final report",
                     file=stream,
                     flush=True,
                 )
-        # 5. D12 semantic corpus: compare the actual Morfeo output with canonical state.
+        # 8. D12 semantic corpus: compare the actual Morfeo output with canonical state.
         cases = _evaluate_cases(_case_definitions(manifest), boundaries)
         record["cases"] = cases
         # The deterministic evaluator owns typed state, attribution, provenance labels,
@@ -4866,14 +4449,15 @@ def _live_run(
             "cases": [case["id"] for case in cases if case.get("status") == "observed"],
             "retained_private_comparison": True,
         }
-        # 6. The real no-work boundary with no inference.  The comparison baseline is
-        # taken after the worked cuts: only a reporter session created beyond them can
-        # indicate that the idle cut itself woke a model turn.
+        # 9. The real no-work boundary with no inference.  The comparison baseline is taken
+        #    after the worked cuts: only a reporter session created beyond them can
+        #    indicate that the idle cut itself woke a model turn.
+        hermes = Path(str(lab["hermes_home"]))
         idle_session_baseline = frozenset(backends.session_sources(hermes))
         idle_deadline = cut_idle + BOUNDARY_SLOP
-        handoff_directory = Path(state_root) / "monitor" / "handoff"
+        handoff_directory = Path(str(lab["state_root"])) / "monitor" / "handoff"
         while True:
-            fresh_job = backends.job_record(interpreter, job_id)
+            fresh_job = backends.job_record(interpreter, job_id, environment)
             run_evidence = _job_run_evidence(
                 output_dir,
                 window_start=cut_idle - timedelta(minutes=1),
@@ -4923,11 +4507,10 @@ def _live_run(
                 flush=True,
             )
             backends.sleep(BOUNDARY_POLL_SECONDS)
-        # 7. Manual off: durable disable, native pause and no unrelated change.
-        off = backends.control(ACTION_OFF)
-        off_checked = True
+        # 10. Manual off: durable disable, native pause and no unrelated change.
+        off = backends.lab_control(lab, ACTION_OFF)
         settings_after_off = store.get_settings()
-        off_job = backends.job_record(interpreter, job_id)
+        off_job = backends.job_record(interpreter, job_id, environment)
         record["off"] = {
             "enabled_after_off": bool(settings_after_off.enabled),
             "job_paused": bool((off.get("result") or {}).get("job_paused")),
@@ -4950,227 +4533,75 @@ def _live_run(
             and bool((record.get("smoke") or {}).get("confirmed"))
         )
     finally:
-        restore: dict[str, Any] = {}
-        if scope is not None:
-            scope_errors: list[str] = []
-            scope_residue: list[str] = []
-            verified_ok = False
-            removed_scope: Mapping[str, Any] | None = None
+        # 11. Cooperative shutdown of the bounded native scheduler, always, then the
+        #     retention verification of the laboratory evidence.  The laboratory is never
+        #     self-deleted and no operator state is restored because none was displaced.
+        retention: dict[str, Any] = {}
+        if scheduler is not None:
             try:
-                removed_scope = backends.scope_remove(interpreter, scope)
-                scope_errors = [str(item) for item in removed_scope.get("errors") or []]
-                scope_residue = [str(item) for item in removed_scope.get("residue") or []]
-                verified = removed_scope.get("verified")
-                if isinstance(verified, Mapping):
-                    restore["scope_verified"] = {
-                        str(key): bool(value) for key, value in verified.items()
-                    }
-                verified_ok = (
-                    isinstance(verified, Mapping)
-                    and bool(verified)
-                    and all(bool(value) for value in verified.values())
+                retention["scheduler_stopped"] = bool(
+                    backends.lab_scheduler_stop(lab or {}, scheduler).get("stopped")
                 )
             except QualificationError as error:
-                restore["scope_error"] = error.code
-            restore["scope_removed"] = (
-                removed_scope is not None and not scope_errors and not scope_residue and verified_ok
-            )
-            restore["scope_errors"] = scope_errors or None
-            restore["scope_residue"] = scope_residue or None
-            if not restore["scope_removed"]:
+                retention["scheduler_stopped"] = False
                 record["errors"].append(
-                    {
-                        "code": "restore-scope",
-                        "message": (
-                            "the synthetic qualification scope was not fully removed and verified"
-                        ),
-                        "detail": {
-                            "errors": scope_errors,
-                            "residue": scope_residue,
-                            "verified": restore.get("scope_verified"),
-                            "code": restore.get("scope_error"),
-                        },
-                    }
+                    {"code": error.code, "message": error.message, "detail": error.detail}
                 )
-            # Every private direct-turn spool record this run wrote is removed and its
-            # absence verified; a remaining record is residue that clears ``ok``.
-            direct_records = _remove_direct_records(state_root, scope)
-            restore["direct_spool_removed"] = direct_records["removed"]
-            restore["direct_spool_clean"] = (
-                not direct_records["errors"] and not direct_records["residue"]
-            )
-            if not restore["direct_spool_clean"]:
-                record["errors"].append(
-                    {
-                        "code": "restore-direct-spool",
-                        "message": (
-                            "a private direct-turn spool record this run wrote was not removed"
-                        ),
-                        "detail": {
-                            "errors": direct_records["errors"],
-                            "residue": direct_records["residue"],
-                        },
-                    }
-                )
+            finally:
+                record["scheduler"] = {
+                    **(record.get("scheduler") or {}),
+                    "stopped": bool(retention.get("scheduler_stopped")),
+                }
         else:
-            restore["direct_spool_clean"] = True
-        restore["registry_restored"] = backends.restore_registry(isolation)
-        retained_staging = (
-            list(isolation.get("retained_staging") or []) if isinstance(isolation, Mapping) else []
-        )
-        if retained_staging:
-            # A staging directory the restore could not remove is recorded with its retained path
-            # and gates the verdict: the bounded restore code alone would not name it.
-            restore["retained_staging"] = retained_staging
-            record["errors"].append(
-                {
-                    "code": "staging-residue",
-                    "message": "a private staging directory of this run could not be removed and "
-                    "is retained for reconciliation",
-                    "detail": {"retained": retained_staging},
-                }
-            )
-        if restore["registry_restored"] not in {
-            "byte-identical",
-            "removed",
-            "merged-concurrent",
-            "concurrent-kept",
-            "not-isolated",
-        }:
-            record["errors"].append(
-                {
-                    "code": "restore-registry",
-                    "message": "the operator project registry was not restored to its prior "
-                    "state; a concurrent change or an unreadable registry leaves the durable "
-                    "recovery record for reconciliation",
-                    "detail": {"result": restore["registry_restored"]},
-                }
-            )
-        if prior_enabled:
-            if enabled_by_harness or off_checked:
-                try:
-                    backends.control(ACTION_ON)
-                    restore["enabled_restored"] = bool(store.get_settings().enabled)
-                except QualificationError as error:
-                    restore["enabled_restored"] = False
-                    restore["enable_error"] = error.code
-            else:
-                # The qualification never touched the monitor; it was and remains enabled.
-                restore["enabled_restored"] = True
-        elif enabled_by_harness:
-            try:
-                backends.control(ACTION_OFF)
-                restore["enabled_restored"] = True
-            except QualificationError as error:
-                restore["enabled_restored"] = False
-                restore["enable_error"] = error.code
+            retention["scheduler_stopped"] = True
+        if lab is None:
+            # Nothing was created, so there is no retained evidence to verify.
+            retention["laboratory"] = {"created": False, "retained": False, "removed": False}
         else:
-            restore["enabled_restored"] = True
-        # A job this run created is removed, and the persisted monitor binding always
-        # returns to its exact prior value so no stale job identity survives the run.
-        if job_created_by_harness and job_id:
-            removed = False
             try:
-                removed = bool(backends.job_removed(interpreter, job_id))
-            except QualificationError as error:
-                restore["job_remove_error"] = error.code
-            restore["created_job_removed"] = removed
-            if not removed:
+                release = backends.lab_release(plan)
+            except (QualificationError, OSError) as error:
+                release = {"retained": False, "problems": [type(error).__name__]}
+            retention["laboratory"] = {
+                key: value for key, value in release.items() if key != "problems"
+            }
+            if release.get("problems"):
+                retention["laboratory_problems"] = list(release["problems"])
                 record["errors"].append(
                     {
-                        "code": "restore-created-job",
-                        "message": "the native job this run created was not removed",
+                        "code": "lab-retention",
+                        "message": "the retained laboratory evidence is incomplete; the root is "
+                        "kept for reconciliation instead of being reported as qualified evidence",
+                        "detail": {"problems": list(release["problems"])},
                     }
                 )
-        try:
-            current_settings = store.get_settings()
-            drifted = (
-                current_settings.native_job_id != prior.native_job_id
-                or current_settings.profile_binding != prior.profile_binding
-                or current_settings.destination_ref != prior.destination_ref
-            )
-            if drifted:
-                store.configure(
-                    native_job_id=prior.native_job_id,
-                    profile_binding=prior.profile_binding,
-                    destination_ref=prior.destination_ref,
-                    timezone=prior.timezone or "UTC",
-                )
-            settings_final = store.get_settings()
-            restore["native_job_id_matches_prior"] = (
-                settings_final.native_job_id == prior.native_job_id
-            )
-        except Exception as error:  # noqa: BLE001 - any failure here must gate the verdict
-            restore["native_job_id_matches_prior"] = False
-            restore["binding_error"] = type(error).__name__
-        if not restore.get("native_job_id_matches_prior"):
-            record["errors"].append(
-                {
-                    "code": "restore-job-identity",
-                    "message": "the persisted monitor job identity was not restored to "
-                    "its prior value",
-                }
-            )
-        try:
-            final_jobs = backends.job_inventory(interpreter)
-            preserved = _inventory_preserved(
-                baseline_jobs, final_jobs, monitor_job_id=job_id or prior.native_job_id
-            )
-            restore["unrelated_jobs_preserved"] = preserved["preserved"]
-            restore["changed_job_ids"] = preserved["changed_ids"]
-        except QualificationError as error:
-            restore["unrelated_jobs_preserved"] = False
-            record["errors"].append(
-                {"code": error.code, "message": error.message, "detail": error.detail}
-            )
-        if not restore.get("unrelated_jobs_preserved"):
-            record["errors"].append(
-                {
-                    "code": "restore-unrelated-jobs",
-                    "message": "a native job this qualification does not own changed",
-                }
-            )
-        try:
-            restore["enabled_matches_prior"] = bool(store.get_settings().enabled) == prior_enabled
-        except Exception as error:  # noqa: BLE001 - a store failure still gates the verdict
-            restore["enabled_matches_prior"] = False
-            restore["enabled_error"] = type(error).__name__
-        if not restore.get("enabled_matches_prior"):
-            record["errors"].append(
-                {
-                    "code": "restore-enabled",
-                    "message": "the monitor enablement was not restored to its prior value",
-                }
-            )
-        record["restore"] = restore
+        retention["registry_touched"] = False
+        retention["scope_retained"] = bool(scope is not None)
+        record["retention"] = retention
         record["ended_at_utc"] = _utc_text(backends.now())
-        # A restore problem or any recorded failure means the installation was not left
-        # where the run found it; the run must never report itself qualified then.
+        # A retention problem or any recorded failure means the laboratory cannot be
+        # reported as qualified evidence.
         record["ok"] = bool(record.get("ok")) and not record["errors"]
         record["public_summary"] = _public_live_summary(record)
         backends.write_output(output, record, established_parent=established_parent)
+        # With no earlier failure to preserve, an unproven shutdown or incomplete retained
+        # evidence surfaces as its own bounded error: a laboratory that did not stop or
+        # whose evidence is missing is never a qualification result.
+        if sys.exc_info()[1] is None:
+            if not retention.get("scheduler_stopped"):
+                raise QualificationError(
+                    "lab-scheduler-stop",
+                    "the bounded native scheduler instance did not stop; the laboratory "
+                    "evidence is retained and the run is not a qualification result",
+                )
+            if retention.get("laboratory_problems"):
+                raise QualificationError(
+                    "lab-retention",
+                    "the retained laboratory evidence is incomplete; the root is kept for "
+                    "reconciliation instead of being reported as qualified evidence",
+                    detail={"problems": list(retention["laboratory_problems"])},
+                )
     return record
-
-
-def _sanitize_status(result: Mapping[str, Any]) -> dict[str, Any]:
-    """Reduce a control result to the fields that are safe in public evidence."""
-
-    job = result.get("native_job") if isinstance(result.get("native_job"), Mapping) else None
-    return {
-        "enabled": bool(result.get("enabled")),
-        "destination_pinned": bool(result.get("destination_pinned")),
-        "timezone": result.get("timezone"),
-        "next_cut_utc": result.get("next_cut_utc"),
-        "native_job": (
-            None
-            if job is None
-            else {
-                "present": True,
-                "schedule": job.get("schedule"),
-                "paused": bool(job.get("paused")),
-            }
-        ),
-    }
 
 
 def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
@@ -5179,7 +4610,10 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
     boundaries = list(record.get("boundaries") or [])
     cases = list(record.get("cases") or [])
     adjudication = record.get("semantic_adjudication") or {}
-    restore = record.get("restore") or {}
+    retention = record.get("retention") or {}
+    laboratory = retention.get("laboratory") or {}
+    lab = record.get("lab") or {}
+    preflight = record.get("preflight") or {}
     enable = record.get("enable") or {}
     idle = record.get("idle") or {}
     smoke = record.get("smoke") or {}
@@ -5214,7 +4648,6 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "smoke_narration_writes": smoke.get("narration_writes"),
         "smoke_trigger_to_collection_seconds": smoke.get("trigger_to_collection_seconds"),
         "smoke_ack_lateness_seconds": smoke.get("ack_lateness_seconds"),
-        "prior_monitor_quiesced": bool((record.get("prior_quiesce") or {}).get("requested")),
         "cases": {str(case.get("id")): str(case.get("status")) for case in cases},
         "case_failures": [str(case.get("id")) for case in cases if case.get("status") == "fail"],
         "semantic_certification": {
@@ -5228,14 +4661,21 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "manual_off_verified": bool((record.get("off") or {}).get("job_paused"))
         and not bool((record.get("off") or {}).get("enabled_after_off")),
         "idle_confirmed": bool(idle.get("idle_confirmed")),
-        "scope_restored": bool(restore.get("scope_removed")),
-        "direct_spool_cleaned": bool(restore.get("direct_spool_clean")),
-        "registry_restored": str(restore.get("registry_restored")),
-        "enabled_restored": bool(restore.get("enabled_restored")),
-        "enabled_matches_prior": bool(restore.get("enabled_matches_prior")),
-        "job_identity_restored": bool(restore.get("native_job_id_matches_prior")),
-        "created_job_removed": bool(restore.get("created_job_removed")),
-        "unrelated_jobs_preserved": bool(restore.get("unrelated_jobs_preserved")),
+        # The laboratory is isolated rather than restored: the public summary carries the
+        # containment facts and the retained-evidence digests, never a lab path or handle.
+        "laboratory_isolated": bool(lab.get("root_digest")),
+        "laboratory_root_digest": lab.get("root_digest"),
+        "laboratory_config_digest": lab.get("config_digest"),
+        "laboratory_retained": bool(laboratory.get("retained")),
+        "scheduler_stopped": bool(retention.get("scheduler_stopped")),
+        "operator_registry_touched": bool(retention.get("registry_touched")),
+        "preflight_destination_digest": preflight.get("destination_digest"),
+        "preflight_interfaces": sorted(str(name) for name in (preflight.get("interfaces") or {})),
+        # Exact-candidate loading evidence (D13 §Laboratory bootstrap 2): the resolved
+        # writer surface, the loaded module/artifact digests, the declared plugin entry
+        # points and the distribution versions.  Names, digests and versions only — the
+        # resolved interpreter, module file paths and laboratory paths stay private.
+        "preflight_writers": preflight.get("writers") or {},
         # ``qualified`` is scoped: it covers the deterministic invariants above and the
         # real delivered digests.  It never certifies the semantic fidelity of the D12
         # cases, whose retained source/output comparison requires independent adjudication.
@@ -5245,11 +4685,14 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
             "one bounded provisioned model and transport smoke",
             "native job shape, idempotency, manual off and the native idle skip",
             "deterministic structural invariants over the live output",
-            "scope, spool, registry, job identity and enablement restoration",
+            "the private laboratory context, its retained evidence and the cooperative "
+            "shutdown of the bounded native scheduler",
         ],
         "unqualified_scope": [
             "semantic fidelity of the observed D12 cases; the retained source/output "
             "comparison requires independent adjudication and is not certified here",
+            "the installation's own production scope and activation; the laboratory proves "
+            "synthetic behavior only and is not a production acceptance",
         ],
         "acceptance_notice": (
             "Telegram Bot API acceptance is recorded as acceptance, "
@@ -5562,9 +5005,9 @@ def _open_private_receipt_directory(
     """Open the receipt's verified private directory for relative, non-followed calls.
 
     Every installation step then happens relative to this descriptor, so a component that
-    is swapped after the target was established cannot redirect the write; a directory
+    is replaced at the same name after the target was established cannot redirect the write; a directory
     whose named entry no longer matches the opened descriptor, or which is no longer the
-    established directory itself, is refused instead.  A swap that lands *after* this
+    established directory itself, is refused instead.  A replacement that lands *after* this
     descriptor is bound therefore leaves the receipt inside the directory the run
     established (then living under its new name) and the final path verification fails the
     run: the replacement directory at the original name never receives a byte, and no
@@ -5636,132 +5079,11 @@ def _install_private_receipt_without_descriptors(
             temporary.unlink()
 
 
-def _install_private_receipt_in_staging(
-    path: Path, data: bytes, *, directory_fd: int, staging_parent: Path
-) -> None:
-    """Install ``path`` from a temporary that lives in one of this run's staging directories.
-
-    Used for every file this harness installs into the operator's registry directory, so that
-    directory is only ever modified by no-clobber ``link`` creations and no-replace renames: the
-    temporary is created inside a fresh run-owned ``0700`` staging directory on the same
-    filesystem, written ``0600`` *before* any content exists, verified by descriptor, linked into
-    place, and unlinked only inside that staging directory.  The directory is then removed with
-    ``rmdir``, which the kernel refuses while any entry is still inside it, so a temporary that
-    somehow survives is never removed silently: the installation is reported as failed and the
-    directory stays under its documented private name for reconciliation.  An entry that appeared
-    at the destination while the harness was installing it is still never replaced and yields the
-    same bounded ``output-target-exists`` refusal as the shared implementation.
-    """
-
-    staging = _create_registry_staging_directory(staging_parent)
-    if staging is None:
-        raise QualificationError(
-            "staging-unavailable",
-            "the private staging directory for the project registry could not be created",
-        )
-    temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
-    descriptor: int | None = None
-    created_identity: tuple[int, int] | None = None
-    primary: BaseException | None = None
-    try:
-        file_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | O_NOFOLLOW | O_CLOEXEC
-        try:
-            descriptor = os.open(temporary_name, file_flags, FILE_MODE, dir_fd=staging.staging_fd)
-        except FileExistsError:
-            raise UnsafeObservationPath("private receipt temporary already exists") from None
-        opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
-            raise UnsafeObservationPath("private receipt temporary is not a private file")
-        created_identity = (opened.st_dev, opened.st_ino)
-        os.fchmod(descriptor, FILE_MODE)
-        view = memoryview(data)
-        written = 0
-        while written < len(view):
-            written += os.write(descriptor, view[written:])
-        os.fsync(descriptor)
-        named = os.stat(temporary_name, dir_fd=staging.staging_fd, follow_symlinks=False)
-        if (
-            not stat.S_ISREG(named.st_mode)
-            or named.st_nlink != 1
-            or (named.st_dev, named.st_ino) != created_identity
-        ):
-            raise UnsafeObservationPath("private receipt temporary changed before install")
-        try:
-            os.link(
-                temporary_name,
-                path.name,
-                src_dir_fd=staging.staging_fd,
-                dst_dir_fd=directory_fd,
-            )
-        except FileExistsError:
-            raise QualificationError(
-                "output-target-exists",
-                "the project registry target appeared while the harness was installing it; "
-                "nothing that was found there was replaced",
-            ) from None
-        os.unlink(temporary_name, dir_fd=staging.staging_fd)
-        installed = os.stat(path.name, dir_fd=directory_fd, follow_symlinks=False)
-        if (
-            not stat.S_ISREG(installed.st_mode)
-            or installed.st_nlink != 1
-            or (installed.st_dev, installed.st_ino) != created_identity
-        ):
-            raise UnsafeObservationPath("the installed project registry is not this run's file")
-        os.fsync(directory_fd)
-    except BaseException as error:
-        primary = error
-        raise
-    finally:
-        if descriptor is not None:
-            os.close(descriptor)
-        if created_identity is not None:
-            try:
-                remaining = os.stat(
-                    temporary_name, dir_fd=staging.staging_fd, follow_symlinks=False
-                )
-            except OSError:
-                remaining = None
-            if remaining is not None and (remaining.st_dev, remaining.st_ino) == created_identity:
-                with contextlib.suppress(OSError):
-                    os.unlink(temporary_name, dir_fd=staging.staging_fd)
-                    os.fsync(staging.staging_fd)
-        removed = _remove_registry_staging_directory(staging)
-        os.close(staging.staging_fd)
-        os.close(staging.parent_fd)
-        if not removed:
-            # The staging cleanup failure is never hidden behind an earlier failure (the round-14
-            # review reproduced ``output-target-exists`` with the retained staging directory
-            # reported nowhere): the primary bounded failure keeps its own code and message and
-            # carries the retained directory explicitly as ``staging_residue`` in its detail, so
-            # the private receipt names the path that must be reconciled.  A primary failure that
-            # is not a bounded qualification failure is preserved as the raised error's cause.
-            residue = {
-                "path": str(staging.path),
-                "primary_error": type(primary).__name__ if primary is not None else None,
-            }
-            if isinstance(primary, QualificationError):
-                if isinstance(primary.detail, Mapping):
-                    detail: dict[str, Any] = dict(primary.detail)
-                elif primary.detail is None:
-                    detail = {}
-                else:
-                    detail = {"primary_detail": primary.detail}
-                detail["staging_residue"] = residue
-                raise QualificationError(primary.code, primary.message, detail=detail) from primary
-            raise QualificationError(
-                "staging-residue",
-                "the private staging directory of the project registry installation could not "
-                "be removed; it is retained, with its content, under its documented private name",
-                detail=residue,
-            ) from primary
-
-
 def _install_private_receipt(
     path: Path,
     data: bytes,
     *,
     established_parent: tuple[int, int] | None = None,
-    staging_parent: Path | None = None,
 ) -> None:
     """Install the receipt without ever replacing an entry that already exists.
 
@@ -5783,12 +5105,6 @@ def _install_private_receipt(
     establishment, the directory is checked read-only *before* anything can be created and
     the opened descriptor is checked again before the temporary exists, so a directory the
     run did not establish can never receive the receipt.
-
-    When ``staging_parent`` is given — every installation into the operator's registry
-    directory does — the temporary is not created next to the target at all: it lives in one of
-    this run's own ``0700`` staging directories (see :func:`_install_private_receipt_in_staging`),
-    so that directory is never unlinked in and a temporary that cannot be removed is reported
-    instead of disappearing.
     """
 
     parent = path.parent
@@ -5804,14 +5120,6 @@ def _install_private_receipt(
         return
 
     directory_fd = _open_private_receipt_directory(parent, established_parent=established_parent)
-    if staging_parent is not None:
-        try:
-            _install_private_receipt_in_staging(
-                path, data, directory_fd=directory_fd, staging_parent=staging_parent
-            )
-        finally:
-            os.close(directory_fd)
-        return
     temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
     descriptor: int | None = None
     created_identity: tuple[int, int] | None = None
@@ -5946,11 +5254,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--live",
         action="store_true",
         help=(
-            "Run the provisioned qualification (owned by MON-INT; real model and Telegram). "
-            "The lane currently refuses with scope-isolation-unsupported, without enabling the "
-            "monitor, changing any registry byte, creating a native job or making a model or "
-            "Telegram call: the synthetic scope cannot be isolated from this installation's "
-            "registered projects — see the Telegram Monitor guide's qualification limits."
+            "Run the provisioned qualification in the D13 isolated native-runtime laboratory: "
+            "one private root outside every Git worktree, the shipped writers, one lab monitor "
+            "job, one bounded native scheduler instance, a real model/Telegram smoke, two "
+            "natural hourly cuts and a later idle cut. This installation's project registry, "
+            "boards, sessions, cron jobs and monitor state are never hidden, swapped or "
+            "restored, and no credential is acquired. See the Telegram Monitor guide."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Print the summary as one JSON object.")

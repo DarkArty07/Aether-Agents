@@ -540,3 +540,38 @@ def test_monitor_guide_states_what_the_store_persists_without_overclaiming() -> 
     # The audited overclaim must not survive anywhere in the guide's privacy section: the
     # store really does persist narrative prose, so the blanket sentence was false.
     assert "No credential, chat identifier, message text, raw transcript" not in privacy
+
+
+def test_monitor_guide_documents_the_isolated_laboratory_and_its_retention() -> None:
+    """The guide's qualification claims match the D13 laboratory the harness implements.
+
+    The retired shared-registry lane is described as retired — with the guarantees it
+    provided mapped onto the containment evidence that carries them — and the guide never
+    presents the laboratory as a production qualification.
+    """
+
+    guide = " ".join((ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8").split())
+
+    for phrase in (
+        "isolated native-runtime laboratory",
+        "lab-root-inside-repository",
+        "lab-context-escape",
+        "lab-scheduler-stop",
+        "lab-retention",
+        "never self-deletes the laboratory",
+        "`registry_touched: false`",
+        "No code path addresses the operator registry at all",
+        "it never touches this installation's project registry",
+    ):
+        assert phrase in guide, phrase
+    # The retired lane's durable artifacts are history, not current behaviour.
+    for retired in (
+        "registry.json.qualification-recovery.json",
+        "registry.json.qualification-held",
+        ".aether-qualification-staging-",
+        "**Live qualification is currently refused",
+    ):
+        assert retired not in guide, retired
+    # Live evidence is still pending: the laboratory is not production acceptance.
+    assert "is not qualified" in guide
+    assert "not production acceptance" in guide

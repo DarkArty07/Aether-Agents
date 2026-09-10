@@ -40,7 +40,11 @@ Each action prints one envelope `{"schema_version": "aether.telegram-monitor.v1"
 uv run --frozen python scripts/qualify_telegram_monitor.py --json
 ```
 
-Read [Telegram Monitor](../guides/telegram-monitor.md) for activation, rollback, privacy and the current qualification limits.
+The deterministic lane is effect-free and now also proves the isolated laboratory's
+bootstrap and fail-closed preflight: the private root, its decision-only configuration,
+the borrowed access names and the child containment. Read
+[Telegram Monitor](../guides/telegram-monitor.md) for activation, rollback, privacy and the
+current qualification limits.
 
 ## Local lifecycle candidates
 

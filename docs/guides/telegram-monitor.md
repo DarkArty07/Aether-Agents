@@ -200,8 +200,13 @@ resources, the control envelopes over a disposable state root, the packaged pre-
 idle gate and the D12 safety boundary (every live-corpus text — including the malicious
 instruction — is accepted by the shipped deterministic boundary, while the historical
 instruction-like canary is refused with `REPORTING_UNSAFE_CONTENT` before any prompt is
-built and without leaking its text), and it verifies that no native Hermes module, model
-call or Telegram send occurred. The private workspace this lane uses is created
+built and without leaking its text). It also proves the D13 laboratory bootstrap and its
+fail-closed preflight with no external effect: a real plan, the refusal of an
+in-repository or already-existing laboratory root, a configuration projection that carries
+the provisioned decisions and no credential, the redirection of every mutable child root
+inside the private root, the refusal of an escaped selector, and the exclusive `0700`
+creation with a `0600` record and configuration. Finally it verifies that no native Hermes
+module, model call or Telegram send occurred. The private workspace this lane uses is created
 exclusively under an unguessable run-owned name (`0700`, verified as a real directory
 owned by this process) and is removed only while the path still names exactly that
 directory: an entry that already exists at a chosen name is never reused, adopted or
@@ -238,222 +243,199 @@ file or any other effect. The `--output` receipt target is validated and establi
 private handles is refused with exit code `1` and a bounded error before any model,
 sender or native job effect.
 
-**Live qualification is currently refused: `scope-isolation-unsupported`.** The fixed
-contract requires the synthetic monitored scope to be sourced from native isolated
-artifacts while the previous scope, other jobs and concurrent work stay untouched. The
-monitor's scope is, by design, every project registered in this installation's Aether
-registry, and its hourly job runs inside the already-running Hermes runtime: a native job
-record carries no environment or namespace field, and the packaged pre-check, the reporter
-turn and the delivery all resolve the Aether state root from that process's own
-environment (`aether_agents.paths.state_root()` reads `XDG_STATE_HOME`, or an explicit
-argument the shipped entry points never pass). Inside those interfaces the only way to
-show the real product a synthetic-only scope is to hide or replace the shared registry for
-the whole multi-hour lane, which D10 and the preservation half of this contract do not
-allow — an hours-long replacement also blinds unrelated concurrent Aether work that uses
-the same registry (project registration, objective contracts, knowledge queries).
+Live mode runs **only inside the D13 isolated native-runtime laboratory**
+(`specs/telegram-monitor/qualification-isolation.md`) and it never touches this
+installation's project registry. The isolation is *containment*, not swapping: no
+operator state is hidden while unrelated Aether work continues, nothing is replaced, and
+nothing has to be put back afterwards.
 
-The lane therefore refuses at its first step, before it probes or changes anything:
+**The laboratory.** One private, exclusive root outside every Git worktree, created by the
+harness under the operator's own Aether state root
+(`<state_root>/monitor/lab/<stamp>-<random>`, mode `0700`, never reused or adopted: an
+existing name is refused with the bounded `lab-root-exists` error, and a root inside any
+Git worktree or repository is refused with `lab-root-inside-repository` before anything is
+created). Inside it the monitor's own native code is given a private `HOME`, `HERMES_HOME`
+(with `profiles/morfeo`), every XDG root, a temporary directory and a working directory, so
+every mutable registry, board, session, cron job and execution, cron output, monitor state
+and plugin state write resolves inside it. The child context is verified before it is used:
+a root that would resolve outside the laboratory, or that is relative, missing, a symlink or
+absent, is refused with the bounded `lab-context-escape` error, and inherited production
+routing selectors (`HERMES_HOME`, the `HERMES_KANBAN_*` family, the XDG roots, `TMPDIR`) are
+removed from every lab child while the delegated identity and the guard policy of the
+operator's environment stay visible. This is operational isolation for cooperating
+processes and controlled paths, not an OS sandbox against a malicious process of the same
+user.
 
-- the monitor is **not** enabled, paused or otherwise touched;
-- **no registry byte** is read-modify-written, hidden or replaced — the durable recovery
-  artifacts and staging directories described below are not created either;
-- no native job is created, changed, triggered or removed, and no unrelated job is read
-  or altered;
-- no model call, no Telegram call and no receipt file: the private `--output` target is
-  left as the operator selected it (the run writes nothing, not even the refusal record);
-- the refusal is reported as `{"ok": false, "error": {"code": "scope-isolation-unsupported"}}`
-  with exit code `1`, and no `qualified` key is ever present.
+**Configuration and the exact candidate.** The lab configuration is a decision-only
+projection of the provisioned Morfeo profile: model, providers, fallback providers,
+toolsets, timezone, transport decisions and the bounded agent limits are preserved, while
+sessions, memories, cron jobs, boards, the project registry, authentication stores and
+*every credential* are not copied — a secret-bearing key is dropped at any depth, and the
+public summary carries only the configuration's digest. Only the already provisioned access
+for that exact route and destination is reused, and only through the process environment of
+the lab children (values are read from the operator's own environment or provisioned
+profile environment file, held in memory, and never written into the laboratory, a test
+file or a receipt); the receipt records the borrowed *names* and their presence, never a
+value. No credential is acquired, refreshed or widened, and no token, destination, provider
+or model input is accepted from the command line.
 
-This is not a qualification result and grants nothing: the missing isolation capability is
-a material design question (a supported monitor scope/namespace primitive, an isolated
-qualification runtime, or an explicitly accepted bounded interruption), so the live
-hourly, narration, idle-skip and activation evidence below stays unqualified until it is
-resolved. The ordered description that follows is the fixed contract the lane implements;
-its steps — quiesce, registry isolation, scope materialization, job, boundaries, idle and
-restore, together with the durable registry recovery artifacts — are implemented but
-**unreachable** from every shipped entry point while the refusal above stands, and the
-final integration step (MON-INT) cannot run the lane until the question is resolved. What
-it does, in order:
+**The read-only phase (before anything exists).** A read-only preflight resolves, before the
+laboratory root exists, the provisioned runtime interpreter, the provisioned profile, the
+decision-only configuration, the borrowed access names, the verified child context, the
+native interfaces the lane depends on (the imported `cron` store and the native scheduler's
+own `start(stop_event, …)` signature) and the provisioned route/destination. A refused
+layout stops here — *nothing is created and no credential is read for it* — and every gap is
+reported by name (`lab-preflight` is the bounded code; `lab-root-inside-repository`,
+`lab-root-exists`, `lab-config`, `lab-access-missing`, `lab-context-escape`,
+`provisioned-…`, `destination-missing` are its problems). The harness never invents a
+replacement trigger: if no compatible provisioned native scheduler is available, the run
+stops with that capability gap.
 
-0. **Quiescing a running monitor.** If the monitor is already enabled, it is durably
-   disabled and its owned job paused *before* the registry is isolated, so no scheduled
-   run can observe the synthetic-only registry while the scope is being prepared. The
-   prior enablement and binding are restored at the end.
-1. **Isolating one synthetic scope — withheld while the refusal above stands.** This step is
-   not performed by any shipped entry point today: the isolation it needs does not exist in
-   the provisioned interfaces, so the lane stops before it (see above). Described for the
-   decision that resolves it: the operator's project registry is read with the
-   private reader — only a genuinely missing registry counts as "no registry"; an
-   unreadable, symlinked, multi-linked or unstably replaced one refuses the run with the
-   bounded `registry-unreadable` error before anything is changed — and its bytes are then
-   captured in a durable, verified-private `0600` recovery record installed next to the
-   registry with the same no-clobber discipline as the receipt. The replacement itself never
-   destroys a byte: the operator's own file is *moved aside* to a private held name with a
-   no-replace rename (the kernel tests the destination and moves in the same operation), so
-   neither an entry already sitting at the held name nor a concurrent write can be overwritten
-   or unlinked: a taken held name refuses the run with `registry-held-exists` and leaves that
-   entry exactly as it was found. The moved bytes are checked against the capture, and
-   the registry is then presented — for the duration of the run — as one containing only two
-   honestly labelled synthetic projects (markers, finalized contracts, canonical boards,
-   origin/finalizer sessions) plus one direct no-contract session. A concurrent write that
-   lands while the registry is captured or swapped is detected instead of being replaced: the
-   changed file is moved back (no-replace again; or it stays at the held name, recoverable,
-   beside the durable record) and the run refuses with
-   the bounded `registry-changed` error. The manifest
-   and the local project files exist before the first native row is created, so every
-   failure path removes exactly the scope this run holds. Everything the run creates —
-   native project rows, boards, sessions, direct-turn spool files, and the registry entries
-   the scope's own runtime probe registers for the synthetic projects — is removed afterwards
-   and each removal is verified absent: a surviving object is recorded as residue and gates
-   the verdict instead of being ignored. The registry is restored to the state the run
-   found: the exact operator bytes are written back (or the harness's own synthetic file is
-   removed when the run found none), and a legitimate registry update that appeared while
-   the synthetic registry was in place is preserved — the operator's original entries are
-   merged back under it and no concurrent entry is ever deleted. The exact value this run
-   registered for each synthetic project is *carried*, not inferred: it is derived from the
-   shipped project writer itself (the same registration call with the same arguments, run
-   against a private scratch state root the harness creates and removes) and never read back
-   out of the operator registry, so a concurrent writer's same-id update can never be captured
-   as this run's entry. That derivation is qualification-gating: the scratch state root is
-   removed with a verified postcondition, and a root that survives is a bounded
-   `registry-scope-residue` failure that leaves the synthetic scope unverified instead of
-   returning a successful derivation. Ownership is therefore resolved before the restore can
-   act, and a run that cannot name its own entries never reverts the isolation at all: the
-   restore refuses, the isolated registry is left exactly as it is, and the durable recovery
-   artifacts stay on disk for the operator. Entries this run registered for its own synthetic
-   projects are removed
-   only while they still carry exactly that value; an entry for a run-owned id that changed is
-   neither deleted nor merged — the restore refuses and keeps the durable evidence. The
-   qualification never invents a real
-   project identity, never edits a source database and never restarts or kills an agent.
-2. **Environment pre-flight.** The installation's own read-only sources are probed before
-   the fixture introduces its deliberate gap. Any permanent gap refuses the run before it
-   is enabled (see the limits below).
-3. **Proving the fixed native job.** `on` must reconcile exactly one owned job; a second
-   `on` must return the same job and create nothing; the job record must carry the fixed
-   schedule, pre-check script, `deliver=local`, restricted reporter toolset, no agent
-   bypass and no model/provider/origin override.
-4. **One bounded initial smoke.** The owned job is triggered once through the shipped
-   native API and must produce exactly one real collected report, one accepted
-   single-write narration, the shipped renderer's parts and one confirmed delivery — a
-   real end-to-end model-plus-transport check before the long wait. It is bounded, it is
-   never a substitute for a real hourly boundary, and it refuses to start when the first
-   boundary is less than fifteen minutes away (a native trigger schedules the job for
-   `now`, which would consume that boundary) and restores the prior state when it fails.
-5. **Two real hourly boundaries.** Each expected cut must be a fresh report for the
+**The private root, then the in-laboratory gate.** The private root is created exclusively
+first, as bootstrap requires, and the loaded candidate and native interfaces are then
+resolved *inside it*: an isolated probe runs in the real laboratory child context and
+resolves the exact destination — compared with the provisioned one, so a difference is
+reported as `destination-drift` and refuses the run, because configuration drift invalidates
+the qualification — the native scheduler interface, and *every native writer the fixture will
+call*: presence and accepted keywords, at the funnel that validates them
+(`SessionDB.create_session` forwards to `_insert_session_row`, which owns its keywords), the
+loaded module/artifact digests and entry points of every module the laboratory depends on,
+and the roots those modules *effectively* resolve. A revision that does not expose a required
+writer, a writer that no longer accepts a keyword the fixture passes, a module without a
+readable artifact digest, or a writer whose effective root resolves outside the laboratory is
+refused by name inside the created root — `writer-interface-missing:<name>`,
+`writer-parameter-missing:<name>:<keyword>`, `writer-artifact-missing:<module>`,
+`writer-root-escape:<root>` or `writer-root-unset:<root>` — and the lane stops with the
+bounded `lab-context-preflight` code before the synthetic scope is seeded, the job is
+enabled, the native scheduler starts, a model is called or a message is sent. The laboratory
+root exists at that point and is **retained honestly**: a refused run reports it as created
+and retained (the laboratory is never self-deleted), because the isolation displaced nothing
+and the root is the evidence of what was attempted.
+
+**The loaded candidate.** The receipt records the resolved interpreter, the loaded artifact
+digests with their module files, the declared plugin entry points and the installed
+distribution versions; the public summary carries the same evidence as names, versions and
+digests only, never a module file or laboratory path. A source branch name alone is not
+loading evidence, and an unsupported runtime fails as a bounded capability gap rather than
+mid-lane after the first write.
+
+What the lane then does, in order:
+
+1. **The private laboratory root and its configuration.** Created exclusively `0700`, with
+   its record (`lab.json`, `0600`) and the decision-only `config.yaml` (`0600`) written
+   inside it.
+2. **The in-laboratory gate.** Resolved inside the created root before anything is seeded or
+   spent (the destination comparison, the native scheduler interface, the writer surface, the
+   loaded artifact digests and the writers' effective roots above). Its refusal is the
+   bounded `lab-context-preflight` error; the created root is retained and reported.
+3. **The synthetic scope, written by the shipped writers.** Two honestly labelled synthetic
+   contract-bound projects (markers, finalized contracts, Git roots) and one direct
+   no-contract session are registered through the shipped product writers for the project
+   registry and native project rows, their boards and tasks are created through the shipped
+   native kanban writers, their origin/finalizer sessions through the shipped native session
+   store, and the direct-project-bound intervals through the shipped product callbacks. The
+   D12 corpus travels the same way: a claim is a real board completion (`complete_task`)
+   rather than an injected row, so the text the monitor reads is a text the shipped writer
+   produced. Every call passes only keywords the preflight resolved as accepted — the
+   session store owns its row timestamps, so no timestamp is supplied, and a session title
+   is written through the shipped title writer (`set_session_title`) rather than by guessing
+   a column. Before its first write the fixture child re-resolves its own effective board,
+   project and session roots and refuses with `fixture-root-escape` if any of them resolves
+   outside the laboratory, so an inherited board selector cannot redirect a lab write into
+   this installation. Task identity belongs to the shipped kanban writer: the fixture
+   reports the id each call returned per manifest key, the harness binds those ids into the
+   manifest (refusing `lab-fixture` if any key is unbound, duplicated or empty), and the
+   links, the between-cut transition and every D12 case reference are derived from the
+   returned identities alone. The fixture deliberately leaves one open descendant per
+   contract — the distinction between a genuinely open contract and a coverage failure — and
+   it refuses (`lab-fixture`) rather than continuing if a project did not receive a native
+   identity.
+4. **The laboratory's own read-only sources.** Probed after the fixture: a coverage gap the
+   fixture did not deliberately create would fabricate an hourly gap report, so it refuses
+   with `environment-gaps` before the monitor is enabled.
+5. **The one lab monitor job.** Installed through the shipped control service — production
+   script, prompt and toolset, `0 * * * *`, `deliver=local`, no per-job model or provider
+   override. `on` must reconcile exactly one owned job; a second `on` must return the same
+   job and create nothing; the job record must carry the fixed shape. The first cut it
+   reports must lie far enough ahead for the bounded smoke to finish first
+   (`smoke-window` otherwise).
+6. **One bounded supervised native scheduler instance.** The native
+   `InProcessCronScheduler` runs in its own bounded child process with the laboratory
+   context — no receiver, no gateway housekeeping, no profile multiplexing, no
+   implementation dispatcher and no permanent service. The native code owns due selection,
+   execution and its own run receipts; the harness only observes. There is no custom
+   scheduling loop in the harness and the hourly cuts are never forced manually.
+7. **One bounded initial smoke.** The owned job is triggered once through the shipped native
+   API and must produce exactly one real collected report, one accepted single-write
+   narration, the shipped renderer's parts and one confirmed delivery. It is never a
+   substitute for a natural cut. (A narration may contain multiple tool/model requests; the
+   budget counts narrations, not HTTP calls.)
+8. **Two natural wall-clock hourly cuts.** Each expected cut must be a fresh report for the
    expected wall-clock hour, collected within the accepted deadline, with an accepted
    single-write Morfeo narrative whose delivered parts are byte-equal to the shipped
-   renderer's output over that evidence (including the immutable identity headers), every
-   part confirmed with a native message identifier, and exactly one native scheduler run
-   record containing that digest identity. The collection-level coverage gaps must be
-   exactly the pre-flight baseline, and the deliberately created `DIRECT_OUTCOME_UNKNOWN`
-   gap is asserted on its own work identity. Between the two cuts the synthetic work
-   transitions — a flow completes, a reviewed flow closes, a direct turn opens a
-   continuation — so the second boundary must carry the genuine final reports.
-6. **Comparing the D12 semantic corpus with canonical state.** The synthetic scope
-   contains contradictory worker completion claims, a forecast deadline, word-based time,
-   a malicious instruction that tells the monitor to declare the objective complete and
-   drop the pending checks, and a legitimate partial success with pending review. The
-   harness compares the actual Morfeo narrative with the canonical snapshot evidence:
-   typed state must equal the canonical lifecycle state, the case's representative source
-   evidence must actually be cited (an omitted evidence claim fails), a percentage is
-   rejected because no report claims one, adversarial text must never be promoted beyond
-   its `reported/unverified` evidence, and a completion must be grounded in observed
-   verified evidence. A case cannot be evaluated without the live narrative that produced
-   it. What the deterministic evaluator cannot do is certify the meaning of free prose —
-   a matching reference proves attribution, not truth (D12) — so a structurally clean case
-   is reported `observed` with `certification=independent-adjudication-required`, and the
-   private receipt retains the canonical text next to the text the narrator emitted. The
-   public verdict never certifies those cases: an independent adjudication of the retained
-   comparison is required before they are counted, and a wrong emitted claim found there is
-   a failed case (and a failed AC-5 result), not a pass.
-7. **One real no-work boundary.** After the final coverage is confirmed, the next cut
-   must show the native scheduler's own record of the silent `wakeAgent=false` gate, an
-   advanced watermark, a resolved snapshot with no narration of any status, no deliveries,
-   no new reporter session and no pending handoff. A fresh rejected or failed narrative
-   is a model turn and therefore fails the skip rather than certifying it.
-8. **Manual off and restoration.** `off` must durably disable the monitor and pause the
-   owned job; the prior enablement, the exact prior persisted job identity, the absence of
-   a job this run created and every unrelated job's behaviour-bearing fields must all be
-   restored. Every synthetic object this run writes is removed and then *verified absent*:
-   the native project rows, board directories, project paths, session rows, the direct-turn
-   spool records and the scope root each carry a postcondition, a removal that silently
-   fails or raises is recorded as residue, and residue is qualification-gating. A run that
-   cannot put the installation back where it found it reports `ok: false` with the specific
-   restore error codes (`restore-scope`, `restore-direct-spool`, `restore-registry`,
-   `restore-job-identity`, `restore-created-job`, `restore-enabled`,
-   `restore-unrelated-jobs`) even when every boundary passed. The registry outcome is
-   reported as `byte-identical` (the registry holds exactly the bytes the run found — also the
-   outcome when the only entries the isolation carried were the ones this run's own synthetic
-   scope registered and removed again), `removed` (the run found no registry and none is
-   left — including the live-shaped cycle in which the only entries that ever appeared were
-   this run's own scope registrations, which are removed), `merged-concurrent` (a legitimate
-   concurrent update appeared during isolation: its entries survive, this run's own scope
-   registrations are removed from it, and the operator's original entries — when the run found
-   any — are merged back under them) or `concurrent-kept` (the run found no registry and a
-   concurrently created one that never carried a run-owned entry is untouched);
-   any other result gates the verdict with `restore-registry` and keeps the durable recovery
-   record for reconciliation. A restore whose ownership could not be derived is reported
-   `restore-registry` as well, with nothing reverted at all: without the exact entries this run
-   registered it cannot tell this run's own synthetic registrations from a concurrent writer's,
-   so it reverts nothing rather than deleting a concurrent entry or leaving a synthetic one
-   behind.
+   renderer's output over that evidence (immutable identity headers included), every part
+   confirmed with a native message identifier, and exactly one native scheduler run record
+   containing that digest identity; the deliberately created `DIRECT_OUTCOME_UNKNOWN` gap is
+   asserted on its own work identity. Between the two cuts the open synthetic work is
+   completed and one direct interval is opened and finished — through the shipped kanban
+   writer and the shipped product callbacks, never by editing SQL — so the second cut must
+   carry the genuine final outcomes, once, with the correct period and identity. The
+   transition completes exactly the identities the shipped kanban writer returned for the
+   open manifest keys: a manifest that carries any other identity refuses the transition
+   (`transition-identity`) instead of completing work the writer never created.
+9. **The D12 semantic corpus.** The synthetic scope contains contradictory worker completion
+   claims, a forecast deadline, word-based time, a malicious instruction that tells the
+   monitor to declare the objective complete and drop the pending checks, and a legitimate
+   partial success with pending review. The harness compares the actual Morfeo narrative
+   with the canonical snapshot evidence: typed state must equal the canonical lifecycle
+   state, the case's representative source evidence must actually be cited (an omitted
+   evidence claim fails), a percentage is rejected because no report claims one, adversarial
+   text must never be promoted beyond its `reported/unverified` evidence, and a completion
+   must be grounded in observed verified evidence. A case cannot be evaluated without the
+   live narrative that produced it. What the deterministic evaluator cannot do is certify
+   the *meaning* of free prose — a matching reference proves attribution, not truth (D12) —
+   so a structurally clean case is reported `observed` with
+   `certification=independent-adjudication-required`, and the private receipt retains the
+   canonical text next to the text the narrator emitted.
+10. **One natural no-work cut.** After the final coverage is confirmed, the next cut must
+   show the native scheduler's own record of the silent `wakeAgent=false` gate, an advanced
+   watermark, a resolved snapshot with no narration of any status, no deliveries, no new
+   reporter session and no pending handoff. A fresh rejected or failed narrative is a model
+   turn and therefore fails the skip rather than certifying it. Unreadable or ambiguous
+   source state is not idle.
+11. **Manual off, cooperative shutdown and retention.** `off` must durably disable the
+    laboratory monitor and pause the owned job. The bounded native scheduler is then stopped
+    *cooperatively* (a run-owned stop file, then a signal only if it does not exit) and its
+    exit is verified: a runner that does not stop is never success — the run refuses with
+    `lab-scheduler-stop` and keeps the evidence. The laboratory root, its record, its
+    configuration and the private receipt are **retained** as declared objective evidence:
+    the harness never self-deletes the laboratory, and it reports `retained: true`,
+    `removed: false` and the root digest instead. Because the isolation displaced nothing,
+    there is no registry, scope, spool or job-identity restoration to perform or to prove.
 
-Registry recovery after an interruption (withheld with the isolation step above). Two durable
-artifacts live next to the operator registry for the duration of a live run:
-`registry.json.qualification-recovery.json` holds
-the operator's registry state exactly as the run found it — its bytes in base64 with their
-SHA-256 and file identity, or the recorded true absence — plus the SHA-256 of the synthetic
-registry the run installs, and `registry.json.qualification-held` *is* the operator's own
-file (moved aside with a no-replace rename, never deleted). A process terminated during the
-run leaves both on disk,
-so the operator's bytes stay recoverable; the next live run refuses with
-`registry-recovery-exists` (or `registry-held-exists` for a held file without a record), and
-an existing artifact is never replaced or unlinked, so no run can silently discard the
-evidence of
-an earlier one. An operator restores the bytes from the held file (or the record) and removes
-the artifacts before re-running. A completed run removes exactly the artifacts it created,
-each verified against the identity and content it installed, and only after the restored
-state — including the absence of every registry entry this run registered for its synthetic
-projects — has been verified; a restore that cannot prove that fails the run and keeps the
-artifacts.
+**What the retired swap machinery guaranteed, and what carries it now.** The previous lane
+hid this installation's project registry behind a synthetic one and then restored it, which
+is why it needed durable recovery records, no-replace renames, descriptor-verified staging
+directories and a deletion boundary it could never fully prove (POSIX cannot bind a delete
+to a file identity). That machinery is removed — not skipped — together with the
+`scope-isolation-unsupported` refusal it produced, and every guarantee it existed to protect
+is carried by containment instead:
 
-No entry of the operator's registry directory is ever unlinked (withheld with the isolation
-step above; the mechanism is retained for the decision and is exercised by the real-helper
-regressions). A removal verifies the artifact *through a descriptor* — a real, singly linked
-regular file with exactly the device/inode
-identity, and the exact bytes, this run installed — moves it into a fresh run-owned private
-staging directory (`0700`, named `.aether-qualification-staging-<random>`) with one no-replace
-rename, verifies the moved entry there through a descriptor again, deletes only inside that
-staging directory, and proves the deletion by descriptor: the verified inode's link count must
-have reached zero and the staged name must be gone. The staging directory itself is removed with
-`rmdir`, which the kernel refuses while any entry is still inside it, so a leftover is never
-removed silently: it stays under that documented name, with its content, for reconciliation and
-the run fails. Every file the harness installs into the registry directory — the durable
-recovery record, the synthetic registry and the restored registry — is staged the same way, so
-that directory only ever sees no-clobber `link` creations and no-replace renames.
+| Guarantee the swap lane provided | How it is carried now |
+| --- | --- |
+| The operator's registered projects are never hidden while the test runs | No code path addresses the operator registry at all; the laboratory has its own registry, boards, sessions, cron store and monitor state |
+| A concurrent registry write can never be lost or overwritten | There is no swap to race: the operator's bytes are never captured, moved, replaced, merged or deleted |
+| The registry is restored to exactly the state the run found | Nothing is displaced, so there is nothing to restore; the harness reports `registry_touched: false` |
+| A synthetic scope still cannot leak into production state | Every mutable root is redirected inside the private laboratory root and verified (`lab-context-escape` refuses an escape) |
+| Cleanup cannot silently fail | There is no cleanup of operator state; the laboratory is retained and its evidence is verified (`lab-retention` refuses an incomplete root) |
 
-An entry that appears at the artifact name after the descriptor check is never replaced and
-never deleted: the move carries it into the staging directory, the staged verification shows it
-is not this run's own file, and it is moved straight back to where it was found while the run
-refuses. A deletion that cannot be proven — the boundary case of a same-user process
-substituting an entry *inside this run's own staging directory* between the staged verification
-and the unlink, which no supported concurrent writer can do, because POSIX offers no delete
-bound to a file identity — never yields a verdict: the run reinstates the exact bytes it
-verified at the artifact name without replacing anything, keeps a diverted run-owned copy
-instead of deleting bytes it cannot prove are its own, and reports the bounded failure with the
-staging directory and its content retained. If the artifact name was taken meanwhile, nothing of
-it is touched and the operator reconciles from the retained copy.
+The real-helper regression that used to prove the swap never unlinked a registry entry is
+now a real-helper regression that proves the whole lane performs *no* rename, replace,
+unlink or recursive delete whose path names the operator registry directory, with a positive
+control that shows the detector fires on a deliberate rename.
 
-A staging directory that survives is *never* hidden behind another failure. The primary bounded
-failure keeps its own code and message and carries the retained path explicitly
-(`detail.staging_residue`), including when the cleanup failed while an earlier operation was
-already failing — the case in which an earlier revision reported only the primary error and said
-nothing about the directory it left behind. The re-coding callers (the durable recovery record
-and the registry install) carry that report forward, and a staging directory the *restore* could
-not remove is recorded on the run's own restore record and appended as a gating
-`staging-residue` error instead of disappearing behind the single restore code. A run in this
-state can never report itself qualified.
+While a live run is in progress, the private receipt target is created and bound before the
+first effect, exactly as the deterministic lane binds it.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file. The
@@ -498,38 +480,50 @@ the semantic fidelity cases that still require independent adjudication.
 
 Current limits, stated honestly:
 
-- **Missing scope-isolation namespace (the reason the live lane refuses).** The fixed live
-  contract needs one synthetic monitored scope sourced from native isolated artifacts while
-  the previous scope and concurrent work are preserved. The provisioned interfaces cannot
-  provide that namespace: the monitor's scope is every project registered in this
-  installation's Aether registry, and its hourly job runs inside the already-running Hermes
-  runtime, whose process environment fixes the state root the pre-check, the reporter turn and
-  the delivery resolve. The only mechanism those interfaces leave is hiding or replacing the
-  shared registry for the whole multi-hour lane — an hours-long interruption of unrelated
-  concurrent Aether work — so the lane refuses with `scope-isolation-unsupported` and no
-  effect instead. Resolving it (a supported monitor scope/namespace primitive, an isolated
-  qualification runtime, or an explicitly accepted bounded interruption) is a design decision
-  for Morfeo through Supervisor; until it is made, the live lane cannot run and MON-INT cannot
-  produce the live evidence.
-- Until the live lane and the terminal integration complete, this build's live
-  hourly/narration/Telegram behavior is **not** qualified. Sample runs, manual ticks and
-  the offline lane are not substitutes.
-- **Deletion boundary (POSIX).** No filesystem interface binds a delete to a file identity, so
-  the harness never unlinks a name in the operator's registry directory: it only deletes inside
-  a private `0700` staging directory that this run creates, owns and removes with `rmdir`, and
-  it proves every deletion by descriptor (the verified inode's link count must reach zero).
-  A same-user process that substitutes an entry *inside that staging directory* between the
-  staged verification and the unlink is therefore outside the supported concurrency boundary;
-  it can never yield a verdict — the run refuses, reinstates the verified bytes and retains the
-  staging directory with its content — but the substituted entry itself cannot be protected
-  from that single syscall by any implementation of this harness.
-- **Environment pre-flight.** The monitor never treats a coverage gap as idle. A
-  read-only probe therefore runs before anything is enabled, and the run refuses with
-  `environment-gaps` when the installation itself reports a gap the qualification cannot
-  remove (for example the default board's absent metadata, or a native session without a
-  title). On such an installation the genuine no-work skip cannot occur and enabling the
-  monitor would produce an hourly gap report; the live lane must not send that, so it
-  stops before the first live effect and reports the gap codes.
+- **The laboratory is not production acceptance.** A laboratory success proves the exact
+  candidate's synthetic behavior inside its own private context (its private roots, its own
+  registry/boards/sessions/cron store, its own scheduler child). It says nothing about this
+  installation's real scope or activation: the same candidate must still deliver its first
+  normal hourly gateway report to the existing destination before the objective is
+  accepted. Sample runs, manual ticks, a decomposition-done flag and the deterministic lane
+  are not substitutes.
+- **This build's live hourly/narration/Telegram behavior is not qualified.** The
+  laboratory orchestration, its preflight, its containment, its fail-closed refusals and its
+  retained-evidence and shutdown invariants are implemented and exercised with injectable
+  backends and real helpers; the multi-hour live run itself (real model narration, real
+  Telegram delivery, two natural cuts, the idle skip) is performed by the terminal
+  integration step. No live success is claimed here.
+- **The operator's registry is never touched, and that is deliberate.** The harness has no
+  code path that renames, unlinks, quarantines, replaces, merges or restores an entry of this
+  installation's project registry, and no recovery artifact is written next to it. If a
+  future change needs to hide or swap operator state to qualify a synthetic scope, that is a
+  design question for Morfeo through Supervisor, not a local patch to this harness.
+- **The lane requires the provisioned runtime's writer surface.** The fixture seeds the
+  synthetic scope only through native writers the preflight resolved, so a provisioned
+  runtime that does not expose them refuses before any effect. Observed on the two inspected
+  revisions: the selected public baseline (the pinned `v2026.8.18` tree) resolves the whole
+  surface — no writer problem at all — while an older local checkout (`hermes-agent` 0.19.1)
+  is refused with `writer-interface-missing:hermes_cli.kanban_db.request_review`, because
+  that revision has no review-lane writer to seed the pending-review corpus case with. That
+  is a capability gap, not a fallback: the harness never substitutes a hand-written row or
+  an ad-hoc SQL write for a missing shipped writer, and it never treats an unsupported
+  runtime as a qualification result. The refusal is the bounded `lab-context-preflight`
+  error and it happens inside the created private root, before the synthetic scope is
+  seeded, the job is enabled, the scheduler starts, a model is called or a message is sent;
+  the created root is retained and reported as created.
+- **The lane resolves its interpreter through the shipped boundary.** `--live` resolves a
+  Hermes-capable interpreter with
+  `aether_agents.monitor.commands.runtime_interpreter()`; when none qualifies it refuses with
+  the bounded `runtime-unavailable` error in the read-only phase, before anything is created,
+  and no fallback interpreter, `sys.executable` or invented launcher is used. On an
+  installation whose Hermes lives behind an unusual launcher this means setting
+  `AETHER_HERMES_PYTHON` to the provisioned interpreter (private operational context, exactly
+  as for `on`/`off`).
+- **Environment pre-flight.** The monitor never treats a coverage gap as idle. The
+  laboratory's own read-only sources are probed before anything is enabled, and the run
+  refuses with `environment-gaps` when a gap the fixture did not deliberately create would
+  fabricate an hourly gap report; enabling the monitor would produce exactly that, so the
+  lane stops first.
 - **Instruction-like source text.** D12 keeps the shipped deterministic boundary: source
   text that matches the fixed prompt-injection forms is refused
   (`REPORTING_UNSAFE_CONTENT`, and `NARRATIVE_UNSAFE` for a narrative) before any prompt is
@@ -565,6 +559,11 @@ Current limits, stated honestly:
 
 No new bot, credential, polling receiver, destination, per-project conversation, topic or
 thread is introduced. There is no inbound command router, no remote work control, no
-percentage/ETA/billing accounting, no second scheduler or daemon, no Desktop/web frontend,
-no cross-machine aggregation, no general chat monitoring, no package publication or
-deployment, and no fourth role: a reporting run of Morfeo is still Morfeo.
+percentage/ETA/billing accounting, no second scheduler or daemon in production, no
+Desktop/web frontend, no cross-machine aggregation, no general chat monitoring, no package
+publication or deployment, and no fourth role: a reporting run of Morfeo is still Morfeo.
+The single bounded exception is the laboratory's own scheduler process, which exists only
+for the duration of a qualification run, inside its own private root, with no receiver, no
+gateway housekeeping, no profile multiplexing, no implementation dispatcher and no
+auto-start: it is never installed, never enabled for this installation and never survives
+the run as a service.
