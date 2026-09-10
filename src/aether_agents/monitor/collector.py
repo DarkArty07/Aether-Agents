@@ -323,10 +323,20 @@ class MonitorCollector:
         previous = settings.last_cutoff_utc
         if previous is not None and _utc(cutoff) <= previous:
             raise ValueError("cutoff must advance beyond the persisted monitor watermark")
+        previous_snapshot = None
+        if previous is not None:
+            snapshots = self.store.list_snapshots(limit=1)
+            if snapshots and snapshots[0].cutoff_utc == previous:
+                previous_snapshot = snapshots[0]
+        previous_watermarks = previous_snapshot.watermarks if previous_snapshot is not None else {}
+        previous_work_items = self.store.list_work_items()
         source = self.sources.collect(
             previous_cutoff_utc=previous,
             cutoff_utc=cutoff,
             direct_records=direct_records,
+            first_enabled_at_utc=settings.first_enabled_at_utc,
+            previous_watermarks=previous_watermarks,
+            previous_work_items=previous_work_items,
         )
         lease = self.store.acquire_collection_lease(cutoff, owner_id=self.owner_id)
         if lease is None:
@@ -390,7 +400,7 @@ class MonitorCollector:
             lease=lease,
         )
         self.store.set_last_cutoff(cutoff)
-        return CollectionResult(snapshot=snapshot, source=source)
+        return CollectionResult(snapshot=snapshot, source=payload_source)
 
 
 # Names used by downstream integration code can remain stable without another class.

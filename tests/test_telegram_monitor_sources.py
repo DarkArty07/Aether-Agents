@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -350,6 +351,40 @@ def _sources(fixture: dict[str, Any]) -> ReadOnlySources:
     )
 
 
+def _insert_session(
+    fixture: dict[str, Any],
+    session_id: str,
+    project: Path,
+    *,
+    source: str = "tui",
+    title: str | None = None,
+) -> None:
+    with sqlite3.connect(fixture["session_db"]) as connection:
+        connection.execute(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                session_id,
+                source,
+                title or session_id,
+                title or session_id,
+                str(project),
+                str(project),
+                1788955200.0,
+                None,
+                1788958800.0,
+            ),
+        )
+        connection.commit()
+
+
+def _monitor_store(root: Path, *, now: str = "2026-09-09T11:00:00+00:00") -> MonitorStore:
+    instant = datetime.fromisoformat(now)
+    store = MonitorStore(state_root=root, clock=lambda: instant)
+    store.configure(native_job_id="job", profile_binding="morfeo", destination_ref="home")
+    store.set_enabled(True)
+    return store
+
+
 def test_project_and_board_identity_is_exact_and_root_done_is_not_closure(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
@@ -495,6 +530,261 @@ def test_direct_turn_ended_without_contract_and_reporter_are_normalized(tmp_path
     assert direct[0].observed_state == "turn_ended_completed"
     assert any(fact["text"] == "TURN_ENDED_COMPLETED" for fact in direct[0].current)
     assert any(fact["text"] == "PROJECT_ACCEPTANCE_NOT_OBSERVED" for fact in direct[0].next)
+
+
+def test_contract_origin_creator_and_worker_sessions_are_separately_bound(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    _insert_session(fixture, "supervisor-session", fixture["project"], title="Supervisor creator")
+    _insert_session(fixture, "worker-session", fixture["project"], title="Worker execution")
+    with sqlite3.connect(fixture["board_db"]) as connection:
+        connection.execute("ALTER TABLE task_runs ADD COLUMN worker_session_id TEXT")
+        connection.execute(
+            "UPDATE tasks SET session_id = ?",
+            ("supervisor-session",),
+        )
+        connection.execute(
+            "UPDATE task_runs SET worker_session_id = ?",
+            ("worker-session",),
+        )
+        connection.commit()
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert len(source.items) == 1
+    assert source.items[0].origin_session_id == ORIGIN
+    assert "CONTRACT_ORIGIN_CONFLICT" not in source.coverage_gaps
+    assert "TASK_CREATOR_PROJECT_CONFLICT" not in source.coverage_gaps
+    assert "WORKER_SESSION_PROJECT_CONFLICT" not in source.coverage_gaps
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_state"),
+    (
+        ("queued", "queued"),
+        ("triage", "triage"),
+        ("blocked", "blocked"),
+        ("review", "review"),
+        ("running", "running"),
+        ("failed", "failed"),
+        ("done", "completed"),
+    ),
+)
+def test_task_lifecycle_states_and_stale_failure_diagnostics(
+    tmp_path: Path, status: str, expected_state: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    completed = 1788960600 if status in {"failed", "done"} else None
+    heartbeat = 1788955200 if status == "running" else 1788958800
+    with sqlite3.connect(fixture["board_db"]) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = ?, completed_at = ?, last_heartbeat_at = ? WHERE id = ?",
+            (status, completed, heartbeat, "t_22222222"),
+        )
+        connection.commit()
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+    assert len(source.items) == 1
+    item = source.items[0]
+    assert item.observed_state == expected_state
+    if status == "running":
+        assert "TASK_STALE" in item.coverage_gaps
+        assert any(fact["text"] == "TASK_STALE" for fact in item.complications)
+    if status == "failed":
+        assert any(fact["text"] == "TASK_FAILURE_FAILED" for fact in item.complications)
+    if status == "done":
+        assert any(fact["text"] == "FLOW_TERMINAL_CONFIRMED" for fact in item.resolved)
+
+
+def test_direct_work_requires_exact_native_project_and_session_binding(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    foreign = tmp_path / "foreign-project"
+    foreign.mkdir()
+    _insert_session(fixture, "foreign-session", foreign, title="Foreign session")
+    records = [
+        {
+            "project_id": PROJECT_ID,
+            "session_id": ORIGIN,
+            "interval_id": "missing-native-binding",
+            "outcome": "completed",
+        },
+        {
+            "project_id": PROJECT_ID,
+            "native_project_id": NATIVE_PROJECT,
+            "project_path": str(fixture["project"]),
+            "session_id": "foreign-session",
+            "interval_id": "wrong-session-binding",
+            "outcome": "completed",
+        },
+    ]
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z", direct_records=records)
+
+    assert not any(item.contract is None for item in source.items)
+    assert "DIRECT_NATIVE_PROJECT_CONFLICT" in source.coverage_gaps
+    assert "DIRECT_SESSION_PROJECT_CONFLICT" in source.coverage_gaps
+    assert not source.idle
+
+
+def test_direct_continuation_intervals_remain_distinct_and_no_contract(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    records = [
+        {
+            "project_id": PROJECT_ID,
+            "native_project_id": NATIVE_PROJECT,
+            "project_path": str(fixture["project"]),
+            "session_id": ORIGIN,
+            "interval_id": "interval-1",
+            "outcome": "completed",
+            "started_at": "2026-09-09T13:00:00Z",
+            "ended_at": "2026-09-09T13:10:00Z",
+        },
+        {
+            "project_id": PROJECT_ID,
+            "native_project_id": NATIVE_PROJECT,
+            "project_path": str(fixture["project"]),
+            "session_id": ORIGIN,
+            "interval_id": "interval-2",
+            "outcome": "interrupted",
+            "started_at": "2026-09-09T13:30:00Z",
+            "ended_at": "2026-09-09T13:40:00Z",
+        },
+    ]
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z", direct_records=records)
+
+    assert {item.work_key for item in source.items if item.contract is None} == {
+        f"direct:{PROJECT_ID}:{ORIGIN}:interval-1",
+        f"direct:{PROJECT_ID}:{ORIGIN}:interval-2",
+    }
+    assert all(
+        item.observed_state.startswith("turn_ended_")
+        for item in source.items
+        if item.contract is None
+    )
+
+
+def test_first_enable_suppresses_completed_history(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    with sqlite3.connect(fixture["board_db"]) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ?, current_run_id = ? WHERE id = ?",
+            (1788957600, 2, "t_22222222"),
+        )
+        connection.execute(
+            "UPDATE task_runs SET status = 'done', outcome = 'completed', ended_at = ? WHERE id = ?",
+            (1788957600, 2),
+        )
+        connection.commit()
+    store = _monitor_store(tmp_path / "monitor-state", now="2026-09-09T14:00:00+00:00")
+    result = MonitorCollector(store, _sources(fixture), owner_id="first-enable").collect(
+        cutoff_utc="2026-09-09T14:30:00Z", collected_at_utc="2026-09-09T14:30:05Z"
+    )
+
+    assert result is not None
+    assert result.source.items == ()
+    assert result.source.idle
+    assert result.snapshot.payload["items"] == []
+
+
+def test_between_cut_final_is_reported_once_then_persisted_watermark_is_idle(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    monitor_root = tmp_path / "monitor-state"
+    store = _monitor_store(monitor_root)
+    collector = MonitorCollector(store, _sources(fixture), owner_id="cut-collector")
+    first = collector.collect(
+        cutoff_utc="2026-09-09T13:10:00Z", collected_at_utc="2026-09-09T13:10:05Z"
+    )
+    assert first is not None
+    assert first.source.items and first.source.items[0].observed_state == "review"
+
+    with sqlite3.connect(fixture["board_db"]) as connection:
+        connection.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ?, current_run_id = ? WHERE id = ?",
+            (1788960600, 3, "t_22222222"),
+        )
+        connection.execute(
+            "INSERT INTO task_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                3,
+                "t_22222222",
+                "done",
+                "completed",
+                1788960600,
+                1788960600,
+                1788960600,
+                "terminal outcome",
+                None,
+                "implementer",
+            ),
+        )
+        connection.execute(
+            "INSERT INTO task_events VALUES (?, ?, ?, ?, ?, ?)",
+            (2, "t_22222222", 3, "completed", '{"summary":"terminal"}', 1788960600),
+        )
+        connection.commit()
+
+    restarted = MonitorStore(
+        state_root=monitor_root,
+        clock=lambda: datetime.fromisoformat("2026-09-09T11:00:00+00:00"),
+    )
+    second = MonitorCollector(restarted, _sources(fixture), owner_id="cut-collector").collect(
+        cutoff_utc="2026-09-09T14:00:00Z", collected_at_utc="2026-09-09T14:00:05Z"
+    )
+    assert second is not None
+    assert len(second.source.items) == 1
+    assert second.source.items[0].observed_state == "completed"
+    serialized = json.dumps(second.snapshot.payload)
+    assert "board:" + BOARD_SLUG + ":task:t_22222222:run:3" in serialized
+    assert "board:" + BOARD_SLUG + ":task:t_11111111:run:1" not in serialized
+    work_key = second.source.items[0].work_key
+    restarted.mark_final_outcome_delivery(work_key, second.report_id)
+
+    third = MonitorCollector(restarted, _sources(fixture), owner_id="cut-collector").collect(
+        cutoff_utc="2026-09-09T15:00:00Z", collected_at_utc="2026-09-09T15:00:05Z"
+    )
+    assert third is not None
+    assert third.source.items == ()
+    assert third.source.idle
+    assert third.snapshot.payload["items"] == []
+
+
+def test_direct_previous_cutoff_filters_old_intervals_but_keeps_continuations(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    records = [
+        {
+            "project_id": PROJECT_ID,
+            "native_project_id": NATIVE_PROJECT,
+            "project_path": str(fixture["project"]),
+            "session_id": ORIGIN,
+            "interval_id": "old",
+            "outcome": "completed",
+            "started_at": "2026-09-09T12:00:00Z",
+            "ended_at": "2026-09-09T12:30:00Z",
+        },
+        {
+            "project_id": PROJECT_ID,
+            "native_project_id": NATIVE_PROJECT,
+            "project_path": str(fixture["project"]),
+            "session_id": ORIGIN,
+            "interval_id": "continuation",
+            "outcome": "unknown",
+            "started_at": "2026-09-09T12:30:00Z",
+        },
+    ]
+    source = _sources(fixture).collect(
+        previous_cutoff_utc="2026-09-09T12:45:00Z",
+        cutoff_utc="2026-09-09T14:00:00Z",
+        direct_records=records,
+    )
+
+    assert [item.work_key for item in source.items if item.contract is None] == [
+        f"direct:{PROJECT_ID}:{ORIGIN}:continuation"
+    ]
+    assert source.items[0].observed_state == "turn_ended_unknown"
 
 
 def test_sensitive_result_is_dropped_and_wakes_with_coverage_gap(tmp_path: Path) -> None:

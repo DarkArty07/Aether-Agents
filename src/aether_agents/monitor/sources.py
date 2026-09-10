@@ -25,6 +25,8 @@ from aether_agents.observation.context import ProjectRegistry, canonical_project
 from aether_agents.paths import read_private_bytes
 from aether_agents.project_marker import ProjectMarkerValidationError, validate_project_marker
 
+from .models import WorkItem
+
 __all__ = [
     "BoardBinding",
     "CoverageGap",
@@ -225,6 +227,7 @@ class _TaskRow:
     parent_ids: tuple[str, ...]
     runs: tuple[Mapping[str, Any], ...]
     events: tuple[Mapping[str, Any], ...]
+    worker_session_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -803,6 +806,101 @@ def _path_belongs_to_project(value: str | None, project: ProjectBinding) -> bool
         return False
 
 
+def _path_is_project_root(value: str | None, project: ProjectBinding) -> bool:
+    """Return whether a native path resolves to the registered project root."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        candidate = Path(value).expanduser().resolve(strict=True)
+    except (OSError, ValueError):
+        return False
+    return candidate == project.path
+
+
+def _session_belongs_to_project(session: SessionRecord, project: ProjectBinding) -> bool:
+    """Validate every known native session path, not just its display title."""
+    paths = [value for value in (session.cwd, session.git_repo_root) if value]
+    return bool(paths) and all(_path_belongs_to_project(value, project) for value in paths)
+
+
+def _cursor_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _row_changed_after(
+    row: Mapping[str, Any],
+    *,
+    cursor: int | None,
+    previous_cutoff: datetime | None,
+) -> bool:
+    """Select only new rows when a durable ID cursor or cutoff is available."""
+    if cursor is not None:
+        row_id = _cursor_int(row.get("id"))
+        return row_id is None or row_id > cursor
+    if previous_cutoff is None:
+        return True
+    timestamps = (
+        _parse_timestamp(row.get("created_at")),
+        _parse_timestamp(row.get("started_at")),
+        _parse_timestamp(row.get("ended_at")),
+        _parse_timestamp(row.get("last_heartbeat_at")),
+    )
+    known = tuple(value for value in timestamps if value is not None)
+    # A row without a usable native timestamp is retained rather than silently
+    # discarded; its bounded identity/facts still provide a visible source wake.
+    return not known or any(value > previous_cutoff for value in known)
+
+
+def _previous_work_items(
+    values: Sequence[WorkItem] | Mapping[str, WorkItem] | None,
+) -> dict[str, WorkItem]:
+    if values is None:
+        return {}
+    iterable: Iterable[WorkItem]
+    if isinstance(values, Mapping):
+        iterable = values.values()
+    else:
+        iterable = values
+    return {
+        item.work_key: item
+        for item in iterable
+        if isinstance(item, WorkItem) and isinstance(item.work_key, str)
+    }
+
+
+def _retained_work_item(item: WorkItem, *, gap: str) -> SourceItem:
+    contract = None
+    if item.contract_id is not None:
+        contract = {
+            "id": item.contract_id,
+            "version": item.contract_version or "",
+            "title": item.contract_title or "",
+        }
+    ref = f"{item.work_key}:retained"
+    return SourceItem(
+        work_key=item.work_key,
+        project_id=item.project_id,
+        project_name=item.project_name or "[unavailable project name]",
+        origin_session_id=item.origin_session_id,
+        origin_session_title=item.origin_session_title,
+        contract=contract,
+        observed_state=item.observed_state,
+        state_evidence_refs=(ref,),
+        started_at_utc=item.started_at_utc,
+        ended_at_utc=item.ended_at_utc,
+        current=(_code_fact(ref, "SOURCE_ITEM_RETAINED", status="unknown"),),
+        coverage_gaps=(gap,),
+        source_cursor=item.source_cursor if isinstance(item.source_cursor, Mapping) else {},
+        active=item.active,
+    )
+
+
 def _fact(
     ref: str, text: str, *, provenance: str = "observed", status: str = "verified"
 ) -> dict[str, Any] | None:
@@ -971,8 +1069,17 @@ class ReadOnlySources:
         }
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
-    def _read_tasks(self, board: BoardBinding) -> tuple[tuple[_TaskRow, ...], tuple[str, ...], int]:
+    def _read_tasks(
+        self,
+        board: BoardBinding,
+        *,
+        previous_cutoff: datetime | None = None,
+        previous_watermark: Mapping[str, Any] | None = None,
+    ) -> tuple[tuple[_TaskRow, ...], tuple[str, ...], int, int]:
         gaps: list[str] = []
+        previous_watermark = previous_watermark or {}
+        previous_run_id = _cursor_int(previous_watermark.get("task_run_id"))
+        previous_event_id = _cursor_int(previous_watermark.get("task_event_id"))
         try:
             with open_read_only_sqlite(board.database_path) as connection:
                 task_columns = (
@@ -1028,11 +1135,15 @@ class ReadOnlySources:
                 runs_by_task: dict[str, list[Mapping[str, Any]]] = {
                     task_id: [] for task_id in task_ids
                 }
+                worker_sessions_by_task: dict[str, set[str]] = {
+                    task_id: set() for task_id in task_ids
+                }
+                max_run_id = 0
                 run_columns = _table_columns(connection, "task_runs")
                 if not run_columns:
                     gaps.append("BOARD_RUNS_SCHEMA_MISSING")
                 if run_columns:
-                    for row in _select_rows(
+                    run_rows = _select_rows(
                         connection,
                         "task_runs",
                         (
@@ -1046,11 +1157,27 @@ class ReadOnlySources:
                             "summary",
                             "error",
                             "profile",
+                            "session_id",
+                            "worker_session_id",
+                            "workspace_path",
                         ),
                         required=("id", "task_id"),
                         order_by=("task_id", "started_at", "id"),
-                    ):
+                    )
+                    for row in run_rows:
+                        run_id = _cursor_int(row.get("id"))
+                        if run_id is not None:
+                            max_run_id = max(max_run_id, run_id)
                         task_id = str(row.get("task_id"))
+                        if task_id in worker_sessions_by_task:
+                            for field_name in ("session_id", "worker_session_id"):
+                                worker_session = _safe_ref(row.get(field_name))
+                                if worker_session is not None:
+                                    worker_sessions_by_task[task_id].add(worker_session)
+                        if not _row_changed_after(
+                            row, cursor=previous_run_id, previous_cutoff=previous_cutoff
+                        ):
+                            continue
                         if task_id in runs_by_task:
                             runs_by_task[task_id].append(row)
                 events_by_task: dict[str, list[Mapping[str, Any]]] = {
@@ -1061,26 +1188,52 @@ class ReadOnlySources:
                     gaps.append("BOARD_EVENTS_SCHEMA_MISSING")
                 max_event_id = 0
                 if event_columns:
-                    for row in _select_rows(
+                    event_rows = _select_rows(
                         connection,
                         "task_events",
                         ("id", "task_id", "run_id", "kind", "payload", "created_at"),
                         required=("id", "task_id", "kind"),
                         order_by=("id",),
-                    ):
+                    )
+                    for row in event_rows:
                         task_id = str(row.get("task_id"))
-                        if task_id in events_by_task:
-                            events_by_task[task_id].append(row)
                         try:
                             event_id_value = row.get("id")
                             if event_id_value is not None:
                                 max_event_id = max(max_event_id, int(event_id_value))
                         except (TypeError, ValueError):
                             pass
+                        if not _row_changed_after(
+                            row, cursor=previous_event_id, previous_cutoff=previous_cutoff
+                        ):
+                            continue
+                        if task_id in events_by_task:
+                            events_by_task[task_id].append(row)
+
+                affinity_columns = _table_columns(connection, "kanban_session_affinity")
+                affinity_task_column = (
+                    "owner_task_id"
+                    if "owner_task_id" in affinity_columns
+                    else "task_id"
+                    if "task_id" in affinity_columns
+                    else None
+                )
+                if affinity_task_column is not None and "session_id" in affinity_columns:
+                    for row in _select_rows(
+                        connection,
+                        "kanban_session_affinity",
+                        (affinity_task_column, "session_id"),
+                        required=(affinity_task_column, "session_id"),
+                        order_by=(affinity_task_column, "session_id"),
+                    ):
+                        task_id = str(row.get(affinity_task_column))
+                        worker_session = _safe_ref(row.get("session_id"))
+                        if task_id in worker_sessions_by_task and worker_session is not None:
+                            worker_sessions_by_task[task_id].add(worker_session)
         except ReadOnlySourceError:
-            return (), ("BOARD_DB_UNREADABLE",), 0
+            return (), ("BOARD_DB_UNREADABLE",), 0, 0
         if not tasks:
-            return (), tuple(gaps), max_event_id
+            return (), tuple(gaps), max_event_id, max_run_id
         result: list[_TaskRow] = []
         for row in tasks:
             project_id = str(row.get("project_id"))
@@ -1093,13 +1246,24 @@ class ReadOnlySources:
                 continue
             affinity = row.get("session_affinity")
             terminal = False
+            worker_session_ids = set(worker_sessions_by_task.get(candidate_id, set()))
             if isinstance(affinity, str) and affinity:
                 try:
                     parsed_affinity = json.loads(affinity)
-                    terminal = (
-                        isinstance(parsed_affinity, Mapping)
-                        and parsed_affinity.get("terminal") is True
-                    )
+                    if isinstance(parsed_affinity, Mapping):
+                        terminal = parsed_affinity.get("terminal") is True
+                        for field_name in ("session_id", "worker_session_id"):
+                            worker_session = _safe_ref(parsed_affinity.get(field_name))
+                            if worker_session is not None:
+                                worker_session_ids.add(worker_session)
+                        raw_sessions = parsed_affinity.get("session_ids")
+                        if isinstance(raw_sessions, Sequence) and not isinstance(
+                            raw_sessions, (str, bytes)
+                        ):
+                            for raw_session in raw_sessions:
+                                worker_session = _safe_ref(raw_session)
+                                if worker_session is not None:
+                                    worker_session_ids.add(worker_session)
                 except (TypeError, ValueError):
                     gaps.append("TASK_AFFINITY_INVALID")
             normalized = dict(row)
@@ -1111,9 +1275,10 @@ class ReadOnlySources:
                     parent_ids=tuple(sorted(links.get(candidate_id, []))),
                     runs=tuple(runs_by_task.get(candidate_id, [])),
                     events=tuple(events_by_task.get(candidate_id, [])),
+                    worker_session_ids=tuple(sorted(worker_session_ids)),
                 )
             )
-        return tuple(result), tuple(sorted(set(gaps))), max_event_id
+        return tuple(result), tuple(sorted(set(gaps))), max_event_id, max_run_id
 
     def _observation_facts(
         self, board: BoardBinding
@@ -1202,37 +1367,80 @@ class ReadOnlySources:
         sessions: Mapping[str, SessionRecord],
         *,
         cutoff: datetime,
+        first_enabled: datetime | None = None,
+        board_cursor: Mapping[str, Any] | None = None,
         observation_facts: Sequence[Mapping[str, Any]] = (),
     ) -> tuple[tuple[SourceItem, ...], tuple[str, ...]]:
         gaps: list[str] = []
         groups: dict[str, list[_TaskRow]] = {}
+        origin_session_id = _safe_ref(board.created_in_session)
+        origin_session = sessions.get(origin_session_id or "")
+        if origin_session_id is None or origin_session is None:
+            return (), ("CONTRACT_ORIGIN_SESSION_MISSING",)
+        if origin_session.is_reporter:
+            return (), ("CONTRACT_ORIGIN_SESSION_CONFLICT",)
+        if not _session_belongs_to_project(origin_session, board.project):
+            return (), ("CONTRACT_ORIGIN_PROJECT_CONFLICT",)
         for task in tasks:
             raw_session = task.values.get("session_id")
             session_id = _safe_ref(raw_session)
             if session_id is None:
-                gaps.append("TASK_ORIGIN_UNRESOLVED")
+                gaps.append("TASK_CREATOR_UNRESOLVED")
                 continue
-            session = sessions.get(session_id)
-            if session is None:
-                gaps.append("TASK_ORIGIN_SESSION_MISSING")
+            creator = sessions.get(session_id)
+            if creator is None:
+                gaps.append("TASK_CREATOR_SESSION_MISSING")
                 continue
-            if session_id != board.created_in_session:
-                gaps.append("CONTRACT_ORIGIN_CONFLICT")
+            if creator.is_reporter:
                 continue
-            if session.is_reporter:
+            if not _session_belongs_to_project(creator, board.project):
+                gaps.append("TASK_CREATOR_PROJECT_CONFLICT")
                 continue
-            if not (
-                _path_belongs_to_project(session.cwd, board.project)
-                or _path_belongs_to_project(session.git_repo_root, board.project)
+            workspace_path = task.values.get("workspace_path")
+            if workspace_path is not None and not _path_belongs_to_project(
+                workspace_path if isinstance(workspace_path, str) else None,
+                board.project,
             ):
-                gaps.append("TASK_ORIGIN_PROJECT_CONFLICT")
+                gaps.append("TASK_WORKSPACE_PROJECT_CONFLICT")
                 continue
-            groups.setdefault(session_id, []).append(task)
+            invalid_worker = False
+            for worker_session_id in task.worker_session_ids:
+                worker = sessions.get(worker_session_id)
+                if worker is None:
+                    gaps.append("WORKER_SESSION_MISSING")
+                    invalid_worker = True
+                    continue
+                if worker.is_reporter or not _session_belongs_to_project(worker, board.project):
+                    gaps.append("WORKER_SESSION_PROJECT_CONFLICT")
+                    invalid_worker = True
+            if invalid_worker:
+                continue
+            # The board task's session is creator context.  The finalized contract's
+            # authored session is the stable report identity; worker/affinity sessions
+            # above are independently validated evidence only.
+            groups.setdefault(origin_session_id, []).append(task)
         items: list[SourceItem] = []
         for session_id, group in sorted(groups.items()):
-            session = sessions[session_id]
+            session = origin_session
             work_key = f"pipeline:{board.project.project_id}:{board.contract_id}:{session_id}"
             state = _state_from_tasks([task.values for task in group])
+            if first_enabled is not None and state in _TERMINAL_STATES:
+                terminal_times: list[datetime] = []
+                for task in group:
+                    task_time = _parse_timestamp(task.values.get("completed_at"))
+                    if task_time is None:
+                        run_times = [
+                            value
+                            for value in (
+                                _parse_timestamp(run.get("ended_at")) for run in task.runs
+                            )
+                            if value is not None
+                        ]
+                        task_time = max(run_times) if run_times else None
+                    if task_time is not None:
+                        terminal_times.append(task_time)
+                if len(terminal_times) == len(group) and max(terminal_times) <= first_enabled:
+                    continue
             evidence_refs: set[str] = set()
             started_values: list[datetime] = []
             ended_values: list[datetime] = []
@@ -1243,7 +1451,8 @@ class ReadOnlySources:
             pending: list[dict[str, Any]] = []
             current.extend(dict(fact) for fact in observation_facts)
             item_gaps: list[str] = []
-            max_event = 0
+            cursor = dict(board_cursor or {})
+            max_event = _cursor_int(cursor.get("task_event_id")) or 0
             for task in sorted(group, key=lambda value: str(value.values.get("id"))):
                 task_id = _safe_ref(str(task.values.get("id")))
                 if task_id is None:
@@ -1391,7 +1600,11 @@ class ReadOnlySources:
                     complications=unique(complications),
                     pending=unique(pending),
                     coverage_gaps=tuple(item_gaps),
-                    source_cursor={"board": board.slug, "task_event_id": max_event},
+                    source_cursor={
+                        "board": board.slug,
+                        "task_event_id": max_event,
+                        "task_run_id": _cursor_int(cursor.get("task_run_id")) or 0,
+                    },
                     active=state not in _TERMINAL_STATES,
                 )
             )
@@ -1402,6 +1615,9 @@ class ReadOnlySources:
         records: Sequence[Mapping[str, Any]],
         projects: Mapping[str, ProjectBinding],
         sessions: Mapping[str, SessionRecord],
+        *,
+        previous_cutoff: datetime | None = None,
+        first_enabled: datetime | None = None,
     ) -> tuple[tuple[SourceItem, ...], tuple[str, ...]]:
         items: list[SourceItem] = []
         gaps: list[str] = []
@@ -1423,15 +1639,35 @@ class ReadOnlySources:
                     gaps.append("DIRECT_SESSION_MISSING")
                 continue
             binding = projects[project_id]
-            native_id = record.get("native_project_id")
+            native_id = _safe_ref(record.get("native_project_id"))
             project_path = record.get("project_path")
-            if native_id is not None and str(native_id) != binding.hermes_project_id:
+            alternate_project_path = record.get("native_project_path")
+            if (
+                native_id is None
+                or native_id != binding.hermes_project_id
+                or (alternate_project_path is not None and alternate_project_path != project_path)
+            ):
                 gaps.append("DIRECT_NATIVE_PROJECT_CONFLICT")
                 continue
-            if project_path is not None and not _path_belongs_to_project(
-                str(project_path), binding
-            ):
+            if not isinstance(project_path, str):
+                gaps.append("DIRECT_PROJECT_PATH_MISSING")
+                continue
+            if not _path_is_project_root(project_path, binding):
                 gaps.append("DIRECT_PROJECT_PATH_CONFLICT")
+                continue
+            if not _session_belongs_to_project(session, binding):
+                gaps.append("DIRECT_SESSION_PROJECT_CONFLICT")
+                continue
+            started = _canonical_timestamp(record.get("started_at")) or session.started_at_utc
+            ended = _canonical_timestamp(record.get("ended_at")) or session.ended_at_utc
+            ended_dt = _parse_timestamp(ended) if ended is not None else None
+            if ended_dt is not None and (
+                (first_enabled is not None and ended_dt <= first_enabled)
+                or (previous_cutoff is not None and ended_dt <= previous_cutoff)
+            ):
+                continue
+            if project_path is not None and not _path_belongs_to_project(project_path, binding):
+                gaps.append("DIRECT_NATIVE_PROJECT_CONFLICT")
                 continue
             outcome = _safe_text(record.get("outcome"), limit=80) or "unknown"
             outcome = outcome.lower()
@@ -1450,8 +1686,6 @@ class ReadOnlySources:
             item_gaps: list[str] = []
             if outcome == "unknown":
                 item_gaps.append("DIRECT_OUTCOME_UNKNOWN")
-            started = _canonical_timestamp(record.get("started_at")) or session.started_at_utc
-            ended = _canonical_timestamp(record.get("ended_at")) or session.ended_at_utc
             items.append(
                 SourceItem(
                     work_key=work_key,
@@ -1490,11 +1724,24 @@ class ReadOnlySources:
         previous_cutoff_utc: str | None = None,
         cutoff_utc: str | None = None,
         direct_records: Sequence[Mapping[str, Any]] = (),
+        first_enabled_at_utc: str | None = None,
+        previous_watermarks: Mapping[str, Any] | None = None,
+        previous_work_items: Sequence[WorkItem] | Mapping[str, WorkItem] | None = None,
     ) -> SourceCollection:
         """Read one bounded source cut.  No source database is ever written."""
         cutoff = _parse_timestamp(cutoff_utc) if cutoff_utc is not None else self.clock()
         if cutoff is None or cutoff.tzinfo is None:
             raise ValueError("cutoff_utc must be timezone-aware")
+        previous_cutoff = (
+            _parse_timestamp(previous_cutoff_utc) if previous_cutoff_utc is not None else None
+        )
+        if previous_cutoff is not None and previous_cutoff >= cutoff:
+            raise ValueError("previous cutoff must precede the snapshot cutoff")
+        first_enabled = (
+            _parse_timestamp(first_enabled_at_utc) if first_enabled_at_utc is not None else None
+        )
+        prior_items = _previous_work_items(previous_work_items)
+        prior_watermarks = previous_watermarks or {}
         projects, project_gaps = enumerate_project_bindings(
             self.registry,
             native_projects_path=self.native_projects_path,
@@ -1516,31 +1763,89 @@ class ReadOnlySources:
         for board in boards:
             observation_facts, observation_gaps = self._observation_facts(board)
             gaps.extend(observation_gaps)
-            task_rows, task_gaps, max_event = self._read_tasks(board)
+            raw_board_watermark = prior_watermarks.get(f"board:{board.slug}")
+            if raw_board_watermark is not None and not isinstance(raw_board_watermark, Mapping):
+                gaps.append("BOARD_WATERMARK_INVALID")
+                raw_board_watermark = None
+            task_rows, task_gaps, max_event, max_run = self._read_tasks(
+                board,
+                previous_cutoff=previous_cutoff,
+                previous_watermark=raw_board_watermark,
+            )
+            board_cursor = {
+                "board": board.slug,
+                "task_event_id": max_event,
+                "task_run_id": max_run,
+            }
             items, item_gaps = self._task_items(
-                board, task_rows, sessions, cutoff=cutoff, observation_facts=observation_facts
+                board,
+                task_rows,
+                sessions,
+                cutoff=cutoff,
+                first_enabled=first_enabled,
+                board_cursor=board_cursor,
+                observation_facts=observation_facts,
             )
             all_items.extend(items)
             gaps.extend(task_gaps)
             gaps.extend(item_gaps)
             watermarks[f"board:{board.slug}"] = {
                 "task_event_id": max_event,
+                "task_run_id": max_run,
                 "project_id": board.project.project_id,
                 "contract_id": board.contract_id,
                 "contract_version": board.contract_version,
             }
         direct_items, direct_gaps = self._direct_items(
-            direct_records, {p.project_id: p for p in projects}, sessions
+            direct_records,
+            {p.project_id: p for p in projects},
+            sessions,
+            previous_cutoff=previous_cutoff,
+            first_enabled=first_enabled,
         )
         all_items.extend(direct_items)
         gaps.extend(direct_gaps)
+        direct_watermark = prior_watermarks.get("direct")
+        if not isinstance(direct_watermark, Mapping):
+            direct_watermark = {}
+        observed_direct_times: list[datetime] = [
+            value
+            for value in (
+                _parse_timestamp(item.ended_at_utc or item.started_at_utc)
+                for item in direct_items
+                if item.ended_at_utc is not None or item.started_at_utc is not None
+            )
+            if value is not None
+        ]
+        latest_direct = (
+            max(observed_direct_times).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            if observed_direct_times
+            else direct_watermark.get("last_observed_at_utc")
+        )
+        watermarks["direct"] = {
+            "last_observed_at_utc": latest_direct if isinstance(latest_direct, str) else None
+        }
         deduped: dict[str, SourceItem] = {}
         for item in all_items:
+            previous = prior_items.get(item.work_key)
+            if item.terminal and previous is not None:
+                if previous.final_outcome_delivery_marker is not None:
+                    continue
             existing = deduped.get(item.work_key)
             if existing is not None and existing != item:
                 gaps.append("WORK_IDENTITY_CONFLICT")
                 continue
             deduped[item.work_key] = item
+        # A final or active identity must not disappear merely because a source
+        # stopped exposing its row between cuts.  A confirmed final is the only
+        # durable suppression point; otherwise retain the identity with a visible
+        # gap until the next source read or delivery confirmation.
+        for work_key, previous in sorted(prior_items.items()):
+            if work_key in deduped or previous.final_outcome_delivery_marker is not None:
+                continue
+            retained = _retained_work_item(previous, gap="SOURCE_ITEM_NOT_OBSERVED")
+            deduped[work_key] = retained
+            gaps.append("SOURCE_ITEM_NOT_OBSERVED")
         return SourceCollection(
             items=tuple(sorted(deduped.values(), key=lambda item: item.work_key)),
             watermarks=watermarks,
