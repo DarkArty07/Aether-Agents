@@ -200,7 +200,9 @@ invoked as:
 # yet: the harness then creates that single level as its own dedicated 0700 leaf before
 # any live effect and writes the receipt there as a verified-private file. The target is
 # a new file (a receipt is a one-shot capture), and an existing directory is never
-# chmod-ed by the harness.
+# chmod-ed by the harness. The receipt is installed without replacing any entry: a path
+# that appears at the target after it was established fails the run instead of being
+# overwritten.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
@@ -301,10 +303,15 @@ other target — a non-literal spelling, an existing file, a symlinked or shared
 parent, or more than one missing level — is refused with exit code `1` and a bounded error
 code (`output-unsafe-target`, `output-target-exists`, `output-parent-missing`,
 `output-parent-not-private`) before anything is created, changed or sent. The accepted
-receipt is then written fail-closed through the repository's atomic private-write
-primitive: the file is created `0600` before any content exists and the written receipt is
-verified `0600` inside a private `0700` containing directory, so a write that cannot be
-verified private fails the run instead of qualifying it. The deterministic lane applies
+receipt is then written fail-closed: one non-followed temporary file is created `0600`
+*before* any content exists, the content is made durable, and the receipt name is
+installed with a single no-clobber `link`. No installation step ever replaces an entry:
+if a file, a symlink, a hard link or a directory appears at the receipt path after the
+target was established — even in the installation window itself — it is left exactly as
+it was found and the run fails with the bounded `output-target-exists` error instead of
+overwriting it. The installed receipt is verified real, singly linked and `0600` inside a
+private `0700` containing directory, so a write that cannot be verified private fails the
+run instead of qualifying it. The deterministic lane applies
 the same target rule before its checks and reports the same bounded codes. The public
 summary carries revisions, counts, latencies, case statuses, the
 `semantic_certification` block and the qualified scope only, and states that Telegram Bot

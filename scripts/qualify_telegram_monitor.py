@@ -31,7 +31,9 @@ and established before the first live effect: it must be a new, literally spelle
 whose immediate parent is already a private ``0700`` directory owned by the current
 user, or one missing level the harness creates as its own dedicated private leaf.  An
 existing directory is never hardened, and a target that cannot capture the private
-handles is refused with exit status 1 and no effect.
+handles is refused with exit status 1 and no effect.  The receipt itself is then
+installed with a single no-clobber link: an entry that appears at the receipt path after
+the target was established is never replaced, it fails the run instead.
 
 Live mode is bounded, never kills or restarts an agent, and never accepts a token,
 destination, provider or model input: it uses only the existing configured
@@ -39,9 +41,10 @@ destination and the existing model route.  Evidence is bound to the native sched
 own run output, the durable monitor records and the shipped renderer, so a boundary
 cannot be reported PASS without the real run that produced it.  Private handles
 (message/session identifiers, report identifiers, paths) stay in the operator-selected
-``--output`` file outside every Git worktree, written fail-closed through the
-repository's atomic private-write primitive and verified ``0600`` inside a private
-``0700`` containing directory (a write that cannot be verified private fails the run);
+``--output`` file outside every Git worktree, written fail-closed and installed with a
+single no-clobber link -- created ``0600`` before any content exists, never replacing an
+entry that appeared at the target, and verified ``0600`` inside a private ``0700``
+containing directory (a write that cannot be verified private fails the run);
 the public summary carries revisions,
 counts, latencies, case results and the qualified scope only.  Telegram Bot API
 acceptance is recorded as acceptance, never as proof that a human read the message.
@@ -95,7 +98,6 @@ from aether_agents.paths import (  # noqa: E402
     DIR_MODE,
     FILE_MODE,
     UnsafeObservationPath,
-    atomic_private_write,
     ensure_private_dir,
 )
 
@@ -4076,17 +4078,15 @@ def _check_private_output_target(path: Path) -> None:
     _verify_private_parent(path.parent, allow_missing=True)
 
 
-def _establish_private_output_target(path: Path) -> None:
-    """Establish the complete protected receipt target before any live effect.
+def _prepare_private_receipt_parent(parent: Path) -> None:
+    """Require the receipt's private directory, creating only the harness's own leaf.
 
-    Validates first (read-only), then creates exactly one dedicated ``0700`` leaf when
-    the immediate parent does not exist yet.  An existing parent is never hardened: if it
-    is not already a private directory owned by this user the run is refused rather than
-    changing the mode of a directory the harness did not create.
+    An existing directory is never hardened: a non-private or foreign parent is refused
+    before ``ensure_private_dir`` could change its mode, and only a missing immediate
+    parent is created ``0700`` as this run's dedicated leaf.
     """
 
-    _check_private_output_target(path)
-    parent = path.parent
+    _verify_private_parent(parent, allow_missing=True)
     try:
         os.lstat(parent)
     except FileNotFoundError:
@@ -4105,6 +4105,19 @@ def _establish_private_output_target(path: Path) -> None:
             detail={"error": type(error).__name__},
         ) from error
     _verify_private_parent(parent, allow_missing=False)
+
+
+def _establish_private_output_target(path: Path) -> None:
+    """Establish the complete protected receipt target before any live effect.
+
+    Validates first (read-only), then creates exactly one dedicated ``0700`` leaf when
+    the immediate parent does not exist yet.  An existing parent is never hardened: if it
+    is not already a private directory owned by this user the run is refused rather than
+    changing the mode of a directory the harness did not create.
+    """
+
+    _check_private_output_target(path)
+    _prepare_private_receipt_parent(path.parent)
 
 
 def _verify_private_receipt(path: Path) -> None:
@@ -4129,32 +4142,187 @@ def _verify_private_receipt(path: Path) -> None:
         raise UnsafeObservationPath("private receipt parent mode is not 0700")
 
 
+def _open_private_receipt_directory(parent: Path) -> int:
+    """Open the receipt's verified private directory for relative, non-followed calls.
+
+    Every installation step then happens relative to this descriptor, so a component that
+    is swapped after the target was established cannot redirect the write; a directory
+    whose named entry no longer matches the opened descriptor is refused instead.
+    """
+
+    flags = (
+        os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    )
+    try:
+        descriptor = os.open(parent, flags)
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt directory could not be opened without following a link",
+            detail={"error": type(error).__name__},
+        ) from error
+    try:
+        info = os.fstat(descriptor)
+        problem = _private_parent_problem(info)
+        if problem is not None:
+            raise QualificationError(*problem)
+        named = os.lstat(parent)
+        if (named.st_dev, named.st_ino) != (info.st_dev, info.st_ino):
+            raise QualificationError(
+                "output-unsafe-target",
+                "the private receipt directory changed while it was being opened",
+            )
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _install_private_receipt_without_descriptors(path: Path, data: bytes) -> None:
+    """The same no-clobber installation where descriptor-relative calls do not exist."""
+
+    temporary = path.parent / f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, FILE_MODE)
+    try:
+        view = memoryview(data)
+        written = 0
+        while written < len(view):
+            written += os.write(descriptor, view[written:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    try:
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            raise QualificationError(
+                "output-target-exists",
+                "the private receipt target appeared after establishment: the harness "
+                "never replaces an existing file, symlink or hard link",
+            ) from None
+    finally:
+        with contextlib.suppress(OSError):
+            temporary.unlink()
+
+
+def _install_private_receipt(path: Path, data: bytes) -> None:
+    """Install the receipt without ever replacing an entry that already exists.
+
+    The round-7 review reproduced the last clobber: the target was validated and
+    established before the live effects, but the installation still used the repository
+    primitive's ``os.replace``, so an operator path that appeared during the two-hour run
+    was silently overwritten.  This seam installs the receipt the way the guarantee is
+    stated.  One non-followed temporary file is created ``0600`` *before* any content
+    exists and its identity is verified; the content is written and made durable; the
+    target is then created with a single no-clobber ``link`` that fails when *any* entry
+    — file, symlink, hard link or directory — is present at the receipt path.
+    ``os.replace`` is never used here, so nothing that appeared after establishment can be
+    destroyed or redirected.  Only the harness's own temporary name is ever removed by
+    the cleanup; the receipt path itself is never deleted or replaced.
+    """
+
+    parent = path.parent
+    _prepare_private_receipt_parent(parent)
+    if os.name != "posix":  # pragma: no cover - exercised by platform CI
+        _install_private_receipt_without_descriptors(path, data)
+        return
+
+    directory_fd = _open_private_receipt_directory(parent)
+    temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
+    descriptor: int | None = None
+    created_identity: tuple[int, int] | None = None
+    try:
+        file_flags = (
+            os.O_WRONLY
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            descriptor = os.open(temporary_name, file_flags, FILE_MODE, dir_fd=directory_fd)
+        except FileExistsError:
+            raise UnsafeObservationPath("private receipt temporary already exists") from None
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+            raise UnsafeObservationPath("private receipt temporary is not a private file")
+        created_identity = (opened.st_dev, opened.st_ino)
+        os.fchmod(descriptor, FILE_MODE)
+        view = memoryview(data)
+        written = 0
+        while written < len(view):
+            written += os.write(descriptor, view[written:])
+        os.fsync(descriptor)
+        named = os.stat(temporary_name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or named.st_nlink != 1
+            or (named.st_dev, named.st_ino) != created_identity
+        ):
+            raise UnsafeObservationPath("private receipt temporary changed before install")
+        try:
+            os.link(
+                temporary_name,
+                path.name,
+                src_dir_fd=directory_fd,
+                dst_dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            raise QualificationError(
+                "output-target-exists",
+                "the private receipt target appeared after establishment: the harness "
+                "never replaces an existing file, symlink or hard link",
+            ) from None
+        os.unlink(temporary_name, dir_fd=directory_fd)
+        installed = os.stat(path.name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(installed.st_mode)
+            or installed.st_nlink != 1
+            or (installed.st_dev, installed.st_ino) != created_identity
+        ):
+            raise UnsafeObservationPath("private receipt changed during installation")
+        os.fsync(directory_fd)
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        if created_identity is not None:
+            try:
+                remaining = os.stat(temporary_name, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError:
+                remaining = None
+            if remaining is not None and (remaining.st_dev, remaining.st_ino) == created_identity:
+                with contextlib.suppress(OSError):
+                    os.unlink(temporary_name, dir_fd=directory_fd)
+                    os.fsync(directory_fd)
+        os.close(directory_fd)
+
+
 def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
-    """Write the private receipt fail-closed through the repository primitive.
+    """Write the private receipt fail-closed and without replacing any existing entry.
 
     The receipt carries private handles (message/session identifiers, report ids,
     paths, the raw native run record and the D12 comparison), so no byte of it may
-    exist before the file is private.  ``aether_agents.paths.atomic_private_write``
-    creates one non-followed single temporary file ``0600`` *before* any content is
-    written, installs it atomically, and removes it on every failure path.  The
-    installed receipt and its containing directory are then verified (real, singly
-    linked, ``0600`` inside private ``0700``), and every hardening, write or
-    verification failure is raised as a bounded ``private-output`` failure: a run that
-    cannot guarantee the private postcondition can never report itself qualified.
+    exist before the file is private.  ``_install_private_receipt`` creates one
+    non-followed temporary file ``0600`` *before* any content is written and installs it
+    with a single no-clobber link, so an entry that appears at the receipt path after the
+    target was established — a file, a symlink, a hard link or a directory — is never
+    replaced and the qualification fails instead.  The installed receipt and its
+    containing directory are then verified (real, singly linked, ``0600`` inside private
+    ``0700``), and every hardening, write, installation or verification failure is raised
+    as a bounded ``private-output``/``output-*`` failure: a run that cannot guarantee the
+    private postcondition can never report itself qualified.
 
-    The containing directory is either the harness's own missing dedicated leaf (the
-    primitive creates it private) or a directory that is already private.  An existing
-    directory that is not a private ``0700`` directory owned by this user is refused
-    before the primitive runs, so writing a receipt never changes the mode of a
-    directory the harness did not create.
+    The containing directory is either the harness's own missing dedicated leaf (created
+    ``0700`` here) or a directory that is already private.  An existing directory that is
+    not a private ``0700`` directory owned by this user is refused, so writing a receipt
+    never changes the mode of a directory the harness did not create.
     """
 
     data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
         "utf-8"
     )
     try:
-        _verify_private_parent(path.parent, allow_missing=True)
-        atomic_private_write(path, data)
+        _install_private_receipt(path, data)
         _verify_private_receipt(path)
     except QualificationError:
         raise
@@ -4194,7 +4362,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "--live), outside every Git worktree. Its immediate parent must already be a "
             "private 0700 directory owned by the current user, or be missing so the "
             "harness creates that one dedicated private leaf before any effect; an "
-            "existing directory is never hardened."
+            "existing directory is never hardened. The receipt is installed without "
+            "replacing any entry, so a file, symlink or hard link that appears at the "
+            "target after it was established fails the run instead of being overwritten."
         ),
     )
     parser.add_argument(

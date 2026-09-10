@@ -4,22 +4,23 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-7 corrections complete for review; self-verified. No `--live` run, no model
-call, no Telegram send, no activation. Rounds 1–6 are preserved below as history; the
-authoritative current state is **"Round-7 corrections"**, **"Round-7 verification record"**
-and **"Round-7 residual risks"**. Round 7 answers the round-6 review's strict
-contract/error-path finding: the operator-selected private receipt target is now validated
-and established *before* the live orchestrator (and before the deterministic lane's
-checks), so an invocation that could never capture the private handles is refused without
-a smoke, a send, a native job effect or a mode change on any existing directory. The
-reusable `--output` help text, the guide and the module docstring state the actual rule.
+**Status:** round-8 corrections complete for review; self-verified. No `--live` run, no model
+call, no Telegram send, no activation. Rounds 1–7 are preserved below as history; the
+authoritative current state is **"Round-8 corrections"**, **"Round-8 verification record"**
+and **"Round-8 residual risks"**. Round 8 answers the round-7 review's strict
+contract/preservation finding: the private receipt is now installed at the final seam with a
+single no-clobber link instead of the repository primitive's `os.replace`, so a file, a
+symlink, a hard link or a directory that appears at the receipt path after the target was
+established is never replaced — it fails the run with the bounded `output-target-exists`
+error and no qualified verdict. The guide, the `--output` help text and the module docstring
+state that rule.
 
-**Round-6 state (historical):** round 6 made the private live receipt fail-closed through
-the repository's `aether_agents.paths.atomic_private_write` primitive — created `0600`
-before any content exists, installed atomically and verified `0600` inside a private `0700`
-directory before the write returns — instead of writing content first and swallowing a
-best-effort `chmod` failure. Round 7 keeps that write path and adds the earlier target
-establishment and the never-harden-an-existing-directory guard.
+**Round-7 state (historical):** round 7 validated and established the complete private
+receipt target before the live orchestrator (and before the deterministic lane's checks), so
+an invocation that could never capture the private handles is refused without a smoke, a
+send, a native job effect or a mode change on any existing directory. Round 8 keeps that
+earlier establishment and adds the no-clobber installation that closes the remaining clobber
+window between establishment and the final write.
 
 ## Starting-point reconstruction
 
@@ -111,9 +112,11 @@ and established before the lane (round 7: new file, literal absolute path, real 
 components only, an already-private `0700` parent owned by the current user or one missing
 level created `0700` as the harness's own dedicated leaf; an existing directory is never
 chmod-ed), and then written
-fail-closed through the
-repository's atomic private-write primitive and verified `0600` in a private `0700`
-directory (round 6); the public summary
+fail-closed through the harness's own no-clobber installation
+(`_install_private_receipt`): one non-followed temporary file is created `0600` before any
+content exists, the content is fsynced, and the receipt name is installed with a single
+`os.link` that fails when any entry is present at the path — so nothing is ever replaced —
+followed by the verified `0600`-in-`0700` receipt check (rounds 6 and 8); the public summary
 carries timings/counts/case statuses, the `semantic_certification` block and the qualified
 scope, and states that Bot API acceptance is not proof the human read a message. The live
 lane never kills or restarts an agent and never introduces a second recurring scheduler.
@@ -160,6 +163,7 @@ check/ruff format file lists.
 | Round-4 D12: the malicious-source-instruction representative case must be live, not a relabeled claim | `test_d12_live_corpus_restores_the_malicious_instruction_case`; `d12-safety-boundary` offline check | the corpus text is an instruction directed at the reporter ("instructs the monitor to … omit the pending checks"), accepted by the shipped boundary and present in the built prompt; the historical canary is refused before any prompt with a reason-only error containing no source text, a narrative claim carrying it is refused with `NARRATIVE_UNSAFE`, and it is not in the corpus |
 | Round-4 D12: a semantically wrong emitted claim must not be auto-certified | `test_d12_wrong_emitted_claim_is_never_auto_certified`; `test_live_preflight_and_full_run_without_external_effects`; `test_live_public_summary_excludes_private_handles_and_private_paths` | the review's fabricated-completion probe returns `observed` with `certification=independent-adjudication-required`, the private receipt keeps `expected_text`/`cited_texts`, and the public verdict reports `semantic_certification={certified:false, adjudication_required:[…], retained_private_comparison:true}` with a `qualified_scope`/`unqualified_scope` split |
 | Round-4 cleanup: every scope/spool/native-row/board/session postcondition observable and gating | `test_real_scope_restore_probe_verifies_every_postcondition`, `test_real_scope_restore_probe_reports_removal_failures_and_residue`, `test_direct_spool_cleanup_reports_residue_and_gating`, `test_live_run_direct_spool_failure_is_qualification_gating`, `test_live_run_scope_verification_failure_is_qualification_gating` | the real probe body (executed against real SQLite with a disposable registry/sessions home) removes and verifies native rows, boards, paths, sessions and the scope root; injected silent/raising removals are recorded as residue with `verified[...] = false`; a surviving direct spool record clears `ok` with `restore-direct-spool`, and the run reports `direct_spool_cleaned: false` while the records remain on disk |
+| Round-7: the receipt target is established before the live effects, but the final write can still replace an operator entry that appeared meanwhile | `test_private_receipt_installation_never_replaces_the_entry_that_appears` (file/symlink/hard link/directory), `test_private_receipt_installation_never_replaces_an_entry_created_at_the_seam`, `test_private_receipt_installation_never_uses_replace`, `test_live_receipt_installation_refuses_a_target_that_appears_during_the_run`, `test_live_entry_point_never_qualifies_when_the_receipt_target_appears` | the reviewer's exact probe (establish, then create an operator `0600` file at the target, then write) is refused with the bounded `output-target-exists`; kind, mode, inode, link count and content of every entry kind are unchanged; an entry created in the installation window itself is likewise refused (the install is one no-clobber `link`, never `os.replace`); the live orchestration and the entry point report `ok: false` with no `qualified` key, and no receipt byte, temporary or other residue reaches the disk |
 
 ## Verification record
 
@@ -1099,7 +1103,13 @@ PR, merge, issue mutation or publication.
   this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
   `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
 
-## Round-7 corrections (authoritative)
+## Round-7 corrections (historical; superseded by round 8 where contradicted)
+
+> Round 8 supersedes this section's write path: the receipt is no longer installed through
+> the repository primitive's replacing `os.replace`. Everything else round 7 established
+> (read-only target validation before the guards, establishment before any effect, no
+> hardening of an existing directory, the deterministic lane's identical rule and the
+> bounded refusal codes) remains in force.
 
 The round-6 review (strict contract/error-path audit) found one blocking defect: the live
 lane established its private receipt target only at the very end. `run_live()` checked
@@ -1278,7 +1288,7 @@ no credential operation, no profile/job/plugin activation, no native Hermes or s
 change outside the harness's own reversible scope (which this unit does not execute), no push,
 PR, merge, issue mutation or publication.
 
-## Round-7 residual risks
+## Round-7 residual risks (historical; the receipt-seam bullet is superseded by round 8)
 
 - The live lane still has never been executed end to end. Round 7 changed only how the
   receipt target is validated/established and when the mode of an existing directory may
@@ -1290,12 +1300,276 @@ PR, merge, issue mutation or publication.
   mode, a shared directory such as `/tmp`, a symlinked component and an existing receipt file
   are refused with exit `1` before any effect — deliberately fail-closed rather than
   convenient.
-- The target is established once before the run; if the filesystem around it changes during
-  the two-hour wait, the fail-closed primitive still refuses (or, when the harness's own
-  dedicated leaf is recreated, creates it private) and the receipt is verified `0600`/`0700`
-  before the run can report success.
+- The target is established once before the run. **Superseded by round 8:** the installation
+  no longer uses the replacing primitive at the receipt path, so if the filesystem around the
+  target changes during the two-hour wait — a file, symlink, hard link or directory appears
+  at the receipt path, even in the installation window itself — the run fails closed with the
+  bounded `output-target-exists` error, leaves that entry exactly as it was found, and never
+  reports success or a qualified verdict (see Round 8).
 - Everything rounds 4–6 recorded remains true: the live scope probes execute only inside the
   provisioned runtime, the malicious-instruction case is one the fixed filter does not
   classify, the D12 semantic cases stay `observed` pending independent adjudication, and on
   this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
   `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
+
+## Round-8 corrections (authoritative)
+
+The round-7 review (strict contract/preservation audit) found one blocking defect: the
+one-shot receipt guarantee ended at preflight. `run_live()` validated and established the
+absent target before `_live_run(...)`, but `_live_run` performed the only write after the
+bounded smoke, the two hourly cuts, the idle boundary and restoration, and
+`_write_private_output` rechecked only the parent before handing the path to
+`aether_agents.paths.atomic_private_write`, whose `os.replace` replaces an existing target
+by design. The reviewer's reproduction created a private `0700` parent, called
+`_check_private_output_target` and `_establish_private_output_target`, created a `0600`
+operator sentinel at the target and called the writer: it returned normally, changed the
+target inode and replaced `OPERATOR-SENTINEL` with the qualification JSON
+(`sentinel_preserved=false`, `target_replaced=true`).
+
+Corrected inside MON-06's writable surface (no production file, no option-surface change,
+no new dependency; 4 changed paths):
+
+### 1. The receipt is installed with one no-clobber link, never a replacement
+
+`_write_private_output` now installs through the harness's own seam.
+`_prepare_private_receipt_parent` keeps the round-7 rule (an existing directory is never
+hardened: a non-private or foreign parent is refused before `ensure_private_dir` could
+change its mode; only the one missing dedicated leaf is created `0700`), factored out so the
+establishment path and the write path cannot drift. `_open_private_receipt_directory` then
+opens that parent `O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC` and matches the opened descriptor
+against its own `lstat` name, so a component swapped after establishment cannot redirect the
+write. `_install_private_receipt` performs the installation relative to that descriptor:
+
+- one temporary is created with `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC` mode `0600` —
+  **before any content exists** — and its regularity, single link and identity are verified;
+- the mode is re-applied with `fchmod 0600` (hostile-umask safe), the content is written in
+  full and `fsync`ed, and the temporary's named identity is re-verified;
+- the receipt name is created with a single `os.link` relative to the descriptor.
+  `FileExistsError` — any file, symlink, hard link or directory at the path — is mapped to
+  the bounded `output-target-exists` error ("the private receipt target appeared after
+  establishment: the harness never replaces an existing file, symlink or hard link");
+- the temporary name is unlinked (only after its identity is re-checked), the installed name
+  is verified against the created identity with a single link, the directory is `fsync`ed,
+  and `_verify_private_receipt` re-checks the final `0600`-in-`0700` postcondition.
+
+`os.replace` is never called on the receipt path (a regression test injects a refusing
+`os.replace` and requires the fresh install to succeed). Cleanup removes only the harness's
+own temporary name — never the receipt path — so a refused run leaves the operator's entry
+exactly as it was found. Preserved: `0600` before content, no-follow, atomic installation,
+temporary cleanup on every failure path, the hostile-umask and injected-`fchmod` fail-closed
+envelope, no hardening of an existing directory, the deterministic lane's identical rule,
+the fixed option surface and every earlier correction.
+
+**Why the no-clobber seam rather than a reservation.** The review allowed either reserving
+the target before the live effects or enforcing no-clobber ownership at the installation
+seam. Reserving would create the receipt file before the run, leave an empty claimed file
+behind on every aborted invocation, and bind only the path rather than the installation
+call. One no-clobber `link` gives the guarantee at the only moment the name is created —
+nothing that appeared after establishment can be destroyed or redirected, the installation
+window itself included — while keeping the documented "new file at establishment" rule and
+the existing bounded refusal codes.
+
+### 2. The documented rule is the implemented rule (round 8 wording)
+
+The module docstring, the `--output` help text and `docs/guides/telegram-monitor.md` now
+state that the receipt is installed without replacing any entry: a path that appears at the
+target after it was established — even during installation — is left as it was found and
+fails the run with the bounded `output-target-exists` error instead of being overwritten.
+
+### 3. The durable handoff names the current round
+
+This file's status names round 8 as the authoritative state, the round-7 corrections carry a
+supersession note, and the round-7 residual-risk bullet about the replacing primitive is
+corrected to the behavior now guaranteed (the review explicitly asked for that claim to be
+updated).
+
+### Round-8 checks
+
+- `test_private_receipt_installation_never_replaces_the_entry_that_appears` (parametrized
+  over `file`, `symlink`, `hard-link`, `directory`) — the exact round-7 probe: establish the
+  target, create the operator entry, then write. Each case is refused with the bounded
+  `output-target-exists`, the whole `tmp_path` tree is byte-and-mode identical afterwards,
+  the operator entry keeps its kind, mode, inode, link count and content, no `*.tmp` remains
+  and no byte of the private payload is written anywhere.
+- `test_private_receipt_installation_never_replaces_an_entry_created_at_the_seam` — an
+  injected wrapper creates the operator file in the installation window itself, immediately
+  before the `os.link` call: `link` raises `FileExistsError`, the operator file is unchanged,
+  only the one entry remains, and the payload never reaches the disk.
+- `test_private_receipt_installation_never_uses_replace` — with `os.replace` injected to
+  raise, a fresh receipt still installs (`0600`, single link, no temporary residue), proving
+  the seam cannot clobber by construction.
+- `test_live_receipt_installation_refuses_a_target_that_appears_during_the_run` — the live
+  orchestration reaches its receipt installation (the capture is recorded), the operator
+  entry created before that installation is preserved, and the bounded error propagates out
+  of `_run_live` instead of a record with `qualified: true`.
+- `test_live_entry_point_never_qualifies_when_the_receipt_target_appears` — the entry point
+  returns `1` with `{"ok": false, "error": {"code": "output-target-exists"}}`, prints no
+  private path and carries no `qualified` key.
+
+## Round-8 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-8 candidate. Changed paths:
+`scripts/qualify_telegram_monitor.py`, `tests/test_telegram_monitor_cli_plugin.py`,
+`docs/guides/telegram-monitor.md`, `specs/telegram-monitor/evidence/MON-06.md`. No production
+file, `policy.yml`, capability registry, lockfile or Objective Contract was modified in this
+round (`git status --short` lists exactly those four modified paths and no new tracked path).
+
+- **Direct probe of the corrected contract (manual, before the tests).** The reviewer's exact
+  sequence — `_check_private_output_target`, `_establish_private_output_target`, then a
+  `0600` operator file at the target, then the writer — is **refused with
+  `output-target-exists`**, the content and inode are preserved
+  (`content_preserved: true`, `inode_preserved: true`), the directory holds only the operator
+  file and the modes stay `0600` inside `0700`.
+- `uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **75 passed** (67 before + 8 new round-8 cases).
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 248 passed**. The 10 failures are the pre-existing, clock-dependent
+  `tests/test_telegram_monitor_runtime.py` handoff class documented below — identical at the
+  reviewed base `2d49418` (byte-identical test file) and at `027be79`, and unrelated to this
+  round's change; 248 passed = the 250 recorded in round 7 + 8 new cases - 10 clock-window
+  failures.
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 88 passed**; the sole failure is the pre-existing issue #364, and the wheel
+  entry-point/resource check passes in this lane.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1329 passed,
+  60 skipped, 373 subtests passed** (164.49 s). The 17 are the 7 pre-existing classes of the
+  reviewed base (six accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set mismatch`,
+  plus issue #364 on the unchanged finalized contract) and the 10 clock-dependent runtime
+  failures described below.
+- **Failure-set baseline comparison (round 8).** `scripts/run_tests.py -- -q --tb=no
+  tests/test_telegram_monitor_runtime.py tests/test_public_artifacts.py
+  tests/test_observation_lifecycle.py` in a temporary detached worktree of the reviewed
+  dependency base (`2d49418`): **17 failed, 133 passed** — the candidate run over the same
+  three files is **17 failed, 133 passed** with a byte-identical `FAILED` name set (`diff`
+  shows no difference). The same runtime file alone at `027be79` shows the identical 10
+  failures. Both temporary worktrees were removed afterwards (`git worktree list` no longer
+  contains `/tmp/mon06-r8-base` or `/tmp/mon06-r8-m05base`).
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation
+  passed** (guide, help text and evidence text included).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true,
+  mode=offline, 10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `uv run --frozen python scripts/check_public_artifacts.py
+  --root .` and the same scan with both built artifacts → only the pre-existing #364 findings
+  (`absolute-user-home`, `operator-desktop-layout`) on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/` is
+  empty). No private path, destination, session, message, model or credential from round 8 is
+  reported.
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364, missing [],
+  extra []**; `.github/workflows/policy.yml` is untouched in round 8 and no tracked path was
+  added, so every MON-01..MON-05 path and the MON-06 paths remain literally listed with no
+  relaxed check.
+- `uv run --frozen python -m compileall -q` (the literal full list from `policy.yml`) →
+  passed; `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source
+  files**; `ruff check` and `ruff format --check` on the two touched Python files → clean
+  (the round-8 change also removed the now-unused module-level `atomic_private_write` import;
+  the function is still imported locally where the registry isolation uses it);
+  `git diff --check` → passed.
+- **Pre-existing lint observation (out of scope, unchanged from the base).** The literal
+  full-list ruff commands from `policy.yml` still report **7 findings and 4 unformatted files**
+  in `src/aether_agents/knowledge/semantic.py`,
+  `src/aether_agents/objective_contracts/hermes_plugin.py`,
+  `tests/test_knowledge_regressions.py` and `tests/test_objective_contracts.py` — the same
+  files as rounds 5–7, each byte-identical to the reviewed base (`git diff 2d49418 -- <path>`
+  is empty).
+
+### Pre-existing clock-dependent runtime failures (returned, not fixed)
+
+The monitor runtime suite contains a wall-clock time bomb that is outside MON-06's writable
+boundary (`tests/test_telegram_monitor_runtime.py` and `src/aether_agents/monitor/runtime.py`
+are byte-identical to the reviewed MON-05 base in this round). The tests freeze the store
+clock at `ANCHOR = 2026-09-10T12:00:00Z`, write a narration handoff whose lease lives
+`NARRATION_LEASE_TTL_SECONDS = 21600` (6 h) → `expires_at_utc = 2026-09-10T18:00:00Z`, while
+`runtime._read_handoff(require_fresh=True)` compares that expiry against the **real** clock.
+Direct reproduction on the candidate:
+
+```text
+anchor            : 2026-09-10T12:00:00+00:00
+handoff expires   : 2026-09-10T18:00:00.000000Z
+TTL seconds       : 21600.0
+real utc now      : 2026-09-10T18:12:43.710317+00:00
+fresh read (real) : None
+fresh read (17:59): True
+reporter claim (real clock): None
+```
+
+So from `2026-09-10T18:00:00Z` (12:00 local, America/Mexico_City) the 10 reporter/handoff
+tests fail for every revision, including the reviewed base — that is exactly why the round-6
+and round-7 review runs (before that boundary) recorded the suite as passing and why this
+round's re-run does not. The correct owner is the MON-05 runtime unit (frozen-clock test
+data or a real-clock freshness check); MON-06 returns the finding rather than editing
+production or another unit's tests.
+
+**Conclusive reconciliation (same test bodies, freshness clock inside the lease window).**
+A diagnostic-only pytest plugin rebinds the runtime module's clock
+(`aether_agents.monitor.runtime.datetime`) to a subclass whose `now()` returns
+`2026-09-10T17:59:00Z` — one minute inside the handoff's six-hour window — and the whole file
+then passes unchanged:
+
+```python
+# plugin.py — loaded with `PYTHONPATH=<dir> pytest -p plugin tests/test_telegram_monitor_runtime.py`
+import datetime as _dt
+import aether_agents.monitor.runtime as _rt
+
+
+class _FrozenDatetime(_dt.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 9, 10, 17, 59, tzinfo=_dt.timezone.utc)
+
+
+def pytest_configure(config):
+    _rt.datetime = _FrozenDatetime
+```
+
+```text
+$ PYTHONPATH=/tmp/mon06-clock-probe uv run --frozen pytest -q --tb=line -p p_mon06_clock \
+    tests/test_telegram_monitor_runtime.py
+[clock-probe] runtime.datetime.now() -> 2026-09-10 17:59:00+00:00
+55 passed in 1.18s
+```
+
+So the same 55 test bodies pass with the freshness clock inside the window and fail with the
+real clock outside it, on files byte-identical to the reviewed MON-05 base. The failures are
+a function of the wall-clock window only: no branch revision, and in particular no round-8
+change, can affect them, and MON-06's own acceptance checks (focused documentation/CLI lane,
+`check_documentation.py`, the offline qualification, build, artifact scan, lint/type/diff
+checks) all pass. The finding is routed durably on the board (card `t_d8a1aad6`,
+"MON-05-R1 — clock-dependent failures in the monitor runtime handoff tests", assigned to the
+supervisor for decomposition) instead of being edited here.
+
+Deliberate non-effects in round 8: no `--live` invocation, no model call, no Telegram send,
+no credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change outside the harness's own reversible scope (which this unit does not execute), no push,
+PR, merge, issue mutation or publication.
+
+## Round-8 residual risks
+
+- The live lane still has never been executed end to end. Round 8 changed only how the
+  receipt name is installed; the orchestration is otherwise unchanged, and the first real run
+  against a scheduler, model and Telegram transport remains MON-INT's.
+- The seam guarantee is deliberately fail-closed at the end of the run and not at the start:
+  a path that appears at the receipt target **during** the two-hour qualification fails the
+  run (`output-target-exists`) and the private handles are then not captured at all.
+  Establishment still refuses a target that already exists when the run starts, so MON-INT
+  must select a protected directory it exclusively owns. Failing after the effects is the
+  only behaviour that never destroys an operator path; there is no way to both install and
+  preserve a foreign entry at the same name.
+- A process death between the successful `link` and the temporary unlink would leave the
+  receipt entry with two links: the final verification requires a single link, so the run
+  fails closed rather than accepting it, and the entry is left for the operator to inspect —
+  nothing is replaced or removed by the harness.
+- Everything rounds 4–7 recorded remains true: the live scope probes execute only inside the
+  provisioned runtime, the malicious-instruction case is one the fixed filter does not
+  classify, the D12 semantic cases stay `observed` pending independent adjudication, and on
+  this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
+  `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
+- The clock-dependent monitor-runtime failures above remain until their owner decides the
+  fix; they are not evidence about this round's change (identical at the reviewed base).

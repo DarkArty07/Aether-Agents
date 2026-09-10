@@ -3801,3 +3801,199 @@ def test_offline_receipt_target_refusals_leave_no_effect(tmp_path: Path) -> None
     assert list(shared.iterdir()) == []
     assert occupied.read_text(encoding="utf-8") == "operator receipt\n"
     assert not (tmp_path / "traversal.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# The private receipt installation never replaces an entry (MON-06 round 8)
+# ---------------------------------------------------------------------------
+
+RECEIPT_SEAM_SENTINEL = "receipt-seam-handle-sentinel-2c84"
+
+
+def _receipt_token_written(root: Path, token: str) -> bool:
+    """Whether any surviving file under ``root`` carries the private receipt token."""
+
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            if token in path.read_text(encoding="utf-8", errors="ignore"):
+                return True
+        except OSError:  # pragma: no cover - unreadable surviving file
+            continue
+    return False
+
+
+def _appearing_entry(kind: str, target: Path, operator_file: Path) -> None:
+    """Create one entry kind at the established receipt path, as an operator would."""
+
+    if kind == "file":
+        target.write_text("operator receipt\n", encoding="utf-8")
+    elif kind == "symlink":
+        target.symlink_to(operator_file)
+    elif kind == "hard-link":
+        os.link(operator_file, target)
+    elif kind == "directory":
+        target.mkdir()
+    else:  # pragma: no cover - the parametrization is closed
+        raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("kind", ["file", "symlink", "hard-link", "directory"])
+def test_private_receipt_installation_never_replaces_the_entry_that_appears(
+    tmp_path: Path, kind: str
+) -> None:
+    """The exact round-7 probe: an entry created after establishment is never replaced.
+
+    The review established the target first and then created an operator file at it; the
+    old writer handed the path to a primitive whose ``os.replace`` destroyed it.  The
+    installation seam now creates the receipt name with a single no-clobber link, so every
+    entry kind is left exactly as the operator left it, the run fails with a bounded
+    ``output-target-exists`` error, and no byte of the private receipt reaches the disk.
+    """
+
+    module = _qualification_module()
+    parent = tmp_path / "private"
+    target = parent / "receipt.json"
+    operator_file = tmp_path / "operator-sentinel.txt"
+    operator_file.write_text("operator receipt\n", encoding="utf-8")
+    module._establish_private_output_target(target)
+    _appearing_entry(kind, target, operator_file)
+    before = _tree_snapshot(tmp_path)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(target, {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}})
+
+    assert failure.value.code == "output-target-exists"
+    assert _tree_snapshot(tmp_path) == before, kind
+    assert operator_file.read_text(encoding="utf-8") == "operator receipt\n"
+    if kind == "file":
+        assert target.read_text(encoding="utf-8") == "operator receipt\n"
+        assert os.lstat(target).st_nlink == 1
+    elif kind == "symlink":
+        assert target.is_symlink() and target.resolve() == operator_file
+    elif kind == "hard-link":
+        assert os.lstat(target).st_nlink == 2
+        assert os.stat(target).st_ino == os.stat(operator_file).st_ino
+    else:
+        assert target.is_dir()
+    assert not list(parent.glob("*.tmp"))
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+def test_private_receipt_installation_never_replaces_an_entry_created_at_the_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The entry can appear in the installation window itself: linking still never clobbers.
+
+    ``os.replace`` would win this race; a single no-clobber ``link`` cannot, and the
+    operator's file is left untouched while the run fails closed.
+    """
+
+    module = _qualification_module()
+    parent = tmp_path / "private"
+    target = parent / "receipt.json"
+    module._establish_private_output_target(target)
+    real_link = os.link
+    appeared: list[str] = []
+
+    def racing_link(src: Any, dst: Any, *args: Any, **kwargs: Any) -> Any:
+        if not appeared:
+            appeared.append(str(dst))
+            parent.joinpath(str(dst)).write_text("operator receipt\n", encoding="utf-8")
+        return real_link(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(target, {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}})
+
+    assert appeared == ["receipt.json"]
+    assert failure.value.code == "output-target-exists"
+    assert target.read_text(encoding="utf-8") == "operator receipt\n"
+    assert sorted(path.name for path in parent.iterdir()) == ["receipt.json"]
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+def test_private_receipt_installation_never_uses_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The installation seam cannot clobber: the fresh install never calls ``os.replace``."""
+
+    module = _qualification_module()
+    target = tmp_path / "private" / "receipt.json"
+    payload = {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}}
+
+    def refusing_replace(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("the receipt installation must never replace an existing path")
+
+    monkeypatch.setattr(os, "replace", refusing_replace)
+    module._write_private_output(target, payload)
+
+    assert json.loads(target.read_text(encoding="utf-8")) == payload
+    assert stat.S_IMODE(os.stat(target).st_mode) == 0o600
+    assert os.lstat(target).st_nlink == 1
+    assert list(target.parent.glob("*.tmp")) == []
+
+
+def test_live_receipt_installation_refuses_a_target_that_appears_during_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live orchestration propagates the seam refusal instead of qualifying."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    module._establish_private_output_target(output)
+    installed: list[Mapping[str, Any]] = []
+
+    def racing_write(path: Path, payload: Mapping[str, Any]) -> None:
+        # The operator path appears after establishment, before the receipt is installed.
+        path.write_text("operator receipt\n", encoding="utf-8")
+        installed.append(payload)
+        module._write_private_output(path, payload)
+
+    monkeypatch.setattr(backends, "write_output", racing_write)
+
+    with pytest.raises(module.QualificationError) as failure:
+        _run_live(world, output)
+
+    assert failure.value.code == "output-target-exists"
+    assert installed, "the run must really reach the receipt installation"
+    assert output.read_text(encoding="utf-8") == "operator receipt\n"
+    assert sorted(path.name for path in output.parent.iterdir()) == ["receipt.json"]
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+def test_live_entry_point_never_qualifies_when_the_receipt_target_appears(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The bounded target error reaches the entry point: no qualified verdict is produced."""
+
+    module = _qualification_module()
+    output = tmp_path / "private" / "receipt.json"
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    record: dict[str, Any] = {"ok": True, "public_summary": {"qualified": True}}
+
+    def establishing_run_live(args: Any, stream: Any) -> dict[str, Any]:
+        target = Path(args.output).expanduser()
+        module._establish_private_output_target(target)
+        _appearing_entry("file", target, tmp_path / "operator-sentinel.txt")
+        module._write_private_output(target, record)
+        return record
+
+    monkeypatch.setattr(module, "run_live", establishing_run_live)
+
+    code = module.main(["--live", "--json", "--output", str(output)])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "output-target-exists"
+    assert "qualified" not in payload
+    assert output.read_text(encoding="utf-8") == "operator receipt\n"
+    assert str(output) not in captured.out
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
