@@ -66,6 +66,17 @@ def test_scanner_rejects_user_home_and_private_desktop_layout(tmp_path: Path) ->
     assert "operator-desktop-layout" in completed.stderr
 
 
+def test_scanner_rejects_windows_user_home(tmp_path: Path) -> None:
+    subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
+    win_path = "C:\\" + "Users" + "\\operator\\repo\\file.txt"
+    (tmp_path / "README.md").write_text(f"windows path: {win_path}\n", encoding="utf-8")
+    subprocess.run(("git", "add", "README.md"), cwd=tmp_path, check=True)
+
+    completed = _run("--root", str(tmp_path), cwd=tmp_path)
+    assert completed.returncode == 1
+    assert "windows-user-home" in completed.stderr
+
+
 def test_scanner_checks_wheel_and_sdist_members(tmp_path: Path) -> None:
     subprocess.run(("git", "init", "-q"), cwd=tmp_path, check=True)
     (tmp_path / "README.md").write_text("portable\n", encoding="utf-8")

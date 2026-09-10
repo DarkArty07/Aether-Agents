@@ -345,8 +345,14 @@ def test_delete_invalidates_reflection_and_removes_history(memory) -> None:
     assert not list(state.rglob(saved["note_id"]))
 
 
-def test_sensitive_notes_and_escaping_evidence_are_rejected(memory) -> None:
-    store, state = memory
+@pytest.fixture
+def memory_store(tmp_path: Path):
+    _root, state = project(tmp_path)
+    return WorkMemoryStore(state, backend=FakeGraphify()), state
+
+
+def test_sensitive_notes_and_escaping_evidence_are_rejected(memory_store) -> None:
+    store, state = memory_store
     ctx = resolve_context(PROJECT, "morfeo", state_root=state)
     with pytest.raises(KnowledgeError) as denied:
         store.execute(ctx, "save", payload("sk-" + "a" * 32))
@@ -355,6 +361,104 @@ def test_sensitive_notes_and_escaping_evidence_are_rejected(memory) -> None:
     data["evidence"] = [{"path": "../other/secret.py"}]
     with pytest.raises(KnowledgeError):
         store.execute(ctx, "save", data)
+
+
+@pytest.mark.parametrize(
+    "credential_fixture",
+    [
+        # Demonstrated password assignment shapes
+        "pass" + "word = 'synthetic_fake_password_123'",
+        "pass" + "wd: synthetic_secret_456",
+        "PASS" + 'WORD="synthetic_secret_789"',
+        '"pass' + 'word": "synthetic_json_pass_123"',
+        # Demonstrated GitHub token prefixes
+        "ghp_" + "a" * 36,
+        "gho_" + "b" * 36,
+        "ghu_" + "c" * 36,
+        "ghs_" + "d" * 36,
+        "ghr_" + "e" * 36,
+        "github_pat_" + "f" * 40,
+        # Demonstrated Bearer authorization values
+        "Authorization" + ": Bearer synthetic_bearer_token_123",
+        "Bearer " + "synthetic_bearer_token_4567890",
+    ],
+)
+def test_demonstrated_credential_shapes_are_rejected_in_note_text(
+    memory_store, credential_fixture: str
+) -> None:
+    store, state = memory_store
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    # Test lesson field
+    with pytest.raises(KnowledgeError) as denied:
+        store.execute(ctx, "save", payload(credential_fixture))
+    assert denied.value.code == "SENSITIVE_CONTENT"
+
+    # Test situation field
+    data = payload()
+    data["situation"] = credential_fixture
+    with pytest.raises(KnowledgeError) as denied_sit:
+        store.execute(ctx, "save", data)
+    assert denied_sit.value.code == "SENSITIVE_CONTENT"
+
+    # Test applicability field
+    data2 = payload()
+    data2["applicability"] = credential_fixture
+    with pytest.raises(KnowledgeError) as denied_app:
+        store.execute(ctx, "save", data2)
+    assert denied_app.value.code == "SENSITIVE_CONTENT"
+
+
+@pytest.mark.parametrize(
+    "credential_fixture",
+    [
+        "pass" + "word=synthetic_evidence_pass_123",
+        "pass" + "wd: synthetic_locator_pass_456",
+        "ghp_" + "z" * 36,
+        "github_pat_" + "z" * 40,
+        "Bearer " + "synthetic_bearer_token_evidence_999",
+        "Authorization" + ": Bearer synthetic_bearer_locator_888",
+    ],
+)
+def test_demonstrated_credential_shapes_are_rejected_in_evidence(
+    memory_store, credential_fixture: str
+) -> None:
+    store, state = memory_store
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    # Test in result field
+    data_res = payload()
+    data_res["evidence"] = [{"path": "module.py", "result": credential_fixture}]
+    with pytest.raises(KnowledgeError) as denied_res:
+        store.execute(ctx, "save", data_res)
+    assert denied_res.value.code == "SENSITIVE_CONTENT"
+
+    # Test in locator field
+    data_loc = payload()
+    data_loc["evidence"] = [{"path": "module.py", "locator": credential_fixture}]
+    with pytest.raises(KnowledgeError) as denied_loc:
+        store.execute(ctx, "save", data_loc)
+    assert denied_loc.value.code == "SENSITIVE_CONTENT"
+
+
+@pytest.mark.parametrize(
+    "benign_text",
+    [
+        "Investigated password reset flow and confirmed argon2id hashing is used.",
+        "Password policy documentation requires 12 characters minimum.",
+        "GitHub token prefixes (ghp_ / gho_ / ghu_ / ghs_ / ghr_ / github_pat_) should be documented.",
+        "Documented the ghp_ personal access token prefix.",
+        "The API implements Bearer authentication according to RFC 6750.",
+        "We verified that Bearer authorization is enforced by middleware.",
+        "The bearer of this security token must be authorized.",
+        "Bearer bonds were issued in 1920.",
+    ],
+)
+def test_benign_prose_and_token_prefix_documentation_are_preserved(
+    memory_store, benign_text: str
+) -> None:
+    store, state = memory_store
+    ctx = resolve_context(PROJECT, "implementer", state_root=state)
+    saved = store.execute(ctx, "save", payload(benign_text))
+    assert saved["note_id"].startswith("wn_")
 
 
 class FakeGraphify(GraphifyBackend):

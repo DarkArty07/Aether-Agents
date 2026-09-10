@@ -86,12 +86,14 @@ def _run_cas_transition(
     root: str,
     target_release_id: str,
     expected_active_release_id: str,
+    ready: object,
     start: object,
     results: object,
 ) -> None:
     """Spawn-safe contender used by the real cross-process CAS regression."""
 
     store = ReleaseStore(Path(root))
+    ready.set()  # type: ignore[attr-defined]
     start.wait()  # type: ignore[attr-defined]
     try:
         with store.mutation_lock():
@@ -2694,6 +2696,7 @@ def test_two_process_transitions_with_one_expected_active_have_one_commit(
     third = store.register(_prepared_release(tmp_path / "r3", "1.0.2", b"wheel-three"))
     context = multiprocessing.get_context("spawn")
     start = context.Event()
+    ready_events = [context.Event() for _ in (second, third)]
     results = context.Queue()
     contenders = [
         context.Process(
@@ -2702,19 +2705,31 @@ def test_two_process_transitions_with_one_expected_active_have_one_commit(
                 str(store.root),
                 target.release_id,
                 first.release_id,
+                ready,
                 start,
                 results,
             ),
         )
-        for target in (second, third)
+        for target, ready in zip((second, third), ready_events)
     ]
     for contender in contenders:
         contender.start()
-    start.set()
-    outcomes = [results.get(timeout=10) for _ in contenders]
-    for contender in contenders:
-        contender.join(timeout=10)
-        assert contender.exitcode == 0
+    try:
+        assert all(
+            ready.wait(timeout=10)  # type: ignore[attr-defined]
+            for ready in ready_events
+        ), "transition processes did not reach the release gate"
+        start.set()
+        outcomes = [results.get(timeout=10) for _ in contenders]
+        for contender in contenders:
+            contender.join(timeout=10)
+            assert contender.exitcode == 0
+    finally:
+        start.set()
+        for contender in contenders:
+            if contender.is_alive():
+                contender.terminate()
+            contender.join(timeout=10)
 
     assert sorted(outcomes) == ["committed", "stale"]
     assert store.active().release_id in {second.release_id, third.release_id}

@@ -308,6 +308,137 @@ class MinimalPolicyContractTests(unittest.TestCase):
         )
         self.assert_blocked(result, "CREDENTIAL")
 
+    def test_staging_auth_placeholders_allowed_in_docs_while_credentials_blocked(self) -> None:
+        auth_hdr = "Auth" + "orization: Be" + "arer "
+        doc_cases = [
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "placeholder"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "test"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "example"},
+            ),
+            (
+                "patch",
+                {
+                    "path": "docs/v1.0.0/STAGING_RUNBOOK.md",
+                    "new_string": f"curl -H '{auth_hdr}<staging-token>' https://staging.example.com",
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/v1.0.0/STAGING_RUNBOOK.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/a.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** Update File: docs/b.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Add File: docs/new.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+        ]
+        for role in PROFILES:
+            for tool_name, tool_input in doc_cases:
+                with self.subTest(role=role, tool_name=tool_name, tool_input=tool_input):
+                    self.assert_allowed(self.run_hook(role, tool_name, tool_input))
+
+        blocked_cases = [
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "A" * 32},
+            ),
+            ("write_file", {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": "sk-" + "B" * 24}),
+            (
+                "write_file",
+                {"path": "tests/fixtures/auth.py", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {"path": "tests/fixtures/auth.py", "content": "TOKEN = 'sk-" + "C" * 24 + "'"},
+            ),
+            (
+                "patch",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "new_string": auth_hdr + "D" * 32},
+            ),
+            (
+                "write_file",
+                {"path": "docs/../src/auth.py", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/..\\src\\auth.py", "content": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "write_file",
+                {
+                    "path": "../docs/v1.0.0/STAGING_RUNBOOK.md",
+                    "content": auth_hdr + "<staging-token>",
+                },
+            ),
+            (
+                "patch",
+                {"path": "docs/../src/auth.py", "new_string": auth_hdr + "<staging-token>"},
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/../src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/r.md\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** Update File: src/auth.py\n@@ ... @@\n+# clean code\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "patch": f"*** Begin Patch\n*** Update File: docs/r.md\n@@ ... @@\n+# clean doc\n*** Update File: src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch"
+                },
+            ),
+            (
+                "patch",
+                {
+                    "mode": "patch",
+                    "path": "docs/v1.0.0/STAGING_RUNBOOK.md",
+                    "patch": f"*** Begin Patch\n*** Update File: src/auth.py\n@@ ... @@\n+{auth_hdr}<staging-token>\n*** End Patch",
+                },
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "<monkey>"},
+            ),
+            (
+                "write_file",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "content": auth_hdr + "<author>"},
+            ),
+            (
+                "patch",
+                {"path": "docs/v1.0.0/STAGING_RUNBOOK.md", "new_string": auth_hdr + "<monkey>"},
+            ),
+        ]
+        for role in PROFILES:
+            for tool_name, tool_input in blocked_cases:
+                with self.subTest(role=role, tool_name=tool_name, tool_input=tool_input):
+                    self.assert_blocked(self.run_hook(role, tool_name, tool_input), "CREDENTIAL")
+
     def test_credential_acquisition_or_widening_is_blocked(self) -> None:
         commands = [
             "gh auth login",

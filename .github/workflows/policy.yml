@@ -64,6 +64,7 @@ jobs:
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
+          .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
           .aether/objective-contracts/oc_0084270d940c98d9/v1.md
@@ -458,8 +459,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import subprocess
 
-          root = Path('.')
           spec = Path('specs/r0-design-governance/spec.md').read_text()
           research = Path('specs/r0-design-governance/research.md').read_text()
           roadmap = Path('ROADMAP.md').read_text()
@@ -471,11 +472,20 @@ jobs:
           assert sc == [f'{i:03d}' for i in range(1, len(sc) + 1)]
           assert decisions == [f'{i:02d}' for i in range(1, len(decisions) + 1)]
           assert len(re.findall(r'^\| R\d+ \|', roadmap, re.M)) == 14
+
+          md_files = [
+              Path(p)
+              for p in subprocess.check_output(
+                  ['git', 'ls-files', '*.md'], text=True
+              ).splitlines()
+              if p
+          ]
+          assert md_files, 'tracked markdown manifest must not be empty'
           assert '001-r0-design-governance' not in '\n'.join(
-              p.read_text(errors='ignore') for p in root.rglob('*.md')
+              p.read_text(errors='ignore') for p in md_files
           )
 
-          for path in root.rglob('*.md'):
+          for path in md_files:
               text = path.read_text()
               assert text.count('```') % 2 == 0, f'unbalanced fence: {path}'
               for target in re.findall(r'(?<!!)\[[^]]+\]\(([^)]+)\)', text):
