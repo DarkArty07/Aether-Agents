@@ -1312,7 +1312,7 @@ PR, merge, issue mutation or publication.
   this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
   `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
 
-## Round-8 corrections (authoritative)
+## Round-8 corrections (historical; superseded by round 9 where contradicted)
 
 The round-7 review (strict contract/preservation audit) found one blocking defect: the
 one-shot receipt guarantee ended at preflight. `run_live()` validated and established the
@@ -1573,3 +1573,230 @@ PR, merge, issue mutation or publication.
   `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
 - The clock-dependent monitor-runtime failures above remain until their owner decides the
   fix; they are not evidence about this round's change (identical at the reviewed base).
+
+## Round-9 corrections (authoritative)
+
+The round-8 review (strict contract/preservation audit) found two blocking defects; the
+round-9 probe below reproduced both exactly before they were corrected.
+
+### 1. The receipt is installed only into the directory establishment accepted
+
+`run_live()` validated and established the receipt target before the orchestration, but the
+installation re-prepared and re-opened `path.parent` **by name** with no identity binding to
+the directory establishment had accepted. The reviewer's reproduction: establish
+`<root>/private/receipt.json`, rename `<root>/private` to `<root>/original-private`, create a
+new `<root>/private`, then write. The write succeeded, the receipt landed in the **new**
+directory and the established directory stayed empty (`write_succeeded: true`,
+`written_parent_is_original: false`, `parent_replaced: true`). The descriptor-versus-name
+match added in round 8 only closed the window *inside* the open call; it could not detect
+that the directory behind the name had already been replaced.
+
+`_establish_private_output_target` now returns the `(st_dev, st_ino)` identity of the
+directory it accepted; `run_live` passes it to `_live_run` (required keyword-only parameter,
+so the orchestrator cannot run unbound), whose final receipt write forwards it through the
+`LiveBackends.write_output` seam into `_write_private_output`. The installation re-checks
+that identity twice: `_require_established_parent` read-only **before**
+`_prepare_private_receipt_parent`, so a directory that was renamed, replaced or removed
+after establishment is refused without the harness creating a replacement leaf and without
+the `0600` temporary ever existing; and again against the opened descriptor inside
+`_open_private_receipt_directory`, **before** the temporary is created, so the pre-open
+window cannot be raced either. `_verify_private_receipt` re-checks the same identity after
+installation, and the non-POSIX fallback path applies the same read-only check. A mismatch
+is the bounded `output-unsafe-target` error and no receipt is written anywhere; the
+deterministic lane binds the identity it established in exactly the same way before its own
+receipt write.
+
+Round-9 probe of the reviewer's exact sequence, run twice against the real filesystem (once
+through the bound writer, once without the identity to keep the round-8 behaviour
+observable). The throwaway probe imports `scripts/qualify_telegram_monitor.py` by path and
+executes the reviewer's steps directly:
+
+```python
+established = module._establish_private_output_target(root / "private" / "receipt.json")
+os.rename(root / "private", root / "original-private")
+os.mkdir(root / "private", 0o700)
+module._write_private_output(target, payload, established_parent=established)  # bound
+module._write_private_output(target, payload)                                 # unbound
+```
+
+```text
+probe_a_unbound_round8_behaviour:
+  write_succeeded                 true      <- the reported defect
+  written_parent_is_original      false
+  receipt_in_replacement_parent   true
+  replacement_parent_entries      ["receipt.json"]
+  original_private_entries        []
+  parent_replaced                 true
+probe_a_bound_round9_contract:
+  write_succeeded                 false
+  error_code                      "output-unsafe-target"
+  written_parent_is_original      false
+  receipt_in_replacement_parent   false
+  replacement_parent_entries      []
+  original_private_entries        []
+```
+
+No byte of the receipt reaches either directory in the bound case; the replacement
+directory keeps its own mode (`0700`), and the entry kinds, modes and inodes of everything
+else are unchanged.
+
+### 2. The guide's privacy claim matches the implemented store
+
+`docs/guides/telegram-monitor.md` claimed that no "credential, chat identifier, message
+text, raw transcript, tool argument/result or provider binding is persisted or printed",
+while `MonitorStore.put_narrative` persists `structured_result_json` and
+`runtime.handle_post_llm_call` stores the validated model narrative there: the reviewer's
+probe read narrative prose back from `narratives.structured_result_json`. The corrected
+bullet states what the store does persist — the canonical snapshot payload; the validated
+narrative structure the narrator returned (per-claim text with its source references,
+provenance and status, bounded at 24,000 characters); the narrator session identifier and
+attempt status; and per-part delivery records (outcome, attempt count, the accepted Bot API
+message identifier and a hash of the delivered text) — and what it does not: Telegram
+message text (only its per-part hash), credentials, the chat identifier, raw transcripts,
+tool arguments/results and provider bindings. The same guide's live invocation block and
+private-receipts paragraph now also state the directory-identity rule, as do the harness
+module docstring and the `--output` help text.
+
+Round-9 store probe (real `MonitorStore` over a disposable state root, narrative written
+through the shipped API and read back):
+
+```text
+probe_b_store:
+  narrative_prose_persisted                true
+  narrator_session_identifier_persisted    true
+  narratives_columns      [report_id, structured_result_json, narrator_session_id,
+                           attempt_status, created_at_utc, updated_at_utc]
+  deliveries_columns      [report_id, part_index, text_hash, state, attempts,
+                           created_at_utc, updated_at_utc, last_error_class,
+                           last_error_message, message_id, lease_owner, lease_token]
+  telegram_message_text_column_present     false
+  delivered_text_hash_column_present       true
+```
+
+### 3. Regressions
+
+- `test_private_receipt_installation_refuses_a_replaced_parent_directory` — the reviewer's
+  probe at the installation seam: bounded `output-unsafe-target`, whole-tree snapshot
+  identical, both directories empty, no receipt token anywhere.
+- `test_private_receipt_installation_refuses_a_removed_parent_directory` — a removed
+  established directory is refused read-only; no replacement leaf is created.
+- `test_live_receipt_installation_refuses_a_parent_replaced_during_the_run` — the live
+  orchestration passes the established identity to the receipt write: the directory is
+  swapped while the run is in flight (after the smoke, the two boundaries and the
+  restoration) and not through the write seam, and the run fails with the bounded error.
+- `test_offline_receipt_write_refuses_a_parent_replaced_during_the_checks` — the
+  deterministic lane binds the same identity between its establishment and its write.
+- `test_monitor_guide_states_what_the_store_persists_without_overclaiming` — the guide's
+  privacy section names the persisted narrative structure and the non-persisted Telegram
+  text, and the audited blanket sentence cannot return.
+- The round-8 race test's injected writer forwards the identity, the
+  `_FakeBackends.write_output` seam carries it, and the `_run_live` helper mirrors the
+  production ordering (establish, then orchestrate).
+- Two fixtures in the existing bounded-smoke test now create their `timeout` / `close`
+  world root before the run: the helper mirrors the production ordering, and the harness
+  tolerates exactly one missing level, so a root two levels above the receipt no longer
+  skips target establishment. The refusal such a target would earn is the intended
+  round-7 behaviour, not a test artifact.
+
+Round-9 changed exactly four paths — `scripts/qualify_telegram_monitor.py`,
+`tests/test_telegram_monitor_cli_plugin.py`, `tests/test_documentation.py`,
+`docs/guides/telegram-monitor.md`, plus this evidence file. No production file, no
+`policy.yml`, no capability registry, no lockfile and no Objective Contract edit; the
+option surface (`--live`, `--json`, `--output`, `--wait-hourly-boundaries 2`) is unchanged
+and no dependency was added.
+
+## Round-9 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-9 candidate.
+
+- **Direct probe of the reviewer's exact sequence (manual, before the tests).** The harness
+  functions over the real filesystem: unbound write → `write_succeeded: true`, receipt in
+  the replacement directory, established directory empty (the reported defect reproduced);
+  bound write → `output-unsafe-target`, both directories empty, no receipt anywhere.
+- Focused docs/CLI lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py
+  tests/test_telegram_monitor_cli_plugin.py`) → **80 passed** (75 before + 5 new round-9
+  cases).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 93 passed** (88 before + 5); the sole failure is the pre-existing issue #364
+  (`absolute-user-home`, `operator-desktop-layout` on the unchanged
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`), and the wheel
+  entry-point/resource check passes in this lane.
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 252 passed** (248 before + 4). The 10 failures are the pre-existing,
+  clock-dependent `tests/test_telegram_monitor_runtime.py` handoff class documented in
+  round 8; `tests/test_telegram_monitor_runtime.py` and
+  `src/aether_agents/monitor/runtime.py` are byte-identical to the reviewed base `2d49418`.
+- **Frozen-clock reconciliation re-run (round 9).** The diagnostic-only plugin rebinding
+  `aether_agents.monitor.runtime.datetime.now()` to `2026-09-10T17:59:00Z` (one minute
+  inside the six-hour handoff lease) still turns the same file green:
+  `PYTHONPATH=<dir> uv run --frozen python -m pytest -q --tb=line -p p_mon06_clock
+  tests/test_telegram_monitor_runtime.py` → **55 passed in 1.12s**, against
+  **10 failed / 45 passed** at the real clock. No branch revision can affect the class.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1334 passed,
+  60 skipped, 373 subtests passed** (135.82 s). The 17 = the 7 pre-existing classes of the
+  reviewed base (six accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set
+  mismatch`, plus issue #364 on the unchanged contract) and the 10 clock-dependent runtime
+  failures; 1334 passed = the 1329 recorded in round 8 + 5 new cases.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation
+  passed** (guide, help text and evidence text included).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true,
+  mode=offline, 10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- Deterministic lane with a receipt target
+  (`--json --output /tmp/.../offline.json`) → exit 0, receipt `0600` inside its created
+  `0700` leaf, `mode: offline` read back — the identity-bound write still installs the
+  normal receipt.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `scripts/check_public_artifacts.py --root .` and the same
+  scan with both built artifacts → only the pre-existing #364 findings on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/`
+  is empty). No private path, destination, session, message, model or credential from
+  round 9 is reported.
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364,
+  missing [], extra []**; `policy.yml` is untouched in round 9 and no tracked path was
+  added, so every MON-01..MON-05 path and the MON-06 paths remain literally listed with no
+  relaxed check and no broadened glob.
+- `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source
+  files**; `ruff check` and `ruff format --check` on the three touched Python files →
+  clean; `compileall` on those files → passed; `git diff --check` → passed. The pre-existing
+  full-list ruff findings recorded in rounds 5–8 are unchanged and out of scope.
+
+Deliberate non-effects in round 9: no `--live` invocation, no model call, no Telegram send,
+no credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change, no push, PR, merge, issue mutation or publication.
+
+## Round-9 residual risks
+
+- The live lane still has never been executed end to end. Round 9 binds the receipt
+  directory by identity and otherwise leaves the orchestration unchanged; the first real
+  run against a scheduler, model and Telegram transport remains MON-INT's.
+- The binding is `(device, inode)` identity, checked read-only before the temporary exists,
+  again on the opened descriptor, and once more after installation. A parent whose
+  replacement directory reuses the very same inode number on the same device (a narrow
+  reuse window on some filesystems) would still match; the failure mode is a bounded
+  fail-closed error, and the check is the standard identity primitive available without
+  holding the descriptor for the whole run.
+- A parent renamed *after* the receipt was installed leaves the receipt in the established
+  (renamed) directory while the final verification sees the new directory and fails the run
+  with the bounded `private-output` error: the handles stay inside the directory the run
+  established (never a foreign one), and the run never reports itself qualified.
+- The seam guarantee remains deliberately fail-closed at the end of the run and not at the
+  start: a path that appears at the receipt target **during** the two-hour qualification
+  fails the run and the private handles are then not captured at all. Establishment still
+  refuses a target that already exists when the run starts, so MON-INT must select a
+  protected directory it exclusively owns.
+- Everything rounds 4–8 recorded remains true: the live scope probes execute only inside the
+  provisioned runtime, the malicious-instruction case is one the fixed filter does not
+  classify, the D12 semantic cases stay `observed` pending independent adjudication, and on
+  this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
+  `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
+- The clock-dependent monitor-runtime failures remain until their owner decides the fix
+  (routed on card `t_d8a1aad6`); they are identical at the reviewed base and are not
+  evidence about this round's change.

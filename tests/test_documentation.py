@@ -486,3 +486,29 @@ def test_policy_manifest_admits_every_monitor_path_literally() -> None:
         "scripts/qualify_telegram_monitor.py"
         in workflow.split("Static, format and bytecode gates")[1]
     )
+
+
+def test_monitor_guide_states_what_the_store_persists_without_overclaiming() -> None:
+    """Round-9 review finding: the privacy claim must match the implemented store.
+
+    The store persists the validated narrative structure (and the narrator session
+    identifier), so the guide may not claim that no narrative text is persisted.  The
+    corrected wording names what is persisted and what is not (Telegram message text,
+    credentials, raw transcripts, tool arguments/results, provider bindings, chat
+    identifiers).
+    """
+
+    guide = (ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8")
+    privacy = guide.split("## State, privacy and retention")[1].split("## Failure behavior")[0]
+
+    for phrase in (
+        "validated narrative structure",
+        "narrator session identifier",
+        "24,000 characters",
+        "Telegram message text is not persisted",
+        "raw transcript",
+    ):
+        assert phrase in privacy, phrase
+    # The audited overclaim must not survive anywhere in the guide's privacy section: the
+    # store really does persist narrative prose, so the blanket sentence was false.
+    assert "No credential, chat identifier, message text, raw transcript" not in privacy

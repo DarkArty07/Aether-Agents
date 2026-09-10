@@ -117,9 +117,15 @@ All monitor state lives in the private Aether state root at `monitor/monitor.sql
 reference, timezone, last cutoff), work enrollment, immutable snapshots, validated
 narratives, per-part delivery records and short transactional leases.
 
-- No credential, chat identifier, message text, raw transcript, tool argument/result or
-  provider binding is persisted or printed. The destination reference is an opaque
-  digest of the pinned target.
+- The store persists monitor content, not the conversation: the canonical snapshot
+  payload, the validated narrative structure the narrator returned (per-claim text with
+  its source references, provenance and status, bounded at 24,000 characters), the
+  narrator session identifier and attempt status, and per-part delivery records (outcome,
+  attempt count, the accepted Bot API message identifier and a hash of the delivered
+  text). Telegram message text is not persisted — only its per-part hash — and no
+  credential, chat identifier, raw transcript, tool argument or result, or provider
+  binding is persisted or printed. The destination is stored as an opaque digest of the
+  pinned target.
 - Snapshot construction selects only bounded, allowlisted fields (task titles, bounded
   run summaries, acceptance metadata, known diagnostic codes and selectively redacted
   outcome excerpts) and applies the existing privacy patterns before anything reaches the
@@ -200,9 +206,10 @@ invoked as:
 # yet: the harness then creates that single level as its own dedicated 0700 leaf before
 # any live effect and writes the receipt there as a verified-private file. The target is
 # a new file (a receipt is a one-shot capture), and an existing directory is never
-# chmod-ed by the harness. The receipt is installed without replacing any entry: a path
-# that appears at the target after it was established fails the run instead of being
-# overwritten.
+# chmod-ed by the harness. The receipt is installed without replacing any entry, and only
+# into the directory establishment accepted: a path that appears at the target after it
+# was established, or a parent directory renamed or replaced at the same name, fails the
+# run instead of being overwritten.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
@@ -297,7 +304,11 @@ a new file, and the harness resolves and establishes the whole target *before* t
 live effect: every component must be a real directory (a symlink is refused), the
 immediate parent must already be a private `0700` directory owned by the current user, and
 exactly one missing level is tolerated — that single dedicated leaf is created `0700` by
-the harness itself. An existing directory is never hardened (its mode is never changed),
+the harness itself. Establishment records that directory's identity (device and inode),
+and the receipt is installed only into the same directory: a parent renamed or replaced at
+the same name during the run fails closed with the bounded `output-unsafe-target` error
+and no receipt is written anywhere. An existing directory is never hardened (its mode is
+never changed),
 and the receipt is a fresh capture rather than a replacement of an operator file. Every
 other target — a non-literal spelling, an existing file, a symlinked or shared/foreign
 parent, or more than one missing level — is refused with exit code `1` and a bounded error

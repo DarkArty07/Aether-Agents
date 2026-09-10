@@ -2134,6 +2134,7 @@ class _FakeBackends:
         self.registry_restore_value = "byte-identical"
         self.fail_job_removal = False
         self.output_payloads: dict[str, Any] = {}
+        self.output_parents: dict[str, Any] = {}
         self.job_last_run: dict[str, datetime] = {}
 
     def now(self) -> datetime:
@@ -2327,10 +2328,17 @@ class _FakeBackends:
         self.calls.append("restore_registry")
         return self.registry_restore_value
 
-    def write_output(self, path: Path, payload: Mapping[str, Any]) -> None:
+    def write_output(
+        self,
+        path: Path,
+        payload: Mapping[str, Any],
+        *,
+        established_parent: tuple[int, int] | None = None,
+    ) -> None:
         self.calls.append("write_output")
         self.output_payloads[str(path)] = payload
-        self.module._write_private_output(path, payload)
+        self.output_parents[str(path)] = established_parent
+        self.module._write_private_output(path, payload, established_parent=established_parent)
 
 
 def _pipeline_item(entry: Mapping[str, Any], *, state: str, final: bool = False) -> Any:
@@ -2653,14 +2661,24 @@ def _live_args(module: Any, output: Path) -> Any:
     return module._build_parser().parse_args(["--live", "--json", "--output", str(output)])
 
 
-def _run_live(world: Mapping[str, Any], output: Path) -> dict[str, Any]:
+def _run_live(
+    world: Mapping[str, Any],
+    output: Path,
+    *,
+    established_parent: tuple[int, int] | None = None,
+) -> dict[str, Any]:
     module = world["module"]
+    if established_parent is None:
+        # The production entry point always establishes the receipt target (and its
+        # identity) before the orchestrator exists; the helper mirrors that ordering.
+        established_parent = module._establish_private_output_target(output)
     return module._live_run(
         _live_args(module, output),
         sys.stderr,
         output=output,
         backends=world["backends"],
         store=world["store"],
+        established_parent=established_parent,
     )
 
 
@@ -2915,26 +2933,30 @@ def test_bounded_smoke_is_required_before_the_hourly_wait(
     assert receipt["restore"]["enabled_matches_prior"] is True
     assert "control:off" in backends.calls
 
+    timeout_root = tmp_path / "timeout"
+    timeout_root.mkdir()
     timeout_world = _build_world(
-        tmp_path / "timeout",
+        timeout_root,
         monkeypatch,
         expose_evidence=False,
         phases=(START + timedelta(minutes=20),),
     )
-    output = tmp_path / "timeout" / "private" / "receipt.json"
+    output = timeout_root / "private" / "receipt.json"
     with pytest.raises(timeout_world["module"].QualificationError) as error:
         _run_live(timeout_world, output)
     assert error.value.code == "smoke-timeout"
     assert timeout_world["backends"].trigger_calls == 1
 
+    close_root = tmp_path / "close"
+    close_root.mkdir()
     close_world = _build_world(
-        tmp_path / "close",
+        close_root,
         monkeypatch,
         expose_evidence=False,
         phases=(START + timedelta(minutes=5),),
     )
     close_world["backends"].enable_next_cut = START + timedelta(minutes=5)
-    output = tmp_path / "close" / "private" / "receipt.json"
+    output = close_root / "private" / "receipt.json"
     with pytest.raises(close_world["module"].QualificationError) as error:
         _run_live(close_world, output)
     assert error.value.code == "smoke-window"
@@ -3947,11 +3969,16 @@ def test_live_receipt_installation_refuses_a_target_that_appears_during_the_run(
     module._establish_private_output_target(output)
     installed: list[Mapping[str, Any]] = []
 
-    def racing_write(path: Path, payload: Mapping[str, Any]) -> None:
+    def racing_write(
+        path: Path,
+        payload: Mapping[str, Any],
+        *,
+        established_parent: tuple[int, int] | None = None,
+    ) -> None:
         # The operator path appears after establishment, before the receipt is installed.
         path.write_text("operator receipt\n", encoding="utf-8")
         installed.append(payload)
-        module._write_private_output(path, payload)
+        module._write_private_output(path, payload, established_parent=established_parent)
 
     monkeypatch.setattr(backends, "write_output", racing_write)
 
@@ -3997,3 +4024,160 @@ def test_live_entry_point_never_qualifies_when_the_receipt_target_appears(
     assert output.read_text(encoding="utf-8") == "operator receipt\n"
     assert str(output) not in captured.out
     assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+# ---------------------------------------------------------------------------
+# The receipt directory is bound by identity (MON-06 round 9)
+# ---------------------------------------------------------------------------
+
+
+def test_private_receipt_installation_refuses_a_replaced_parent_directory(
+    tmp_path: Path,
+) -> None:
+    """The exact round-8 review probe: a parent replaced at the same name is refused.
+
+    Establishment records the identity of the private directory the run owns.  The review
+    renamed that directory and created a new private one at the same name, and the old
+    writer followed the name and installed the receipt into the new directory while the
+    original stayed empty.  The recorded identity now binds the installation: the run
+    fails with the bounded ``output-unsafe-target`` error and no byte of the receipt
+    reaches either directory.
+    """
+
+    module = _qualification_module()
+    parent = tmp_path / "private"
+    target = parent / "receipt.json"
+    established = module._establish_private_output_target(target)
+    parent.rename(tmp_path / "original-private")
+    parent.mkdir()
+    parent.chmod(0o700)
+    before = _tree_snapshot(tmp_path)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(
+            target,
+            {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}},
+            established_parent=established,
+        )
+
+    assert failure.value.code == "output-unsafe-target"
+    assert _tree_snapshot(tmp_path) == before
+    assert list((tmp_path / "original-private").iterdir()) == []
+    assert list(parent.iterdir()) == []
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+def test_private_receipt_installation_refuses_a_removed_parent_directory(
+    tmp_path: Path,
+) -> None:
+    """A removed established directory is refused without creating a replacement leaf.
+
+    The refusal happens before the parent is prepared, so the harness never creates a
+    directory the run did not establish and never writes the receipt into one.
+    """
+
+    module = _qualification_module()
+    parent = tmp_path / "private"
+    target = parent / "receipt.json"
+    established = module._establish_private_output_target(target)
+    parent.rmdir()
+    before = _tree_snapshot(tmp_path)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(
+            target,
+            {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}},
+            established_parent=established,
+        )
+
+    assert failure.value.code == "output-unsafe-target"
+    assert not parent.exists()
+    assert _tree_snapshot(tmp_path) == before
+    assert not _receipt_token_written(tmp_path, RECEIPT_SEAM_SENTINEL)
+
+
+def test_live_receipt_installation_refuses_a_parent_replaced_during_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live orchestration passes the established identity to the receipt write.
+
+    The directory is swapped while the run is in flight — after the smoke, the two
+    boundaries and the restoration — and not through the write seam, so the failure is
+    the real installation refusal with the identity the entry point established: the run
+    fails with the bounded ``output-unsafe-target`` error and neither directory receives
+    the receipt.
+    """
+
+    world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
+    backends = world["backends"]
+    root = tmp_path / "operator-root"
+    root.mkdir()
+    parent = root / "private"
+    output = parent / "receipt.json"
+    established = module._establish_private_output_target(output)
+    swapped: list[bool] = []
+    real_summary = module._public_live_summary
+
+    def swapping_summary(record: Mapping[str, Any]) -> dict[str, Any]:
+        if not swapped:
+            # The operator directory is renamed and replaced at the same name while the
+            # qualification is in flight, exactly as the review's probe did.
+            swapped.append(True)
+            parent.rename(root / "original-private")
+            parent.mkdir()
+            parent.chmod(0o700)
+        return real_summary(record)
+
+    monkeypatch.setattr(module, "_public_live_summary", swapping_summary)
+
+    with pytest.raises(module.QualificationError) as failure:
+        _run_live(world, output, established_parent=established)
+
+    assert swapped == [True]
+    assert failure.value.code == "output-unsafe-target"
+    # The orchestration really forwarded the identity establishment accepted.
+    assert backends.output_parents[str(output)] == established
+    assert list((root / "original-private").iterdir()) == []
+    assert list(parent.iterdir()) == []
+    assert not output.exists()
+
+
+def test_offline_receipt_write_refuses_a_parent_replaced_during_the_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The deterministic lane binds the same established identity before it writes."""
+
+    module = _qualification_module()
+    root = tmp_path / "operator-root"
+    root.mkdir()
+    parent = root / "private"
+    output = parent / "receipt.json"
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    stub_summary = {
+        "schema_version": module.SCHEMA_VERSION,
+        "mode": "offline",
+        "checks": [{"check": "stub", "status": "pass", "detail": "injected"}],
+    }
+
+    def swapping_checks(workspace: Path) -> dict[str, Any]:
+        parent.rename(root / "original-private")
+        parent.mkdir()
+        parent.chmod(0o700)
+        return dict(stub_summary)
+
+    monkeypatch.setattr(module, "run_offline", swapping_checks)
+
+    code = module.main(["--json", "--output", str(output)])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "output-unsafe-target"
+    assert list((root / "original-private").iterdir()) == []
+    assert list(parent.iterdir()) == []
+    assert not output.exists()
+    assert str(output) not in captured.out

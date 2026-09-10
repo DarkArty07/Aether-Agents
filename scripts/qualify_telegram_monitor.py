@@ -31,9 +31,12 @@ and established before the first live effect: it must be a new, literally spelle
 whose immediate parent is already a private ``0700`` directory owned by the current
 user, or one missing level the harness creates as its own dedicated private leaf.  An
 existing directory is never hardened, and a target that cannot capture the private
-handles is refused with exit status 1 and no effect.  The receipt itself is then
-installed with a single no-clobber link: an entry that appears at the receipt path after
-the target was established is never replaced, it fails the run instead.
+handles is refused with exit status 1 and no effect.  Establishment records the identity
+of that private directory, and the receipt is then installed with a single no-clobber
+link relative to the same directory: an entry that appears at the receipt path after the
+target was established is never replaced, and a parent renamed or replaced at the same
+name is refused, so a run never writes its handles into a directory it did not establish
+and fails the run instead.
 
 Live mode is bounded, never kills or restarts an agent, and never accepts a token,
 destination, provider or model input: it uses only the existing configured
@@ -42,9 +45,10 @@ own run output, the durable monitor records and the shipped renderer, so a bound
 cannot be reported PASS without the real run that produced it.  Private handles
 (message/session identifiers, report identifiers, paths) stay in the operator-selected
 ``--output`` file outside every Git worktree, written fail-closed and installed with a
-single no-clobber link -- created ``0600`` before any content exists, never replacing an
-entry that appeared at the target, and verified ``0600`` inside a private ``0700``
-containing directory (a write that cannot be verified private fails the run);
+single no-clobber link into the exact directory establishment accepted: created ``0600``
+before any content exists, never replacing an entry that appeared at the target, and
+verified ``0600`` inside a private ``0700`` containing directory (a write that cannot be
+verified private fails the run);
 the public summary carries revisions,
 counts, latencies, case results and the qualified scope only.  Telegram Bot API
 acceptance is recorded as acceptance, never as proof that a human read the message.
@@ -3201,8 +3205,14 @@ class LiveBackends:
     def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
         return _restore_registry(isolation)
 
-    def write_output(self, path: Path, payload: Mapping[str, Any]) -> None:
-        _write_private_output(path, payload)
+    def write_output(
+        self,
+        path: Path,
+        payload: Mapping[str, Any],
+        *,
+        established_parent: tuple[int, int] | None = None,
+    ) -> None:
+        _write_private_output(path, payload, established_parent=established_parent)
 
 
 def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
@@ -3237,13 +3247,14 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
             "boundaries-unsupported",
             "--live implements exactly two real hourly boundaries; the option surface stays fixed",
         )
-    _establish_private_output_target(output)
+    established_parent = _establish_private_output_target(output)
     return _live_run(
         args,
         stream,
         output=output,
         backends=LiveBackends(),
         store=MonitorStore(),
+        established_parent=established_parent,
     )
 
 
@@ -3254,6 +3265,7 @@ def _live_run(
     output: Path,
     backends: LiveBackends,
     store: Any,
+    established_parent: tuple[int, int] | None,
 ) -> dict[str, Any]:
     """Orchestrate the live qualification through the injected backends.
 
@@ -3262,6 +3274,12 @@ def _live_run(
     the fixture introduces its deliberate gap, and the bounded smoke runs before the
     two real hourly boundaries.  Every restore invariant either holds or is recorded as
     an error, and any recorded error clears ``ok``.
+
+    ``established_parent`` is the identity of the private receipt directory the caller
+    established before this orchestrator could spend any effect; the final receipt write
+    passes it on, so a directory renamed or replaced at the same name during the run
+    fails the receipt with the bounded ``output-unsafe-target`` error instead of
+    receiving it.
     """
 
     interpreter = backends.runtime_python()
@@ -3810,7 +3828,7 @@ def _live_run(
         # where the run found it; the run must never report itself qualified then.
         record["ok"] = bool(record.get("ok")) and not record["errors"]
         record["public_summary"] = _public_live_summary(record)
-        backends.write_output(output, record)
+        backends.write_output(output, record, established_parent=established_parent)
     return record
 
 
@@ -4107,25 +4125,95 @@ def _prepare_private_receipt_parent(parent: Path) -> None:
     _verify_private_parent(parent, allow_missing=False)
 
 
-def _establish_private_output_target(path: Path) -> None:
+def _established_parent_identity(parent: Path) -> tuple[int, int]:
+    """Record the identity of the private receipt directory establishment accepted.
+
+    The ``(device, inode)`` pair names exactly one directory, whatever a later name lookup
+    returns, so it is what the installation re-checks before it writes a byte.
+    """
+
+    try:
+        info = os.lstat(parent)
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the established private receipt directory could not be examined",
+            detail={"error": type(error).__name__},
+        ) from error
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt path must contain only real directories: a symlink or "
+            "a non-directory component is refused before any effect",
+        )
+    return (info.st_dev, info.st_ino)
+
+
+def _require_established_parent(parent: Path, established: tuple[int, int]) -> None:
+    """Refuse a receipt directory that is no longer the one establishment accepted.
+
+    Establishment records the identity of the private directory this run owns; every
+    installation step re-checks it so a directory renamed and replaced at the same name
+    (the round-8 review probe) can never receive the receipt.  The check is read-only, so
+    a missing or substituted directory fails with the bounded ``output-unsafe-target``
+    error before the harness could create anything at the target.
+    """
+
+    try:
+        info = os.lstat(parent)
+    except FileNotFoundError:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the established private receipt directory is gone: the harness writes only "
+            "inside the directory it established before the run",
+        ) from None
+    except OSError as error:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the established private receipt directory could not be examined",
+            detail={"error": type(error).__name__},
+        ) from error
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+        raise QualificationError(
+            "output-unsafe-target",
+            "the established private receipt directory is no longer a real directory",
+        )
+    if (info.st_dev, info.st_ino) != established:
+        raise QualificationError(
+            "output-unsafe-target",
+            "the private receipt directory is not the one established before the run: a "
+            "renamed or replaced directory never receives the receipt",
+        )
+
+
+def _establish_private_output_target(path: Path) -> tuple[int, int]:
     """Establish the complete protected receipt target before any live effect.
 
     Validates first (read-only), then creates exactly one dedicated ``0700`` leaf when
     the immediate parent does not exist yet.  An existing parent is never hardened: if it
     is not already a private directory owned by this user the run is refused rather than
     changing the mode of a directory the harness did not create.
+
+    Returns the ``(device, inode)`` identity of that established directory.  The writer
+    verifies the identity again, so the receipt can only ever be installed into the very
+    directory this call accepted (a parent replaced at the same name fails closed).
     """
 
     _check_private_output_target(path)
     _prepare_private_receipt_parent(path.parent)
+    return _established_parent_identity(path.parent)
 
 
-def _verify_private_receipt(path: Path) -> None:
+def _verify_private_receipt(
+    path: Path, *, established_parent: tuple[int, int] | None = None
+) -> None:
     """Final-mode verification: a private receipt is real, single and private.
 
     The receipt itself must be a single real regular file with mode ``0600`` living in
     a private ``0700`` directory.  Any deviation raises, so a receipt that cannot be
-    verified private is never accepted as written.
+    verified private is never accepted as written.  When the established directory
+    identity is known it must still match, so the final postcondition is checked against
+    the same directory the run established and not against whatever the name resolves to.
     """
 
     info = os.stat(path, follow_symlinks=False)
@@ -4140,14 +4228,21 @@ def _verify_private_receipt(path: Path) -> None:
         raise UnsafeObservationPath("private receipt parent is not a directory")
     if stat.S_IMODE(parent.st_mode) != DIR_MODE:
         raise UnsafeObservationPath("private receipt parent mode is not 0700")
+    if established_parent is not None and (parent.st_dev, parent.st_ino) != established_parent:
+        raise UnsafeObservationPath(
+            "private receipt parent is not the directory established before the run"
+        )
 
 
-def _open_private_receipt_directory(parent: Path) -> int:
+def _open_private_receipt_directory(
+    parent: Path, *, established_parent: tuple[int, int] | None = None
+) -> int:
     """Open the receipt's verified private directory for relative, non-followed calls.
 
     Every installation step then happens relative to this descriptor, so a component that
     is swapped after the target was established cannot redirect the write; a directory
-    whose named entry no longer matches the opened descriptor is refused instead.
+    whose named entry no longer matches the opened descriptor, or which is no longer the
+    established directory itself, is refused instead.
     """
 
     flags = (
@@ -4166,6 +4261,12 @@ def _open_private_receipt_directory(parent: Path) -> int:
         problem = _private_parent_problem(info)
         if problem is not None:
             raise QualificationError(*problem)
+        if established_parent is not None and (info.st_dev, info.st_ino) != established_parent:
+            raise QualificationError(
+                "output-unsafe-target",
+                "the private receipt directory is not the one established before the run: "
+                "a renamed or replaced directory never receives the receipt",
+            )
         named = os.lstat(parent)
         if (named.st_dev, named.st_ino) != (info.st_dev, info.st_ino):
             raise QualificationError(
@@ -4178,9 +4279,13 @@ def _open_private_receipt_directory(parent: Path) -> int:
     return descriptor
 
 
-def _install_private_receipt_without_descriptors(path: Path, data: bytes) -> None:
+def _install_private_receipt_without_descriptors(
+    path: Path, data: bytes, *, established_parent: tuple[int, int] | None = None
+) -> None:
     """The same no-clobber installation where descriptor-relative calls do not exist."""
 
+    if established_parent is not None:
+        _require_established_parent(path.parent, established_parent)
     temporary = path.parent / f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, FILE_MODE)
     try:
@@ -4205,7 +4310,9 @@ def _install_private_receipt_without_descriptors(path: Path, data: bytes) -> Non
             temporary.unlink()
 
 
-def _install_private_receipt(path: Path, data: bytes) -> None:
+def _install_private_receipt(
+    path: Path, data: bytes, *, established_parent: tuple[int, int] | None = None
+) -> None:
     """Install the receipt without ever replacing an entry that already exists.
 
     The round-7 review reproduced the last clobber: the target was validated and
@@ -4219,15 +4326,28 @@ def _install_private_receipt(path: Path, data: bytes) -> None:
     ``os.replace`` is never used here, so nothing that appeared after establishment can be
     destroyed or redirected.  Only the harness's own temporary name is ever removed by
     the cleanup; the receipt path itself is never deleted or replaced.
+
+    The round-8 review reproduced the remaining redirect: the parent was renamed and
+    replaced at the same name after establishment, and the installation followed the name
+    into the new directory.  When ``established_parent`` is the identity recorded at
+    establishment, the directory is checked read-only *before* anything can be created and
+    the opened descriptor is checked again before the temporary exists, so a directory the
+    run did not establish can never receive the receipt.
     """
 
     parent = path.parent
+    if established_parent is not None:
+        # Read-only and before the parent is (re-)prepared: a directory renamed, replaced
+        # or removed after establishment is refused without the harness creating a leaf.
+        _require_established_parent(parent, established_parent)
     _prepare_private_receipt_parent(parent)
     if os.name != "posix":  # pragma: no cover - exercised by platform CI
-        _install_private_receipt_without_descriptors(path, data)
+        _install_private_receipt_without_descriptors(
+            path, data, established_parent=established_parent
+        )
         return
 
-    directory_fd = _open_private_receipt_directory(parent)
+    directory_fd = _open_private_receipt_directory(parent, established_parent=established_parent)
     temporary_name = f"{path.stem}.{uuid.uuid4().hex[:8]}.tmp"
     descriptor: int | None = None
     created_identity: tuple[int, int] | None = None
@@ -4297,7 +4417,9 @@ def _install_private_receipt(path: Path, data: bytes) -> None:
         os.close(directory_fd)
 
 
-def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
+def _write_private_output(
+    path: Path, payload: Mapping[str, Any], *, established_parent: tuple[int, int] | None = None
+) -> None:
     """Write the private receipt fail-closed and without replacing any existing entry.
 
     The receipt carries private handles (message/session identifiers, report ids,
@@ -4306,9 +4428,13 @@ def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
     non-followed temporary file ``0600`` *before* any content is written and installs it
     with a single no-clobber link, so an entry that appears at the receipt path after the
     target was established — a file, a symlink, a hard link or a directory — is never
-    replaced and the qualification fails instead.  The installed receipt and its
-    containing directory are then verified (real, singly linked, ``0600`` inside private
-    ``0700``), and every hardening, write, installation or verification failure is raised
+    replaced and the qualification fails instead.  When ``established_parent`` is the
+    identity returned by ``_establish_private_output_target``, the receipt is installed
+    only into that exact directory: a parent renamed or replaced at the same name fails
+    with the bounded ``output-unsafe-target`` error and nothing is written.  The installed
+    receipt and its containing directory are then verified (real, singly linked, ``0600``
+    inside private ``0700``, still the established directory), and every hardening, write,
+    installation or verification failure is raised
     as a bounded ``private-output``/``output-*`` failure: a run that cannot guarantee the
     private postcondition can never report itself qualified.
 
@@ -4322,8 +4448,8 @@ def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
         "utf-8"
     )
     try:
-        _install_private_receipt(path, data)
-        _verify_private_receipt(path)
+        _install_private_receipt(path, data, established_parent=established_parent)
+        _verify_private_receipt(path, established_parent=established_parent)
     except QualificationError:
         raise
     except (OSError, ValueError) as error:
@@ -4363,8 +4489,10 @@ def _build_parser() -> argparse.ArgumentParser:
             "private 0700 directory owned by the current user, or be missing so the "
             "harness creates that one dedicated private leaf before any effect; an "
             "existing directory is never hardened. The receipt is installed without "
-            "replacing any entry, so a file, symlink or hard link that appears at the "
-            "target after it was established fails the run instead of being overwritten."
+            "replacing any entry (a file, symlink or hard link that appears at the "
+            "target after it was established fails the run instead of being "
+            "overwritten), and only into that established directory: a parent renamed or "
+            "replaced at the same name fails the run with output-unsafe-target."
         ),
     )
     parser.add_argument(
@@ -4398,6 +4526,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     workspace.mkdir(parents=True, exist_ok=True)
     receipt_target_ready = False
+    established_receipt_parent: tuple[int, int] | None = None
     try:
         if args.live:
             record = run_live(args, sys.stderr)
@@ -4412,7 +4541,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 # The deterministic lane's receipt is private output too: establish the
                 # same complete target before the checks, so a directory the harness did
                 # not create is never hardened and an unusable target fails immediately.
-                _establish_private_output_target(_private_output_path(args.output))
+                # The established directory's identity is kept and re-checked at the
+                # write, so a parent replaced during the checks is refused too.
+                established_receipt_parent = _establish_private_output_target(
+                    _private_output_path(args.output)
+                )
                 receipt_target_ready = True
             summary = run_offline(workspace)
             ok = all(record["status"] == "pass" for record in summary["checks"])
@@ -4437,7 +4570,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Only a target this run established is written: a refused target keeps its own
         # bounded error instead of being masked by a second failed write to that path.
         try:
-            _write_private_output(_private_output_path(args.output), summary)
+            _write_private_output(
+                _private_output_path(args.output),
+                summary,
+                established_parent=established_receipt_parent,
+            )
         except QualificationError as error:
             # The deterministic receipt is private output too: a write that cannot be
             # verified private is a failed qualification, never a silent success.
