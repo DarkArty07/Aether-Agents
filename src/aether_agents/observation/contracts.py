@@ -24,6 +24,8 @@ __all__ = [
     "COLLECTOR_VERSION",
     "EVENT_SCHEMA_VERSION",
     "EVENT_TYPES",
+    "FINISH_REASON_HISTOGRAM_PATH",
+    "FINISH_REASON_PATTERN",
     "MANIFEST_SCHEMA_VERSION",
     "MAX_EVENT_LINE_BYTES",
     "ARTIFACT_REF_PATTERN",
@@ -41,6 +43,8 @@ __all__ = [
     "event_validator",
     "manifest_validator",
     "is_artifact_ref",
+    "is_finish_reason_count",
+    "is_finish_reason_name",
     "is_native_message_id",
     "is_opaque_ref",
     "is_version_ref",
@@ -147,6 +151,43 @@ def is_version_ref(value: Any, *, max_len: int = 128) -> bool:
 def is_native_message_id(value: Any) -> bool:
     """Hermes SessionDB message identities are positive SQLite INTEGER values."""
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+# --------------------------------------------------------------------------------------
+# The one schema-owned histogram (summary schema)
+# --------------------------------------------------------------------------------------
+
+#: ``observation-summary.schema.json`` owns exactly one integer histogram:
+#: ``model_context_economics.finish_reasons``.  The schema constrains it with
+#: ``propertyNames`` and non-negative integer counts, so a native finish reason such as
+#: ``tool_calls`` or ``error`` is typed data inside that namespace — never the raw
+#: payload field of the same name.  This grammar mirrors the schema so the guard and any
+#: other reader interpret the histogram identically instead of re-deriving it.
+FINISH_REASON_PATTERN: Final = r"^[A-Za-z0-9_.:-]{1,64}$"
+
+#: Root-relative path of that histogram inside one summary document.  No other path is
+#: schema-owned, so no other path may relax a metadata guard.
+FINISH_REASON_HISTOGRAM_PATH: Final = ("model_context_economics", "finish_reasons")
+
+_FINISH_REASON_RE: Final = re.compile(FINISH_REASON_PATTERN, re.ASCII)
+
+
+def is_finish_reason_name(value: Any) -> bool:
+    """Return whether ``value`` is one schema-valid finish-reason histogram name."""
+    return (
+        isinstance(value, str)
+        and value == value.strip()
+        and _FINISH_REASON_RE.fullmatch(value) is not None
+    )
+
+
+def is_finish_reason_count(value: Any) -> bool:
+    """Return whether ``value`` is one schema-valid histogram count.
+
+    The schema requires a non-negative integer.  ``bool`` subclasses ``int`` in Python,
+    so it is excluded explicitly, and a float is not an integer count either.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 # --------------------------------------------------------------------------------------
