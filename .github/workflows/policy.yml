@@ -75,6 +75,7 @@ jobs:
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
           .aether/project.toml
+          .aether/skills/aether-observe/SKILL.md
           AGENTS.md
           CHANGELOG.md
           CLAUDE.md
@@ -322,6 +323,7 @@ jobs:
           tests/test_knowledge_plugin_cli.py
           tests/test_knowledge_regressions.py
           tests/test_knowledge_resources.py
+          tests/test_observation_usage_guidance.py
           tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py
           tests/test_project_knowledge_engine.py

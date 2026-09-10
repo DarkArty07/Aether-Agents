@@ -63,6 +63,11 @@ package/native profile skill mechanism. Skills provide reusable procedure only a
 subordinate to owner instruction, the constitution, `DESIGN.md`, stage specifications,
 Objective Contracts, and these repository rules; no skill grants authority.
 
+For contract progress, changes, blockers and observation failures in this project, read
+the Project Canonical Skill `.aether/skills/aether-observe/SKILL.md`. It selects the
+compact observation view first and expands only the relevant authoritative evidence;
+it does not replace independent review or final contract-result acceptance.
+
 Current adoption status for the contract/execution procedures is tracked in
 [issue #317](https://github.com/DarkArty07/Aether-Agents/issues/317) and
 [the execution guide](docs/guides/execution.md#contractexecution-procedure-adoption).

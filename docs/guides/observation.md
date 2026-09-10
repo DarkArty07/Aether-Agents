@@ -12,7 +12,11 @@ aether observe [REF] [--project PATH] [--since SUMMARY_ID] [--watch] [--json]
 
 The normal output is one deterministic review brief. `--json` returns one stable JSON envelope whose `data.state` is either `summary` or `empty`. `--since` requests a deterministic comparison with a prior summary; incompatible schemas return an error instead of a manufactured diff. `--watch` refreshes selected summary facets and cannot be combined with `--json`.
 
-The command is read-only: it does not mutate the board, sessions, canonical artifacts, or observation state, and it makes no network or model call. Partial, estimated, unavailable, and coverage-limited information must remain visibly labeled.
+The command is read-only with respect to the board, sessions and canonical artifacts, and it makes no network or model call. It may ingest events and update its own derived observation projection and retained summaries; it is not a zero-write filesystem probe. Partial, estimated, unavailable, and coverage-limited information must remain visibly labeled.
+
+For routine contract-wide questions, Morfeo starts with the compact `aether_observe` tool: `status` normally, `changes` against a known successful summary, and `diagnose` for an actual anomaly. Verify the exact project/contract, freshness and coverage before reporting. Consult individual review handoffs, code or logs for specific details or when observation is unavailable; disclose a failed observation rather than silently substituting a full-history reconstruction. Final acceptance still requires the contract-result review and supporting evidence.
+
+This project's complete procedure is the [Project Canonical Skill](../../.aether/skills/aether-observe/SKILL.md), discovered through root `AGENTS.md`. It is procedure, not authority or proof that a live observer deployment is healthy.
 
 ## Observer plugin and curated tool
 
