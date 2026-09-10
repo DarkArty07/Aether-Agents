@@ -772,8 +772,10 @@ A handoff carries an opaque Supervisor flow identity while Implementers remain f
 - [src/aether_agents/objective_contracts/store.py](../../src/aether_agents/objective_contracts/store.py)
 - [src/aether_agents/resources/profiles/morfeo/SOUL.md](../../src/aether_agents/resources/profiles/morfeo/SOUL.md)
 - [src/aether_agents/resources/profiles/supervisor/SOUL.md](../../src/aether_agents/resources/profiles/supervisor/SOUL.md)
+- [src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md](../../src/aether_agents/resources/skills/supervisor-decomposition/SKILL.md)
 
 ### Verification
+- [tests/test_contract_quality_documents.py](../../tests/test_contract_quality_documents.py)
 - [tests/test_lab_formalization.py](../../tests/test_lab_formalization.py)
 - [tests/test_objective_contracts.py](../../tests/test_objective_contracts.py)
 
