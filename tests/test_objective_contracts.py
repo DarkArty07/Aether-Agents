@@ -1939,18 +1939,60 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
         "--quiet",
         "--no-tags",
         "--no-checkout",
-        "--branch",
-        "aether-main",
     ]
     if source_hint:
         clone_args.insert(4, "--no-local")
     clone_args.extend((clone_source, str(fork_checkout)))
     subprocess.run(tuple(clone_args), capture_output=True, text=True, check=True)
-    assert git_text(fork_checkout, "rev-parse", "HEAD") == fork_head
+
+    # The configured checkout may have advanced its aether-main branch since the
+    # maintained revision was recorded. Resolve the exact commit object instead
+    # of coupling this qualification to that mutable branch tip.
+    maintained_revision_result = subprocess.run(
+        (
+            "git",
+            "rev-parse",
+            "--verify",
+            f"{fork_head}^{{commit}}",
+        ),
+        cwd=fork_checkout,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if maintained_revision_result.returncode != 0:
+        fetch_result = subprocess.run(
+            ("git", "fetch", "--quiet", "--no-tags", "origin", fork_head),
+            cwd=fork_checkout,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert fetch_result.returncode == 0, fetch_result.stderr
+        maintained_revision_result = subprocess.run(
+            (
+                "git",
+                "rev-parse",
+                "--verify",
+                f"{fork_head}^{{commit}}",
+            ),
+            cwd=fork_checkout,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    assert maintained_revision_result.returncode == 0, maintained_revision_result.stderr
+    maintained_revision = maintained_revision_result.stdout.strip()
+    assert maintained_revision == fork_head
 
     baseline_source = tmp_path / "maintained-baseline"
-    candidate_source = tmp_path / "maintained-candidate"
-    for source in (baseline_source, candidate_source):
+    hlp_candidate_source = tmp_path / "hlp-354-candidate"
+    maintained_source = tmp_path / "maintained-exact"
+    for source, revision in (
+        (baseline_source, fork_base),
+        (hlp_candidate_source, fork_base),
+        (maintained_source, maintained_revision),
+    ):
         git_text(
             fork_checkout,
             "worktree",
@@ -1958,21 +2000,22 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
             "--quiet",
             "--detach",
             str(source),
-            fork_base,
+            revision,
         )
     assert git_bytes(baseline_source, "show", "HEAD:hermes_cli/kanban_db.py") == git_bytes(
         fork_checkout, "show", f"{fork_base}:hermes_cli/kanban_db.py"
     )
     subprocess.run(
         ("git", "apply", "--include=hermes_cli/kanban_db.py", str(patch_path)),
-        cwd=candidate_source,
+        cwd=hlp_candidate_source,
         capture_output=True,
         text=True,
         check=True,
     )
-    assert (candidate_source / "hermes_cli" / "kanban_db.py").read_bytes() == git_bytes(
+    assert (hlp_candidate_source / "hermes_cli" / "kanban_db.py").read_bytes() == git_bytes(
         fork_checkout, "show", f"{hlp_commit}:hermes_cli/kanban_db.py"
     )
+    assert git_text(maintained_source, "rev-parse", "HEAD") == maintained_revision
 
     hermes_home = tmp_path / "hermes-home"
     state_home = tmp_path / "state-home"
@@ -2168,6 +2211,7 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
         board = sys.argv[1]
         metadata = kb.read_board_metadata(board)
         primary = Path(metadata["default_workdir"]).resolve()
+        source_root = Path(kb.__file__).resolve().parents[1]
 
         def head(path: Path) -> str:
             return subprocess.run(
@@ -2202,6 +2246,7 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
 
         print(json.dumps({
             "module": str(Path(kb.__file__).resolve()),
+            "source_revision": head(source_root),
             "primary": str(primary),
             "root_id": root_id,
             "child_id": child_id,
@@ -2217,7 +2262,7 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
         """
     )
 
-    def resolve(source: Path, board: str) -> dict[str, Any]:
+    def resolve(source: Path, board: str, expected_revision: str) -> dict[str, Any]:
         environment = os.environ.copy()
         environment["HERMES_HOME"] = str(hermes_home)
         environment["PYTHONPATH"] = str(source)
@@ -2239,11 +2284,16 @@ def test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintai
         assert completed.returncode == 0, completed.stderr
         payload = json.loads(completed.stdout)
         assert payload["module"] == str((source / "hermes_cli" / "kanban_db.py").resolve())
+        assert payload["source_revision"] == expected_revision
         assert payload["primary"] == str(primary.resolve())
         return payload
 
-    baseline = resolve(baseline_source, outcomes["one"]["execution_board"])
-    candidate = resolve(candidate_source, outcomes["two"]["execution_board"])
+    baseline = resolve(baseline_source, outcomes["one"]["execution_board"], fork_base)
+    candidate = resolve(
+        maintained_source,
+        outcomes["two"]["execution_board"],
+        maintained_revision,
+    )
     assert baseline["child_parents"] == [baseline["root_id"]]
     assert candidate["child_parents"] == [candidate["root_id"]]
     assert baseline["root_head"] == primary_head
