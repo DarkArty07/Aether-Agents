@@ -120,12 +120,19 @@ same four strict contexts; GitHub remains the authoritative final-head record. N
 bypassed or weakened.
 
 The separate observation-qualification matrix is not a branch-protection requirement and
-remained red. Python 3.11 and 3.12 stopped on two different existing journal-concurrency
-tests; each exact node passed independently on this candidate and current `origin/main`, so
-the nondeterministic failures are recorded as unrelated rather than hidden. Python 3.13
-reached the unchanged public-artifact scanner and failed on the exact inherited #364
-baseline above. Current `origin/main` also has a red non-required observation matrix. These
-failures remain visible and are not represented as required-check success.
+remained red on the final head. All three lanes failed in the qualification harness:
+- Python 3.11 and 3.13 reached the unchanged public-artifact gate and failed only on
+  `test_tracked_public_surface_contains_no_operator_paths` for the exact inherited #364
+  two-finding baseline recorded above; non-required harness logs `bgd-final-311.log` and
+  `bgd-final-313.log` preserve those runs.
+- Python 3.12 stopped in `Execute observation suite and real PluginContext harness` on
+  `test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook`; non-required
+  harness log `bgd-final-312.log` preserves that node. The local checkout does not provide
+  the exact public Hermes baseline, so no honest local PASS is claimed for this runner
+  behavior. Its touched paths are Python observation/harness paths outside this objective,
+  and the failing node advances through CI runners/logs in the earlier `main` baseline,
+  so it is recorded as an unrelated existing-platform failure. These failures remain
+  visible and are not represented as required-check success.
 
 GitHub reported the PR open, non-draft and mergeable, with `main` as base and #368 linked.
 No Pages workflow run exists for the objective branch because Pages listens to qualifying
