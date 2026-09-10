@@ -113,8 +113,13 @@ manifest as mechanically implied build/config glue; local manifest equality, wor
 documentation checks, focused tests, whitespace and the exact scanner baseline were then
 re-verified before a normal follow-up push. No check was bypassed or weakened.
 
-The final required-check state and open/unmerged boundary are recorded after the corrected
-PR revision completes. Merge, issue closure and Pages deployment remain outside current
+On corrected repair revision `083e369c49357bc585b3593e3f0f96064810d42c`, all four
+branch-protection-required contexts completed green: `pull-request-target` and `policy` on
+Python 3.11, 3.12 and 3.13. The separate observation-qualification matrix is not a required
+context and was still executing at that checkpoint; it is recorded separately rather than
+being confused with the required-check gate. Any later evidence-only revision remains
+subject to the same required contexts, whose authoritative final state is the pull request's
+GitHub check record. Merge, issue closure and Pages deployment remain outside current
 authority.
 
 ## Compatibility and release conclusions
