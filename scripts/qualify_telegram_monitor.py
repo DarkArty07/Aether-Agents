@@ -23,7 +23,7 @@ Every external boundary the live lane crosses is reached through :class:`LiveBac
 and every restore invariant is qualification-gating: a run that cannot put the
 installation back where it found it never reports itself qualified.
 
-``--live`` requires ``--output`` outside every Git worktree and the fixed
+``--live`` requires an absolute ``--output`` outside every Git worktree and the fixed
 ``--wait-hourly-boundaries 2``: the accepted qualification is exactly two real native
 wall-clock boundaries, and every other count is refused with exit status 2 before the
 live lane, an output file or any other effect.
@@ -34,7 +34,10 @@ destination and the existing model route.  Evidence is bound to the native sched
 own run output, the durable monitor records and the shipped renderer, so a boundary
 cannot be reported PASS without the real run that produced it.  Private handles
 (message/session identifiers, report identifiers, paths) stay in the operator-selected
-``--output`` file outside every Git worktree; the public summary carries revisions,
+``--output`` file outside every Git worktree, written fail-closed through the
+repository's atomic private-write primitive and verified ``0600`` inside a private
+``0700`` containing directory (a write that cannot be verified private fails the run);
+the public summary carries revisions,
 counts, latencies, case results and the qualified scope only.  Telegram Bot API
 acceptance is recorded as acceptance, never as proof that a human read the message.
 """
@@ -50,6 +53,7 @@ import os
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
@@ -82,6 +86,12 @@ from aether_agents.monitor.service import (  # noqa: E402
     MonitorService,
 )
 from aether_agents.monitor.store import MonitorStore  # noqa: E402
+from aether_agents.paths import (  # noqa: E402
+    DIR_MODE,
+    FILE_MODE,
+    UnsafeObservationPath,
+    atomic_private_write,
+)
 
 SCHEMA_VERSION = "aether.telegram-monitor.qualification.v1"
 #: The accepted qualification waits for exactly two real native hourly boundaries; the
@@ -3195,7 +3205,7 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
             "output-required",
             "--live requires --output outside the repository: private receipts are never public",
         )
-    output = Path(args.output).expanduser()
+    output = _private_output_path(args.output)
     if _inside_repository(output):
         raise QualificationError(
             "output-inside-repository",
@@ -3900,16 +3910,73 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _private_output_path(raw: str | os.PathLike[str]) -> Path:
+    """Normalize the operator-selected receipt path; it must be absolute.
+
+    The repository fail-closed private-write primitive is confined to an absolute path,
+    so a relative ``--output`` is refused as a bounded failure instead of surfacing when
+    the receipt is written (for the live lane, after the two-hour wait).
+    """
+
+    path = Path(raw).expanduser()
+    if not path.is_absolute():
+        raise QualificationError(
+            "output-not-absolute",
+            "the private receipt file must be an absolute path outside every Git worktree",
+        )
+    return path
+
+
+def _verify_private_receipt(path: Path) -> None:
+    """Final-mode verification: a private receipt is real, single and private.
+
+    The receipt itself must be a single real regular file with mode ``0600`` living in
+    a private ``0700`` directory.  Any deviation raises, so a receipt that cannot be
+    verified private is never accepted as written.
+    """
+
+    info = os.stat(path, follow_symlinks=False)
+    if not stat.S_ISREG(info.st_mode):
+        raise UnsafeObservationPath("private receipt is not a regular file")
+    if info.st_nlink != 1:
+        raise UnsafeObservationPath("private receipt is not singly linked")
+    if stat.S_IMODE(info.st_mode) != FILE_MODE:
+        raise UnsafeObservationPath("private receipt mode is not 0600")
+    parent = os.stat(path.parent, follow_symlinks=False)
+    if not stat.S_ISDIR(parent.st_mode):
+        raise UnsafeObservationPath("private receipt parent is not a directory")
+    if stat.S_IMODE(parent.st_mode) != DIR_MODE:
+        raise UnsafeObservationPath("private receipt parent mode is not 0700")
+
+
 def _write_private_output(path: Path, payload: Mapping[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
-        encoding="utf-8",
+    """Write the private receipt fail-closed through the repository primitive.
+
+    The receipt carries private handles (message/session identifiers, report ids,
+    paths, the raw native run record and the D12 comparison), so no byte of it may
+    exist before the file is private.  ``aether_agents.paths.atomic_private_write``
+    creates one non-followed single temporary file ``0600`` *before* any content is
+    written, installs it atomically, and removes it on every failure path.  The
+    installed receipt and its containing directory are then verified (real, singly
+    linked, ``0600`` inside private ``0700``), and every hardening, write or
+    verification failure is raised as a bounded ``private-output`` failure: a run that
+    cannot guarantee the private postcondition can never report itself qualified.
+    """
+
+    data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
+        "utf-8"
     )
     try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+        atomic_private_write(path, data)
+        _verify_private_receipt(path)
+    except QualificationError:
+        raise
+    except (OSError, ValueError) as error:
+        raise QualificationError(
+            "private-output",
+            "the private receipt was not written with a verified private mode",
+            detail={"error": type(error).__name__},
+        ) from error
 
 
 # ---------------------------------------------------------------------------
@@ -3935,7 +4002,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         default=None,
-        help="Operator-selected protected file for private live receipts (required with --live).",
+        help=(
+            "Absolute operator-selected protected file for private live receipts "
+            "(required with --live)."
+        ),
     )
     parser.add_argument(
         "--wait-hourly-boundaries",
@@ -3997,7 +4067,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         shutil.rmtree(workspace, ignore_errors=True)
     summary["ok"] = ok and "error" not in summary
     if args.output is not None and not args.live:
-        _write_private_output(Path(args.output).expanduser(), summary)
+        try:
+            _write_private_output(_private_output_path(args.output), summary)
+        except QualificationError as error:
+            # The deterministic receipt is private output too: a write that cannot be
+            # verified private is a failed qualification, never a silent success.
+            summary = {
+                "schema_version": SCHEMA_VERSION,
+                "ok": False,
+                "error": {"code": error.code, "message": error.message},
+            }
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     else:

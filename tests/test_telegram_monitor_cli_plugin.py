@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import textwrap
@@ -938,6 +939,15 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
     missing_output = _run_qualification(tmp_path, "--live", "--json")
     assert missing_output.returncode == 2
     assert "--live requires --output" in missing_output.stderr
+
+    relative_output = _run_qualification(
+        tmp_path, "--live", "--output", "receipts/should-not-exist.json", "--json"
+    )
+    assert relative_output.returncode == 1
+    relative_envelope = json.loads(relative_output.stdout)
+    assert relative_envelope["ok"] is False
+    assert relative_envelope["error"]["code"] == "output-not-absolute"
+    assert not (ROOT / "receipts").exists()
 
     for value in ("0", "1", "3", "24", "25", "not-a-number"):
         bounded = _run_qualification(tmp_path, "--wait-hourly-boundaries", value, "--json")
@@ -3387,3 +3397,157 @@ def test_live_run_scope_verification_failure_is_qualification_gating(
     assert record["restore"]["scope_verified"]["boards"] is False
     assert record["restore"]["scope_residue"] == ["board: synthetic-b"]
     assert record["public_summary"]["scope_restored"] is False
+
+
+# ---------------------------------------------------------------------------
+# Private receipt writing is fail-closed (MON-06 round-6 regression)
+# ---------------------------------------------------------------------------
+
+PRIVATE_RECEIPT_SENTINEL = "private-receipt-handle-sentinel-7f31"
+
+
+def _fail_file_mode_hardening(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Inject the review probe: file ``fchmod`` fails while directory hardening works."""
+
+    real_fchmod = os.fchmod
+
+    def failing_fchmod(descriptor: int, mode: int) -> None:
+        if stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise PermissionError("injected private-mode hardening failure")
+        real_fchmod(descriptor, mode)
+
+    monkeypatch.setattr(os, "fchmod", failing_fchmod)
+
+
+def test_private_receipt_is_private_before_content_under_a_hostile_umask(
+    tmp_path: Path,
+) -> None:
+    """Even with ``umask(0)`` the receipt is created private before any content exists."""
+
+    module = _qualification_module()
+    output = tmp_path / "private" / "receipt.json"
+    payload = {"schema_version": module.SCHEMA_VERSION, "handles": {"message_id": "4242"}}
+
+    previous = os.umask(0)
+    try:
+        module._write_private_output(output, payload)
+    finally:
+        os.umask(previous)
+
+    info = os.stat(output, follow_symlinks=False)
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(output.parent).st_mode) == 0o700
+    assert json.loads(output.read_text(encoding="utf-8")) == payload
+
+
+def test_private_receipt_hardening_failure_is_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed private-mode hardening raises and leaves no readable or partial receipt."""
+
+    module = _qualification_module()
+    output = tmp_path / "private" / "receipt.json"
+    payload = {
+        "schema_version": module.SCHEMA_VERSION,
+        "handles": {"message_id": PRIVATE_RECEIPT_SENTINEL},
+    }
+    _fail_file_mode_hardening(monkeypatch)
+
+    previous = os.umask(0)
+    try:
+        with pytest.raises(module.QualificationError) as failure:
+            module._write_private_output(output, payload)
+    finally:
+        os.umask(previous)
+
+    assert failure.value.code == "private-output"
+    assert not output.exists()
+    # The containing directory was established before the failing file hardening, so the
+    # failure really happened at the receipt's own mode establishment.
+    assert output.parent.is_dir()
+    surviving = sorted(path for path in tmp_path.rglob("*") if path.is_file())
+    assert surviving == [], surviving
+    contents = [path.read_text(encoding="utf-8", errors="ignore") for path in surviving]
+    assert all(PRIVATE_RECEIPT_SENTINEL not in text for text in contents)
+
+
+def test_live_run_private_receipt_failure_never_qualifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live orchestration propagates the hardening failure instead of certifying."""
+
+    world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
+    backends = world["backends"]
+    output = tmp_path / "private" / "receipt.json"
+    _fail_file_mode_hardening(monkeypatch)
+
+    previous = os.umask(0)
+    try:
+        with pytest.raises(module.QualificationError) as failure:
+            _run_live(world, output)
+    finally:
+        os.umask(previous)
+
+    assert failure.value.code == "private-output"
+    assert "write_output" in backends.calls
+    assert not output.exists()
+    assert not list(output.parent.glob("*"))
+
+
+def test_live_entry_point_reports_a_failed_private_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The entry point fails closed with a bounded error and writes no receipt."""
+
+    module = _qualification_module()
+    output = tmp_path / "private" / "receipt.json"
+    record: dict[str, Any] = {"ok": True, "public_summary": {"qualified": True}}
+
+    def writing_run_live(args: Any, stream: Any) -> dict[str, Any]:
+        module._write_private_output(Path(args.output).expanduser(), record)
+        return record
+
+    monkeypatch.setattr(module, "run_live", writing_run_live)
+    _fail_file_mode_hardening(monkeypatch)
+
+    previous = os.umask(0)
+    try:
+        code = module.main(["--live", "--json", "--output", str(output)])
+    finally:
+        os.umask(previous)
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "private-output"
+    assert "qualified" not in payload
+    assert not output.exists()
+    assert str(output) not in captured.out
+
+
+def test_offline_receipt_failure_is_reported_instead_of_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The deterministic lane fails closed too when its receipt cannot be verified."""
+
+    module = _qualification_module()
+    output = tmp_path / "private" / "offline.json"
+    monkeypatch.setenv("TMPDIR", str(tmp_path / "scratch-tmp"))
+    monkeypatch.setattr(module, "run_offline", lambda workspace: {"checks": []})
+    _fail_file_mode_hardening(monkeypatch)
+
+    previous = os.umask(0)
+    try:
+        code = module.main(["--json", "--output", str(output)])
+    finally:
+        os.umask(previous)
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "private-output"
+    assert not output.exists()

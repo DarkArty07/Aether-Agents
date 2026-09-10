@@ -4,17 +4,17 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-4 corrections complete for review; self-verified. No `--live` run, no model
-call, no Telegram send, no activation. Rounds 1–3 are preserved below as history; the
-authoritative current state is **"Round-4 corrections"** and **"Round-4 verification
-record"**. Round 4 answers the round-3 review's strict-contract findings: the malicious
-D12 live case is restored as an actual instruction that travels the shipped source
-boundary, the deterministic evaluator no longer labels any semantically judged case as
-passing (cases are `observed` with an explicit independent-adjudication requirement, and
-the public verdict reports `semantic_certification.certified: false`), and every scope,
-spool, native-row, board, session and scope-root postcondition is now verified and
-qualification-gating (the round-3 claim that cleanup was complete was contradicted by the
-review's direct-spool reproduction).
+**Status:** round-6 corrections complete for review; self-verified. No `--live` run, no model
+call, no Telegram send, no activation. Rounds 1–5 are preserved below as history; the
+authoritative current state is **"Round-6 corrections"** and **"Round-6 verification
+record"**. Round 6 answers the round-5 review's strict contract/privacy findings: the
+private live receipt is written fail-closed through the repository's
+`aether_agents.paths.atomic_private_write` primitive — created `0600` before any content
+exists, installed atomically and verified `0600` inside a private `0700` directory before
+the write returns — instead of writing content first and swallowing a best-effort
+`chmod` failure, so a live run can no longer continue or report itself qualified while a
+receipt is readable. This status header also corrects the round-4 label the review found
+here.
 
 ## Starting-point reconstruction
 
@@ -97,7 +97,9 @@ boundaries, recording due/cut/collection/narration/acknowledgment times and priv
 identifiers, refusing more than one narration per digest or an unconfirmed hourly delivery →
 the D12 semantic corpus comparison → one real no-work boundary with zero inference → manual
 `off` → remove and verify the synthetic scope, spool records, registry bytes, job identity
-and enablement. Private receipts go only to `--output` (mode 0600); the public summary
+and enablement. Private receipts go only to `--output`, written fail-closed through the
+repository's atomic private-write primitive and verified `0600` in a private `0700`
+directory (round 6); the public summary
 carries timings/counts/case statuses, the `semantic_certification` block and the qualified
 scope, and states that Bot API acceptance is not proof the human read a message. The live
 lane never kills or restarts an agent and never introduces a second recurring scheduler.
@@ -773,7 +775,7 @@ PR, merge, issue mutation or publication.
   recorded above is decided; that refusal is the honest outcome and it happens before the
   fixture, so no fixture gap is conflated with it.
 
-## Round-5 corrections (authoritative)
+## Round-5 corrections (historical; superseded by round 6 where contradicted)
 
 The round-4 review (strict contract lens) found one blocking defect: the live count option
 advertised and accepted every value `1..24`, although the accepted qualification — and
@@ -899,4 +901,186 @@ PR, merge, issue mutation or publication.
   provisioned runtime (their real semantics are exercised in-process against real SQLite),
   the malicious-instruction case is one the fixed filter does not classify, and on this
   installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
+  `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
+
+## Round-6 corrections (authoritative)
+
+The round-5 review (strict contract/privacy audit) found two blocking defects. First, the
+private receipt write was fail-open: `_write_private_output` wrote the receipt content
+first, then ran a best-effort `os.chmod(path, 0o600)` whose `OSError` was swallowed; the
+reviewer's independent reproduction with `umask(0)` plus an injected `os.chmod` failure
+returned normally and left the receipt readable at mode `0666`, so a live run could
+continue and certify despite a failed privacy postcondition. Second, this evidence file
+still described round 4 as the authoritative state. Both are corrected inside MON-06's
+writable surface; no production file was touched.
+
+### 1. The private receipt write is fail-closed
+
+`_write_private_output` no longer touches the output path directly. It serializes the
+same JSON payload (unchanged shape and `sort_keys`/`ensure_ascii` arguments) to UTF-8
+bytes and hands it to `aether_agents.paths.atomic_private_write` — the repository's
+fail-closed private-write primitive already used for Aether state — which:
+
+1. creates exactly one temporary file with `O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW` and mode
+   `0600` **before any content exists** (no window in which content lives in a permissive
+   file), and refuses to follow or reuse a predictable temporary link;
+2. `fchmod`s the temporary to `0600`, verifies it is a singly-linked regular file whose
+   named identity matches the open descriptor, writes the content, `fsync`s it and
+   verifies the identity again before installing it with one `os.replace`;
+3. verifies the installed receipt's identity after the replace, verifies the parent
+   directory did not change under it, `fsync`s the directory, and removes the temporary on
+   every failure path (a failure never leaves a content-bearing temporary behind).
+
+Because that primitive establishes the containing directory private (`0700`) and hardens
+the file before content, `_verify_private_receipt` adds the independent final-mode
+verification the review asked for: the installed receipt must be a real, singly-linked
+regular file with mode exactly `0600` inside a directory with mode exactly `0700`,
+otherwise it raises. Every hardening, write, verification or primitive failure is wrapped
+in a bounded `QualificationError("private-output", "the private receipt was not written
+with a verified private mode", detail={"error": <type>})`:
+
+- the live lane's final `backends.write_output(output, record)` call propagates it, so
+  `_live_run`/`run_live` never return a record and the run can never report itself qualified;
+- the live entry point reports `{"ok": false, "error": {"code": "private-output"}}` and
+  exits `1`, with no private path on stdout and no receipt on disk;
+- the deterministic lane's `--output` receipt now fails the same bounded way instead of
+  escaping `main()` as a traceback: an offline receipt that cannot be verified private is a
+  failed qualification, never a silent success.
+
+The primitive's containing-directory hardening is now a stated, verified behavior: the
+receipt is `0600` inside a `0700` directory (the module docstring and
+`docs/guides/telegram-monitor.md` say so, and the verification enforces it). The write
+still happens only to the operator-selected `--output` path outside every Git worktree;
+nothing else changed in the live lane.
+
+### 2. A relative `--output` is refused before the live lane
+
+The repository private-write primitive is confined to an absolute path, so round 6 also
+normalizes the operator-selected receipt path through `_private_output_path`: an absolute
+`--output` is used as given, and a relative one is refused as a bounded
+`QualificationError("output-not-absolute", ...)`. This runs first in `run_live` — before
+the repository containment check, the test-process refusal, the boundary guard and every
+live effect — so a relative path fails immediately with `{"ok": false, "error": {"code":
+"output-not-absolute"}}` and exit `1` instead of surfacing when the receipt is written
+after the two-hour wait. The deterministic lane's `--output` uses the same normalization.
+The `--output` help text and the guide now state that the path must be absolute; the
+option surface itself (`--live`, `--json`, `--output`, `--wait-hourly-boundaries`) is
+unchanged.
+
+### 3. The status header is corrected
+
+This file's top-level status now names round 6 as the authoritative state (the round-5
+status text had been left in place while the candidate moved on), the round-5 section is
+marked historical, and the implemented-deliverables summary states the verified private
+receipt mode instead of the former best-effort claim.
+
+### Round-6 checks
+
+- `test_private_receipt_hardening_failure_is_fail_closed` — reproduces the review probe:
+  `umask(0)` plus an injected `os.fchmod` that raises for regular-file descriptors
+  (directory hardening still succeeds, so the failure hits exactly the receipt's own mode
+  establishment). `_write_private_output` raises `QualificationError` with
+  `code="private-output"`, the receipt path does not exist, no file survives anywhere under
+  the output root and no private sentinel appears in any bytes that did.
+- `test_private_receipt_is_private_before_content_under_a_hostile_umask` — positive
+  control: under `umask(0)` the receipt is still a singly-linked regular file with mode
+  `0600` inside a `0700` directory and its JSON round-trips.
+- `test_live_run_private_receipt_failure_never_qualifies` — the fake-backend live world
+  performs the same injected failure; `write_output` was reached, the orchestration
+  propagates `private-output` instead of returning a record, and the receipt directory
+  stays empty.
+- `test_live_entry_point_reports_a_failed_private_receipt` — `main()` for `--live` exits
+  `1`, prints `{"ok": false, "error": {"code": "private-output"}}` with no `qualified` key
+  and no private path, and writes no receipt.
+- `test_offline_receipt_failure_is_reported_instead_of_success` — the deterministic lane's
+  `--output` receipt fails closed with the same bounded envelope and exit `1`.
+- `test_live_qualification_refuses_unsafe_invocations_without_effects` (extended) — the
+  subprocess-level refusal probe now also runs `--live --output receipts/should-not-exist.json`:
+  exit `1`, `{"ok": false, "error": {"code": "output-not-absolute"}}` and no `receipts/`
+  directory created under the repository, so a relative path can never reach the live lane.
+
+## Round-6 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-6 candidate. Changed paths:
+`scripts/qualify_telegram_monitor.py`, `tests/test_telegram_monitor_cli_plugin.py`,
+`docs/guides/telegram-monitor.md`, `specs/telegram-monitor/evidence/MON-06.md`. No production
+file, `policy.yml`, capability registry, lockfile or Objective Contract was modified.
+
+- **Direct probe of the corrected write (manual, before the tests).** `_write_private_output`
+  under `umask(0)`: receipt `0600`, containing directory `0700`, JSON round-trips. Same call
+  under `umask(0)` with `os.fchmod` raising for regular-file descriptors: raises
+  `QualificationError` (`code="private-output"`), the receipt does not exist and no file
+  (temporary or otherwise) survives under the output root.
+- `uv run --frozen pytest -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **62 passed** (57 before + 5 new round-6 tests).
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **245 passed** (240 before + 5 new round-6 tests).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 75 passed**; the sole failure is the pre-existing issue #364, and the wheel
+  entry-point/resource check (`test_wheel_exposes_the_fourth_entry_point_and_monitor_resources`)
+  passes in this lane.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **7 failed, 1326 passed,
+  60 skipped, 373 subtests passed** (114.72 s). The 7 are the same classes as the reviewed
+  base: the six accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set mismatch`
+  (collision already routed to MON-INT, outside this unit's writable boundary) and issue #364
+  on the unchanged finalized contract.
+- **Failure-set baseline comparison (round 6).** `scripts/run_tests.py -- -q --tb=no
+  tests/test_public_artifacts.py tests/test_observation_lifecycle.py` in a temporary detached
+  worktree of the reviewed dependency base (`2d49418`): **7 failed, 88 passed in both trees**,
+  and the sorted `FAILED` name sets are byte-identical (`diff` empty). The temporary worktree
+  was removed afterwards (`git worktree list` no longer contains it).
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation
+  passed** (guide text change included).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true,
+  mode=offline, 10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `uv run --frozen python scripts/check_public_artifacts.py
+  --root .` and the same scan with both built artifacts → only the pre-existing #364 findings
+  (`absolute-user-home`, `operator-desktop-layout`) on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/` is
+  empty). No private path, destination, session, message, model or credential from round 6 is
+  reported.
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364, missing [],
+  extra []**; `.github/workflows/policy.yml` is unchanged in round 6 and no tracked path was
+  added, so every MON-01..MON-05 path and the MON-06 paths remain literally listed with no
+  relaxed check.
+- `uv run --frozen python -m compileall -q` (the literal full list from `policy.yml`) →
+  passed; `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source
+  files**; `ruff check` and `ruff format --check` on the two touched Python files → clean;
+  `git diff --check` → passed.
+- **Pre-existing lint observation (out of scope, unchanged from the base).** The literal
+  full-list ruff commands from `policy.yml` still report 7 findings and 4 unformatted files in
+  `src/aether_agents/knowledge/semantic.py`,
+  `src/aether_agents/objective_contracts/hermes_plugin.py`,
+  `tests/test_knowledge_regressions.py` and `tests/test_objective_contracts.py` — the same
+  files as round 5, each byte-identical to the reviewed base (`git diff 2d49418 -- <path>` is
+  empty), so they remain pre-existing and outside MON-06's writable boundary.
+
+Deliberate non-effects in round 6: no `--live` invocation, no model call, no Telegram send,
+no credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change outside the harness's own reversible scope (which this unit does not execute), no push,
+PR, merge, issue mutation or publication.
+
+## Round-6 residual risks
+
+- The live lane still has never been executed end to end. Round 6 changed only how the private
+  receipt is written (and how the deterministic lane reports a failed receipt); the
+  orchestration is otherwise unchanged, and the first real run against a scheduler, model and
+  Telegram transport remains MON-INT's.
+- The repository primitive establishes the containing directory private (`0700`): an
+  operator-selected output directory that already exists is hardened to `0700`, and the
+  receipt is verified `0600` inside it. A path whose containing directory cannot be made
+  private (or whose write cannot be verified) fails the run closed instead of leaving a weaker
+  receipt; MON-INT should choose a protected location it accepts being private.
+- Everything rounds 4–5 recorded remains true: the live scope probes execute only inside the
+  provisioned runtime, the malicious-instruction case is one the fixed filter does not
+  classify, the D12 semantic cases stay `observed` pending independent adjudication, and on
+  this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
   `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.

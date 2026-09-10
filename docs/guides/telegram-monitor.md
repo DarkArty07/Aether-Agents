@@ -195,7 +195,8 @@ The provisioned live lane is owned by the terminal integration step (MON-INT) an
 invoked as:
 
 ```bash
-# $PRIVATE_EVIDENCE is an operator-selected protected directory outside every Git worktree.
+# $PRIVATE_EVIDENCE is an absolute operator-selected protected directory outside every
+# Git worktree; the receipt is written there as a verified-private file.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
@@ -282,12 +283,15 @@ effect. What it does, in order:
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file, which
-must live outside every Git worktree; the public summary carries revisions, counts,
-latencies, case statuses, the `semantic_certification` block and the qualified scope only,
-and states that Telegram Bot API acceptance is not proof the human read a message. The
-public `qualified` verdict covers the deterministic scope listed in `qualified_scope`; the
-`unqualified_scope` entry names the semantic fidelity cases that still require independent
-adjudication.
+must be an absolute path outside every Git worktree and is written fail-closed through the
+repository's atomic private-write primitive: the file is created `0600` before any content
+exists and the written receipt is verified `0600` inside a private `0700` containing
+directory, so a write that cannot be verified private fails the run instead of qualifying
+it. The public summary carries revisions, counts, latencies, case statuses, the
+`semantic_certification` block and the qualified scope only, and states that Telegram Bot
+API acceptance is not proof the human read a message. The public `qualified` verdict covers
+the deterministic scope listed in `qualified_scope`; the `unqualified_scope` entry names
+the semantic fidelity cases that still require independent adjudication.
 
 Current limits, stated honestly:
 
