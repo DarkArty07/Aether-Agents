@@ -286,6 +286,8 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
 
     for claim_text, status in (
         ("All work completed and accepted.", "in_progress"),
+        ("All objectives have been accomplished.", "in_progress"),
+        ("Todo quedó hecho.", "in_progress"),
         ("Todo está listo.", "listo"),
         ("The work has shipped.", "shipped"),
         ("The work is ready.", "ready"),
@@ -299,6 +301,7 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
 
     for invalid_status in (
         "completed_by_Friday",
+        "accomplished",
         "completado",
         "listo",
         "shipped",
@@ -329,6 +332,8 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
         "El progreso es 80 pct.",
         "Progress is 100 pct.",
         "Work is 80% complete.",
+        "The work is due Friday.",
+        "La entrega vence el viernes.",
     ):
         forbidden_narrative = _narrative(_narrative_item())
         forbidden_narrative["items"][0]["current"][0]["text"] = forbidden
@@ -346,6 +351,41 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
         valid_completed = _narrative(_narrative_item(status=terminal_status))
         validated = reporting.validate_narrative(completed_snapshot, valid_completed)
         assert validated["items"][0]["status"] == terminal_status
+
+
+def test_verified_resolved_subfacts_can_coexist_with_in_progress_status() -> None:
+    for resolved_text in (
+        "The test completed successfully; review remains pending.",
+        "El defecto fue resuelto; la revisión sigue pendiente.",
+    ):
+        item = _item(state="in_progress")
+        item["resolved"] = [_fact("work_alpha_resolved", resolved_text)]
+        snapshot = _snapshot(item)
+        narrative_item = _narrative_item()
+        narrative_item["resolved"] = [{"ref": "work_alpha_resolved", "text": resolved_text}]
+        narrative = _narrative(narrative_item)
+
+        prompt = reporting.build_narration_prompt(snapshot)
+        accepted = reporting.validate_narrative(snapshot, narrative)
+        rendered = reporting.render_report(snapshot, accepted)
+
+        assert resolved_text in prompt
+        assert accepted["items"][0]["status"] == "in_progress"
+        assert resolved_text in rendered
+
+        broader = copy.deepcopy(narrative)
+        broader["items"][0]["resolved"][0]["text"] = "All objectives have been accomplished."
+        with pytest.raises(reporting.ReportingError) as error:
+            reporting.validate_narrative(snapshot, broader)
+        assert error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+    broad_item = _item(state="in_progress")
+    broad_item["resolved"] = [
+        _fact("work_alpha_resolved", "All objectives have been accomplished.")
+    ]
+    with pytest.raises(reporting.ReportingError) as source_error:
+        reporting.build_narration_prompt(_snapshot(broad_item))
+    assert source_error.value.code == "REPORTING_FORBIDDEN_CLAIM"
 
 
 def test_coverage_gap_claim_boundary_and_legitimate_notices() -> None:
@@ -556,6 +596,10 @@ def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> 
         ("Progress is 100 pct.", "REPORTING_FORBIDDEN_CLAIM"),
         ("Completion expected Friday.", "REPORTING_FORBIDDEN_CLAIM"),
         ("La tarea concluirá el viernes.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("All objectives have been accomplished.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("Todo quedó hecho.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("The work is due Friday.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("La entrega vence el viernes.", "REPORTING_FORBIDDEN_CLAIM"),
     ],
 )
 def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code: str) -> None:
