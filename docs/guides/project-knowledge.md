@@ -2,6 +2,8 @@
 
 Aether packages an optional native Hermes plugin, `aether-project-knowledge`, with two tools: `project_knowledge` and `work_memory`. Morfeo, Supervisor and Implementer receive the same action schemas. The Graphify engine is an external, isolated component, not a fork of Hermes and not an MCP requirement.
 
+This is an optional advanced guide. Start with [Getting started](../getting-started.md) and [Start here](../start-here.md) if you are new to Aether; use the [glossary](../reference/glossary.md) for the terms below.
+
 This build provides local structural indexing, bounded graph exploration, optional read-only
 GitHub/visualization views, durable role/project experience records, and an explicit
 configured semantic-maintenance path through the existing auxiliary connection. Semantic
@@ -238,3 +240,7 @@ Export writes the selected namespace to stdout, not an automatically chosen file
 | `SCOPE_UNAVAILABLE`, `RESULT_TOO_LARGE` | Narrow the operation or review documented limits; coverage is not silently invented. |
 
 No callback changes the prompt or automatically invokes a model. Graphify failures do not disable file/terminal tools. Deterministic component/plugin tests do not establish live-agent behavior, production readiness or token savings. Qualification must compare against directed search and reading, include indexing costs, and test modified repositories across sessions.
+
+## Next step
+
+Return to [Start here](../start-here.md) for the core route choice, or read [Observation](observation.md) for a separate provider-free view of contract activity.

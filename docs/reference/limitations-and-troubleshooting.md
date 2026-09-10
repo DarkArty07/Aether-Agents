@@ -2,6 +2,8 @@
 
 This page records current limits plainly. It does not turn a candidate interface, package source file, or historical qualification artifact into a release/readiness claim.
 
+If you have not followed the beginner path, read [Getting started](../getting-started.md) first. Use this page to interpret refusals and boundaries, not to infer that an intended or partial capability is release-qualified.
+
 ## Current limits
 
 | Area | Current limit | Safe response |
@@ -41,3 +43,7 @@ A denial mentioning credential material/acquisition, protected external effect, 
 Do not put credentials, secrets, private profile/configuration content, sessions, board databases, logs, machine paths, or provider/model bindings into documentation, contract envelopes, issue-like durable fields, or public artifacts. The generic authoritative references for Hermes configuration and troubleshooting are at [Hermes Agent documentation](https://hermes-agent.nousresearch.com/docs/).
 
 See [Capability coverage](capabilities.md) for each public surface's current status and evidence paths.
+
+## Next step
+
+Return to [Getting started](../getting-started.md) for the safe provider-free exercise, or read [Policy and recovery](../guides/policy-and-recovery.md) when a refusal concerns a protected edge.

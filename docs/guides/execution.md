@@ -5,6 +5,8 @@ before Supervisor work begins. This page describes Aether's role and evidence
 rules; Hermes supplies the generic board, session, worktree, retry, reclaim, and
 review lifecycle.
 
+New to the workflow? Read [Start here](../start-here.md) and the [illustrative first objective](first-objective.md) first. This page then gives the precise execution boundary.
+
 ## Per-contract execution board
 
 `prepare_handoff` derives one deterministic execution-board identity from
@@ -99,3 +101,7 @@ idempotent provisioning, and profile instructions. The complete installed
 runtime/session-affinity path remains a separately qualified boundary; see
 [Capability coverage](../reference/capabilities.md) and
 [limitations](../reference/limitations-and-troubleshooting.md).
+
+## Next step
+
+Use [Lifecycle](lifecycle.md) to follow direct and pipeline routes, or return to [First objective](first-objective.md) for the beginner walkthrough.

@@ -2,6 +2,8 @@
 
 Aether is a product and method layered on [Hermes Agent](https://hermes-agent.nousresearch.com/docs/). It deliberately reuses Hermes mechanisms where they meet the requirement and does not turn framework availability into Aether authority.
 
+If you are learning the system for the first time, read [Start here](start-here.md) before this boundary reference.
+
 | Hermes provides | Aether adds or constrains |
 | --- | --- |
 | Agent conversation loop, profiles, tools, and hooks | A three-role responsibility model, Objective Contracts, portable role resources, and a small edge-effect policy |
@@ -34,3 +36,7 @@ The two package-owned canonical skills teach use of `project_knowledge` and `wor
 Aether does not implement its own queue, retry engine, board store, worktree manager, generic plugin system, generic provider manager, or generic Hermes manual. A role having local tool capability does not grant authority to change product intent, acquire credentials, activate services, deploy, publish, or make a protected external effect.
 
 Aether's current source also is not evidence of a stable release, public installation, active service, live profile, configured provider, or qualified model-backed execution. Those distinctions are intentional and visible in [limitations and troubleshooting](reference/limitations-and-troubleshooting.md).
+
+## Next step
+
+Read [Roles and authority](roles-and-authority.md) to see who owns each decision, then [Start here](start-here.md) if you have not yet followed the beginner path.

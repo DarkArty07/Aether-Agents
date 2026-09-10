@@ -2,6 +2,8 @@
 
 `aether init` makes an **existing Git repository root** an Aether Project. It is implemented and intentionally narrow.
 
+Read [Getting started](../getting-started.md) first for the provider-free orientation. This page is only applicable when the existing Git and native Hermes Project prerequisites below are already available.
+
 ## Preconditions
 
 - Run at the repository root (or pass that root as `PATH`); a plain directory and a subdirectory of a repository are refused.
@@ -49,3 +51,7 @@ only and cannot grant authority.
 The broader product design calls for greenfield and brownfield support, but this current implementation does **not** run `git init` in an empty directory. Create an existing Git repository and the exact-path native Hermes Project first, then run `aether init`. This distinction prevents documentation from presenting a planned greenfield product behavior as current.
 
 For the parser surface, see [CLI reference](../reference/cli.md). For the identity's role in handoff, see [Objective Contracts](objective-contracts.md).
+
+## Next step
+
+After initialization succeeds, continue to [Objective Contracts and handoff](objective-contracts.md). If the prerequisites are not present, return to [Getting started](../getting-started.md) and use its provider-free path instead.
