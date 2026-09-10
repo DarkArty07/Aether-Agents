@@ -50,8 +50,16 @@ Resource paths above are relative to `src/aether_agents/`.
   tracked Markdown link/fence checks passed with both new paths explicitly listed.
 - Ruff on all changed Python paths passed; format check on new/edited receipt-document
   tests passed. `mypy src/aether_agents` passed (53 source files).
-- Full repository bootstrap was started through `scripts/run_tests.py`; its completed
-  result will be recorded before issue closeout, not inferred from focused tests.
+- Full bootstrap: `uv run --frozen python scripts/run_tests.py -- -q` — **1133 passed,
+  64 skipped, 445 subtests passed, 2 failed** in 396.92 seconds. The exact failing nodes
+  are `tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths`
+  and `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer`.
+  Both were reproduced unchanged in an isolated worktree at baseline
+  `ad9c5c8e549986923f8b220c76eaac3cb83ba736` using the same interpreter and exact-Hermes
+  bootstrap: **2 failed in 0.89 seconds**. The relevant tests, scanner and Hermes baseline
+  are unchanged. This is baseline attribution, not a green full-suite claim.
+  All production/resource bytes tested match source commit
+  `893666c208c2a8713f3bf9f9716a16006c346590`; the subsequent amendment only records evidence.
 
 ### Pre-existing limitations
 
