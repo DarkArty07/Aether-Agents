@@ -12,7 +12,7 @@
 | Tree | Revision / identity | Evidence |
 | --- | --- | --- |
 | Maintained fork baseline | `DarkArty07/aether-hermes` `aether-main` `28b593efa86bbc674b32f488c35932a4e7e85a51` | Verified before mutation in the nested unit worktree |
-| Maintained fork candidate | `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f` | Local commit only; no push, PR, merge, or remote mutation |
+| Maintained fork candidate | `d68132254b088d26730134d86f8b27a7474ef460` | Local commits only; no push, PR, merge, or remote mutation |
 | Candidate import | `agent/model_metadata.py` | Import probe resolved to the candidate fork source, not an installed release tree |
 
 Pre-mutation hashes at fork baseline `28b593efa8`:
@@ -23,8 +23,8 @@ Pre-mutation hashes at fork baseline `28b593efa8`:
 
 Candidate hashes:
 
-- `agent/model_metadata.py`: `a547f3c844cfc24c5cc6a114f5ceedf2b6fae5ce82ad4443089c45d832f17ade`
-- `tests/agent/test_model_metadata_gateway.py`: `8561fd3264301e4ff945113da6278488a78b86f3a5656bb2b9a365e8b54b446b`
+- `agent/model_metadata.py`: `4c9b43ec6f42214aad1ea62da4a2baac435568ffaa2a09f88c5c4127a985513f`
+- `tests/agent/test_model_metadata_gateway.py`: `2c7000eff29c11a76f7340f2fd02ef3c8834348e67e052fde2ff1106126338bc`
 
 The writable product surface was limited to `agent/model_metadata.py` and the new focused loopback test module. `auxiliary_client.py`, the existing model-metadata test files, ledgers, live profiles, credentials, and the canonical contract were not changed.
 
@@ -37,11 +37,11 @@ At the assigned fork baseline, `agent/model_metadata.py` had two relevant paths:
 
 The actual fork file `hermes_cli/models.py` at the same baseline independently validates a top-level `models` list in `_lmstudio_fetch_raw_models()` (baseline lines 3957–4004). The candidate applies the same response-shape rule to the metadata parser without importing or broadening the model-picker path.
 
-The bounded repair in `agent/model_metadata.py:677–679` and `:1293–1333`:
+The bounded repair in `agent/model_metadata.py:677–679`, `:1182–1207`, and `:1293–1412`:
 
 1. Checks that the LM Studio response is a mapping with a top-level `models` list before iterating native entries.
 2. Returns the native cache only when at least one usable native model was parsed.
-3. Falls through to the existing generic `/models` candidate loop for malformed, empty, or non-LM Studio-shaped responses, preserving generic `data[*].context_length` values.
+3. Parses a generic top-level `data` list from the already-received `/api/v1/models` payload when the native list is absent or empty, and reuses the same bounded parser for the existing generic candidate loop, preserving generic `data[*].context_length` values.
 4. Leaves global server detection, inference routing, payloads, auxiliary clients, and provider protocols unchanged.
 
 This localizes the correction to endpoint metadata, avoiding the blast-radius change documented in the issue discussion for a global detector rewrite.
@@ -59,10 +59,10 @@ HERMES_PYTHON=already-provisioned HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.s
 **Observed baseline result:**
 
 ```text
-Summary: 1 files, 2 tests passed, 4 failed (100% complete) in 9.9s (1 workers)
+Summary: 1 files, 2 tests passed, 3 failed (100% complete) in 3.5s (1 workers)
 ```
 
-The four failures were the generic `data` response being discarded under an LM Studio verdict (including an empty native list and a stale disk verdict). The two passing controls covered a true native LM Studio payload and the explicit context override. No retry was used as evidence.
+The three failures were the generic `data` response being discarded under an LM Studio verdict, including the direct HTTP-200 `/api/v1/models` payload and the empty native-list shape. The two passing controls covered a true native LM Studio payload and the explicit context override. No retry was used as evidence.
 
 ## 4. Candidate GREEN
 
@@ -75,7 +75,7 @@ HERMES_PYTHON=already-provisioned HERMES_TEST_FILE_RETRIES=0 HERMES_TEST_WORKERS
 Observed:
 
 ```text
-Summary: 4 files, 46 tests passed, 0 failed (100% complete) in 7.4s (1 workers)
+Summary: 4 files, 45 tests passed, 0 failed (100% complete) in 9.2s (1 workers)
 ```
 
 **Existing model-metadata cases affected by this path:**
@@ -109,9 +109,9 @@ Observed: Ruff check passed, the new test file was already formatted, compileall
 
 | Obligation | Check and observed result | Evidence |
 | --- | --- | --- |
-| Generic HTTP-200 `/api/v1/models` does not lose a valid OpenAI `data` list under the LM Studio branch | Baseline: generic loopback fixture failed. Candidate: `test_generic_data_shape_is_parsed_even_when_detector_reports_lmstudio` passed with stale detector forced to `lm-studio`; generic metadata returned a keyed model | `tests/agent/test_model_metadata_gateway.py` |
-| Empty native LM Studio list falls through instead of returning an empty cache | Candidate: `test_empty_lmstudio_models_falls_through_to_generic_data` passed against loopback `/api/v1/models` with `models: []` and generic `/v1/models` data | `tests/agent/test_model_metadata_gateway.py` |
-| Legacy/stale LM Studio verdict cannot discard generic metadata | Baseline: `test_generic_data_shape_revalidates_stale_disk_lmstudio_verdict` failed. Candidate passed while the disk probe returned synthetic `lm-studio` | `tests/agent/test_model_metadata_gateway.py` |
+| Generic HTTP-200 `/api/v1/models` does not lose a valid OpenAI `data` list under the LM Studio branch | Baseline: API-only generic loopback fixture failed. Candidate: `test_generic_data_shape_is_parsed_even_when_detector_reports_lmstudio` passed with stale detector forced to `lm-studio`; the same `/api/v1/models` response yielded keyed metadata and `get_model_context_length()` returned the advertised value | `tests/agent/test_model_metadata_gateway.py` |
+| Empty native LM Studio list falls through without requiring another model-list endpoint | Candidate: `test_empty_lmstudio_models_falls_through_to_generic_data` passed against a single `/api/v1/models` response containing `models: []` and generic `data`; no `/v1/models` route was available | `tests/agent/test_model_metadata_gateway.py` |
+| Legacy/stale LM Studio verdict cannot discard generic metadata | Baseline: `test_generic_data_shape_revalidates_stale_disk_lmstudio_verdict` failed. Candidate passed while the disk probe returned synthetic `lm-studio`, using only the `/api/v1/models` generic payload | `tests/agent/test_model_metadata_gateway.py` |
 | Existing true LM Studio behavior remains | `test_true_lmstudio_models_shape_remains_supported` passed with native `models` and loaded `context_length=196608` | `tests/agent/test_model_metadata_gateway.py` |
 | No unrelated detector/routing behavior changed | Adjacent local-probe and detector-cache suites passed: 17/17; no changes to detector implementation or routing modules | `tests/agent/test_local_probe_disk_cache.py`, `tests/agent/test_probe_cache_followups.py`, candidate diff |
 
@@ -123,7 +123,7 @@ Observed: Ruff check passed, the new test file was already formatted, compileall
 | --- | --- | --- |
 | Use an advertised per-model context window when present | Candidate loopback generic row carried synthetic `context_length=872000`; `fetch_endpoint_model_metadata()` preserved it and `get_model_context_length()` returned `872000` for the custom endpoint | `tests/agent/test_model_metadata_gateway.py` |
 | Keep explicit fallback/override compatibility | `test_context_override_remains_available_when_gateway_has_no_context` returned explicit `config_context_length=123456`; existing custom-endpoint catalog fallback also passed | `tests/agent/test_model_metadata_gateway.py`, `tests/agent/test_model_metadata.py` |
-| Do not guess or silently widen routing | Only the existing metadata parser/fallback and focused tests changed; no provider, routing, request, auth, or context-probe tier was widened | Candidate diff and 46-test adjacent suite |
+| Do not guess or silently widen routing | Only the existing metadata parser/fallback and focused tests changed; no provider, routing, request, auth, or context-probe tier was widened | Candidate diff and 45-test adjacent suite |
 | Preserve authentication boundaries | Loopback fixtures used no API key and did not exercise or copy credentials; existing adjacent probe tests remained green | `tests/agent/test_model_metadata_gateway.py`, `tests/agent/test_model_metadata_local_ctx.py` |
 
 ## 6. Downstream ledger paragraph (not applied by this unit)
@@ -132,12 +132,12 @@ Observed: Ruff check passed, the new test file was already formatted, compileall
 ### ABR-META / #306 + #293 — shape-aware local gateway metadata
 
 - **Issues:** [#306](https://github.com/DarkArty07/Aether-Agents/issues/306), [#293](https://github.com/DarkArty07/Aether-Agents/issues/293)
-- **Commit:** `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f`
+- **Commit(s):** `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f`, `adaa181c08321e6d7fce4b875b8d36c0998b520a`, `d68132254b088d26730134d86f8b27a7474ef460`
 - **Evidence:** `specs/autonomous-bug-remediation/evidence/ABR-META.md`
 - **Scope:** Maintained-fork `agent/model_metadata.py` local endpoint metadata parser and synthetic loopback regressions.
-- **Behavior:** The existing LM Studio metadata branch now requires a top-level `models` list and only returns a non-empty native cache. Empty, malformed, or generic OpenAI-compatible responses fall through to the existing `/models` parser, which preserves advertised per-model context values. Explicit context overrides and fallback/catalog behavior remain available; global detector, inference routing, payload, authentication, and auxiliary-client behavior are unchanged.
+- **Behavior:** The existing LM Studio metadata branch now requires a top-level `models` list and only returns a non-empty native cache. When the same HTTP-200 `/api/v1/models` response instead carries a generic OpenAI-compatible `data` list, the bounded generic parser consumes it directly; empty native lists with generic data receive the same treatment. The existing generic model-list loop reuses that parser, preserving advertised per-model context values. Explicit context overrides and fallback/catalog behavior remain available; global detector, inference routing, payload, authentication, and auxiliary-client behavior are unchanged.
 - **Upstream relationship:** Candidate is based on maintained-fork `aether-main` `28b593efa86bbc674b32f488c35932a4e7e85a51`; no moving dependency or upstream upgrade was introduced. Retire this patch only after an exact released upstream artifact provides the same shape-aware fallback and the ABR-META regression suite passes without the local commit.
-- **Rollback:** Revert local fork commit `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f`.
+- **Rollback:** Revert the local fork commits in reverse order: `d68132254b088d26730134d86f8b27a7474ef460`, `adaa181c08321e6d7fce4b875b8d36c0998b520a`, then `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f`.
 ```
 
 ## 7. Limits and remaining risk
