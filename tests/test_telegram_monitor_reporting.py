@@ -284,28 +284,122 @@ def test_fabricated_completion_requires_verified_observed_completion_evidence() 
 def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
     snapshot = _snapshot(_item(state="in_progress"))
 
-    current_completion = _narrative(_narrative_item())
-    current_completion["items"][0]["current"][0]["text"] = "All work completed and accepted."
-    with pytest.raises(reporting.ReportingError) as completion_error:
-        reporting.validate_narrative(snapshot, current_completion)
-    assert completion_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+    for claim_text, status in (
+        ("All work completed and accepted.", "in_progress"),
+        ("Todo está listo.", "listo"),
+        ("The work has shipped.", "shipped"),
+        ("The work is ready.", "ready"),
+        ("El cambio fue entregado.", "entregado"),
+    ):
+        fabricated_narrative = _narrative(_narrative_item(status=status))
+        fabricated_narrative["items"][0]["current"][0]["text"] = claim_text
+        with pytest.raises(reporting.ReportingError) as completion_error:
+            reporting.validate_narrative(snapshot, fabricated_narrative)
+        assert completion_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
 
-    status_completion = _narrative(_narrative_item(status="completed_by_Friday"))
-    with pytest.raises(reporting.ReportingError) as status_error:
-        reporting.validate_narrative(snapshot, status_completion)
-    assert status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+    for invalid_status in (
+        "completed_by_Friday",
+        "completado",
+        "listo",
+        "shipped",
+        "ready",
+        "entregado",
+        "listo_para_el_lunes",
+    ):
+        status_completion = _narrative(_narrative_item(status=invalid_status))
+        with pytest.raises(reporting.ReportingError) as status_error:
+            reporting.validate_narrative(snapshot, status_completion)
+        assert status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
 
-    spanish_status_completion = _narrative(_narrative_item(status="completado"))
-    with pytest.raises(reporting.ReportingError) as spanish_status_error:
-        reporting.validate_narrative(snapshot, spanish_status_completion)
-    assert spanish_status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
-
-    for forbidden in ("La previsión terminará mañana.", "El progreso está al 80 por ciento."):
+    for forbidden in (
+        "La previsión terminará mañana.",
+        "El progreso está al 80 por ciento.",
+        "Estará listo el viernes.",
+        "El progreso es 80 pct.",
+        "Progress is 100 pct.",
+        "Work is 80% complete.",
+    ):
         forbidden_narrative = _narrative(_narrative_item())
         forbidden_narrative["items"][0]["current"][0]["text"] = forbidden
         with pytest.raises(reporting.ReportingError) as forbidden_error:
             reporting.validate_narrative(snapshot, forbidden_narrative)
         assert forbidden_error.value.code == "NARRATIVE_UNSAFE"
+
+    # Verified terminal items accept completion statuses
+    completed_item = _item(state="completed")
+    completed_item["resolved"] = [
+        _fact("work_alpha_resolved", "The work was accepted by the required review.")
+    ]
+    completed_snapshot = _snapshot(completed_item)
+    for terminal_status in ("completed", "listo", "shipped", "ready"):
+        valid_completed = _narrative(_narrative_item(status=terminal_status))
+        validated = reporting.validate_narrative(completed_snapshot, valid_completed)
+        assert validated["items"][0]["status"] == terminal_status
+
+
+def test_coverage_gap_claim_boundary_and_legitimate_notices() -> None:
+    snapshot = _snapshot(_item())
+
+    # Global coverage gap string with forbidden percentage
+    bad_global_percent = copy.deepcopy(snapshot)
+    bad_global_percent["coverage_gaps"] = ["Work is 80% complete."]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_global_percent)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Per-item coverage gap string with forecast
+    bad_item_forecast = copy.deepcopy(snapshot)
+    bad_item_forecast["items"][0]["coverage_gaps"] = ["Estará listo el viernes."]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_item_forecast)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Structured coverage gap message with pct percentage
+    bad_structured_pct = copy.deepcopy(snapshot)
+    bad_structured_pct["coverage_gaps"] = [
+        {"code": "GAP_PROGRESS", "message": "Progress is 100 pct."}
+    ]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_structured_pct)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Global coverage gap with completion assertion
+    bad_global_completion = copy.deepcopy(snapshot)
+    bad_global_completion["coverage_gaps"] = ["Todo está listo."]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_global_completion)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Per-item coverage gap with completion assertion
+    bad_item_completion = copy.deepcopy(snapshot)
+    bad_item_completion["items"][0]["coverage_gaps"] = ["The work has shipped."]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_item_completion)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Structured coverage gap with completion assertion
+    bad_structured_completion = copy.deepcopy(snapshot)
+    bad_structured_completion["coverage_gaps"] = [
+        {"code": "GAP_DONE", "message": "All work completed and accepted."}
+    ]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_structured_completion)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Legitimate compacted notice and diagnostic codes are preserved
+    legit_snapshot = copy.deepcopy(snapshot)
+    legit_snapshot["coverage_gaps"] = [
+        "[COMPACTED] Source detail was bounded for narration; 10 fact(s) require handling.",
+        {"code": "GAP_UNTRACKED", "message": "Untracked files were skipped during collection"},
+    ]
+    prompt = reporting.build_narration_prompt(legit_snapshot)
+    assert "[COMPACTED]" in prompt
+    assert "GAP_UNTRACKED" in prompt
+
+    narrative = _narrative(_narrative_item())
+    rendered = reporting.render_report(legit_snapshot, narrative)
+    assert "[COMPACTED]" in rendered
+    assert "GAP_UNTRACKED" in rendered
 
 
 def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> None:
@@ -349,6 +443,10 @@ def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> 
         ("+1 555-123-4567", "REPORTING_UNSAFE_CONTENT"),
         ("El progreso está al 80 por ciento.", "REPORTING_FORBIDDEN_CLAIM"),
         ("La previsión terminará mañana.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("Estará listo el viernes.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("El progreso es 80 pct.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("Work is 80% complete.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("Progress is 100 pct.", "REPORTING_FORBIDDEN_CLAIM"),
     ],
 )
 def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code: str) -> None:
@@ -372,6 +470,10 @@ def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code:
         "+1 555-123-4567",
         "El progreso está al 80 por ciento.",
         "La previsión terminará mañana.",
+        "Estará listo el viernes.",
+        "El progreso es 80 pct.",
+        "Work is 80% complete.",
+        "Progress is 100 pct.",
     ],
 )
 def test_selected_narrative_canaries_fail_before_output(canary: str) -> None:

@@ -135,19 +135,21 @@ _PROMPT_INJECTION_RE: Final = re.compile(
 )
 _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"(?:"
-    r"\b\d+(?:[.,]\d+)?\s*%|"
-    r"\b(?:percent|percentage|porcentaje|por\s+ciento|porciento)\b|"
+    r"\b\d+(?:[.,]\d+)?\s*(?:%|pct\.?|percent|percentage|porciento|por\s+ciento)(?!\w)|"
+    r"\b(?:percent|percentage|porcentaje|por\s+ciento|porciento)\b|(?<!\w)pct\.?(?!\w)|"
     r"(?<![A-Za-z])e\.?t\.?a\.?\b|"
     r"\b(?:estimated\s+time\s+of\s+arrival|forecast(?:ed)?|projected?|"
     r"predicted?|estimate(?:d)?|projection)\b|"
     r"\b(?:pron[oó]stico|previsi[oó]n|previst[oa]s?|estimaci[oó]n|estimad[oa]s?|"
-    r"proyectad[oa]s?|predich[oa]s?)\b|"
-    r"\b(?:se\s+espera|esperamos|se\s+prev[eé])\b|"
-    r"\b(?:finish|finished|complete|completed)\s+(?:by|in)\s+"
-    r"(?:\d|today\b|tomorrow\b|yesterday\b|this\s+(?:hour|morning|week)\b|"
+    r"proyectad[oa]s?|predich[oa]s?|esperad[oa]s?)\b|"
+    r"\b(?:se\s+espera|esperamos|se\s+prev[eé]|se\s+pronostica)\b|"
+    r"\b(?:finish|finished|complete|completed|ready|done|ship|shipped|deliver|delivered)\s+(?:by|in|on|before|for)\s+"
+    r"(?:\d|today\b|tomorrow\b|yesterday\b|this\s+(?:hour|morning|afternoon|week|month)\b|"
     r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)|"
-    r"\b(?:termin(?:ar|ará)|finalizar(?:á)?|completar(?:á)?)\b.{0,40}"
-    r"\b(?:mañana|hoy|ayer|lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b|"
+    r"\b(?:will\s+be\s+(?:ready|finished|completed|done|shipped|delivered)|will\s+(?:finish|complete|ship|deliver))\b|"
+    r"\b(?:estar[áa]n?|quedar[áa]n?|ser[áa]n?|va\s+a\s+estar)\s+(?:list[oa]s?|terminad[oa]s?|finalizad[oa]s?|completad[oa]s?|entregad[oa]s?|desplegad[oa]s?)\b|"
+    r"\b(?:list[oa]s?|termin(?:ar|ar[áa]|ad[oa]s?)|finaliz(?:ar|ar[áa]|ad[oa]s?)|complet(?:ar|ar[áa]|ad[oa]s?)|entreg(?:ar|ar[áa]|ad[oa]s?)|despleg(?:ar|ar[áa]|ad[oa]s?))\b.{0,40}"
+    r"\b(?:mañana|hoy|ayer|pronto|este\s+(?:mes|año|fin\s+de\s+semana)|esta\s+semana|(?:el\s+|pr[oó]xim[oa]\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|sabado|domingo))\b|"
     r"\b(?:worked|spent|took|used)\s+\d+(?:[.,]\d+)?\s*"
     r"(?:seconds?|minutes?|hours?|days?)\b|"
     r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+\d+(?:[.,]\d+)?\s*"
@@ -158,11 +160,33 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     re.IGNORECASE,
 )
 _COMPLETION_ASSERTION_RE: Final = re.compile(
-    r"(?<![A-Za-z])(?:complete(?:d|s|ing)?|done|finish(?:ed|es|ing)?|resolved|"
-    r"accepted|closed|succeed(?:ed|s)?|passed|complet(?:e|o|a|ad[oa]s?|ar(?:á|án)?|ó)|"
-    r"termin(?:ad[oa]s?|ar|ó|ará)|finaliz(?:ad[oa]s?|ar|ará)|resuelt[oa]s?|"
-    r"aceptad[oa]s?|cerrad[oa]s?|aprobado[as]?)"
-    r"(?![A-Za-z])",
+    r"(?<![A-Za-zÁÉÍÓÚáéíóúÑñ])(?:"
+    r"complete(?:d|s|ing|tion)?|"
+    r"done|"
+    r"finish(?:ed|es|ing)?|"
+    r"resolv(?:ed?|es|ing)|resolution|"
+    r"accept(?:ed?|s|ing|ance)?|"
+    r"clos(?:ed?|es|ing)|"
+    r"succeed(?:ed|s|ing)?|success(?:ful)?|"
+    r"pass(?:ed|es|ing)?|"
+    r"ready|"
+    r"ship(?:ped|s|ping|ment)?|"
+    r"deliver(?:ed?|s|ing|y)?|"
+    r"deploy(?:ed?|s|ing|ment)?|"
+    r"release(?:d?|s|ing)?|"
+    r"complet(?:e|o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
+    r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
+    r"finaliz(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
+    r"resuelt[oa]s?|resolv(?:er|ió|ieron|erá|erán)|"
+    r"aceptad[oa]s?|acept(?:ar|ó|aron|ará|arán)|"
+    r"cerrad[oa]s?|cerr(?:ar|ó|aron|ará|arán)|"
+    r"aprobad[oa]s?|aprob(?:ar|ó|aron|ará|arán)|"
+    r"list[oa]s?|"
+    r"entregad[oa]s?|entreg(?:ar|ó|aron|ará|arán)|"
+    r"desplegad[oa]s?|despleg(?:ar|ó|aron|ará|arán)|"
+    r"liberad[oa]s?|liber(?:ar|ó|aron|ará|arán)|"
+    r"[eé]xit[oa]s?"
+    r")(?![A-Za-zÁÉÍÓÚáéíóúÑñ])",
     re.IGNORECASE,
 )
 
@@ -177,22 +201,60 @@ _COMPLETION_STATUSES: Final = frozenset(
         "success",
         "succeeded",
         "passed",
+        "ready",
+        "shipped",
+        "ship",
+        "delivered",
+        "deployed",
+        "released",
         "completo",
         "completa",
+        "completos",
+        "completas",
         "completado",
         "completada",
+        "completados",
+        "completadas",
         "terminado",
         "terminada",
+        "terminados",
+        "terminadas",
         "finalizado",
         "finalizada",
+        "finalizados",
+        "finalizadas",
         "resuelto",
         "resuelta",
+        "resueltos",
+        "resueltas",
         "aceptado",
         "aceptada",
+        "aceptados",
+        "aceptadas",
         "cerrado",
         "cerrada",
+        "cerrados",
+        "cerradas",
         "aprobado",
         "aprobada",
+        "aprobados",
+        "aprobadas",
+        "listo",
+        "lista",
+        "listos",
+        "listas",
+        "entregado",
+        "entregada",
+        "entregados",
+        "entregadas",
+        "desplegado",
+        "desplegada",
+        "desplegados",
+        "desplegadas",
+        "liberado",
+        "liberada",
+        "liberados",
+        "liberadas",
     }
 )
 _TERMINAL_OBSERVED_STATES: Final = frozenset(
@@ -206,22 +268,60 @@ _TERMINAL_OBSERVED_STATES: Final = frozenset(
         "succeeded",
         "success",
         "passed",
+        "ready",
+        "shipped",
+        "ship",
+        "delivered",
+        "deployed",
+        "released",
         "completo",
         "completa",
+        "completos",
+        "completas",
         "completado",
         "completada",
+        "completados",
+        "completadas",
         "terminado",
         "terminada",
+        "terminados",
+        "terminadas",
         "finalizado",
         "finalizada",
+        "finalizados",
+        "finalizadas",
         "resuelto",
         "resuelta",
+        "resueltos",
+        "resueltas",
         "aceptado",
         "aceptada",
+        "aceptados",
+        "aceptadas",
         "cerrado",
         "cerrada",
+        "cerrados",
+        "cerradas",
         "aprobado",
         "aprobada",
+        "aprobados",
+        "aprobadas",
+        "listo",
+        "lista",
+        "listos",
+        "listas",
+        "entregado",
+        "entregada",
+        "entregados",
+        "entregadas",
+        "desplegado",
+        "desplegada",
+        "desplegados",
+        "desplegadas",
+        "liberado",
+        "liberada",
+        "liberados",
+        "liberadas",
     }
 )
 
@@ -474,14 +574,15 @@ def _coverage_list(value: Any, *, field: str) -> list[Any]:
     result: list[Any] = []
     for entry in entries:
         if isinstance(entry, str):
-            result.append(
-                _bounded_text(
-                    entry,
-                    max_chars=MAX_PROSE_CHARS,
-                    check_claims=False,
-                    check_injection=True,
-                )
+            text = _bounded_text(
+                entry,
+                max_chars=MAX_PROSE_CHARS,
+                check_claims=True,
+                check_injection=True,
             )
+            if _COMPLETION_ASSERTION_RE.search(text):
+                _fail("REPORTING_FORBIDDEN_CLAIM", "coverage entry contains a completion claim")
+            result.append(text)
             continue
         mapping = _mapping(entry, "REPORTING_SCHEMA_INVALID", "coverage entry is invalid")
         keys = set(mapping)
@@ -492,15 +593,18 @@ def _coverage_list(value: Any, *, field: str) -> list[Any]:
             continue
         if keys != {"code", "message"}:
             _fail("REPORTING_SCHEMA_INVALID", "coverage entry is invalid")
+        message = _bounded_text(
+            mapping["message"],
+            max_chars=MAX_PROSE_CHARS,
+            check_claims=True,
+            check_injection=True,
+        )
+        if _COMPLETION_ASSERTION_RE.search(message):
+            _fail("REPORTING_FORBIDDEN_CLAIM", "coverage entry contains a completion claim")
         result.append(
             {
                 "code": _identifier(mapping["code"], field=f"{field} code"),
-                "message": _bounded_text(
-                    mapping["message"],
-                    max_chars=MAX_PROSE_CHARS,
-                    check_claims=False,
-                    check_injection=True,
-                ),
+                "message": message,
             }
         )
     return sorted(result, key=lambda entry: json.dumps(entry, ensure_ascii=False, sort_keys=True))
