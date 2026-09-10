@@ -145,3 +145,49 @@ this closeout. Therefore there is no objective monitor to remove here; progress 
 return use durable board state. Cleanup of merged objective branches/worktrees occurs only
 after durable Aether merge evidence, while active, unmerged, concurrent, unrelated and
 campaign-owned residue remains preserved.
+
+## Morfeo contract-result reception
+
+Aether artifact reviewed: `070452d04b61d480fe6b41cd7ec8c42e6f266b70`
+(PR #386). Maintained-fork artifact: `415056fee527c5a2302370bd6dba56f84b9a4202`
+(PR #6). Current owner instruction authorizes successive bug batches, excludes
+#275, and preserves existing acceptance. The original finalized contract remains
+byte-identical to its recorded digest.
+
+Verdict: the four-issue remediation/disposition outcome is supported. This does
+not mean four causal repairs, green full suites, a release or live activation.
+#354 and #369 closed; #352 and #357 remain open with evidence and next boundaries.
+
+### Criterion coverage
+
+The following table separates direct Morfeo checks from reused pipeline evidence.
+
+| Contract criterion | Artifact and evidence | Result / limit |
+| --- | --- | --- |
+| AC-1 scope and graph | Direct: native component has all four units, FU-352-R and terminal done. Disconnected test probe excluded. | Supported; no #275 unit. |
+| AC-2 lineage | Direct: named concurrent-flow canary at Aether `070452d` passed; inspected exact source pin, ancestry, digest and primary/ref preservation assertions. | Supported for maintained-source behavior; live runtime was not activated. |
+| AC-3 independent goal review | Reused: Supervisor's native tool/CLI/review/recovery matrix passed on fork `415056f`. Direct: inspected portable implementation/digest; GitHub comparison from reviewed `8b600f3` to `415056f` changes only `AETHER_FORK.md`. | Supported; no independent Morfeo rerun of the fork matrix or live model qualification. |
+| AC-4 PluginContext | Direct: qualification/privacy module rerun on `070452d`; inspected nonce/source qualification and content-free fallback. Post-merge run `34481606730` passed the harness step on 3.11/3.12/3.13. Source/test bytes equal reviewed `2169f73`. | Diagnostic delivery supported; #357 stays OPEN, no causal fix established. |
+| AC-5 concurrency | Direct: named competing-process oracle rerun at `070452d` passed. Reused: FU-352-R run24 independently approved `83ad2a5`, record `ab4eaa8`, including 90 module tests and bounded repetitions. | Evidence disposition supported; #352 stays OPEN, not claimed fixed. |
+| AC-6 scope/tests | Direct: PR diff and all accepted commit ancestries verified; no diff-check errors. Reused: terminal full Aether/fork suites, build, static checks and attributed baseline failures above. | Focused reception passed; full suites were not rerun by Morfeo and are not globally green. |
+| AC-7 GitHub | Direct: both PRs MERGED at the exact revisions above; four required Aether checks SUCCESS. Inspected failed post-merge logs: only historical public-artifact and selected-public-Hermes review assertions. Fork check rollup empty. | Source integrated; fork Actions NOT RUN, nonrequired Aether CI red. |
+| AC-8 issue disposition | Direct: #354/#369/#371 CLOSED and #352/#357 OPEN. Reused terminal receipt records #275 unchanged timestamp; no #275 operation by this reception. | Honest dispositions supported; excluded work untouched. |
+| AC-9 release/authority | Reused terminal no-activation/no-publication report; direct code/resource diff consistent with compatible review repair and additive diagnostics. | patch / defer / none; no live activation or release qualification claimed. |
+| AC-10 cleanup | Direct: batch local branches absent, four unit directories absent, Aether remote branch absent; fork remote branch still exists. Root detached workspace remains for exit; campaign and receipt worktrees retained. | Documented residue, no blanket clean claim or bypass of denied deletion. |
+
+### Direct reception execution and limits
+
+On exact Aether `070452d`, CPython 3.13.15, using disposable Hermes/state homes
+and no live board bindings, Morfeo executed the canonical wrapper with
+`HERMES_TEST_FILE_RETRIES=0` and these targets:
+
+- `tests/test_objective_contracts.py::test_concurrent_flow_handoff_preserves_lineage_through_reconstructed_maintained_resolver`
+- `tests/test_observation_qualification.py`
+- `tests/test_observation_lifecycle.py::test_two_process_transitions_with_one_expected_active_have_one_commit`
+
+Observed: **62 passed, 1 skipped in 38.69s**, process exit 0. This is a focused
+reception, not a rerun of the complete Aether/fork suites, their multi-Python
+matrix or live provider traffic. The skip remains visible.
+
+No material acceptance mismatch remains for the allowed issue dispositions.
+The separately recorded process defects remain pending in the continuous campaign.
