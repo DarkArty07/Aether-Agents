@@ -881,6 +881,33 @@ One portable pre-tool policy permits ordinary reversible local work while blocki
 
 None.
 
+## `profiles.headless-worker-tools`
+
+**Status:** `implemented`
+
+Portable worker profiles exclude desktop control and interactive clarification; all role templates select native Exa search/extraction without credentials.
+
+### Surfaces
+- `policy.headless-worker-tools`
+
+### Current documentation
+- [docs/reference/plugins-and-tools.md](plugins-and-tools.md)
+
+### Owning specifications
+- [specs/worker-tool-surface/spec.md](../../specs/worker-tool-surface/spec.md)
+
+### Implementation
+- [src/aether_agents/resources/profiles/implementer/config.yaml](../../src/aether_agents/resources/profiles/implementer/config.yaml)
+- [src/aether_agents/resources/profiles/morfeo/config.yaml](../../src/aether_agents/resources/profiles/morfeo/config.yaml)
+- [src/aether_agents/resources/profiles/supervisor/config.yaml](../../src/aether_agents/resources/profiles/supervisor/config.yaml)
+
+### Verification
+- [tests/test_worker_tool_defaults.py](../../tests/test_worker_tool_defaults.py)
+
+### Notes / current limits
+
+Native platform resolution and provisioned web credentials determine runtime availability. Existing running agents/profiles are not migrated by a repository merge; tool selection is not an authority or security boundary.
+
 ## `roles.portable-profile-bundle`
 
 **Status:** `partial`

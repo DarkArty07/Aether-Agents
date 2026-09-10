@@ -318,6 +318,7 @@ jobs:
           tests/test_knowledge_plugin_cli.py
           tests/test_knowledge_regressions.py
           tests/test_knowledge_resources.py
+          tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py
           tests/test_project_knowledge_engine.py
           tests/test_work_memory.py
