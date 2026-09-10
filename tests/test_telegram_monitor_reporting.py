@@ -281,7 +281,9 @@ def test_fabricated_completion_requires_verified_observed_completion_evidence() 
     assert accepted["items"][0]["status"] == "completed"
 
 
-@pytest.mark.parametrize("observed_state", ["ready", "listo"])
+@pytest.mark.parametrize(
+    "observed_state", ["ready", "listo", "passed", "success", "resolved", "shipped", "deployed"]
+)
 def test_readiness_observed_states_cannot_ground_terminal_completion(observed_state: str) -> None:
     item = _item(state=observed_state)
     item["resolved"] = [_fact("work_alpha_resolved", "The test completed successfully.")]
@@ -304,6 +306,15 @@ def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_c
         "We expect delivery Friday.",
         "The task took one hour.",
         "La tarea tardó una hora.",
+        "La tarea ha concluido.",
+        "Todo ha culminado.",
+        "The whole job is wrapped up.",
+        "All objectives are fulfilled.",
+        "All goals are met.",
+        "La tarea acabará el viernes.",
+        "It required one hour.",
+        "One hour was spent on the task.",
+        "La tarea consumió una hora.",
     )
     for claim in claims:
         source_item = _item(state="in_progress")
@@ -344,6 +355,11 @@ def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_c
         "ready",
         "entregado",
         "listo_para_el_lunes",
+        "concluido",
+        "culminado",
+        "wrapped_up",
+        "fulfilled",
+        "narrating",
     ):
         status_completion = _narrative(_narrative_item(status=invalid_status))
         with pytest.raises(reporting.ReportingError) as status_error:
@@ -383,10 +399,26 @@ def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_c
         _fact("work_alpha_resolved", "The work was accepted by the required review.")
     ]
     completed_snapshot = _snapshot(completed_item)
-    for terminal_status in ("completed", "listo", "shipped", "ready"):
+    for terminal_status in ("completed",):
         valid_completed = _narrative(_narrative_item(status=terminal_status))
         validated = reporting.validate_narrative(completed_snapshot, valid_completed)
         assert validated["items"][0]["status"] == terminal_status
+
+
+@pytest.mark.parametrize("terminal_status", ["failed", "cancelled", "timed_out", "interrupted"])
+def test_noncompletion_terminal_statuses_must_match_observed_state(terminal_status: str) -> None:
+    in_progress = _snapshot(_item(state="in_progress"))
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(
+            in_progress, _narrative(_narrative_item(status=terminal_status))
+        )
+    assert error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+    terminal_snapshot = _snapshot(_item(state=terminal_status))
+    accepted = reporting.validate_narrative(
+        terminal_snapshot, _narrative(_narrative_item(status=terminal_status))
+    )
+    assert accepted["items"][0]["status"] == terminal_status
 
 
 def test_verified_resolved_subfacts_can_coexist_with_in_progress_status() -> None:

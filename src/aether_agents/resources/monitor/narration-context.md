@@ -30,6 +30,11 @@ be copied from a source candidate belonging to the same work item. Keep each cla
 600 characters and never invent a result, completion, identity, time, source, recipient,
 percentage, ETA, forecast, budget, CPU-hour, or agent-hour claim. A planned next step is
 not an executed result. Preserve unresolved complications and pending owner action.
-The renderer, not you, supplies project/session/contract identity, timestamps, evidence
-labels, headers, and Telegram part markers. Empty sections are allowed when the snapshot
+Use only these canonical lifecycle values for `status`: `queued`, `running`, `in_progress`,
+`review`, `waiting`, `blocked`, `triage`, `completed`, `failed`, `cancelled`, `timed_out`,
+`interrupted`, or `unknown`. Use `completed` only when the snapshot's observed state is
+exactly `completed` and verified observed resolution evidence supports it; do not substitute
+translated or free-form completion labels. The renderer, not you, supplies
+project/session/contract identity, timestamps, evidence labels, headers, and Telegram part
+markers. Empty sections are allowed when the snapshot
 has no supporting candidate; absence of evidence must remain visible in the final report.

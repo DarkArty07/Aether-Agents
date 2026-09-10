@@ -167,6 +167,9 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"\b(?:list[oa]s?|termin(?:ar|ar[áa]n?|ad[oa]s?)|finaliz(?:ar|ar[áa]n?|ad[oa]s?)|complet(?:ar|ar[áa]n?|ad[oa]s?)|entreg(?:ar|ar[áa]n?|ad[oa]s?)|despleg(?:ar|ar[áa]n?|ad[oa]s?)|conclu(?:ir|ir[áa]n?|ye|yen)|culmin(?:ar|ar[áa]n?|ad[oa]s?))\b.{0,40}"
     r"\b(?:mañana|hoy|ayer|pronto|este\s+(?:mes|año|fin\s+de\s+semana)|esta\s+semana|(?:el\s+|pr[oó]xim[oa]\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|sabado|domingo))\b|"
     r"\b(?:concluir[áa]n?|culminar[áa]n?)\b|"
+    r"\b(?:acab|termin|finaliz|conclu|culmin)\w*\s+(?:el\s+)?(?:hoy|mañana|ayer|"
+    r"(?:pr[oó]ximo\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|"
+    r"s[aá]bado|sabado|domingo)|\d)\b|"
     r"\b(?:worked|spent|took|used)\s+(?:\d+(?:[.,]\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
     r"(?:seconds?|minutes?|hours?|days?)\b|"
     r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+(?:\d+(?:[.,]\d+)?|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*"
@@ -174,6 +177,14 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"\b(?:cpu|agent|active)\s*[- ]?hours?\b|\b(?:cpu|agent)\s*[- ]?hrs?\b|"
     r"\b\d+(?:[.,]\d+)?\s*horas?\s+(?:de\s+)?(?:cpu|agente|trabajo)\b"
     r")",
+    re.IGNORECASE,
+)
+
+_DURATION_CLAIM_RE: Final = re.compile(
+    r"\b(?:\d+(?:[.,]\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"a|an|un[oa]?|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*"
+    r"(?:[-–—]\s*)?(?:seconds?|minutes?|hours?|days?|secs?|mins?|hrs?|"
+    r"segundos?|minutos?|horas?|d[ií]as?)\b",
     re.IGNORECASE,
 )
 
@@ -215,35 +226,12 @@ _DELIVERY_DEGRADATION_RE: Final = re.compile(
 
 _COMPLETION_ASSERTION_RE: Final = re.compile(
     r"(?<![A-Za-zÁÉÍÓÚáéíóúÑñ])(?:"
-    r"complete(?:d|s|ing)?|"
-    r"accomplish(?:ed|es|ing)?|"
-    r"done|"
-    r"finish(?:ed|es|ing)?|"
-    r"resolv(?:ed?|es|ing)|"
-    r"accept(?:ed?|s|ing)?|"
-    r"clos(?:ed?|es|ing)|"
-    r"succeed(?:ed|s|ing)?|success(?:ful)?|"
-    r"pass(?:ed|es|ing)?|"
-    r"finaliz(?:e|ed|es|ing)?|"
-    r"ready|"
-    r"ship(?:ped|s|ping)?|"
-    r"deliver(?:ed|s|ing)?|"
-    r"deploy(?:ed|s|ing)?|"
-    r"release(?:d?|s|ing)?|"
-    r"over|"
-    r"complet(?:e|o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
-    r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
-    r"finaliz(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
-    r"resuelt[oa]s?|resolv(?:er|ió|ieron|erá|erán)|"
-    r"hech[oa]s?|"
-    r"aceptad[oa]s?|acept(?:ar|ó|aron|ará|arán)|"
-    r"cerrad[oa]s?|cerr(?:ar|ó|aron|ará|arán)|"
-    r"aprobad[oa]s?|aprob(?:ar|ó|aron|ará|arán)|"
-    r"list[oa]s?|"
-    r"entregad[oa]s?|entreg(?:ar|ó|aron|ará|arán)|"
-    r"desplegad[oa]s?|despleg(?:ar|ó|aron|ará|arán)|"
-    r"liberad[oa]s?|liber(?:ar|ó|aron|ará|arán)|"
-    r"[eé]xit[oa]s?"
+    r"wrapped\s+up|wrap\s+up|"
+    r"(?:complete|accomplish|finish|resolv|accept|clos|succeed|pass|finaliz|ready|"
+    r"ship|deploy|release|conclud|culminat|fulfill|wrap)\w*|"
+    r"deliver(?:ed|s|ing)?|success(?:ful)?|done|met|over|"
+    r"(?:complet|termin|finaliz|resolv|hech|acept|cerr|aprob|list|entreg|"
+    r"despleg|liber|conclu|culmin|acab)\w*"
     r")(?![A-Za-zÁÉÍÓÚáéíóúÑñ])",
     re.IGNORECASE,
 )
@@ -251,27 +239,17 @@ _COMPLETION_ASSERTION_RE: Final = re.compile(
 _WHOLE_ITEM_SUBJECT_RE: Final = re.compile(
     r"(?:"
     r"\b(?:all|every|everything|todo|toda|todos|todas)\b|"
-    r"\b(?:the|this|that|el|la|los|las)\s+(?:work|task|item|project|change|delivery|report|"
+    r"\b(?:the|this|that|el|la|los|las)\s+(?:work|task|item|job|project|change|delivery|report|"
     r"objective(?:s)?|goal(?:s)?|trabajo|tarea|proyecto|cambio|entrega|objetivo(?:s)?)\b|"
-    r"\b(?:work|task|item|project|change|delivery|report|objective(?:s)?|goal(?:s)?|"
+    r"\b(?:work|task|item|job|project|change|delivery|report|objective(?:s)?|goal(?:s)?|"
     r"trabajo|tarea|proyecto|cambio|entrega|objetivo(?:s)?)\b"
     r")",
     re.IGNORECASE,
 )
 
-_LEADING_WHOLE_ITEM_COMPLETION_RE: Final = re.compile(
-    r"^\s*(?:"
-    r"complete(?:d|s|ing)?|accomplish(?:ed|es|ing)?|done|finish(?:ed|es|ing)?|"
-    r"resolv(?:ed|es|ing)?|accept(?:ed|s|ing)?|clos(?:ed|es|ing)?|"
-    r"succeed(?:ed|s|ing)?|pass(?:ed|es|ing)?|finaliz(?:e|ed|es|ing)?|"
-    r"ship(?:ped|s|ping)?|deliver(?:ed|s|ing)?|deploy(?:ed|s|ing)?|"
-    r"release(?:d?|s|ing)?|complet(?:o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
-    r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|finaliz(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
-    r"resuelt[oa]s?|resolv(?:er|ió|ieron|erá|erán)|hech[oa]s?|aceptad[oa]s?|"
-    r"cerrad[oa]s?|aprob(?:ad[oa]s?|ar|ó|aron|ará|arán)|entregad[oa]s?|"
-    r"desplegad[oa]s?|liberad[oa]s?"
-    r")\s+(?:(?:all|every|the|this|that|todo|toda|todos|todas)\s+)?"
-    r"(?:work|task|item|project|change|delivery|report|objective(?:s)?|goal(?:s)?|"
+_WHOLE_ITEM_OBJECT_RE: Final = re.compile(
+    r"^\s+(?:(?:all|every|the|this|that|todo|toda|todos|todas)\s+)?"
+    r"(?:work|task|item|job|project|change|delivery|report|objective(?:s)?|goal(?:s)?|"
     r"trabajo|tarea|proyecto|cambio|entrega|informe|objetivo(?:s)?|meta(?:s)?)\b",
     re.IGNORECASE,
 )
@@ -298,6 +276,16 @@ def _has_completion_assertion(text: str) -> bool:
     return bool(_COMPLETION_ASSERTION_RE.search(masked))
 
 
+def _has_forbidden_claim(text: str) -> bool:
+    """Return True for forecast, metric, or human-time accounting claims."""
+    normalized = re.sub(r"[-_]+", " ", text)
+    return any(
+        pattern.search(candidate)
+        for pattern in (_FORBIDDEN_CLAIM_RE, _DURATION_CLAIM_RE)
+        for candidate in (text, normalized)
+    )
+
+
 def _has_whole_item_completion_assertion(text: str) -> bool:
     """Return True for completion language that claims the whole work item is done."""
 
@@ -307,7 +295,8 @@ def _has_whole_item_completion_assertion(text: str) -> bool:
     masked = _EXPLICIT_NEGATION_RE.sub(" ", normalized)
     masked = _GATE_READINESS_RE.sub(" ", masked)
     masked = _DELIVERY_DEGRADATION_RE.sub(" ", masked)
-    if _LEADING_WHOLE_ITEM_COMPLETION_RE.search(masked):
+    leading = _COMPLETION_ASSERTION_RE.match(masked)
+    if leading is not None and _WHOLE_ITEM_OBJECT_RE.match(masked[leading.end() :]):
         return True
     subject = _WHOLE_ITEM_SUBJECT_RE.search(masked)
     if subject is None:
@@ -321,141 +310,30 @@ def _has_whole_item_completion_assertion(text: str) -> bool:
     return not any(marker in between for marker in ".;!?")
 
 
-_COMPLETION_STATUSES: Final = frozenset(
+_NARRATIVE_STATUSES: Final = frozenset(
     {
-        "complete",
+        "queued",
+        "running",
+        "in_progress",
+        "review",
+        "waiting",
+        "blocked",
+        "triage",
         "completed",
-        "accomplished",
-        "done",
-        "resolved",
-        "finalized",
-        "accepted",
-        "closed",
-        "success",
-        "succeeded",
-        "passed",
-        "ready",
-        "shipped",
-        "ship",
-        "delivered",
-        "deployed",
-        "released",
-        "completo",
-        "completa",
-        "completos",
-        "completas",
-        "completado",
-        "completada",
-        "completados",
-        "completadas",
-        "terminado",
-        "terminada",
-        "terminados",
-        "terminadas",
-        "finalizado",
-        "finalizada",
-        "finalizados",
-        "finalizadas",
-        "resuelto",
-        "resuelta",
-        "resueltos",
-        "resueltas",
-        "aceptado",
-        "aceptada",
-        "aceptados",
-        "aceptadas",
-        "cerrado",
-        "cerrada",
-        "cerrados",
-        "cerradas",
-        "aprobado",
-        "aprobada",
-        "aprobados",
-        "aprobadas",
-        "listo",
-        "lista",
-        "listos",
-        "listas",
-        "entregado",
-        "entregada",
-        "entregados",
-        "entregadas",
-        "desplegado",
-        "desplegada",
-        "desplegados",
-        "desplegadas",
-        "liberado",
-        "liberada",
-        "liberados",
-        "liberadas",
+        "failed",
+        "cancelled",
+        "timed_out",
+        "interrupted",
+        "unknown",
     }
 )
-# Observed lifecycle terminality is source-authoritative.  Readiness states such as
-# ``ready``/``listo`` remain open even when a model uses completion vocabulary in its
-# reported status; they must never ground a terminal narrative.
-_TERMINAL_OBSERVED_STATES: Final = frozenset(
-    {
-        "complete",
-        "completed",
-        "accomplished",
-        "done",
-        "resolved",
-        "accepted",
-        "closed",
-        "succeeded",
-        "success",
-        "passed",
-        "shipped",
-        "ship",
-        "delivered",
-        "deployed",
-        "released",
-        "completo",
-        "completa",
-        "completos",
-        "completas",
-        "completado",
-        "completada",
-        "completados",
-        "completadas",
-        "terminado",
-        "terminada",
-        "terminados",
-        "terminadas",
-        "finalizado",
-        "finalizada",
-        "finalizados",
-        "finalizadas",
-        "resuelto",
-        "resuelta",
-        "resueltos",
-        "resueltas",
-        "aceptado",
-        "aceptada",
-        "aceptados",
-        "aceptadas",
-        "cerrado",
-        "cerrada",
-        "cerrados",
-        "cerradas",
-        "aprobado",
-        "aprobada",
-        "aprobados",
-        "aprobadas",
-        "entregado",
-        "entregada",
-        "entregados",
-        "entregadas",
-        "desplegado",
-        "desplegada",
-        "desplegados",
-        "desplegadas",
-        "liberado",
-        "liberada",
-        "liberados",
-        "liberadas",
-    }
+_COMPLETION_STATUSES: Final = frozenset({"completed"})
+_TERMINAL_NARRATIVE_STATUSES: Final = frozenset(
+    {"completed", "failed", "cancelled", "timed_out", "interrupted"}
 )
+# Only the normalized whole-work terminal state can authorize a completed narrative.
+# Milestone/prose values (for example ``passed`` or ``shipped``) remain open source text.
+_TERMINAL_OBSERVED_STATES: Final = frozenset({"completed"})
 
 _SECTION_NAMES: Final = ("resolved", "current", "next", "complications", "pending")
 _CLAIM_SOURCE_SECTIONS: Final = {
@@ -578,8 +456,7 @@ def _bounded_text(
     if check_injection and _PROMPT_INJECTION_RE.search(text):
         _fail(unsafe_code, "reporting text contains instruction-like content")
     if check_claims:
-        words = re.sub(r"[-_]+", " ", text)
-        if _FORBIDDEN_CLAIM_RE.search(text) or _FORBIDDEN_CLAIM_RE.search(words):
+        if _has_forbidden_claim(text):
             claim_code = (
                 "NARRATIVE_UNSAFE"
                 if code != "REPORTING_SCHEMA_INVALID"
@@ -627,10 +504,15 @@ def _status(value: Any) -> str:
         check_claims=False,
         check_injection=True,
     ).lower()
-    as_words = re.sub(r"[-_]+", " ", normalized)
-    if _has_completion_assertion(as_words) and normalized not in _COMPLETION_STATUSES:
-        _fail("NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded")
-    if _FORBIDDEN_CLAIM_RE.search(normalized) or _FORBIDDEN_CLAIM_RE.search(as_words):
+    if normalized not in _NARRATIVE_STATUSES:
+        if _has_completion_assertion(normalized):
+            _fail("NARRATIVE_FABRICATED_COMPLETION", "narrative status is not evidence-grounded")
+        if _has_forbidden_claim(normalized):
+            _fail("NARRATIVE_UNSAFE", "narrative status contains a forbidden forecast or metric")
+        _fail(
+            "NARRATIVE_FABRICATED_COMPLETION", "narrative status is not a canonical lifecycle value"
+        )
+    if _has_forbidden_claim(normalized):
         _fail("NARRATIVE_UNSAFE", "narrative status contains a forbidden forecast or metric")
     return normalized
 
@@ -730,7 +612,7 @@ def _validate_source_claim_boundaries(item: Mapping[str, Any]) -> None:
 
     for section in _SECTION_NAMES:
         for fact in item[section]:
-            if not _has_completion_assertion(fact["text"]):
+            if not _has_whole_item_completion_assertion(fact["text"]):
                 continue
             if _is_authoritative_source_completion(item, section, fact):
                 continue
@@ -1372,7 +1254,7 @@ def validate_narrative(
             normalized_claims: list[dict[str, str]] = []
             for claim_value in claims:
                 claim = _narrative_claim(claim_value)
-                completion_shaped = _has_completion_assertion(claim["text"])
+                completion_shaped = _has_whole_item_completion_assertion(claim["text"])
                 ref = claim["ref"]
                 source = sources.get(ref)
                 if source is None:
@@ -1419,6 +1301,17 @@ def validate_narrative(
         if normalized_item["status"] in _COMPLETION_STATUSES and not authoritative_completion:
             _fail(
                 "NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded"
+            )
+        observed_state = (
+            str(expected_items[work_key]["observed_state"]).strip().lower().replace("-", "_")
+        )
+        if (
+            normalized_item["status"] in _TERMINAL_NARRATIVE_STATUSES - _COMPLETION_STATUSES
+            and normalized_item["status"] != observed_state
+        ):
+            _fail(
+                "NARRATIVE_FABRICATED_COMPLETION",
+                "narrative terminal status is not source-grounded",
             )
         normalized_by_work[work_key] = normalized_item
 
@@ -1675,7 +1568,7 @@ def _report_groups(
 def _check_rendered(text: str) -> str:
     # Rendered headers are generated from validated fields.  Run the same forbidden-claim
     # check over the final text to catch future local formatting changes.
-    if _FORBIDDEN_CLAIM_RE.search(text):
+    if _has_forbidden_claim(text):
         _fail(
             "REPORTING_FORBIDDEN_CLAIM", "rendered report contains a forbidden forecast or metric"
         )
