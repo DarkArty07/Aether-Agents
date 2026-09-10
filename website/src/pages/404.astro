@@ -1,7 +1,17 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { sitePath } from '../lib/site-path';
+const docsHome = sitePath('/docs/');
 ---
 <Layout title="Página no encontrada — Aether Agents" docs>
-  <main id="main" class="not-found wrap"><p class="eyebrow">FUERA DEL MAPA</p><h1>404</h1><p>Esta página no existe. El origen sigue aquí.</p><a href={sitePath('/')} class="button button-primary">VOLVER A AETHER →</a></main>
+  <main id="main" class="not-found wrap" data-doc-recovery aria-labelledby="not-found-title">
+    <p class="eyebrow">FUERA DEL MAPA / DOCUMENTATION RECOVERY</p>
+    <h1 id="not-found-title">404</h1>
+    <p>Esta página no existe o cambió de ruta. El índice agrupado y el manual canónico siguen disponibles.</p>
+    <nav class="not-found-actions" aria-label="Recovery links">
+      <a href={docsHome} class="button button-primary">EXPLORAR DOCUMENTACIÓN →</a>
+      <a href={`${docsHome}#documentation-search`} class="button">BUSCAR EN EL MANUAL</a>
+      <a href={sitePath('/')} class="button">VOLVER A AETHER</a>
+    </nav>
+  </main>
 </Layout>
