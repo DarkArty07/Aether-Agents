@@ -30,12 +30,18 @@ PROJECT_ID = "11111111-1111-4111-8111-111111111111"
 PROJECT_B = "22222222-2222-4222-8222-222222222222"
 CONTRACT_ID = "oc_abcdef0123456789"
 CONTRACT_B = "oc_1234567890abcdef"
+CONTRACT_C = "oc_fedcba9876543210"
 NATIVE_PROJECT = "p_native"
 NATIVE_PROJECT_B = "p_native_b"
 ORIGIN = "origin-1"
 ORIGIN_B = "origin-2"
+ORIGIN_C = "origin-3"
+FINALIZER = "finalizer-1"
+FINALIZER_B = "finalizer-2"
+FINALIZER_C = "finalizer-3"
 BOARD_SLUG = "oc-11111111111141118111111111111111-abcdef0123456789-v1"
 BOARD_SLUG_B = "oc-22222222222242228222222222222222-1234567890abcdef-v1"
+BOARD_SLUG_C = "oc-11111111111141118111111111111111-fedcba9876543210-v1"
 
 
 _PROJECT_SCHEMA = """
@@ -138,6 +144,7 @@ def _write_contract(
     project_id: str = PROJECT_ID,
     contract_id: str = CONTRACT_ID,
     origin: str = ORIGIN,
+    finalized: str = FINALIZER,
 ) -> None:
     contract_dir = project / ".aether" / "objective-contracts" / contract_id
     contract_dir.mkdir(parents=True)
@@ -154,7 +161,7 @@ def _write_contract(
         "finalized_at_local": "2026-09-09T06:05:00-06:00",
         "author_profile": "morfeo",
         "created_in_session": origin,
-        "finalized_in_session": "finalizer-1",
+        "finalized_in_session": finalized,
         "supersedes": None,
         "change_reason": None,
         "observation_trace_id": "ctr_" + "1" * 32,
@@ -231,6 +238,20 @@ def _fixture(tmp_path: Path) -> dict[str, Any]:
                 1,
             ),
         )
+        connection.execute(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                FINALIZER,
+                "tui",
+                "Contract finalizer session",
+                "Contract finalizer session",
+                str(project),
+                str(project),
+                1788955200.0,
+                1788955500.0,
+                1788955500.0,
+            ),
+        )
         connection.executemany(
             "INSERT INTO messages VALUES (?, ?, ?, ?, ?)",
             [
@@ -248,6 +269,7 @@ def _fixture(tmp_path: Path) -> dict[str, Any]:
                 "slug": BOARD_SLUG,
                 "name": "Collision Board",
                 "project_id": NATIVE_PROJECT,
+                "default_workdir": str(project.resolve()),
                 "aether_project_id": PROJECT_ID,
                 "aether_contract_id": CONTRACT_ID,
                 "aether_contract_version": 1,
@@ -377,6 +399,65 @@ def _insert_session(
         connection.commit()
 
 
+def _write_bound_board(
+    fixture: dict[str, Any],
+    *,
+    project: Path,
+    project_id: str,
+    native_project_id: str,
+    contract_id: str,
+    board_slug: str,
+    origin: str,
+    finalized: str,
+    task_id: str,
+    status: str = "queued",
+    title: str = "Additional bound work",
+) -> Path:
+    _write_contract(
+        project,
+        project_id=project_id,
+        contract_id=contract_id,
+        origin=origin,
+        finalized=finalized,
+    )
+    _insert_session(fixture, origin, project, title=f"{origin} session")
+    _insert_session(fixture, finalized, project, title=f"{finalized} session")
+    board_dir = fixture["board_dir"].parent / board_slug
+    board_dir.mkdir(parents=True)
+    (board_dir / "board.json").write_text(
+        json.dumps(
+            {
+                "slug": board_slug,
+                "project_id": native_project_id,
+                "default_workdir": str(project.resolve()),
+                "aether_project_id": project_id,
+                "aether_contract_id": contract_id,
+                "aether_contract_version": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    board_db = board_dir / "kanban.db"
+    _sqlite(board_db, _BOARD_SCHEMA)
+    with sqlite3.connect(board_db) as connection:
+        connection.execute(
+            "INSERT INTO tasks (id, title, status, project_id, session_id, created_at, started_at, workspace_path, session_affinity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                task_id,
+                title,
+                status,
+                native_project_id,
+                origin,
+                1788955200,
+                1788955200,
+                str(project),
+                '{"flow_id":"additional-flow"}',
+            ),
+        )
+        connection.commit()
+    return board_db
+
+
 def _monitor_store(root: Path, *, now: str = "2026-09-09T11:00:00+00:00") -> MonitorStore:
     instant = datetime.fromisoformat(now)
     store = MonitorStore(state_root=root, clock=lambda: instant)
@@ -401,12 +482,99 @@ def test_project_and_board_identity_is_exact_and_root_done_is_not_closure(tmp_pa
     assert not source.idle
 
 
+def test_contract_origin_and_finalizer_are_distinct_verified_sessions(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert len(source.items) == 1
+    assert source.items[0].origin_session_id == ORIGIN
+    assert ORIGIN != FINALIZER
+    assert not any(gap.startswith("CONTRACT_FINALIZED_") for gap in source.coverage_gaps)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_gap"),
+    (
+        ("missing", "CONTRACT_FINALIZED_SESSION_MISSING"),
+        ("reporter", "CONTRACT_FINALIZED_SESSION_CONFLICT"),
+        ("foreign", "CONTRACT_FINALIZED_PROJECT_CONFLICT"),
+    ),
+)
+def test_finalized_contract_session_must_be_present_nonreporter_and_project_bound(
+    tmp_path: Path, mutation: str, expected_gap: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    if mutation == "missing":
+        with sqlite3.connect(fixture["session_db"]) as connection:
+            connection.execute("DELETE FROM sessions WHERE id = ?", (FINALIZER,))
+            connection.commit()
+    elif mutation == "reporter":
+        with sqlite3.connect(fixture["session_db"]) as connection:
+            connection.execute("UPDATE sessions SET source = ? WHERE id = ?", ("cron", FINALIZER))
+            connection.commit()
+    else:
+        foreign = tmp_path / "foreign-finalizer"
+        foreign.mkdir()
+        with sqlite3.connect(fixture["session_db"]) as connection:
+            connection.execute(
+                "UPDATE sessions SET cwd = ?, git_repo_root = ? WHERE id = ?",
+                (str(foreign), str(foreign), FINALIZER),
+            )
+            connection.commit()
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert source.items == ()
+    assert expected_gap in source.coverage_gaps
+    assert not source.idle
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_gap"),
+    (
+        ("missing_id", "BOARD_NATIVE_PROJECT_MISSING"),
+        ("conflicting_id", "BOARD_NATIVE_PROJECT_CONFLICT"),
+        ("missing_path", "BOARD_PROJECT_PATH_MISSING"),
+        ("conflicting_path", "BOARD_PROJECT_PATH_CONFLICT"),
+    ),
+)
+def test_board_requires_canonical_native_project_id_and_root_path(
+    tmp_path: Path, mutation: str, expected_gap: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    metadata_path = fixture["board_dir"] / "board.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if mutation == "missing_id":
+        del metadata["project_id"]
+    elif mutation == "conflicting_id":
+        metadata["project_id"] = "foreign-native-project"
+    elif mutation == "missing_path":
+        del metadata["default_workdir"]
+    else:
+        foreign = tmp_path / "foreign-board-root"
+        foreign.mkdir()
+        metadata["default_workdir"] = str(foreign)
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    source = _sources(fixture).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    assert source.items == ()
+    assert expected_gap in source.coverage_gaps
+    assert not source.idle
+
+
 def test_two_bound_projects_with_colliding_names_are_kept_separate(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     project_b = tmp_path / "project-b"
     project_b.mkdir()
     _write_project(project_b, project_id=PROJECT_B)
-    _write_contract(project_b, project_id=PROJECT_B, contract_id=CONTRACT_B, origin=ORIGIN_B)
+    _write_contract(
+        project_b,
+        project_id=PROJECT_B,
+        contract_id=CONTRACT_B,
+        origin=ORIGIN_B,
+        finalized=FINALIZER_B,
+    )
     registry: ProjectRegistry = fixture["registry"]
     assert registry.register(PROJECT_B, project_b, "Registry Collision Name", NATIVE_PROJECT_B)
 
@@ -431,6 +599,20 @@ def test_two_bound_projects_with_colliding_names_are_kept_separate(tmp_path: Pat
                 1788958800.0,
             ),
         )
+        connection.execute(
+            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                FINALIZER_B,
+                "tui",
+                "Finalizer B session",
+                "Finalizer B session",
+                str(project_b),
+                str(project_b),
+                1788955200.0,
+                1788955500.0,
+                1788955500.0,
+            ),
+        )
         connection.commit()
 
     board_b_dir = tmp_path / "board" / BOARD_SLUG_B
@@ -440,6 +622,7 @@ def test_two_bound_projects_with_colliding_names_are_kept_separate(tmp_path: Pat
             {
                 "slug": BOARD_SLUG_B,
                 "project_id": NATIVE_PROJECT_B,
+                "default_workdir": str(project_b.resolve()),
                 "aether_project_id": PROJECT_B,
                 "aether_contract_id": CONTRACT_B,
                 "aether_contract_version": 1,
@@ -481,6 +664,43 @@ def test_two_bound_projects_with_colliding_names_are_kept_separate(tmp_path: Pat
     assert identities == {(PROJECT_ID, ORIGIN, CONTRACT_ID), (PROJECT_B, ORIGIN_B, CONTRACT_B)}
     assert {item.project_name for item in source.items} == {"Collision Name"}
     assert {item.observed_state for item in source.items} == {"review", "blocked"}
+
+
+def test_same_project_multiple_contracts_and_origins_stay_distinct(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    board_c = _write_bound_board(
+        fixture,
+        project=fixture["project"],
+        project_id=PROJECT_ID,
+        native_project_id=NATIVE_PROJECT,
+        contract_id=CONTRACT_C,
+        board_slug=BOARD_SLUG_C,
+        origin=ORIGIN_C,
+        finalized=FINALIZER_C,
+        task_id="t_44444444",
+        status="queued",
+        title="Second contract queued",
+    )
+    source = ReadOnlySources(
+        registry=fixture["registry"],
+        native_projects_path=fixture["projects_db"],
+        board_paths=[(BOARD_SLUG, fixture["board_db"]), (BOARD_SLUG_C, board_c)],
+        session_db_paths=[fixture["session_db"]],
+        hermes_home=fixture["hermes"],
+    ).collect(cutoff_utc="2026-09-09T14:00:00Z")
+
+    identities = {
+        (item.project_id, item.origin_session_id, item.contract["id"])
+        for item in source.items
+        if item.contract is not None
+    }
+    assert identities == {
+        (PROJECT_ID, ORIGIN, CONTRACT_ID),
+        (PROJECT_ID, ORIGIN_C, CONTRACT_C),
+    }
+    assert len({item.work_key for item in source.items}) == 2
+    assert {item.observed_state for item in source.items} == {"review", "queued"}
+    assert source.coverage_gaps == ()
 
 
 def test_root_done_without_terminal_affinity_is_not_closed(tmp_path: Path) -> None:

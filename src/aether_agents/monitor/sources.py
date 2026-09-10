@@ -661,19 +661,23 @@ def _read_board_bindings(
         if metadata is None:
             gaps.append("BOARD_METADATA_UNREADABLE")
             continue
-        portable_id = canonical_project_id(
-            metadata.get("aether_project_id")
-            or metadata.get("portable_project_id")
-            or metadata.get("project_id")
-        )
-        if portable_id is None or portable_id not in project_map:
+        portable_values = [
+            metadata[key] for key in ("aether_project_id", "portable_project_id") if key in metadata
+        ]
+        portable_ids = {canonical_project_id(value) for value in portable_values}
+        if not portable_values or None in portable_ids or len(portable_ids) != 1:
             gaps.append("BOARD_PROJECT_UNBOUND")
             continue
+        portable_id = next(iter(portable_ids))
+        if portable_id not in project_map:
+            gaps.append("BOARD_PROJECT_UNBOUND")
+            continue
+        project = project_map[portable_id]
         contract_id, version = _extract_contract_fields(metadata)
         if contract_id is None or version is None:
             gaps.append("BOARD_CONTRACT_UNBOUND")
             continue
-        contract = _contract_metadata(project_map[portable_id], contract_id, version)
+        contract = _contract_metadata(project, contract_id, version)
         if contract is None:
             gaps.append("FINAL_CONTRACT_UNREADABLE")
             continue
@@ -681,16 +685,35 @@ def _read_board_bindings(
         if slug != expected_slug:
             gaps.append("BOARD_IDENTITY_CONFLICT")
             continue
-        metadata_native = (
-            metadata.get("project_id")
-            or metadata.get("hermes_project_id")
-            or metadata.get("native_project_id")
-        )
-        if (
-            metadata_native is not None
-            and str(metadata_native) != project_map[portable_id].hermes_project_id
-        ):
+
+        # ``project_id`` and ``default_workdir`` are the canonical native Hermes
+        # board fields.  Aliases are tolerated only as corroboration; an absent or
+        # disagreeing canonical value cannot establish a source binding.
+        if "project_id" not in metadata:
+            gaps.append("BOARD_NATIVE_PROJECT_MISSING")
+            continue
+        native_values: list[str] = []
+        native_invalid = False
+        for key in ("project_id", "hermes_project_id", "native_project_id"):
+            if key not in metadata:
+                continue
+            value = metadata[key]
+            if not isinstance(value, str) or not value:
+                native_invalid = True
+                break
+            native_values.append(value)
+        if native_invalid or not native_values:
+            gaps.append("BOARD_NATIVE_PROJECT_INVALID")
+            continue
+        if any(value != project.hermes_project_id for value in native_values):
             gaps.append("BOARD_NATIVE_PROJECT_CONFLICT")
+            continue
+        default_workdir = metadata.get("default_workdir")
+        if not isinstance(default_workdir, str) or not default_workdir:
+            gaps.append("BOARD_PROJECT_PATH_MISSING")
+            continue
+        if not _path_is_project_root(default_workdir, project):
+            gaps.append("BOARD_PROJECT_PATH_CONFLICT")
             continue
         bindings.append(
             BoardBinding(
@@ -1381,6 +1404,14 @@ class ReadOnlySources:
             return (), ("CONTRACT_ORIGIN_SESSION_CONFLICT",)
         if not _session_belongs_to_project(origin_session, board.project):
             return (), ("CONTRACT_ORIGIN_PROJECT_CONFLICT",)
+        finalized_session_id = _safe_ref(board.finalized_in_session)
+        finalized_session = sessions.get(finalized_session_id or "")
+        if finalized_session_id is None or finalized_session is None:
+            return (), ("CONTRACT_FINALIZED_SESSION_MISSING",)
+        if finalized_session.is_reporter:
+            return (), ("CONTRACT_FINALIZED_SESSION_CONFLICT",)
+        if not _session_belongs_to_project(finalized_session, board.project):
+            return (), ("CONTRACT_FINALIZED_PROJECT_CONFLICT",)
         for task in tasks:
             raw_session = task.values.get("session_id")
             session_id = _safe_ref(raw_session)
