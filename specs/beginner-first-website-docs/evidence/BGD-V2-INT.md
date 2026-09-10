@@ -115,12 +115,37 @@ re-verified before a normal follow-up push. No check was bypassed or weakened.
 
 On corrected repair revision `083e369c49357bc585b3593e3f0f96064810d42c`, all four
 branch-protection-required contexts completed green: `pull-request-target` and `policy` on
-Python 3.11, 3.12 and 3.13. The separate observation-qualification matrix is not a required
-context and was still executing at that checkpoint; it is recorded separately rather than
-being confused with the required-check gate. Any later evidence-only revision remains
-subject to the same required contexts, whose authoritative final state is the pull request's
-GitHub check record. Merge, issue closure and Pages deployment remain outside current
-authority.
+Python 3.11, 3.12 and 3.13. The final evidence-only PR head was then required to pass the
+same four strict contexts; GitHub remains the authoritative final-head record. No check was
+bypassed or weakened.
+
+The separate observation-qualification matrix is not a branch-protection requirement and
+remained red. Python 3.11 and 3.12 stopped on two different existing journal-concurrency
+tests; each exact node passed independently on this candidate and current `origin/main`, so
+the nondeterministic failures are recorded as unrelated rather than hidden. Python 3.13
+reached the unchanged public-artifact scanner and failed on the exact inherited #364
+baseline above. Current `origin/main` also has a red non-required observation matrix. These
+failures remain visible and are not represented as required-check success.
+
+GitHub reported the PR open, non-draft and mergeable, with `main` as base and #368 linked.
+No Pages workflow run exists for the objective branch because Pages listens to qualifying
+`main` pushes, not pull-request heads. Merge, issue closure and Pages deployment remain
+outside current authority.
+
+## Terminal progress reporting
+
+After the reviewed open-PR state and final-head required checks were observed, one concise
+Spanish terminal brief was sent through the already provisioned Telegram home destination
+with the provider-free `hermes send --to telegram --quiet` surface. The command returned
+success. The brief distinguished durable observations from inference, named the open PR,
+green required contexts, exact inherited scanner baseline and explicit no-merge/no-deploy
+boundary without including private paths, credentials, logs, sessions or routing data.
+
+The same single reviewed no-agent objective reporter was then paused through the supported
+Hermes cron surface. Native readback confirmed it is disabled, retains no last error and was
+not duplicated. The reporter's automatic exact-card terminal path was not falsely claimed:
+the supported terminal brief and pause were performed during closeout before this card's
+own final lifecycle transition.
 
 ## Compatibility and release conclusions
 
