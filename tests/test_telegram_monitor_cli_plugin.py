@@ -8,6 +8,7 @@ checkout to prove the real cron/plugin/toolset interfaces the monitor registers.
 from __future__ import annotations
 
 import configparser
+import hashlib
 import importlib.util
 import json
 import os
@@ -16,7 +17,8 @@ import sys
 import textwrap
 import zipfile
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Mapping, Sequence
 
 import pytest
 
@@ -939,6 +941,16 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
     assert envelope["error"]["code"] in {"output-inside-repository", "runtime-unavailable"}
     assert not inside.exists()
 
+    other_repo = tmp_path / "another-repo"
+    other_repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(other_repo)], check=True)
+    foreign_output = _run_qualification(
+        tmp_path, "--live", "--output", str(other_repo / "receipts.json"), "--json"
+    )
+    assert foreign_output.returncode == 1
+    assert json.loads(foreign_output.stdout)["error"]["code"] == "output-inside-repository"
+    assert not (other_repo / "receipts.json").exists()
+
     outside = tmp_path / "private" / "receipts.json"
     no_runtime = _run_qualification(tmp_path, "--live", "--output", str(outside), "--json")
     # The live lane must fail closed in a test process and write nothing.
@@ -952,6 +964,832 @@ def test_live_qualification_refuses_unsafe_invocations_without_effects(tmp_path:
     assert not outside.exists()
 
 
+def test_git_containment_rejects_every_worktree_or_repository(tmp_path: Path) -> None:
+    """A receipt inside any Git worktree (not only this checkout) is refused."""
+
+    module = _qualification_module()
+
+    assert module._inside_repository(tmp_path / "private" / "receipts.json") is False
+    assert module._inside_repository(ROOT) is True
+    assert module._inside_repository(ROOT / "scripts") is True
+
+    repo = tmp_path / "another-repo"
+    nested = repo / "work" / "nested"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    assert module._inside_repository(nested / "receipts.json") is True
+
+    primary = module._primary_checkout_root()
+    if primary is not None:
+        # The linked worktree's primary checkout is not an ancestor of this path; it
+        # must still be refused.
+        assert module._inside_repository(primary / "private" / "receipts.json") is True
+
+
+def test_live_entry_point_never_prints_private_paths_or_handles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The real entry point prints only the sanitized public summary."""
+
+    module = _qualification_module()
+    private_output = tmp_path / "private" / "receipts.json"
+    record: dict[str, Any] = {
+        "schema_version": "aether.telegram-monitor.qualification.v1",
+        "mode": "live",
+        "candidate_revision": "0" * 40,
+        "runtime_interpreter": "/private/operator/runtime/python3",
+        "output_file": str(private_output),
+        "environment": {"gaps": []},
+        "enable": {
+            "job_id": "native-job-7",
+            "shape_ok": True,
+            "second_enable_same_job": True,
+            "named_job_count": 1,
+        },
+        "boundaries": [
+            {
+                "cutoff_utc": "2026-09-10T14:00:00.000000Z",
+                "collected_at_utc": "2026-09-10T14:00:40.000000Z",
+                "collected_lateness_seconds": 40.0,
+                "narration_status": "accepted",
+                "narration_writes": 1,
+                "narration_lateness_seconds": 60.0,
+                "ack_lateness_seconds": 90.0,
+                "delivery_states": ["confirmed"],
+                "part_count": 1,
+                "message_ids": ["424242"],
+                "report_id": "monitor-report-1",
+                "work_keys": ["pipeline:private", "direct:private"],
+                "native_run_files": 1,
+                "payload_items": {"pipeline:private": {"work_key": "pipeline:private"}},
+                "narrative_items": {},
+                "source_facts": {},
+            }
+        ],
+        "cases": [{"id": "direct-no-contract", "status": "pass", "detail": "ok"}],
+        "idle": {"idle_confirmed": True},
+        "off": {"job_paused": True, "enabled_after_off": False},
+        "restore": {
+            "scope_removed": True,
+            "registry_restored": "byte-identical",
+            "enabled_restored": True,
+            "unrelated_jobs_preserved": True,
+        },
+        "errors": [],
+        "ok": True,
+    }
+    record["public_summary"] = module._public_live_summary(record)
+    monkeypatch.setattr(module, "run_live", lambda args, stream: record)
+
+    code = module.main(["--live", "--json", "--output", str(private_output)])
+    captured = capsys.readouterr()
+
+    assert code == 0, captured.err
+    payload = json.loads(captured.out)
+    rendered = json.dumps(payload)
+    assert payload["ok"] is True and payload["qualified"] is True
+    for private in (
+        "424242",
+        "monitor-report-1",
+        "/private/operator",
+        str(private_output),
+        "native-job-7",
+        "2026-09-10T14:00:00.000000Z",
+        "pipeline:private",
+        "qualification-origin",
+    ):
+        assert private not in rendered, private
+
+    code = module.main(["--live", "--output", str(private_output)])
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    assert str(private_output) not in captured.out
+    assert "private receipts written to the operator-selected --output file" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Live lane oracles (fake store and native evidence)
+# ---------------------------------------------------------------------------
+
+EXPECTED_CUT = "2026-09-10T14:00:00.000000Z"
+BASELINE_REPORTS = frozenset({"rpt_baseline"})
+PROJECT_ID = "11111111-1111-4111-8111-111111111111"
+CONTRACT_ID = "oc_abcdef0123456789"
+ORIGIN_SESSION = "qualification-origin-unit-a"
+
+
+class _FakeSettings:
+    def __init__(self, *, enabled: bool = True, last_cutoff_utc: str | None = None) -> None:
+        self.enabled = enabled
+        self.last_cutoff_utc = last_cutoff_utc
+        self.native_job_id = "native-job-1"
+        self.first_enabled_at_utc = None
+
+
+def _fake_snapshot(
+    report_id: str,
+    cutoff: str,
+    *,
+    collected: str | None = None,
+    payload: Mapping[str, Any] | None = None,
+    gaps: tuple[str, ...] = (),
+    resolved: str | None = None,
+    previous: str | None = None,
+) -> Any:
+    return SimpleNamespace(
+        report_id=report_id,
+        cutoff_utc=cutoff,
+        previous_cutoff_utc=previous,
+        collected_at_utc=collected or cutoff,
+        payload=payload if payload is not None else {"items": []},
+        coverage_gaps=gaps,
+        resolved_at_utc=resolved,
+    )
+
+
+def _fake_narrative(
+    report_id: str,
+    *,
+    status: str = "accepted",
+    created: str = "2026-09-10T14:00:20.000000Z",
+    updated: str | None = None,
+    result: Mapping[str, Any] | None = None,
+) -> Any:
+    return SimpleNamespace(
+        report_id=report_id,
+        structured_result=(
+            result
+            if result is not None
+            else {
+                "schema_version": "aether.telegram-monitor.narrative.v1",
+                "report_id": report_id,
+                "items": [],
+            }
+        ),
+        narrator_session_id="cron_native-job-1_test",
+        attempt_status=status,
+        created_at_utc=created,
+        updated_at_utc=updated or created,
+    )
+
+
+def _fake_delivery(
+    index: int,
+    state: str,
+    *,
+    message_id: str | None = "424242",
+    updated: str = "2026-09-10T14:00:40.000000Z",
+    text_hash: str = "0" * 64,
+) -> Any:
+    return SimpleNamespace(
+        part_index=index,
+        state=state,
+        attempts=1,
+        updated_at_utc=updated,
+        message_id=message_id,
+        text_hash=text_hash,
+        report_id="rpt_new",
+    )
+
+
+class _FakeMonitorStore:
+    def __init__(
+        self,
+        *,
+        settings: _FakeSettings,
+        snapshots: Sequence[Any],
+        narratives: Mapping[str, Any] | None = None,
+        deliveries: Mapping[str, Sequence[Any]] | None = None,
+    ) -> None:
+        self._settings = settings
+        self._snapshots = tuple(snapshots)
+        self._narratives = dict(narratives or {})
+        self._deliveries = {key: tuple(value) for key, value in (deliveries or {}).items()}
+
+    def get_settings(self) -> Any:
+        return self._settings
+
+    def list_snapshots(self, *, limit: int | None = None) -> tuple[Any, ...]:
+        return self._snapshots
+
+    def get_narrative(self, report_id: str) -> Any:
+        return self._narratives.get(report_id)
+
+    def list_deliveries(self, report_id: str) -> tuple[Any, ...]:
+        return self._deliveries.get(report_id, ())
+
+
+def test_boundary_gate_rejects_stale_scopes_and_mixed_deliveries() -> None:
+    """Only a fresh, fully confirmed, correctly bound real cut can count."""
+
+    module = _qualification_module()
+    baseline = BASELINE_REPORTS
+
+    historical = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc="2026-09-10T13:00:00.000000Z"),
+        snapshots=[
+            _fake_snapshot("rpt_13", "2026-09-10T13:00:00.000000Z"),
+            _fake_snapshot("rpt_12", "2026-09-10T12:00:00.000000Z"),
+        ],
+    )
+    decision = module._inspect_boundary(
+        historical,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "waiting"
+
+    preexisting = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+        snapshots=[_fake_snapshot("rpt_baseline", EXPECTED_CUT)],
+    )
+    decision = module._inspect_boundary(
+        preexisting,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "waiting"
+
+    collected_before_enable = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+        snapshots=[
+            _fake_snapshot("rpt_old", EXPECTED_CUT, collected="2026-09-10T12:00:30.000000Z")
+        ],
+    )
+    decision = module._inspect_boundary(
+        collected_before_enable,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "missed"
+
+    missed = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc="2026-09-10T15:00:00.000000Z"),
+        snapshots=[],
+    )
+    decision = module._inspect_boundary(
+        missed,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "missed"
+
+    pending = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+        snapshots=[_fake_snapshot("rpt_new", EXPECTED_CUT)],
+        narratives={"rpt_new": _fake_narrative("rpt_new", status="pending")},
+    )
+    decision = module._inspect_boundary(
+        pending,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "waiting"
+
+    for status in ("rejected", "failed"):
+        broken = _FakeMonitorStore(
+            settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+            snapshots=[_fake_snapshot("rpt_new", EXPECTED_CUT)],
+            narratives={"rpt_new": _fake_narrative("rpt_new", status=status)},
+        )
+        decision = module._inspect_boundary(
+            broken,
+            expected_cutoff_utc=EXPECTED_CUT,
+            baseline_report_ids=baseline,
+            enable_time_utc="2026-09-10T12:30:00Z",
+        )
+        assert decision["state"] == "narration-failed", status
+
+    mixed = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+        snapshots=[_fake_snapshot("rpt_new", EXPECTED_CUT)],
+        narratives={"rpt_new": _fake_narrative("rpt_new")},
+        deliveries={"rpt_new": [_fake_delivery(0, "confirmed"), _fake_delivery(1, "failed")]},
+    )
+    decision = module._inspect_boundary(
+        mixed,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "delivery-failed"
+
+    confirmed = _FakeMonitorStore(
+        settings=_FakeSettings(last_cutoff_utc=EXPECTED_CUT),
+        snapshots=[_fake_snapshot("rpt_new", EXPECTED_CUT)],
+        narratives={"rpt_new": _fake_narrative("rpt_new")},
+        deliveries={"rpt_new": [_fake_delivery(0, "confirmed")]},
+    )
+    decision = module._inspect_boundary(
+        confirmed,
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=baseline,
+        enable_time_utc="2026-09-10T12:30:00Z",
+    )
+    assert decision["state"] == "ready"
+
+
+def _live_payload(
+    *,
+    report_id: str = "rpt_" + "a" * 32,
+    cutoff: str = EXPECTED_CUT,
+    previous: str = "2026-09-10T13:00:00.000000Z",
+    collected: str = "2026-09-10T14:00:30.000000Z",
+) -> dict[str, Any]:
+    from aether_agents.monitor.collector import build_bounded_snapshot
+    from aether_agents.monitor.sources import SourceCollection, SourceItem
+
+    ref = "board:oc-unit:task:t_00000001:title"
+    item = SourceItem(
+        work_key=f"pipeline:{PROJECT_ID}:{CONTRACT_ID}:{ORIGIN_SESSION}",
+        project_id=PROJECT_ID,
+        project_name="Synthetic qualification (unit)",
+        origin_session_id=ORIGIN_SESSION,
+        origin_session_title="Synthetic qualification origin session A",
+        contract={
+            "id": CONTRACT_ID,
+            "version": "v1",
+            "title": "Synthetic qualification objective A",
+        },
+        observed_state="running",
+        current=(
+            {
+                "ref": ref,
+                "text": "Synthetic root decomposition is active.",
+                "provenance": "observed",
+                "status": "verified",
+            },
+        ),
+        active=True,
+    )
+    return build_bounded_snapshot(
+        report_id=report_id,
+        cutoff_utc=cutoff,
+        collected_at_utc=collected,
+        previous_cutoff_utc=previous,
+        source=SourceCollection(items=(item,), watermarks={}, coverage_gaps=()),
+    )
+
+
+def _live_narrative(payload: Mapping[str, Any]) -> dict[str, Any]:
+    item = payload["items"][0]
+    claim = item["current"][0]
+    return {
+        "schema_version": "aether.telegram-monitor.narrative.v1",
+        "report_id": payload["report_id"],
+        "items": [
+            {
+                "work_key": item["work_key"],
+                "resolved": [],
+                "current": [{"ref": claim["ref"], "text": claim["text"]}],
+                "next": [],
+                "complications": [],
+                "pending": [],
+                "status": "running",
+            }
+        ],
+    }
+
+
+def _confirmed_decision(payload: Mapping[str, Any], narrative: Mapping[str, Any]) -> Any:
+    module = _qualification_module()
+    from aether_agents.monitor import reporting as reporting_module
+
+    parts = reporting_module.render_parts(payload, narrative)
+    deliveries = [
+        _fake_delivery(
+            index,
+            "confirmed",
+            text_hash=hashlib.sha256(part.encode("utf-8")).hexdigest(),
+        )
+        for index, part in enumerate(parts)
+    ]
+    snapshot = _fake_snapshot(
+        payload["report_id"], EXPECTED_CUT, payload=payload, collected=payload["collected_at_utc"]
+    )
+    return {
+        "state": "ready",
+        "snapshot": snapshot,
+        "narrative": _fake_narrative(payload["report_id"], result=narrative),
+        "deliveries": deliveries,
+        "module": module,
+    }
+
+
+def _run_evidence(report_id: str, *, count: int = 1, silent: bool = False) -> dict[str, Any]:
+    return {
+        "available": True,
+        "count": count,
+        "silent": silent,
+        "contents": [{"name": "run.md", "text": f"digest {report_id}"}] * count,
+    }
+
+
+def _job_record(**overrides: Any) -> dict[str, Any]:
+    record = {
+        "last_run_at": "2026-09-10T14:00:05.000000Z",
+        "last_status": "ok",
+        "last_error": None,
+        "paused": False,
+    }
+    record.update(overrides)
+    return record
+
+
+def test_boundary_record_binds_a_real_run_and_a_single_narration() -> None:
+    """A boundary is certified only by its own native run, single narration and parts."""
+
+    module = _qualification_module()
+    payload = _live_payload()
+    narrative = _live_narrative(payload)
+    work_key = payload["items"][0]["work_key"]
+    expected_items = {work_key: "running"}
+
+    decision = _confirmed_decision(payload, narrative)
+    boundary = module._boundary_record(
+        decision,
+        expected_items=expected_items,
+        expected_gaps=frozenset(),
+        language=None,
+        job_record=_job_record(),
+        run_evidence=_run_evidence(payload["report_id"]),
+        expected_cutoff_utc=EXPECTED_CUT,
+    )
+    assert boundary["narration_writes"] == 1
+    assert boundary["delivery_states"] == ["confirmed"]
+    assert boundary["work_keys"] == [work_key]
+    assert boundary["part_count"] == 1
+    assert boundary["native_run_files"] == 1
+    assert boundary["message_ids"] == ["424242"]
+
+    def fail_with(**changes: Any) -> str:
+        decision_value = _confirmed_decision(payload, narrative)
+        expected = dict(expected_items)
+        gaps = frozenset()
+        job = _job_record()
+        evidence = _run_evidence(payload["report_id"])
+        if "expected" in changes:
+            expected = changes["expected"]
+        if "gaps" in changes:
+            gaps = changes["gaps"]
+        if "job" in changes:
+            job = changes["job"]
+        if "evidence" in changes:
+            evidence = changes["evidence"]
+        if "narrative" in changes:
+            decision_value["narrative"] = changes["narrative"]
+        if "deliveries" in changes:
+            decision_value["deliveries"] = changes["deliveries"]
+        with pytest.raises(module.QualificationError) as error:
+            module._boundary_record(
+                decision_value,
+                expected_items=expected,
+                expected_gaps=gaps,
+                language=None,
+                job_record=job,
+                run_evidence=evidence,
+                expected_cutoff_utc=EXPECTED_CUT,
+            )
+        return error.value.code
+
+    assert fail_with(expected={work_key: "review"}) == "scope-state"
+    assert fail_with(expected={"pipeline:other": "running"}) == "scope-items"
+    assert fail_with(gaps=frozenset({"UNEXPECTED_GAP"})) == "scope-gaps"
+    assert (
+        fail_with(
+            narrative=_fake_narrative(
+                payload["report_id"],
+                result=narrative,
+                created="2026-09-10T14:00:20.000000Z",
+                updated="2026-09-10T14:00:35.000000Z",
+            )
+        )
+        == "multiple-narrations"
+    )
+    assert (
+        fail_with(deliveries=[_fake_delivery(0, "confirmed", message_id=None)])
+        == "delivery-unconfirmed"
+    )
+    assert fail_with(evidence={"available": False, "count": 0, "silent": False}) == (
+        "native-run-evidence"
+    )
+    assert fail_with(evidence=_run_evidence(payload["report_id"], count=2)) == "native-run-count"
+    assert (
+        fail_with(
+            evidence={
+                "available": True,
+                "count": 1,
+                "silent": False,
+                "contents": [{"name": "run.md", "text": "some other digest"}],
+            }
+        )
+        == "native-run-content"
+    )
+    assert (
+        fail_with(job=_job_record(last_run_at="2026-09-10T13:59:00.000000Z")) == "native-job-state"
+    )
+    assert fail_with(job=_job_record(last_status="error")) == "native-job-state"
+
+
+def test_idle_gate_requires_the_native_skip_and_no_new_inference() -> None:
+    """The idle cut must be a resolved silent native run with no narration anywhere."""
+
+    module = _qualification_module()
+
+    def store(**overrides: Any) -> Any:
+        payload: dict[str, Any] = {"items": [], "coverage_gaps": [], "report_id": "rpt_idle"}
+        settings = _FakeSettings(last_cutoff_utc=EXPECTED_CUT)
+        snapshots = [
+            _fake_snapshot(
+                "rpt_idle",
+                EXPECTED_CUT,
+                payload=payload,
+                resolved="2026-09-10T15:00:30.000000Z",
+            )
+        ]
+        narratives = overrides.get("narratives")
+        deliveries = overrides.get("deliveries")
+        return _FakeMonitorStore(
+            settings=settings,
+            snapshots=snapshots,
+            narratives=narratives,
+            deliveries=deliveries,
+        )
+
+    ready = module._inspect_idle(
+        store(),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"sess_existing": {"source": "tui"}},
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert ready["state"] == "ready"
+
+    # The reviewer's reproduced false positive: a fresh rejected narrative is a real
+    # model turn and must never be reported as an idle skip.
+    rejected = module._inspect_idle(
+        store(narratives={"rpt_idle": _fake_narrative("rpt_idle", status="rejected")}),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"sess_existing": {"source": "tui"}},
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert rejected["state"] == "failed"
+
+    pending = module._inspect_idle(
+        store(narratives={"rpt_idle": _fake_narrative("rpt_idle", status="pending")}),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"sess_existing": {"source": "tui"}},
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert pending["state"] == "failed"
+
+    not_silent = module._inspect_idle(
+        store(),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"sess_existing": {"source": "tui"}},
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle"),
+        handoff_directory=None,
+    )
+    assert not_silent["state"] == "failed"
+
+    new_reporter = module._inspect_idle(
+        store(),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"cron_native-job-1_2": {"source": "cron"}},
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert new_reporter["state"] == "failed"
+
+    not_yet = module._inspect_idle(
+        store(),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset(),
+        session_sources={"sess_existing": {"source": "tui"}},
+        job_record=_job_record(last_run_at="2026-09-10T13:59:00.000000Z"),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert not_yet["state"] == "waiting"
+
+    # A reporter session from the already observed worked cuts is not a new turn.
+    worked_cuts_only = module._inspect_idle(
+        store(),
+        expected_cutoff_utc=EXPECTED_CUT,
+        baseline_report_ids=BASELINE_REPORTS,
+        baseline_sessions=frozenset({"cron_native-job-1_1", "cron_native-job-1_2"}),
+        session_sources={
+            "cron_native-job-1_1": {"source": "cron"},
+            "cron_native-job-1_2": {"source": "cron"},
+        },
+        job_record=_job_record(),
+        run_evidence=_run_evidence("rpt_idle", silent=True),
+        handoff_directory=None,
+    )
+    assert worked_cuts_only["state"] == "ready"
+
+
+def test_d12_live_corpus_cannot_pass_without_live_evidence() -> None:
+    """Every semantic case compares the actual narrative with canonical source state."""
+
+    module = _qualification_module()
+    work_key = f"pipeline:{PROJECT_ID}:{CONTRACT_ID}:{ORIGIN_SESSION}"
+    fixture_ref = "board:oc-unit:task:t_00000001:result"
+    fixture_fact = {
+        "ref": fixture_ref,
+        "text": "Phase one checks are complete and everything is green.",
+        "provenance": "reported",
+        "status": "unverified",
+        "work_key": work_key,
+        "section": "current",
+    }
+    payload_item = {
+        "work_key": work_key,
+        "observed_state": "running",
+        "contract": {"id": CONTRACT_ID, "version": "v1", "title": "Synthetic"},
+        "current": [dict(fixture_fact)],
+    }
+    boundary = {
+        "payload_items": {work_key: payload_item},
+        "narrative_items": {},
+        "source_facts": {fixture_ref: fixture_fact},
+    }
+    case = {
+        "id": "contradictory-completion",
+        "boundary_index": 0,
+        "work_key": work_key,
+        "expected_state": "running",
+        "fixture_ref": fixture_ref,
+        "kind": "no-promotion",
+        "tokens": ["everything is green"],
+    }
+
+    missing = module._evaluate_cases([case], [])
+    assert missing[0]["status"] == "fail"
+
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "completed",
+            "current": [],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    promoted_state = module._evaluate_cases([case], [boundary])
+    assert promoted_state[0]["status"] == "fail"
+
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "running",
+            "current": [
+                {
+                    "ref": fixture_ref,
+                    "text": "Phase one checks are complete and everything is green.",
+                    "provenance": "observed",
+                    "status": "verified",
+                }
+            ],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    promoted_claim = module._evaluate_cases([case], [boundary])
+    assert promoted_claim[0]["status"] == "fail"
+
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "running",
+            "current": [
+                {
+                    "ref": "board:oc-unit:task:t_00000001:title",
+                    "text": "everything is green according to my own summary",
+                    "provenance": "observed",
+                    "status": "verified",
+                }
+            ],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    invented_token = module._evaluate_cases([case], [boundary])
+    assert invented_token[0]["status"] == "fail"
+
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "running",
+            "current": [
+                {
+                    "ref": fixture_ref,
+                    "text": "A worker reported phase one as complete; the flow is running.",
+                    "provenance": "reported",
+                    "status": "unverified",
+                }
+            ],
+            "resolved": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    faithful = module._evaluate_cases([case], [boundary])
+    assert faithful[0]["status"] == "pass"
+
+    completion_case = {
+        "id": "between-cut-final",
+        "boundary_index": 0,
+        "work_key": work_key,
+        "expected_state": "completed",
+        "kind": "completion",
+        "tokens": [],
+    }
+    completion_item = {
+        "work_key": work_key,
+        "observed_state": "completed",
+        "contract": {"id": CONTRACT_ID, "version": "v1", "title": "Synthetic"},
+        "resolved": [
+            {
+                "ref": f"{work_key}:closure",
+                "text": "FLOW_TERMINAL_CONFIRMED",
+                "provenance": "observed",
+                "status": "verified",
+            }
+        ],
+    }
+    verified_ref = f"{work_key}:closure"
+    boundary["payload_items"] = {work_key: completion_item}
+    boundary["source_facts"] = {
+        verified_ref: {
+            "ref": verified_ref,
+            "text": "FLOW_TERMINAL_CONFIRMED",
+            "provenance": "observed",
+            "status": "verified",
+            "work_key": work_key,
+            "section": "resolved",
+        }
+    }
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "completed",
+            "resolved": [],
+            "current": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    ungrounded = module._evaluate_cases([completion_case], [boundary])
+    assert ungrounded[0]["status"] == "fail"
+
+    boundary["narrative_items"] = {
+        work_key: {
+            "status": "completed",
+            "resolved": [
+                {
+                    "ref": verified_ref,
+                    "text": "Flow completion is confirmed by canonical evidence.",
+                    "provenance": "observed",
+                    "status": "verified",
+                }
+            ],
+            "current": [],
+            "next": [],
+            "complications": [],
+            "pending": [],
+        }
+    }
+    grounded = module._evaluate_cases([completion_case], [boundary])
+    assert grounded[0]["status"] == "pass"
+
+
 def test_live_public_summary_excludes_private_handles_and_private_paths() -> None:
     """Only sanitized timings, counts and case results may leave a live run."""
 
@@ -959,30 +1797,66 @@ def test_live_public_summary_excludes_private_handles_and_private_paths() -> Non
     record = {
         "candidate_revision": "0" * 40,
         "runtime_interpreter": "/private/operator/runtime/python3",
-        "boundaries": {
-            "boundaries": [
-                {
-                    "cutoff_utc": "2026-09-10T13:00:00Z",
-                    "report_id": "monitor-report-1",
-                    "message_ids": ["424242"],
-                    "delivery_states": ["confirmed"],
-                    "narration_count": 1,
-                }
-            ]
-        },
+        "environment": {"gaps": []},
+        "boundaries": [
+            {
+                "cutoff_utc": "2026-09-10T13:00:00Z",
+                "report_id": "monitor-report-1",
+                "message_ids": ["424242"],
+                "delivery_states": ["confirmed"],
+                "narration_status": "accepted",
+                "narration_writes": 1,
+                "collected_lateness_seconds": 41.0,
+                "narration_lateness_seconds": 63.0,
+                "ack_lateness_seconds": 88.0,
+                "work_keys": ["pipeline:private"],
+                "part_count": 2,
+                "native_run_files": 1,
+            }
+        ],
+        "cases": [
+            {"id": "direct-no-contract", "status": "pass", "detail": "ok"},
+            {"id": "between-cut-final", "status": "fail", "detail": "lost"},
+        ],
         "idle": {"idle_confirmed": True},
-        "restore": {"scope_removed": True, "enabled_restored": True},
+        "restore": {
+            "scope_removed": True,
+            "enabled_restored": True,
+            "registry_restored": "byte-identical",
+        },
         "errors": [],
     }
 
     public = module._public_live_summary(record)
 
     rendered = json.dumps(public)
-    for private in ("424242", "monitor-report-1", "/private/operator", "2026-09-10T13:00:00Z"):
+    for private in (
+        "424242",
+        "monitor-report-1",
+        "/private/operator",
+        "2026-09-10T13:00:00Z",
+        "pipeline:private",
+    ):
         assert private not in rendered, private
     assert public["boundaries_observed"] == 1
     assert public["confirmed_deliveries"] == 1
     assert public["narration_counts"] == [1]
+    assert public["collection_lateness_seconds"] == [41.0]
+    assert public["item_counts"] == [1]
+    assert public["cases"] == {"direct-no-contract": "pass", "between-cut-final": "fail"}
+    assert public["case_failures"] == ["between-cut-final"]
     assert public["idle_confirmed"] is True
     assert public["scope_restored"] is True
     assert "Bot API acceptance" in public["acceptance_notice"]
+
+
+def test_live_state_fingerprint_uses_cutoff_and_relative_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The harness resolves the operator state read-only and never creates it."""
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg"))
+    fingerprint = module._live_state_fingerprint()
+    assert fingerprint == {}
+    assert not (tmp_path / "xdg").exists()

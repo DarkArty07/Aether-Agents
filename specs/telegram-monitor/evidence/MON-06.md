@@ -4,8 +4,10 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** self-verified; ready for same-card Supervisor review. No `--live` run, no model call,
-no Telegram send, no activation.
+**Status:** round-2 corrections complete for review; self-verified. No `--live` run, no model
+call, no Telegram send, no activation. The round-1 review reproduced four live-oracle and
+privacy defects; their corrections are recorded in "Round-2 corrections" below, and the
+"Implemented deliverables" section describes the round-1 text that the corrections replaced.
 
 ## Starting-point reconstruction
 
@@ -221,3 +223,174 @@ Residual risks, stated honestly:
   roots for every state it writes.
 - Capability status is `partial` by design: deterministic packaging is qualified, live
   hourly/narration/Telegram behavior and installation-local activation are not.
+
+## Round-2 corrections (review round 1 → rework)
+
+The same-card review reproduced four defects in the round-1 live lane. Each correction is
+stated with the check that now fails closed; nothing in production was modified.
+
+### 1. Stale-cut and single-narration oracles (`_inspect_boundary`, `_boundary_record`)
+
+Round 1 accepted any snapshot whose cutoff merely differed from the persisted watermark, so
+historical cuts and pre-existing reports could certify a "real boundary". The live lane now
+accepts a cut only when all of the following hold, and the evidence captures the required
+times and identifiers:
+
+- the cut equals the **expected** wall-clock hour computed from `on`'s own `next_cut_utc`,
+  the report was not present at run start (`baseline_report_ids`) and it was collected after
+  this enablement;
+- the snapshot payload contains exactly the expected synthetic work identities in exactly
+  the expected canonical states and no other coverage gap than the declared fixture gap
+  (`DIRECT_OUTCOME_UNKNOWN` at the first cut);
+- collection began within the accepted 120-second deadline;
+- the narration is `accepted`, carries a structured result, and was written once
+  (`created_at_utc == updated_at_utc`) — a re-attempt is not a single digest narration;
+- every part is `confirmed` with a native message identifier (a multipart result containing
+  both `confirmed` and `failed` fails; round 1 required only the presence of `confirmed`);
+- the shipped renderer recomputes the delivered parts from the snapshot and narrative and
+  every part hash matches, including each item's immutable identity header;
+- the native scheduler's own run record for the window exists exactly once and contains the
+  digest identity, and the owned native job reports a successful run after the cut;
+- due/cut/collection/narration/acknowledgement times, part counts and attempts are recorded
+  (message identifiers and report identifiers stay in the private receipt).
+
+Checks: `test_boundary_gate_rejects_stale_scopes_and_mixed_deliveries`,
+`test_boundary_record_binds_a_real_run_and_a_single_narration` (the fake-store probe from
+the review — baseline `14:00`, historical `12:00`/`13:00` — is classified `waiting`).
+
+### 2. Genuine no-work / no-inference gate (`_inspect_idle`)
+
+Round 1 inferred "no inference" from a missing `structured_result`, so a fresh `rejected` or
+`failed` narrative after a real model turn certified the skip. The idle cut now requires:
+
+- the native scheduler's own saved run record for that window to contain the exact silent
+  gate marker the native scheduler writes when the pre-check returns `wakeAgent=false`
+  (`Script gate returned `wakeAgent=false` — agent skipped.`), exactly one run record;
+- the durable watermark to have advanced to the idle cut, the snapshot to be resolved, and
+  **no** narration of any status, no deliveries, no pending handoff and an empty payload
+  with no new coverage gaps;
+- no reporter session (`cron*`/gateway-shaped) beyond the sessions already present after the
+  two worked cuts;
+- the owned native job to report a successful run at/after the cut and to be unpaused.
+
+Checks: `test_idle_gate_requires_the_native_skip_and_no_new_inference` (the review's
+rejected-narrative reproduction now returns `failed`; pending, non-silent, new-reporter and
+not-yet-run cases all fail closed or wait).
+
+### 3. Isolation, between-cut finals and the D12 corpus (`run_live`, `_scope_*`)
+
+- **Isolation.** The operator's project registry is backed up byte-for-byte and replaced by
+  a synthetic-only registry for the duration; native rows, boards, sessions and direct-turn
+  spool files are the only other written objects, all created by the run and all removed in
+  the `finally` block, with the registry bytes restored and hash-verified. The source
+  adapter therefore cannot enumerate an unrelated real project during the qualification.
+- **Between-cut behavior.** The synthetic flows start active (one running, one in review)
+  and are completed between the two cuts, so the second boundary must carry genuine final
+  reports; the direct no-contract session opens a second interval between the cuts, so the
+  continuation is attributed and closed.
+- **D12 corpus.** The fixture carries contradictory worker completion, a forecast deadline,
+  word-based time, a malicious instruction and a legitimate partial success with pending
+  review. Nine case checks compare the actual persisted narrative with the canonical
+  payload: typed state equality, adversarial text never promoted beyond its
+  `reported/unverified` source, completion grounded in observed verified evidence, and the
+  direct case carrying no contract. A case cannot pass without the live narrative, because
+  the case reads the boundary evidence produced by the native run.
+
+Check: `test_d12_live_corpus_cannot_pass_without_live_evidence` (missing evidence, promoted
+state, promoted claim, invented token and ungrounded completion all fail; faithful
+paraphrase and grounded completion pass).
+
+### 4. Private output boundary (`_inside_repository`, entry point)
+
+- `_inside_repository` now rejects any path inside **any** Git worktree (ancestor `.git`
+  directory or linked-worktree file, a temporary repository included) and inside this
+  repository's primary checkout, not only this worktree.
+- The live public output no longer contains the absolute `--output` value in JSON or in the
+  human summary; the operator-selected file is referenced by role only. Private handles,
+  report identifiers, paths and timestamps stay in the private receipt.
+
+Checks: `test_git_containment_rejects_every_worktree_or_repository`,
+`test_live_entry_point_never_prints_private_paths_or_handles` (entry-point level: the real
+`main()` is invoked with a stubbed `run_live` record containing private handles; the printed
+JSON and human text contain none of them), plus the CLI-level foreign-repository refusal in
+`test_live_qualification_refuses_unsafe_invocations_without_effects`.
+
+### Environment precondition discovered while correcting the oracle (production, not edited)
+
+While binding the idle gate to the real source adapter, a read-only probe of this
+installation showed that a **synthetic-only registry** still yields persistent coverage
+gaps:
+
+```text
+$ uv run --frozen python - <<'PY'   # registry replace → read-only collect → byte-exact restore
+ReadOnlySources(state_root=None, hermes_home=None).collect(cutoff_utc=...).coverage_gaps
+PY
+synthetic-only-registry gaps: ('BOARD_METADATA_UNREADABLE', 'SESSION_TITLE_UNAVAILABLE')
+items: []
+registry restored byte-identical: True
+```
+
+Under D8 a coverage gap is never idle, and `run_precheck` only emits the silent gate when
+the collection is fully idle; with those persistent gaps the native idle skip is
+unreachable on this installation (and enabling the monitor would send an hourly no-work
+gap report to the owner). The harness therefore runs a read-only pre-flight probe **before
+enabling anything** and refuses with `environment-gaps` (gap codes in the message and
+receipt) instead of spending two hours and sending gap reports. This is a production
+behavior question in `src/aether_agents/monitor/sources.py` (default-board metadata and
+untitled native sessions are reported as permanent gaps), a file outside MON-06's writable
+boundary: MON-06 does not edit it, and the live idle-skip qualification stays pending until
+MON-INT/Supervisor decides the production fix or the intended installation precondition.
+
+## Round-2 verification record
+
+All commands ran in the assigned worktree on the round-2 candidate (single local commit on
+`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`; exact SHA in the
+review handoff).
+
+- `uv run --frozen pytest -q tests/test_documentation.py tests/test_telegram_monitor_cli_plugin.py`
+  → **39 passed** (25 qualification/CLI tests, including the six new live-oracle and privacy
+  tests, plus the documentation checks).
+- Monitor suite (`tests/test_telegram_monitor_state.py`, `_sources.py`, `_reporting.py`,
+  `_delivery.py`, `_runtime.py`, `_cli_plugin.py`) → **222 passed**.
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 52 passed**; the single failure is the pre-existing issue #364.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q`) → **7 failed, 1303 passed, 60 skipped,
+  373 subtests passed**. The failures are the six unchanged accepted-lifecycle entry-point
+  allow-list tests (`tests/test_observation_lifecycle.py`: **6 failed, 84 passed**, all at
+  `candidate Aether plugin entry-point set mismatch`) and issue #364 — identical classes to
+  the reviewed MON-05 baseline; MON-06 caused none.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed**.
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  9 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel + sdist built.
+- `uv run --frozen python scripts/check_public_artifacts.py --root . --artifact <wheel> --artifact <sdist>`
+  → only the pre-existing issue #364 findings on the unchanged finalized contract.
+- Manifest emulation (literal `cat >"$expected"` block vs `git ls-files` minus `specs/`) →
+  **364 = 364, missing [], extra []** — no path added, removed or relaxed; `policy.yml`
+  itself is unchanged in round 2.
+- `uv run --frozen ruff check` / `ruff format --check` on the script and both test files →
+  clean; `mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `compileall` on the three files → passed; `git diff --check` → passed.
+
+Deliberate non-effects in round 2: no `--live` invocation, no model call, no Telegram send,
+no credential operation, no profile/job/plugin activation, no native Hermes change, no
+source-database write outside the harness's own reversible scope (which the unit does not
+execute), no push/PR/merge/issue mutation.
+
+## Round-2 residual risks
+
+- The live lane still has never been executed: its deterministic half, its refusals and its
+  oracles are covered by tests and by a local fake-driven dry run of the whole orchestration
+  (scope → enable → two boundaries → cases → idle → off → restore), but the first real run
+  belongs to MON-INT. On this installation the environment pre-flight will refuse until the
+  persistent-gap production question above is resolved; that refusal is the honest outcome,
+  not a harness defect.
+- The native run-record evidence depends on the scheduler's own per-job output files; the
+  harness reads them through `cron.jobs._job_output_dir` and fails closed with
+  `native-run-evidence` when they cannot be read, rather than accepting weaker evidence.
+- The registry isolation is byte-preserving and verified, but it is still a live
+  modification for the duration of a qualification; it is documented in the guide and the
+  run refuses before enabling any live effect when its pre-flight cannot succeed.

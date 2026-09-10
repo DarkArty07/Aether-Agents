@@ -192,23 +192,70 @@ The provisioned live lane is owned by the terminal integration step (MON-INT) an
 invoked as:
 
 ```bash
-# $PRIVATE_EVIDENCE is an operator-selected protected directory outside the repository.
+# $PRIVATE_EVIDENCE is an operator-selected protected directory outside every Git worktree.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
 
 Live mode accepts no token, destination, provider or model input; it resolves only the
-provisioned runtime and the existing pinned destination, creates one honestly labelled
-synthetic monitored scope, exercises the shipped source adapter and delivery adapter, and
-records due, cut, collection, narration and acknowledgment times plus private message
-identifiers in the protected `--output` file. It restores the synthetic scope and the
-previous enablement, and never kills or restarts an agent.
+provisioned runtime and the existing pinned destination, and it performs no external
+effect until its environment pre-flight passes. What it does, in order:
+
+1. **Isolating one synthetic scope.** The operator's project registry is backed up
+   byte-for-byte and replaced, for the duration of the run, by a registry containing only
+   two honestly labelled synthetic projects (markers, finalized contracts, canonical
+   boards, origin/finalizer sessions) plus one direct no-contract session. Everything the
+   run creates — native project rows, boards, sessions, direct-turn spool files — is
+   removed afterwards and the registry bytes are restored and verified. The
+   qualification never invents a real project identity, never edits a source database and
+   never restarts or kills an agent.
+2. **Proving the fixed native job.** `on` must reconcile exactly one owned job; a second
+   `on` must return the same job and create nothing; the job record must carry the fixed
+   schedule, pre-check script, `deliver=local`, restricted reporter toolset, no agent
+   bypass and no model/provider/origin override.
+3. **Two real hourly boundaries.** Each expected cut must be a fresh report for the
+   expected wall-clock hour, collected within the accepted deadline, with an accepted
+   single-write Morfeo narrative whose delivered parts are byte-equal to the shipped
+   renderer's output over that evidence (including the immutable identity headers), every
+   part confirmed with a native message identifier, and at most one native scheduler run
+   record containing that digest identity. Between the two cuts the synthetic work
+   transitions — a flow completes, a reviewed flow closes, a direct turn opens a
+   continuation — so the second boundary must carry the genuine final reports.
+4. **Comparing the D12 semantic corpus with canonical state.** The synthetic scope
+   contains contradictory worker completion claims, a forecast deadline, word-based time,
+   a malicious instruction and a legitimate partial success with pending review. The
+   harness compares the actual Morfeo narrative with the canonical snapshot evidence:
+   typed state must equal the canonical lifecycle state, adversarial text must never be
+   promoted beyond its `reported/unverified` evidence, a completion must be grounded in
+   observed verified evidence, and the direct case must carry no contract. A case cannot
+   pass without the live narrative that produced it.
+5. **One real no-work boundary.** After the final coverage is confirmed, the next cut
+   must show the native scheduler's own record of the silent `wakeAgent=false` gate, an
+   advanced watermark, a resolved snapshot with no narration of any status, no deliveries,
+   no new reporter session and no pending handoff. A fresh rejected or failed narrative
+   is a model turn and therefore fails the skip rather than certifying it.
+6. **Manual off and restoration.** `off` must durably disable the monitor and pause the
+   owned job; the prior enablement (and, on an installation that had none, the absence of
+   the created job) and every unrelated job's behaviour-bearing fields must be restored.
+
+Private receipts (message and session handles, report identifiers, paths, the raw native
+run record) go only to the `--output` file, which must live outside every Git worktree;
+the public summary carries revisions, counts, latencies, case results and the qualified
+scope only, and states that Telegram Bot API acceptance is not proof the human read a
+message.
 
 Current limits, stated honestly:
 
 - Until the live lane and the terminal integration complete, this build's live
   hourly/narration/Telegram behavior is **not** qualified. Sample runs, manual ticks and
   the offline lane are not substitutes.
+- **Environment pre-flight.** The monitor never treats a coverage gap as idle. A
+  read-only probe therefore runs before anything is enabled, and the run refuses with
+  `environment-gaps` when the installation itself reports a gap the qualification cannot
+  remove (for example the default board's absent metadata, or a native session without a
+  title). On such an installation the genuine no-work skip cannot occur and enabling the
+  monitor would produce an hourly gap report; the live lane must not send that, so it
+  stops before the first live effect and reports the gap codes.
 - The narration quality boundary is structural plus representative live review: typed
   lifecycle/reference/provenance/size/privacy validation is deterministic, while faithful
   paraphrase of arbitrary prose is judged on real Morfeo output, not by a semantic parser.
