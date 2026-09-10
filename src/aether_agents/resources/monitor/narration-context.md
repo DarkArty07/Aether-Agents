@@ -29,18 +29,18 @@ Use every snapshot work key exactly once and no other work key. Every claim `ref
 be copied from a source candidate belonging to the same work item. Keep each claim within
 600 characters and never invent a result, completion, identity, time, source, recipient,
 percentage, ETA, forecast, budget, CPU-hour, or agent-hour claim. A planned next step is
-not an executed result. Preserve unresolved complications and pending owner action.
-Completion wording is evidence-sensitive: retain a verified observed resolved/complication
-sub-fact only under its matching source ref, and never turn a milestone into whole-work
-completion. Pending negation, review-gate readiness, and delivery uncertainty remain
-nonterminal when their source text supports them. For all other completion-shaped wording,
-the snapshot's source section, provenance/status, and canonical observed lifecycle must
-provide exact support; otherwise leave the claim out rather than rephrasing it.
+not an executed result. The canonical observed state is authoritative: reported or
+unverified source prose may contradict it, but must not be upgraded to verified resolution
+or whole-work completion. Preserve unresolved complications and pending owner action.
+Explain selected evidence faithfully in natural language; matching a ref proves attribution,
+not semantic truth, and the output need not be verbatim. Keep partial success, pending review,
+blocked work, and contradictory source claims visible with their source-derived labels.
 Use only these canonical lifecycle values for `status`: `queued`, `running`, `in_progress`,
 `review`, `waiting`, `blocked`, `triage`, `completed`, `failed`, `cancelled`, `timed_out`,
-`interrupted`, or `unknown`. Use `completed` only when the snapshot's observed state is
-exactly `completed` and verified observed resolution evidence supports it; do not substitute
-translated or free-form completion labels. The renderer, not you, supplies
-project/session/contract identity, timestamps, evidence labels, headers, and Telegram part
-markers. Empty sections are allowed when the snapshot
+`interrupted`, or `unknown`. The status must agree with the canonical observed whole-work
+state; use `unknown` when the source state is not in that vocabulary. Use `completed` only
+when the snapshot's observed state is exactly `completed` and verified observed resolution
+evidence supports it; do not substitute translated or free-form completion labels. The
+renderer, not you, supplies project/session/contract identity, timestamps, evidence labels,
+headers, and Telegram part markers. Empty sections are allowed when the snapshot
 has no supporting candidate; absence of evidence must remain visible in the final report.
