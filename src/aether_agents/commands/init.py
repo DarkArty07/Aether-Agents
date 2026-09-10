@@ -296,7 +296,10 @@ _TRACKED_PATHS = (
     ".aether/objective-contracts/",
     ".aether/skills/",
 )
-_IGNORED_PATHS = (".aether/drafts/",)
+_IGNORED_PATHS = (
+    ".aether/drafts/",
+    ".worktrees/",
+)
 
 _IGNORE_BLOCK = """
 # Aether project identity, finalized Objective Contracts, and
@@ -309,6 +312,7 @@ _IGNORE_BLOCK = """
 !/.aether/objective-contracts/**
 !/.aether/skills/
 !/.aether/skills/**
+/.worktrees/
 """
 
 
@@ -317,8 +321,16 @@ def _is_ignored(root: Path, relative: str) -> bool:
     return _git(root, "check-ignore", "-q", relative) is not None
 
 
+def _tracked_worktrees_paths(root: Path) -> str | None:
+    """Return tracked paths under ``.worktrees`` if any exist in the Git index/HEAD."""
+    tracked = _git(root, "ls-files", "--", ".worktrees")
+    return tracked if tracked else None
+
+
 def _ignore_policy_satisfied(root: Path) -> bool:
     """The canonical layout requires tracked marker/finals and ignored drafts."""
+    if _tracked_worktrees_paths(root) is not None:
+        return False
     return not any(_is_ignored(root, path) for path in _TRACKED_PATHS) and all(
         _is_ignored(root, path) for path in _IGNORED_PATHS
     )
@@ -332,6 +344,14 @@ def _apply_ignore_policy(root: Path) -> None:
     verified with Git itself; if the policy is still unsatisfied the file is restored
     byte-for-byte and the caller refuses rather than reporting a usable project.
     """
+    tracked_worktrees = _tracked_worktrees_paths(root)
+    if tracked_worktrees is not None:
+        raise InitError(
+            "AETHER-INIT-WORKTREES-CONFLICT",
+            f".worktrees is already tracked in Git ({tracked_worktrees}); "
+            "refusing to hide an existing tracked path",
+            failure_kind="blocked",
+        )
     path = root / ".gitignore"
     original: bytes | None = None
     if path.exists():
@@ -371,6 +391,14 @@ def _apply_ignore_policy(root: Path) -> None:
 
 def _plan(root: Path, args: argparse.Namespace, registry: ProjectRegistry) -> dict[str, Any]:
     """Compute the full init decision without writing anything."""
+    tracked_worktrees = _tracked_worktrees_paths(root)
+    if tracked_worktrees is not None:
+        raise InitError(
+            "AETHER-INIT-WORKTREES-CONFLICT",
+            f".worktrees is already tracked in Git ({tracked_worktrees}); "
+            "refusing to hide an existing tracked path",
+            failure_kind="blocked",
+        )
     marker_path = root / ".aether" / "project.toml"
     existing = _read_existing_marker(marker_path)
     native = _resolve_hermes_project(root, args.hermes_project)

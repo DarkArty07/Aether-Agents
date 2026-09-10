@@ -9,13 +9,16 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Sequence
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
 DRIFT_CHECKER = ROOT / "scripts" / "check_hermes_baseline_drift.py"
 TEST_BOOTSTRAP = ROOT / "scripts" / "run_tests.py"
 POLICY_WORKFLOW = ROOT / ".github" / "workflows" / "policy.yml"
+QUALIFY_RUNNER = ROOT / "scripts" / "qualify_observation.py"
 
 
 def test_loader_reads_the_authoritative_machine_readable_resource() -> None:
@@ -297,3 +300,217 @@ def test_ci_exercises_the_no_argument_bootstrap_against_the_checkout_it_created(
         == "uv run --frozen python scripts/run_tests.py -- tests/test_hermes_baseline.py -q"
     )
     assert "--checkout" not in bootstrap_step["run"]
+
+
+def _load_qualify_runner() -> Any:
+    spec = importlib.util.spec_from_file_location("qualify_observation_test", QUALIFY_RUNNER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_qualify_observation_retains_sanitized_git_diagnostics_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_qualify_runner()
+    git_stderr = "fatal: reference is not a tree: e624e9fde561e1add9388384012b295fde669ade\n"
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args[0] if args else [],
+            returncode=128,
+            stdout="",
+            stderr=git_stderr,
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner._run(["git", "checkout", "--detach", "e624e9fde561e1add9388384012b295fde669ade"])
+
+    message = str(exc_info.value)
+    assert "command failed (git exit 128)" in message
+    assert (
+        "stderr_tail=[fatal: reference is not a tree: e624e9fde561e1add9388384012b295fde669ade]"
+        in message
+    )
+    assert "sha256=" not in message
+
+
+def test_qualify_observation_redacts_credentials_and_private_paths_in_git_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_qualify_runner()
+    unix_fixture_path = "/" + "home" + "/operator_user/project/.git/refs/heads/main"
+    win_fixture_path = "C" + ":\\" + "Users" + "\\operator_user\\aether\\.git\\config"
+    raw_diagnostic = (
+        "fatal: unable to access 'https://bot-user:secret_cred_123@github.com/org/repo.git/': 401 Unauthorized\n"
+        f"error: cannot lock ref at {unix_fixture_path}\n"
+        f"error: windows lock failure on {win_fixture_path}\n"
+        "hint: credential bearer token_sample_val was rejected\n"
+    )
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args[0] if args else [],
+            returncode=128,
+            stdout="",
+            stderr=raw_diagnostic,
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner._run(["git", "fetch", "--force", "origin"])
+
+    message = str(exc_info.value)
+    assert "command failed (git exit 128)" in message
+    # Sensitive tokens and paths must be redacted
+    assert "bot-user:secret_cred_123" not in message
+    assert "operator_user" not in message
+    assert "token_sample_val" not in message
+    assert "<redacted>" in message
+    assert "<path>" in message
+    assert ("https://" + "<" + "redacted>@github.com/org/repo.git/") in message
+
+
+def test_qualify_observation_redacts_high_confidence_secrets_and_query_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_qualify_runner()
+    raw_synthetic_tokens = {
+        "akia": "AK" + "IA" + "0123456789ABCDEF",
+        "jwt": (
+            "eyJ"
+            + "hbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+            + "eyJ"
+            + "zdWIiOiIxMjM0NTY3ODkwIn0."
+            + "synthetic_signature"
+        ),
+        "aiza": "AI" + "za" + "012345678901234567890123456789",
+        "sk_openai": "sk" + "-syntheticOpenAiKey1234567890",
+        "sk_live": "sk" + "_live_" + "0123456789abcdef1234",
+        "xapp": "x" + "app-1-" + "123456789012-" + "abcdef12345678901234",
+        "xoxb": "xox" + "b-123456789012-345678901234-" + "abcdef123456",
+        "ghp": "gh" + "p_" + "0123456789abcdef123456789012",
+        "privkey": "-----" + "BEGIN " + "RSA PRIVATE KEY-----",
+        "ssh_cred": "ssh_bot:synthetic_ssh_secret",
+        "query_token": "synthetic_query_token_value_987",
+        "query_key": "synthetic_query_api_key_456",
+        "kv_access_token": "synthetic_access_token_value_321",
+        "kv_client_secret": "synthetic_client_secret_value_654",
+    }
+    q_token_param = "?access" + "_token="
+    q_key_param = "&" + "key="
+    raw_diagnostic = (
+        f"fatal: access denied on ssh://{raw_synthetic_tokens['ssh_cred']}@example.com/repo.git\n"
+        + "error: query auth failed on https://example.com/repo.git"
+        + q_token_param
+        + raw_synthetic_tokens["query_token"]
+        + q_key_param
+        + raw_synthetic_tokens["query_key"]
+        + "\n"
+        + f"error: underscore-delimited access_token={raw_synthetic_tokens['kv_access_token']} and client_secret: {raw_synthetic_tokens['kv_client_secret']}\n"
+        f"warning: rejected AWS {raw_synthetic_tokens['akia']} and JWT {raw_synthetic_tokens['jwt']}\n"
+        f"remote: rejected AI keys {raw_synthetic_tokens['aiza']} and {raw_synthetic_tokens['sk_openai']}\n"
+        f"hint: rejected Stripe {raw_synthetic_tokens['sk_live']}, Slack {raw_synthetic_tokens['xapp']}, {raw_synthetic_tokens['xoxb']}\n"
+        f"error: rejected GitHub token {raw_synthetic_tokens['ghp']} and header {raw_synthetic_tokens['privkey']}\n"
+    )
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args[0] if args else [],
+            returncode=128,
+            stdout="",
+            stderr=raw_diagnostic,
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner._run(["git", "fetch", "--force", "origin"])
+
+    message = str(exc_info.value)
+    assert "command failed (git exit 128)" in message
+    for token_name, token_val in raw_synthetic_tokens.items():
+        assert token_val not in message, f"Token {token_name} leaked in git diagnostic message"
+    assert "<redacted>" in message
+    assert "fatal: access denied on ssh://" in message
+    assert "https://example.com/repo.git" in message
+    assert ("access" + "_token=<redacted>") in message
+    assert ("key=" + "<redacted>") in message
+    assert "warning: rejected AWS <redacted> and JWT <redacted>" in message
+    assert "remote: rejected AI keys <redacted> and <redacted>" in message
+
+
+def test_qualify_observation_falls_back_to_content_free_tail_for_non_git_or_non_diagnostic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_qualify_runner()
+
+    def fake_run_pytest(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args[0] if args else [],
+            returncode=1,
+            stdout="",
+            stderr="internal tool traceback or unexpected non-diagnostic error line\n",
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run_pytest)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner._run(["pytest", "-q"])
+
+    assert "command failed (pytest exit 1)" in exc_info.value.args[0]
+    assert "sha256=" in exc_info.value.args[0]
+
+    def fake_run_git_no_diag(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args[0] if args else [],
+            returncode=128,
+            stdout="",
+            stderr="Cloning into 'target'...\nUpdating files: 50%\n",
+        )
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run_git_no_diag)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner._run(["git", "clone", "url"])
+
+    assert "command failed (git exit 128)" in exc_info.value.args[0]
+    assert "sha256=" in exc_info.value.args[0]
+
+
+def test_checkout_exact_surfaces_git_checkout_failure_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runner = _load_qualify_runner()
+    target = tmp_path / "hermes-checkout"
+
+    def fake_run(
+        arguments: Sequence[str], *args: Any, **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        if "clone" in arguments:
+            target.mkdir(parents=True, exist_ok=True)
+            (target / ".git").mkdir(parents=True, exist_ok=True)
+            return subprocess.CompletedProcess(list(arguments), returncode=0, stdout="", stderr="")
+        if "checkout" in arguments:
+            return subprocess.CompletedProcess(
+                list(arguments),
+                returncode=128,
+                stdout="",
+                stderr="fatal: reference is not a tree: e624e9fde561e1add9388384012b295fde669ade\n",
+            )
+        return subprocess.CompletedProcess(list(arguments), returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner, "_run", runner._run)
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        runner.checkout_exact(target)
+
+    message = str(exc_info.value)
+    assert "command failed (git exit 128)" in message
+    assert "fatal: reference is not a tree: e624e9fde561e1add9388384012b295fde669ade" in message
