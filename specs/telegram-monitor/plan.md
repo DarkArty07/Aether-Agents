@@ -186,7 +186,18 @@ Morfeo returns one JSON narrative envelope with `schema_version`, exact `report_
 claim references known source refs and the model cannot supply project/chat/session
 headers. Validation rejects unknown items/refs, mixed identities, fabricated structured
 completion and malformed output; preserve pending state, never turn rejected text into
-an official report. Renderer adds immutable identity/time headers and evidence labels,
+an official report. `spec.md` D12 owns the precise distinction: typed lifecycle/status
+validation is deterministic; arbitrary prose semantics is not certified with regex.
+Keep the existing snapshot/narrative shapes. A model status must match the source's
+canonical whole-work state (or the deterministic unknown mapping), never a prose synonym.
+References and provenance cannot be upgraded by a sentence; all linked refs remain within
+the source work item and compatible section. Reported/unverified content receives an
+unverified/reporting label computed from source, not a model-supplied verification claim.
+No natural-language semantic classifier, synonym denylist or verbatim-only narrative is
+part of the contract. Seeded privacy/identity/shape validation remains mandatory.
+Prompt guidance and representative actual model qualification own faithful paraphrase,
+contradictory-source handling and no fabricated completion/time/percentage statements.
+Renderer adds immutable identity/time headers and evidence labels,
 then the accepted Spanish/owner-language section structure. Mark no evidence explicitly.
 Plain-text splitting uses <=3,500 Unicode characters per Telegram part (leave header
 headroom) and repeats identity for continued items, with report/part order markers. One

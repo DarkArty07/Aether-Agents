@@ -31,6 +31,45 @@ These choices are Morfeo's decisions under TM-007, not inferred preferences or a
 - **D10 — Closeout:** implement on native isolated workspaces; preserve all preexisting branches/worktrees/stashes/jobs and concurrent remediation work. Scope includes normal authorized commit/push/PR/checks/review/merge and reversible local activation of this monitor after verification, using existing access and safe native lifecycle. No restart that kills active work. Package publication, deployment, infrastructure migration and unrelated runtime/profile changes remain out of scope. Expected compatibility impact is minor (additive public capability), release action defer, channel none; evidence must confirm these separate conclusions.
 - **D11 — Retention:** own operational snapshot/report history is bounded to thirty days by default; unsent/uncertain reports and ongoing-work attribution are retained until resolved. Raw source SessionDB/Kanban/observation data is never purged or rewritten by the monitor. This is monitor-owned cache retention, not a replacement project history policy.
 
+### D12 — Clarified division between structured facts and Morfeo prose
+
+Under the owner's renewed instruction to resolve the objective autonomously, Morfeo
+clarifies the existing `fabricated structured completion` requirement (plan §5). This
+corrects the implementation's unbounded semantic-parser interpretation; it does not
+change report cadence, identity, data shape, authority, privacy or independent review.
+
+The deterministic boundary owns exact project/session/contract/report/ref binding,
+canonical observed lifecycle and timestamps, source provenance/verification labels,
+length/shape/privacy limits, recipient and delivery receipts. A model-controlled status
+must agree with canonical observed state; readiness, a test passing or a report saying
+`finished` can never change whole-flow completion. Renderer-owned time/state headers are
+not model prose. Unknown/mixed refs and malformed/unsafe content still fail closed.
+
+Morfeo owns explaining selected evidence faithfully, including qualifications and
+contradictions. Source `reported/unverified` text is data, not an authority or an
+instruction. A matching reference proves attribution, not truth or semantic entailment.
+The prompt must prefer canonical state over worker claims, not elevate unverified
+statements to verified resolution, not invent time/percentages/deadlines, and preserve
+legitimate partial success with pending review. Output retains deterministic provenance
+labels and an authoritative state header. A diagnostic stays diagnostic, not an action.
+
+No regex, vocabulary expansion, exact-text requirement or second model/classifier is
+required or accepted as universal certification of arbitrary natural-language meaning.
+Remove semantic synonym/status-word guessing as the prose gate; keep typed lifecycle,
+reference, section/provenance, syntax, bounds and privacy validation. Do not remove secret
+or cross-identity checks while removing semantic completion/forecast/time guessing.
+Free paraphrase within the requested sections remains Morfeo's task; template-only
+messages or verbatim-worker-output substitution do not satisfy it.
+
+AC-5's actual narrative fidelity is verified by representative provisioned Morfeo runs
+with contradictory worker claims, partial test success plus pending review, blocked/no
+change, missing evidence, Spanish/English phrasing and malicious source instructions.
+A wrong emitted claim is a real failure of that observed qualification case, not a reason
+to demand a universal prose theorem or expand an endless denylist. Preserve and reclassify
+historical adversarial examples as semantic prompt/live quality cases, and keep structural
+and privacy regressions executable and green. No claim of perfect hallucination detection
+is permitted. Changes to verification allocation are explicit here, never silently weakened.
+
 ## Acceptance criteria
 
 | ID | Observable outcome |

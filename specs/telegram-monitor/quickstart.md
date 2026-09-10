@@ -5,6 +5,18 @@ passed. Run from the assigned project worktree. Commands below that target propo
 files/surfaces become runnable when implemented; their absence is an unmet deliverable,
 not permission to replace evidence with samples. `spec.md` owns acceptance.
 
+## Clarification for MON-03 semantic verification
+
+`spec.md` D12 owns verification allocation, correcting the repeated synonym-loop
+interpretation of plan §5. Unit tests reject mismatched typed status, cross-item/unknown
+refs, provenance promotion, invalid shape/size and unsafe source data. They accept
+legitimate partial-success/pending-review prose without semantic word heuristics. Keep
+prior adversarial prose examples as the quality-case corpus, not an impossible pure
+regex truth oracle. Existing live Morfeo qualification includes contradictory worker
+completion, forecasts, word-based time and malicious instructions; compare actual output
+with authoritative state/evidence and report case outcomes. No new classifier/provider,
+extra normal hourly inference or unlimited retries. A failed live case remains a failure.
+
 ## 1. Baseline and safety
 
 1. Record `git status --short --branch`, candidate/base SHAs, root `AGENTS.md`, and the
