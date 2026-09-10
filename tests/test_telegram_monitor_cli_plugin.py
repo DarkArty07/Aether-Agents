@@ -7,6 +7,7 @@ checkout to prove the real cron/plugin/toolset interfaces the monitor registers.
 
 from __future__ import annotations
 
+import base64
 import configparser
 import hashlib
 import importlib.util
@@ -32,6 +33,7 @@ from aether_agents.monitor import hermes_plugin
 from aether_agents.monitor import runtime as runtime_module
 from aether_agents.monitor.service import ACTIONS, MonitorService
 from aether_agents.monitor.store import MonitorStore
+from aether_agents.paths import atomic_private_write, ensure_private_dir
 
 ROOT = Path(__file__).parents[1]
 MONITOR_ENTRY_POINT = ("aether-telegram-monitor", "aether_agents.monitor.hermes_plugin")
@@ -4303,3 +4305,294 @@ def test_offline_receipt_write_after_the_directory_is_bound_never_qualifies(
     assert receipt.is_file()
     assert stat.S_IMODE(os.lstat(receipt).st_mode) == 0o600
     assert str(output) not in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Registry isolation and restore against a real disposable state root (round 11)
+# ---------------------------------------------------------------------------
+
+REGISTRY_PROJECT_A = "11111111-1111-4111-8111-111111111111"
+REGISTRY_PROJECT_B = "22222222-2222-4222-8222-222222222222"
+REGISTRY_PROJECT_C = "33333333-3333-4333-8333-333333333333"
+
+
+def _operator_registry_bytes(projects: Mapping[str, Any] | None = None) -> bytes:
+    """The exact bytes the production registry writer produces for one operator registry."""
+
+    return json.dumps(
+        {"schema_version": 1, "projects": dict(projects or {})}, indent=2, sort_keys=True
+    ).encode("utf-8")
+
+
+def _registry_world(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, operator_bytes: bytes | None
+) -> dict[str, Any]:
+    """A disposable XDG state root whose project registry is written by the real helpers."""
+
+    module = _qualification_module()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "xdg-state"))
+    state_root = tmp_path / "xdg-state" / "aether"
+    registry_path = state_root / "projects" / "registry.json"
+    if operator_bytes is not None:
+        ensure_private_dir(registry_path.parent)
+        atomic_private_write(registry_path, operator_bytes)
+    return {
+        "module": module,
+        "state_root": state_root,
+        "registry_path": registry_path,
+        "recovery_path": module._registry_recovery_path(registry_path),
+    }
+
+
+def test_registry_isolation_round_trip_restores_the_exact_operator_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The real helpers replace one existing operator registry and restore it byte-for-byte."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+
+    isolation = module._isolate_registry()
+
+    assert registry_path.read_bytes() == module._synthetic_registry_bytes()
+    info = os.lstat(recovery_path)
+    assert stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+    assert stat.S_IMODE(info.st_mode) == 0o600
+    assert stat.S_IMODE(os.lstat(recovery_path.parent).st_mode) == 0o700
+    record = json.loads(recovery_path.read_text(encoding="utf-8"))
+    assert record["kind"] == "aether.telegram-monitor.qualification-registry-recovery"
+    assert record["original_state"] == "present"
+    assert record["original_sha256"] == hashlib.sha256(operator).hexdigest()
+    assert base64.b64decode(record["original_base64"]) == operator
+    assert (
+        record["installed_sha256"] == hashlib.sha256(module._synthetic_registry_bytes()).hexdigest()
+    )
+
+    assert module._restore_registry(isolation) == "byte-identical"
+
+    assert registry_path.read_bytes() == operator
+    assert not recovery_path.exists()
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+
+
+def test_registry_isolation_round_trip_of_a_genuinely_absent_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registry that genuinely does not exist is created for the run and removed again."""
+
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=None)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+
+    isolation = module._isolate_registry()
+
+    assert registry_path.read_bytes() == module._synthetic_registry_bytes()
+    record = json.loads(recovery_path.read_text(encoding="utf-8"))
+    assert record["original_state"] == "absent"
+    assert record["original_base64"] is None and record["original_sha256"] is None
+
+    assert module._restore_registry(isolation) == "removed"
+
+    assert not registry_path.exists()
+    assert not recovery_path.exists()
+    assert [path.name for path in registry_path.parent.iterdir()] == []
+
+
+def test_registry_isolation_refuses_an_unreadable_registry_without_any_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An operator registry that cannot be read safely is never treated as absent."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+    before = _tree_snapshot(world["state_root"])
+
+    import aether_agents.paths as paths
+
+    def unreadable(path: Any) -> bytes:
+        raise PermissionError("injected: the operator registry cannot be read")
+
+    monkeypatch.setattr(paths, "read_private_bytes", unreadable)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-unreadable"
+    assert registry_path.read_bytes() == operator
+    assert stat.S_IMODE(os.lstat(registry_path).st_mode) == 0o600
+    assert not recovery_path.exists()
+    assert not list(registry_path.parent.glob("*.tmp"))
+    assert _tree_snapshot(world["state_root"]) == before
+
+
+def test_registry_isolation_refuses_a_symlinked_registry_without_any_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An aliased operator registry is an identity error, never an absent registry."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=None)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    target = tmp_path / "operator-state" / "registry.json"
+    ensure_private_dir(target.parent)
+    atomic_private_write(target, operator)
+    ensure_private_dir(registry_path.parent)
+    registry_path.symlink_to(target)
+    before = _tree_snapshot(world["state_root"])
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-unreadable"
+    assert registry_path.is_symlink()
+    assert target.read_bytes() == operator
+    assert not world["recovery_path"].exists()
+    assert _tree_snapshot(world["state_root"]) == before
+
+
+def test_interrupted_registry_isolation_retains_durable_recovery_and_refuses_a_new_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A killed run leaves recoverable evidence on disk; a new run never clobbers it."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+
+    # Isolation happened and the process was killed before any restore: only the on-disk
+    # record survives, and it carries the exact operator bytes.
+    module._isolate_registry()
+
+    record = json.loads(recovery_path.read_text(encoding="utf-8"))
+    assert record["original_state"] == "present"
+    assert record["original_sha256"] == hashlib.sha256(operator).hexdigest()
+    assert base64.b64decode(record["original_base64"]) == operator
+    preserved = recovery_path.read_bytes()
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-recovery-exists"
+    assert failure.value.detail["record"] == str(recovery_path)
+    # The durable record and the synthetic registry are both left exactly as they were.
+    assert recovery_path.read_bytes() == preserved
+    assert registry_path.read_bytes() == module._synthetic_registry_bytes()
+
+
+def test_registry_restore_preserves_a_concurrent_update_alongside_the_original(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An update written during isolation survives; the synthetic registry does not."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+
+    # A legitimate concurrent update: the production registry writer registers a project
+    # while the synthetic registry is in place.
+    from aether_agents.observation.context import ProjectRegistry
+
+    concurrent_path = tmp_path / "concurrent-project"
+    assert ProjectRegistry().register(REGISTRY_PROJECT_B, concurrent_path, name="Concurrent B")
+
+    assert module._restore_registry(isolation) == "merged-concurrent"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_A, REGISTRY_PROJECT_B}
+    assert payload["projects"][REGISTRY_PROJECT_A]["name"] == "Operator A"
+    assert payload["projects"][REGISTRY_PROJECT_B]["name"] == "Concurrent B"
+    assert payload["projects"][REGISTRY_PROJECT_B]["path"] == str(concurrent_path.resolve())
+    assert not world["recovery_path"].exists()
+
+
+def test_registry_restore_keeps_a_registry_a_concurrent_update_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run found no registry: a concurrently created one is left exactly as it is."""
+
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=None)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    assert ProjectRegistry().register(
+        REGISTRY_PROJECT_C, tmp_path / "concurrent-project", name="Concurrent C"
+    )
+    created = registry_path.read_bytes()
+
+    assert module._restore_registry(isolation) == "concurrent-kept"
+
+    assert registry_path.read_bytes() == created
+    assert not world["recovery_path"].exists()
+
+
+def test_registry_restore_never_overwrites_an_unparseable_concurrent_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A concurrent state the harness cannot parse safely fails the restore instead."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+
+    isolation = module._isolate_registry()
+    atomic_private_write(registry_path, b"{not the registry this run owns")
+
+    assert module._restore_registry(isolation) == "failed"
+
+    assert registry_path.read_bytes() == b"{not the registry this run owns"
+    # The durable record stays as the only safe recovery source for the operator's bytes.
+    record = json.loads(recovery_path.read_text(encoding="utf-8"))
+    assert base64.b64decode(record["original_base64"]) == operator
+
+
+def test_live_restore_accepts_the_concurrency_preserving_registry_outcomes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a bounded restore failure is qualification-gating; preserved work is not."""
+
+    for code in ("merged-concurrent", "concurrent-kept"):
+        root = tmp_path / code
+        root.mkdir(parents=True, exist_ok=True)
+        world = _build_world(root, monkeypatch)
+        backends = world["backends"]
+        backends.registry_restore_value = code
+        output = root / "private" / "receipt.json"
+
+        record = _run_live(world, output)
+
+        assert record["ok"] is True, record["errors"]
+        assert record["restore"]["registry_restored"] == code
+        assert "restore-registry" not in {entry["code"] for entry in record["errors"]}
+        assert record["public_summary"]["registry_restored"] == code
+        assert record["public_summary"]["qualified"] is True

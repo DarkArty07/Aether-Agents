@@ -10,14 +10,20 @@ therefore performs no external effect and can run anywhere.
 ``--live`` adds the provisioned qualification: it resolves the already provisioned
 Morfeo runtime, isolates one honestly labelled synthetic scope (two synthetic
 contract-bound projects, one direct no-contract session and the D12 live semantic
-corpus) by backing up the operator's project registry byte-for-byte and presenting
-only the synthetic entries for the duration, runs one bounded native model+transport
+corpus) by replacing the operator's project registry with a synthetic one after the
+original bytes have been captured in a durable, verified-private, no-clobber recovery
+record next to it, runs one bounded native model+transport
 smoke, enables the single owned native hourly job, waits for two real wall-clock
 hourly boundaries executed by the native scheduler, transitions the synthetic work
 between those cuts, then observes one real no-work boundary whose scheduler run must
 show the native ``wakeAgent=false`` gate, and finally verifies manual ``off``,
 restores the previous enablement and puts the registry, native rows, boards, sessions
-and spool files back exactly.
+and spool files back exactly.  Only a genuinely missing registry counts as "no
+registry": an unreadable, symlinked, multi-linked or unstable registry refuses the live
+lane with the bounded ``registry-unreadable`` failure before anything is changed, a
+recovery record left by an interrupted run refuses it with ``registry-recovery-exists``
+until it is reconciled, and the restore never deletes or overwrites a legitimate
+concurrent registry change.
 
 Every external boundary the live lane crosses is reached through :class:`LiveBackends`,
 and every restore invariant is qualification-gating: a run that cannot put the
@@ -62,6 +68,7 @@ acceptance is recorded as acceptance, never as proof that a human read the messa
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import hashlib
 import io
@@ -1630,10 +1637,157 @@ def _git(root: Path, *arguments: str) -> None:
         )
 
 
-def _isolate_registry() -> dict[str, Any]:
-    """Replace the operator registry with an empty synthetic registry, byte-preserved."""
+#: Fixed suffix of the durable, no-clobber recovery record the live lane installs next to
+#: the operator registry before it replaces it, so an interrupted run stays recoverable.
+REGISTRY_RECOVERY_SUFFIX = ".qualification-recovery.json"
+#: Bounded attempts of the restore state machine when a concurrent writer keeps landing
+#: between its final read and its verified write; exhaustion is a bounded failure.
+REGISTRY_RESTORE_ATTEMPTS = 3
 
-    from aether_agents.paths import atomic_private_write, ensure_private_dir
+
+def _synthetic_registry_bytes() -> bytes:
+    """The exact synthetic registry the live lane installs while the scope is isolated."""
+
+    return json.dumps({"schema_version": 1, "projects": {}}, indent=2, sort_keys=True).encode(
+        "utf-8"
+    )
+
+
+def _registry_recovery_path(registry_path: Path) -> Path:
+    """The fixed durable recovery-record path next to the operator's project registry."""
+
+    return registry_path.with_name(registry_path.name + REGISTRY_RECOVERY_SUFFIX)
+
+
+def _registry_bytes_or_none(path: Path) -> bytes | None:
+    """Read the operator registry privately; ``None`` means it genuinely does not exist.
+
+    ``read_private_bytes`` refuses a symlinked, multi-linked or unstably replaced file, so a
+    registry the harness cannot read *safely* raises instead of being treated as an empty one:
+    only the real absence of the file (and of its directory chain) is ``None``.
+    """
+
+    from aether_agents.paths import read_private_bytes
+
+    try:
+        return read_private_bytes(path)
+    except FileNotFoundError:
+        return None
+
+
+def _install_private_registry_record(path: Path, payload: Mapping[str, Any]) -> tuple[int, int]:
+    """Install the durable recovery record private-before-content, never replacing an entry.
+
+    The record is the only durable copy of the operator's registry bytes while the synthetic
+    registry is in place, so it reuses the audited no-clobber seam: one non-followed temporary
+    file is created ``0600`` *before* any content exists, the content is made durable, and the
+    record name is installed with a single ``link``.  An entry already present at the record
+    path — a file, a symlink, a hard link or a directory — is the durable evidence of an
+    interrupted earlier run: it is never replaced, and the caller receives the bounded
+    ``registry-recovery-exists`` refusal instead.  Returns the ``(device, inode)`` identity the
+    caller removes the record by, after verifying the installed record is a real, singly
+    linked ``0600`` file inside its private ``0700`` directory.
+    """
+
+    data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
+        "utf-8"
+    )
+    ensure_private_dir(path.parent)
+    try:
+        _install_private_receipt(path, data)
+        _verify_private_receipt(path)
+        info = os.stat(path, follow_symlinks=False)
+    except QualificationError as error:
+        if error.code == "output-target-exists":
+            raise QualificationError(
+                "registry-recovery-exists",
+                "a durable project-registry recovery record already exists: reconcile the "
+                "interrupted earlier run before a new live qualification replaces the registry",
+                detail={"record": str(path)},
+            ) from None
+        raise QualificationError(
+            "registry-recovery",
+            "the durable project-registry recovery record could not be installed; the "
+            "operator registry was not changed",
+            detail={"error": error.code},
+        ) from error
+    except (OSError, ValueError) as error:
+        raise QualificationError(
+            "registry-recovery",
+            "the durable project-registry recovery record could not be installed; the "
+            "operator registry was not changed",
+            detail={"error": type(error).__name__},
+        ) from error
+    return (info.st_dev, info.st_ino)
+
+
+def _remove_private_registry_record(path: Path, identity: tuple[int, int] | None) -> bool:
+    """Remove exactly the record this run installed, then verify it is gone.
+
+    Nothing else is ever deleted: an entry that is not the same real, singly linked file the
+    run installed — a replaced file, a symlink, a hard link or a directory — is left exactly
+    as it was found and the restore reports failure, so durable evidence of an unreconciled
+    state is never destroyed.
+    """
+
+    if identity is None:
+        return True
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        return False
+    if (info.st_dev, info.st_ino) != identity:
+        return False
+    try:
+        path.unlink()
+        return not path.exists()
+    except OSError:
+        return False
+
+
+def _discard_registry_record_when_unused(
+    registry_path: Path,
+    recovery_path: Path,
+    identity: tuple[int, int] | None,
+    original: bytes | None,
+) -> None:
+    """Drop the recovery record only when the operator registry is provably unchanged.
+
+    A failure between installing the record and knowing that the synthetic registry is in
+    place ordinarily leaves the operator registry untouched, and the record is then not
+    needed.  An unreadable or already changed registry keeps the record, because the durable
+    bytes are then the only safe recovery source.
+    """
+
+    try:
+        current = _registry_bytes_or_none(registry_path)
+    except (OSError, ValueError):
+        return
+    if current != (bytes(original) if original is not None else None):
+        return
+    _remove_private_registry_record(recovery_path, identity)
+
+
+def _isolate_registry() -> dict[str, Any]:
+    """Replace the operator registry with a synthetic one, durably and fail-closed.
+
+    Reads the operator's registry with the private reader, so only a genuinely missing file
+    counts as "no registry": an unreadable, symlinked, multi-linked or unstably replaced
+    registry raises the bounded ``registry-unreadable`` failure *before* anything is changed.
+    A verified-private, no-clobber recovery record carrying the original bytes (or the
+    recorded true absence) is then installed next to the registry, so a process termination
+    during the multi-hour live lane still leaves a durable restoration source; if a record
+    from an earlier interrupted run already exists it is never replaced and this call refuses
+    with ``registry-recovery-exists``.  Only after the record is durable is the registry
+    replaced by the exact synthetic bytes this run owns, and the replacement is read back and
+    verified before the isolation is reported.
+    """
+
+    from aether_agents.paths import atomic_private_write
 
     try:
         import aether_agents.paths as paths
@@ -1643,41 +1797,185 @@ def _isolate_registry() -> dict[str, Any]:
         raise QualificationError(
             "registry-unavailable",
             "the Aether project registry could not be resolved; nothing was changed",
-            detail=type(error).__name__,
-        )
+            detail={"error": type(error).__name__},
+        ) from error
     try:
-        original = registry_path.read_bytes()
-    except OSError:
-        original = None
-    ensure_private_dir(registry_path.parent)
-    atomic_private_write(
-        registry_path,
-        json.dumps({"schema_version": 1, "projects": {}}, indent=2, sort_keys=True).encode("utf-8"),
-    )
-    return {"path": registry_path, "original": original}
+        original = _registry_bytes_or_none(registry_path)
+    except (OSError, ValueError) as error:
+        raise QualificationError(
+            "registry-unreadable",
+            "the existing Aether project registry could not be read safely; nothing was "
+            "changed and no synthetic registry was installed",
+            detail={"error": type(error).__name__},
+        ) from error
+    installed = _synthetic_registry_bytes()
+    recovery_path = _registry_recovery_path(registry_path)
+    try:
+        ensure_private_dir(registry_path.parent)
+    except (OSError, ValueError) as error:
+        raise QualificationError(
+            "registry-unavailable",
+            "the private project-registry directory could not be prepared; nothing was changed",
+            detail={"error": type(error).__name__},
+        ) from error
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "kind": "aether.telegram-monitor.qualification-registry-recovery",
+        "created_at_utc": _utc_text(_utc_now()),
+        "registry_path": str(registry_path),
+        "original_state": "present" if original is not None else "absent",
+        "original_sha256": hashlib.sha256(original).hexdigest() if original is not None else None,
+        "original_base64": (
+            base64.b64encode(original).decode("ascii") if original is not None else None
+        ),
+        "installed_sha256": hashlib.sha256(installed).hexdigest(),
+    }
+    identity = _install_private_registry_record(recovery_path, payload)
+    try:
+        atomic_private_write(registry_path, installed)
+        written = _registry_bytes_or_none(registry_path)
+    except (OSError, ValueError) as error:
+        _discard_registry_record_when_unused(registry_path, recovery_path, identity, original)
+        raise QualificationError(
+            "registry-isolation",
+            "the synthetic project registry could not be installed; the operator registry "
+            "was not left replaced",
+            detail={"error": type(error).__name__, "recovery_record": str(recovery_path)},
+        ) from error
+    if written != installed:
+        _discard_registry_record_when_unused(registry_path, recovery_path, identity, original)
+        raise QualificationError(
+            "registry-isolation",
+            "the installed synthetic project registry could not be verified; the operator "
+            "registry was not left replaced",
+            detail={"recovery_record": str(recovery_path)},
+        )
+    return {
+        "path": registry_path,
+        "original": original,
+        "installed": installed,
+        "recovery_path": recovery_path,
+        "recovery_identity": identity,
+    }
+
+
+def _merge_concurrent_registry(original: bytes, current: bytes) -> bytes | None:
+    """Merge a concurrent registry update with the operator's original registry bytes.
+
+    The harness replaced the whole registry with an empty synthetic one, so every entry the
+    current registry carries is a legitimate concurrent change that must survive.  The
+    operator's original entries are merged back under them (a concurrent entry for the same
+    project id wins because it is newer).  ``None`` means the concurrent state could not be
+    parsed safely and must never be overwritten or deleted.
+    """
+
+    try:
+        original_object = json.loads(original.decode("utf-8"))
+        current_object = json.loads(current.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        return None
+    if not isinstance(original_object, dict) or not isinstance(current_object, dict):
+        return None
+    original_projects = original_object.get("projects")
+    current_projects = current_object.get("projects")
+    if not isinstance(original_projects, dict) or not isinstance(current_projects, dict):
+        return None
+    merged = dict(original_object)
+    merged.update({key: value for key, value in current_object.items() if key != "projects"})
+    merged["projects"] = {**original_projects, **current_projects}
+    return json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
 
 
 def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
-    """Restore the operator registry bytes exactly; return the verification code."""
+    """Put the operator registry back, preserving every concurrent change; never clobber.
+
+    The restore is bound to the exact synthetic registry this run installed, so only an
+    isolation this run owns can be reverted.  ``byte-identical`` means the registry now holds
+    exactly the bytes the run found; ``removed`` means the run found no registry and none is
+    left; ``merged-concurrent`` means a legitimate concurrent registry update appeared during
+    isolation and its entries were preserved while the operator's original entries were merged
+    back; ``concurrent-kept`` means the run found no registry and a concurrently created one
+    was left exactly as it is; ``not-isolated`` means no isolation was reported.  ``failed`` is
+    the bounded failure: the registry could not be read or verified and was left untouched, and
+    the durable recovery record was kept for reconciliation.  In no case is a concurrent entry
+    deleted or an unreadable registry overwritten.  Each state is re-read and re-verified after
+    the write, with a bounded number of attempts when a concurrent writer keeps landing inside
+    the restore window; an exhausted budget is a bounded failure, never an unverified success.
+    """
 
     if isolation is None:
         return "not-isolated"
+    from aether_agents.paths import atomic_private_write
+
     registry_path = Path(isolation["path"])  # type: ignore[arg-type]
     original = isolation.get("original")
-    from aether_agents.paths import atomic_private_write, ensure_private_dir
+    installed = isolation.get("installed")
+    installed = _synthetic_registry_bytes() if installed is None else bytes(installed)
+    recorded = bytes(original) if original is not None else None
+    recovery_value = isolation.get("recovery_path")
+    recovery_path = Path(recovery_value) if recovery_value is not None else None
+    recovery_identity = isolation.get("recovery_identity")
 
-    try:
-        if original is None:
-            registry_path.unlink(missing_ok=True)
-            return "removed" if not registry_path.exists() else "failed"
-        ensure_private_dir(registry_path.parent)
-        atomic_private_write(registry_path, bytes(original))
-    except OSError:
+    for _attempt in range(REGISTRY_RESTORE_ATTEMPTS):
+        try:
+            current = _registry_bytes_or_none(registry_path)
+        except (OSError, ValueError):
+            return "failed"
+        if current == installed:
+            if recorded is None:
+                try:
+                    registry_path.unlink(missing_ok=True)
+                except OSError:
+                    return "failed"
+                try:
+                    if registry_path.exists():
+                        return "failed"
+                except OSError:
+                    return "failed"
+                code = "removed"
+                verified = True
+            else:
+                try:
+                    atomic_private_write(registry_path, recorded)
+                    verified = _registry_bytes_or_none(registry_path) == recorded
+                except (OSError, ValueError):
+                    return "failed"
+                code = "byte-identical"
+        elif recorded is None:
+            # The run found no registry, so nothing of the operator's is missing and a
+            # concurrently created registry is never touched.
+            code = "concurrent-kept" if current is not None else "removed"
+            verified = True
+        elif current is None:
+            # The harness's synthetic registry is gone; writing the operator's own bytes back
+            # restores the state the run found instead of leaving the registry absent.
+            try:
+                atomic_private_write(registry_path, recorded)
+                verified = _registry_bytes_or_none(registry_path) == recorded
+            except (OSError, ValueError):
+                return "failed"
+            code = "byte-identical"
+        else:
+            merged = _merge_concurrent_registry(recorded, current)
+            if merged is None:
+                return "failed"
+            verified = True
+            if merged != current:
+                try:
+                    atomic_private_write(registry_path, merged)
+                    verified = _registry_bytes_or_none(registry_path) == merged
+                except (OSError, ValueError):
+                    return "failed"
+            code = "merged-concurrent"
+        if verified:
+            break
+    else:
         return "failed"
-    try:
-        return "byte-identical" if registry_path.read_bytes() == bytes(original) else "failed"
-    except OSError:
+    if recovery_path is not None and not _remove_private_registry_record(
+        recovery_path, recovery_identity
+    ):
         return "failed"
+    return code
 
 
 def _scope_materialize(
@@ -3727,11 +4025,20 @@ def _live_run(
         else:
             restore["direct_spool_clean"] = True
         restore["registry_restored"] = backends.restore_registry(isolation)
-        if restore["registry_restored"] not in {"byte-identical", "removed", "not-isolated"}:
+        if restore["registry_restored"] not in {
+            "byte-identical",
+            "removed",
+            "merged-concurrent",
+            "concurrent-kept",
+            "not-isolated",
+        }:
             record["errors"].append(
                 {
                     "code": "restore-registry",
-                    "message": "the operator project registry was not restored byte-for-byte",
+                    "message": "the operator project registry was not restored to its prior "
+                    "state; a concurrent change or an unreadable registry leaves the durable "
+                    "recovery record for reconciliation",
+                    "detail": {"result": restore["registry_restored"]},
                 }
             )
         if prior_enabled:

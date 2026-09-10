@@ -4,32 +4,35 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-9 corrections complete for review, amended by the round-9 addendum that
-answers review round 9; self-verified. No `--live` run, no model call, no Telegram send, no
-activation. Rounds 1–8 are preserved below as history; the authoritative current state is
-**"Round-9 corrections"** (including the round-9 addendum), **"Round-9 verification record"**
-and **"Round-9 residual risks"**. Round 9 answers the round-8 review's strict
-contract/preservation findings: the private receipt is installed only into the directory
-establishment accepted (bound by `(device, inode)` identity), and the guide's privacy claim
-matches the implemented store (which does persist the validated narrative structure). The
-round-9 addendum answers review round 9: the receipt-directory wording is narrowed to the
-bounded behavior actually implemented — a parent already renamed, replaced or removed when
-the write begins is refused read-only with the bounded `output-unsafe-target` error and no
-receipt is written anywhere, while a rename that lands after the write's directory descriptor
-is bound cannot redirect the write: the receipt is installed inside the established directory
-(which then lives under its new name), the final path verification fails with the bounded
-`private-output` error, no qualified verdict is emitted, and the replacement directory at the
-original name never receives a byte. A deterministic after-open rename regression proves
-exactly that, and the module docstring, the `_write_private_output` /
-`_open_private_receipt_directory` / `run_live` docstrings, the `--output` help text and the
-guide state the same two bounded halves.
+**Status:** round-10 corrections complete for review; self-verified. No `--live` run, no model call,
+no Telegram send, no activation. Rounds 1–9 are preserved below as history; the authoritative
+current state is **"Round-10 corrections"**, **"Round-10 verification record"** and **"Round-10
+residual risks"**. Round 10 answers the round-10 review's strict contract/preservation finding:
+the live harness's project-registry isolation is now fail-closed, durably recoverable and
+concurrency-preserving. Only a genuinely missing registry counts as "no registry" — any other
+read/identity/privacy error refuses the run with the bounded `registry-unreadable` failure before
+anything is changed; a verified-private, no-clobber recovery record carrying the original bytes
+(or the recorded true absence) is installed next to the registry *before* it is replaced, so an
+interrupted run leaves a durable restoration source and the next run refuses with
+`registry-recovery-exists` instead of clobbering it; and the restore is bound to the exact
+synthetic registry this run installed, merges a legitimate concurrent registry update instead of
+deleting it, and reports `byte-identical` / `removed` / `merged-concurrent` / `concurrent-kept`
+(any other outcome is a bounded failure that keeps the durable record for reconciliation). The
+round-9 receipt-directory and privacy corrections are unchanged and preserved.
 
-**Round-8 state (historical):** round 8 installed the receipt at the final seam with a single
+**Round-9 state (historical):** round 9 installed the receipt at the final seam with a single
 no-clobber link instead of the repository primitive's `os.replace`, so a file, a symlink, a
 hard link or a directory that appears at the receipt path after the target was established is
 never replaced — it fails the run with the bounded `output-target-exists` error and no
 qualified verdict. The guide, the `--output` help text and the module docstring state that
 rule.
+
+**Round-8 state (historical):** round 8 bound the receipt directory by `(device, inode)`
+identity and narrowed the guide's receipt-directory wording to the two bounded halves actually
+implemented; a parent already renamed, replaced or removed when the write begins is refused
+read-only with `output-unsafe-target` and no write, while a rename landing after the write's
+directory descriptor is bound leaves the receipt inside the established directory and fails the
+run's final path verification with `private-output`.
 
 **Round-7 state (historical):** round 7 validated and established the complete private
 receipt target before the live orchestrator (and before the deterministic lane's checks), so
@@ -1588,7 +1591,7 @@ PR, merge, issue mutation or publication.
 - The clock-dependent monitor-runtime failures above remain until their owner decides the
   fix; they are not evidence about this round's change (identical at the reviewed base).
 
-## Round-9 corrections (authoritative)
+## Round-9 corrections (historical; superseded by round 10 where contradicted)
 
 The round-8 review (strict contract/preservation audit) found two blocking defects; the
 round-9 probe below reproduced both exactly before they were corrected.
@@ -1777,7 +1780,7 @@ Round-9 (including this addendum) changed exactly four paths — `scripts/qualif
 option surface (`--live`, `--json`, `--output`, `--wait-hourly-boundaries 2`) is unchanged
 and no dependency was added.
 
-## Round-9 verification record
+## Round-9 verification record (historical)
 
 All commands ran in the assigned worktree
 (`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
@@ -1912,7 +1915,7 @@ Deliberate non-effects in the round-9 addendum: no `--live` invocation, no model
 Telegram send, no credential operation, no profile/job/plugin activation, no native Hermes or
 source-database change, no push, PR, merge, issue mutation or publication.
 
-## Round-9 residual risks
+## Round-9 residual risks (historical)
 
 - The live lane still has never been executed end to end. Round 9 binds the receipt
   directory by identity and otherwise leaves the orchestration unchanged; the first real
@@ -1943,3 +1946,270 @@ source-database change, no push, PR, merge, issue mutation or publication.
 - The clock-dependent monitor-runtime failures remain until their owner decides the fix
   (routed on card `t_d8a1aad6`); they are identical at the reviewed base and are not
   evidence about this round's change.
+
+## Round-10 corrections (authoritative)
+
+The round-10 review (strict contract/preservation audit, comment 64) found that the round-9
+candidate's project-registry isolation was still destructive in ordinary fail-closed and
+concurrent paths, so MON-INT could not safely run it. Both probes were reproduced exactly
+against the round-9 module (`dbe9476`) before the correction.
+
+### 1. Only a genuinely missing registry counts as "no registry"
+
+Round-9 `_isolate_registry()` wrapped the registry read in `except OSError: original = None`, so
+*every* read error — a permission failure, an aliased or unstable file — was treated as "the
+operator has no registry", and the registry was then replaced by the synthetic one.
+`_restore_registry()` interpreted `original is None` as proof the file had not existed and
+unlinked it. The reviewer's reproduction injected `PermissionError` for an existing operator
+registry: isolation proceeded, `captured_original_is_none=true`, the operator bytes were
+replaced by `{"projects": {}}`, restoration returned `removed`, and the registry no longer
+existed.
+
+The harness now reads the registry through `aether_agents.paths.read_private_bytes`
+(`_registry_bytes_or_none`): only `FileNotFoundError` — a genuinely missing file or directory
+chain — is "no registry", while every other `OSError`/`UnsafeObservationPath` (permission, a
+symlink, a hard link, an unstable replacement) becomes the bounded `registry-unreadable`
+failure *before* any mutation: nothing is created, replaced or removed. The same rule governs
+the restore, which fails instead of overwriting a registry it cannot read safely.
+
+### 2. Durable, no-clobber recovery and an ownership-fenced, concurrency-preserving restore
+
+Round-9 kept the only copy of the original bytes in the in-process `isolation` dict while the
+filesystem held just the replaced registry, so a process termination during the multi-hour lane
+left no restoration source at all; `_restore_registry()` then overwrote whatever the file
+contained with the old bytes and reported `byte-identical`. The reviewer's second reproduction
+wrote a legitimate `concurrent-work` entry after isolation and observed `byte-identical`
+returned while the concurrent entry was silently deleted (`concurrent_update_preserved=false`).
+
+Registry isolation is now durable and fail-closed:
+
+- Before the registry is touched, a **verified-private, no-clobber recovery record**
+  (`<state_root>/projects/registry.json.qualification-recovery.json`) is installed through the
+  same audited seam as the private receipt: one non-followed temporary file created `0600`
+  *before* any content exists, the content made durable, and the record name installed with a
+  single `link`. The record carries the registry path, the original state (`present`/`absent`),
+  the original bytes in base64 with their SHA-256, and the SHA-256 of the synthetic registry the
+  run installs. An entry already present at the record path — the durable evidence of an
+  interrupted earlier run — is never replaced: the call refuses with the bounded
+  `registry-recovery-exists`, touching neither the record nor the registry.
+- Only after the record is verified private and durable is the synthetic registry installed,
+  and the replacement is read back and compared against the exact synthetic bytes this run owns
+  before the isolation is reported (`registry-isolation` otherwise, with the record kept unless
+  the operator registry is provably unchanged).
+- The **restore is bound to the isolation this run owns**: `byte-identical` means the registry
+  now holds exactly the bytes the run found, `removed` the state the run found with no registry;
+  a current registry equal to the installed synthetic bytes is the only state that is reverted,
+  and every write is re-read and verified afterwards.
+- A **concurrent update is never deleted**: when the current registry differs from the
+  installed synthetic bytes, the operator's original entries are merged back under the
+  concurrent ones (`merged-concurrent`; a concurrent entry for the same project id wins because
+  it is newer); when the run found no registry, a concurrently created one is left byte-exactly
+  as it is (`concurrent-kept`). An unparseable concurrent state is never overwritten: the
+  restore fails and keeps the record. Each state is re-read and re-verified after the write,
+  with a bounded number of attempts (three) when a concurrent writer keeps landing inside the
+  restore window; an exhausted budget is a bounded failure, never an unverified success.
+- On a successful restore, exactly the record this run installed is removed (same real,
+  singly-linked identity) and its absence verified; anything else at that path is left exactly
+  as it was found and the restore reports failure, so evidence of an unreconciled state is never
+  destroyed.
+
+The orchestrator's `restore-registry` gate now accepts `byte-identical`, `removed`,
+`merged-concurrent`, `concurrent-kept` and `not-isolated`; any other outcome clears `ok` and is
+recorded as `restore-registry`, and the durable record is kept for reconciliation.
+
+### Reproduction and correction probes
+
+Throwaway probe (`/tmp/mon06_round10_probe.py`, not committed): the round-9 module was loaded
+from `git show dbe9476:scripts/qualify_telegram_monitor.py`, the round-10 module from the
+worktree, and both ran the same three disposable-state cases against the real filesystem
+helpers — the reviewer's injected unreadable registry (`PermissionError` for an existing
+registry), a production `ProjectRegistry().register()` after isolation, and a "process killed"
+case (isolation without any restore):
+
+```text
+probe_a[round9] unreadable existing operator registry
+  captured_original_is_none      True        <- the reported defect
+  registry_after_isolation       {"projects": {}, "schema_version": 1}
+  restore_result                 removed
+  registry_exists_after_restore  False
+  operator_bytes_survive         False
+probe_a[round10] unreadable existing operator registry
+  error_code                     registry-unreadable
+  registry_bytes_unchanged       True
+  registry_mode                  0o600
+  recovery_record_exists         False
+  projects_dir_entries           ["registry.json"]
+probe_b[round9] concurrent update during isolation
+  restore_result                 byte-identical   <- the reported defect
+  final_projects                 ["11111111-1111-4111-8111-111111111111"]
+  concurrent_entry_preserved     False
+  original_entry_preserved       True
+probe_b[round10] concurrent update during isolation
+  restore_result                 merged-concurrent
+  final_projects                 ["11111111-1111-4111-8111-111111111111",
+                                  "22222222-2222-4222-8222-222222222222"]
+  concurrent_entry_preserved     True
+  original_entry_preserved       True
+probe_c[round9] interrupted isolation (process killed, no restore call)
+  projects_dir_entries           ["registry.json"]
+  durable_recovery_record_exists False       <- nothing on disk to recover from
+probe_c[round10] interrupted isolation (process killed, no restore call)
+  projects_dir_entries           ["registry.json",
+                                  "registry.json.qualification-recovery.json"]
+  durable_recovery_record_exists True
+  record_original_state          present
+  record_bytes_match_operator    True
+  record_mode                    0o600
+```
+
+### 3. Regressions (real helpers, not `_FakeBackends`)
+
+- `test_registry_isolation_refuses_an_unreadable_registry_without_any_change` — the reviewer's
+  injected `PermissionError`: bounded `registry-unreadable`, operator bytes and `0600` mode
+  unchanged, whole-state-root snapshot identical, no record, no `*.tmp` residue.
+- `test_registry_isolation_refuses_a_symlinked_registry_without_any_change` — a real identity
+  error (a symlinked registry) is refused the same way, with its target untouched.
+- `test_registry_isolation_round_trip_restores_the_exact_operator_bytes` — the clean existing
+  round trip: the synthetic registry is installed, the record is a real single-link `0600` file
+  in the private `0700` directory carrying the original bytes and both hashes, restore returns
+  `byte-identical`, the registry holds the exact operator bytes, the record is gone and only
+  `registry.json` remains.
+- `test_registry_isolation_round_trip_of_a_genuinely_absent_registry` — the absent round trip:
+  `original_state: absent`, restore returns `removed`, and the directory is left empty.
+- `test_interrupted_registry_isolation_retains_durable_recovery_and_refuses_a_new_run` — the
+  simulated interruption: the durable record holds the exact original bytes; a second
+  `_isolate_registry()` refuses with `registry-recovery-exists` (its detail naming the record)
+  and leaves both the record bytes and the synthetic registry exactly as they were.
+- `test_registry_restore_preserves_a_concurrent_update_alongside_the_original` — a real
+  `ProjectRegistry().register()` during isolation survives the restore (`merged-concurrent`):
+  both the operator's entry and the concurrent entry are present with their own values, and the
+  record is removed.
+- `test_registry_restore_keeps_a_registry_a_concurrent_update_created` — the run found no
+  registry: the concurrently created file is byte-exactly preserved (`concurrent-kept`).
+- `test_registry_restore_never_overwrites_an_unparseable_concurrent_registry` — a concurrent
+  state the harness cannot parse safely fails the restore (`failed`) with the bytes untouched
+  and the durable record retained.
+- `test_live_restore_accepts_the_concurrency_preserving_registry_outcomes` — the orchestration
+  positive control: `merged-concurrent` and `concurrent-kept` are accepted (no
+  `restore-registry` error, `ok: true`, the outcome reported privately and publicly), while
+  `failed` remains qualification-gating
+  (`test_live_restore_failures_are_qualification_gating`).
+
+Corrected text: the module docstring and the `_isolate_registry` / `_restore_registry`
+docstrings state the fail-closed read, the durable no-clobber record, the bounded restore
+outcomes and the concurrency rule; `docs/guides/telegram-monitor.md` (step 1, step 8 and the new
+*Registry recovery after an interruption* paragraph) states the same implemented behavior.
+
+Round 10 changed exactly four paths — `scripts/qualify_telegram_monitor.py`,
+`tests/test_telegram_monitor_cli_plugin.py`, `docs/guides/telegram-monitor.md` and this evidence
+file. No production file, no `policy.yml`, no capability registry, no lockfile and no Objective
+Contract edit; the option surface (`--live`, `--json`, `--output`,
+`--wait-hourly-boundaries 2`) is unchanged and no dependency was added.
+
+## Round-10 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the round-10 candidate.
+
+- **Direct probe of the reviewer's two findings (manual, before the tests).** The throwaway
+  probe above ran the round-9 module (`git show dbe9476:scripts/qualify_telegram_monitor.py`)
+  and the round-10 module against the real filesystem helpers: the unreadable-registry case
+  lost the operator bytes on round 9 (`captured_original_is_none: true`,
+  `operator_bytes_survive: false`) and is refused with `registry-unreadable` while leaving the
+  bytes and mode untouched on round 10; the concurrent-update case reported `byte-identical`
+  and deleted the concurrent entry on round 9 and reports `merged-concurrent` with both
+  entries present on round 10; the interrupted case left no on-disk evidence on round 9 and
+  leaves a verified-private `0600` record carrying the exact operator bytes on round 10.
+- Focused docs/CLI lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py
+  tests/test_telegram_monitor_cli_plugin.py`) → **93 passed** (84 before + 9 new round-10
+  cases).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 106 passed** (97 before + 9); the sole failure is the pre-existing issue #364
+  (`absolute-user-home`, `operator-desktop-layout` on the unchanged
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`), and the wheel
+  entry-point/resource check passes in this lane.
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 264 passed** (255 before + 9). The 10 failures are the pre-existing,
+  clock-dependent `tests/test_telegram_monitor_runtime.py` handoff class documented in round 8.
+  `tests/test_telegram_monitor_runtime.py` and `src/aether_agents/monitor/runtime.py` are
+  byte-identical to the reviewed base
+  (`git diff 2d49418 -- tests/test_telegram_monitor_runtime.py src/aether_agents/monitor/runtime.py`
+  is empty), and a temporary worktree of
+  `2d49418` fails exactly the same ten named tests with the same command
+  (`10 failed, 45 passed`).
+- **Frozen-clock reconciliation re-run (round 10).** The diagnostic-only plugin rebinding
+  `aether_agents.monitor.runtime.datetime.now()` to `2026-09-10T17:59:00Z` (one minute inside
+  the six-hour handoff lease) still turns the same file green:
+  `PYTHONPATH=<dir> uv run --frozen python -m pytest -q --tb=line -p p_mon06_clock
+  tests/test_telegram_monitor_runtime.py` → **55 passed in 1.34s** against **10 failed / 45
+  passed** at the real clock. No round-10 change can affect that class.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1347 passed,
+  60 skipped, 373 subtests passed** (105.60 s). The 17 = the same 7 pre-existing classes of the
+  reviewed base (six accepted-lifecycle wheel gates failing at
+  `aether_agents.lifecycle.IntegrityError: candidate Aether plugin entry-point set mismatch`
+  plus issue #364 on the unchanged contract — reproduced identically in a temporary worktree of
+  `2d49418`: `7 failed, 88 passed` on those two files) and the 10 clock-dependent runtime
+  failures; 1347 passed = the 1338 recorded in round 9 + 9 new cases.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed**
+  (guide, help text and evidence text included; the generated `docs/reference/capabilities.md`
+  is byte-exact against the rendered registry, so no regeneration was needed).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `scripts/check_public_artifacts.py --root .` and the same scan
+  with both built artifacts → only the pre-existing #364 findings on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/` is
+  empty). No private path, destination, session, message, model or credential is reported.
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364,
+  missing [], extra []**; round 10 adds no tracked path and does not edit `policy.yml`, so every
+  MON-01..MON-05 path and the MON-06 paths remain literally listed with no relaxed check and no
+  broadened glob.
+- `uv run --frozen ruff check` on the three touched Python files → **All checks passed**;
+  `uv run --frozen ruff format --check` on the same files → **3 files already formatted**;
+  `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `compileall` on the three touched Python files → passed; `git diff --check` → passed. The
+  pre-existing full-list ruff findings recorded in rounds 5–9 are unchanged and out of scope.
+
+Deliberate non-effects in round 10: no `--live` invocation, no model call, no Telegram send, no
+credential operation, no profile/job/plugin activation, no native Hermes or source-database
+change, no push, PR, merge, issue mutation or publication.
+
+## Round-10 residual risks
+
+- The live lane still has never been executed end to end. Round 10 makes its registry
+  isolation recoverable and non-destructive; the first real run against a scheduler, model and
+  Telegram transport remains MON-INT's.
+- The restore has no lock against a concurrent writer: POSIX gives no compare-and-swap on a
+  file path, so a write landing between the restore's final read of the current registry and
+  its own write is not observable. Every write that lands before the re-read is merged, and
+  repeated interference inside the bounded three-attempt loop ends as a bounded failure that
+  keeps the durable record — never an unverified success. Production registry writers publish
+  atomically through the repository's `atomic_private_write` replacement and the monitor itself
+  is durably quiesced *before* the registry is isolated, so the only remaining writer is an
+  operator-initiated `aether init`/`setup` during the run.
+- A concurrent writer that publishes bytes *identical* to the installed synthetic registry is
+  content-indistinguishable from the harness's own isolation; the restore then applies the
+  run's isolation state. The distinction only matters in the "the run found no registry" case,
+  where such a write would be treated as the harness's own file and removed.
+- The durable recovery record keeps the operator's registry bytes (base64) as private `0600`
+  state inside the `0700` state directory. After an interruption it stays on disk by design
+  until an operator restores the bytes or removes it, and every later live run refuses with
+  `registry-recovery-exists` until then; that refusal is the intended fail-closed behavior, not
+  a stuck state.
+- Round 9's receipt-directory residual risks are unchanged: the live-seam guarantee is
+  fail-closed at the end of the run, and MON-INT must select a protected, exclusively owned
+  `--output` directory.
+- Everything rounds 4–9 recorded remains true: the live scope probes execute only inside the
+  provisioned runtime, the malicious-instruction case is one the fixed filter does not
+  classify, the D12 semantic cases stay `observed` pending independent adjudication, and on
+  this installation the environment pre-flight refuses with `BOARD_METADATA_UNREADABLE` /
+  `SESSION_TITLE_UNAVAILABLE` until the production question recorded above is decided.
+- The clock-dependent monitor-runtime failures remain until their owner decides the fix
+  (routed on card `t_d8a1aad6`); they are identical at the reviewed base and are not evidence
+  about this round's change.
