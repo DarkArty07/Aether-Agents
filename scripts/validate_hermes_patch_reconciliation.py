@@ -277,20 +277,26 @@ def _validate_record_set(
             raise ReconciliationError("HLP-211 must declare the combined HLP-211b component")
         if identifier == "HLP-226":
             components = set(record["components"])
-            required_components = {"HLP-226", "HLP-226b"}
+            required_components = {"HLP-226", "HLP-226b", "HLP-226c"}
             missing_components = sorted(required_components - components)
             if missing_components:
                 raise ReconciliationError(
                     "HLP-226 must declare the combined components: " + ", ".join(missing_components)
                 )
-            if not any(
-                artifact["kind"] == "patch"
-                and artifact["reference"]
-                == "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch"
+            declared_patches = {
+                artifact["reference"]
                 for artifact in record["artifact_verification"]["artifacts"]
-            ):
+                if artifact["kind"] == "patch"
+            }
+            required_patches = {
+                "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
+                "patches/hermes/HLP-226c-cross-board-project-inheritance.patch",
+            }
+            missing_patches = sorted(required_patches - declared_patches)
+            if missing_patches:
                 raise ReconciliationError(
-                    "HLP-226 must declare the HLP-226b portable patch artifact"
+                    "HLP-226 must declare the combined portable patch artifacts: "
+                    + ", ".join(missing_patches)
                 )
         if _contains_nonportable_value(record):
             raise ReconciliationError(f"non-portable/private content in fragment {identifier}")

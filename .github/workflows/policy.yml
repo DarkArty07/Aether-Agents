@@ -46,6 +46,7 @@ jobs:
           .aether/objective-contracts/oc_59cd48430a56d93c/v4.md
           .aether/objective-contracts/oc_59cd48430a56d93c/v5.md
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
+          .aether/objective-contracts/oc_644c0b407d13366a/v1.md
           .aether/objective-contracts/oc_75401d18c602d787/v1.md
           .aether/objective-contracts/oc_7a35eca6393f18a7/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v1.md
@@ -115,6 +116,7 @@ jobs:
           INTEGRATIONS.md
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
           patches/hermes/HLP-280-bounded-flow-recovery.patch
