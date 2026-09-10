@@ -72,6 +72,11 @@ def _emit_qualification_failure(error: Exception) -> None:
             "python": platform.python_version(),
             "implementation": platform.python_implementation(),
         },
+        # Provenance for the runner: only a marker carrying the per-invocation
+        # nonce the runner provisioned for this subprocess can influence
+        # retained runner state.  Without it the runner treats this line as
+        # untrusted output and falls back to its fixed generic class.
+        "nonce": os.environ.get("AETHER_QUALIFICATION_DIAGNOSTIC_NONCE", ""),
     }
     print(
         QUALIFICATION_DIAGNOSTIC_PREFIX
@@ -781,6 +786,8 @@ def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
     """Synthetic phase failures retain only the allowlisted actionable state."""
     module = _load_runner(f"qualification_diagnostic_{phase}_{failure_kind}")
     secret = "RAW_ASSERTION_PAYLOAD_SECRET"
+    commit = "b" * 40
+    nonce = "b" * 32
     marker = {
         "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
         "phase": phase,
@@ -789,8 +796,9 @@ def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
         "exception_class": failure_class,
         "assertion_class": failure_class if failure_kind == "assertion" else None,
         "test_node": QUALIFICATION_TEST_NODE,
-        "source_commit": "b" * 40,
+        "source_commit": commit,
         "runtime": {"python": "3.13.15", "implementation": "CPython"},
+        "nonce": nonce,
         "raw_payload": secret,
         "credential": "token=PRIVATE_TOKEN",
         "local_path": "/private/operator-project",
@@ -818,7 +826,10 @@ def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
         module._run(
             ["pytest"],
             phase="qualification_harness",
-            env={"AETHER_QUALIFICATION_SOURCE_COMMIT": "c" * 40},
+            env={
+                "AETHER_QUALIFICATION_SOURCE_COMMIT": commit,
+                "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE": nonce,
+            },
         )
 
     diagnostic = captured.value.diagnostic
@@ -829,7 +840,7 @@ def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
     assert diagnostic["exception_class"] == failure_class
     assert diagnostic["assertion_class"] == (failure_class if failure_kind == "assertion" else None)
     assert diagnostic["test_node"] == QUALIFICATION_TEST_NODE
-    assert diagnostic["source_commit"] == "b" * 40
+    assert diagnostic["source_commit"] == commit
     assert diagnostic["runtime"] == {"python": "3.13.15", "implementation": "CPython"}
     assert set(diagnostic) <= {
         "schema_version",
@@ -844,6 +855,147 @@ def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
     }
     message = str(captured.value)
     for private_value in (secret, "PRIVATE_TOKEN", "/private/operator-project"):
+        assert private_value not in message
+
+
+# Runner phase, marker field overrides (None drops the field), expected retained phase.
+_MARKER_FORGERY_CASES: dict[str, tuple[str, dict[str, Any], str]] = {
+    "missing_nonce": ("qualification_harness", {"nonce": None}, "qualification_harness"),
+    "wrong_nonce": ("qualification_harness", {"nonce": "f" * 32}, "qualification_harness"),
+    "foreign_source_commit": (
+        "qualification_harness",
+        {"source_commit": "d" * 40},
+        "qualification_harness",
+    ),
+    "outside_qualification_harness_phase": ("core_execution", {}, "core_execution"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_MARKER_FORGERY_CASES))
+def test_unqualified_marker_cannot_forge_phase_class_source_or_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    """A marker without established provenance/exact identity is untrusted output."""
+    module = _load_runner(f"qualification_marker_forgery_{case}")
+    runner_phase, overrides, expected_phase = _MARKER_FORGERY_CASES[case]
+    commit = "c" * 40
+    nonce = "a" * 32
+    marker: dict[str, Any] = {
+        "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
+        "phase": "registration",
+        "failure_kind": "exception",
+        "failure_class": "PrivatePayloadError",
+        "exception_class": "PrivatePayloadError",
+        "assertion_class": None,
+        "test_node": QUALIFICATION_TEST_NODE,
+        "source_commit": commit,
+        "runtime": {"python": "9.9.9", "implementation": "SecretRuntime"},
+        "nonce": nonce,
+    }
+    for key, value in overrides.items():
+        if value is None:
+            marker.pop(key)
+        else:
+            marker[key] = value
+    stdout = "\n".join(
+        (
+            QUALIFICATION_DIAGNOSTIC_PREFIX
+            + json.dumps(marker, sort_keys=True, separators=(",", ":")),
+            "FAILED tests/test_safe.py::test_gate - assert PrivatePayloadError",
+        )
+    )
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(["pytest"], 1, stdout, ""),
+    )
+
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(
+            ["pytest"],
+            phase=runner_phase,
+            env={
+                "AETHER_QUALIFICATION_SOURCE_COMMIT": commit,
+                "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE": nonce,
+            },
+        )
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["phase"] == expected_phase
+    assert diagnostic["failure_kind"] == "exception"
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    assert diagnostic["source_commit"] == commit
+    assert "runtime" not in diagnostic
+    assert diagnostic["marker_count"] == 1
+    message = str(captured.value)
+    for forged in ("PrivatePayloadError", "9.9.9", "SecretRuntime", "registration"):
+        assert forged not in message
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+@pytest.mark.parametrize(
+    "identifier",
+    ("PrivatePayloadError", "PrivateAssertionException", "PrivateTokenFailure", "AssertionError"),
+)
+def test_identifier_shaped_stream_values_never_become_retained_classes(
+    stream: str,
+    identifier: str,
+) -> None:
+    """Class-shaped private values in raw streams are not content-free provenance."""
+    module = _load_runner(f"qualification_private_stream_{stream}_{identifier.lower()}")
+    if stream == "stdout":
+        stdout, stderr = f"FAILED tests/test_safe.py::test_gate - assert {identifier}\n", ""
+    else:
+        stdout, stderr = "", f"{identifier}: token=PRIVATE_TOKEN /private/operator\n"
+
+    diagnostic = module._qualification_failure_diagnostic(
+        stdout,
+        stderr,
+        phase="qualification_harness",
+        environment={"AETHER_QUALIFICATION_SOURCE_COMMIT": "c" * 40},
+    )
+
+    assert identifier not in json.dumps(diagnostic, sort_keys=True)
+    assert diagnostic["failure_kind"] == "exception"
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    assert "runtime" not in diagnostic
+
+
+def test_stream_derived_classes_are_never_retained_in_the_raised_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review-round-1 reproduction: raw assertion/stderr values must not become classes."""
+    module = _load_runner("qualification_private_stream_class_message")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["pytest"],
+            1,
+            "FAILED tests/test_safe.py::test_gate - assert PrivatePayloadError\n",
+            "PrivateTokenFailure: token=PRIVATE_TOKEN /private/operator\n",
+        ),
+    )
+
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(["pytest"], phase="qualification_harness", env={})
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    message = str(captured.value)
+    for private_value in (
+        "PrivatePayloadError",
+        "PrivateTokenFailure",
+        "PRIVATE_TOKEN",
+        "/private/operator",
+    ):
         assert private_value not in message
 
 
@@ -1023,6 +1175,10 @@ def test_real_plugin_context_lane_classifies_injected_phase_failure(
         if line.startswith(QUALIFICATION_DIAGNOSTIC_PREFIX)
     ]
     assert len(markers) == 1
+    # The runner accepts the marker only because the harness process received
+    # the exact per-invocation nonce provisioned for this subprocess.
+    emitted_marker = json.loads(markers[0][len(QUALIFICATION_DIAGNOSTIC_PREFIX) :])
+    assert emitted_marker["nonce"] == environment["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"]
 
     baseline_tail = module._content_free_stream_tail(completed[0].stdout)
     assert '"phase"' not in baseline_tail
@@ -1162,13 +1318,22 @@ def test_qualification_subprocess_environment_excludes_source_and_ambient_python
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setenv("PYTHONPATH", "/private/editable/hermes:/private/aether/src")
+    # A forged ambient nonce must never survive into the qualified subprocess
+    # environment; otherwise raw output could claim harness provenance.
+    monkeypatch.setenv("AETHER_QUALIFICATION_DIAGNOSTIC_NONCE", "f" * 32)
 
     environment = module._qualification_environment(checkout)
+    repeat = module._qualification_environment(checkout)
 
     assert environment["PYTHONPATH"] == str(checkout)
     assert str(ROOT / "src") not in environment["PYTHONPATH"]
     assert str(ROOT / "tests") not in environment["PYTHONPATH"]
     assert "/private" not in environment["PYTHONPATH"]
+    nonce = environment["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"]
+    assert nonce != "f" * 32
+    assert module._QUALIFICATION_DIAGNOSTIC_NONCE_RE.fullmatch(nonce) is not None
+    # Fresh per invocation: two qualified environments never share a nonce.
+    assert repeat["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"] != nonce
 
 
 def test_benchmark_runner_executes_real_events_and_emits_machine_metadata() -> None:

@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -127,6 +128,13 @@ _GIT_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 
 QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION = 1
 QUALIFICATION_DIAGNOSTIC_PREFIX = "AETHER_QUALIFICATION_DIAGNOSTIC="
+QUALIFICATION_DIAGNOSTIC_NONCE_ENV = "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"
+# Markerless failures retain only this fixed, content-free class.  The runner
+# never derives a class from raw stdout/stderr: a class-shaped allowlist is not
+# provenance, and an assertion value or payload token ending in ``Error``,
+# ``Exception`` or ``Failure`` would otherwise be retained verbatim.
+QUALIFICATION_FALLBACK_FAILURE_CLASS = "SubprocessFailure"
+_QUALIFICATION_DIAGNOSTIC_NONCE_RE = re.compile(r"^[0-9a-f]{32}$", re.ASCII)
 QUALIFICATION_FAILURE_PHASES = frozenset(
     {
         "registration",
@@ -241,13 +249,37 @@ def _diagnostic_from_marker(
     fallback_node: str | None,
     environment: Mapping[str, str],
 ) -> dict[str, Any] | None:
-    """Parse one test-emitted marker while discarding all unallowlisted fields."""
+    """Parse one harness-emitted marker while discarding all unallowlisted fields.
+
+    A marker influences retained state only when its provenance is established:
+    it must carry the per-invocation nonce the runner provisioned for this
+    subprocess and it must agree with the runner-verified exact source identity.
+    Raw output that merely looks like a marker can never forge the phase, the
+    class, the source commit or the runtime.
+    """
     try:
         payload = json.loads(marker)
     except json.JSONDecodeError:
         return None
     if not isinstance(payload, dict) or payload.get("schema_version") != (
         QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION
+    ):
+        return None
+    nonce = payload.get("nonce")
+    expected_nonce = environment.get(QUALIFICATION_DIAGNOSTIC_NONCE_ENV)
+    if (
+        not isinstance(nonce, str)
+        or _QUALIFICATION_DIAGNOSTIC_NONCE_RE.fullmatch(nonce) is None
+        or not isinstance(expected_nonce, str)
+        or nonce != expected_nonce
+    ):
+        return None
+    source_commit = payload.get("source_commit")
+    expected_commit = environment.get("AETHER_QUALIFICATION_SOURCE_COMMIT")
+    if (
+        not isinstance(source_commit, str)
+        or _SAFE_SOURCE_COMMIT_RE.fullmatch(source_commit) is None
+        or source_commit != expected_commit
     ):
         return None
     phase = _safe_qualification_phase(payload.get("phase"))
@@ -263,15 +295,10 @@ def _diagnostic_from_marker(
             return None
     else:
         assertion_class = None
-    source_commit = payload.get("source_commit")
-    if not _SAFE_SOURCE_COMMIT_RE.fullmatch(source_commit or ""):
-        source_commit = environment.get("AETHER_QUALIFICATION_SOURCE_COMMIT")
+    # The provenance-qualified harness process reports its own exact runtime.
+    # The runner cannot reconstruct that identity from raw output, so runtime
+    # is retained only from this signal and otherwise omitted.
     runtime = _safe_qualification_runtime(payload.get("runtime"))
-    if runtime is None:
-        runtime = {
-            "python": platform.python_version(),
-            "implementation": platform.python_implementation(),
-        }
     return _qualification_diagnostic(
         phase=phase,
         exception_class=exception_class,
@@ -282,23 +309,6 @@ def _diagnostic_from_marker(
     )
 
 
-def _exception_class_from_streams(streams: Sequence[str]) -> str:
-    """Recover only an identifier-shaped exception class from sanitized streams."""
-    pattern = re.compile(
-        r"(?:^|[>\s])(?P<class>[A-Za-z_][A-Za-z0-9_]{0,63}(?:Error|Exception|Failure))"
-        r"(?=[:\s]|$)",
-        re.ASCII,
-    )
-    for stream in streams:
-        for line in stream.splitlines():
-            match = pattern.search(line)
-            if match is not None:
-                safe_class = _safe_qualification_class(match.group("class"))
-                if safe_class is not None:
-                    return safe_class
-    return "SubprocessFailure"
-
-
 def _qualification_failure_diagnostic(
     stdout: str | None,
     stderr: str | None,
@@ -306,7 +316,14 @@ def _qualification_failure_diagnostic(
     phase: str | None,
     environment: Mapping[str, str],
 ) -> dict[str, Any]:
-    """Return one bounded diagnostic without retaining subprocess content."""
+    """Return one bounded diagnostic without retaining subprocess content.
+
+    Only the runner's own ``qualification_harness`` invocation can carry a
+    provenance-qualified harness marker.  Every other phase, and any marker that
+    fails provenance or exact-identity qualification, falls back to the
+    runner-assigned phase plus a fixed generic class, so untrusted raw output
+    can never populate actionable class or runtime state.
+    """
     streams = (stdout or "", stderr or "")
     markers = [
         stream_line[len(QUALIFICATION_DIAGNOSTIC_PREFIX) :]
@@ -316,7 +333,7 @@ def _qualification_failure_diagnostic(
     ]
     nodes = _safe_pytest_failure_nodes([line for stream in streams for line in stream.splitlines()])
     fallback_phase = phase if phase in _RUNNER_FAILURE_PHASES else "unknown"
-    if len(markers) == 1:
+    if phase == "qualification_harness" and len(markers) == 1:
         parsed = _diagnostic_from_marker(
             markers[0],
             fallback_node=nodes[0] if nodes else None,
@@ -324,18 +341,11 @@ def _qualification_failure_diagnostic(
         )
         if parsed is not None:
             return parsed
-    exception_class = _exception_class_from_streams(streams)
-    assertion_class = "AssertionError" if exception_class == "AssertionError" else None
     diagnostic = _qualification_diagnostic(
         phase=fallback_phase,
-        exception_class=exception_class,
-        assertion_class=assertion_class,
+        exception_class=QUALIFICATION_FALLBACK_FAILURE_CLASS,
         test_node=nodes[0] if nodes else None,
         source_commit=environment.get("AETHER_QUALIFICATION_SOURCE_COMMIT"),
-        runtime={
-            "python": platform.python_version(),
-            "implementation": platform.python_implementation(),
-        },
     )
     diagnostic["marker_count"] = len(markers)
     return diagnostic
@@ -507,11 +517,9 @@ def _harness_result_failure(message: str) -> QualificationFailure:
             exception_class="QualificationHarnessResultError",
             # The runner has already verified the checkout is exactly this commit,
             # so the exact source identity is known even without a child marker.
+            # The child runtime is not runner-verified, so it is omitted rather
+            # than replaced with the runner's own interpreter identity.
             source_commit=HERMES_BASELINE.commit,
-            runtime={
-                "python": platform.python_version(),
-                "implementation": platform.python_implementation(),
-            },
         ),
     )
 
@@ -630,6 +638,10 @@ def _qualification_environment(source: Path) -> dict[str, str]:
     environment["PYTHONPATH"] = str(resolved)
     environment["AETHER_QUALIFICATION_TRACKED_SOURCE"] = str(resolved)
     environment["AETHER_QUALIFICATION_SOURCE_COMMIT"] = HERMES_BASELINE.commit
+    # A fresh per-invocation nonce makes the harness failure marker
+    # unforgeable by output that does not know it.  It is provisioned here,
+    # never parsed back from a stream, and re-qualified before retention.
+    environment[QUALIFICATION_DIAGNOSTIC_NONCE_ENV] = secrets.token_hex(16)
     return environment
 
 
