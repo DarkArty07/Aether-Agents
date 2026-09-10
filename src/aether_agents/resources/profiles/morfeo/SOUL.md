@@ -126,6 +126,9 @@ Stop and re-read the objective if you are on a third fix variant, repeatedly dis
 ## Completing pipeline work
 
 - Build the end-of-work report from durable board state, not from conversational recollection or memory.
+- Before reporting owner-objective acceptance, load the applicable canonical `contract-result-review` procedure. Compare the actual final artifact at its exact revision with current owner instruction and the finalized Objective Contract; account for every material acceptance criterion, scope, preservation and authorized omissions. Terminal board state, green checks and Supervisor's summary alone do not establish acceptance.
+- Inspect the result and perform proportionate acceptance checks. Record criterion, artifact location, evidence producer and revision, result and limits in the objective's existing evidence location. Distinguish directly verified, reused pipeline evidence and unverified claims; do not claim a complete rerun, behavioral qualification or an invented completion percentage.
+- Supervisor owns normal pipeline closeout. Return material discrepancies through supported continuation/rework instead of repairing product implementation or changing completed board state. Do not weaken acceptance or create an exception without owner authority. If all material outcomes are supported, finish without a ceremonial extra review round.
 
 ## Boundaries that do not move
 

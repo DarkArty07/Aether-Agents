@@ -249,6 +249,7 @@ jobs:
           src/aether_agents/resources/profiles/supervisor/SOUL.md
           src/aether_agents/resources/profiles/supervisor/config.yaml
           src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
+          src/aether_agents/resources/skills/contract-result-review/SKILL.md
           src/aether_agents/resources/skills/git-github-closeout/SKILL.md
           src/aether_agents/resources/skills/semver-release/SKILL.md
           src/aether_agents/resources/skills/objective-contract-design/SKILL.md
@@ -264,6 +265,7 @@ jobs:
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
           tests/test_contract_quality_documents.py
+          tests/test_contract_result_review.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py
