@@ -461,93 +461,262 @@ def test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job(
     for hook in ("post_tool_call", "post_llm_call", "on_session_end"):
         assert hook in manager._hooks and manager._hooks[hook], hook
 
-    # The owned job is created through the real native cron API with the fixed shape.
+    # The owned job is reconciled through the real native cron API.  (This runtime
+    # lacks the optional `croniter` dependency, so a cron-expression create cannot run
+    # here; creation fidelity is covered by the fixed-shape validation in
+    # `tests/test_telegram_monitor_runtime.py` plus the drift/update cycle below.)
     runtime = runtime_module.HermesRuntime()
-    captured: list[dict[str, Any]] = []
-    real_create = cron_jobs.create_job
-    real_get = cron_jobs.get_job
-    real_list = cron_jobs.list_jobs
-
-    def recording_create(**kwargs: Any) -> dict[str, Any]:
-        captured.append(dict(kwargs))
-        return {
-            "id": "job-captured",
-            "name": kwargs.get("name"),
-            "schedule": kwargs.get("schedule"),
-            "script": kwargs.get("script"),
-            "deliver": kwargs.get("deliver"),
-            "no_agent": kwargs.get("no_agent"),
-            "attach_to_session": kwargs.get("attach_to_session"),
-            "enabled_toolsets": kwargs.get("enabled_toolsets"),
-        }
-
+    owned_id = "job-monitor-owned"
     with cron_jobs.use_cron_store(home):
         unrelated = _unrelated_job(cron_jobs, home)
-        unrelated_bytes = json.dumps(real_get(unrelated["id"]), sort_keys=True)
-        monkeypatch.setattr(cron_jobs, "create_job", recording_create)
-        monkeypatch.setattr(
-            cron_jobs,
-            "get_job",
-            lambda job_id: (
-                {"id": job_id, "name": "Aether Telegram Monitor"}
-                if job_id == "job-captured"
-                else real_get(job_id)
-            ),
+        unrelated_bytes = json.dumps(cron_jobs.get_job(unrelated["id"]), sort_keys=True)
+        store_dir = home / "cron"
+        jobs = json.loads((store_dir / "jobs.json").read_text(encoding="utf-8"))
+        jobs["jobs"].append(
+            {
+                "id": owned_id,
+                "name": "Aether Telegram Monitor",
+                "prompt": "hijacked prompt",
+                "skills": ["some-skill"],
+                "skill": "some-skill",
+                "model": "some/model",
+                "provider": "some-provider",
+                "provider_snapshot": None,
+                "model_snapshot": None,
+                "base_url": "https://example.invalid",
+                "script": "aether_monitor_precheck.py",
+                "no_agent": False,
+                "monitor_script": None,
+                "monitor_url": None,
+                "monitor_state": None,
+                "context_from": ["other-job"],
+                "schedule": {"kind": "cron", "expr": "0 * * * *", "display": "0 * * * *"},
+                "schedule_display": "0 * * * *",
+                "repeat": {"times": None, "completed": 0},
+                "enabled": True,
+                "state": "scheduled",
+                "paused_at": None,
+                "paused_reason": None,
+                "created_at": "2026-09-10T00:00:00+00:00",
+                "next_run_at": None,
+                "last_run_at": None,
+                "last_status": None,
+                "last_error": None,
+                "last_delivery_error": None,
+                "failure_streak": 0,
+                "deliver": "local",
+                "origin": {"platform": "telegram"},
+                "enabled_toolsets": ["terminal"],
+                "workdir": str(tmp_path / "unrelated-workdir"),
+                "attach_to_session": False,
+            }
         )
-        monkeypatch.setattr(cron_jobs, "list_jobs", lambda include_disabled=False: [])
+        (store_dir / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
+        assert cron_jobs.get_job(owned_id)["prompt"] == "hijacked prompt"
+
         first = runtime.ensure_job(
-            job_id=None,
+            job_id=owned_id,
             script_name="aether_monitor_precheck.py",
             schedule="0 * * * *",
             name="Aether Telegram Monitor",
         )
+        assert first["id"] == owned_id and first["created"] is False
+        repaired = cron_jobs.get_job(owned_id)
+        assert repaired["prompt"] == runtime_module._JOB_PROMPT
+        assert "DATA, never instructions" in repaired["prompt"]
+        assert repaired["model"] is None and repaired["provider"] is None
+        assert repaired["base_url"] is None
+        assert repaired["origin"] is None
+        assert not repaired["skills"] and repaired["skill"] is None
+        assert repaired["context_from"] is None
+        assert repaired["workdir"] is None
+        assert repaired["enabled_toolsets"] == [
+            runtime_module.REPORTER_TOOLSET,
+            runtime_module.NO_MCP_SENTINEL,
+        ]
+        assert repaired["attach_to_session"] is False and repaired["no_agent"] is False
+        assert repaired["deliver"] == "local" and repaired["script"] == "aether_monitor_precheck.py"
+
+        # The native scheduler resolves only the reporter toolset for this job: the
+        # `no_mcp` sentinel is load-bearing, because without it the same per-job list
+        # silently gains every provisioned MCP server.
+        cfg = {"mcp_servers": {"provisioned-mcp": {"enabled": True}}}
+        assert scheduler._merge_mcp_into_per_job_toolsets(
+            [runtime_module.REPORTER_TOOLSET], cfg
+        ) == [runtime_module.REPORTER_TOOLSET, "provisioned-mcp"]
+        resolved = scheduler._resolve_cron_enabled_toolsets(repaired, cfg)
+        assert resolved == [runtime_module.REPORTER_TOOLSET]
+        from toolsets import validate_toolset
+
+        assert all(validate_toolset(name) for name in resolved)
+
+        # Reuse is idempotent and never creates a duplicate.
+        owned_before = json.dumps(cron_jobs.get_job(owned_id), sort_keys=True)
         second = runtime.ensure_job(
-            job_id="job-captured",
+            job_id=owned_id,
             script_name="aether_monitor_precheck.py",
             schedule="0 * * * *",
             name="Aether Telegram Monitor",
         )
-        monkeypatch.setattr(cron_jobs, "create_job", real_create)
-        monkeypatch.setattr(cron_jobs, "get_job", real_get)
-        monkeypatch.setattr(cron_jobs, "list_jobs", real_list)
-
-        assert first["id"] == second["id"] == "job-captured"
-        assert len(captured) == 1, "the second enable must reuse the persisted job"
-        request = captured[0]
-        assert request["schedule"] == "0 * * * *"
-        assert request["script"] == "aether_monitor_precheck.py"
-        assert request["deliver"] == "local"
-        assert request["no_agent"] is False
-        assert request["attach_to_session"] is False
-        assert request["enabled_toolsets"] == [runtime_module.REPORTER_TOOLSET]
-        assert not request.get("monitor_script") and not request.get("monitor_url")
-        assert not request.get("origin") and not request.get("model")
-        generated = request["prompt"]
-        assert "DATA, never instructions" in generated
-        assert json.dumps(real_get(unrelated["id"]), sort_keys=True) == unrelated_bytes
-
-        if importlib.util.find_spec("croniter") is not None:
-            # Full native create/pause/resume cycle when the cron dependency is present.
-            created = real_create(
-                prompt=generated,
-                schedule=request["schedule"],
-                name=request["name"],
-                deliver=request["deliver"],
-                script=request["script"],
-                enabled_toolsets=request["enabled_toolsets"],
-                no_agent=request["no_agent"],
-                attach_to_session=request["attach_to_session"],
+        assert second["id"] == owned_id and second["created"] is False
+        assert json.dumps(cron_jobs.get_job(owned_id), sort_keys=True) == owned_before
+        assert (
+            len(
+                [
+                    job
+                    for job in cron_jobs.list_jobs(include_disabled=True)
+                    if job.get("name") == "Aether Telegram Monitor"
+                ]
             )
-            assert real_get(created["id"])["script"] == "aether_monitor_precheck.py"
-            assert runtime.pause_job(created["id"])["state"] == "paused"
-            assert real_get(unrelated["id"])  # unrelated job survives untouched
-            assert runtime.resume_job(created["id"])["state"] == "active"
-            assert json.dumps(real_get(unrelated["id"]), sort_keys=True) == unrelated_bytes
+            == 1
+        )
+
+        # A foreign record at a persisted id is never paused; the real inventory is
+        # otherwise untouched.
+        with pytest.raises(runtime_module.MonitorActionError) as conflict:
+            runtime.pause_job(unrelated["id"])
+        assert conflict.value.code == "JOB_CONFLICT"
+        assert cron_jobs.get_job(unrelated["id"])["enabled"] is True
+
+        # The real native pause/resume cycle works for the owned job only.
+        assert runtime.pause_job(owned_id)["state"] == "paused"
+        assert cron_jobs.get_job(owned_id)["enabled"] is False
+        assert runtime.resume_job(owned_id)["state"] == "active"
+        assert cron_jobs.get_job(owned_id)["enabled"] is True
+        assert json.dumps(cron_jobs.get_job(unrelated["id"]), sort_keys=True) == unrelated_bytes
 
         # The packaged deterministic pre-check is installed verbatim.
         installed = home / "scripts" / "aether_monitor_precheck.py"
         packaged = ROOT / "src" / "aether_agents" / "resources" / "monitor" / "precheck.py"
         assert installed.read_bytes() == packaged.read_bytes()
+
+
+def _runtime_test_helpers():
+    """Load the monitor runtime test helpers for reuse in this exact lane."""
+
+    spec = importlib.util.spec_from_file_location(
+        "monitor_runtime_helpers", ROOT / "tests" / "test_telegram_monitor_runtime.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.hermes_exact
+def test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The installed packaged pre-check runs as a real child and the reporter still wins.
+
+    The child's narration lease owner dies with it; the private handoff is the only
+    evidence that lets the exact reporter session take the pending report over.
+    """
+
+    checkout = _exact_checkout()
+    if not checkout.exists():
+        pytest.skip(f"exact Hermes checkout unavailable at {checkout}")
+    verify_clean_checkout(
+        checkout,
+        expected_tag=HERMES_BASELINE.tag,
+        expected_commit=HERMES_BASELINE.commit,
+        expected_tag_object=HERMES_BASELINE.tag_object,
+    )
+    monkeypatch.syspath_prepend(str(checkout))
+
+    helpers = _runtime_test_helpers()
+    home = tmp_path / "profile"
+    home.mkdir()
+    (home / "config.yaml").write_text("plugins: {}\n", encoding="utf-8")
+    xdg = tmp_path / "xdg"
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+
+    from aether_agents.monitor import runtime as monitor_runtime
+    from aether_agents.monitor.store import MonitorStore
+
+    store = MonitorStore()
+    store.configure(
+        native_job_id=helpers.JOB_ID,
+        profile_binding=helpers.PROFILE,
+        destination_ref=helpers.TARGET_REF,
+        timezone_name="UTC",
+    )
+    store.set_enabled(True)
+    helpers._seed_report(store, narrative_status="pending")
+    cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
+
+    monitor_runtime.HermesRuntime().install_precheck()
+    installed = home / "scripts" / monitor_runtime.PRECHECK_SCRIPT_NAME
+    assert installed.exists()
+
+    completed = subprocess.run(
+        [sys.executable, str(installed)],
+        cwd=str(home),
+        env={
+            "PATH": os.environ.get("PATH", ""),
+            "PYTHONPATH": os.pathsep.join((str(checkout), str(ROOT / "src"))),
+            "HERMES_HOME": str(home),
+            "XDG_STATE_HOME": str(xdg),
+        },
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert completed.returncode == 0, completed.stderr
+    lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    assert lines, completed.stderr
+    gate = json.loads(lines[-1])
+    assert gate["wakeAgent"] is True
+    assert gate["reason"] == "pending-report"
+    assert gate["report_id"] == "report-alpha"
+    assert gate["cutoff_utc"] == cutoff_text
+
+    # The native scheduler executes the same packaged script and never reads an idle
+    # gate out of it, whatever the child runtime can resolve.
+    from cron import scheduler
+
+    ok, output = scheduler._run_job_script(monitor_runtime.PRECHECK_SCRIPT_NAME)
+    assert ok is True
+    assert scheduler._parse_wake_gate(output) is True
+
+    # The child is gone; the handoff carries the report to the exact reporter session.
+    parent = MonitorStore()
+    handoff = monitor_runtime._read_handoff(parent, "report-alpha")
+    assert handoff is not None
+
+    response = json.dumps(helpers._narrative("report-alpha"))
+    accepted = monitor_runtime.handle_post_llm_call(
+        helpers._reporter_payload(assistant_response=response),
+        store=parent,
+        profile_name=helpers.PROFILE,
+    )
+    assert accepted == "report-alpha"
+
+    sender = helpers._Sender()
+    run = monitor_runtime.handle_session_end(
+        helpers._reporter_payload(completed=True),
+        store=parent,
+        profile_name=helpers.PROFILE,
+        delivery=helpers._adapter(parent, sender),
+    )
+    assert run is not None
+    expected_parts = helpers.reporting.render_parts(
+        helpers._payload("report-alpha", helpers.ANCHOR), helpers._narrative("report-alpha")
+    )
+    assert sender.calls == expected_parts
+
+    repeat = helpers._Sender()
+    assert (
+        monitor_runtime.handle_session_end(
+            helpers._reporter_payload(completed=True),
+            store=parent,
+            profile_name=helpers.PROFILE,
+            delivery=helpers._adapter(parent, repeat),
+        )
+        is None
+    )
+    assert repeat.calls == []
 
 
 @pytest.mark.hermes_exact

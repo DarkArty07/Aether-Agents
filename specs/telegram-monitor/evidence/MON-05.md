@@ -4,8 +4,10 @@
 **Task:** `t_8608f340`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base commit:** `fbf0b1d922b8e72943f3a6e99620520dc8d9f9d9` (reviewed MON-01..MON-04 replay; see "Base reconstruction")
-**Candidate implementation tree SHA (before this evidence file):** `447bc4793391573e04f49a9f964a5b7cb8b5d4b0`
-**Status:** self-verified; ready for same-card Supervisor review.
+**Implementation tree SHA (before this evidence file):** `b8181e06325690a616a52604e69e0ab919ccf9d4` (`git write-tree` with the implementation and tests staged, this evidence file excluded)
+**Status:** self-verified against review round 1 corrections; ready for same-card Supervisor
+review.
+**Review round:** 2 (round-1 changes requested at candidate `383fe376e098a62d5068518cf7e0fff1ce1bc930`).
 
 ## Scope and changed paths
 
@@ -81,18 +83,35 @@ read-only; no Hermes file was modified and no Hermes patch is proposed.
 
 - **One owned job.** `HermesRuntime.ensure_job` installs the packaged
   `resources/monitor/precheck.py` verbatim under `<HERMES_HOME>/scripts/aether_monitor_precheck.py`
-  and creates or adopts exactly one job with `schedule=0 * * * *`, `no_agent=False`,
+  and creates or reconciles exactly one job with `schedule=0 * * * *`, `no_agent=False`,
   `script=aether_monitor_precheck.py`, `deliver=local`, `attach_to_session=False`,
-  `enabled_toolsets=["aether_monitor_reporting"]`, no `monitor_script`/`monitor_url`, no
-  `origin`/`model`/`provider`. The persisted job id is the runtime authority: a second `on`
-  reuses it, and a job whose name is claimed by a different id (or two candidates) fails
-  closed as `JOB_CONFLICT`. A persisted id whose job drifted is repaired through
-  `update_job` to the same fixed shape (including clearing monitor suppression fields);
-  unrelated jobs are never listed as owned, updated, paused or resumed.
+  `enabled_toolsets=["aether_monitor_reporting", "no_mcp"]`, no
+  `monitor_script`/`monitor_url`, no `origin`/`model`/`provider`/`skills`/`context_from`/
+  `workdir`. The persisted job id is the runtime authority. A same-name job is *never*
+  adopted without a persisted id, a persisted id whose record looks like a different job is
+  never touched, a second job claiming the monitor name is `JOB_CONFLICT`, an unreadable
+  inventory or an update that does not take fails as `JOB_OPERATION_FAILED`, and a drifted
+  owned record is repaired through `update_job` to the full fixed shape (prompt, schedule,
+  toolsets, model/provider/base_url/origin/skills/context/workdir included) and revalidated.
+  `pause_job`/`resume_job` revalidate the ownership identity of the exact persisted record
+  before any native mutation, so a replaced or foreign record is never paused or resumed.
 - **Manual off is durable and ordered.** `MonitorService._off` commits `enabled=false`
   before pausing the exact persisted job; a racing pre-check re-reads the switch and stops
   without inference, and a racing send re-checks `enabled` before every attempt (MON-04
   adapter). Restart/agent activity cannot re-enable the monitor: `on` is the only writer.
+  `on` resumes the owned native job *before* flipping the durable switch, so a failed enable
+  can never claim "on" (or let a racing pre-check collect) while the job is unscheduled; the
+  durable binding survives for a retry.
+- **Exact Morfeo identity.** `on` requires the provisioned runtime to identify itself as
+  the Morfeo profile (and to agree with any persisted binding) before any pin, job or state
+  mutation; a missing or foreign identity fails as `RUNTIME_MISMATCH`. Every reporter path
+  (`reporter_context`, snapshot tool, `post_llm_call`, `on_session_end`) and every direct
+  enrollment path requires that exact profile, never accepting a missing identity.
+- **Configured timezone.** The monitor resolves the native Hermes IANA zone
+  (`hermes_time` → `HERMES_TIMEZONE` → server-local), pins it on `on`, and uses it for the
+  hourly cutoff, `status` rendering and DST boundaries, so cuts land on the same clock the
+  native cron actually fires on instead of the OS-local zone (e.g. `Asia/Kolkata` cuts at
+  `:30` UTC).
 - **Destination pin.** `on` resolves only the existing configured Telegram home chat/thread
   through the native gateway configuration and persists an opaque
   `telegram-home-<sha256>` reference. Missing, invalid or changed target fails closed
@@ -105,25 +124,35 @@ read-only; no Hermes file was modified and no Hermes patch is proposed.
   collects one hourly cut. Genuine idle emits `{"wakeAgent": false}` before inference and
   resolves the idle report; ongoing work, an unreported final outcome, a source failure,
   a runtime mismatch or a pre-check crash emit `{"wakeAgent": true}` and never look idle.
-  A late tick resolves to the local wall-clock hour it belongs to; a repeat tick inside the
-  same hour is suppressed only when the cut is already collected or a live narration owns
-  it.
-- **Bounded recovery.** A report that was collected but never narrated (process death or
-  callback failure) is re-surfaced by the next pre-check with its own bounded context and
-  the narration lease, so a pending report cannot be silently lost behind a newer cut.
-  Reports whose parts never confirmed are retried through the transport only (never a model
-  call), and a failed/rejected narration is re-sent as the single fixed labeled service
+  A late tick resolves to the configured wall-clock hour it belongs to; a repeat tick inside
+  the same hour is suppressed only when the cut is already collected or a live narration owns
+  it, and a contended cut lease makes the second tick emit `collection-in-progress` instead
+  of starting a second narration.
+- **Bounded recovery with a cross-process handoff.** A report that was collected but never
+  narrated (process death or callback failure) is re-surfaced by the next pre-check with its
+  own bounded context and a fresh pending narration lease plus its private handoff, so a
+  pending report cannot be silently lost behind a newer cut. The pre-check runs in a native
+  child process, so the handoff (mode-0600 JSON under `<state>/monitor/handoff/`) is what
+  carries the exact pending report to the exact reporter session after the child exits; the
+  lease row alone cannot survive the boundary because the store recovers dead owners by
+  design. Reports whose parts never confirmed are retried through the transport only (never a
+  model call), and a failed/rejected narration is re-sent as the single fixed labeled service
   notice per report cut.
 - **Reporter recognition.** A reporter is exactly a native cron session whose id starts with
-  `cron_<persisted job id>_`, on platform `cron`, for the bound profile, with the pending
-  narration lease present and the report unresolved. `post_llm_call` validates the narrative
-  against the canonical snapshot and persists `accepted`/`rejected`; `on_session_end`
-  renders and delivers only for that exact session, releases the narration state, and
-  sends only the labeled service notice when narration failed. Any other hook path only
+  `cron_<persisted job id>_`, on platform `cron`, for the exact bound Morfeo profile, with a
+  valid pre-check handoff for the unresolved report. Taking the narration lease over is
+  token-fenced: a live foreign narration, or a *different* cron session of the same job,
+  can never steal or refresh the claim, while the claiming session may refresh its own claim
+  across `post_llm_call` → `on_session_end`. `post_llm_call` validates the narrative against
+  the canonical snapshot and persists `accepted`/`rejected`; `on_session_end` renders and
+  delivers only for that exact session, releases the narration lease and deletes the handoff,
+  and sends only the labeled service notice when narration failed. Any other hook path only
   records source evidence and never sends.
 - **Direct Morfeo work.** `post_tool_call` enrolls a project-bound turn only when the exact
-  native session exists and its recorded workdir matches a marker-verified registered
-  project (portable id + native project id); `post_llm_call` attaches a bounded reported
+  native session exists, its recorded `source` is a local interactive session (`tui`/`cli`),
+  and its recorded workdir matches a marker-verified registered project (portable id + native
+  project id); gateway platform traffic (`telegram`, …), sub-agent `tool` runs, cron sessions
+  and unknown service sources never enroll. `post_llm_call` attaches a bounded reported
   summary; `on_session_end` marks the interval `completed`/`failed`/`interrupted`/`unknown`.
   A continuation opens a new interval, reporter/cron sessions and monitor-control calls are
   excluded, and the bounded spool is pruned by age and count.
@@ -145,60 +174,147 @@ read-only; no Hermes file was modified and no Hermes patch is proposed.
   `aether_monitor` in `aether_monitor` and `aether_monitor_report_snapshot` in the dedicated
   `aether_monitor_reporting` toolset. Registration is Morfeo-only and opt-in. Against the
   release-locked registry the reporter toolset resolves to exactly one tool and the control
-  toolset to exactly one tool, so the hourly job's `enabled_toolsets` cannot default-expand
-  to terminal/file/messaging/board/delegation/cron/control tools. The MORFEO profile is the
-  only profile config that enables the plugin (`language: Spanish`); Supervisor and
-  Implementer configs are untouched.
+  toolset to exactly one tool; the owned job carries the supported `no_mcp` sentinel, which
+  the release-locked scheduler strips at resolution time, so the per-job list cannot
+  default-expand with every provisioned MCP server into terminal/file/messaging/board/
+  delegation/cron/control tools. The MORFEO profile is the only profile config that enables
+  the plugin (`language: Spanish`); Supervisor and Implementer configs are untouched.
 - **Packaging.** One new entry point `aether-telegram-monitor = aether_agents.monitor.hermes_plugin`
   (four total), the packaged pre-check and narration context ship in the wheel byte-equal to
   source, and the monitor help path still works with a deliberately broken Hermes import.
+
+## Review round 2 corrections (supersedes round-1 claims)
+
+Round 1 requested changes against `383fe376e098a62d5068518cf7e0fff1ce1bc930`. Each item below
+lists the defect, the correction in this candidate, and the regression that now covers it.
+
+1. **Reporter lease across the real process boundary.** The packaged pre-check runs in a
+   native child (`cron/scheduler.py:3482-3645` at `v2026.8.18`), so its lease owner is dead
+   before the reporter session starts and `acquire_collection_lease` recovers it by design.
+   The round-1 `_pending_lease_present` therefore rejected the exact reporter. Correction:
+   the pre-check writes a private cross-process handoff
+   (`<state>/monitor/handoff/<sha256(report_id)>.json`, mode 0600, schema
+   `aether.telegram-monitor.handoff.v1`, bound to report/cutoff/job/holder/token/expiry)
+   whenever it acquires a pending narration lease, and `_claim_pending_lease` transfers the
+   claim to the exact reporter through it. Regressions:
+   `test_precheck_child_handoff_reaches_the_exact_reporter` (real subprocess running the
+   packaged entry point, child exits, parent store claims and delivers exactly once) and the
+   exact-lane `test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter` (the
+   installed packaged script executed as a child, then through the real native
+   `_run_job_script`, then a single delivery), plus
+   `test_reporter_requires_the_exact_precheck_handoff` (no handoff, wrong-job handoff and
+   expired handoff all refuse) and `test_reporter_claim_loses_to_a_live_foreign_narration`.
+2. **Reporter-only tool surface.** The release-locked scheduler unions every enabled MCP
+   server into a per-job list unless the supported `no_mcp` sentinel is present
+   (`cron/scheduler.py:394-446`). The owned job now carries
+   `enabled_toolsets=["aether_monitor_reporting", "no_mcp"]`, `_drift()` expects exactly that
+   list, and the exact test proves with the real scheduler resolver that a provisioned MCP
+   server is added without the sentinel and excluded with it.
+3. **Profile checks failed open.** `on` now requires the exact Morfeo identity before any
+   pin/job/state mutation (missing or foreign → `RUNTIME_MISMATCH`), and every reporter and
+   direct path requires the exact profile. Regressions:
+   `test_on_requires_the_exact_morfeo_identity_before_any_mutation`,
+   `test_reporter_context_requires_the_exact_profile`,
+   `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles`.
+4. **Job ownership and fixed shape.** `ensure_job` never adopts a same-name job without a
+   persisted id, rejects a persisted id whose record is not the monitor job, rejects a
+   second job claiming the monitor name, fails on an unreadable inventory, validates that
+   `update_job` actually applied the full fixed shape (prompt, model, provider, base_url,
+   origin, skills, context_from, workdir included), and `pause_job`/`resume_job` revalidate
+   ownership before mutating. Regressions:
+   `test_ensure_job_refuses_same_name_adoption_without_a_persisted_id`,
+   `test_ensure_job_rejects_replaced_ids_and_inventory_failures`,
+   `test_ensure_job_reconciles_the_full_fixed_shape`,
+   `test_ensure_job_creation_carries_and_validates_the_fixed_shape`,
+   `test_ensure_job_fails_when_the_native_update_does_not_apply`,
+   `test_pause_and_resume_revalidate_ownership`, plus the exact-lane drift/pause/resume cycle
+   through the real `cron.jobs` API.
+5. **Failed `on` left the monitor enabled.** The order is now: validate identity/destination,
+   ensure the owned job, persist the binding, resume the native job, and only then commit
+   `enabled=true`. Regression: `test_failed_enable_never_flips_the_monitor_on` (resume
+   failure → error, `enabled=false`, no `enabled:True` event, racing pre-check stays silent).
+6. **Direct enrollment ignored the session source.** `_session_project_binding` now selects
+   and validates the native session `source` against a closed local-interactive allow-list
+   (`tui`, `cli`); gateway/sub-agent/service sources are excluded even when their cwd matches
+   a registered project. Regression:
+   `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles` (telegram/tool
+   sources with matching cwd enroll nothing; `tui` continues to enroll).
+7. **Timezone.** `configured_timezone_name()` resolves `hermes_time` → `HERMES_TIMEZONE` →
+   server-local; `on` pins the resolvable configured IANA zone; the pre-check cut, `status`
+   rendering and DST boundaries all use it. Regressions:
+   `test_configured_timezone_comes_from_native_configuration`,
+   `test_precheck_cuts_hours_in_the_configured_native_zone` (`Asia/Kolkata` cut at `:30` UTC),
+   `test_status_renders_the_next_cut_in_the_persisted_zone`,
+   `test_status_keeps_a_resolvable_persisted_zone_over_a_local_label`,
+   `test_on_pins_the_resolvable_configured_zone`,
+   `test_hour_boundary_follows_the_configured_zone_across_a_dst_fold`.
+
+A later self-review pass additionally fenced the lease takeover to the *exact* claiming
+session (`test_reporter_claim_is_fenced_to_the_exact_session`): a second cron session of the
+same job can neither claim nor deliver a live report, so the handoff cannot be used to
+duplicate a narration. A repeat cut-contended tick now emits `collection-in-progress`
+instead of starting a second narration.
+
+Known environment limit: the optional `croniter` dependency is absent from this environment,
+so a native `create_job` for `0 * * * *` cannot be executed here. Creation fidelity is
+covered by `ensure_job`'s own post-create fixed-shape validation and the fake-native creation
+assertion in the plain lane; the exact lane exercises the real native
+`get_job`/`update_job`/`pause_job`/`resume_job` reconciliation cycle, the real scheduler
+toolset resolution, and the real packaged-script execution.
 
 ## Requirement-to-evidence mapping
 
 | Obligation (TM/D/AC/plan) | Check executed | Observed result |
 | --- | --- | --- |
-| TM-005/D1/D2: one native hourly job, `0 * * * *`, ordinary agent job, packaged pre-check, `deliver=local`, no monitor suppression | `test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job` (`hermes_exact`, real `cron.jobs.create_job` kwargs captured) | Session id `cron_<job-id>_<timestamp>` and `platform="cron"` confirmed in the release-locked scheduler; job created with `schedule="0 * * * *"`, `script="aether_monitor_precheck.py"`, `deliver="local"`, `no_agent=False`, `attach_to_session=False`, `enabled_toolsets=["aether_monitor_reporting"]`, no monitor/origin/model fields; script installed byte-equal to the packaged resource. |
-| AC-1: idempotent `on`, no duplicate job | `test_on_is_idempotent_and_reuses_the_single_owned_job`; `test_exact_hermes_interfaces_...` (second `ensure_job` must not call `create_job`) | First `on` created, second reused: exactly one `create_job` call, stable job id, one native job. |
+| TM-005/D1/D2: one native hourly job, `0 * * * *`, ordinary agent job, packaged pre-check, `deliver=local`, no monitor suppression | `test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job` (`hermes_exact`, real `cron.jobs` reconciliation API); `test_ensure_job_creation_carries_and_validates_the_fixed_shape` | Session id `cron_<job-id>_<timestamp>` and `platform="cron"` confirmed in the release-locked scheduler; the created job carries `schedule="0 * * * *"`, `script="aether_monitor_precheck.py"`, `deliver="local"`, `no_agent=False`, `attach_to_session=False`, `enabled_toolsets=["aether_monitor_reporting","no_mcp"]`, the fixed prompt, and no monitor/origin/model fields; the exact lane repaired a hijacked record through the real `update_job` to that shape and the script installed byte-equal to the packaged resource. (Native `create_job` for a cron expression cannot execute here because the optional `croniter` dependency is absent; the exact lane exercises real create-shape validation via the repair cycle.) |
+| AC-1: idempotent `on`, no duplicate job | `test_on_is_idempotent_and_reuses_the_single_owned_job`; `test_exact_hermes_interfaces_...` (second `ensure_job` must not mutate or duplicate) | First `on` created, second reused with no second native write: exactly one job, stable id, one duplicate-name check. |
 | AC-1/D5: `off` persists before pausing; unrelated jobs untouched | `test_off_persists_disabled_before_pausing_the_exact_job`; `test_exact_hermes_interfaces_...` | Recorded event order `enabled:False` before `pause:<job-id>`; only the owned id paused/resumed; an unrelated job's JSON bytes were identical before and after the on/off cycle. |
 | AC-1: repeated `on` after restart/activity stays off | `test_off_persists_disabled_before_pausing_the_exact_job` (status after restart) | Status reported `enabled: false`; only `on` writes enablement. |
 | AC-1: missing/changed/ambiguous destination fails without credential request | `test_on_fails_closed_on_missing_or_changed_destination`; `test_on_rejects_a_different_profile_or_changed_pin` | `DESTINATION_MISSING`, `DESTINATION_CHANGED`, `RUNTIME_MISMATCH`; no job call, no pin persisted, enablement unchanged. |
-| AC-2/D2: hourly wall-clock cuts, late ticks visible, DST, repeat suppression | `test_precheck_uses_the_local_wall_clock_hour_and_suppresses_a_repeat_tick`; `test_next_hour_boundary_is_always_a_future_wall_clock_hour`; `test_hour_boundary_follows_the_wall_clock_across_a_dst_fold`; `test_precheck_collection_and_gate_stay_well_inside_the_start_bound` | Late 12:59:30 tick produced the 12:00 local cutoff record and `wakeAgent:true`; a repeat tick with a live narration collected nothing; a resolved same-hour tick reported `already-collected`; across the `Europe/Madrid` fold both instants resolved to the same local wall-clock hour with differing explicit offsets and monotonic UTC cutoffs; deterministic pre-check work stayed far below the 120 s start bound. |
-| AC-2/D4/D8: idle is silent, source failure wakes, no unreported loss | `test_precheck_idle_resolves_the_report_and_skips_inference`; `test_precheck_source_failure_wakes_instead_of_looking_idle`; `test_precheck_runtime_mismatch_is_observable_and_never_idle`; `test_precheck_resumes_an_unfinished_report_instead_of_collecting_again`; `test_precheck_waits_while_a_live_narration_owns_the_report` | Idle emitted `{"reason":"idle","wakeAgent":false}` before any inference and resolved the report; collection error, pre-check error and runtime mismatch emitted `wakeAgent:true`; an un-narrated prior report was re-surfaced with its bounded context and lease instead of a second cut; a live narration produced no duplicate narration and no second collection. |
+| AC-2/D2: hourly wall-clock cuts in the configured zone, late ticks visible, DST, repeat suppression | `test_precheck_uses_the_local_wall_clock_hour_and_suppresses_a_repeat_tick`; `test_precheck_cuts_hours_in_the_configured_native_zone`; `test_next_hour_boundary_is_always_a_future_wall_clock_hour`; `test_hour_boundary_follows_the_configured_zone_across_a_dst_fold`; `test_status_renders_the_next_cut_in_the_persisted_zone`; `test_precheck_collection_and_gate_stay_well_inside_the_start_bound` | Late 12:59:30 tick produced the 12:00 local cutoff record and `wakeAgent:true`; with `Asia/Kolkata` configured the cut landed at `:30` UTC (12:30Z for 12:45Z) rather than the UTC-grid 12:00Z; `status` rendered the next cut as `2026-09-10T19:00:00+05:30`; across the `Europe/Madrid` configured fold both instants resolved to the same wall-clock hour with differing explicit offsets and monotonic UTC cutoffs; deterministic pre-check work stayed far below the 120 s start bound. |
+| AC-2/D4/D8: idle is silent, source failure wakes, no unreported loss, cross-process handoff | `test_precheck_idle_resolves_the_report_and_skips_inference`; `test_precheck_source_failure_wakes_instead_of_looking_idle`; `test_precheck_runtime_mismatch_is_observable_and_never_idle`; `test_precheck_resumes_an_unfinished_report_instead_of_collecting_again`; `test_precheck_waits_while_a_live_narration_owns_the_report`; `test_precheck_child_handoff_reaches_the_exact_reporter` | Idle emitted `{"reason":"idle","wakeAgent":false}` before any inference and resolved the report; collection error, pre-check error and runtime mismatch emitted `wakeAgent:true`; an un-narrated prior report was re-surfaced with its bounded context, a fresh lease and its handoff instead of a second cut; a live narration produced no duplicate narration and no second collection; a real pre-check child process exited before the parent reporter, whose store still claimed the `pending-report` handoff and delivered the report exactly once. |
 | AC-2/AC-6: bounded transport retry without extra narration | `test_precheck_retries_unconfirmed_parts_without_rerunning_the_narrator` | A failed part was re-rendered from the accepted structure and confirmed on the next tick; narrative stayed `accepted`; no collector ran. |
 | AC-4: unreported final retained; root completion not closure | covered by accepted MON-02 source tests; MON-05 wakes for unreported finals | `_markers_for_snapshot` advances a work key only after all covering parts confirm; the recovery path keeps a report pending until then. |
 | AC-6/D8/D10: narration failure yields only the labeled notice, once per cut | `test_precheck_sends_one_labeled_service_notice_for_failed_narration`; `test_session_end_sends_only_a_notice_for_rejected_narration`; `test_post_llm_call_rejects_malformed_or_fabricated_narratives` | A `failed` narration produced exactly one `[SERVICE NOTICE]`/`[NO PROGRESS COVERAGE]` notice, no coverage marker; a second tick added nothing; a rejected narrative was persisted as `rejected` and never became an official report. |
-| AC-6: exact reporter match, recursion exclusion | `test_reporter_context_requires_the_exact_owned_cron_binding`; `test_post_llm_call_persists_only_a_validated_narrator_result`; `test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confirm` | Wrong job id, wrong platform, wrong profile, disabled monitor and foreign session all failed to match; only the exact `cron_<job_id>_…` session with the pending lease persisted/validated the narrative and delivered; a repeat session-end sent nothing. |
+| AC-6: exact reporter match, handoff transfer, session fence, recursion exclusion | `test_reporter_context_requires_the_exact_owned_cron_binding`; `test_reporter_context_requires_the_exact_profile`; `test_reporter_requires_the_exact_precheck_handoff`; `test_reporter_claim_is_fenced_to_the_exact_session`; `test_reporter_claim_loses_to_a_live_foreign_narration`; `test_post_llm_call_persists_only_a_validated_narrator_result`; `test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confirm`; `test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter` | Wrong job id, wrong platform, missing/foreign profile, disabled monitor and foreign session all failed to match; a report without its pre-check handoff, with a wrong-job handoff or with an expired handoff was refused; a live foreign narration and a second cron session of the same job could neither claim nor deliver; only the exact `cron_<job_id>_…` session with the handoff persisted/validated the narrative and delivered, then released the lease and deleted the handoff, and a repeat session-end sent nothing. |
 | AC-6: manual off blocks narration/send and retry | `test_manual_off_blocks_narration_delivery_and_retry` | The racing session-end performed no send and left the report pending/durable; re-enabling let the next pre-check deliver the preserved report exactly once without another narration. |
-| AC-4/D3: direct project-bound work, no invented contract | `test_direct_enrollment_requires_an_exact_project_bound_session`; `test_direct_turn_end_marks_flags_and_continuation_opens_a_new_interval`; `test_direct_turn_end_requires_an_enrolled_interval` | Only the exact session whose workdir matched the marker-verified registered project enrolled; `cron_` sessions, monitor-control calls and unbound sessions enrolled nothing; a turn recorded `completed` with a bounded summary and the continuation opened a new `unknown` interval. |
+| AC-4/D3: direct project-bound work, exact source, no invented contract | `test_direct_enrollment_requires_an_exact_project_bound_session`; `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles`; `test_direct_turn_end_marks_flags_and_continuation_opens_a_new_interval`; `test_direct_turn_end_requires_an_enrolled_interval` | Only the exact local-interactive session whose workdir matched the marker-verified registered project enrolled; a matching-cwd `telegram` gateway session and a `tool` sub-agent session enrolled nothing, as did a foreign profile; `cron_` sessions, monitor-control calls and unbound sessions enrolled nothing; a turn recorded `completed` with a bounded summary and the continuation opened a new `unknown` interval. |
 | D7/D12 privacy: no raw transcripts/paths/identifiers | `test_direct_records_reject_unsafe_reported_summaries`; `test_control_tool_matches_the_cli_envelope_and_rejects_bad_arguments` | URL/path/`@`-bearing reported summaries were dropped; a 4000-character summary was truncated to the 600-character bound; the durable record held no raw content. |
 | AC-1/D5: CLI/tool parity and malformed inputs | `test_control_tool_matches_the_cli_envelope_and_rejects_bad_arguments`; `test_cli_actions_read_the_durable_state_without_hermes`; `test_cli_malformed_inputs_fail_closed` | Tool and CLI produced the same schema/action/result keys for the same durable state; extra/unknown/invalid arguments returned `INVALID_ARGUMENT`/`INVALID_LIMIT` or argparse exit 2; `on` without a runtime failed closed without changing state. |
 | AC-8/plan §7: Hermes-free manager, validated subprocess boundary | `test_cli_parser_and_help_are_hermes_free_and_expose_the_fixed_surface`; `test_runtime_subprocess_boundary_validates_and_fails_closed`; packaging `monitor --help` with a broken Hermes import | `aether monitor --help` worked with no Hermes in `sys.modules`; the runtime probe rejected a candidate that cannot import the interfaces; non-JSON/wrong-schema/wrong-action/crash outputs were rejected; action and `--limit` were forwarded exactly; `HERMES_KANBAN_*`/`PYTHONPATH` are stripped for the child. |
-| AC-8/plan §7: restricted reporter toolset, Morfeo-only opt-in | `test_reporter_tool_is_restricted_to_the_dedicated_toolset_and_exact_run`; `test_tool_registration_is_morfeo_only_and_opt_in`; `test_morfeo_portable_opt_in_is_the_only_profile_that_enables_the_monitor`; `test_exact_hermes_interfaces_...` (real registry) | Exactly two tools registered; reporter toolset resolved to exactly `{aether_monitor_report_snapshot}` and control toolset to exactly `{aether_monitor}` in the release-locked registry; authoring/registration for Supervisor/Implementer and disabled settings produced no tools. |
+| AC-8/plan §7: restricted reporter toolset, Morfeo-only opt-in, no default expansion | `test_reporter_tool_is_restricted_to_the_dedicated_toolset_and_exact_run`; `test_tool_registration_is_morfeo_only_and_opt_in`; `test_morfeo_portable_opt_in_is_the_only_profile_that_enables_the_monitor`; `test_exact_hermes_interfaces_...` (real registry and real scheduler resolver) | Exactly two tools registered; reporter toolset resolved to exactly `{aether_monitor_report_snapshot}` and control toolset to exactly `{aether_monitor}` in the release-locked registry; the native scheduler resolver turned `["aether_monitor_reporting"]` into `["aether_monitor_reporting","provisioned-mcp"]` and resolved the fixed job list `["aether_monitor_reporting","no_mcp"]` to exactly `["aether_monitor_reporting"]`; authoring/registration for Supervisor/Implementer and disabled settings produced no tools. |
 | AC-8: packaged entry point and resources | `test_only_one_plugin_entry_point_is_declared_for_the_monitor`; `test_wheel_exposes_the_fourth_entry_point_and_monitor_resources`; `test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins`; `test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadowing` | Wheel declares exactly four plugin entry points; monitor resources and profile opt-in ship byte-equal; manager and runtime installs agree. |
 | Plan §6: capability preflight against the imported runtime | `test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job`; `_module_problems` source check | `_module_problems()` returned `[]` against the verified release-locked checkout, and the wake-gate/hook/toolset facts above were read from the actual sources. |
+| AC-1/plan §6: exact Morfeo identity before any mutation | `test_on_requires_the_exact_morfeo_identity_before_any_mutation`; `test_reporter_context_requires_the_exact_profile`; `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles` | Missing/`implementer`/`supervisor` identities returned `RUNTIME_MISMATCH` with no enablement, job id, destination or profile binding persisted and no native call; `profile_name=None` matched no reporter context; foreign-profile direct turns enrolled nothing. |
+| AC-1: failed enable cannot flip the monitor on | `test_failed_enable_never_flips_the_monitor_on` | A native resume failure returned `JOB_OPERATION_FAILED`, left `enabled=false` and `first_enabled_at_utc` empty with no `enabled:True` event, persisted the owned binding for a retry, and the racing pre-check emitted `disabled` with no collection. |
+| AC-1/D1: job ownership fail-closed (no name adoption, replaced ids, inventory/update failures) | `test_ensure_job_refuses_same_name_adoption_without_a_persisted_id`; `test_ensure_job_rejects_replaced_ids_and_inventory_failures`; `test_ensure_job_reconciles_the_full_fixed_shape`; `test_ensure_job_fails_when_the_native_update_does_not_apply`; `test_pause_and_resume_revalidate_ownership`; exact-lane pause of a foreign id | A same-name foreign job without a persisted id, a replaced record at the persisted id, a duplicate monitor name and an unreadable inventory all failed with no create/update/mutation; a forced no-op update failed as `JOB_OPERATION_FAILED` without touching the record; the drifted record was repaired to the full fixed shape; a foreign id was never paused and its bytes were unchanged. |
 
 ## Verification record
 
-All commands were run in the assigned worktree with the locked `uv` environment.
+All commands were run in the assigned worktree with the locked `uv` environment. Counts below
+are from the final candidate (review round 2).
 
-- Quickstart focused files (`quickstart.md` §2):
-  - `uv run --frozen pytest -q tests/test_telegram_monitor_state.py` → **20 passed in 0.17s**
-  - `uv run --frozen pytest -q tests/test_telegram_monitor_sources.py` → **39 passed in 0.34s**
-  - `uv run --frozen pytest -q tests/test_telegram_monitor_runtime.py` → **29 passed in 0.42s**
-  - `uv run --frozen pytest -q tests/test_telegram_monitor_delivery.py` → **22 passed in 0.34s**
-  - `uv run --frozen pytest -q tests/test_telegram_monitor_cli_plugin.py` → **11 passed in 1.86s**
+- Quickstart focused files (`quickstart.md` §2), plain lane
+  (`uv run --frozen pytest -q -m "not hermes_exact" <file>`):
+  - `tests/test_telegram_monitor_state.py` → **20 passed in 0.17s**
+  - `tests/test_telegram_monitor_sources.py` → **39 passed in 0.61s**
+  - `tests/test_telegram_monitor_reporting.py` → **61 passed in 2.01s**
+  - `tests/test_telegram_monitor_delivery.py` → **21 passed, 1 deselected in 0.33s**
+  - `tests/test_telegram_monitor_runtime.py` → **49 passed in 0.64s**
+  - `tests/test_telegram_monitor_cli_plugin.py` → **9 passed, 3 deselected in 0.54s**
+  - combined plain lane of all six files → **199 passed, 4 deselected in 3.56s**
 - MON-05 runtime/CLI plus the complete accepted monitor surface through the exact-Hermes
   bootstrap lane:
   `uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_runtime.py tests/test_telegram_monitor_cli_plugin.py tests/test_telegram_monitor_state.py tests/test_telegram_monitor_sources.py tests/test_telegram_monitor_reporting.py tests/test_telegram_monitor_delivery.py`
-  → **182 passed in 4.58s** (the release-locked checkout is verified before pytest starts;
-  both `hermes_exact` tests executed rather than skipped).
+  → **203 passed in 5.53s** (the release-locked checkout is verified before pytest starts;
+  all four `hermes_exact` tests executed rather than skipped).
 - Regression surfaces in the same lane:
   `... tests/test_observation_cli_plugin.py tests/test_observation_packaging.py tests/test_public_artifacts.py tests/test_knowledge_plugin_cli.py tests/test_objective_contracts.py`
-  → **2 failed, 105 passed, 1 skipped**; the two failures are baseline, not candidate-caused
-  (see "Pre-existing baseline failures").
+  → **1 failed, 106 passed, 1 skipped**; the failure is the pre-existing public-artifact
+  issue #364 (see "Pre-existing baseline failures").
 - Full repository suite through the exact-Hermes bootstrap lane:
   `uv run --frozen python scripts/run_tests.py -- -q`
-  → **7 failed, 1260 passed, 60 skipped, 373 subtests passed in 113.16s**. One failure is
+  → **7 failed, 1281 passed, 60 skipped, 373 subtests passed in 120.76s**. One failure is
   the pre-existing issue #364 (below). The other six are candidate-caused and are a
   cross-unit collision that MON-05 cannot repair inside its writable boundary — see the
   next section.
@@ -285,11 +401,21 @@ Residual risks, stated honestly:
   runtime exposes the interfaces, not that the plugin will be enabled there. Activation
   therefore remains MON-INT's verified step, and a drifted runtime makes the pre-check wake
   with an explicit diagnostic instead of pretending to be idle.
-- The narration lease protects one in-flight narration per cut and is released by the
-  reporter's own path; a crashed narration's lease is recovered by the store's dead-owner
-  recovery on the next lease operation, so a crashed tick is re-narrated rather than lost.
-  This was verified with a live-lease probe and a resumption probe, but only deterministic
-  fakes stood in for the real model turn.
+- The narration lease protects one in-flight narration per cut and is transferred to the
+  exact reporter session through the private handoff; after delivery the handoff is deleted
+  and the lease released. A crashed narration's lease is recovered by the store's dead-owner
+  recovery on the next lease operation, and the next pre-check re-surfaces the report with a
+  fresh handoff, so a crashed tick is re-narrated rather than lost. The cross-process path is
+  covered by two real-subprocess regressions (a plain-lane child and the installed packaged
+  script through the native scheduler helper); only deterministic fakes stood in for the
+  real model turn.
+- The handoff carries identifiers and a lease token only, inside the monitor's private state
+  root (directory mode 0700, file mode 0600, bounded at 8 KiB, `aether.telegram-monitor.handoff.v1`);
+  it holds no message text, chat identity, credential or source content.
+- `on` pins the resolvable configured IANA zone. The pre-check always follows the native
+  configuration in force at fire time (that is the clock cron uses); `status` renders the
+  persisted pin, so an operator who changes the native zone should re-run `on` to re-pin,
+  and until then the reported `timezone` field shows the older pin rather than a guess.
 - The pre-check's runtime-mismatch path wakes the agent with a diagnostic instead of a
   snapshot; the reporter cannot match it, so no report is sent and the failure is visible in
   the cron output. Live qualification of that path belongs to MON-INT.

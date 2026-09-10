@@ -41,8 +41,11 @@ from aether_agents.monitor.delivery import (
     TelegramDeliveryAdapter,
     canonical_target_reference,
 )
+from aether_agents.monitor.models import Lease
 from aether_agents.monitor.service import (
     ACTIONS,
+    MORFEO_PROFILE,
+    NATIVE_JOB_NAME,
     NATIVE_SCHEDULE,
     PRECHECK_SCRIPT_NAME,
     MonitorActionError,
@@ -57,6 +60,7 @@ __all__ = [
     "CONTROL_TOOL",
     "CONTROL_TOOLSET",
     "HermesRuntime",
+    "MORFEO_PROFILE",
     "NARRATION_LEASE_TTL_SECONDS",
     "REPORTER_TOOL",
     "REPORTER_TOOLSET",
@@ -72,6 +76,10 @@ __all__ = [
 
 #: Dedicated restricted toolset that a reporter run is limited to.
 REPORTER_TOOLSET = "aether_monitor_reporting"
+#: Native sentinel that keeps enabled MCP servers out of the per-job toolset list.
+NO_MCP_SENTINEL = "no_mcp"
+#: The exact per-job toolset list the owned job must carry.
+REPORTER_JOB_TOOLSETS = (REPORTER_TOOLSET, NO_MCP_SENTINEL)
 #: Ordinary-session control toolset.
 CONTROL_TOOLSET = "aether_monitor"
 CONTROL_TOOL = "aether_monitor"
@@ -80,6 +88,16 @@ REPORTER_TOOL = "aether_monitor_report_snapshot"
 PLUGIN_ID = "aether-telegram-monitor"
 #: Explicit private override for the narration output language.
 OWNER_LANGUAGE_ENV = "AETHER_MONITOR_LANGUAGE"
+
+#: Sources that may enroll direct Morfeo project work: local interactive sessions only.
+#: Gateway platform traffic, cron/report runs, sub-agent "tool" runs and unknown
+#: service sources never establish a direct interval.
+DIRECT_SESSION_SOURCES = frozenset({"tui", "cli"})
+
+#: Private cross-process handoff that carries one pre-check's pending narration lease
+#: to the exact reporter session it woke.
+HANDOFF_SCHEMA_VERSION = "aether.telegram-monitor.handoff.v1"
+HANDOFF_MAX_BYTES = 8_192
 
 #: A narration run may take a while; the pending lease must outlive one tick.
 NARRATION_LEASE_TTL_SECONDS = 6 * 3600.0
@@ -178,10 +196,46 @@ def active_profile_name() -> str | None:
 
 
 def local_timezone_name() -> str:
-    """Return the installation's current local timezone name."""
+    """Return the process-local timezone label (last-resort display fallback)."""
 
     name = datetime.now().astimezone().tzname()
     return name if isinstance(name, str) and name.strip() else "UTC"
+
+
+def configured_timezone_name() -> str:
+    """Return the installation's configured native Hermes timezone name.
+
+    Native cron computes its boundaries from ``hermes_time`` (``HERMES_TIMEZONE`` then
+    ``config.yaml`` then server-local).  The monitor must cut and render on that exact
+    clock, never on the process's OS-local zone, so this resolves the same source.
+    """
+
+    module = _optional_module("hermes_time")
+    if module is not None:
+        try:
+            zone = module.get_timezone()
+        except Exception:
+            zone = None
+        key = getattr(zone, "key", None)
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+    configured = os.environ.get("HERMES_TIMEZONE", "").strip()
+    if configured:
+        return configured
+    return local_timezone_name()
+
+
+def _zone(timezone_name: str | None) -> Any | None:
+    """Resolve an IANA zone name, or ``None`` for the process-local fallback."""
+
+    if isinstance(timezone_name, str) and timezone_name.strip():
+        try:
+            from zoneinfo import ZoneInfo
+
+            return ZoneInfo(timezone_name.strip())
+        except (KeyError, ValueError, OSError):
+            return None
+    return None
 
 
 def hermes_available() -> bool:
@@ -253,7 +307,7 @@ class HermesRuntime:
         return {
             "profile": active_profile_name(),
             "hermes_home": str(hermes_home()),
-            "timezone": local_timezone_name(),
+            "timezone": configured_timezone_name(),
             "schedule": NATIVE_SCHEDULE,
         }
 
@@ -330,12 +384,35 @@ class HermesRuntime:
             ) from error
         return script_name
 
-    def _is_owned(self, job: Mapping[str, Any], name: str) -> bool:
-        return str(job.get("name") or "") == name
+    def _identity_ok(self, job: Mapping[str, Any], *, name: str, script_name: str) -> bool:
+        """True when a record is provably the monitor's own job.
+
+        The persisted native job ID is the runtime authority, but a record found at
+        that ID is only touched while it still carries the monitor identity fields.
+        A name match alone, a replaced record or a renamed job fails closed.
+        """
+
+        return (
+            str(job.get("name") or "") == name
+            and str(job.get("script") or "") == script_name
+            and str(job.get("deliver") or "") == "local"
+        )
+
+    @staticmethod
+    def _schedule_matches(job: Mapping[str, Any], schedule: str) -> bool:
+        current = job.get("schedule")
+        if isinstance(current, Mapping):
+            return any(
+                str(current.get(key) or "").strip() == schedule
+                for key in ("expr", "display", "value")
+            )
+        return str(current or "").strip() == schedule
 
     def _drift(self, job: Mapping[str, Any], *, script_name: str, schedule: str) -> dict[str, Any]:
+        """Return every behavior-bearing field that differs from the fixed job shape."""
+
         updates: dict[str, Any] = {}
-        if str(job.get("schedule") or "") != schedule:
+        if not self._schedule_matches(job, schedule):
             updates["schedule"] = schedule
         if str(job.get("script") or "") != script_name:
             updates["script"] = script_name
@@ -343,11 +420,26 @@ class HermesRuntime:
             updates["deliver"] = "local"
         if job.get("attach_to_session") is not False:
             updates["attach_to_session"] = False
-        if bool(job.get("no_agent")):
+        if job.get("no_agent"):
             updates["no_agent"] = False
         toolsets = job.get("enabled_toolsets")
-        if not isinstance(toolsets, list) or [str(item) for item in toolsets] != [REPORTER_TOOLSET]:
-            updates["enabled_toolsets"] = [REPORTER_TOOLSET]
+        if not isinstance(toolsets, list) or [str(item) for item in toolsets] != list(
+            REPORTER_JOB_TOOLSETS
+        ):
+            updates["enabled_toolsets"] = list(REPORTER_JOB_TOOLSETS)
+        if str(job.get("prompt") or "") != _JOB_PROMPT:
+            updates["prompt"] = _JOB_PROMPT
+        for field in ("model", "provider", "base_url"):
+            if job.get(field) not in (None, ""):
+                updates[field] = None
+        if job.get("origin") is not None:
+            updates["origin"] = None
+        if job.get("skills") not in (None, [], ()) or job.get("skill") not in (None, ""):
+            updates["skills"] = []
+        if job.get("context_from") not in (None, [], ()):
+            updates["context_from"] = None
+        if job.get("workdir") not in (None, ""):
+            updates["workdir"] = None
         for unused in ("monitor_script", "monitor_url"):
             if job.get(unused):
                 updates[unused] = None
@@ -355,14 +447,38 @@ class HermesRuntime:
 
     def _summary(self, job: Mapping[str, Any], *, created: bool) -> dict[str, Any]:
         schedule = job.get("schedule")
+        display = schedule.get("display") if isinstance(schedule, Mapping) else None
+        next_run = job.get("next_run_at") or job.get("next_run")
         return {
             "id": str(job.get("id") or ""),
             "name": str(job.get("name") or ""),
-            "schedule": str(schedule) if isinstance(schedule, str) else NATIVE_SCHEDULE,
+            "schedule": str(
+                display or (schedule if isinstance(schedule, str) else NATIVE_SCHEDULE)
+            ),
             "state": "paused" if _job_paused(job) else "active",
             "created": created,
-            "next_run": job.get("next_run") if isinstance(job.get("next_run"), str) else None,
+            "next_run": next_run if isinstance(next_run, str) else None,
         }
+
+    @staticmethod
+    def _named_jobs(cron_jobs: Any, name: str) -> list[Mapping[str, Any]]:
+        """Read the native inventory for same-name jobs; an unreadable list is fatal."""
+
+        try:
+            jobs = cron_jobs.list_jobs(include_disabled=True)
+        except Exception as error:
+            raise MonitorActionError(
+                "JOB_OPERATION_FAILED",
+                "the native job inventory cannot be read; no job was changed",
+            ) from error
+        if not isinstance(jobs, Sequence) or isinstance(jobs, (str, bytes)):
+            raise MonitorActionError(
+                "JOB_OPERATION_FAILED",
+                "the native job inventory is unreadable; no job was changed",
+            )
+        return [
+            job for job in jobs if isinstance(job, Mapping) and str(job.get("name") or "") == name
+        ]
 
     def ensure_job(
         self,
@@ -378,28 +494,54 @@ class HermesRuntime:
         if job_id:
             candidate = cron_jobs.get_job(job_id)
             if candidate is not None:
-                if not self._is_owned(candidate, name):
+                if not self._identity_ok(candidate, name=name, script_name=script_name):
                     raise MonitorActionError(
                         "JOB_CONFLICT",
                         "a different native job already owns the persisted monitor job id",
                     )
+                others = [
+                    job
+                    for job in self._named_jobs(cron_jobs, name)
+                    if str(job.get("id") or "") != str(job_id)
+                ]
+                if others:
+                    raise MonitorActionError(
+                        "JOB_CONFLICT",
+                        "another native job also claims the monitor name; resolve it "
+                        "before enabling the monitor",
+                    )
                 existing = candidate
-        if existing is None:
-            owned = [job for job in _safe_job_list(cron_jobs) if self._is_owned(job, name)]
-            if len(owned) > 1:
+            elif self._named_jobs(cron_jobs, name):
+                # The persisted job is gone but a same-name job exists. Adopting it
+                # would be name matching, which is never the runtime authority.
                 raise MonitorActionError(
                     "JOB_CONFLICT",
-                    "more than one native job claims the monitor identity; resolve them "
-                    "before enabling the monitor",
+                    "the persisted monitor job id is missing and a different job claims "
+                    "the monitor name; resolve them before enabling the monitor",
                 )
-            if owned:
-                existing = owned[0]
+        elif self._named_jobs(cron_jobs, name):
+            # No persisted ID at all: any same-name job is ambiguous and is never adopted.
+            raise MonitorActionError(
+                "JOB_CONFLICT",
+                "a native job already claims the monitor name but no owned job id is "
+                "persisted; resolve it before enabling the monitor",
+            )
         if existing is not None:
             drift = self._drift(existing, script_name=script_name, schedule=schedule)
             if drift:
                 updated = cron_jobs.update_job(str(existing.get("id")), drift)
-                if isinstance(updated, Mapping):
-                    existing = updated
+                if not isinstance(updated, Mapping) or str(updated.get("id") or "") != str(
+                    existing.get("id") or ""
+                ):
+                    raise MonitorActionError("JOB_OPERATION_FAILED", "the native job update failed")
+                if not self._identity_ok(
+                    updated, name=name, script_name=script_name
+                ) or self._drift(updated, script_name=script_name, schedule=schedule):
+                    raise MonitorActionError(
+                        "JOB_OPERATION_FAILED",
+                        "the native job did not accept the fixed monitor job shape",
+                    )
+                existing = updated
             return self._summary(existing, created=False)
         created = cron_jobs.create_job(
             prompt=_JOB_PROMPT,
@@ -407,33 +549,48 @@ class HermesRuntime:
             name=name,
             deliver="local",
             script=script_name,
-            enabled_toolsets=[REPORTER_TOOLSET],
+            enabled_toolsets=list(REPORTER_JOB_TOOLSETS),
             no_agent=False,
             attach_to_session=False,
         )
+        if not isinstance(created, Mapping) or not str(created.get("id") or ""):
+            raise MonitorActionError("JOB_OPERATION_FAILED", "the native job could not be created")
+        if not self._identity_ok(created, name=name, script_name=script_name) or self._drift(
+            created, script_name=script_name, schedule=schedule
+        ):
+            raise MonitorActionError(
+                "JOB_OPERATION_FAILED",
+                "the native job creation did not produce the fixed monitor job shape",
+            )
         return self._summary(created, created=True)
 
-    def pause_job(self, job_id: str) -> Mapping[str, Any]:
+    def _validated_job(self, job_id: str, *, action: str) -> Mapping[str, Any]:
         cron_jobs = _cron_jobs()
         job = cron_jobs.get_job(job_id)
-        if job is None:
+        if not isinstance(job, Mapping):
             raise MonitorActionError(
-                "JOB_OPERATION_FAILED", "the owned native job is missing; it cannot be paused"
+                "JOB_OPERATION_FAILED",
+                f"the owned native job is missing; it cannot be {action}",
             )
-        paused = cron_jobs.pause_job(job_id)
-        if not isinstance(paused, Mapping):
+        if not self._identity_ok(job, name=NATIVE_JOB_NAME, script_name=PRECHECK_SCRIPT_NAME):
+            raise MonitorActionError(
+                "JOB_CONFLICT",
+                f"the persisted monitor job id no longer names the monitor job; "
+                f"it was not {action}",
+            )
+        return job
+
+    def pause_job(self, job_id: str) -> Mapping[str, Any]:
+        self._validated_job(job_id, action="paused")
+        paused = _cron_jobs().pause_job(job_id)
+        if not isinstance(paused, Mapping) or str(paused.get("id") or "") != str(job_id):
             raise MonitorActionError("JOB_OPERATION_FAILED", "the native job pause failed")
         return self._summary(paused, created=False)
 
     def resume_job(self, job_id: str) -> Mapping[str, Any]:
-        cron_jobs = _cron_jobs()
-        job = cron_jobs.get_job(job_id)
-        if job is None:
-            raise MonitorActionError(
-                "JOB_OPERATION_FAILED", "the owned native job is missing; it cannot be resumed"
-            )
-        resumed = cron_jobs.resume_job(job_id)
-        if not isinstance(resumed, Mapping):
+        self._validated_job(job_id, action="resumed")
+        resumed = _cron_jobs().resume_job(job_id)
+        if not isinstance(resumed, Mapping) or str(resumed.get("id") or "") != str(job_id):
             raise MonitorActionError("JOB_OPERATION_FAILED", "the native job resume failed")
         return self._summary(resumed, created=False)
 
@@ -442,16 +599,6 @@ class HermesRuntime:
         if not isinstance(job, Mapping):
             return None
         return self._summary(job, created=False)
-
-
-def _safe_job_list(cron_jobs: Any) -> list[Mapping[str, Any]]:
-    try:
-        jobs = cron_jobs.list_jobs(include_disabled=True)
-    except Exception:
-        return []
-    if not isinstance(jobs, Sequence):
-        return []
-    return [job for job in jobs if isinstance(job, Mapping)]
 
 
 def _job_paused(job: Mapping[str, Any]) -> bool:
@@ -509,6 +656,139 @@ def _gate(wake: bool, **fields: Any) -> str:
     payload: dict[str, Any] = {"wakeAgent": wake}
     payload.update(fields)
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+# ---------------------------------------------------------------------------
+# Pending-narration handoff
+# ---------------------------------------------------------------------------
+
+
+def _handoff_directory(store: MonitorStore) -> Path:
+    return Path(store.state_root) / "monitor" / "handoff"
+
+
+def _handoff_path(store: MonitorStore, report_id: str) -> Path:
+    digest = hashlib.sha256(report_id.encode("utf-8")).hexdigest()
+    return _handoff_directory(store) / f"{digest}.json"
+
+
+def _parse_utc_text(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _read_handoff(
+    store: MonitorStore,
+    report_id: str,
+    *,
+    now: datetime | None = None,
+    require_fresh: bool = True,
+) -> dict[str, Any] | None:
+    """Read the private pending-narration handoff for one report, or ``None``.
+
+    The handoff is the cross-process half of the pending narration lease: the
+    pre-check runs in a child process that exits before the reporter session starts,
+    so the lease row alone cannot survive the boundary (a dead owner is recovered by
+    design).  Only a handoff written by the exact pre-check for this report keeps the
+    exact reporter eligible.
+    """
+
+    path = _handoff_path(store, report_id)
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    if len(raw) > HANDOFF_MAX_BYTES:
+        return None
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        return None
+    if not isinstance(payload, Mapping) or payload.get("schema_version") != HANDOFF_SCHEMA_VERSION:
+        return None
+    if payload.get("report_id") != report_id:
+        return None
+    for field in ("cutoff_utc", "job_id", "holder", "token", "expires_at_utc"):
+        value = payload.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return None
+    if require_fresh:
+        current = now if now is not None else datetime.now(timezone.utc)
+        expires = _parse_utc_text(payload.get("expires_at_utc"))
+        if expires is None or expires <= current:
+            return None
+    return dict(payload)
+
+
+def _write_handoff(
+    store: MonitorStore,
+    *,
+    report_id: str,
+    cutoff_utc: str,
+    job_id: str,
+    lease: Any,
+    holder: str,
+    session_id: str | None = None,
+) -> bool:
+    """Persist one pending-narration handoff; ``False`` means fail closed."""
+
+    payload = {
+        "schema_version": HANDOFF_SCHEMA_VERSION,
+        "report_id": report_id,
+        "cutoff_utc": cutoff_utc,
+        "job_id": job_id,
+        "holder": holder,
+        "session_id": session_id or "",
+        "token": str(getattr(lease, "token", "") or ""),
+        "acquired_at_utc": str(getattr(lease, "acquired_at_utc", "") or ""),
+        "expires_at_utc": str(getattr(lease, "expires_at_utc", "") or ""),
+        "created_at_utc": _utc_text(datetime.now(timezone.utc)),
+    }
+    if not payload["token"] or not payload["expires_at_utc"]:
+        return False
+    directory = _handoff_directory(store)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
+        _atomic_write(
+            _handoff_path(store, report_id),
+            json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+        )
+    except OSError:
+        return False
+    return True
+
+
+def _clear_handoff(store: MonitorStore, report_id: str, *, release_lease: bool) -> None:
+    """Drop one reported interval's handoff and, when it was ours, its lease."""
+
+    handoff = _read_handoff(store, report_id, require_fresh=False)
+    if handoff is None:
+        return
+    if release_lease and handoff.get("holder") == "reporter":
+        lease = Lease(
+            lease_key=f"collection:{handoff['cutoff_utc']}",
+            lease_kind="collection",
+            owner_id=_narration_owner(str(handoff["job_id"])),
+            token=str(handoff["token"]),
+            acquired_at_utc=str(handoff.get("acquired_at_utc") or ""),
+            expires_at_utc=str(handoff["expires_at_utc"]),
+        )
+        try:
+            store.release_collection_lease(lease)
+        except (MonitorStoreError, ValueError):
+            pass
+    try:
+        _handoff_path(store, report_id).unlink()
+    except OSError:
+        pass
 
 
 def configured_owner_language() -> str | None:
@@ -594,7 +874,7 @@ def run_precheck(
     ):
         return 0
     now = clock() if clock is not None else datetime.now(timezone.utc)
-    cutoff = service_hour_boundary(now)
+    cutoff = service_hour_boundary(now, timezone_name=_precheck_timezone_name(settings))
     previous = settings.last_cutoff_utc
     if previous is not None and _utc_text(cutoff) <= previous:
         print(_gate(False, reason="already-collected"), file=stream)
@@ -630,12 +910,27 @@ def run_precheck(
             narrator_session_id=None,
             attempt_status="pending",
         )
-        store.acquire_collection_lease(
+        lease = store.acquire_collection_lease(
             result.snapshot.cutoff_utc,
             owner_id=_narration_owner(settings.native_job_id),
             ttl_seconds=NARRATION_LEASE_TTL_SECONDS,
         )
     except MonitorStoreError:
+        print(_gate(True, reason="pending-state-error"), file=stream)
+        return 0
+    if lease is None:
+        # Another tick already owns this cut's lease and is actively collecting or
+        # narrating it; this tick must not start a second narration.
+        print(_gate(False, reason="collection-in-progress"), file=stream)
+        return 0
+    if not _write_handoff(
+        store,
+        report_id=result.report_id,
+        cutoff_utc=result.snapshot.cutoff_utc,
+        job_id=settings.native_job_id,
+        lease=lease,
+        holder="precheck",
+    ):
         print(_gate(True, reason="pending-state-error"), file=stream)
         return 0
     try:
@@ -658,10 +953,23 @@ def run_precheck(
     return 0
 
 
-def service_hour_boundary(value: datetime) -> datetime:
-    """Return the local wall-clock hour boundary that this tick belongs to."""
+def _precheck_timezone_name(settings: Any) -> str | None:
+    """Return the zone the native schedule actually cuts hours in."""
 
-    local = value.astimezone()
+    configured = configured_timezone_name()
+    if _zone(configured) is not None:
+        return configured
+    persisted = getattr(settings, "timezone", None)
+    if _zone(persisted) is not None:
+        return persisted
+    return None
+
+
+def service_hour_boundary(value: datetime, *, timezone_name: str | None = None) -> datetime:
+    """Return the configured wall-clock hour boundary that this tick belongs to."""
+
+    zone = _zone(timezone_name)
+    local = value.astimezone(zone) if zone is not None else value.astimezone()
     return local.replace(minute=0, second=0, microsecond=0)
 
 
@@ -825,6 +1133,19 @@ def _resume_pending_narration(
                     file=stream,
                 )
                 return True
+        if not _write_handoff(
+            store,
+            report_id=snapshot.report_id,
+            cutoff_utc=snapshot.cutoff_utc,
+            job_id=job_id,
+            lease=lease,
+            holder="precheck",
+        ):
+            print(
+                _gate(True, reason="pending-state-error", report_id=snapshot.report_id),
+                file=stream,
+            )
+            return True
         try:
             context = reporting.prepare_narration_context(snapshot.payload, owner_language=language)
         except reporting.ReportingError:
@@ -869,7 +1190,10 @@ def reporter_context(
         return None
     if not session_id or not session_id.startswith(f"cron_{settings.native_job_id}_"):
         return None
-    if settings.profile_binding and profile_name and profile_name != settings.profile_binding:
+    # The bound profile is required exactly: a missing identity is never accepted.
+    if profile_name != MORFEO_PROFILE:
+        return None
+    if settings.profile_binding and settings.profile_binding != profile_name:
         return None
     return {
         "job_id": settings.native_job_id,
@@ -878,29 +1202,82 @@ def reporter_context(
     }
 
 
-def _pending_lease_present(store: MonitorStore, cutoff_utc: str, job_id: str) -> bool:
-    """Verify the pending narration lease without creating one.
+def _claim_pending_lease(
+    store: MonitorStore,
+    snapshot: Any,
+    *,
+    job_id: str,
+    session_id: str | None = None,
+    now: datetime | None = None,
+) -> Lease | None:
+    """Take ownership of one pending report's narration lease for the exact reporter.
 
-    ``acquire_collection_lease`` returns ``None`` when an unexpired lease already exists
-    on the same key.  Acquiring it ourselves or finding an expired row means the pending
-    report is gone, so the reporter must fail closed instead of narrating stale evidence.
+    The pre-check ran in a child process that exited, so its lease row has a dead
+    owner and would be recovered by any later acquisition.  The private handoff
+    written by that exact pre-check is the cross-process evidence that this report's
+    lease is legitimately transferable to the reporter session it woke; without it
+    (or with a live foreign holder) the reporter fails closed.
     """
 
+    handoff = _read_handoff(store, snapshot.report_id, now=now)
+    if handoff is None:
+        return None
+    if handoff["job_id"] != job_id or handoff["cutoff_utc"] != snapshot.cutoff_utc:
+        return None
+    owner = _narration_owner(job_id)
     try:
         probe = store.acquire_collection_lease(
-            cutoff_utc,
-            owner_id=_narration_owner(job_id),
+            snapshot.cutoff_utc,
+            owner_id=owner,
             ttl_seconds=NARRATION_LEASE_TTL_SECONDS,
         )
     except (MonitorStoreError, ValueError):
-        return False
+        return None
     if probe is None:
-        return True
-    try:
-        store.release_collection_lease(probe)
-    except MonitorStoreError:
-        pass
-    return False
+        # An unexpired lease is held. Only the report's own prior claim by this exact
+        # reporter session may be refreshed; every other live holder wins, so a second
+        # session or a foreign narration can never steal or duplicate a narration.
+        if handoff.get("holder") != "reporter" or handoff.get("session_id") != session_id:
+            return None
+        previous = Lease(
+            lease_key=f"collection:{handoff['cutoff_utc']}",
+            lease_kind="collection",
+            owner_id=owner,
+            token=str(handoff["token"]),
+            acquired_at_utc=str(handoff.get("acquired_at_utc") or ""),
+            expires_at_utc=str(handoff["expires_at_utc"]),
+        )
+        try:
+            released = store.release_collection_lease(previous)
+        except (MonitorStoreError, ValueError):
+            return None
+        if not released:
+            return None
+        try:
+            probe = store.acquire_collection_lease(
+                snapshot.cutoff_utc,
+                owner_id=owner,
+                ttl_seconds=NARRATION_LEASE_TTL_SECONDS,
+            )
+        except (MonitorStoreError, ValueError):
+            return None
+        if probe is None:
+            return None
+    if not _write_handoff(
+        store,
+        report_id=snapshot.report_id,
+        cutoff_utc=snapshot.cutoff_utc,
+        job_id=job_id,
+        lease=probe,
+        holder="reporter",
+        session_id=session_id,
+    ):
+        try:
+            store.release_collection_lease(probe)
+        except (MonitorStoreError, ValueError):
+            pass
+        return None
+    return probe
 
 
 def _find_pending_report(
@@ -969,7 +1346,12 @@ def handle_post_llm_call(
     if target is None:
         return None
     snapshot, narrative = target
-    if not _pending_lease_present(store, snapshot.cutoff_utc, context["job_id"]):
+    if (
+        _claim_pending_lease(
+            store, snapshot, job_id=context["job_id"], session_id=context["session_id"]
+        )
+        is None
+    ):
         return None
     try:
         validated = reporting.validate_narrative(snapshot.payload, response)
@@ -1035,7 +1417,12 @@ def handle_session_end(
     if target is None:
         return None
     snapshot, narrative = target
-    if not _pending_lease_present(store, snapshot.cutoff_utc, context["job_id"]):
+    if (
+        _claim_pending_lease(
+            store, snapshot, job_id=context["job_id"], session_id=context["session_id"]
+        )
+        is None
+    ):
         return None
     successful = (
         payload.get("completed") is True
@@ -1078,24 +1465,8 @@ def handle_session_end(
     except MonitorStoreError:
         return None
     finally:
-        _release_narration_lease(store, snapshot.cutoff_utc, context["job_id"])
+        _clear_handoff(store, snapshot.report_id, release_lease=True)
     return run.as_dict()
-
-
-def _release_narration_lease(store: MonitorStore, cutoff_utc: str, job_id: str) -> None:
-    try:
-        probe = store.acquire_collection_lease(
-            cutoff_utc,
-            owner_id=_narration_owner(job_id),
-            ttl_seconds=NARRATION_LEASE_TTL_SECONDS,
-        )
-    except (MonitorStoreError, ValueError):
-        return
-    if probe is not None:
-        try:
-            store.release_collection_lease(probe)
-        except MonitorStoreError:
-            pass
 
 
 def reporter_snapshot(
@@ -1124,6 +1495,12 @@ def reporter_snapshot(
     if target is None:
         raise MonitorActionError("NO_PENDING_REPORT", "no monitor snapshot is awaiting narration")
     snapshot, _narrative = target
+    if _read_handoff(store, snapshot.report_id) is None:
+        # Without the exact pre-check handoff this session is not the reporter the
+        # pending report belongs to; it may not read the snapshot.
+        raise MonitorActionError(
+            "REPORTER_CONTEXT_REQUIRED", "no pending monitor narration belongs to this run"
+        )
     return reporting.model_snapshot_json(snapshot.payload)
 
 
@@ -1242,8 +1619,10 @@ def _session_project_binding(
     """Resolve the exact registered project bound to this native session.
 
     Identity comes from the session's recorded workdir matched byte-exactly against a
-    marker-verified registered project root; a profile name, repository display name or
-    the most recent session is never an identity source.
+    marker-verified registered project root, and only a local interactive session
+    source may establish project work: a profile name, repository display name, the
+    most recent session, gateway platform traffic or a service session is never an
+    identity source.
     """
 
     from aether_agents.monitor.sources import enumerate_project_bindings, open_read_only_sqlite
@@ -1258,11 +1637,17 @@ def _session_project_binding(
     try:
         with open_read_only_sqlite(database) as connection:
             row = connection.execute(
-                "SELECT cwd FROM sessions WHERE id = ?", (session_id,)
+                "SELECT cwd, source FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
     except Exception:
         return None
     if row is None:
+        return None
+    source_value = row["source"] if hasattr(row, "keys") else None
+    if (
+        not isinstance(source_value, str)
+        or source_value.strip().lower() not in DIRECT_SESSION_SOURCES
+    ):
         return None
     cwd_value = row["cwd"] if hasattr(row, "keys") else None
     if not isinstance(cwd_value, str) or not cwd_value.strip():
@@ -1317,6 +1702,8 @@ def handle_post_tool_call(
 ) -> None:
     """Enroll actual project-bound operational work for one native turn."""
 
+    if profile_name != MORFEO_PROFILE:
+        return
     session_id = payload.get("session_id")
     platform = payload.get("platform")
     tool_name = payload.get("tool_name")
@@ -1351,6 +1738,8 @@ def handle_post_llm_call_direct(
 ) -> None:
     """Attach the bounded reported outcome of a direct project-bound turn."""
 
+    if profile_name != MORFEO_PROFILE:
+        return
     session_id = payload.get("session_id")
     interval_id = payload.get("turn_id")
     if _is_reporter_session(session_id, payload.get("platform")):
@@ -1373,6 +1762,8 @@ def handle_session_end_direct(
 ) -> None:
     """Close one direct project-bound turn interval with explicit flags."""
 
+    if profile_name != MORFEO_PROFILE:
+        return
     session_id = payload.get("session_id")
     interval_id = payload.get("turn_id")
     if _is_reporter_session(session_id, payload.get("platform")):
@@ -1409,7 +1800,9 @@ def execute_action(
 ) -> dict[str, Any]:
     """Execute one control action in a Hermes-capable process."""
 
-    service = MonitorService(store=store, native=_default_runtime())
+    runtime = _default_runtime()
+    timezone_name = configured_timezone_name() if runtime is not None else None
+    service = MonitorService(store=store, native=runtime, timezone_name=timezone_name)
     return service.execute(action, limit=limit)
 
 

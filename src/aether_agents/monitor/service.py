@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Protocol, Sequence
+from zoneinfo import ZoneInfo
 
 from aether_agents.monitor.store import MonitorStore, MonitorStoreError
 
@@ -34,6 +35,7 @@ __all__ = [
     "DEFAULT_HISTORY_LIMIT",
     "MAX_HISTORY_LIMIT",
     "MONITOR_SCHEMA_VERSION",
+    "MORFEO_PROFILE",
     "NATIVE_JOB_NAME",
     "NATIVE_SCHEDULE",
     "PRECHECK_SCRIPT_NAME",
@@ -45,6 +47,9 @@ __all__ = [
 ]
 
 MONITOR_SCHEMA_VERSION = "aether.telegram-monitor.v1"
+
+#: The monitor belongs to the provisioned Morfeo runtime only.
+MORFEO_PROFILE = "morfeo"
 
 ACTION_STATUS = "status"
 ACTION_ON = "on"
@@ -143,26 +148,51 @@ def _utc_text(value: datetime) -> str:
     return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def _local_text(value: datetime) -> str:
-    return value.astimezone().isoformat(timespec="seconds")
+def _local_text(value: datetime, timezone_name: str | None = None) -> str:
+    return _zoned(value, timezone_name).isoformat(timespec="seconds")
 
 
-def hour_boundary(value: datetime) -> datetime:
-    """Return the wall-clock hour boundary containing ``value`` in local time."""
+def _zone(timezone_name: str | None) -> ZoneInfo | None:
+    """Resolve an IANA zone name, or ``None`` for the process-local fallback."""
 
-    local = value.astimezone()
+    if isinstance(timezone_name, str) and timezone_name.strip():
+        try:
+            return ZoneInfo(timezone_name.strip())
+        except (KeyError, ValueError, OSError):
+            return None
+    return None
+
+
+def _zoned(value: datetime, timezone_name: str | None) -> datetime:
+    zone = _zone(timezone_name)
+    return value.astimezone(zone) if zone is not None else value.astimezone()
+
+
+def first_resolvable_zone(*names: Any) -> str | None:
+    """Return the first candidate that is a real IANA zone name, or ``None``."""
+
+    for name in names:
+        if _zone(name) is not None and isinstance(name, str):
+            return name.strip()
+    return None
+
+
+def hour_boundary(value: datetime, timezone_name: str | None = None) -> datetime:
+    """Return the configured-zone wall-clock hour boundary containing ``value``."""
+
+    local = _zoned(value, timezone_name)
     boundary = local.replace(minute=0, second=0, microsecond=0)
     return boundary
 
 
-def next_hour_boundary(value: datetime) -> datetime:
+def next_hour_boundary(value: datetime, timezone_name: str | None = None) -> datetime:
     """Return the next future wall-clock hour boundary.
 
     Resuming monitoring schedules the next real boundary instead of replaying missed
     ones, and a late tick still resolves to the boundary it belongs to.
     """
 
-    return hour_boundary(value) + timedelta(hours=1)
+    return hour_boundary(value, timezone_name) + timedelta(hours=1)
 
 
 def _bounded_history_limit(limit: Any) -> int:
@@ -257,7 +287,9 @@ class MonitorService:
     def _status(self) -> dict[str, Any]:
         settings = self.store.get_settings()
         now = self.clock()
-        boundary = next_hour_boundary(now)
+        # An unresolvable local label must never mask a real persisted IANA zone.
+        zone_name = first_resolvable_zone(self._timezone_name, settings.timezone)
+        boundary = next_hour_boundary(now, zone_name)
         runtime: dict[str, Any] = {"available": self.native is not None}
         if settings.profile_binding:
             runtime["profile"] = settings.profile_binding
@@ -297,7 +329,7 @@ class MonitorService:
             "timezone": settings.timezone,
             "destination_pinned": bool(settings.destination_ref),
             "next_cut_utc": _utc_text(boundary),
-            "next_cut_local": _local_text(boundary),
+            "next_cut_local": _local_text(boundary, zone_name),
             "native_job": dict(job) if job is not None else None,
             "runtime": runtime,
             "coverage_gaps": coverage_gaps,
@@ -315,8 +347,18 @@ class MonitorService:
         identity = self.native.runtime_identity()
         settings = self.store.get_settings()
         profile = identity.get("profile")
-        profile_text = str(profile) if isinstance(profile, str) and profile.strip() else None
-        if settings.profile_binding and profile_text and settings.profile_binding != profile_text:
+        profile_text = (
+            str(profile).strip() if isinstance(profile, str) and profile.strip() else None
+        )
+        # The monitor only ever runs as the provisioned Morfeo monitor. A missing or
+        # foreign identity fails closed *before* any pin, job or state mutation.
+        if profile_text != MORFEO_PROFILE:
+            raise MonitorActionError(
+                "RUNTIME_MISMATCH",
+                "the monitor can only be enabled from the provisioned Morfeo runtime; "
+                "no job or destination was changed",
+            )
+        if settings.profile_binding and settings.profile_binding != profile_text:
             raise MonitorActionError(
                 "RUNTIME_MISMATCH",
                 "the monitor is bound to a different profile; no job or destination was changed",
@@ -333,16 +375,10 @@ class MonitorService:
                 "the configured Telegram destination changed while the monitor was enabled; "
                 "turn the monitor off before re-pinning it",
             )
-        timezone_name = self._timezone_name
-        if not timezone_name:
-            candidate = identity.get("timezone")
-            timezone_name = str(candidate) if isinstance(candidate, str) and candidate else "UTC"
-        self.store.configure(
-            native_job_id=settings.native_job_id,
-            profile_binding=profile_text,
-            destination_ref=reference,
-            timezone_name=timezone_name,
+        timezone_name = first_resolvable_zone(
+            self._timezone_name, identity.get("timezone"), settings.timezone
         )
+        timezone_name = timezone_name or "UTC"
         job = self.native.ensure_job(
             job_id=settings.native_job_id,
             script_name=PRECHECK_SCRIPT_NAME,
@@ -360,8 +396,11 @@ class MonitorService:
             destination_ref=reference,
             timezone_name=timezone_name,
         )
-        self.store.set_enabled(True)
+        # Native scheduling is resumed before the durable switch flips, so a failed
+        # enable can never leave the monitor claiming "on" (or a racing pre-check
+        # collecting) while the owned job is not actually scheduled.
         resumed = self.native.resume_job(job_id)
+        self.store.set_enabled(True)
         settings = self.store.get_settings()
         return {
             "enabled": True,
@@ -370,7 +409,7 @@ class MonitorService:
             "native_job": dict(resumed),
             "job_created": bool(job.get("created")),
             "first_enabled_at_utc": settings.first_enabled_at_utc,
-            "next_cut_utc": _utc_text(next_hour_boundary(self.clock())),
+            "next_cut_utc": _utc_text(next_hour_boundary(self.clock(), settings.timezone)),
         }
 
     def _off(self) -> dict[str, Any]:

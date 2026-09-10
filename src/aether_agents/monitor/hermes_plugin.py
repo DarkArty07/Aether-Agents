@@ -33,6 +33,7 @@ from aether_agents.monitor.runtime import (
 from aether_agents.monitor.service import (
     ACTION_HISTORY,
     ACTIONS,
+    MORFEO_PROFILE,
     MonitorActionError,
     error_envelope,
 )
@@ -40,7 +41,7 @@ from aether_agents.monitor.store import MonitorStore
 
 __all__ = ["register"]
 
-ROLE = "morfeo"
+ROLE = MORFEO_PROFILE
 
 _CONTROL_DESCRIPTION = "Control and read the Aether Telegram Monitor: status, on, off and history."
 _REPORT_DESCRIPTION = (
