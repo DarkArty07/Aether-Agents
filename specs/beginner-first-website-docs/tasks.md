@@ -1,21 +1,202 @@
 # Beginner-first website documentation — Supervisor task breakdown
 
-**Status:** verified decomposition for Objective Contract `oc_844dfc12880ee967@v1`.
+**Status:** active closeout continuation for Objective Contract
+`oc_844dfc12880ee967@v2`; the completed v1 implementation decomposition remains below as
+historical execution provenance.
 
 **Derived by:** Supervisor
 
-**Source contract:** `.aether/objective-contracts/oc_844dfc12880ee967/v1.md`
-(SHA-256 `e53a80f647e6aa54eb749fd8b37148429abf9e41455d1f77a6c8af0107311302`)
-on base `9bce0d222fdf0bfc581a26e282b81b08a1418d7c`.
+**Active source contract:**
+`.aether/objective-contracts/oc_844dfc12880ee967/v2.md` (SHA-256
+`72a435bf75c73d26785f3ce00d90f151e8023a236b4f69ba7d159bb3fee90e4e`)
+on continuation base `6ddedab1dae701af51382822740050ccb0c29dc9`.
+
+**Original source contract:**
+`.aether/objective-contracts/oc_844dfc12880ee967/v1.md` (SHA-256
+`e53a80f647e6aa54eb749fd8b37148429abf9e41455d1f77a6c8af0107311302`)
+on original base `9bce0d222fdf0bfc581a26e282b81b08a1418d7c`.
 
 **Owning issue:** [#368](https://github.com/DarkArty07/Aether-Agents/issues/368).
 
-This is the Supervisor-owned execution decomposition. It does not widen the Objective
+This is the Supervisor-owned execution decomposition. It does not widen either Objective
 Contract or turn website presentation into evidence of a released/qualified runtime.
-The executable unit deliveries are repeated in the native board cards because new
-worktrees start at the contract base rather than this root branch's decomposition commit.
+The active v2 units consume the already integrated and reviewed v1 implementation; the
+historical v1 units remain recorded below rather than being recreated.
 
-## Receipt
+## Active v2 continuation receipt
+
+| Check | Observed result |
+| --- | --- |
+| Portable Project | `.aether/project.toml` project `12027989-a08f-41cd-a82c-54ff1bfb6b03` and repository `DarkArty07/Aether-Agents` match the envelope and bound native Project |
+| Contract bytes | final v2 artifact exists at the active path and its SHA-256 equals the envelope; v2 supersedes v1 without changing historical v1 bytes |
+| Base / root worktree | clean deterministic objective branch at exact required continuation base `6ddedab1dae701af51382822740050ccb0c29dc9` before this addendum |
+| Integrated implementation | base contains ordinary merge `860176e1db8c6c24d937f38d67b9a9c1f190f9b4` of the independently approved recovered website head `ad892a7539ecc619bf00b9d4be0a1b8a2602f1a7`, with the content and website commit chain preserved |
+| Superseding decision | v2 changes only the public-artifact acceptance oracle: exactly two inherited #364 findings are non-blocking when the historical blob is identical to current `origin/main`; any other difference remains blocking |
+| Historical blob | `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` has the same blob ID in continuation base and `origin/main` at receipt |
+| GitHub state | issue #368 is open with no milestone; no PR exists for the objective branch at receipt |
+| Knowledge / memory | project binding matches and source revision is exact, but no knowledge snapshot is available; direct source inspection is the accepted fallback and no applicable Supervisor memory note replaces current evidence |
+| Profiles / procedures | native `implementer` and `supervisor` profiles exist; no `.aether/skills/` directory exists; applicable Aether Canonical procedures were loaded |
+| Design sufficiency | v2 fixes the disproved scanner assumption and leaves reader outcome, interfaces, verification, reporting, GitHub boundary and release conclusions determinate; no missing material product decision remains |
+
+## Active v2 cross-artifact conclusions
+
+- The implementation is already concentrated in the reviewed content and website commit
+  chain. Recreating those units would duplicate accepted work and risk colliding with the
+  integrated candidate. The continuation therefore adds no feature-writing unit.
+- The v2 acceptance delta is independently testable as a read-only candidate verification
+  plus one portable evidence record. It owns no scanner, test, contract, website or reader
+  source and must return any behavior defect for rework instead of silently changing it.
+- Progress reporting is local operational work with no repository writable surface. It is
+  independent of candidate verification and may run concurrently after this root releases
+  both units. Reuse or update the objective reporter; do not create a duplicate job.
+- Terminal integration cannot run until both the verification evidence has passed same-card
+  independent Supervisor review and the reporter is reviewed/configured for the active v2
+  flow. This is a real evidence/reporting prerequisite, not an arbitrary sequence.
+- Publication and GitHub closeout remain Supervisor work. The terminal unit owns the normal
+  branch push, one PR linked to #368, green required checks and explicit non-merge boundary;
+  Implementer units may not publish, merge, deploy, close the issue or make release effects.
+- The inherited v1 unit compatibility conclusions are BGD-CONTENT=`patch`, BGD-WEB=`patch`
+  and BGD-MON=`none`. The new verification and reporting continuation units are `none`.
+  The contract-fixed aggregate remains `release_impact=patch`, `release_action=defer`,
+  `release_channel=none`.
+
+## Active v2 requirement coverage
+
+| Contract source | Owning unit | Acceptance/evidence responsibility |
+| --- | --- | --- |
+| AC 1–11 and AC 13; deliverables 1–6 and 8 | accepted v1 BGD-CONTENT/BGD-WEB chain; BGD-V2-VERIFY | independently reproduce the integrated reader, route, search, accessibility, responsive, no-JavaScript, command/status and guidance evidence without source edits |
+| AC 12 and revised Testing Standard | BGD-V2-VERIFY; terminal integration | compare complete scanner findings and historical blob against current `origin/main`; accept only the exact two-kind one-file inherited set locally; preserve unmodified scanner/test/contracts and require green PR checks |
+| Deliverable 10 | BGD-V2-MON; terminal integration | reuse/configure change-driven Telegram progress for the active flow, terminal brief and stop behavior without public or sensitive state |
+| AC 14 and deliverables 7 and 9 | same-card review of both continuation units; terminal integration | independent review evidence, complete integrated gates, one linked open PR, green required checks, no merge/deploy and issue remains open |
+| Authority, preservation and stop conditions | every active unit | no provider call, credential/settings change, runtime feature, scanner weakening, immutable-byte change, bypass, history rewrite, unrelated absorption, merge, deployment or release publication |
+
+## Active v2 execution graph
+
+```text
+Supervisor decomposition root
+    ├── BGD-V2-VERIFY (Implementer; candidate and exact inherited-baseline evidence)
+    │       └── same-card Supervisor review
+    └── BGD-V2-MON (Implementer; active-flow Telegram reporter reconciliation)
+            └── same-card Supervisor review
+
+root + both independently reviewed continuation units
+    └── BGD-V2-INT (same-affinity terminal Supervisor; verification, PR and checks)
+```
+
+BGD-V2-VERIFY and BGD-V2-MON have disjoint writable surfaces and no prerequisite edge
+between them. BGD-V2-INT is serialized after both because it must cite reviewed acceptance,
+report PR/check milestones, emit the terminal brief and stop the reporter.
+
+## BGD-V2-VERIFY — independent candidate and inherited-baseline evidence
+
+- **Source:** v2 Decisions 5, 8–10; Deliverables 1–9; AC 1–14; Testing Standard;
+  active requirement coverage above.
+- **Outcome:** Independently inspect the actual integrated candidate and commit one concise
+  v2 evidence record. Reproduce the accepted documentation/website behavior and prove the
+  complete HEAD scanner result equals current `origin/main` and consists exclusively of
+  `absolute-user-home` and `operator-desktop-layout` for immutable
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`, with an identical historical
+  blob. Record the inherited local nonzero honestly. Do not change behavior to manufacture
+  a pass; return any acceptance defect for Supervisor rework/decomposition.
+- **Inputs:** active v2 contract/digest and continuation base above; integrated merge
+  `860176e1db8c6c24d937f38d67b9a9c1f190f9b4`; recovered reviewed head
+  `ad892a7539ecc619bf00b9d4be0a1b8a2602f1a7`; current read-only `origin/main` after fetch;
+  historical v1 unit evidence and actual source/tests. The contract and prior evidence are
+  leads; inspect the candidate and execute the oracles.
+- **Boundaries:** writable only
+  `specs/beginner-first-website-docs/evidence/BGD-V2-VERIFY.md`. Preserve all
+  `.aether/objective-contracts/**`, `scripts/check_public_artifacts.py`,
+  `tests/test_public_artifacts.py`, `.github/workflows/**`, `docs/**`, `website/**`, Python
+  runtime/source and every other path. No untracked generated output is evidence. Do not
+  weaken, skip, exempt or normalize substantive scanner findings.
+- **Judgement:** evidence organization, nondeterministic temporary-path normalization and
+  proportionate retry of an environment-only failure are local choices. A behavior,
+  truthfulness, accessibility, interface, public-artifact-set or authority failure returns
+  to Supervisor; it is not writable under this unit.
+- **Verification:** from clean generated state run the contract's full website sequence:
+  `npm ci`, normal build/check/unit/e2e, Pages-mode build and verifier, restored normal
+  build, capture generation and representative desktop/mobile inspection. Run root
+  documentation checks, focused pytest, provider-free isolated-HOME parser probes and
+  `git diff --check`. Execute the public-artifact test and underlying scanner on both HEAD
+  and current `origin/main`, compare normalized complete finding sets, and compare the
+  historical blob IDs. Re-run candidate checks after adding the evidence record. Record
+  exact commands, candidate revision, exit codes, interpretations and any visual limit.
+- **Dependencies:** active v2 decomposition root only. Independent of BGD-V2-MON; it uses
+  the repository worktree while the monitor has no repository writable surface.
+- **Completion:** one evidence-only local commit, unit compatibility `none`, complete
+  requirement mapping and remaining risks, then same-card Supervisor review. No push, PR,
+  issue mutation, merge, deploy, release, credentials/settings or provider invocation.
+
+## BGD-V2-MON — active-flow Telegram reporter reconciliation
+
+- **Source:** Owner Intent; reporting In Scope item; Deliverable 10; AC 12 and 14;
+  Authority and Stop Conditions; active requirement coverage above.
+- **Outcome:** Inspect existing objective-specific local reporting state and reuse or update
+  exactly one reporter for the active v2 board flow. Reports are change-driven and cover
+  meaningful unit/review/rework/blocker and PR/check/terminal transitions, distinguish
+  observed state from inference, omit private identifiers/paths/logs/secrets and stop after
+  the terminal outcome. Do not duplicate an existing usable reporter or resend stale
+  milestones as new events.
+- **Inputs:** native parent/children state, the already provisioned Telegram destination,
+  existing objective-specific scheduler state and the terminal card identity supplied by
+  Supervisor before root completion. Nothing in local state becomes public evidence.
+- **Boundaries:** writable local objective-specific scheduler/job state only. No repository
+  file, profile/provider/model/credential/configuration setting, gateway, destination,
+  unrelated job or remote repository state may change.
+- **Judgement:** supported local polling cadence and concise change-state representation.
+  If an already provisioned destination cannot be reused without credentials/settings or
+  a protected effect beyond the authorized progress sends, stop with capability evidence.
+- **Verification:** sanitized supported job readback proves one active objective reporter,
+  correct active-flow/terminal coverage, change-only behavior, safe message construction
+  and terminal-stop condition; `git status --porcelain` remains empty. Report a delivery
+  only when the supported surface reports it.
+- **Dependencies:** active v2 decomposition root only. Independent of BGD-V2-VERIFY.
+- **Completion:** durable private/native reporter reference in the board handoff, unit
+  compatibility `none`, no repository commit, then same-card Supervisor review. No PR,
+  merge, deploy, release, credential/settings change or provider invocation.
+
+## BGD-V2-INT — terminal verification, PR/check closeout, no merge or deployment
+
+- **Source:** all v2 Deliverables; AC 1–14; Testing Standard and Stop Conditions; active
+  requirement coverage above; Aether Canonical Git/GitHub closeout and SemVer procedures.
+- **Outcome:** Consume the accepted integrated implementation plus both independently
+  reviewed continuation units. Verify current `origin/main` is compatible, preserve all
+  accepted commits without squash/amend/rebase/history rewrite, run complete integrated
+  acceptance, normally push the objective branch, open exactly one PR to `main` linked to
+  #368, obtain green required checks and reconcile only objective-caused failures through
+  bounded ordinary rework. Do not merge because `main` triggers Pages deployment. Leave
+  #368 open, emit the terminal progress brief, stop the reporter and report durable evidence.
+- **Inputs:** active v2 root handoff; reviewed BGD-V2-VERIFY evidence commit and compatibility
+  result; reviewed BGD-V2-MON private handoff; integrated merge/recovered head above; latest
+  read-only remote/default-branch, workflow, issue and PR state. Revalidate every state;
+  prior prose is not proof.
+- **Boundaries:** the shared objective integration worktree; terminal evidence under
+  `specs/beginner-first-website-docs/evidence/`; PR/issue metadata strictly needed for
+  authorized closeout; local objective reporter stop; mechanically implied conflict,
+  import, path, build/config or reference glue only. Any behavior/truth/interface/
+  accessibility repair returns to Implementer same-card rework. Preserve unrelated,
+  concurrent, active, blocked, review-active and unmerged state.
+- **Judgement:** exact portable evidence layout, PR title/body wording, and mechanically
+  implied integration glue. A target-base semantic collision, unexpected scanner set,
+  historical-blob mismatch, behavior repair, missing authority or protected denial is a
+  stop/rework condition, not permission to widen scope.
+- **Verification:** repeat the full contract website/root/parser/differential-scanner gates
+  on the integrated candidate; verify root and website `AGENTS.md` coherence; audit intended
+  paths/privacy; inspect actual diff/history; normal push and one linked PR; wait for every
+  required check to be green without bypass. Verify PR remains open/unmerged, Pages was not
+  triggered by this objective, #368 remains linked/open, reporter sent the supported terminal
+  brief and stopped, and no tag/release/package/deployment/merge occurred. Audit residue but
+  do not delete the active unmerged PR branch/worktree or unrelated state. Every omitted
+  closeout step gets a concrete non-applicability reason.
+- **Dependencies:** active v2 root and both completed same-card review lanes. The terminal
+  card is not a substitute for either independent review.
+- **Completion:** terminal board/Git/GitHub/check/test/reporter/residue evidence with one
+  reviewed open PR and green required checks. Keep aggregate conclusions separate:
+  `release_impact=patch`; `release_action=defer`; `release_channel=none`. Merge, issue
+  closure, Pages deployment, release publication and cleanup of the unmerged objective
+  branch/worktree remain deferred because their prerequisites/authority are absent.
+
+## Historical v1 receipt and decomposition
 
 | Check | Observed result |
 | --- | --- |
