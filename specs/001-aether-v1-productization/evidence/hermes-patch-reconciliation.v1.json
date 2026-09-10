@@ -917,9 +917,9 @@
           },
           {
             "checksum_status": "passed",
-            "computed_sha256": "5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945",
+            "computed_sha256": "6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418",
             "kind": "patch",
-            "ledger_sha256": "5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945",
+            "ledger_sha256": "6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418",
             "parse_status": "passed",
             "reference": "patches/hermes/HLP-226c-cross-board-project-inheritance.patch",
             "result": "passed"

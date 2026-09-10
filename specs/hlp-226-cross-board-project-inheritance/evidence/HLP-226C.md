@@ -70,8 +70,9 @@ file passed 3/3 in isolation; `compileall`, Ruff check/format on touched scope a
 | --- | --- |
 | Component | `HLP-226c` |
 | Path | `patches/hermes/HLP-226c-cross-board-project-inheritance.patch` |
-| SHA-256 | `5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945` |
+| SHA-256 | `6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418` |
 | Size | 861 lines; `git apply --numstat` per file `100/0`, `699/0`, `6/0` (805 insertions, 0 deletions) |
+| Corpus whitespace gate | the three whitespace-only context lines of the raw `git diff` text were normalized to empty context lines so the recorded artifact passes the repository's own `git diff --check` / `git diff-tree --check` gate; no added or removed line was touched, and the normalized patch re-passed `git apply --check` and reconstructed all three candidate files to the identical SHA-256 values |
 | Generation | file-scoped `git diff 415056fee527c5a2302370bd6dba56f84b9a4202 7980bbf1f9f75efdcbee2196ae910bb77138541d -- hermes_cli/kanban_db.py tools/kanban_tools.py tests/tools/test_kanban_cross_board_project.py`, run in the maintained-fork clone at the exact base and accepted candidate |
 | Portability | repo-relative Hermes paths only; no operator path, home directory, credential or raw runtime state in the patch text |
 | Preservation | the pre-existing `patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch` is byte-identical to the reviewed revision (SHA-256 `a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040`), and it was not collapsed into or replaced by the new artifact |
@@ -145,4 +146,3 @@ push, pull request, merge or issue mutation.
   the inspected upstream revision, which does not contain the required behavior; the generated
   reconciliation aggregate and preflight will need one more regeneration by H226C-INT once the
   durable ledger records the HLP-226c SHA-256.
-

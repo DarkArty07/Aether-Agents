@@ -4,8 +4,8 @@ index dadfbcd7da..00bb50193c 100644
 +++ b/hermes_cli/kanban_db.py
 @@ -3653,6 +3653,87 @@ def _canonical_assignee(assignee: Optional[str]) -> Optional[str]:
      return normalize_profile_name(assignee)
- 
- 
+
+
 +def _project_from_board_binding(
 +    source_task: Optional["Task"],
 +    project_id: Optional[str],
@@ -127,7 +127,7 @@ index dadfbcd7da..00bb50193c 100644
 +                project_obj = _project_from_board_binding(
 +                    source_task, project_id, board=board
 +                )
- 
+
          if project_obj is None:
              # A project id/slug that doesn't resolve must not crash task
 diff --git a/tests/tools/test_kanban_cross_board_project.py b/tests/tools/test_kanban_cross_board_project.py
