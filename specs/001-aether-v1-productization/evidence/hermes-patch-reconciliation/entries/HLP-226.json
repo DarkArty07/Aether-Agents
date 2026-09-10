@@ -3,10 +3,11 @@
   "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
   "components": [
     "HLP-226",
-    "HLP-226b"
+    "HLP-226b",
+    "HLP-226c"
   ],
-  "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root.",
-  "local_status": "ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL",
+  "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root. A current-board Project/affinity root whose shared worktree was created for a prior board also keeps its Project when the leaf names no task in this board: recovery requires the exact source Project and affinity, exact board metadata binding the same Project to the repository containing the shared path, and exactly one opaque leaf under <board default_workdir>/.worktrees/, while every board/path/Project/affinity mismatch fails closed before an invalid child is persisted.",
+  "local_status": "ACTIVE_LOCAL + HLP-226b + HLP-226c / UPSTREAM_PARTIAL",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
@@ -48,7 +49,7 @@
     ]
   },
   "retirement_gate": {
-    "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source.",
+    "summary": "With an empty worker Projects registry, verify both a direct worktree source and an affinity-terminal dir source preserve the canonical Project, materialize a real distinct worktree and branch, reject a conflicting Project, and reject a noncanonical dir source; then verify that a current-board Project/affinity root sharing a prior-board worktree leaf still recovers the board-bound Project/repository identity in the new terminal and its cross-profile worktree child, while every board/path/Project/affinity mismatch fails before invalid persistence.",
     "status": "failed",
     "evidence": [
       {
@@ -60,6 +61,11 @@
         "kind": "source",
         "reference": "https://github.com/NousResearch/hermes-agent/pull/89363",
         "result": "Commit b9b5481d6236edb3ec8aae32cc4b5c661569b872 covers source-task routing; open PR 89363 contains the still-missing explicit-worktree inheritance and conflict check."
+      },
+      {
+        "kind": "test",
+        "reference": "maintained-fork baseline 415056fee527c5a2302370bd6dba56f84b9a4202 versus reviewed candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d, tests/tools/test_kanban_cross_board_project.py",
+        "result": "The identical 21-test module bytes used at both revisions failed 3 of 21 tests on the unchanged baseline with 'kanban_create: session-affinity tasks require a canonical project_id' (cross-board recurrence, materialized two-step E2E, explicit target board versus process-current decoy board) and passed 21 of 21 on the reviewed candidate; the minimum affected run passed 132 tests with 1 Windows-only skip. Results recorded by the HF-226C fork producer and independently reproduced by the same-card Supervisor review at the exact candidate revision; this Aether unit reconstructed the exact candidate bytes and did not re-run the fork suites."
       },
       {
         "kind": "artifact",
@@ -89,15 +95,35 @@
         "kind": "reconstruction",
         "reference": "full HLP-226b patch byte reconstruction against the documented backup input",
         "result": "unavailable"
+      },
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-226c-cross-board-project-inheritance.patch",
+        "result": "passed",
+        "ledger_sha256": "5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945",
+        "computed_sha256": "5532b3461c3563aadadceff7caad585d5bffd78cb7783f243746be6071bba945",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "byte-for-byte portable patch reconstruction of the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 (git apply --check plus file SHA-256 and Git blob equality for all three changed files)",
+        "result": "passed"
       }
     ],
-    "blocker": "The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence."
+    "blocker": "The documented private backup reconstruction input was approval-denied under #264 and is neither rerun, replaced, nor inferred, so the HLP-226b reconstruction and the record-level artifact verification remain unavailable; the HLP-226c patch checksum, parser control, and byte-for-byte reconstruction against maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 passed and do not establish HLP-226b byte equivalence. No reconstruction has been performed against the inspected upstream revision, which does not contain the required behavior."
   },
   "retirement_recommendation": "retain",
   "blocking_uncertainty": [
     "The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.",
     "Issue #226 is reopened, and the completing upstream PR remains open.",
-    "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded."
+    "The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.",
+    "HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7."
   ],
-  "summary": "Retain HLP-226 and HLP-226b. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable."
+  "summary": "Retain HLP-226, HLP-226b and HLP-226c. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable. The new portable HLP-226c patch is bound by digest and reconstructs the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d byte for byte from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 with git apply --check and all three changed files matching on file SHA-256 and Git blob identity."
 }

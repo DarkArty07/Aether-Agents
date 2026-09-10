@@ -114,6 +114,7 @@ jobs:
           INTEGRATIONS.md
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
           patches/hermes/HLP-280-bounded-flow-recovery.patch

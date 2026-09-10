@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-07T03:39:57Z`
+Observation timestamp: `2026-09-10T17:04:30Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c052209e5c9bf`
+Source ledger SHA-256: `04df9bc957958e0c62fba7f9d9877850db475b62e32f9218d02b08703741774d`
 
 ## Remaining local guarantees
 
@@ -16,12 +16,16 @@ Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c0522
 - `HLP-204`: Retain HLP-204. The target retains only the uniform cap, while the required asymmetric override interface remains solely in an open upstream PR.
 - `HLP-209`: The exact upstream target contains and behaviorally passes the HLP-209 directory exemption, but the recorded runtime retirement gate remains incomplete.
 - `HLP-211`: Retain both HLP-211 and HLP-211b. The exact public snapshot lacks prerequisite runtime interfaces, and the linked open PR is a narrower same-task resumption change. The tracked HLP-211b patch checksum, parser check, and read-only effective-checkout byte reconstruction passed; only the ignored backup input remains unavailable.
-- `HLP-226`: Retain HLP-226 and HLP-226b. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable.
+- `HLP-226`: Retain HLP-226, HLP-226b and HLP-226c. Exact upstream lacks the affinity-terminal Project-source variant as well as the explicit-worktree and conflicting-Project behavior. The portable HLP-226b patch checksum and parser controls pass, but the documented reconstruction input and overall artifact verification remain unavailable. The new portable HLP-226c patch is bound by digest and reconstructs the reviewed fork candidate 7980bbf1f9f75efdcbee2196ae910bb77138541d byte for byte from maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 with git apply --check and all three changed files matching on file SHA-256 and Git blob identity.
 - `HLP-246`: Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.
 - `HLP-247`: Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.
 - `HLP-262`: Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.
 - `HLP-280`: Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.
+- `HLP-305`: Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.
+- `HLP-310`: Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.
 - `HLP-335`: Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.
+- `HLP-354`: Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.
+- `HLP-369`: Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.
 
 ## Qualified upstream equivalents
 
@@ -51,11 +55,12 @@ Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c0522
 - `HLP-211` (uncertainty): PR 75951 remains open and only covers same-task session respawn, not the combined HLP-211/HLP-211b behavior.
 - `HLP-211` (uncertainty): No linked upstream issue or PR covers HLP-211b terminal-controller flow routing.
 - `HLP-211` (uncertainty): The full live retirement canary remains unexecuted under this unit's no-spend and no-runtime-mutation constraints.
-- `HLP-226` (artifact): The documented private backup existence check was approval-denied under #264 and is neither rerun, replaced, nor inferred. The reconstruction input and full reconstruction remain unavailable; checksum and parser controls do not establish byte equivalence.
+- `HLP-226` (artifact): The documented private backup reconstruction input was approval-denied under #264 and is neither rerun, replaced, nor inferred, so the HLP-226b reconstruction and the record-level artifact verification remain unavailable; the HLP-226c patch checksum, parser control, and byte-for-byte reconstruction against maintained fork base 415056fee527c5a2302370bd6dba56f84b9a4202 passed and do not establish HLP-226b byte equivalence. No reconstruction has been performed against the inspected upstream revision, which does not contain the required behavior.
 - `HLP-226` (retirement_gate): Retirement gate status is failed.
 - `HLP-226` (uncertainty): The exact target is only partially equivalent: it retains omitted-workspace cross-profile routing but lacks the explicit-worktree, conflict-rejection, and affinity-terminal dir-source behavior required for retirement.
 - `HLP-226` (uncertainty): Issue #226 is reopened, and the completing upstream PR remains open.
 - `HLP-226` (uncertainty): The documented private backup reconstruction input is unavailable after its approval-denied existence check; no replacement or inferred reconstruction is recorded.
+- `HLP-226` (uncertainty): HLP-226c remains a downstream component: the objective's pre-dispatch inspection at applied upstream revision 67764dc0863349a384c16425e73ee8571f3a94b7 recorded in specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md found no equivalent shared-dir/board-bound recovery, and no recurrence-level upstream inspection exists at this record's inspected revision 4f22543509d1b91dc45bcb369447126c5eb14fb7.
 - `HLP-246` (retirement_gate): Retirement gate status is failed.
 - `HLP-246` (uncertainty): No linked upstream issue or PR was located for equivalent attachment identity behavior.
 - `HLP-246` (uncertainty): A future upstream change must still pass the full pre-transport, readback, legacy-row, and byte-for-byte tarball gate; source similarity or a merged label is insufficient.
@@ -71,10 +76,25 @@ Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c0522
 - `HLP-280` (retirement_gate): Retirement gate status is failed.
 - `HLP-280` (uncertainty): The inventory upstream lacks the affinity origin primitives.
 - `HLP-280` (uncertainty): Clean public-baseline reconstruction is not claimed; the exact local preimage is retained privately.
+- `HLP-305` (artifact): The exact local reconstruction passed, but the already-modified editable runtime preimages are private and are not public release artifacts. Public readers must not infer clean upstream applicability from the portable patch checksum.
+- `HLP-305` (retirement_gate): Retirement gate status is failed.
+- `HLP-305` (uncertainty): The already-running TUI and gateway have not yet reloaded the installed bytes; live activation and the real recurrence canary remain pending.
+- `HLP-305` (uncertainty): Current upstream still contains the unconditional refresh-exception interrupt and no equivalent issue or pull request was found.
+- `HLP-310` (artifact): The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.
+- `HLP-310` (retirement_gate): Retirement gate status is failed.
+- `HLP-310` (uncertainty): The inspected upstream lacks snapshot exclusions for HERMES_DELEGATED_CHILD_CONTEXT and HERMES_KANBAN_*.
+- `HLP-310` (uncertainty): Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb is downstream-only; no equivalent upstream change exists.
 - `HLP-335` (artifact): No public portable patch exists under patches/hermes. The exact dirty runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from the recorded hashes.
 - `HLP-335` (retirement_gate): Retirement gate status is failed.
 - `HLP-335` (uncertainty): Upstream PR 95199 remains open and is not an exact-revision behavioral pass of this local delta.
 - `HLP-335` (uncertainty): No public portable patch is checked into patches/hermes; reconstruction uses a private dirty preimage.
+- `HLP-354` (artifact): The documented reconstruction input is based on maintained fork base 6243e40ea6b06e85061bf3fedffaad43eed51dec rather than the historical inspected upstream revision 4f22543509d1b91dc45bcb369447126c5eb14fb7; checksum and parser controls pass without establishing full-patch upstream reconstruction.
+- `HLP-354` (retirement_gate): Retirement gate status is failed.
+- `HLP-354` (uncertainty): The inspected upstream roots new worktrees at incidental HEAD and lacks worktree_base_ref.
+- `HLP-354` (uncertainty): Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 is downstream-only; no equivalent upstream change exists.
+- `HLP-369` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.
+- `HLP-369` (retirement_gate): Retirement gate status is failed.
+- `HLP-369` (uncertainty): The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.
 
 ## Artifact integrity
 
@@ -91,7 +111,11 @@ Source ledger SHA-256: `e3e094efe428651837b2e91832af8a1bc1a9e16278d1398e740c0522
 - `HLP-247`: not_applicable
 - `HLP-262`: unavailable
 - `HLP-280`: unavailable
+- `HLP-305`: unavailable
+- `HLP-310`: unavailable
 - `HLP-335`: unavailable
+- `HLP-354`: unavailable
+- `HLP-369`: unavailable
 
 ## Safe next decisions
 
