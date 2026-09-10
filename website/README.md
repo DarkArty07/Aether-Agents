@@ -1,8 +1,8 @@
 # Aether Agents — Website
 
-Status: local review candidate for the BGD-WEB documentation unit in an isolated worktree.
-Not merged, pushed, published or deployed; the implementation and evidence are committed
-locally for same-card Supervisor review.
+Status: local v2 objective candidate. BGD-WEB has been independently approved and locally
+integrated in this worktree. This checkout is not evidence of a pushed branch, pull request,
+merge, deployment, public installation or release.
 
 The first polish pass removes visible sketch numbering, refines supporting Spanish,
 adds the @DarkArty07 profile link and replaces the flattened knowledge graph with a
@@ -17,8 +17,9 @@ and reduced-motion settings. See [final polish plan](FINAL_POLISH_PLAN.md).
 
 Post-restart verification is complete, including repeated real browser history/cache
 restoration of graph and ambient-motion controls. The earlier owner acceptance gate is
-recorded in [VERIFICATION.md](VERIFICATION.md); this documentation candidate remains a
-local worktree subject to same-card Supervisor review.
+recorded in [VERIFICATION.md](VERIFICATION.md) as historical pre-integration evidence.
+The independently reviewed BGD-WEB implementation is included in this local v2 candidate;
+remaining v2 verification and terminal closeout are separate.
 
 An animated one-page site in Spanish and English with the approved Greek/modern,
 editorial tech-noir identity and Catppuccin Mocha palette. A separate documentation
@@ -53,7 +54,10 @@ After shutting down/restarting the machine, run `npm run preview` again; preview
 local development process, not an autostart service. If it reports a running server,
 open the existing address rather than starting a duplicate. Stop only the website
 preview you started or select an explicit alternate port; never stop an unrelated
-process. There is no public deployment workflow.
+process. The repository includes a GitHub Pages workflow (`.github/workflows/pages.yml`)
+configured to build and deploy on qualifying `main` changes; this loopback preview does
+not deploy. Current v2 authority defers merge and Pages deployment, so no public
+deployment is claimed here.
 
 ## What is implemented
 

@@ -14,6 +14,24 @@ const homepage = await doc('index.html');
 const repository = execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim();
 const trackedDocs = execFileSync('git',['ls-files','--','docs'],{cwd:repository,encoding:'utf8'}).split('\n').filter(file => file.endsWith('.md'));
 
+test('README reports the local v2 status and Pages deployment boundary', async () => {
+  const readme = await readFile(path.join(repository,'website','README.md'),'utf8');
+  assert.match(readme,/Status: local v2 objective candidate/);
+  assert.match(normalize(readme),/BGD-WEB has been independently approved and locally integrated in this worktree/);
+  assert.doesNotMatch(readme,/local review candidate|same-card Supervisor review|There is no public deployment workflow/);
+  assert.match(readme,/GitHub Pages workflow/);
+  assert.match(readme,/configured to build and deploy on qualifying `main` changes/);
+  assert.match(normalize(readme),/this loopback preview does not deploy/);
+  assert.match(readme,/Current v2 authority defers merge and Pages deployment/);
+
+  const workflow = await readFile(path.join(repository,'.github','workflows','pages.yml'),'utf8');
+  assert.ok(workflow.includes('branches: [main]'));
+  assert.ok(workflow.includes('uses: actions/deploy-pages@v4'));
+
+  const contract = await readFile(path.join(repository,'.aether','objective-contracts','oc_844dfc12880ee967','v2.md'),'utf8');
+  assert.match(contract,/Merge is deferred because this repository's `main` push triggers the GitHub Pages deploy job/);
+});
+
 test('eight ordered sections and only the owner-selected opening, graph decoration and finale images', () => {
   const sections = [...homepage.querySelectorAll('main section[data-section]')];
   assert.deepEqual(sections.map(s=>s.dataset.section),['00','01','02','03','04','05','06','07']);
