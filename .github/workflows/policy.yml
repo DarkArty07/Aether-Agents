@@ -85,6 +85,7 @@ jobs:
           docs/capabilities.toml
           docs/getting-started.md
           docs/guides/execution.md
+          docs/guides/first-objective.md
           docs/guides/lifecycle.md
           docs/guides/objective-contracts.md
           docs/guides/observation.md
@@ -94,9 +95,11 @@ jobs:
           docs/product-boundary.md
           docs/reference/capabilities.md
           docs/reference/cli.md
+          docs/reference/glossary.md
           docs/reference/limitations-and-troubleshooting.md
           docs/reference/plugins-and-tools.md
           docs/roles-and-authority.md
+          docs/start-here.md
           .github/dependabot.yml
           .github/ISSUE_TEMPLATE/bug_report.md
           .github/ISSUE_TEMPLATE/feature_request.md
@@ -265,6 +268,7 @@ jobs:
           tests/observation_helpers.py
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
+          tests/test_beginner_documentation.py
           tests/test_contract_quality_documents.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
@@ -371,6 +375,7 @@ jobs:
           website/src/styles/global.css
           website/src/styles/knowledge.css
           website/tests/browser/atmosphere.spec.ts
+          website/tests/browser/docs.spec.ts
           website/tests/browser/history.spec.ts
           website/tests/browser/polish.spec.ts
           website/tests/browser/site.spec.ts

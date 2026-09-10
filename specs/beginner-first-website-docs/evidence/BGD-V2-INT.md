@@ -22,9 +22,12 @@ package publication, provider-backed execution or a public installation.
   was used.
 
 The canonical Objective Contracts, public-artifact scanner and its test are unchanged from
-the v2 continuation base. The independently reviewed local progress reporter remains
-private operational state; no destination, job, board, session or routing identifier is
-recorded here.
+the v2 continuation base. During GitHub closeout, the existing policy workflow's exact
+non-spec manifest required one bounded integration correction for the five objective-owned
+reader/test paths; that workflow-only repair is recorded below and changes no executable
+reader behavior or acceptance oracle. The independently reviewed local progress reporter
+remains private operational state; no destination, job, board, session or routing identifier
+is recorded here.
 
 ## Independent review consumed
 
@@ -99,9 +102,19 @@ The authorized target is one normal pull request to `main`, linked to #368, with
 protection-required checks green. The PR must remain open and unmerged because a qualifying
 `main` push triggers `.github/workflows/pages.yml`, including `actions/deploy-pages@v4`.
 
-At this local-evidence checkpoint the branch has not yet been pushed and the pull request has
-not yet been opened. The final section will be updated after the normal push, PR creation and
-required-check observation. Merge, issue closure and Pages deployment remain outside current
+The branch was normally pushed and pull request #375 was opened against `main`, linked to
+#368 without auto-closing it. Its first required policy matrix failed immediately because
+the workflow's exact non-spec manifest did not yet list the five objective-owned additions:
+`docs/start-here.md`, `docs/guides/first-objective.md`,
+`docs/reference/glossary.md`, `tests/test_beginner_documentation.py` and
+`website/tests/browser/docs.spec.ts`. The three Python jobs reported the same deterministic
+manifest defect. Terminal integration added exactly those five entries to the existing
+manifest as mechanically implied build/config glue; local manifest equality, workflow YAML,
+documentation checks, focused tests, whitespace and the exact scanner baseline were then
+re-verified before a normal follow-up push. No check was bypassed or weakened.
+
+The final required-check state and open/unmerged boundary are recorded after the corrected
+PR revision completes. Merge, issue closure and Pages deployment remain outside current
 authority.
 
 ## Compatibility and release conclusions
