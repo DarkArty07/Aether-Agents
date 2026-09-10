@@ -171,6 +171,38 @@ def _native_preflight(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime_module, "_module_problems", lambda: [])
 
 
+class _FrozenRuntimeDateTime(datetime):
+    """A ``datetime`` whose ``now`` is the fixed store anchor.
+
+    The reporter/pre-check hook paths read the wall clock themselves
+    (``_read_handoff(require_fresh=True)`` has no injectable clock), so a regression that
+    seeds its store on ``ANCHOR`` and writes a six-hour narration handoff would start
+    failing as soon as the host clock passed ``ANCHOR + NARRATION_LEASE_TTL_SECONDS``.
+    Pinning the module clock keeps the store and the runtime on one deterministic
+    instant; the real ``expires <= now`` fence, the six-hour TTL and every
+    ownership/session/cutoff/job check still run exactly as production runs them.
+    """
+
+    @classmethod
+    def now(cls, tz: Any = None) -> datetime:
+        if tz is None:
+            return ANCHOR.replace(tzinfo=None)
+        return ANCHOR.astimezone(tz)
+
+
+@pytest.fixture
+def frozen_runtime_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run one regression on the deterministic runtime clock of its own store.
+
+    Only the regressions that read a store-anchored handoff through a direct runner
+    path take this fixture: the spool-pruning regressions compare real file mtimes
+    against the runtime clock, so a frozen clock would make them depend on the host
+    date instead of staying consistent with the filesystem they read.
+    """
+
+    monkeypatch.setattr(runtime_module, "datetime", _FrozenRuntimeDateTime)
+
+
 def _store(
     tmp_path: Path, *, clock: Any | None = None, configured: bool = True, enabled: bool = True
 ) -> MonitorStore:
@@ -494,6 +526,7 @@ def test_precheck_idle_resolves_the_report_and_skips_inference(tmp_path: Path) -
     assert collector.calls, "one collection still happened before the idle gate"
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_precheck_ongoing_work_wakes_with_bounded_context_and_pending_lease(tmp_path: Path) -> None:
     store = _store(tmp_path)
     collector = _FakeCollector(store, items=[_item()])
@@ -627,6 +660,7 @@ def test_precheck_resumes_an_unfinished_report_instead_of_collecting_again(
     assert len(store.list_snapshots()) == 1
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_precheck_waits_while_a_live_narration_owns_the_report(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
@@ -757,6 +791,7 @@ def test_reporter_context_requires_the_exact_owned_cron_binding(tmp_path: Path) 
     )
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_post_llm_call_persists_only_a_validated_narrator_result(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
@@ -796,6 +831,7 @@ def test_post_llm_call_persists_only_a_validated_narrator_result(tmp_path: Path)
     assert store.get_narrative("report-alpha").attempt_status == "accepted"
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_post_llm_call_rejects_malformed_or_fabricated_narratives(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
@@ -825,6 +861,7 @@ def test_post_llm_call_rejects_malformed_or_fabricated_narratives(tmp_path: Path
     assert narrative.structured_result is None
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confirm(
     tmp_path: Path,
 ) -> None:
@@ -884,6 +921,7 @@ def test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confir
     assert repeat.calls == []
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_session_end_sends_only_a_notice_for_rejected_narration(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(
@@ -1392,7 +1430,45 @@ def test_configured_owner_language_prefers_plugin_settings(tmp_path: Path, monke
 # Cross-process pending-narration handoff
 # ---------------------------------------------------------------------------
 
+#: Deterministic pre-check child probe.  It runs the real packaged pre-check entry point
+#: in a separate process against the disposable state root; only the child's clock is
+#: controlled.  The parent and the child must share the fixed anchor, otherwise the
+#: six-hour narration handoff written by one process would expire against the other
+#: process's clock and the regression would flip with the host date.
+_PRE_CHECK_CHILD_DRIVER = textwrap.dedent(
+    """
+    from datetime import datetime
 
+    from aether_agents.monitor import runtime as monitor_runtime
+
+    ANCHOR = datetime.fromisoformat({anchor!r})
+
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return ANCHOR.replace(tzinfo=None)
+            return ANCHOR.astimezone(tz)
+
+
+    class _FrozenStore(monitor_runtime.MonitorStore):
+        def __init__(self, *args, **kwargs):
+            kwargs.setdefault("clock", lambda: ANCHOR)
+            super().__init__(*args, **kwargs)
+
+
+    monitor_runtime.datetime = _FrozenDateTime
+    monitor_runtime.MonitorStore = _FrozenStore
+    # The imported-runtime preflight has its own release-locked regression; this probe
+    # exercises the cross-process handoff mechanics themselves.
+    monitor_runtime._module_problems = lambda: []
+    raise SystemExit(monitor_runtime.main_precheck())
+    """
+).format(anchor=_stamp(ANCHOR))
+
+
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_precheck_child_handoff_reaches_the_exact_reporter(tmp_path: Path) -> None:
     """A real pre-check child process hands its pending lease to the reporter session.
 
@@ -1416,19 +1492,7 @@ def test_precheck_child_handoff_reaches_the_exact_reporter(tmp_path: Path) -> No
     cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
 
     driver = tmp_path / "precheck-child.py"
-    driver.write_text(
-        textwrap.dedent(
-            """
-            from aether_agents.monitor import runtime as monitor_runtime
-
-            # The imported-runtime preflight has its own release-locked regression;
-            # this probe exercises the cross-process handoff mechanics themselves.
-            monitor_runtime._module_problems = lambda: []
-            raise SystemExit(monitor_runtime.main_precheck())
-            """
-        ),
-        encoding="utf-8",
-    )
+    driver.write_text(_PRE_CHECK_CHILD_DRIVER, encoding="utf-8")
     completed = subprocess.run(
         [sys.executable, str(driver)],
         cwd=Path(__file__).parents[1],
@@ -1453,6 +1517,15 @@ def test_precheck_child_handoff_reaches_the_exact_reporter(tmp_path: Path) -> No
         "job_id": JOB_ID,
     }
     assert "BEGIN AETHER TELEGRAM MONITOR SNAPSHOT" in completed.stdout
+
+    # The child ran on the same controlled clock as this test: its handoff expires one
+    # full narration TTL after the shared anchor, never relative to the host date.
+    child_handoff = json.loads(
+        runtime_module._handoff_path(store, "report-alpha").read_text(encoding="utf-8")
+    )
+    assert child_handoff["expires_at_utc"] == _stamp(
+        ANCHOR + timedelta(seconds=NARRATION_LEASE_TTL_SECONDS)
+    )
 
     # The child is gone; the handoff is the only cross-process transfer evidence.
     parent = MonitorStore(state_root=state_root, clock=_STORE_CLOCK)
@@ -1495,6 +1568,7 @@ def test_precheck_child_handoff_reaches_the_exact_reporter(tmp_path: Path) -> No
     assert repeat.calls == []
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_two_real_precheck_children_wake_exactly_one_narration(tmp_path: Path) -> None:
     """A live handoff is a real cross-process pre-inference fence.
 
@@ -1519,19 +1593,7 @@ def test_two_real_precheck_children_wake_exactly_one_narration(tmp_path: Path) -
     cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
 
     driver = tmp_path / "precheck-child.py"
-    driver.write_text(
-        textwrap.dedent(
-            """
-            from aether_agents.monitor import runtime as monitor_runtime
-
-            # The imported-runtime preflight has its own release-locked regression;
-            # this probe exercises the cross-process fence mechanics themselves.
-            monitor_runtime._module_problems = lambda: []
-            raise SystemExit(monitor_runtime.main_precheck())
-            """
-        ),
-        encoding="utf-8",
-    )
+    driver.write_text(_PRE_CHECK_CHILD_DRIVER, encoding="utf-8")
     environment = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
@@ -1557,6 +1619,10 @@ def test_two_real_precheck_children_wake_exactly_one_narration(tmp_path: Path) -
     assert first["wakeAgent"] is True and first["reason"] == "pending-report"
     handoff_path = runtime_module._handoff_path(store, "report-alpha")
     live_bytes = handoff_path.read_bytes()
+    # The first child ran on the same controlled clock as this test, so its handoff is
+    # live purely because of the anchor, never because of the host date.
+    live = json.loads(live_bytes)
+    assert live["expires_at_utc"] == _stamp(ANCHOR + timedelta(seconds=NARRATION_LEASE_TTL_SECONDS))
 
     # A second real child sees the live handoff and must not wake a second narration:
     # it neither rewrites the transfer nor recovers the report's lease.
@@ -1600,6 +1666,53 @@ def test_two_real_precheck_children_wake_exactly_one_narration(tmp_path: Path) -
     assert parent.get_snapshot("report-alpha").resolved_at_utc is not None
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
+def test_read_handoff_freshness_boundary_is_exclusive_at_expiry(tmp_path: Path) -> None:
+    """``expires > now`` is the freshness fence: equality with ``now`` is already stale.
+
+    The runner paths read the wall clock themselves, so this regression pins the exact
+    comparison on both sides of the boundary: through an explicit instant and through
+    the controlled default clock those paths use.
+    """
+
+    store = _store(tmp_path)
+    _seed_report(store, narrative_status="pending")
+    cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
+
+    def write_handoff(expires: datetime) -> None:
+        assert runtime_module._write_handoff(
+            store,
+            report_id="report-alpha",
+            cutoff_utc=cutoff_text,
+            job_id=JOB_ID,
+            lease=SimpleNamespace(
+                token="boundary-token",
+                acquired_at_utc=_stamp(ANCHOR),
+                expires_at_utc=_stamp(expires),
+            ),
+            holder="precheck",
+        )
+
+    # At the exact expiry instant the handoff is stale: `expires <= now` fails closed.
+    write_handoff(ANCHOR)
+    assert runtime_module._read_handoff(store, "report-alpha", now=ANCHOR) is None
+    assert runtime_module._read_handoff(store, "report-alpha") is None
+
+    # One microsecond of remaining life is fresh, for an explicit instant and for the
+    # module clock the runner paths read.
+    write_handoff(ANCHOR + timedelta(microseconds=1))
+    assert runtime_module._read_handoff(store, "report-alpha", now=ANCHOR) is not None
+    assert runtime_module._read_handoff(store, "report-alpha") is not None
+    assert (
+        runtime_module._read_handoff(store, "report-alpha", now=ANCHOR + timedelta(microseconds=1))
+        is None
+    )
+
+    # The default-clock reads above ran at the store anchor, not at the host time.
+    assert runtime_module.datetime.now(UTC) == ANCHOR
+
+
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_reporter_snapshot_requires_the_exact_live_handoff(tmp_path: Path) -> None:
     """The reporter read path validates report, cutoff, job, holder and claimed session."""
 
@@ -1685,6 +1798,7 @@ def test_reporter_snapshot_requires_the_exact_live_handoff(tmp_path: Path) -> No
     assert snapshot["report_id"] == "report-alpha"
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_reporter_requires_the_exact_precheck_handoff(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
@@ -1763,6 +1877,7 @@ def test_reporter_requires_the_exact_precheck_handoff(tmp_path: Path) -> None:
     assert store.get_narrative("report-alpha").attempt_status == "accepted"
 
 
+@pytest.mark.usefixtures("frozen_runtime_clock")
 def test_reporter_claim_is_fenced_to_the_exact_session(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
