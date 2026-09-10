@@ -73,6 +73,23 @@ another unit's scope. Unfinished, blocked, review-active, concurrent, or
 unrelated work is preserved. Completion evidence states what changed, what was
 actually verified, and what material risk or non-applicability remains.
 
+## Review convergence
+
+Supervisor owns convergence as well as defect detection. Repeated failure classes,
+equivalent cases exposed by successive fixes, or increasing repair complexity require
+a common-cause assessment before another piecemeal return. Review the affected mechanism
+jointly, tie findings to current obligations, and keep optional improvements out of the
+acceptance gate. A bounded implementation correction stays with Implementer; an
+unsuitable or missing material design, scope, interface, guarantee or authority decision
+returns to Morfeo, even if the contract is complete. Preserve the candidate and evidence;
+do not interrupt healthy independent work or approve because a round count was reached.
+
+The existing `supervisor-decomposition` canonical skill owns the detailed procedure and
+illustrative contrasts. This introduces no new engine, form, judge, automatic threshold,
+authority grant or weakened preservation rule. Document and loader tests establish
+instructional consistency, not observed improvement; organic adoption stays in #317.
+See R7 FR-736b for the owning requirement.
+
 ## Contract/execution procedure adoption
 
 The explicit canonical resource set includes `objective-contract-design` for Morfeo,

@@ -1,7 +1,7 @@
 ---
 name: supervisor-decomposition
 description: Use when Supervisor decomposes or reviews units.
-version: 0.1.0
+version: 0.1.1
 author: Morfeo (Aether role), Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -93,11 +93,62 @@ current limits and authority as constraints, not settings to tune during decompo
    evidence against the unit's requirements, interfaces, preservation and oracles.
    Re-run proportionate checks when required. A missing obligation is rework even if
    the summary says PASS. A unit-level success is not integrated product success.
+   Apply Review convergence below before returning repeated piecemeal corrections.
    For graphs you create, review units through the native same-card lane; issue a
    verdict only from the claimed review run. Honor a distinct pre-created review lane
    when the trusted runtime graph explicitly supplies it. The terminal integration
    card consumes reviewed units; it does not replace unit review. Integrate and close
    out under existing procedures, preserving accepted commits and release conclusions.
+
+## Review convergence
+
+Supervisor owns convergence, not only a sequence of individually valid defect reports.
+Use the existing review comments, evidence and breakdown; do not add a form, registry,
+classifier, judge, automatic approval threshold or new lifecycle.
+
+1. **Tie findings to current obligations.** For each material defect, identify the
+   requirement or preservation boundary, its reproduction and the affected mechanism.
+   Separate required corrections from optional improvements. Optional work does not
+   block acceptance; record it without adding it to the unit's scope.
+2. **Review the mechanism together.** Cover its relevant normal path, failures,
+   preservation and recovery as one bounded review, not one predictable operation per
+   return. For a receipt writer, for example, consider creation, write, refusal and
+   cleanup together. This does not require reviewing the entire repository each time.
+3. **Recognize non-convergence.** Before another piecemeal return, assess the common
+   cause when the same failure class recurs, one fix exposes an equivalent case, or
+   repair machinery grows without closing the obligation. Compare the exact candidates
+   and evidence; a round count or long runtime alone is not the diagnosis.
+4. **Return one coherent correction or a material design question.** An isolated bug,
+   or a common-cause repair that stays within the agreed design and unit boundary,
+   remains Implementer rework. If the evidence challenges an existing material design,
+   shared interface, scope, guarantee or authority decision, return it to Morfeo even
+   when the contract is complete. State the failing premise, evidence, preserved
+   requirements and the decision needed; do not silently redesign it or weaken it.
+   Suspend the failing patch-by-patch strategy, not healthy independent work. Preserve
+   the candidate and unfinished work through the native lifecycle.
+5. **Consolidate the handoff.** Give the known findings together, the common mechanism
+   when supported, and observable verification. Avoid both an open-ended instruction
+   to keep hardening and a second oversized specification inside the card.
+6. **Re-review proportionately.** Check the changed risk surface, prior mandatory
+   controls and affected regressions. Do not reopen settled unrelated areas without
+   evidence or invent universal guarantees outside the agreed boundary. A genuinely
+   new defect or introduced regression still requires its own reproduction and may
+   prevent acceptance. Never approve merely because a round budget was reached, hide
+   a failure, or remove a preservation obligation to finish sooner.
+
+### Review contrasts (illustrative, not behavioral evidence)
+
+| Case | Appropriate response |
+| --- | --- |
+| Isolated implementation defect within a settled interface | Return the bounded correction and its verification to Implementer. |
+| Repeated failures expose an unsuitable shared-state isolation design | Consolidate the common cause and return the material design question to Morfeo. |
+| Unrelated optional refactor suggested during review | Record it separately; do not block the existing acceptance. |
+| A later patch introduces a new real preservation regression | Reproduce and return it; consolidation is not immunity from further review. |
+
+Document/loading tests can check that this procedure exists and remains consistent.
+They cannot prove that a model follows it. Observe actual authorized work through the
+existing adoption tracker; do not restart a retired synthetic campaign or fabricate a
+speedup or behavioral qualification result.
 
 ## Compact unit delivery (template, not another schema)
 
@@ -153,6 +204,8 @@ Actual overlap still needs run evidence; this table demonstrates only graph reas
 - Delaying all fan-out while personally implementing or overplanning unrelated details.
 - Equating one large unit with a defect without inspecting its true coupling.
 - Adding workers, tools, profiles or limits instead of fixing a faulty dependency graph.
+- Treating every new instance of the same failure class as an unrelated review finding,
+  or using a fixed round count to approve unresolved defects.
 - Counting currently Supervisor-assigned reviewed cards as Supervisor implementation.
 - Closing a root before its decomposition exists, or leaving it running until its own
   parent-gated implementation finishes. Follow the native lifecycle, not a new one.
