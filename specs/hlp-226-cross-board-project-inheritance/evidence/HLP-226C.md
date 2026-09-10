@@ -176,3 +176,92 @@ push, pull request, merge or issue mutation.
   the inspected upstream revision, which does not contain the required behavior; the generated
   reconciliation aggregate and preflight will need one more regeneration by H226C-INT once the
   durable ledger records the HLP-226c SHA-256.
+
+## H226C-INT terminal integration evidence
+
+Producer: Supervisor terminal card `t_08c43ab2`. This section receives the two
+independently reviewed units; it does not replace their same-card reviews.
+
+### Integration provenance and maintained-fork closeout
+
+- HF-226C was approved at exact fork commit
+  `7980bbf1f9f75efdcbee2196ae910bb77138541d` (tree
+  `0f4912cc1a1f3ccae66d604d3960c259c7e9d618`). Its three commits remain distinct:
+  `d962b73e3d5c73aa21c500c6e1c51026dfb0d686`,
+  `3f981f10924774afd4b9a72d81f525fafe64fd5c`, and
+  `7980bbf1f9f75efdcbee2196ae910bb77138541d`.
+- The terminal created a clean integration worktree from exact maintained-fork base
+  `415056fee527c5a2302370bd6dba56f84b9a4202`, fast-forwarded to the reviewed head,
+  and added only fork-ledger commit
+  `311f1f4d737df7c2d465d4f16bcfae5334d190ba`. No squash, amend, rebase, force push,
+  or history rewrite occurred.
+- `DarkArty07/aether-hermes` PR
+  [#7](https://github.com/DarkArty07/aether-hermes/pull/7) was clean and mergeable with
+  exact head `311f1f4d737df7c2d465d4f16bcfae5334d190ba`; it merged normally to
+  `aether-main` as `266e412fb83ad32af92ed391db942f88993d76a2`. The merge parents are exact
+  prior `aether-main` `415056fee527c5a2302370bd6dba56f84b9a4202` and the reviewed-plus-ledger
+  head `311f1f4d737df7c2d465d4f16bcfae5334d190ba`. The merged tree is
+  `37d7a2b536ac15b6d25d85da97dfd06bae507f83`.
+- Inherited fork Actions remain disabled; PR #7 has an empty check rollup. They are
+  **NOT RUN**, not green. This objective did not enable or modify repository Actions.
+
+### Independent final fork verification
+
+All commands ran at exact fork source commit
+`311f1f4d737df7c2d465d4f16bcfae5334d190ba`; PR merge
+`266e412fb83ad32af92ed391db942f88993d76a2` contains that tree unchanged.
+The provisioned CPython was 3.11.15 with pytest 9.1.1 and Ruff 0.16.1. Retries were
+explicitly disabled.
+
+| Check | Terminal observation |
+| --- | --- |
+| H226C-FR-001 through H226C-FR-004, including the real materialized two-profile terminal-to-Implementer path and explicit target-board/decoy-board control | `HERMES_TEST_FILE_RETRIES=0 scripts/run_tests.sh tests/tools/test_kanban_tools.py tests/hermes_cli/test_kanban_db.py tests/hermes_cli/test_kanban_session_affinity.py tests/tools/test_kanban_cross_board_project.py` passed `132`, failed `0`, skipped `1` Windows-only. The focused HLP-226c module passed all `21`; its E2E materialized and inspected the task-id-keyed checkout, while the negative matrix failed before invalid persistence and left worker Project registries empty. |
+| Exact final full fork runner | One retained log-captured zero-retry run discovered `2997` files and reported `31022 passed, 2392 failed, 262 skipped` in 918.0 seconds with 24 workers. The HLP-226c module passed all `21`. The `421` failing files and `4` collection/no-test files are the already attributed missing-optional-dependency/async-plugin environment baseline; no objective-changed source/test file is in either set. An earlier terminal process run independently showed the same `2392` failures across `421` files and a green HLP-226c module; its exact summary was not retained by the process-log pagination surface, so it is not used for the exact total. No further full-suite restart was made. |
+| Static and diff checks | `python -m compileall -q hermes_cli tools tests`, Ruff check on both production files and the new test, Ruff format check on the new test, and range/working-tree `git diff --check` passed. The known whole-production-file format debt predates this objective and was not reformatted. |
+| Portable reconstruction | HLP-226c SHA-256 `6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418`; exact-base `git apply --check` and all three reconstructed file/blob identities match reviewed `7980bbf1`. HLP-226b remains byte-identical at SHA-256 `a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040`; its historical private reconstruction input remains unavailable and is not inferred. |
+
+### Aether integration state before publication
+
+AE-226C was approved at `bf1bcb4c8580f87f5a5102d56d2161a310a08913` (tree
+`cdadae123a8c32f0b6f095dec74da8110fd91257`). The terminal fast-forwarded the
+Aether objective branch from decomposition `a1f66117c2641266b3e76ea0da370e256b47ed41`
+through all four reviewed AE-226C commits without rewriting them. The terminal then:
+
+- updated `HERMES_LOCAL_PATCHES.md` with the exact fork PR/merge, patch digest,
+  compatibility, no-activation state, rollback, and retirement gate;
+- re-pinned the HLP-226 reconciliation locator and status to distinguish existing live
+  HLP-226/HLP-226b from maintained-fork-only HLP-226c;
+- added the already-tracked finalized Objective Contract path to the canonical workflow
+  manifest. This is mechanically implied policy/build glue: the contract existed at the
+  objective base but the exact manifest omitted it; no policy behavior or authority changed;
+- regenerated the aggregate reconciliation and preflight at
+  `2026-09-10T18:18:11Z` from the updated ledger SHA-256
+  `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44616dc487`; the
+  aggregate binds the same ledger digest, the exact three HLP-226 components, both
+  patch digests, and maintained-fork-only HLP-226c status.
+
+Aether PR/check/merge, issue reconciliation, and merged-resource cleanup are recorded
+below only after they occur. Local integration alone is not acceptance. The terminal
+first established exact-final Aether evidence: the canonical full runner passed
+`1175`, failed `2`, and skipped `64`. Both failures already exist on exact
+`origin/main` `2f72fcf420c0634da262c2f6dcbad0574c4b6a01`, which produced the same
+`2 failed, 14 passed` for the identical two modules; neither touched file is owned by
+this objective.
+
+### Owner steering and no-activation boundary
+
+During terminal verification the owner instructed the campaign to stop after completion of
+this current #226 objective. The terminal therefore finishes only the existing #226
+verification, dual-repository PR/check/merge, evidence, issue reconciliation, and
+objective-owned merged-resource cleanup. It starts no successor bug, batch, feature,
+expanded repair chain, or #275 work; Morfeo owns final reception/report and will not restart
+the backlog. A material new behavior/design/scope or unsafe-effect blocker would preserve
+the current candidates/logs/PRs and stop through the native blocker path rather than widen
+this objective.
+
+No live Hermes source, TUI, gateway, service, installation, profile, Project registry,
+configuration, model, provider, credential, repository setting/protection, or board database
+was modified or activated. No reload/restart, release preparation/publication, package
+publication, deployment, tag, history rewrite, bypass, or #275/#367/#368/#352/#357 work
+occurred. Disposable test boards, repositories, profiles and worktrees were the only runtime
+state used for behavioral qualification.

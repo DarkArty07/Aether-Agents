@@ -1,13 +1,13 @@
 {
   "id": "HLP-226",
-  "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md:168-184",
   "components": [
     "HLP-226",
     "HLP-226b",
     "HLP-226c"
   ],
   "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root. A current-board Project/affinity root whose shared worktree was created for a prior board also keeps its Project when the leaf names no task in this board: recovery requires the exact source Project and affinity, exact board metadata binding the same Project to the repository containing the shared path, and exactly one opaque leaf under <board default_workdir>/.worktrees/, while every board/path/Project/affinity mismatch fails closed before an invalid child is persisted.",
-  "local_status": "ACTIVE_LOCAL + HLP-226b + HLP-226c / UPSTREAM_PARTIAL",
+  "local_status": "ACTIVE_LOCAL + HLP-226b; HLP-226c MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
   "upstream": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",

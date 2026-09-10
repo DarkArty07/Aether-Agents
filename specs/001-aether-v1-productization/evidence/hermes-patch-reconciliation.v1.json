@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-10T17:04:30Z",
+  "observed_at_utc": "2026-09-10T18:18:11Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -950,8 +950,8 @@
         "HLP-226c"
       ],
       "id": "HLP-226",
-      "ledger_locator": "HERMES_LOCAL_PATCHES.md:159-172",
-      "local_status": "ACTIVE_LOCAL + HLP-226b + HLP-226c / UPSTREAM_PARTIAL",
+      "ledger_locator": "HERMES_LOCAL_PATCHES.md:168-184",
+      "local_status": "ACTIVE_LOCAL + HLP-226b; HLP-226c MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL",
       "required_behavior": "A cross-profile worker child that explicitly requests workspace_kind=worktree inherits its worker task's canonical Project, receives a distinct project worktree and branch, and rejects a conflicting explicit Project. A terminal-affinity Supervisor card that shares its root worktree as workspace_kind=dir is also a canonical Project source only when its worktree leaf identifies that same root. A current-board Project/affinity root whose shared worktree was created for a prior board also keeps its Project when the leaf names no task in this board: recovery requires the exact source Project and affinity, exact board metadata binding the same Project to the repository containing the shared path, and exactly one opaque leaf under <board default_workdir>/.worktrees/, while every board/path/Project/affinity mismatch fails closed before an invalid child is persisted.",
       "retirement_gate": {
         "evidence": [
@@ -1675,7 +1675,7 @@
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "04df9bc957958e0c62fba7f9d9877850db475b62e32f9218d02b08703741774d",
+  "source_ledger_sha256": "c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44616dc487",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"
