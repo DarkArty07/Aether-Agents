@@ -89,14 +89,32 @@ _GIT_DIAGNOSTIC_LINE_RE = re.compile(
     r"^(?P<prefix>(?:fatal|error|warning|remote|hint):)\s*(?P<body>.*)$",
     re.IGNORECASE,
 )
-_GIT_URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/\s@]+@")
-_GIT_AUTH_VALUE_RE = re.compile(
-    r"(?i)\b(?:authorization|proxy-authorization|password|passwd|token|secret|"
-    r"api[-_ ]?key|credentials?)\b\s*(?:=|:)\s*[^\s,;]+"
+_GIT_URL_CREDENTIAL_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s@]+@")
+_GIT_QUERY_CREDENTIAL_RE = re.compile(
+    r"(?i)([?&](?:token|access_token|api_key|key|signature|sig)=)[^&#\s\"'<>]+"
+)
+_GIT_AUTH_HEADER_RE = re.compile(
+    r"(?i)\b(?:authorization|proxy-authorization)\s*[:=]\s*(?:bearer|basic)\s+\S+"
+)
+_GIT_KEY_VALUE_CREDENTIAL_RE = re.compile(
+    r"(?i)\b(?:"
+    r"authorization|proxy-authorization|"
+    r"api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|"
+    r"client[_-]?secret|password|passwd|private[_-]?key|secret[_-]?key|"
+    r"connection[_-]?string|token|secret|credentials?"
+    r")\b\s*(?:=|:)\s*[\"']?[^\s\"',;&?<>]+[\"']?"
 )
 _GIT_BEARER_VALUE_RE = re.compile(r"(?i)\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+")
-_GIT_TOKEN_VALUE_RE = re.compile(
-    r"(?i)\b(?:gh[pousr]_|github_pat_|glpat-|xox[baprs]-|sk-)[A-Za-z0-9._-]+"
+_GIT_HIGH_CONFIDENCE_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----"),
+    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"),
+    re.compile(r"\bsk-[A-Za-z0-9][A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+    re.compile(r"\bxapp-\d+-[A-Za-z0-9-]{20,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
+    re.compile(r"\b(?:gh[pousr]_|github_pat_|glpat-)[A-Za-z0-9_]{16,}\b"),
 )
 _GIT_PRIVATE_PATH_RE = re.compile(
     r"(?i)(?<![A-Za-z0-9])(?:/(?:home|users|root|tmp|private|var/tmp)/[^\s'\\\"<>]+"
@@ -174,9 +192,12 @@ def _sanitize_git_diagnostic_line(line: str) -> str | None:
         return None
     body = re.sub(r"\s+", " ", match.group("body")).strip()
     body = _GIT_URL_CREDENTIAL_RE.sub(lambda value: f"{value.group(1)}<redacted>@", body)
-    body = _GIT_AUTH_VALUE_RE.sub("<redacted>", body)
+    body = _GIT_QUERY_CREDENTIAL_RE.sub(r"\g<1><redacted>", body)
+    body = _GIT_AUTH_HEADER_RE.sub("<redacted>", body)
+    body = _GIT_KEY_VALUE_CREDENTIAL_RE.sub("<redacted>", body)
     body = _GIT_BEARER_VALUE_RE.sub("<redacted>", body)
-    body = _GIT_TOKEN_VALUE_RE.sub("<redacted>", body)
+    for pattern in _GIT_HIGH_CONFIDENCE_SECRET_PATTERNS:
+        body = pattern.sub("<redacted>", body)
     body = _GIT_WINDOWS_PRIVATE_PATH_RE.sub("<path>", body)
     body = _GIT_PRIVATE_PATH_RE.sub("<path>", body)
     body = body[:MAX_GIT_DIAGNOSTIC_LINE_CHARS]
