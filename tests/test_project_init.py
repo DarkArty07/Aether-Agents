@@ -468,6 +468,8 @@ def test_init_makes_the_marker_trackable_under_pre_existing_ignore_rules(
     assert not _ignored(repository, ".aether/skills/example/SKILL.md")
     # Drafts stay local, and unrelated project policy is untouched.
     assert _ignored(repository, ".aether/drafts/x.json")
+    assert _ignored(repository, ".worktrees/")
+    assert _ignored(repository, ".worktrees/task-1/file.txt")
     assert _ignored(repository, "node_modules/pkg/index.js")
     assert "node_modules/" in (repository / ".gitignore").read_text(encoding="utf-8")
 
@@ -510,7 +512,7 @@ def test_init_does_not_touch_an_already_correct_ignore_policy(
 ) -> None:
     repository = _git_repository(tmp_path / "repo")
     policy = (
-        "node_modules/\n/.aether/*\n!/.aether/project.toml\n"
+        "node_modules/\n/.worktrees/\n/.aether/*\n!/.aether/project.toml\n"
         "!/.aether/objective-contracts/\n!/.aether/objective-contracts/**\n"
         "!/.aether/skills/\n!/.aether/skills/**\n"
     )
@@ -692,3 +694,168 @@ def test_project_canonical_skill_is_discoverable_from_root_agents_convention(
     assert ".aether/skills/<skill-name>/SKILL.md" in guidance
     assert skill.is_file()
     assert skill.read_text(encoding="utf-8").startswith("---\nname: example")
+
+
+# --- Worktrees ignore policy (issue #284) ---------------------------------------
+
+
+def test_init_ignores_project_worktrees_and_keeps_owner_status_clean(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fresh brownfield init + project-linked task worktree leaves git status clean."""
+    repository = _git_repository(tmp_path / "repo")
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    envelope = run_init(_args(repository), registry=registry)
+    assert envelope.result == "changed", envelope.errors
+    assert _ignored(repository, ".worktrees/")
+    assert _ignored(repository, ".worktrees/t_12345678/")
+    assert _ignored(repository, ".worktrees/t_12345678/file.py")
+
+    # Simulate a project-linked task worktree materialized at .worktrees/<task-id>
+    task_worktree = repository / ".worktrees" / "t_12345678"
+    subprocess.run(
+        ("git", "worktree", "add", "-b", "wt/t_12345678", str(task_worktree)),
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    # Commit a change inside the worktree
+    (task_worktree / "solution.py").write_text("print('hello')\n", encoding="utf-8")
+    subprocess.run(
+        ("git", "add", "solution.py"), cwd=task_worktree, check=True, capture_output=True
+    )
+    subprocess.run(
+        ("git", "commit", "-m", "work in progress"),
+        cwd=task_worktree,
+        check=True,
+        capture_output=True,
+    )
+
+    # In the owner checkout, .worktrees/ must NOT appear in git status
+    status = subprocess.run(
+        ("git", "status", "--porcelain"),
+        cwd=repository,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert ".worktrees" not in status
+
+    # Removing the worktree works cleanly
+    subprocess.run(
+        ("git", "worktree", "remove", str(task_worktree)),
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+    assert not task_worktree.exists()
+
+
+def test_init_refuses_when_worktrees_is_already_tracked(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Tracked or conflicting .worktrees refuses rather than hiding tracked content."""
+    repository = _git_repository(tmp_path / "repo")
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    # Case 1: .worktrees is a tracked file
+    worktrees_file = repository / ".worktrees"
+    worktrees_file.write_text("conflict file\n", encoding="utf-8")
+    subprocess.run(("git", "add", ".worktrees"), cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ("git", "commit", "-m", "tracked worktrees file"),
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+
+    envelope = run_init(_args(repository), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.failure_kind == "blocked"
+    assert envelope.errors[0].code == "AETHER-INIT-WORKTREES-CONFLICT"
+    assert ".worktrees is already tracked in Git" in envelope.errors[0].message
+    assert not (repository / ".gitignore").exists() or "/.worktrees/" not in (
+        repository / ".gitignore"
+    ).read_text(encoding="utf-8")
+
+    # Dry-run also refuses
+    dry_run = run_init(_args(repository, dry_run=True), registry=registry)
+    assert dry_run.result == "error"
+    assert dry_run.errors[0].code == "AETHER-INIT-WORKTREES-CONFLICT"
+
+
+def test_init_refuses_when_worktrees_directory_content_is_tracked(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Files inside .worktrees/ tracked or staged refuse initialization."""
+    repository = _git_repository(tmp_path / "repo")
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    worktrees_dir = repository / ".worktrees" / "nested"
+    worktrees_dir.mkdir(parents=True)
+    (worktrees_dir / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+    subprocess.run(("git", "add", ".worktrees"), cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ("git", "commit", "-m", "tracked worktrees dir"),
+        cwd=repository,
+        check=True,
+        capture_output=True,
+    )
+
+    envelope = run_init(_args(repository), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.failure_kind == "blocked"
+    assert envelope.errors[0].code == "AETHER-INIT-WORKTREES-CONFLICT"
+
+
+def test_init_refuses_when_worktrees_is_staged_in_index(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A staged .worktrees file before commit also refuses initialization."""
+    repository = _git_repository(tmp_path / "repo")
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    worktrees_dir = repository / ".worktrees"
+    worktrees_dir.mkdir(parents=True)
+    (worktrees_dir / "staged.txt").write_text("staged\n", encoding="utf-8")
+    subprocess.run(("git", "add", ".worktrees"), cwd=repository, check=True, capture_output=True)
+
+    envelope = run_init(_args(repository), registry=registry)
+    assert envelope.result == "error"
+    assert envelope.failure_kind == "blocked"
+    assert envelope.errors[0].code == "AETHER-INIT-WORKTREES-CONFLICT"
+
+
+def test_init_preserves_unrelated_ignore_rules_when_ignoring_worktrees(
+    tmp_path: Path, registry: ProjectRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Existing ignore rules for unrelated paths are preserved byte-for-byte."""
+    repository = _git_repository(tmp_path / "repo")
+    initial_ignore = "# Custom rules\nbuild/\n*.log\nnode_modules/\n"
+    (repository / ".gitignore").write_text(initial_ignore, encoding="utf-8")
+    subprocess.run(("git", "add", ".gitignore"), cwd=repository, check=True, capture_output=True)
+    subprocess.run(
+        ("git", "commit", "-m", "custom gitignore"), cwd=repository, check=True, capture_output=True
+    )
+    monkeypatch.setenv(
+        "HERMES_HOME", str(_hermes_home(tmp_path, [("p_exact", "repo", "Repo", repository)]))
+    )
+
+    envelope = run_init(_args(repository), registry=registry)
+    assert envelope.result == "changed", envelope.errors
+    content = (repository / ".gitignore").read_text(encoding="utf-8")
+    assert content.startswith(initial_ignore)
+    assert "/.worktrees/" in content
+    assert _ignored(repository, "build/out.bin")
+    assert _ignored(repository, "app.log")
+    assert _ignored(repository, "node_modules/pkg/index.js")
+    assert _ignored(repository, ".worktrees/")
