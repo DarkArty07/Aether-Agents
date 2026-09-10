@@ -2233,7 +2233,11 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
     update appeared during isolation: its entries survive and the operator's original entries are
     merged back under them), ``concurrent-kept`` (the run found no registry and a concurrently
     created one is untouched), ``not-isolated`` (no isolation was reported).  Entries this run
-    registered for its own synthetic projects are removed rather than kept as concurrent work.
+    registered for its own synthetic projects are removed rather than kept as concurrent work: a
+    merge whose result is exactly the captured bytes — the only difference the isolation carried
+    was this run's own scope registrations — is reported ``byte-identical`` because that is what
+    the registry holds, and ``merged-concurrent`` is reserved for a genuine concurrent update
+    whose entries were preserved alongside the operator's original ones.
     ``failed`` is the bounded failure: the registry was left untouched, or the state could not be
     verified, and the durable recovery artifacts were kept for reconciliation.  No path operation
     in this function replaces an entry that appeared underneath it: the current file is *moved
@@ -2293,15 +2297,18 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
             merged = _merge_concurrent_registry(recorded, current, owned)
             if merged is None:
                 return "failed"
-            if merged == current:
-                code, expected_final = "merged-concurrent", current
-            else:
+            if merged != current:
                 outgoing_expected = current
                 outgoing_identity = _move_registry_file_aside(
                     registry_path, outgoing_path, expected=current
                 )
                 _install_registry_file(registry_path, merged)
-                code, expected_final = "merged-concurrent", merged
+            # A merge that lands exactly on the bytes the run found means the only entries the
+            # isolation carried were the ones this run's own scope registered: the state is
+            # restored exactly and the outcome is named for what it is.  Only a genuine
+            # concurrent update makes the final bytes differ from the capture.
+            code = "byte-identical" if merged == recorded else "merged-concurrent"
+            expected_final = merged
     except _RegistrySwapError:
         # Nothing this run moved aside was destroyed: the file is at the registry path or at the
         # aside name, and the durable artifacts stay for reconciliation.

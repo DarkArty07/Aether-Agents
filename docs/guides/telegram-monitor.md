@@ -316,8 +316,13 @@ effect. What it does, in order:
    restore error codes (`restore-scope`, `restore-direct-spool`, `restore-registry`,
    `restore-job-identity`, `restore-created-job`, `restore-enabled`,
    `restore-unrelated-jobs`) even when every boundary passed. The registry outcome is
-   reported as `byte-identical`, `removed`, `merged-concurrent` or `concurrent-kept`; any
-   other result gates the verdict with `restore-registry` and keeps the durable recovery
+   reported as `byte-identical` (the registry holds exactly the bytes the run found — also the
+   outcome when the only entries the isolation carried were the ones this run's own synthetic
+   scope registered and removed again), `removed` (the run found no registry and none is
+   left), `merged-concurrent` (a legitimate concurrent update appeared during isolation: its
+   entries survive and the operator's original entries are merged back under them) or
+   `concurrent-kept` (the run found no registry and a concurrently created one is untouched);
+   any other result gates the verdict with `restore-registry` and keeps the durable recovery
    record for reconciliation.
 
 Registry recovery after an interruption. Two durable artifacts live next to the operator

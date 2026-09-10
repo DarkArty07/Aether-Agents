@@ -4660,8 +4660,11 @@ def test_live_shaped_registry_cycle_removes_only_the_owned_synthetic_entries(
         registry_path, module, tmp_path, concurrent=False
     )
 
-    assert module._restore_registry(isolation) == "merged-concurrent"
+    # The only difference the isolation carried was this run's own scope registrations, so the
+    # registry ends up holding exactly the bytes the run found and the outcome says so.
+    assert module._restore_registry(isolation) == "byte-identical"
 
+    assert registry_path.read_bytes() == operator
     payload = json.loads(registry_path.read_bytes().decode("utf-8"))
     assert set(payload["projects"]) == {REGISTRY_PROJECT_A}
     assert payload["projects"][REGISTRY_PROJECT_A]["name"] == "Operator A"

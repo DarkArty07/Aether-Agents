@@ -6,8 +6,12 @@
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
 **Status:** round-11 corrections complete for review; self-verified. No `--live` run, no model call,
 no Telegram send, no activation. Rounds 1–10 are preserved below as history; the authoritative
-current state is **"Round-11 corrections"**, **"Round-11 verification record"** and **"Round-11
-residual risks"**. Round 11 answers the round-11 review's strict contract/preservation finding:
+current state is **"Round-11 corrections"**, **"Round-11 verification record"**, **"Round-11
+residual risks"** and the **"Round-11 addendum (run 79)"** — the addendum records the run-77 →
+run-79 ownership handoff, the outcome-code refinement (a merge that lands exactly on the captured
+bytes is reported `byte-identical`, not `merged-concurrent`) and run 79's independent
+re-verification of the handed-over candidate. Round 11 answers the round-11 review's strict
+contract/preservation finding:
 the live scope's own registry entries are no longer mistaken for concurrent operator work, and the
 capture→replace interleaving no longer silently deletes a legitimate concurrent update. The
 runtime probe registers both synthetic projects through the shipped `ProjectRegistry`; those exact
@@ -2460,3 +2464,144 @@ change, no push, PR, merge, issue mutation or publication.
 - The clock-dependent monitor-runtime failures remain until their owner decides the fix (routed on
   card `t_d8a1aad6`); they are identical at the reviewed base and are not evidence about this
   round's change.
+
+## Round-11 addendum (run 79): ownership handoff, outcome-code refinement and re-verification
+
+**Ownership handoff.** The round-11 review note reached the still-running run-77 session mid-turn,
+so that session implemented the corrections and committed them as
+`0b73cf59843a4a71ac36eddfbc8e43747c7885c2` (tree `f9fd9a0be47b5525650658447b115606497e7f47`) in
+this worktree. The dispatcher had already claimed run 79 for the same card, so run 77's own
+`kanban_request_review` was refused (the current run is 79); run 77 stopped mutating the worktree
+and handed it over, and run 79 owns the review transition. Run 79 re-ran the whole verification
+recorded below on the handed-over tree, made exactly one refinement (next section) and files the
+review. The cumulative diff against the reviewed base `2d49418` is unchanged: exactly the 14
+authorized MON-06 paths.
+
+### Outcome-code refinement: `byte-identical` when only the scope's own entries were removed
+
+`_restore_registry` documents `merged-concurrent` as "a legitimate concurrent update appeared
+during isolation", but the merge branch set that code for *every* non-installed state — including a
+normal live-shaped cycle, where the only entries the isolation carried are the two this run's own
+scope probe registered and the merged bytes are exactly the bytes the run captured. The candidate
+now reports `byte-identical` whenever the restored bytes equal the capture
+(`code = "byte-identical" if merged == recorded else "merged-concurrent"`) and reserves
+`merged-concurrent` for a genuine concurrent update. Only the reported outcome changes: the merge
+rule, the fail-closed postcondition and the artifact removal are untouched.
+`test_live_shaped_registry_cycle_removes_only_the_owned_synthetic_entries` now asserts
+`byte-identical` and the exact operator bytes;
+`test_live_shaped_registry_cycle_keeps_the_operator_and_a_concurrent_entry` still asserts
+`merged-concurrent` with both surviving entries.
+
+### Run-79 probe: independent reproduction and correction check
+
+`/tmp/mon06_round11_probe.py` (throwaway, not committed) loads the module under test from an
+explicit path — the reviewed base was extracted with
+`git show b21ca3f:scripts/qualify_telegram_monitor.py` — points `XDG_STATE_HOME` at a disposable
+root and drives the real helpers (`ProjectRegistry`, `_isolate_registry`, `_restore_registry`)
+with an injected interleaving at each seam:
+
+```text
+### base b21ca3f
+scenario=live-shaped
+restore=merged-concurrent
+synthetic_ids_remaining=['b0000000-0000-4000-8000-00000000000b', 'c0000000-0000-4000-8000-00000000000c']
+operator_a_survives=True
+recovery_record_exists=False
+projects_dir_entries=['registry.json']
+
+scenario=concurrent-before-install
+isolation_error=none
+restore=byte-identical
+concurrent_d_survives=False
+operator_a_survives=True
+recovery_record_exists=False
+registry.json.qualification-held_exists=False
+
+scenario=concurrent-in-window
+isolation_error=not-supported-on-this-revision
+
+### candidate
+scenario=live-shaped
+restore=byte-identical
+synthetic_ids_remaining=[]
+operator_a_survives=True
+recovery_record_exists=False
+projects_dir_entries=['registry.json']
+
+scenario=concurrent-before-install
+isolation_error=registry-changed
+restore=not-reached
+concurrent_d_survives=True
+operator_a_survives=True
+recovery_record_exists=False
+registry.json.qualification-held_exists=False
+
+scenario=concurrent-in-window
+isolation_error=registry-changed
+concurrent_d_survives=True
+held_file_holds_operator_a=True
+recovery_record_exists=True
+```
+
+The base reproduces both findings: the live-shaped cycle leaves both synthetic project ids in the
+operator registry while reporting `merged-concurrent`, and the operator update injected between the
+capture and the replacement is silently gone (`byte-identical`, `concurrent_d_survives=False`, no
+artifact left). The candidate removes every synthetic id and restores exactly the captured bytes
+(`byte-identical`, only `registry.json` left in the directory); the update injected before the
+replacement makes it refuse with `registry-changed` while the update survives at the registry path
+and no artifact is left (the operator state is provably intact); a registry that appears after the
+operator's file was moved aside also refuses with `registry-changed`, leaves that file exactly as
+found and keeps the operator's own bytes at the held name plus the durable record — the documented
+*recoverable* refusal. The base performs its replacement inside a single `atomic_private_write`
+call with no separable installation seam, which is the window round 10 injected; the third
+scenario is therefore only observable on the round-11 candidate.
+
+### Run-79 verification record
+
+All commands ran in the assigned worktree
+(`aether-agents-2/t_d22ba5b9-mon-06-telegram-monitor-qualification-ha`, base
+`2d49418b2ac9a3f64764b84e1b071df48b85070f`) on the handed-over candidate with the refinement above:
+
+- Focused docs/CLI lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py
+  tests/test_telegram_monitor_cli_plugin.py`) → **98 passed**.
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 111 passed**; the sole failure is the pre-existing issue #364
+  (`tests/test_public_artifacts.py::test_tracked_public_surface_contains_no_operator_paths` on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`, `git diff 2d49418 -- .aether/` is
+  empty), and the wheel entry-point/resource check passes in this lane.
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 269 passed**; the 10 are the pre-existing, clock-dependent
+  `tests/test_telegram_monitor_runtime.py` handoff class. `tests/test_telegram_monitor_runtime.py`
+  and `src/aether_agents/monitor/runtime.py` are byte-identical to the reviewed base
+  (`git diff 2d49418 -- tests/test_telegram_monitor_runtime.py src/aether_agents/monitor/runtime.py`
+  is empty), and a temporary worktree of `2d49418` run by run 79
+  (`git worktree add --detach /tmp/mon06-base-2d49418 2d49418`; the worktree was removed
+  afterwards) fails **the same ten test names** in that file (`10 failed, 45 passed`).
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1352 passed,
+  60 skipped, 373 subtests passed** (103.40 s); the 17 = the same 7 pre-existing classes of the
+  reviewed base (six accepted-lifecycle wheel gates plus issue #364) and the 10 clock-dependent
+  runtime failures.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation passed**.
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true, mode=offline,
+  10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `scripts/check_public_artifacts.py --root .` and the same scan
+  with both built artifacts → only the pre-existing #364 findings on the unchanged contract. No
+  private path, destination, session, message, model or credential is reported.
+- Literal policy manifest emulation (the heredoc block parsed from `.github/workflows/policy.yml`
+  vs `git ls-files` minus `specs/`) → **364 = 364, missing [], extra []**; the round-11 change adds
+  no tracked path and does not edit `policy.yml`.
+- Cumulative tracked diff against the reviewed base `2d49418` → exactly the **14 authorized MON-06
+  paths**.
+- `uv run --frozen ruff check` on the three touched Python files → **All checks passed**;
+  `uv run --frozen ruff format --check` on the same files → **3 files already formatted**;
+  `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `compileall` on the three touched Python files → passed; `git diff --check` → passed.
+
+Deliberate non-effects in run 79: no `--live` invocation, no model call, no Telegram send, no
+credential operation, no profile/job/plugin activation, no native Hermes or source-database change,
+no push, PR, merge, issue mutation or publication.
