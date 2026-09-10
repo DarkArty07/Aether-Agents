@@ -2304,6 +2304,7 @@ def test_rebuild_retry_cleans_only_owned_stale_candidates(tmp_path) -> None:
     model.close()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="reader lease fencing is POSIX-only")
 def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
@@ -2312,6 +2313,7 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     owner = ReadModel.open(paths)
     reader = ReadModel.open(paths)
     upgrade_entered = threading.Event()
+    exclusive_verified = threading.Event()
     finished = threading.Event()
     failures: list[BaseException] = []
     original_upgrade = storage_module._ProjectionReaderLease.upgrade
@@ -2319,6 +2321,32 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     def gated_upgrade(lease: storage_module._ProjectionReaderLease) -> None:
         upgrade_entered.set()
         original_upgrade(lease)
+
+        # A non-blocking shared-lock probe is a post-call oracle for the
+        # exclusive lease. It succeeds while the lock is shared and is denied
+        # only while the rebuild lease holds LOCK_EX.
+        parent_descriptor = storage_module._open_private_directory(paths.locks)
+        probe_fd = os.open("projection-readers.lock", os.O_RDWR, dir_fd=parent_descriptor)
+        try:
+            try:
+                assert storage_module.fcntl is not None
+                storage_module.fcntl.flock(
+                    probe_fd,
+                    storage_module.fcntl.LOCK_SH | storage_module.fcntl.LOCK_NB,
+                )
+                storage_module.fcntl.flock(probe_fd, storage_module.fcntl.LOCK_UN)
+            except BlockingIOError:
+                pass
+            else:
+                failures.append(
+                    AssertionError("reader lease did not hold exclusive lock after upgrade")
+                )
+            if not reader._reader_lease._closed:
+                failures.append(AssertionError("rebuild upgraded while reader lease was open"))
+            exclusive_verified.set()
+        finally:
+            os.close(probe_fd)
+            os.close(parent_descriptor)
 
     monkeypatch.setattr(storage_module._ProjectionReaderLease, "upgrade", gated_upgrade)
 
@@ -2334,10 +2362,14 @@ def test_rebuild_waits_for_open_reader_before_publishing_candidate(
     worker.start()
     assert upgrade_entered.wait(timeout=1.0), "rebuild never reached the reader fence"
     assert not finished.is_set(), "rebuild published while a reader lease was open"
+    assert not exclusive_verified.is_set(), (
+        "exclusive reader lease acquired before the open reader was released"
+    )
     reader.close()
+    assert exclusive_verified.wait(timeout=2.0), "rebuild never acquired the exclusive reader lease"
     assert finished.wait(timeout=2.0)
     worker.join(timeout=1.0)
-    assert failures == []
+    assert failures == [], f"reader-fence violations: {failures}"
     owner.close()
 
 
