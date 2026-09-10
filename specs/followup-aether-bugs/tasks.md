@@ -386,6 +386,26 @@ the lifecycle defect.
   no product/diagnostic fix remains), `release_action=defer`,
   `release_channel=none`. Local integration alone is not success.
 
+### Terminal execution receipt
+
+- Maintained-fork PR #6 merged normally to `aether-main` as
+  `415056fee527c5a2302370bd6dba56f84b9a4202`; inherited fork Actions remained
+  disabled and were NOT RUN, not green.
+- Accepted Aether units remain inspectable behind integration merges `383982b` (FU-354),
+  `b3bcf1a` (FU-369), `8bb940c` (FU-357), and `1900977` (FU-352 plus prospective
+  independent review). No squash, amend, rebase, force or history rewrite occurred.
+- The terminal-owned HLP-369 ledger/active reconciliation record is committed at
+  `b259afc`; its patch digest is
+  `f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c`.
+- Integrated acceptance evidence is in
+  `specs/followup-aether-bugs/evidence/FBUG-INT.md`. The Aether canonical runner
+  reported `1171 passed, 64 skipped, 2` known unchanged failures; focused issue
+  canaries, exact 3.11/3.12/3.13 qualification, type/syntax/docs/drift/build and diff
+  gates passed as recorded there.
+- Aggregate release conclusions are `release_impact=patch`, `release_action=defer`,
+  `release_channel=none`. No release, tag, package publication, deployment, runtime
+  activation, profile/service/settings change or #275 work occurred.
+
 ## Authority and stop conditions
 
 Follow the Objective Contract. Routine local work, normal commits and authorized fork/
