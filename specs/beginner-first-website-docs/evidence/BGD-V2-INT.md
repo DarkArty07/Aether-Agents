@@ -134,12 +134,15 @@ outside current authority.
 
 ## Terminal progress reporting
 
-After the reviewed open-PR state and final-head required checks were observed, one concise
-Spanish terminal brief was sent through the already provisioned Telegram home destination
-with the provider-free `hermes send --to telegram --quiet` surface. The command returned
-success. The brief distinguished durable observations from inference, named the open PR,
+After the reviewed open-PR state and the then-current head's required checks were observed,
+one concise Spanish terminal brief was sent through the already provisioned Telegram
+destination with the provider-free `hermes send --to telegram --quiet` surface. The command
+returned success. The brief distinguished durable observations from inference, named the
 green required contexts, exact inherited scanner baseline and explicit no-merge/no-deploy
-boundary without including private paths, credentials, logs, sessions or routing data.
+boundary without including private paths, credentials, logs, sessions or routing data. The
+brief's head/head-revision fidelity is preserved by the immediately following wording fix:
+each wording-only evidence commit is normally pushed and its final head is independently
+re-verified through GitHub before this card's own lifecycle completes.
 
 The same single reviewed no-agent objective reporter was then paused through the supported
 Hermes cron surface. Native readback confirmed it is disabled, retains no last error and was
