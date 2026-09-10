@@ -126,16 +126,16 @@ worktrees start at the contract base rather than this root branch's decompositio
 ## Execution graph
 
 ```text
-Supervisor decomposition root
-    ├── BGD-CONTENT (Implementer; canonical beginner content and truthful landing copy)
+t_6261ed0a  Supervisor decomposition root
+    ├── t_06c61d96  BGD-CONTENT (Implementer; canonical beginner content and truthful landing copy)
     │       └── same-card Supervisor review
-    │               └── BGD-WEB (Implementer; manifest, docs UX and website verification)
+    │               └── t_9d778545  BGD-WEB (Implementer; manifest, docs UX and website verification)
     │                       └── same-card Supervisor review
-    └── BGD-MON (Implementer; local Telegram progress monitor)
+    └── t_38ce9821  BGD-MON (Implementer; local Telegram progress monitor)
             └── same-card Supervisor review
 
-Supervisor decomposition root + all three independently reviewed units
-    └── BGD-INT (Supervisor; terminal integration, PR, green checks, no merge/deploy)
+t_6261ed0a + all three independently reviewed units
+    └── t_314cb06f  BGD-INT (Supervisor; terminal integration, PR, green checks, no merge/deploy)
 ```
 
 BGD-MON is independent of repository implementation. BGD-WEB depends on reviewed
