@@ -208,8 +208,11 @@ invoked as:
 # a new file (a receipt is a one-shot capture), and an existing directory is never
 # chmod-ed by the harness. The receipt is installed without replacing any entry, and only
 # into the directory establishment accepted: a path that appears at the target after it
-# was established, or a parent directory renamed or replaced at the same name, fails the
-# run instead of being overwritten.
+# was established is left as it was found, and a parent already renamed or replaced when
+# the write begins is refused with output-unsafe-target without a write. A rename that
+# lands after the write's directory descriptor is bound cannot redirect the write, but the
+# receipt then stays inside the established directory under its new name and the run fails
+# its final verification instead of qualifying — see *Private receipts* below.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
@@ -305,12 +308,17 @@ live effect: every component must be a real directory (a symlink is refused), th
 immediate parent must already be a private `0700` directory owned by the current user, and
 exactly one missing level is tolerated — that single dedicated leaf is created `0700` by
 the harness itself. Establishment records that directory's identity (device and inode),
-and the receipt is installed only into the same directory: a parent renamed or replaced at
-the same name during the run fails closed with the bounded `output-unsafe-target` error
-and no receipt is written anywhere. An existing directory is never hardened (its mode is
-never changed),
-and the receipt is a fresh capture rather than a replacement of an operator file. Every
-other target — a non-literal spelling, an existing file, a symlinked or shared/foreign
+and the receipt is installed only into the same directory. A parent already renamed or
+replaced — or removed — when the write begins is refused read-only with the bounded
+`output-unsafe-target` error and no receipt is written anywhere. A rename that lands after
+the write's directory descriptor is bound cannot redirect the write either: the receipt is
+installed inside the established directory (which then lives under its new name) and the
+run fails its final path verification with the bounded `private-output` error, so the
+replacement directory at the original name never receives a byte, the private receipt can
+only remain in the established `0700` directory, and no qualified verdict is emitted. An
+existing directory is never hardened (its mode is never changed), and the receipt is a
+fresh capture rather than a replacement of an operator file. Every other
+target — a non-literal spelling, an existing file, a symlinked or shared/foreign
 parent, or more than one missing level — is refused with exit code `1` and a bounded error
 code (`output-unsafe-target`, `output-target-exists`, `output-parent-missing`,
 `output-parent-not-private`) before anything is created, changed or sent. The accepted
@@ -321,8 +329,9 @@ if a file, a symlink, a hard link or a directory appears at the receipt path aft
 target was established — even in the installation window itself — it is left exactly as
 it was found and the run fails with the bounded `output-target-exists` error instead of
 overwriting it. The installed receipt is verified real, singly linked and `0600` inside a
-private `0700` containing directory, so a write that cannot be verified private fails the
-run instead of qualifying it. The deterministic lane applies
+private `0700` containing directory — and, when the write began, inside the directory
+establishment accepted — so a write that cannot be verified private fails the run with the
+bounded `private-output` error instead of qualifying it. The deterministic lane applies
 the same target rule before its checks and reports the same bounded codes. The public
 summary carries revisions, counts, latencies, case statuses, the
 `semantic_certification` block and the qualified scope only, and states that Telegram Bot

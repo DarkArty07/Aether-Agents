@@ -916,6 +916,31 @@ def test_qualification_options_are_exactly_the_fixed_contract(tmp_path: Path) ->
     assert "fixed at exactly 2" in boundary_action.help
 
 
+def test_output_help_states_the_bounded_directory_binding() -> None:
+    """The `--output` help names both bounded outcomes (round-9 review finding).
+
+    The help text may not promise that every parent rename or replacement ends with no
+    write: a rename after the write's directory descriptor is bound leaves the receipt
+    inside the established directory and fails the run with ``private-output``.
+    """
+
+    module = _qualification_module()
+    action = next(
+        item for item in module._build_parser()._actions if "--output" in item.option_strings
+    )
+    help_text = " ".join((action.help or "").split())
+
+    assert "output-unsafe-target" in help_text
+    assert "private-output" in help_text
+    assert "cannot redirect the write" in help_text
+    # The audited absolute claim must not return: only the pre-binding case is refused
+    # without a write.
+    assert (
+        "renamed or replaced at the same name fails the run with output-unsafe-target"
+        not in help_text
+    )
+
+
 def test_offline_qualification_makes_no_model_or_sender_call(tmp_path: Path) -> None:
     """No --live run passes with native imports poisoned and live state untouched."""
 
@@ -4180,4 +4205,101 @@ def test_offline_receipt_write_refuses_a_parent_replaced_during_the_checks(
     assert list((root / "original-private").iterdir()) == []
     assert list(parent.iterdir()) == []
     assert not output.exists()
+    assert str(output) not in captured.out
+
+
+def test_private_receipt_write_after_the_directory_is_bound_never_redirects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review-round-9 after-open sequence: a bound directory cannot be redirected.
+
+    The reviewer renamed the receipt directory *after* its descriptor was handed back and
+    created a replacement at the original name.  The installation is descriptor-relative,
+    so no byte can follow the new name: the replacement directory stays empty, the receipt
+    exists only inside the established directory (now under its new name), and the run
+    fails its final verification with the bounded ``private-output`` error instead of
+    emitting a qualified verdict.  That bounded residue is what the guide now states.
+    """
+
+    module = _qualification_module()
+    root = tmp_path / "operator-root"
+    root.mkdir()
+    parent = root / "private"
+    target = parent / "receipt.json"
+    established = module._establish_private_output_target(target)
+    real_open = module._open_private_receipt_directory
+    swapped: list[bool] = []
+
+    def after_open_rename(directory: Path, *, established_parent: Any = None) -> int:
+        descriptor = real_open(directory, established_parent=established_parent)
+        # The rename lands after the descriptor is bound: every installation step below is
+        # relative to that descriptor, and the name on disk is no longer the same directory.
+        swapped.append(True)
+        parent.rename(root / "original-private")
+        parent.mkdir()
+        parent.chmod(0o700)
+        return descriptor
+
+    monkeypatch.setattr(module, "_open_private_receipt_directory", after_open_rename)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._write_private_output(
+            target,
+            {"handles": {"message_id": RECEIPT_SEAM_SENTINEL}},
+            established_parent=established,
+        )
+
+    assert swapped == [True]
+    assert failure.value.code == "private-output"
+    # The replacement directory at the original name never receives a byte.
+    assert list(parent.iterdir()) == []
+    assert not _receipt_token_written(parent, RECEIPT_SEAM_SENTINEL)
+    # The only receipt is the private one inside the established (renamed) directory.
+    established_dir = root / "original-private"
+    assert os.stat(established_dir).st_ino == established[1]
+    receipt = established_dir / "receipt.json"
+    assert receipt.is_file()
+    assert stat.S_IMODE(os.lstat(receipt).st_mode) == 0o600
+    assert os.lstat(receipt).st_nlink == 1
+    assert RECEIPT_SEAM_SENTINEL in receipt.read_text(encoding="utf-8")
+    assert list(established_dir.glob("*.tmp")) == []
+
+
+def test_offline_receipt_write_after_the_directory_is_bound_never_qualifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The deterministic lane reports the same bounded failure and no qualified verdict."""
+
+    module = _qualification_module()
+    root = tmp_path / "operator-root"
+    root.mkdir()
+    parent = root / "private"
+    output = parent / "receipt.json"
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))
+    real_open = module._open_private_receipt_directory
+
+    def after_open_rename(directory: Path, *, established_parent: Any = None) -> int:
+        descriptor = real_open(directory, established_parent=established_parent)
+        parent.rename(root / "original-private")
+        parent.mkdir()
+        parent.chmod(0o700)
+        return descriptor
+
+    monkeypatch.setattr(module, "_open_private_receipt_directory", after_open_rename)
+
+    code = module.main(["--json", "--output", str(output)])
+    captured = capsys.readouterr()
+
+    assert code == 1
+    payload = json.loads(captured.out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "private-output"
+    assert "qualified" not in payload
+    assert list(parent.iterdir()) == []
+    assert not output.exists()
+    receipt = root / "original-private" / "receipt.json"
+    assert receipt.is_file()
+    assert stat.S_IMODE(os.lstat(receipt).st_mode) == 0o600
     assert str(output) not in captured.out

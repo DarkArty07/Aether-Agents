@@ -33,10 +33,15 @@ user, or one missing level the harness creates as its own dedicated private leaf
 existing directory is never hardened, and a target that cannot capture the private
 handles is refused with exit status 1 and no effect.  Establishment records the identity
 of that private directory, and the receipt is then installed with a single no-clobber
-link relative to the same directory: an entry that appears at the receipt path after the
-target was established is never replaced, and a parent renamed or replaced at the same
-name is refused, so a run never writes its handles into a directory it did not establish
-and fails the run instead.
+link relative to the descriptor of that same directory: an entry that appears at the
+receipt path after the target was established is never replaced, and a parent that was
+already renamed or replaced — or removed — when the write begins is refused read-only with
+the bounded ``output-unsafe-target`` error, so a run never writes its handles into a
+directory it did not establish.  A rename that lands after that descriptor is bound cannot
+redirect the write: the receipt is installed inside the established directory itself
+(which then lives under its new name) and the final path verification fails with the
+bounded ``private-output`` error, so no qualified verdict is emitted and the private
+receipt can only remain inside the established ``0700`` directory.
 
 Live mode is bounded, never kills or restarts an agent, and never accepts a token,
 destination, provider or model input: it uses only the existing configured
@@ -3277,9 +3282,12 @@ def _live_run(
 
     ``established_parent`` is the identity of the private receipt directory the caller
     established before this orchestrator could spend any effect; the final receipt write
-    passes it on, so a directory renamed or replaced at the same name during the run
-    fails the receipt with the bounded ``output-unsafe-target`` error instead of
-    receiving it.
+    passes it on, so a directory renamed or replaced at the same name before that write is
+    refused read-only with the bounded ``output-unsafe-target`` error instead of receiving
+    the receipt.  The receipt itself is written relative to the bound directory descriptor,
+    so a rename that lands after that descriptor is bound cannot redirect the write: the
+    receipt stays inside the established directory and the final path verification fails
+    with the bounded ``private-output`` error, never a qualified verdict.
     """
 
     interpreter = backends.runtime_python()
@@ -4196,7 +4204,9 @@ def _establish_private_output_target(path: Path) -> tuple[int, int]:
 
     Returns the ``(device, inode)`` identity of that established directory.  The writer
     verifies the identity again, so the receipt can only ever be installed into the very
-    directory this call accepted (a parent replaced at the same name fails closed).
+    directory this call accepted: a parent already replaced at the same name is refused,
+    and a rename after the write's directory descriptor is bound cannot redirect the
+    receipt into a replacement directory.
     """
 
     _check_private_output_target(path)
@@ -4242,7 +4252,11 @@ def _open_private_receipt_directory(
     Every installation step then happens relative to this descriptor, so a component that
     is swapped after the target was established cannot redirect the write; a directory
     whose named entry no longer matches the opened descriptor, or which is no longer the
-    established directory itself, is refused instead.
+    established directory itself, is refused instead.  A swap that lands *after* this
+    descriptor is bound therefore leaves the receipt inside the directory the run
+    established (then living under its new name) and the final path verification fails the
+    run: the replacement directory at the original name never receives a byte, and no
+    qualified verdict is emitted.
     """
 
     flags = (
@@ -4430,8 +4444,13 @@ def _write_private_output(
     target was established — a file, a symlink, a hard link or a directory — is never
     replaced and the qualification fails instead.  When ``established_parent`` is the
     identity returned by ``_establish_private_output_target``, the receipt is installed
-    only into that exact directory: a parent renamed or replaced at the same name fails
-    with the bounded ``output-unsafe-target`` error and nothing is written.  The installed
+    only into that exact directory: a parent already renamed or replaced — or removed — when
+    the write begins is refused read-only with the bounded ``output-unsafe-target`` error
+    and nothing is written.  A rename that lands after the directory descriptor is bound
+    cannot redirect the write either: the receipt is installed inside the established
+    directory (which then lives under its new name) and the final path verification fails
+    with the bounded ``private-output`` error, so the replacement directory at the original
+    name never receives a byte and no qualified verdict is emitted.  The installed
     receipt and its containing directory are then verified (real, singly linked, ``0600``
     inside private ``0700``, still the established directory), and every hardening, write,
     installation or verification failure is raised
@@ -4491,8 +4510,11 @@ def _build_parser() -> argparse.ArgumentParser:
             "existing directory is never hardened. The receipt is installed without "
             "replacing any entry (a file, symlink or hard link that appears at the "
             "target after it was established fails the run instead of being "
-            "overwritten), and only into that established directory: a parent renamed or "
-            "replaced at the same name fails the run with output-unsafe-target."
+            "overwritten), and only into that established directory: a parent already "
+            "renamed or replaced when the write begins is refused with "
+            "output-unsafe-target, while a rename after that directory is bound cannot "
+            "redirect the write and fails the run with private-output (no qualified "
+            "verdict) instead of being overwritten."
         ),
     )
     parser.add_argument(

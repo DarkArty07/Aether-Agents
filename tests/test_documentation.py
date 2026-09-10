@@ -451,6 +451,34 @@ def test_monitor_guide_documents_controls_state_and_limits() -> None:
     assert "not** qualified" in guide or "not qualified" in guide
 
 
+def test_monitor_guide_states_the_bounded_receipt_directory_rule() -> None:
+    """Round-9 review finding: the guide must state the bounded rename outcome.
+
+    A parent already renamed, replaced or removed when the receipt write begins is refused
+    read-only with ``output-unsafe-target`` and nothing is written; a rename that lands
+    after the write's directory descriptor is bound cannot redirect the write, so the
+    receipt stays inside the established directory and the run fails its final verification
+    with ``private-output`` (no qualified verdict).  The reviewed absolute claim — every
+    rename/replacement ends with no receipt anywhere — was false and must not return.
+    """
+
+    guide = " ".join((ROOT / "docs/guides/telegram-monitor.md").read_text(encoding="utf-8").split())
+    paragraph = guide.split("Private receipts (", 1)[1].split(" Every other target", 1)[0]
+
+    for phrase in (
+        "Establishment records that directory's identity",
+        "already renamed or replaced",
+        "`output-unsafe-target` error and no receipt is written anywhere",
+        "cannot redirect the write",
+        "private receipt can only remain in the established `0700` directory",
+        "no qualified verdict is emitted",
+    ):
+        assert phrase in paragraph, phrase
+    # The audited overclaim must not come back: a rename during the run can leave the
+    # private receipt inside the established directory.
+    assert "renamed or replaced at the same name during the run fails closed" not in paragraph
+
+
 def test_policy_manifest_admits_every_monitor_path_literally() -> None:
     """Every new non-spec path is listed literally; no check or glob was widened."""
 

@@ -4,23 +4,37 @@
 **Task:** `t_d22ba5b9`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base:** reviewed MON-05 candidate `2d49418b2ac9a3f64764b84e1b071df48b85070f` (tree `6dea7a7fc73ea72348e605bf75a6bc954bf0e426`)
-**Status:** round-8 corrections complete for review; self-verified. No `--live` run, no model
-call, no Telegram send, no activation. Rounds 1–7 are preserved below as history; the
-authoritative current state is **"Round-8 corrections"**, **"Round-8 verification record"**
-and **"Round-8 residual risks"**. Round 8 answers the round-7 review's strict
-contract/preservation finding: the private receipt is now installed at the final seam with a
-single no-clobber link instead of the repository primitive's `os.replace`, so a file, a
-symlink, a hard link or a directory that appears at the receipt path after the target was
-established is never replaced — it fails the run with the bounded `output-target-exists`
-error and no qualified verdict. The guide, the `--output` help text and the module docstring
-state that rule.
+**Status:** round-9 corrections complete for review, amended by the round-9 addendum that
+answers review round 9; self-verified. No `--live` run, no model call, no Telegram send, no
+activation. Rounds 1–8 are preserved below as history; the authoritative current state is
+**"Round-9 corrections"** (including the round-9 addendum), **"Round-9 verification record"**
+and **"Round-9 residual risks"**. Round 9 answers the round-8 review's strict
+contract/preservation findings: the private receipt is installed only into the directory
+establishment accepted (bound by `(device, inode)` identity), and the guide's privacy claim
+matches the implemented store (which does persist the validated narrative structure). The
+round-9 addendum answers review round 9: the receipt-directory wording is narrowed to the
+bounded behavior actually implemented — a parent already renamed, replaced or removed when
+the write begins is refused read-only with the bounded `output-unsafe-target` error and no
+receipt is written anywhere, while a rename that lands after the write's directory descriptor
+is bound cannot redirect the write: the receipt is installed inside the established directory
+(which then lives under its new name), the final path verification fails with the bounded
+`private-output` error, no qualified verdict is emitted, and the replacement directory at the
+original name never receives a byte. A deterministic after-open rename regression proves
+exactly that, and the module docstring, the `_write_private_output` /
+`_open_private_receipt_directory` / `run_live` docstrings, the `--output` help text and the
+guide state the same two bounded halves.
+
+**Round-8 state (historical):** round 8 installed the receipt at the final seam with a single
+no-clobber link instead of the repository primitive's `os.replace`, so a file, a symlink, a
+hard link or a directory that appears at the receipt path after the target was established is
+never replaced — it fails the run with the bounded `output-target-exists` error and no
+qualified verdict. The guide, the `--output` help text and the module docstring state that
+rule.
 
 **Round-7 state (historical):** round 7 validated and established the complete private
 receipt target before the live orchestrator (and before the deterministic lane's checks), so
 an invocation that could never capture the private handles is refused without a smoke, a
-send, a native job effect or a mode change on any existing directory. Round 8 keeps that
-earlier establishment and adds the no-clobber installation that closes the remaining clobber
-window between establishment and the final write.
+send, a native job effect or a mode change on any existing directory.
 
 ## Starting-point reconstruction
 
@@ -1698,7 +1712,65 @@ probe_b_store:
   skips target establishment. The refusal such a target would earn is the intended
   round-7 behaviour, not a test artifact.
 
-Round-9 changed exactly four paths — `scripts/qualify_telegram_monitor.py`,
+### 4. The documented receipt-directory rule is the implemented rule (round-9 addendum, review round 9)
+
+Review round 9 found two defects that round 9 itself had left. The guide still carried the
+absolute claim "a parent renamed or replaced at the same name during the run fails closed
+with the bounded `output-unsafe-target` error and no receipt is written anywhere", and this
+file's header still named round 8 as authoritative. The claim is false in the window the
+reviewer probed: a rename that lands *after* the write's directory descriptor is bound cannot
+redirect the write (every installation step is descriptor-relative), so the private receipt
+is installed inside the established directory — which then lives under its new name — and the
+run's final path verification fails with the bounded `private-output` error. The replacement
+directory at the original name never receives a byte, no qualified verdict is emitted, and
+the private `0600` receipt can remain only inside the established `0700` directory. Only a
+parent already renamed, replaced or removed when the write begins is refused read-only with
+`output-unsafe-target` and no write at all.
+
+Deterministic probe of the reviewer's exact after-open sequence (throwaway probe importing
+`scripts/qualify_telegram_monitor.py` by path; `_open_private_receipt_directory` is wrapped so
+the rename lands after the returned descriptor is bound):
+
+```text
+established_after_rename_entries      [{"name": "receipt.json", "mode": "0o600", "nlink": 1}]
+replacement_dir_entries               []
+replacement_contains_sentinel         false
+established_contains_sentinel         true
+receipt_exists_in_established         true
+receipt_exists_in_replacement         false
+receipt_mode                          "0o600"
+receipt_nlink                         1
+tmp_residue                           []
+error_code                            "private-output"
+```
+
+Corrected wording (all inside MON-06's writable interface):
+`docs/guides/telegram-monitor.md` (the live invocation block and the *Private receipts*
+paragraph now state the two bounded halves and name `private-output` as the
+final-verification failure), `scripts/qualify_telegram_monitor.py` (module docstring,
+`run_live`, `_open_private_receipt_directory`, `_write_private_output` and
+`_establish_private_output_target` docstrings, and the `--output` help text), and this file's
+header (now naming round 9 as authoritative with rounds 1–8 historical and recording both
+round-9 corrections).
+
+Regressions added for this finding (deterministic, filesystem-only, no model or sender):
+
+- `test_private_receipt_write_after_the_directory_is_bound_never_redirects` — the
+  reviewer's sequence at the writer seam: the replacement directory stays empty, the receipt
+  exists only inside the established (renamed) directory with mode `0600` and one link, no
+  `*.tmp` residue survives, and the failure is the bounded `private-output`.
+- `test_offline_receipt_write_after_the_directory_is_bound_never_qualifies` — the same
+  sequence through the deterministic entry point: exit `1`,
+  `{"ok": false, "error": {"code": "private-output"}}`, no `qualified` key, the replacement
+  directory empty, the receipt only in the established renamed directory, and the private
+  path never printed.
+- `test_output_help_states_the_bounded_directory_binding` — the `--output` help names both
+  bounded outcomes and the audited absolute sentence cannot return.
+- `test_monitor_guide_states_the_bounded_receipt_directory_rule` — the guide's *Private
+  receipts* paragraph states both bounded halves, and the audited absolute claim cannot
+  return.
+
+Round-9 (including this addendum) changed exactly four paths — `scripts/qualify_telegram_monitor.py`,
 `tests/test_telegram_monitor_cli_plugin.py`, `tests/test_documentation.py`,
 `docs/guides/telegram-monitor.md`, plus this evidence file. No production file, no
 `policy.yml`, no capability registry, no lockfile and no Objective Contract edit; the
@@ -1772,6 +1844,74 @@ Deliberate non-effects in round 9: no `--live` invocation, no model call, no Tel
 no credential operation, no profile/job/plugin activation, no native Hermes or source-database
 change, no push, PR, merge, issue mutation or publication.
 
+### Round-9 addendum verification (review round 9)
+
+Same worktree and reviewed base `2d49418` as above, on the round-9 addendum candidate
+(round-9 candidate `55c025be2237534479ca9fd10e9f1ab62065ab32` plus the four-path addendum of
+item 4). `git diff --name-only 2d49418` still lists exactly the 14 authorized MON-06 paths,
+and `git status --short` lists only the four addendum paths plus this evidence file — no new
+tracked path, so the literal manifest needs no new entry.
+
+- **Direct probe of the reviewer's after-open sequence (manual, before the tests).** A
+  throwaway probe imported `scripts/qualify_telegram_monitor.py` by path, established
+  `<root>/private/receipt.json`, wrapped `_open_private_receipt_directory` so the rename lands
+  after the returned descriptor is bound, created the replacement `0700` directory and called
+  the writer with the established identity: `error_code: "private-output"`,
+  `replacement_dir_entries: []`, `replacement_contains_sentinel: false`,
+  `receipt_exists_in_established: true`, `receipt_mode: "0o600"`, `receipt_nlink: 1`,
+  `tmp_residue: []` — the reviewer's observation exactly, now the documented rule.
+- Focused docs/CLI lane
+  (`uv run --frozen python scripts/run_tests.py -- -q tests/test_documentation.py
+  tests/test_telegram_monitor_cli_plugin.py`) → **84 passed** (80 before + 4 addendum cases).
+- Exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no tests/test_telegram_monitor_cli_plugin.py
+  tests/test_documentation.py tests/test_observation_packaging.py tests/test_public_artifacts.py`)
+  → **1 failed, 97 passed** (93 before + 4); the sole failure is the pre-existing issue #364
+  (`absolute-user-home`, `operator-desktop-layout` on the unchanged
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md`), and the wheel
+  entry-point/resource check passes in this lane.
+- Monitor suite (`state`, `sources`, `reporting`, `delivery`, `runtime`, `cli_plugin`)
+  → **10 failed, 255 passed** (252 before + 3). The 10 failures are the pre-existing,
+  clock-dependent `tests/test_telegram_monitor_runtime.py` handoff class documented in
+  round 8; `tests/test_telegram_monitor_runtime.py` and
+  `src/aether_agents/monitor/runtime.py` remain byte-identical to the reviewed base `2d49418`.
+- **Frozen-clock reconciliation re-run (addendum).** The diagnostic-only plugin rebinding
+  `aether_agents.monitor.runtime.datetime.now()` to `2026-09-10T17:59:00Z` still turns the
+  same file green: `PYTHONPATH=<dir> uv run --frozen python -m pytest -q --tb=line
+  -p p_mon06_clock tests/test_telegram_monitor_runtime.py` → **55 passed in 1.05s** against
+  **10 failed / 45 passed** at the real clock. No addendum change can affect that class.
+- Full repository suite through the exact-Hermes bootstrap lane
+  (`uv run --frozen python scripts/run_tests.py -- -q --tb=no`) → **17 failed, 1338 passed,
+  60 skipped, 373 subtests passed** (155.33 s). The 17 = the same 7 pre-existing classes of
+  the reviewed base (six accepted-lifecycle wheel gates plus issue #364 on the unchanged
+  contract) and the 10 clock-dependent runtime failures; 1338 passed = the 1334 recorded above
+  + 4 addendum cases.
+- `uv run --frozen python scripts/check_documentation.py` → **documentation validation
+  passed** (guide, help text and evidence text included; the generated
+  `docs/reference/capabilities.md` is byte-exact against the rendered registry, so it is not
+  stale and no regeneration was needed).
+- `uv run --frozen python scripts/qualify_telegram_monitor.py --json` → **ok=true,
+  mode=offline, 10 checks**, `external_effects={model_calls:0, telegram_sends:0}`.
+- `uv build` → wheel `aether_agents-0.24.0-py3-none-any.whl` + sdist
+  `aether_agents-0.24.0.tar.gz`; `scripts/check_public_artifacts.py --root .` and the same
+  scan with both built artifacts → only the pre-existing #364 findings on
+  `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (`git diff 2d49418 -- .aether/` is
+  empty). No private path, destination, session, message, model or credential is reported.
+- Literal policy manifest emulation (the heredoc block parsed from
+  `.github/workflows/policy.yml` vs `git ls-files` minus `specs/`) → **364 = 364,
+  missing [], extra []**; the addendum touches no new tracked path and does not edit
+  `policy.yml`, so every MON-01..MON-05 path and the MON-06 paths remain literally listed with
+  no relaxed check and no broadened glob.
+- `uv run --frozen ruff check` on the three touched Python files → **All checks passed**;
+  `uv run --frozen ruff format --check` on the same files → **3 files already formatted**;
+  `uv run --frozen mypy src/aether_agents` → **Success: no issues found in 65 source files**;
+  `compileall` on the three touched Python files → passed; `git diff --check` → passed. The
+  pre-existing full-list ruff findings recorded in rounds 5–9 are unchanged and out of scope.
+
+Deliberate non-effects in the round-9 addendum: no `--live` invocation, no model call, no
+Telegram send, no credential operation, no profile/job/plugin activation, no native Hermes or
+source-database change, no push, PR, merge, issue mutation or publication.
+
 ## Round-9 residual risks
 
 - The live lane still has never been executed end to end. Round 9 binds the receipt
@@ -1783,10 +1923,13 @@ change, no push, PR, merge, issue mutation or publication.
   reuse window on some filesystems) would still match; the failure mode is a bounded
   fail-closed error, and the check is the standard identity primitive available without
   holding the descriptor for the whole run.
-- A parent renamed *after* the receipt was installed leaves the receipt in the established
-  (renamed) directory while the final verification sees the new directory and fails the run
-  with the bounded `private-output` error: the handles stay inside the directory the run
-  established (never a foreign one), and the run never reports itself qualified.
+- A parent renamed *after* the write's directory descriptor is bound — before or after the
+  receipt is installed — leaves the receipt in the established (renamed) directory while the
+  final path verification sees the new directory and fails the run with the bounded
+  `private-output` error: the handles stay inside the directory the run established (never a
+  foreign one), the replacement directory at the original name never receives a byte, and the
+  run never reports itself qualified. The guide and the `--output` help now state exactly this
+  bounded outcome instead of the earlier absolute no-write claim.
 - The seam guarantee remains deliberately fail-closed at the end of the run and not at the
   start: a path that appears at the receipt target **during** the two-hour qualification
   fails the run and the private handles are then not captured at all. Establishment still
