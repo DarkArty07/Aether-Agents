@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 import tarfile
@@ -12,14 +11,12 @@ import zipfile
 from pathlib import Path
 from typing import Iterable
 
-# Build sensitive literals from components so the scanner does not flag itself.
-_UNIX_HOME = re.compile(
-    r"(?<![A-Za-z0-9_$}>])/(?:" + "home" + r"|" + "Users" + r")/[A-Za-z0-9._-]+/"
-)
-_WINDOWS_HOME = re.compile(r"(?i)(?<![A-Za-z0-9_$}>])[A-Z]:\\" + "Users" + r"\\[^\\\s]+\\")
-_PRIVATE_DESKTOP = re.compile(
-    r"(?i)(?<![A-Za-z0-9_<])(?:" + "Desktop" + r"|" + "Escritorio" + r")/(?:agentes|dev)/"
-)
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = ROOT / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
+
+from aether_agents.objective_contracts.store import find_operator_path_violations  # noqa: E402
 
 
 def _violations(label: str, payload: bytes) -> list[str]:
@@ -27,13 +24,7 @@ def _violations(label: str, payload: bytes) -> list[str]:
         text = payload.decode("utf-8")
     except UnicodeDecodeError:
         return []
-    kinds: list[str] = []
-    if _UNIX_HOME.search(text):
-        kinds.append("absolute-user-home")
-    if _WINDOWS_HOME.search(text):
-        kinds.append("windows-user-home")
-    if _PRIVATE_DESKTOP.search(text):
-        kinds.append("operator-desktop-layout")
+    kinds = find_operator_path_violations(text)
     return [f"{label}: {kind}" for kind in kinds]
 
 
