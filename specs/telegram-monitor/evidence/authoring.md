@@ -27,3 +27,27 @@
 
 Supervisor must inspect the canonical artifacts, create its own coverage/dependency
 breakdown, and verify actual unit/integration/live outcomes before terminal closure.
+
+## v2 — owner-approved isolation revision
+
+The owner approved D13's presented laboratory plus production-activation design and
+requested renewed Supervisor handoff. The native capability supersedes immutable v1;
+its v2 draft passed structural validation with all sections present. Design sufficiency
+was self-checked against scope, authority, original AC-1..9 and expected test effects:
+lab roots are private; native scheduler is reused without another receiver/dispatcher;
+production registry replacement is prohibited; lab and actual gateway evidence are
+separate; retained private evidence replaces unsafe cleanup, not preservation itself.
+
+The existing canonical baseline runner for `tests/test_documentation.py` and
+`tests/test_objective_contracts.py` returned **48 passed in 1.94s**. Documentation
+validation and `git diff --check` passed. These are authoring/source checks, not live
+monitor qualification. Prior approved candidate hashes were checked as reachable Git
+commits and matched the predecessor's durable independent-review summaries; no claim
+of rerunning those unit suites is made. D13 lists the exact reuse/provenance boundaries.
+
+The source/path-resolution probe verified isolated native roots and the Morfeo identity
+with no scheduler/model/sender execution. Actual artifact/config/plugin qualification
+remains an explicit preflight in D13 before spending the approved live budget. No
+product code, credentials, profiles or existing worker state were mutated by authoring.
+The existing Project knowledge component returned VIEW_MISMATCH for the native session
+workspace; direct current source inspection was used, not a substituted graph result.

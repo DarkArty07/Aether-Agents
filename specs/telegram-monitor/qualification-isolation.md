@@ -1,0 +1,97 @@
+# D13 — isolated live qualification and production activation
+
+**Authority:** owner approved Morfeo's presented design and requested a renewed Supervisor handoff. This document owns the material qualification design for `oc_f8c9fc9320587cf3@v2`; spec.md and quickstart.md reference it. No constitutional change. No implementation or live success is claimed by authoring it.
+
+## Decision and preserved outcome
+
+Keep one installation-wide production monitor and its existing destination. Prove synthetic behavior in a disposable native-runtime laboratory, then verify the same candidate on the existing production gateway. A laboratory success is not production acceptance. This replaces shared-registry swapping/restoration, not identity, privacy, concurrency, semantic fidelity or independent review requirements.
+
+Only the laboratory may run a second, temporary **instance of the native Hermes scheduler**, in its own state and without a gateway receiver, implementation dispatcher, auto-start or permanent service. Do not add a scheduler implementation, per-job product namespace, scope selector, new bot or credentials. Do not interrupt concurrent production work or hide registered projects to manufacture silence.
+
+## Inspected feasibility and limits
+
+- Monitor candidate `21d44b5d87deaed2f3e5eccfea15dcd2a740ca6b`: `paths.state_root` resolves XDG state; `monitor.runtime._collector` combines that root with the native Hermes home. Existing job fields cannot namespace the production gateway's Aether root.
+- Provisioned Hermes source `0b288979e2322c02ab42c05f1e183bb31cfa5aa9`: `cron.jobs` stores jobs by profile home; `cron.scheduler_provider.InProcessCronScheduler.start(stop_event, ...)` invokes native `cron.scheduler.tick`. Gateway uses that same built-in implementation. Do not run a custom scheduling loop or manually force the two hourly cuts.
+- `monitor.delivery._native_bot_api_send` uses the existing outgoing Bot API helper without starting another Telegram receiver.
+- A credential-free, network-free fresh-process probe resolved the Morfeo profile, native cron paths and Aether state inside a temporary HOME/HERMES_HOME/XDG tree. No scheduler, model or sender was started. This proves path isolation interfaces, not E2E behavior.
+- CronScheduler is marked experimental in the inspected runtime. Preflight must check actual imported distribution, source/signature and candidate compatibility; this objective does not authorize a Hermes patch. Existing selected-baseline/exact-Hermes tests remain required. If no compatible provisioned native trigger exists, return the exact capability gap rather than invent a replacement.
+
+## Laboratory bootstrap
+
+Use the existing qualification harness and provisioned runtime interpreter. Establish the child environment before importing Hermes/Aether:
+
+1. Create one private, exclusive root outside Git worktrees. Give it separate HOME, all XDG roots, temporary directory, cwd and Hermes root with `profiles/morfeo`. All mutable registry, boards, sessions, cron jobs/executions/output, monitor state and plugin state resolve inside it. Reject links or inherited selectors that redirect those writes to production.
+2. Pin and load the exact candidate artifact privately with the provisioned interpreter/dependencies; never install it over the running installation during the test. Record loaded module/artifact digests and entry points, not merely a source branch name. The later production acceptance uses the same relevant candidate bytes.
+3. Build minimal test configuration preserving the production Morfeo cron/model/fallback, tool/plugin, timezone, limits and transport decisions. Do not clone existing sessions, memories, jobs, registry, boards or authentication stores. Namespaced test identity is still Morfeo, not a fourth product role.
+4. Reuse only already provisioned access needed for that exact route and destination through private ephemeral process context. Never accept token/provider/model/destination overrides from CLI arguments, obtain/refresh credentials or persist new secret copies in test files or receipts. If access cannot be reused within that boundary, fail preflight before live spending. Remove inherited production board/session/project routing selectors only in the lab children, without suppressing delegation identity or guard policy.
+5. Verify resolved paths, exact route/destination, privacy of the output target and native interfaces before external effects. Configuration drift invalidates qualification; do not silently change the route. These are fail-closed checks inside the harness, not a new global permission engine.
+6. Seed only labeled synthetic projects, contracts, boards and native session/work records with the shipped product/native writers. Drive direct-work lifecycle via its supported callbacks. Do not inject accepted snapshots, model answers, delivery acknowledgments or successful summaries. Create enough native source metadata to distinguish real idle from coverage failure.
+7. Install one lab monitor job through its normal service with production script/prompt/toolset, `0 * * * *`, `deliver=local` and no per-job model overrides. Run the native InProcessCronScheduler in a bounded supervised child, with only the lab profile and no receiver, gateway housekeeping, profile multiplexing or implementation dispatcher. The native code owns due selection, execution and receipts; the harness only drives scenarios and observes evidence.
+
+This is operational isolation for cooperating processes and controlled paths, not an OS sandbox against a malicious process of the same user. Production state may legitimately change because other agents work; do not demand that all production files remain byte-identical. The harness itself must never replace, restore, quarantine, merge or delete the production registry.
+
+## Live sequence and budget
+
+Retain the public harness interface:
+
+```bash
+uv run --frozen python scripts/qualify_telegram_monitor.py --json
+uv run --frozen python scripts/qualify_telegram_monitor.py --live \
+  --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
+```
+
+Without `--live`, there are zero model/sender calls. `2` means two active wall-clock hourly cuts, followed by one naturally scheduled idle cut. Existing D2 pickup/lateness tolerances remain unchanged.
+
+- First run deterministic/static/exact-runtime gates and bootstrap preflight.
+- One initial bounded native model/transport smoke, labeled test; not a substitute for a scheduled boundary. Preserve the existing lead-time/deadline limits so the smoke cannot be counted as the first cut.
+- First natural cut: two projects/origins/contracts, a completed decomposition root with open descendant, review/blocked/unchanged work, and direct no-contract work. Cover the existing D12 semantic corpus within the smoke/hourly narratives; independently assess fidelity, not only structural validation.
+- Between cuts: create a short-lived work interval and finish it; complete the other synthetic scenarios through supported lifecycle. Do not directly edit source SQL or fabricate closure evidence.
+- Second natural cut: report pending final outcomes once with correct period/identity and actual native Telegram acknowledgments. Keep projects registered; only their work terminates.
+- Next natural cut: same registered projects, genuinely no work and no unreported outcome. Require the native silent gate, zero new narration and zero new send. Unreadable/ambiguous source state is not idle.
+- Preserve manual-off/idempotence/recovery controls. Induce network/fault/concurrency cases only through deterministic adapters and test-owned roots, never the owner's real transport or shared state.
+
+Budget is one smoke plus at most one normal narration per active lab digest, with existing provisioned fallback/agent bounds. One narration may contain multiple tool/model requests; do not misreport this as one HTTP call. The idle cut consumes none. No automatic live rerun loop. A failed qualification stops with evidence; a retry needs the corrected cause and an explicit remaining budget within approved authority. Scheduler lifetime is bounded by the planned cuts plus existing tolerances; closing the test TUI must not stop it.
+
+## Receipt, shutdown and retention
+
+A private receipt correlates candidate/artifact/native revisions, lab identity, source binding, due/capture/narration/ack times in UTC and local offset, job/session/report, status per criterion, limits/failures and shutdown. Public evidence contains sanitized references/timings/counts, not native live identifiers, paths, credentials or transcripts. Synthetic source labels produce visible test labeling without post-editing generated messages. Bot API acceptance is not human reading.
+
+Preflight output capture before any costly effect. Use an exclusively owned evidence target and no-overwrite finalization; preserve the existing private-write controls that still apply. Disable only the lab job, stop its native scheduler cooperatively and drain in-flight work under existing bounds. Uncertain delivery or a runner that fails to stop is not success.
+
+**Do not self-delete the laboratory in the test.** Retain its private root and receipt as explicitly reported objective evidence. Cleanup, if authorized at final closeout, is confined to proven test-owned state after processes end and evidence is durable. No real registry restoration is required. Removing the old shared-registry/cleanup mechanism removes its race surface; it does not waive preservation of unrelated data.
+
+## Real installation activation
+
+After independent lab review, use the supported scoped monitor activation and rollback, preserving the running gateway/agents:
+
+1. Revalidate exact candidate modules/plugins and relevant provisioned configuration. Cached code from a different candidate is not parity. If safe loading cannot happen without interrupting active work, report an activation blocker; no forced restart or silent alternative path.
+2. Register/reuse the production monitor with D3's actual installation-wide scope. Never copy lab job IDs, cursors, snapshots, source records, receipts or approval flags into production.
+3. Observe its first real hourly gateway execution and normal report to the existing destination: authoritative source identity, period, actual tool/plugin path and Telegram ack. If no reportable real work exists, record the real condition and keep first-delivery acceptance pending; do not seed production just to get a report.
+4. Do not force production idle while other agents work. Lab demonstrates idle; production demonstrates actual scope and gateway activation. Both evidence sets are required and separately labeled.
+5. Retire the exact temporary build reporter only after confirmed first production monitor delivery. On failure, retain evidence, scoped rollback and the appropriate existing reporter; do not close issue #367 or claim feature completion.
+
+## Continuation and preservation of previous work
+
+Version 2 supersedes the executable v1 design without invalidating reviewed code by fiat. Supervisor independently confirms reusable commits/receipts, maps the existing outcomes into the revised execution flow and owns any continuation/decomposition. Do not dispatch duplicate implementation for accepted outcomes or mark blocked v1 work done merely to satisfy a parent edge. Do not resume the old unsafe live lane. The v2 root ends after verified executable continuation handoff; implementation/review/integration remain separate native lifecycle phases.
+
+Retain the immutable v1 artifact and actual reviewed commits:
+
+| Outcome | Candidate/evidence revision | Evidence path |
+| --- | --- | --- |
+| MON-01 approved | cfbab930727c2e68fb6a0391088e77918b712edd | specs/telegram-monitor/evidence/MON-01.md |
+| MON-02 approved | 55334be6fb0d187fef341689775e929a8a286b56 | specs/telegram-monitor/evidence/MON-02.md |
+| MON-03 approved | dc19fe31d3c7cf21dbf35cb6669f495f39ee97e2; receipt 53e1b2da92e872823c56626ab716cc1ebce7fc77 | specs/telegram-monitor/evidence/MON-03.md |
+| MON-04 approved | d908c033d139e9dfeddfedf4461f85b40faedadc | specs/telegram-monitor/evidence/MON-04.md |
+| MON-05 approved | 2d49418b2ac9a3f64764b84e1b071df48b85070f | specs/telegram-monitor/evidence/MON-05.md |
+| MON-05-R1 approved, test-only | 704b729bc418f0d009ec32ac6a01e47197f36774 | specs/telegram-monitor/evidence/MON-05-R1.md |
+| MON-06 preserved, NOT approved | 21d44b5d87deaed2f3e5eccfea15dcd2a740ca6b | specs/telegram-monitor/evidence/MON-06.md |
+
+The table is source evidence from prior durable review handoffs, not a claim that Morfeo independently reran all suites. Use the exact predecessor contract binding for targeted board evidence when needed. Integration preserves commits and reconciles main changes, including canonical Supervisor convergence guidance and worker tools, rather than reverting them to a stale unit base.
+
+The expected remaining changes are the qualification harness/tests/documentation, its private bootstrap/scenario/receipt/shutdown helpers and the previously identified mechanical lifecycle plugin allowlist integration. Preserve approved production behavior; material new shared interfaces return to Morfeo. Remove `scope-isolation-unsupported` only after the real isolated preflight replaces the unsafe lane, not as an unconditional bypass. Local helper names, equivalent algorithms and test organization remain Implementer choices. No implementation cards are authored here.
+
+## Failure ownership and rejected alternatives
+
+A real source gap such as #390 must remain explicit. Fix only objective-blocking defects within existing authority through the correct role; otherwise record dependency/limits. Never hand back a false idle/success snapshot. Hermes recovery remains Morfeo's bounded operation, not a new framework repair inside this feature.
+
+Rejected: swapping the live registry; mocks-only live claims; extending product/gateway scope per job merely for a test; pausing all real agents; starting another Telegram receiver. All original AC-1..9 remain required with D13's explicit allocation of lab and production evidence. Release impact expected minor/additive, action defer, channel none; no publication/tag authority is added.

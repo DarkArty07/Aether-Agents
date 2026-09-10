@@ -78,49 +78,35 @@ Add every new non-spec tracked path to the existing literal manifest rather than
 its policy or duplicating a registry. Candidate-caused regressions must be fixed; record
 pre-existing failures with baseline comparison instead of silently skipping them.
 
-## 4. Private live qualification
+## 4. Private live qualification — isolated laboratory
 
-Implement `scripts/qualify_telegram_monitor.py` with explicit `--live`, `--json`,
-`--output <private-path>` and `--wait-hourly-boundaries 2` options. Without `--live` it
-must not send messages or invoke an LLM. It resolves only the already provisioned runtime,
-Morfeo route and existing configured Telegram conversation, never accepting a token or
-creating credentials. Native environment choices remain private invocation context, not
-version-controlled defaults. Preserve the exact scenario/receipt correlations privately.
-
-Before the long qualification, run the deterministic suite and one owner-authorized
-initial native model+transport smoke. Then:
+D13's [qualification-isolation.md](qualification-isolation.md) is normative for this
+phase and supersedes the previous shared-installation synthetic-scope approach.
 
 ```bash
-# $PRIVATE_EVIDENCE is an operator-selected protected directory outside the repository.
+uv run --frozen python scripts/qualify_telegram_monitor.py --json
+# PRIVATE_EVIDENCE is an approved private directory outside every Git worktree.
 uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
 
-The harness is bounded and never introduces a second recurring scheduler. It verifies:
+Without `--live`, zero model/sender calls. Before live effects verify candidate/runtime
+compatibility, isolated mutable paths, output privacy and the unchanged approved route
+and destination. No CLI token/model/recipient overrides or persisted credential copies.
+The supported native scheduler runs only the private lab profile; no receiver, dispatcher,
+custom scheduler or permanent service. The production gateway and projects are untouched.
 
-1. Native job is idempotently installed under Morfeo with `0 * * * *`; manual off persists.
-2. One synthetic monitored scope, with honest synthetic labels, is sourced from native
-   isolated artifacts. Cover two project identities and originating sessions, a pipeline
-   root/child boundary, direct no-contract work, and a short-lived completion. No arbitrary
-   live projects are enrolled by the test. It must exercise the shipped source adapter,
-   not feed handcrafted successful provider/Telegram responses into the main path.
-3. Actual native scheduler crosses two wall-clock hourly boundaries with recorded due,
-   capture, narration and acknowledgment times; close the originating test TUI and retain
-   the existing gateway. A manually triggered run is not a replacement for this evidence.
-4. Each active cut invokes at most one narrative; actual configured Morfeo route and native
-   Telegram acknowledgment/message identity are recorded privately. Header remains correct.
-5. After a confirmed final delivery, a subsequent native/direct precheck with genuinely
-   empty monitored scope returns the silent wake gate and starts no model call. Fault cases
-   use deterministic adapters, never induced failures in the owner's real network/service.
-6. Restore the previous scope and other jobs; retain the accepted production monitor only
-   after review. Do not kill active user agents or restart unrelated runtime services.
-7. Publish only a sanitized evidence summary containing source revisions, timings/counts,
-   case results and qualified scope; private chat/message/session handles stay in the
-   protected local receipt. Telegram acceptance is not proof of human reading.
+Perform one bounded initial smoke, then two actual hourly active cuts and a subsequent
+native idle cut. Native synthetic source records cover the original identity/lifecycle,
+D12 narrative corpus, blocked/unchanged, short-lived final and direct-work scenarios.
+Keep projects registered after their work finishes; unreadable source state is not idle.
+Manual triggering never substitutes for hourly evidence. Preserve existing pickup,
+lateness, inference/fallback and timeout bounds. Do not retry live calls indefinitely.
 
-For long waiting, use native background/process completion and board heartbeat evidence;
-do not discard progressing workers due to duration. If model/network/gateway is unhealthy,
-report exact failed prerequisites and preserve the candidate without fabricating success.
+Stop the lab scheduler/job cooperatively and retain private receipts/root as declared
+objective evidence; do not attempt shared-registry restoration or automatic test deletion.
+Use background completion and heartbeats for the wait, independently of the test TUI.
+No lab result alone establishes production activation or final acceptance.
 
 ## 5. Review, integration and activation
 
@@ -130,6 +116,13 @@ commits and do not bypass/rewrite history. Before local activation, record prior
 configuration/job identity/package source and a reversible rollback path using supported
 product lifecycle/native interfaces. Rollback disables only the feature and preserves
 monitor receipts and all unrelated work; no destructive database cleanup.
+
+After the independently accepted laboratory, verify the exact candidate on the existing
+production gateway with the full D3 real scope and a first normal hourly report/ack.
+Do not copy lab job IDs, cursors, source records or acceptance state into production; do
+not hide real work to force idle. If there is no reportable real work, keep first-delivery
+acceptance pending rather than fabricate an outcome. A cached incompatible gateway
+requires an explicit safe-activation resolution, not interruption of active work.
 
 On activation the user must see `aether monitor status` accurately report automatic/off,
 next due, scope and last delivery, and observe actual intended Telegram output. Retire the

@@ -256,6 +256,21 @@ per affected report cut. Manual off blocks both narrative and retry delivery.
 
 ## 7. Packaging, activation and ownership boundaries
 
+### D13: separate qualification from production activation
+
+The owner-approved [qualification-isolation.md](qualification-isolation.md) defines the
+remaining live path and preserved previous revisions. It replaces shared-registry
+substitution with a private native scheduler-only laboratory, preserving the production
+installation. Exactly one initial smoke, two active native hourly cuts and a following
+native idle cut prove laboratory behavior. Independently verify the same candidate's
+first hourly report on the existing production gateway before terminal acceptance.
+A second temporary native scheduler instance is allowed only inside this private lab;
+no second service/receiver/dispatcher or custom scheduling engine is authorized.
+Retain private test evidence and stop the runner; do not self-delete or restore the
+production registry. This is v2's explicit qualification/authority revision, not a
+reason to omit remaining functional or privacy acceptance. Keep approved MON-01..05
+and reviewed test corrections; Supervisor owns continuation of the unfinished work.
+
 Document `docs/guides/telegram-monitor.md`, relevant CLI/plugin references, and
 `docs/capabilities.toml` plus generated reference. Keep status claims at observed capability
 level only. Reconcile the workflow's **literal** tracked-file/entry-point allowlists with

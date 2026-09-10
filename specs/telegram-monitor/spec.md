@@ -70,6 +70,23 @@ historical adversarial examples as semantic prompt/live quality cases, and keep 
 and privacy regressions executable and green. No claim of perfect hallucination detection
 is permitted. Changes to verification allocation are explicit here, never silently weakened.
 
+### D13 — Owner-approved isolated qualification and real activation
+
+The owner approved the presented laboratory design and renewed handoff to Supervisor.
+[qualification-isolation.md](qualification-isolation.md) owns the exact bootstrap,
+source/scenario, scheduler, receipt, shutdown, retention and continuation design.
+The single production monitor and D3 installation-wide scope are unchanged. Explicitly
+permit one temporary scheduler-only native instance with isolated HOME/HERMES_HOME/XDG
+state for qualification; no second receiver, permanent service or custom scheduler.
+Never swap or restore the real registry. Use existing access ephemerally without new
+credential copies. Qualify one smoke, two active real hourly cuts and a subsequent real
+idle cut in the lab; then independently verify the same candidate's first normal hourly
+report on the existing production gateway. Keep private lab evidence through closure
+instead of self-deleting it. No active-agent interruption or relaxed acceptance.
+This explicit method/authority amendment supersedes v1's blanket second-scheduler ban
+only for the isolated bounded test, and requires Objective Contract v2. Preserve the
+reviewed code/commits; Supervisor owns the remaining continuation and its review.
+
 ## Acceptance criteria
 
 | ID | Observable outcome |
@@ -90,6 +107,6 @@ Under delegated authority, use behavior-focused regression tests, deterministic 
 
 ## Preservation and exclusions
 
-Retain the three roles. A reporting execution of Morfeo is not a fourth role. Reporting is read-only with respect to source work: it cannot advance tasks, accept milestones, repair blockers or change a contract. Its own enrollment/report/cursor records and the identified monitor cron may change under the product controls. Do not expose credentials, raw transcripts, user identifiers, machine paths or private provider bindings in public artifacts. Avoid unrelated cleanup. No new bot, scheduler daemon, Telegram poller, Desktop frontend, cross-machine collector, percentage engine, time-billing service, inbound command router, provider or package release is included. The owner requested up-front review of protected identity edits; all three SOUL sources were inspected and require no modification. They and installed SOUL copies remain outside scope. The sole protected AGENTS exception link was applied through its normal guard after that explicit owner instruction.
+Retain the three roles. A reporting execution of Morfeo is not a fourth role. Reporting is read-only with respect to source work: it cannot advance tasks, accept milestones, repair blockers or change a contract. Its own enrollment/report/cursor records and the identified monitor cron may change under the product controls. Do not expose credentials, raw transcripts, user identifiers, machine paths or private provider bindings in public artifacts. Avoid unrelated cleanup. Except for D13's isolated bounded native scheduler instance, no new bot, scheduler daemon, Telegram poller, Desktop frontend, cross-machine collector, percentage engine, time-billing service, inbound command router, provider or package release is included. The owner requested up-front review of protected identity edits; all three SOUL sources were inspected and require no modification. They and installed SOUL copies remain outside scope. The sole protected AGENTS exception link was applied through its normal guard after that explicit owner instruction.
 
-Objective Contract `oc_f8c9fc9320587cf3@v1` is finalized at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v1.md`. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
+Objective Contract `oc_f8c9fc9320587cf3@v2` supersedes v1 with D13 at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v2.md`; immutable v1 remains preserved. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
