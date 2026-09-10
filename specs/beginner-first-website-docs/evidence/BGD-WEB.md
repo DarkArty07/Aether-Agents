@@ -19,6 +19,12 @@ GitHub publication claim, or proof of Pages deployment.
 - Website implementation was replayed without content changes as
   `8c289cd91579513803163d0e3ea13b8c89da0bbe`; its stable patch ID exactly matches the
   original local implementation commit `9f58447585fac049ac687d6c749afea0ab4ea725`.
+- Supervisor review correction is isolated in website commit
+  `63ba7f31e290bc1bbb46227cfabf55708ad9b9d0`: the docs index now marks the canonical
+  English Markdown and English card/group-label metadata with `lang="en"`, explicitly
+  identifies Spanish orientation descriptions as `es-MX`, adds static/browser
+  regressions, and reconciles the current README wording without changing historical
+  `website/VERIFICATION.md` records.
 - Recovery was necessary because the original unit worktrees were materialized from an
   incidental unrelated checkout tip rather than the contract base. The recovered chain
   starts with the Supervisor decomposition commits on required base
@@ -39,7 +45,8 @@ GitHub publication claim, or proof of Pages deployment.
 - `website/src/components/DocsNavigation.astro`: shared grouped navigation with stable
   ordering, current-page semantics and source metadata.
 - `website/src/pages/docs/index.astro`: beginner-oriented index, canonical index Markdown
-  rendering, grouped cards, Spanish/English search orientation and explicit degraded state.
+  rendering, grouped cards, language-of-parts metadata, Spanish/English search orientation
+  and explicit degraded state.
 - `website/src/pages/docs/[...slug].astro` and `website/src/pages/docs/search.json.ts`:
   one article route per non-index source, group/breadcrumb/current/revision/status context,
   in-page heading navigation, within-group previous/next links and complete static search
@@ -49,8 +56,8 @@ GitHub publication claim, or proof of Pages deployment.
   no page overflow rules.
 - `website/tests/content.test.mjs`, `website/tests/browser/docs.spec.ts`, and the
   documentation assertions in `website/tests/browser/site.spec.ts`: corpus, manifest,
-  route, link, fragment, source, search, navigation, accessibility, keyboard, mobile and
-  no-JavaScript coverage.
+  route, link, fragment, source, search, language-of-parts, navigation, accessibility,
+  keyboard, mobile and no-JavaScript coverage.
 - `website/scripts/capture.mjs`, `website/AGENTS.md`, `website/README.md` and
   `website/VERIFICATION.md`: representative docs captures and reconciled website guidance.
 
@@ -66,20 +73,23 @@ repository setting, remote, issue, PR, deployment or release state was changed.
 | AC-8: article group/current context, return/search access, headings, fragments, within-group adjacency, mobile and keyboard behavior | `CI=1 npm run test:e2e`: PASS, 57 passed and 1 intentionally skipped across desktop/mobile Chromium. Article checks observed `Working with Aether`, `CHAPTER 3 OF 6`, current sidebar/mobile links, status/search actions, 12 walkthrough TOC links, previous `objective-contracts` and next `execution`. Direct-fragment and keyboard-focus checks passed. | `website/tests/browser/docs.spec.ts`; generated article routes |
 | AC-9: title/description/group/body search, Mexican-Spanish and English terms, count/no-result/failure, no-JavaScript degradation | Browser search passed for `conocimiento`, `worktree`, and a no-result term; failed-index interception reported the load failure while retaining all five groups; no-JavaScript checks found the grouped index/navigation and article content usable, with the search panel hidden and an explicit `noscript` unavailable message. | `website/tests/browser/docs.spec.ts`; `website/src/pages/docs/index.astro`; generated `docs/search.json` |
 | AC-10: desktop/mobile overflow and local code/table scrolling | `node scripts/capture.mjs`: PASS at 360, 390, 768, 1024, 1440 and 1920 pixels; all reported document widths equal viewport widths and all reported overflow arrays are empty. Browser representatives passed no-overflow checks; start page code/table regions were focusable (`tabIndex=0`) with `overflow-x:auto`. | `website/scripts/capture.mjs`; `website/test-results/visual/layout.json` (ignored generated output); `website/tests/browser/docs.spec.ts` |
-| AC-11: WCAG A/AA checks on index/start/walkthrough/long reference and mobile | `CI=1 npm run test:e2e`: PASS. Axe checks on `/docs/`, `/docs/start-here/`, `/docs/guides/first-objective/` and `/docs/reference/capabilities/` in both configured desktop and mobile projects reported no WCAG 2A/2AA/2.1A/2.1AA violations. | `website/tests/browser/docs.spec.ts` |
+| AC-11: WCAG A/AA checks on index/start/walkthrough/long reference and mobile | `CI=1 npm run test:e2e`: PASS, 57 passed and 1 intentional skip across desktop/mobile Chromium. Axe checks on `/docs/`, `/docs/start-here/`, `/docs/guides/first-objective/` and `/docs/reference/capabilities/` in both configured desktop and mobile projects reported no WCAG 2A/2AA/2.1A/2.1AA violations. The index regression additionally verifies the Spanish `es-MX` document, `lang="en"` canonical Markdown, five English group labels, five explicit `es-MX` orientation descriptions and all 19 English card title/description pairs in both projects. | `website/tests/browser/docs.spec.ts`; `website/tests/content.test.mjs` |
 | AC-12: no private/opaque operational data in public artifacts | `uv run --frozen pytest -q tests/test_beginner_documentation.py tests/test_documentation.py tests/test_public_artifacts.py`: 24 passed and one known unchanged-base public-artifact failure. The only failure is `test_tracked_public_surface_contains_no_operator_paths`, reporting the pre-existing `oc_0084270d940c98d9` `absolute-user-home` and `operator-desktop-layout` findings. No new finding points to this unit; no operational state is committed. | Root test output; inherited `specs/beginner-first-website-docs/evidence/BGD-CONTENT.md`; `git diff --name-only` |
-| AC-13: website guidance/verification coherence and preservation | Website guidance now describes the 19-page tracked corpus, direct Markdown rendering, five groups, stabilization status, no-JavaScript behavior and required commands. Landing components, artwork, motion and inherited content paths are unchanged by this unit. | `website/AGENTS.md`; `website/README.md`; `website/VERIFICATION.md`; `git diff --stat` |
+| AC-13: website guidance/verification coherence and preservation | Website guidance describes the 19-page tracked corpus, direct Markdown rendering, five groups, stabilization status, no-JavaScript behavior and required commands. README now points to the earlier owner-acceptance gate as historical while accurately identifying this docs candidate as a local same-card review item; historical `VERIFICATION.md` records remain unchanged. Landing components, artwork, motion and inherited content paths are unchanged by this unit. | `website/AGENTS.md`; `website/README.md`; `website/VERIFICATION.md`; `git diff --stat` |
 | AC-14 unit portion: independently reviewable implementation and truthful evidence | The content prerequisite remains a distinct ancestor, and this unit is a separate implementation commit with a separate evidence record. Same-card Supervisor review is still required; this self-review is not approval. | `git log --oneline`; this file; native Kanban review handoff |
 
 ## Executed verification
 
-All website commands below ran after cleaning ignored `dist`, `.astro`, Playwright reports
-and captures, and after `npm ci`. The final normal build was restored after the Pages-mode
-check.
+All website commands below ran after `npm ci`. The requested scoped cleanup of ignored
+`dist`, `.astro`, Playwright reports and captures was denied by the pre-tool guard as a
+destructive operation; no alternate destructive cleanup was attempted. Each normal build
+regenerated `dist`, and the capture/e2e commands rewrote their representative outputs.
+The final normal build was restored after the Pages-mode check.
 
 | Command or action | Observed result | Interpretation |
 | --- | --- | --- |
 | `npm ci` from `website/` | PASS: 320 packages added/audited; 0 vulnerabilities | Existing locked dependencies suffice; no package change was introduced. |
+| Scoped generated-output cleanup | Guard denial: `git clean -fdX -- website/dist website/.astro website/test-results website/playwright-report` was classified as a destructive local operation | The denial was recorded; verification continued with the required build/test sequence and no generated output was treated as tracked evidence. |
 | `npm run build` | PASS: Astro static build completed with 22 pages | Normal local output includes `/docs/`, 18 non-index article pages, 404, search JSON and the two landing pages. |
 | `npm run check` | PASS: 33 files; 0 errors, warnings or hints | Astro/type diagnostics are clean. |
 | `npm test` | PASS: 14 tests; 0 failed, skipped or cancelled | Content, manifest, generated-link, source and preservation checks pass. |
