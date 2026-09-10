@@ -281,7 +281,42 @@ def test_fabricated_completion_requires_verified_observed_completion_evidence() 
     assert accepted["items"][0]["status"] == "completed"
 
 
-def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
+@pytest.mark.parametrize("observed_state", ["ready", "listo"])
+def test_readiness_observed_states_cannot_ground_terminal_completion(observed_state: str) -> None:
+    item = _item(state=observed_state)
+    item["resolved"] = [_fact("work_alpha_resolved", "The test completed successfully.")]
+    snapshot = _snapshot(item)
+    reporting.build_narration_prompt(snapshot)
+
+    narrative_item = _narrative_item(status="completed")
+    narrative_item["resolved"] = [
+        {"ref": "work_alpha_resolved", "text": "The test completed successfully."}
+    ]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(snapshot, _narrative(narrative_item))
+    assert error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+
+def test_source_aligned_whole_item_completion_forecast_and_elapsed_claims_fail_closed() -> None:
+    claims = (
+        "Completed all objectives; review remains pending.",
+        "The work is over.",
+        "We expect delivery Friday.",
+        "The task took one hour.",
+        "La tarea tardó una hora.",
+    )
+    for claim in claims:
+        source_item = _item(state="in_progress")
+        source_item["current"] = [_fact("work_alpha_current", claim)]
+        with pytest.raises(reporting.ReportingError) as source_error:
+            reporting.build_narration_prompt(_snapshot(source_item))
+        assert source_error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+        narrative = _narrative(_narrative_item())
+        narrative["items"][0]["current"] = [{"ref": "work_alpha_current", "text": claim}]
+        with pytest.raises(reporting.ReportingError):
+            reporting.render_report(_snapshot(_item(state="in_progress")), narrative)
+
     snapshot = _snapshot(_item(state="in_progress"))
 
     for claim_text, status in (
@@ -302,6 +337,7 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
     for invalid_status in (
         "completed_by_Friday",
         "accomplished",
+        "finalized",
         "completado",
         "listo",
         "shipped",
@@ -357,6 +393,7 @@ def test_verified_resolved_subfacts_can_coexist_with_in_progress_status() -> Non
     for resolved_text in (
         "The test completed successfully; review remains pending.",
         "El defecto fue resuelto; la revisión sigue pendiente.",
+        "The task's tests passed; review remains pending.",
     ):
         item = _item(state="in_progress")
         item["resolved"] = [_fact("work_alpha_resolved", resolved_text)]

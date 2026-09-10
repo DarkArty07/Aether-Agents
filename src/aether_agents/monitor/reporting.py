@@ -143,6 +143,8 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"\b(?:pron[oó]stico|previsi[oó]n|previst[oa]s?|estimaci[oó]n|estimad[oa]s?|"
     r"proyectad[oa]s?|predich[oa]s?|esperad[oa]s?)\b|"
     r"\b(?:se\s+espera|esperamos|se\s+prev[eé]|se\s+pronostica|se\s+estima|se\s+proyecta)\b|"
+    r"\b(?:expect|expects|expecting)\s+(?:the\s+)?(?:work|task|item|delivery|"
+    r"completion|finish|resolution|change|project|report)\b|"
     r"\b(?:completion|finish|delivery|resolution|work|task|item)\s+(?:is\s+)?expected\b|"
     r"\bexpected\s+(?:completion|finish|delivery|resolution|by|in|on|before|for|to|at|"
     r"today|tomorrow|yesterday|this\s+(?:hour|morning|afternoon|week|month)|"
@@ -159,14 +161,15 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"\b(?:finish|finished|complete|completed|ready|done|ship|shipped|deliver|delivered|conclude|concluded)\s+(?:by|in|on|before|for)\s+"
     r"(?:\d|today\b|tomorrow\b|yesterday\b|this\s+(?:hour|morning|afternoon|week|month)\b|"
     r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)|"
+    r"\b(?:work|task|item|project|change|delivery|report)\s+(?:is|are|was|were|will\s+be)\s+over\b|"
     r"\b(?:will\s+be\s+(?:ready|finished|completed|done|shipped|delivered|concluded)|will\s+(?:finish|complete|ship|deliver|conclude))\b|"
     r"\b(?:estar[áa]n?|quedar[áa]n?|ser[áa]n?|va\s+a\s+estar)\s+(?:list[oa]s?|terminad[oa]s?|finalizad[oa]s?|completad[oa]s?|entregad[oa]s?|desplegad[oa]s?|concluid[oa]s?)\b|"
     r"\b(?:list[oa]s?|termin(?:ar|ar[áa]n?|ad[oa]s?)|finaliz(?:ar|ar[áa]n?|ad[oa]s?)|complet(?:ar|ar[áa]n?|ad[oa]s?)|entreg(?:ar|ar[áa]n?|ad[oa]s?)|despleg(?:ar|ar[áa]n?|ad[oa]s?)|conclu(?:ir|ir[áa]n?|ye|yen)|culmin(?:ar|ar[áa]n?|ad[oa]s?))\b.{0,40}"
     r"\b(?:mañana|hoy|ayer|pronto|este\s+(?:mes|año|fin\s+de\s+semana)|esta\s+semana|(?:el\s+|pr[oó]xim[oa]\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|sabado|domingo))\b|"
     r"\b(?:concluir[áa]n?|culminar[áa]n?)\b|"
-    r"\b(?:worked|spent|took|used)\s+\d+(?:[.,]\d+)?\s*"
+    r"\b(?:worked|spent|took|used)\s+(?:\d+(?:[.,]\d+)?|one|two|three|four|five|six|seven|eight|nine|ten)\s*"
     r"(?:seconds?|minutes?|hours?|days?)\b|"
-    r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+\d+(?:[.,]\d+)?\s*"
+    r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+(?:\d+(?:[.,]\d+)?|un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*"
     r"(?:segundos?|minutos?|horas?|días?)\b|"
     r"\b(?:cpu|agent|active)\s*[- ]?hours?\b|\b(?:cpu|agent)\s*[- ]?hrs?\b|"
     r"\b\d+(?:[.,]\d+)?\s*horas?\s+(?:de\s+)?(?:cpu|agente|trabajo)\b"
@@ -221,11 +224,13 @@ _COMPLETION_ASSERTION_RE: Final = re.compile(
     r"clos(?:ed?|es|ing)|"
     r"succeed(?:ed|s|ing)?|success(?:ful)?|"
     r"pass(?:ed|es|ing)?|"
+    r"finaliz(?:e|ed|es|ing)?|"
     r"ready|"
     r"ship(?:ped|s|ping)?|"
     r"deliver(?:ed|s|ing)?|"
     r"deploy(?:ed|s|ing)?|"
     r"release(?:d?|s|ing)?|"
+    r"over|"
     r"complet(?:e|o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
     r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
     r"finaliz(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
@@ -254,6 +259,35 @@ _WHOLE_ITEM_SUBJECT_RE: Final = re.compile(
     re.IGNORECASE,
 )
 
+_LEADING_WHOLE_ITEM_COMPLETION_RE: Final = re.compile(
+    r"^\s*(?:"
+    r"complete(?:d|s|ing)?|accomplish(?:ed|es|ing)?|done|finish(?:ed|es|ing)?|"
+    r"resolv(?:ed|es|ing)?|accept(?:ed|s|ing)?|clos(?:ed|es|ing)?|"
+    r"succeed(?:ed|s|ing)?|pass(?:ed|es|ing)?|finaliz(?:e|ed|es|ing)?|"
+    r"ship(?:ped|s|ping)?|deliver(?:ed|s|ing)?|deploy(?:ed|s|ing)?|"
+    r"release(?:d?|s|ing)?|complet(?:o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
+    r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|finaliz(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
+    r"resuelt[oa]s?|resolv(?:er|ió|ieron|erá|erán)|hech[oa]s?|aceptad[oa]s?|"
+    r"cerrad[oa]s?|aprob(?:ad[oa]s?|ar|ó|aron|ará|arán)|entregad[oa]s?|"
+    r"desplegad[oa]s?|liberad[oa]s?"
+    r")\s+(?:(?:all|every|the|this|that|todo|toda|todos|todas)\s+)?"
+    r"(?:work|task|item|project|change|delivery|report|objective(?:s)?|goal(?:s)?|"
+    r"trabajo|tarea|proyecto|cambio|entrega|informe|objetivo(?:s)?|meta(?:s)?)\b",
+    re.IGNORECASE,
+)
+
+_SUBFACT_MARKER_RE: Final = re.compile(
+    r"(?:['’]s\s+|\b(?:"
+    r"test(?:s|ing)?|check(?:s|ed|ing)?|unit(?:s)?|build(?:s|ing)?|"
+    r"compile(?:d|s|ing)?|lint(?:ed|s|ing)?|review(?:s|ed|ing)?|"
+    r"patch(?:es|ed|ing)?|fix(?:es|ed|ing)?|defect(?:s)?|issue(?:s)?|"
+    r"component(?:s)?|module(?:s)?|case(?:s)?|assertion(?:s)?|step(?:s)?|"
+    r"milestone(?:s)?|remed(?:y|ies)|verification(?:s)?|deployment(?:s)?|"
+    r"message(?:s)?|delivery(?:ies)?|acceptance(?:s)?|acknowledg(?:ement|ment)s?"
+    r")\b)",
+    re.IGNORECASE,
+)
+
 
 def _has_completion_assertion(text: str) -> bool:
     """Return True if text asserts terminal completion rather than pending/readiness/diagnostics."""
@@ -273,6 +307,8 @@ def _has_whole_item_completion_assertion(text: str) -> bool:
     masked = _EXPLICIT_NEGATION_RE.sub(" ", normalized)
     masked = _GATE_READINESS_RE.sub(" ", masked)
     masked = _DELIVERY_DEGRADATION_RE.sub(" ", masked)
+    if _LEADING_WHOLE_ITEM_COMPLETION_RE.search(masked):
+        return True
     subject = _WHOLE_ITEM_SUBJECT_RE.search(masked)
     if subject is None:
         return False
@@ -280,6 +316,8 @@ def _has_whole_item_completion_assertion(text: str) -> bool:
     if completion is None:
         return False
     between = masked[subject.end() : completion.start()]
+    if _SUBFACT_MARKER_RE.search(between):
+        return False
     return not any(marker in between for marker in ".;!?")
 
 
@@ -290,6 +328,7 @@ _COMPLETION_STATUSES: Final = frozenset(
         "accomplished",
         "done",
         "resolved",
+        "finalized",
         "accepted",
         "closed",
         "success",
@@ -351,6 +390,9 @@ _COMPLETION_STATUSES: Final = frozenset(
         "liberadas",
     }
 )
+# Observed lifecycle terminality is source-authoritative.  Readiness states such as
+# ``ready``/``listo`` remain open even when a model uses completion vocabulary in its
+# reported status; they must never ground a terminal narrative.
 _TERMINAL_OBSERVED_STATES: Final = frozenset(
     {
         "complete",
@@ -363,7 +405,6 @@ _TERMINAL_OBSERVED_STATES: Final = frozenset(
         "succeeded",
         "success",
         "passed",
-        "ready",
         "shipped",
         "ship",
         "delivered",
@@ -401,10 +442,6 @@ _TERMINAL_OBSERVED_STATES: Final = frozenset(
         "aprobada",
         "aprobados",
         "aprobadas",
-        "listo",
-        "lista",
-        "listos",
-        "listas",
         "entregado",
         "entregada",
         "entregados",
