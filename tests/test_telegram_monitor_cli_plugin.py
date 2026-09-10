@@ -2352,7 +2352,7 @@ class _FakeBackends:
         }
 
     def owned_registry_entries(
-        self, registry_path: Path, project_ids: Sequence[str]
+        self, registry_path: Path, manifest: Sequence[Mapping[str, Any]]
     ) -> tuple[dict[str, Any], list[str]]:
         self.calls.append("owned_registry_entries")
         return {}, []
@@ -4610,32 +4610,55 @@ def test_live_restore_accepts_the_concurrency_preserving_registry_outcomes(
 
 
 # ---------------------------------------------------------------------------
-# Live-shaped registry cycles and ownership fences (round 11)
+# Live-shaped registry cycles and ownership fences (round 11, extended round 13)
 # ---------------------------------------------------------------------------
 
 SYNTHETIC_PROJECT_ONE = "44444444-4444-4444-8444-444444444444"
 SYNTHETIC_PROJECT_TWO = "55555555-5555-4555-8555-555555555555"
 
 
+def _scope_registration_manifest(tmp_path: Path) -> list[dict[str, Any]]:
+    """The two synthetic registrations the live scope probe performs, as the live flow knows them."""
+
+    return [
+        {
+            "project_id": SYNTHETIC_PROJECT_ONE,
+            "path": str(tmp_path / "synthetic-one"),
+            "name": "Synthetic scope",
+            "native_project_id": "native-scope",
+        },
+        {
+            "project_id": SYNTHETIC_PROJECT_TWO,
+            "path": str(tmp_path / "synthetic-two"),
+            "name": "Synthetic scope",
+            "native_project_id": "native-scope",
+        },
+    ]
+
+
 def _register_scope_projects(
     registry_path: Path, module: Any, tmp_path: Path, *, concurrent: bool
 ) -> dict[str, Any]:
-    """The registrations the live scope probe performs, plus an optional operator update."""
+    """The registrations the live scope probe performs, plus an optional operator update.
+
+    The owned values are derived exactly as the live flow derives them: from the shipped writer
+    with the probe's own arguments, and only then checked against the isolated registry.
+    """
 
     from aether_agents.observation.context import ProjectRegistry
 
+    manifest = _scope_registration_manifest(tmp_path)
     registry = ProjectRegistry()
-    synthetic_paths = {
-        SYNTHETIC_PROJECT_ONE: tmp_path / "synthetic-one",
-        SYNTHETIC_PROJECT_TWO: tmp_path / "synthetic-two",
-    }
-    for project_id, project_path in synthetic_paths.items():
+    for entry in manifest:
         assert registry.register(
-            project_id, project_path, name="Synthetic scope", hermes_project_id="native-scope"
+            entry["project_id"],
+            Path(entry["path"]),
+            name=entry["name"],
+            hermes_project_id=entry["native_project_id"],
         )
-    owned, missing = module._registry_owned_entries(registry_path, list(synthetic_paths))
+    owned, missing = module._scope_registry_owned_entries(registry_path, manifest)
     assert missing == []
-    assert sorted(owned) == sorted(synthetic_paths)
+    assert sorted(owned) == sorted(entry["project_id"] for entry in manifest)
     if concurrent:
         assert registry.register(
             REGISTRY_PROJECT_B, tmp_path / "concurrent-project", name="Concurrent B"
@@ -4713,9 +4736,19 @@ def test_registry_restore_refuses_when_an_owned_entry_changed(
     isolation = module._isolate_registry()
     from aether_agents.observation.context import ProjectRegistry
 
+    manifest = [
+        entry
+        for entry in _scope_registration_manifest(tmp_path)
+        if entry["project_id"] == SYNTHETIC_PROJECT_ONE
+    ]
     registry = ProjectRegistry()
-    assert registry.register(SYNTHETIC_PROJECT_ONE, tmp_path / "synthetic-one", name="Synthetic")
-    owned, missing = module._registry_owned_entries(registry_path, [SYNTHETIC_PROJECT_ONE])
+    assert registry.register(
+        SYNTHETIC_PROJECT_ONE,
+        Path(manifest[0]["path"]),
+        name=manifest[0]["name"],
+        hermes_project_id=manifest[0]["native_project_id"],
+    )
+    owned, missing = module._scope_registry_owned_entries(registry_path, manifest)
     assert missing == []
     isolation["owned_entries"] = owned
     # Something rewrote the run-owned entry to a different value, which is never deleted here.
@@ -4808,3 +4841,268 @@ def test_registry_isolation_refuses_a_registry_that_appears_before_the_install(
     assert base64.b64decode(record["original_base64"]) == operator
     assert not world["outgoing_path"].exists()
     assert not list(registry_path.parent.glob("*.tmp"))
+
+
+# ---------------------------------------------------------------------------
+# Exact ownership, no-replace moves and non-destructive removal (round 13)
+# ---------------------------------------------------------------------------
+
+
+def test_rename_no_replace_never_replaces_an_entry_at_the_destination(
+    tmp_path: Path,
+) -> None:
+    """The registry move primitive refuses instead of clobbering whatever is already there."""
+
+    module = _qualification_module()
+    source = tmp_path / "source"
+    source.write_bytes(b"source")
+    destination = tmp_path / "destination"
+    destination.write_bytes(b"destination")
+
+    with pytest.raises(FileExistsError):
+        module._rename_no_replace(source, destination)
+
+    assert source.read_bytes() == b"source"
+    assert destination.read_bytes() == b"destination"
+    module._rename_no_replace(source, tmp_path / "free")
+    assert (tmp_path / "free").read_bytes() == b"source"
+
+
+def test_absent_registry_live_shaped_cycle_removes_only_the_run_s_own_scope(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run found no registry: the live-shaped cycle leaves no synthetic project behind."""
+
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=None)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=False
+    )
+
+    # The only entries the registry carried were this run's own scope registrations, so the
+    # registry this run created is removed and the outcome says exactly that.
+    assert module._restore_registry(isolation) == "removed"
+
+    assert not registry_path.exists()
+    assert [path.name for path in registry_path.parent.iterdir()] == []
+
+
+def test_absent_registry_live_shaped_cycle_keeps_a_genuinely_concurrent_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same absent-start cycle with a real concurrent registration: it survives."""
+
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=None)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=True
+    )
+
+    assert module._restore_registry(isolation) == "merged-concurrent"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_B}
+    assert payload["projects"][REGISTRY_PROJECT_B]["name"] == "Concurrent B"
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+
+
+def test_owned_entries_come_from_the_shipped_writer_not_from_a_later_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A same-id update is never adopted as this run's entry and never deleted."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    before = registry_path.read_bytes()
+    from aether_agents.observation.context import ProjectRegistry
+
+    manifest = _scope_registration_manifest(tmp_path)
+    scratch_roots: list[Path] = []
+    real_mkdtemp = module.tempfile.mkdtemp
+
+    def recording_mkdtemp(*arguments: Any, **keywords: Any) -> str:
+        created = real_mkdtemp(*arguments, **keywords)
+        scratch_roots.append(Path(created))
+        return created
+
+    monkeypatch.setattr(module.tempfile, "mkdtemp", recording_mkdtemp)
+    # Ownership is derived without consulting the operator registry at all.
+    derived = module._scope_registry_entries(manifest)
+    assert registry_path.read_bytes() == before
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+    # ...and the private scratch state root it derived the values from is removed again.
+    assert scratch_roots and not scratch_roots[0].exists()
+
+    isolation = module._isolate_registry()
+    registry = ProjectRegistry()
+    for entry in manifest:
+        assert registry.register(
+            entry["project_id"],
+            Path(entry["path"]),
+            name=entry["name"],
+            hermes_project_id=entry["native_project_id"],
+        )
+    # A legitimate same-id update lands after the registration and before any readback.
+    assert registry.register(
+        SYNTHETIC_PROJECT_ONE, tmp_path / "concurrent-replacement", name="Concurrent replacement"
+    )
+    owned, missing = module._scope_registry_owned_entries(registry_path, manifest)
+
+    assert missing == [SYNTHETIC_PROJECT_ONE]
+    assert owned[SYNTHETIC_PROJECT_ONE] == derived[SYNTHETIC_PROJECT_ONE]
+    assert owned[SYNTHETIC_PROJECT_ONE]["name"] == "Synthetic scope"
+    isolation["owned_entries"] = owned
+    assert module._restore_registry(isolation) == "failed"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert payload["projects"][SYNTHETIC_PROJECT_ONE]["name"] == "Concurrent replacement"
+    assert set(payload["projects"]) == {SYNTHETIC_PROJECT_ONE, SYNTHETIC_PROJECT_TWO}
+    record = json.loads(world["recovery_path"].read_text(encoding="utf-8"))
+    assert base64.b64decode(record["original_base64"]) == operator
+
+
+def test_registry_isolation_refuses_an_entry_that_appears_at_the_held_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A durable file that appears at the held name at the move seam is never replaced."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    held_path = world["held_path"]
+    sentinel = b"a durable file that appeared at the held name"
+    real_move = module._rename_no_replace
+
+    def injected(source: Path, destination: Path) -> None:
+        # The entry appears immediately before the real no-replace move.
+        if destination == held_path and not destination.exists():
+            destination.write_bytes(sentinel)
+        return real_move(source, destination)
+
+    monkeypatch.setattr(module, "_rename_no_replace", injected)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-held-exists"
+    # The entry that appeared at the seam is untouched and the operator registry is unchanged.
+    assert held_path.read_bytes() == sentinel
+    assert registry_path.read_bytes() == operator
+    assert not world["recovery_path"].exists()
+
+
+def test_registry_restore_refuses_an_entry_that_appears_at_the_outgoing_seam(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The restore never replaces a durable file that appears at the outgoing name."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    outgoing_path = world["outgoing_path"]
+    sentinel = b"a durable file that appeared at the outgoing name"
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=False
+    )
+    real_move = module._rename_no_replace
+
+    def injected(source: Path, destination: Path) -> None:
+        if destination == outgoing_path and not destination.exists():
+            destination.write_bytes(sentinel)
+        return real_move(source, destination)
+
+    monkeypatch.setattr(module, "_rename_no_replace", injected)
+
+    assert module._restore_registry(isolation) == "failed"
+
+    assert outgoing_path.read_bytes() == sentinel
+    # The move was refused, so the registry still carries this run's own scope registrations and
+    # the operator's bytes remain in the durable record for reconciliation.
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {SYNTHETIC_PROJECT_ONE, SYNTHETIC_PROJECT_TWO}
+    record = json.loads(world["recovery_path"].read_text(encoding="utf-8"))
+    assert base64.b64decode(record["original_base64"]) == operator
+    assert not list(registry_path.parent.glob("*quarantine*"))
+
+
+def test_registry_artifact_removal_never_deletes_a_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replacement that lands at the artifact name at the removal seam is never deleted."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    held_path = world["held_path"]
+    isolation = module._isolate_registry()
+    identity = isolation["held_identity"]
+    sentinel = b"a concurrent replacement at the verified artifact name"
+    real_move = module._rename_no_replace
+
+    def injected(source: Path, destination: Path) -> None:
+        # The verified run-owned artifact is replaced immediately before the real move.
+        if source == held_path:
+            source.write_bytes(sentinel)
+        return real_move(source, destination)
+
+    monkeypatch.setattr(module, "_rename_no_replace", injected)
+
+    assert module._remove_private_registry_artifact(held_path, identity, operator) is False
+
+    assert held_path.read_bytes() == sentinel
+    assert not list(registry_path.parent.glob("*quarantine*"))
+
+
+def test_registry_restore_gates_when_a_durable_artifact_is_replaced_at_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A restored registry whose durable record was replaced is never certified as restored."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    recovery_path = world["recovery_path"]
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=False
+    )
+    sentinel = b"a concurrent replacement at the durable recovery record"
+    real_move = module._rename_no_replace
+
+    def injected(source: Path, destination: Path) -> None:
+        if source == recovery_path:
+            source.write_bytes(sentinel)
+        return real_move(source, destination)
+
+    monkeypatch.setattr(module, "_rename_no_replace", injected)
+
+    assert module._restore_registry(isolation) == "failed"
+
+    # The operator's own bytes are back at the registry path, the replacement is not deleted...
+    assert registry_path.read_bytes() == operator
+    assert recovery_path.read_bytes() == sentinel
+    # ...and the run never reports the registry as restored.
+    assert not list(registry_path.parent.glob("*quarantine*"))

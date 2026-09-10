@@ -29,6 +29,18 @@ concurrent write detected while the registry is captured or replaced refuses it 
 entries this run itself registered for its synthetic projects while never deleting or
 overwriting a legitimate concurrent registry change.
 
+Every operator-visible or durable registry name is *moved* with a no-replace rename
+(``renameat2`` with ``RENAME_NOREPLACE``, so the existence test and the move are one
+kernel operation) and a durable artifact is never unlinked under its documented name: a
+removal first moves the artifact to a fresh name this run invents, verifies that the moved
+file is the very one this run installed, and only then unlinks that fresh name — an entry
+that appeared at the artifact name after the reader's check is neither replaced nor
+deleted, it is moved back and the run refuses.  The exact registry entries this run
+registered for its synthetic projects are derived from the shipped project writer itself —
+the same registration call with the same arguments against a private scratch state root,
+never a value read out of the operator registry — so a concurrent writer's same-id update
+is preserved rather than mistaken for this run's own scope.
+
 Every external boundary the live lane crosses is reached through :class:`LiveBackends`,
 and every restore invariant is qualification-gating: a run that cannot put the
 installation back where it found it never reports itself qualified.
@@ -74,6 +86,7 @@ from __future__ import annotations
 import argparse
 import base64
 import contextlib
+import errno
 import hashlib
 import io
 import json
@@ -1645,11 +1658,94 @@ def _git(root: Path, *arguments: str) -> None:
 #: the operator registry before it is replaced, so an interrupted run stays recoverable.
 REGISTRY_RECOVERY_SUFFIX = ".qualification-recovery.json"
 #: Fixed suffix of the name the operator registry itself is *moved* to for the duration of the
-#: live lane (a single ``rename``, never an unlink), so the operator's exact bytes stay on disk.
+#: live lane (a single no-replace ``rename``, never an unlink and never a replacement), so the
+#: operator's exact bytes stay on disk.
 REGISTRY_HELD_SUFFIX = ".qualification-held"
 #: Fixed suffix of the name a restore moves the current registry to before installing the
 #: restored state; it is removed only after the restored state and the postcondition are verified.
 REGISTRY_OUTGOING_SUFFIX = ".qualification-outgoing"
+#: Fixed suffix of the fresh name a removal moves a durable artifact to before it is deleted:
+#: the documented artifact name itself is never unlinked.
+REGISTRY_QUARANTINE_SUFFIX = ".qualification-quarantine"
+#: Linux ``renameat2`` flag: move a file only when nothing exists at the destination.  The
+#: kernel performs the existence test and the move in one step, so no read-only check followed
+#: by a clobbering ``rename`` can be raced by an entry that appears in between.
+RENAME_NOREPLACE = 1
+#: ``AT_FDCWD``: resolve both paths of :func:`_rename_no_replace` against the working directory.
+_AT_FDCWD = -100
+_RENAMEAT2_UNSET: Any = object()
+_RENAMEAT2_LIBRARY: Any = _RENAMEAT2_UNSET
+
+
+def _renameat2_library() -> Any:
+    """The C library providing ``renameat2``, or ``None`` where no-replace moves are absent.
+
+    Resolved once.  Where the platform cannot move a file without replacing the destination,
+    the live lane refuses with the bounded ``registry-isolation`` failure instead of falling
+    back to a clobbering ``rename`` or a ``link`` + ``unlink`` pair: both of those can destroy
+    an entry that appeared at the destination after the reader's last check.
+    """
+
+    global _RENAMEAT2_LIBRARY
+    if _RENAMEAT2_LIBRARY is _RENAMEAT2_UNSET:
+        library: Any = None
+        if os.name == "posix" and sys.platform.startswith("linux"):
+            try:
+                import ctypes
+                import ctypes.util
+
+                resolved = ctypes.util.find_library("c") or "libc.so.6"
+                candidate = ctypes.CDLL(resolved, use_errno=True)
+                candidate.renameat2.argtypes = [
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_uint,
+                ]
+                candidate.renameat2.restype = ctypes.c_int
+                library = candidate
+            except (ImportError, OSError, AttributeError):
+                library = None
+        _RENAMEAT2_LIBRARY = library
+    return _RENAMEAT2_LIBRARY
+
+
+def _rename_no_replace(source: Path, destination: Path) -> None:
+    """Move ``source`` to ``destination`` without ever replacing an existing entry.
+
+    Every operator-visible or durable registry name is moved with this primitive: the
+    existence test and the move are a single kernel operation (``renameat2`` with
+    ``RENAME_NOREPLACE``), so an entry that appears at ``destination`` after any earlier
+    read-only check is never replaced — the call fails with ``FileExistsError`` and the caller
+    refuses while leaving the entry exactly as it was found.  The source is *moved*, never
+    unlinked: a file a concurrent writer put at the source between the reader's verification
+    and this call is not destroyed, it is moved (and the caller detects it by comparing the
+    moved bytes).  Where the platform cannot perform a no-replace move, ``ENOTSUP`` is raised
+    and the caller fails closed instead of degrading to a clobbering sequence.
+    """
+
+    import ctypes
+
+    library = _renameat2_library()
+    if library is None:
+        raise OSError(
+            errno.ENOTSUP,
+            "this platform cannot move a project-registry file without replacing the "
+            "destination, so the live qualification refuses to run",
+            str(source),
+            str(destination),
+        )
+    result = library.renameat2(
+        _AT_FDCWD,
+        os.fsencode(source),
+        _AT_FDCWD,
+        os.fsencode(destination),
+        RENAME_NOREPLACE,
+    )
+    if result != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(source), str(destination))
 
 
 class _RegistrySwapError(RuntimeError):
@@ -1734,7 +1830,9 @@ def _registry_file_identity(path: Path) -> tuple[int, int] | None:
     return (info.st_dev, info.st_ino)
 
 
-def _install_private_registry_record(path: Path, payload: Mapping[str, Any]) -> tuple[int, int]:
+def _install_private_registry_record(
+    path: Path, payload: Mapping[str, Any]
+) -> tuple[tuple[int, int], bytes]:
     """Install the durable recovery record private-before-content, never replacing an entry.
 
     The record is the only durable copy of the operator's registry bytes while the synthetic
@@ -1743,9 +1841,9 @@ def _install_private_registry_record(path: Path, payload: Mapping[str, Any]) -> 
     record name is installed with a single ``link``.  An entry already present at the record
     path — a file, a symlink, a hard link or a directory — is the durable evidence of an
     interrupted earlier run: it is never replaced, and the caller receives the bounded
-    ``registry-recovery-exists`` refusal instead.  Returns the ``(device, inode)`` identity the
-    caller removes the record by, after verifying the installed record is a real, singly
-    linked ``0600`` file inside its private ``0700`` directory.
+    ``registry-recovery-exists`` refusal instead.  Returns the ``(device, inode)`` identity *and*
+    the exact bytes the caller removes the record by, after verifying the installed record is a
+    real, singly linked ``0600`` file inside its private ``0700`` directory.
     """
 
     data = (json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode(
@@ -1777,64 +1875,89 @@ def _install_private_registry_record(path: Path, payload: Mapping[str, Any]) -> 
             "operator registry was not changed",
             detail={"error": type(error).__name__},
         ) from error
-    return (info.st_dev, info.st_ino)
+    return (info.st_dev, info.st_ino), data
+
+
+def _quarantine_path(path: Path) -> Path:
+    """A fresh, run-invented name next to ``path`` that nothing can already occupy."""
+
+    return path.with_name(f"{path.name}.{uuid.uuid4().hex[:12]}{REGISTRY_QUARANTINE_SUFFIX}")
 
 
 def _remove_private_registry_artifact(
     path: Path, identity: tuple[int, int] | None, expected: bytes | None
 ) -> bool:
-    """Remove exactly the artifact this run created, when it still holds the expected bytes.
+    """Remove exactly the artifact this run created, and never by unlinking its own name.
 
-    Nothing else is ever deleted: the artifact must still be the same real, singly linked file
-    (same ``(device, inode)``) — and, when ``expected`` names the bytes this run put there, hold
-    exactly those bytes — a replaced file, a symlink, a hard link or a directory is left exactly
-    as it was found and the caller reports failure, so durable evidence of an unreconciled state
-    is never destroyed.  ``identity`` is ``None`` when the caller never created the artifact,
-    which needs no removal; ``expected`` is ``None`` for an artifact whose content is metadata
-    rather than registry bytes.
+    The documented artifact name is never unlinked: it is *moved* to a fresh name this run
+    invents in the same private directory — a no-replace rename, so an entry that appeared
+    there after the caller's read-only check is moved rather than replaced, and a fresh name
+    that is somehow taken only refuses — the moved file is verified against the
+    ``(device, inode)`` identity (and, when ``expected`` names the bytes this run put there,
+    the exact content) this run installed, and only that fresh name, created by this run
+    moments earlier, is unlinked.  A file that does not verify is moved straight back to the
+    artifact name (no-replace again) and the caller reports failure: a replacement is never
+    deleted, never clobbered, and ends up exactly where it was found, with the durable evidence
+    kept for reconciliation.  ``identity`` is ``None`` when the caller never created the
+    artifact, which needs no removal; ``expected`` is ``None`` for an artifact whose content is
+    metadata rather than registry bytes.
     """
 
     if identity is None:
         return True
-    try:
-        info = os.lstat(path)
-    except FileNotFoundError:
-        return True
-    except OSError:
-        return False
-    if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
-        return False
-    if (info.st_dev, info.st_ino) != identity:
-        return False
-    if expected is not None:
+    quarantine: Path | None = None
+    for _ in range(3):
+        candidate = _quarantine_path(path)
         try:
-            data = _registry_bytes_or_none(path)
-        except (OSError, ValueError):
+            _rename_no_replace(path, candidate)
+        except FileNotFoundError:
+            return True
+        except FileExistsError:
+            continue
+        except OSError:
             return False
-        if data != expected:
-            return False
+        quarantine = candidate
+        break
+    if quarantine is None:
+        return False
     try:
-        path.unlink()
-        return not path.exists()
+        info = os.lstat(quarantine)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise UnsafeObservationPath("the moved qualification artifact is not a real file")
+        if (info.st_dev, info.st_ino) != identity:
+            raise UnsafeObservationPath(
+                "the moved qualification artifact is not the one this run installed"
+            )
+        if expected is not None and _registry_bytes_or_none(quarantine) != expected:
+            raise UnsafeObservationPath(
+                "the moved qualification artifact no longer holds the bytes this run installed"
+            )
+    except (OSError, ValueError):
+        _put_registry_file_back(quarantine, path)
+        return False
+    try:
+        os.unlink(quarantine)
     except OSError:
         return False
+    return not os.path.lexists(quarantine)
 
 
-def _link_file_back(aside_path: Path, registry_path: Path) -> bool:
-    """Link a moved-aside file back to the registry path, never replacing an entry there.
+def _put_registry_file_back(aside_path: Path, registry_path: Path) -> bool:
+    """Move a moved-aside file back to the registry path, never replacing an entry there.
 
     Used when a swap discovers that the file it moved aside is not the state this run decided
-    on: the file goes back exactly as it was found (the move never destroyed a byte) and the
-    caller refuses.  ``False`` means another file appeared at the registry path in the meantime;
-    that file is left in place and the moved file stays at the aside name as recoverable state.
+    on, and when a removal discovers that the artifact it moved aside is not the one this run
+    installed: the file goes back exactly as it was found (the move never destroyed a byte) and
+    the caller refuses.  ``False`` means another file appeared at the registry path in the
+    meantime, or the move could not be performed at all; that file is left in place and the
+    moved file stays at the aside name as recoverable state.  The move is a no-replace rename,
+    so neither name can be overwritten or destroyed by this call.
     """
 
     try:
-        os.link(aside_path, registry_path)
+        _rename_no_replace(aside_path, registry_path)
     except OSError:
         return False
-    with contextlib.suppress(OSError):
-        os.unlink(aside_path)
     return True
 
 
@@ -1843,35 +1966,28 @@ def _move_registry_file_aside(
 ) -> tuple[int, int]:
     """Move the file at the registry path aside without destroying a single byte of it.
 
-    The move is one ``rename``: whatever the path holds at that instant is preserved on disk
-    under the private aside name and is then compared with ``expected`` — the exact state this
-    run read and decided on.  A concurrent write that landed before the move is detected by that
-    comparison: the file is put back at the registry path (no-clobber, when the path is still
-    free) and the caller refuses, so no concurrent writer's bytes are ever silently replaced or
-    destroyed.  An aside name left behind by an interrupted earlier run is never overwritten.
-    Raises :class:`_RegistrySwapError` instead of proceeding whenever the moved state is not the
-    expected one.
+    The move is one no-replace ``rename``: whatever the path holds at that instant is moved to
+    the private aside name — never unlinked, never replaced — and is then compared with
+    ``expected``, the exact state this run read and decided on.  The destination is tested by
+    the kernel inside the same operation, so a durable file left behind by an interrupted
+    earlier run, or any entry that appears at the aside name at that seam, is neither examined
+    and then raced nor overwritten: the call fails and the run refuses with
+    ``registry-held-exists``.  A concurrent write that landed before the move is detected by the
+    byte comparison afterwards: the file is moved back to the registry path (no-replace again,
+    when the path is still free) and the caller refuses, so no concurrent writer's bytes are ever
+    silently replaced or destroyed.  Raises :class:`_RegistrySwapError` instead of proceeding
+    whenever the moved state is not the expected one.
     """
 
     try:
-        os.lstat(aside_path)
-    except FileNotFoundError:
-        pass
-    except OSError as error:
-        raise _RegistrySwapError(
-            "held-exists",
-            "a durable qualification file next to the operator registry could not be examined",
-            detail={"path": str(aside_path), "error": type(error).__name__},
-        ) from error
-    else:
+        _rename_no_replace(registry_path, aside_path)
+    except FileExistsError as error:
         raise _RegistrySwapError(
             "held-exists",
             "a durable qualification file already exists next to the operator project registry: "
             "reconcile the interrupted earlier run before a new live qualification replaces it",
             detail={"path": str(aside_path)},
-        )
-    try:
-        os.rename(registry_path, aside_path)
+        ) from error
     except FileNotFoundError as error:
         raise _RegistrySwapError(
             "changed",
@@ -1895,17 +2011,17 @@ def _move_registry_file_aside(
             )
         moved = _registry_bytes_or_none(aside_path)
     except _RegistrySwapError:
-        _link_file_back(aside_path, registry_path)
+        _put_registry_file_back(aside_path, registry_path)
         raise
     except (OSError, ValueError) as error:
-        _link_file_back(aside_path, registry_path)
+        _put_registry_file_back(aside_path, registry_path)
         raise _RegistrySwapError(
             "changed",
             "the moved operator project registry could not be read safely; it was put back",
             detail={"error": type(error).__name__},
         ) from error
     if moved != expected:
-        put_back = _link_file_back(aside_path, registry_path)
+        put_back = _put_registry_file_back(aside_path, registry_path)
         raise _RegistrySwapError(
             "changed",
             "the operator project registry changed while the qualification was preparing to "
@@ -1967,8 +2083,9 @@ def _registry_preserves_all_entries(captured: bytes, current: bytes) -> bool:
 def _registry_has_owned_entries(data: bytes | None, owned: Mapping[str, Any]) -> bool:
     """Whether a registry still carries an entry this run's synthetic projects registered.
 
-    An entry only counts when it is *exactly* the value this run registered; a run-owned id whose
-    entry changed is handled by the merge (which refuses rather than deletes it), and an
+    An entry only counts when it still holds *exactly* the value this run registered for that id
+    (carried in ``owned``, never read back out of the registry); a run-owned id whose entry
+    changed is handled by the restore decision (which refuses rather than deletes it), and an
     unreadable or unexpected final state is never certified as clean.
     """
 
@@ -1990,6 +2107,7 @@ def _discard_registry_artifacts_when_unused(
     registry_path: Path,
     recovery_path: Path,
     recovery_identity: tuple[int, int] | None,
+    recovery_bytes: bytes | None,
     held_path: Path,
     held_identity: tuple[int, int] | None,
     captured: bytes | None,
@@ -1999,7 +2117,9 @@ def _discard_registry_artifacts_when_unused(
     A failure between installing the record and knowing that the synthetic registry is in place
     ordinarily leaves the operator registry where it was, and the artifacts are then not needed.
     They are kept whenever the registry cannot be read, or no longer carries the operator's
-    entries, because the durable bytes are then the only safe recovery source.
+    entries, because the durable bytes are then the only safe recovery source.  Each removal is
+    bound to the exact identity and bytes this run installed, so a file that appeared at an
+    artifact name is neither replaced nor deleted.
     """
 
     try:
@@ -2015,8 +2135,8 @@ def _discard_registry_artifacts_when_unused(
         intact = current is not None and _registry_preserves_all_entries(captured, current)
     if not intact:
         return
-    _remove_private_registry_artifact(recovery_path, recovery_identity, None)
-    _remove_private_registry_artifact(held_path, held_identity, None)
+    _remove_private_registry_artifact(recovery_path, recovery_identity, recovery_bytes)
+    _remove_private_registry_artifact(held_path, held_identity, captured)
 
 
 def _isolate_registry() -> dict[str, Any]:
@@ -2028,13 +2148,13 @@ def _isolate_registry() -> dict[str, Any]:
     together with their file identity.  A verified-private, no-clobber recovery record carrying
     that state is installed next to it; durable evidence left by an interrupted earlier run
     refuses the run with ``registry-recovery-exists`` and is never replaced.  The replacement
-    itself never destroys a byte: the operator file is *moved aside* (one ``rename``) to a private
-    held name, the moved bytes are verified against the capture, and the exact synthetic registry
-    this run owns is installed at the operator path with a single no-clobber ``link``.  A
-    concurrent write that lands anywhere in that sequence is detected — the moved file is put
-    back and the run refuses with the bounded ``registry-changed`` failure — instead of being
-    silently replaced by the synthetic registry; the operator's bytes stay recoverable on disk in
-    every outcome.
+    itself never destroys a byte: the operator file is *moved aside* (one no-replace ``rename``
+    that fails instead of overwriting an entry at the held name), the moved bytes are verified
+    against the capture, and the exact synthetic registry this run owns is installed at the
+    operator path with a single no-clobber ``link``.  A concurrent write that lands anywhere in
+    that sequence is detected — the moved file is put back and the run refuses with the bounded
+    ``registry-changed`` failure — instead of being silently replaced by the synthetic registry;
+    the operator's bytes stay recoverable on disk in every outcome.
     """
 
     try:
@@ -2081,14 +2201,20 @@ def _isolate_registry() -> dict[str, Any]:
         ),
         "installed_sha256": hashlib.sha256(installed).hexdigest(),
     }
-    recovery_identity = _install_private_registry_record(recovery_path, payload)
+    recovery_identity, recovery_bytes = _install_private_registry_record(recovery_path, payload)
     # Ownership fence: the file this run decided on must still be the file at the path.
     try:
         current = _registry_bytes_or_none(registry_path)
         current_identity = _registry_file_identity(registry_path)
     except (OSError, ValueError) as error:
         _discard_registry_artifacts_when_unused(
-            registry_path, recovery_path, recovery_identity, held_path, None, original
+            registry_path,
+            recovery_path,
+            recovery_identity,
+            recovery_bytes,
+            held_path,
+            None,
+            original,
         )
         raise QualificationError(
             "registry-isolation",
@@ -2098,7 +2224,13 @@ def _isolate_registry() -> dict[str, Any]:
         ) from error
     if current != original or current_identity != original_identity:
         _discard_registry_artifacts_when_unused(
-            registry_path, recovery_path, recovery_identity, held_path, None, original
+            registry_path,
+            recovery_path,
+            recovery_identity,
+            recovery_bytes,
+            held_path,
+            None,
+            original,
         )
         raise QualificationError(
             "registry-changed",
@@ -2113,7 +2245,13 @@ def _isolate_registry() -> dict[str, Any]:
         _install_registry_file(registry_path, installed)
     except _RegistrySwapError as error:
         _discard_registry_artifacts_when_unused(
-            registry_path, recovery_path, recovery_identity, held_path, held_identity, original
+            registry_path,
+            recovery_path,
+            recovery_identity,
+            recovery_bytes,
+            held_path,
+            held_identity,
+            original,
         )
         raise QualificationError(
             REGISTRY_SWAP_CODES[error.kind], error.message, detail=error.detail
@@ -2141,22 +2279,94 @@ def _isolate_registry() -> dict[str, Any]:
         "installed": installed,
         "recovery_path": recovery_path,
         "recovery_identity": recovery_identity,
+        "recovery_bytes": recovery_bytes,
         "held_path": held_path,
         "held_identity": held_identity,
     }
 
 
-def _registry_owned_entries(
-    registry_path: Path, project_ids: Sequence[str]
-) -> tuple[dict[str, Any], list[str]]:
-    """The exact registry entries this run's synthetic projects registered, read back.
+def _scope_registry_entries(manifest: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The exact registry entries this run's synthetic registrations produce.
 
-    The live scope's runtime probe registers each synthetic project through the shipped
-    ``ProjectRegistry``, so the value that lands in the registry is the one the production writer
-    produced.  Reading it back is what lets the restore remove exactly those entries instead of
-    mistaking them for concurrent operator work.  Returns the entries found and the ids the
-    isolated registry does not carry (a missing entry means the isolated scope is not the one
-    this run created).
+    Ownership is derived from the shipped writer itself and never inferred from a later read of
+    the operator's registry: the very ``ProjectRegistry.register`` call the scope probe performs
+    is executed once here against a private scratch state root this harness creates and removes,
+    with the same project id, project path, name and native project id the probe uses, and the
+    value the shipped writer produced is what the isolation record carries as this run's own.
+    A concurrent writer that later registers its own value for one of these ids therefore can
+    never be mistaken for this run's entry and can never be deleted by the restore.
+    """
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    try:
+        scratch = Path(tempfile.mkdtemp(prefix="aether-monitor-qualification-"))
+    except OSError as error:
+        raise QualificationError(
+            "registry-scope",
+            "a private scratch state root for the synthetic registrations could not be created",
+            detail={"error": type(error).__name__},
+        ) from error
+    try:
+        registry = ProjectRegistry(scratch)
+        for entry in manifest:
+            project_id = str(entry.get("project_id") or "")
+            native_id = entry.get("native_project_id")
+            if not registry.register(
+                project_id,
+                Path(str(entry.get("path") or "")),
+                str(entry.get("name") or ""),
+                str(native_id) if native_id is not None else None,
+            ):
+                raise QualificationError(
+                    "registry-scope",
+                    "a synthetic project identity could not be registered with the shipped "
+                    "project writer; the synthetic scope cannot be verified",
+                    detail={"project_id": project_id},
+                )
+        data = _registry_bytes_or_none(registry.path)
+        payload: Any = None
+        if data is not None:
+            try:
+                payload = json.loads(data.decode("utf-8"))
+            except (UnicodeError, ValueError):
+                payload = None
+        projects = payload.get("projects") if isinstance(payload, dict) else None
+        if not isinstance(projects, dict):
+            raise QualificationError(
+                "registry-scope",
+                "the shipped project writer produced no readable registry for the synthetic "
+                "scope; the synthetic scope cannot be verified",
+            )
+        values: dict[str, Any] = {}
+        for entry in manifest:
+            project_id = str(entry.get("project_id") or "")
+            if project_id not in projects:
+                raise QualificationError(
+                    "registry-scope",
+                    "the shipped project writer did not record a synthetic project; the "
+                    "synthetic scope cannot be verified",
+                    detail={"project_id": project_id},
+                )
+            values[project_id] = projects[project_id]
+        return values
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _registry_owned_entries(
+    registry_path: Path, expected: Mapping[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    """Verify the isolated registry carries exactly the entries this run registered.
+
+    Ownership itself is *carried in* — ``expected``, derived from the shipped writer before the
+    scope was materialized — and is never read out of the registry.  This helper only proves that
+    the scope in place is the scope this run created: an id the isolated registry does not carry
+    with exactly the expected value is reported as missing, and the caller refuses the run rather
+    than adopting whatever value it found as its own.  A concurrent writer's same-id update can
+    therefore never be captured as this run's entry and never be deleted.  Returns the exact
+    expected map together with the ids the isolated registry does not carry with exactly that
+    value.
     """
 
     try:
@@ -2175,74 +2385,104 @@ def _registry_owned_entries(
         except (UnicodeError, ValueError):
             payload = None
     projects = payload.get("projects") if isinstance(payload, dict) else None
-    owned: dict[str, Any] = {}
     missing: list[str] = []
-    for project_id in project_ids:
-        entry = projects.get(project_id) if isinstance(projects, dict) else None
-        if entry is None:
+    for project_id, value in expected.items():
+        if not isinstance(projects, dict) or projects.get(project_id) != value:
             missing.append(project_id)
-        else:
-            owned[project_id] = entry
-    return owned, missing
+    return dict(expected), missing
 
 
-def _merge_concurrent_registry(
-    original: bytes, current: bytes, owned: Mapping[str, Any]
-) -> bytes | None:
-    """Merge a concurrent registry update with the operator's original registry bytes.
+def _scope_registry_owned_entries(
+    registry_path: Path, manifest: Sequence[Mapping[str, Any]]
+) -> tuple[dict[str, Any], list[str]]:
+    """Derive this run's exact synthetic entries and verify the isolated registry carries them."""
+
+    return _registry_owned_entries(registry_path, _scope_registry_entries(manifest))
+
+
+def _restore_target(
+    recorded: bytes | None, current: bytes, owned: Mapping[str, Any]
+) -> tuple[str, bytes | None] | None:
+    """The outcome and final registry bytes a restore may produce, or ``None`` when it cannot.
 
     Every entry the current registry carries is either a legitimate concurrent change that must
-    survive or an entry this run itself registered for one of its synthetic projects.  The
-    harness's own entries are recognised by the exact value this run registered, and they are
-    *removed* rather than merged back, so the synthetic scope leaves no project behind.  An entry
-    for a run-owned id that no longer carries the registered value, an unparseable registry or an
-    unexpected shape returns ``None`` and the restore refuses instead of touching it.
+    survive or an entry this run itself registered for one of its synthetic projects.  This run's
+    own entries are recognised *only* by the exact value carried in ``owned`` (the value the
+    shipped writer produced for this run's registration arguments), and they are removed rather
+    than merged back, so the synthetic scope leaves no project behind.  An entry for a run-owned
+    id that carries anything else is not this run's entry: it is neither deleted nor merged, the
+    caller refuses and keeps the durable evidence.  When the run found no registry at all, only
+    the entries it registered itself may disappear: nothing left of the concurrent state means
+    the registry this run created is removed, and a genuine concurrent registry that also carries
+    this run's registrations keeps its own entries with the run's entries removed from it.
     """
 
     try:
-        original_object = json.loads(original.decode("utf-8"))
         current_object = json.loads(current.decode("utf-8"))
     except (UnicodeError, ValueError):
         return None
-    if not isinstance(original_object, dict) or not isinstance(current_object, dict):
+    if not isinstance(current_object, dict):
         return None
-    original_projects = original_object.get("projects")
     current_projects = current_object.get("projects")
-    if not isinstance(original_projects, dict) or not isinstance(current_projects, dict):
+    if not isinstance(current_projects, dict):
         return None
-    concurrent: dict[str, Any] = {}
-    for key, value in current_projects.items():
-        if key in owned:
-            if owned[key] == value:
-                continue
+    for project_id, value in owned.items():
+        if project_id in current_projects and current_projects[project_id] != value:
             return None
-        concurrent[key] = value
-    merged = dict(original_object)
+    concurrent = {key: value for key, value in current_projects.items() if key not in owned}
+    if recorded is None:
+        if not concurrent:
+            return "removed", None
+        if len(concurrent) == len(current_projects):
+            # Nothing of this run's was in the registry: the concurrent state is left untouched.
+            return "concurrent-kept", current
+        merged = dict(current_object)
+        merged["projects"] = concurrent
+        return "merged-concurrent", json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
+    try:
+        recorded_object = json.loads(recorded.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        return None
+    if not isinstance(recorded_object, dict):
+        return None
+    recorded_projects = recorded_object.get("projects")
+    if not isinstance(recorded_projects, dict):
+        return None
+    merged = dict(recorded_object)
     merged.update({key: value for key, value in current_object.items() if key != "projects"})
-    merged["projects"] = {**original_projects, **concurrent}
-    return json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
+    merged["projects"] = {**recorded_projects, **concurrent}
+    result = json.dumps(merged, indent=2, sort_keys=True).encode("utf-8")
+    return ("byte-identical" if result == recorded else "merged-concurrent"), result
 
 
 def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
     """Put the operator registry back, preserving every concurrent change; never clobber.
 
-    The restore is bound to the exact synthetic registry this run installed, so only a state
-    this run owns is reverted; anything else is left exactly as it is found.  Codes:
-    ``byte-identical`` (the registry now holds exactly the bytes the run found), ``removed``
-    (the run found no registry and none is left), ``merged-concurrent`` (a legitimate concurrent
-    update appeared during isolation: its entries survive and the operator's original entries are
-    merged back under them), ``concurrent-kept`` (the run found no registry and a concurrently
-    created one is untouched), ``not-isolated`` (no isolation was reported).  Entries this run
-    registered for its own synthetic projects are removed rather than kept as concurrent work: a
-    merge whose result is exactly the captured bytes — the only difference the isolation carried
-    was this run's own scope registrations — is reported ``byte-identical`` because that is what
-    the registry holds, and ``merged-concurrent`` is reserved for a genuine concurrent update
-    whose entries were preserved alongside the operator's original ones.
+    The restore is bound to the exact synthetic registry this run installed and to the exact
+    entries this run registered, so only a state this run owns is reverted; anything else is left
+    exactly as it is found.  Codes: ``byte-identical`` (the registry now holds exactly the bytes
+    the run found), ``removed`` (the run found no registry and none is left), ``merged-concurrent``
+    (a legitimate concurrent update appeared during isolation: its entries survive, this run's own
+    scope registrations are removed from it, and the operator's original entries — when the run
+    found any — are merged back under it), ``concurrent-kept`` (the run found no registry and a
+    concurrently created one that never carried a run-owned entry is untouched),
+    ``not-isolated`` (no isolation was reported).  An entry this run registered for its own
+    synthetic project is removed only while it still carries exactly the value this run registered
+    for it — the value the shipped writer produced for this run's registration arguments, carried
+    in ``owned`` and never read back out of the registry — and an entry for a run-owned id that
+    changed is never deleted and never merged: the restore refuses instead.  A merge whose result
+    is exactly the captured bytes — the only difference the isolation carried was this run's own
+    scope registrations — is reported ``byte-identical`` because that is what the registry holds,
+    and ``merged-concurrent`` is reserved for a genuine concurrent update whose entries were
+    preserved alongside the operator's original ones; when the run found no registry at all and
+    the only entries present are its own scope registrations, the registry this run created is
+    removed and the outcome is ``removed``.
     ``failed`` is the bounded failure: the registry was left untouched, or the state could not be
     verified, and the durable recovery artifacts were kept for reconciliation.  No path operation
     in this function replaces an entry that appeared underneath it: the current file is *moved
-    aside* (never unlinked) and the restored bytes are installed with a single no-clobber link, so
-    a concurrent writer's bytes are either merged, put back, or left in place.
+    aside* with a no-replace rename (never unlinked, never clobbered) and the restored bytes are
+    installed with a single no-clobber link, so a concurrent writer's bytes are either merged, put
+    back, or left in place.
     """
 
     if isolation is None:
@@ -2256,6 +2496,8 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
     recovery_value = isolation.get("recovery_path")
     recovery_path = Path(recovery_value) if recovery_value is not None else None
     recovery_identity = isolation.get("recovery_identity")
+    recovery_value = isolation.get("recovery_bytes")
+    recovery_bytes = bytes(recovery_value) if recovery_value is not None else None
     held_value = isolation.get("held_path")
     held_path = Path(held_value) if held_value is not None else None
     held_identity = isolation.get("held_identity")
@@ -2289,26 +2531,22 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
             else:
                 _install_registry_file(registry_path, recorded)
                 code, expected_final = "byte-identical", recorded
-        elif recorded is None:
-            # The run found no registry, so nothing of the operator's is missing and a
-            # concurrently created registry is never touched.
-            code, expected_final = "concurrent-kept", current
         else:
-            merged = _merge_concurrent_registry(recorded, current, owned)
-            if merged is None:
+            # The registry changed while the synthetic one was in place.  The decision is made
+            # from the exact entries this run registered, never from what the registry holds:
+            # this run's own entries disappear, every other entry survives, and an entry for a
+            # run-owned id that changed refuses the restore instead of being deleted.
+            decision = _restore_target(recorded, current, owned)
+            if decision is None:
                 return "failed"
-            if merged != current:
+            code, expected_final = decision
+            if expected_final != current:
                 outgoing_expected = current
                 outgoing_identity = _move_registry_file_aside(
                     registry_path, outgoing_path, expected=current
                 )
-                _install_registry_file(registry_path, merged)
-            # A merge that lands exactly on the bytes the run found means the only entries the
-            # isolation carried were the ones this run's own scope registered: the state is
-            # restored exactly and the outcome is named for what it is.  Only a genuine
-            # concurrent update makes the final bytes differ from the capture.
-            code = "byte-identical" if merged == recorded else "merged-concurrent"
-            expected_final = merged
+                if expected_final is not None:
+                    _install_registry_file(registry_path, expected_final)
     except _RegistrySwapError:
         # Nothing this run moved aside was destroyed: the file is at the registry path or at the
         # aside name, and the durable artifacts stay for reconciliation.
@@ -2330,7 +2568,7 @@ def _restore_registry(isolation: Mapping[str, Any] | None) -> str:
     ):
         return "failed"
     if recovery_path is not None and not _remove_private_registry_artifact(
-        recovery_path, recovery_identity, None
+        recovery_path, recovery_identity, recovery_bytes
     ):
         return "failed"
     return code
@@ -3864,9 +4102,9 @@ class LiveBackends:
         return _isolate_registry()
 
     def owned_registry_entries(
-        self, registry_path: Path, project_ids: Sequence[str]
+        self, registry_path: Path, manifest: Sequence[Mapping[str, Any]]
     ) -> tuple[dict[str, Any], list[str]]:
-        return _registry_owned_entries(registry_path, project_ids)
+        return _scope_registry_owned_entries(registry_path, manifest)
 
     def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
         return _restore_registry(isolation)
@@ -4051,11 +4289,15 @@ def _live_run(
             "registry_isolated": True,
         }
         # 1a. The runtime probe registered both synthetic projects through the shipped
-        #     `ProjectRegistry`, so those exact entries are this run's own scope: they are read
-        #     back now and carried into the restore, which removes them (value-equal only)
-        #     instead of mistaking them for concurrent operator work.
+        #     `ProjectRegistry`.  The exact entry values those registrations produce are derived
+        #     here from the shipped writer itself — the same call with the same arguments against
+        #     a private scratch state root, never a value read out of the operator registry — and
+        #     the isolated registry is then checked to carry exactly them.  Those exact values are
+        #     carried into the restore, which removes an entry only while it still holds the value
+        #     this run registered, so a concurrent writer's same-id update is preserved instead of
+        #     being mistaken for this run's own scope.
         owned_entries, missing_entries = backends.owned_registry_entries(
-            isolation["path"], [entry["project_id"] for entry in manifest]
+            isolation["path"], manifest
         )
         isolation["owned_entries"] = owned_entries
         record["scope"]["registry_entries"] = sorted(owned_entries)

@@ -237,13 +237,17 @@ effect. What it does, in order:
    bounded `registry-unreadable` error before anything is changed — and its bytes are then
    captured in a durable, verified-private `0600` recovery record installed next to the
    registry with the same no-clobber discipline as the receipt. The replacement itself never
-   destroys a byte: the operator's own file is *moved aside* to a private held name (a single
-   rename, not an unlink or a replace), the moved bytes are checked against the capture, and
+   destroys a byte: the operator's own file is *moved aside* to a private held name with a
+   no-replace rename (the kernel tests the destination and moves in the same operation), so
+   neither an entry already sitting at the held name nor a concurrent write can be overwritten
+   or unlinked: a taken held name refuses the run with `registry-held-exists` and leaves that
+   entry exactly as it was found. The moved bytes are checked against the capture, and
    the registry is then presented — for the duration of the run — as one containing only two
    honestly labelled synthetic projects (markers, finalized contracts, canonical boards,
    origin/finalizer sessions) plus one direct no-contract session. A concurrent write that
    lands while the registry is captured or swapped is detected instead of being replaced: the
-   changed file is put back (or stays at the held name, recoverable) and the run refuses with
+   changed file is moved back (no-replace again; or it stays at the held name, recoverable,
+   beside the durable record) and the run refuses with
    the bounded `registry-changed` error. The manifest
    and the local project files exist before the first native row is created, so every
    failure path removes exactly the scope this run holds. Everything the run creates —
@@ -254,10 +258,15 @@ effect. What it does, in order:
    found: the exact operator bytes are written back (or the harness's own synthetic file is
    removed when the run found none), and a legitimate registry update that appeared while
    the synthetic registry was in place is preserved — the operator's original entries are
-   merged back under it and no concurrent entry is ever deleted. Entries this run registered
-   for its own synthetic projects are removed only while they still carry exactly the value
-   this run registered; an entry for a run-owned id that changed is never deleted and fails
-   the restore instead. The qualification never invents a real
+   merged back under it and no concurrent entry is ever deleted. The exact value this run
+   registered for each synthetic project is *carried*, not inferred: it is derived from the
+   shipped project writer itself (the same registration call with the same arguments, run
+   against a private scratch state root the harness creates and removes) and never read back
+   out of the operator registry, so a concurrent writer's same-id update can never be captured
+   as this run's entry. Entries this run registered for its own synthetic projects are removed
+   only while they still carry exactly that value; an entry for a run-owned id that changed is
+   neither deleted nor merged — the restore refuses and keeps the durable evidence. The
+   qualification never invents a real
    project identity, never edits a source database and never restarts or kills an agent.
 2. **Environment pre-flight.** The installation's own read-only sources are probed before
    the fixture introduces its deliberate gap. Any permanent gap refuses the run before it
@@ -319,9 +328,12 @@ effect. What it does, in order:
    reported as `byte-identical` (the registry holds exactly the bytes the run found — also the
    outcome when the only entries the isolation carried were the ones this run's own synthetic
    scope registered and removed again), `removed` (the run found no registry and none is
-   left), `merged-concurrent` (a legitimate concurrent update appeared during isolation: its
-   entries survive and the operator's original entries are merged back under them) or
-   `concurrent-kept` (the run found no registry and a concurrently created one is untouched);
+   left — including the live-shaped cycle in which the only entries that ever appeared were
+   this run's own scope registrations, which are removed), `merged-concurrent` (a legitimate
+   concurrent update appeared during isolation: its entries survive, this run's own scope
+   registrations are removed from it, and the operator's original entries — when the run found
+   any — are merged back under them) or `concurrent-kept` (the run found no registry and a
+   concurrently created one that never carried a run-owned entry is untouched);
    any other result gates the verdict with `restore-registry` and keeps the durable recovery
    record for reconciliation.
 
@@ -330,16 +342,27 @@ registry for the duration of a live run: `registry.json.qualification-recovery.j
 the operator's registry state exactly as the run found it — its bytes in base64 with their
 SHA-256 and file identity, or the recorded true absence — plus the SHA-256 of the synthetic
 registry the run installs, and `registry.json.qualification-held` *is* the operator's own
-file (moved aside, never deleted). A process terminated during the run leaves both on disk,
+file (moved aside with a no-replace rename, never deleted). A process terminated during the
+run leaves both on disk,
 so the operator's bytes stay recoverable; the next live run refuses with
 `registry-recovery-exists` (or `registry-held-exists` for a held file without a record), and
-an existing artifact is never replaced, so no run can silently discard the evidence of an
-earlier one. An operator restores the bytes from the held file (or the record) and removes
+an existing artifact is never replaced or unlinked, so no run can silently discard the
+evidence of
+an earlier one. An operator restores the bytes from the held file (or the record) and removes
 the artifacts before re-running. A completed run removes exactly the artifacts it created,
 each verified against the identity and content it installed, and only after the restored
 state — including the absence of every registry entry this run registered for its synthetic
 projects — has been verified; a restore that cannot prove that fails the run and keeps the
-artifacts.
+artifacts. The removal never unlinks a documented artifact name: it first moves that name
+with a no-replace rename to a fresh name this run invents in the same private directory, then
+verifies the moved file against the identity and content this run installed, and only that
+fresh name — created by this run moments earlier — is unlinked. A file that does not verify is
+moved straight back to the artifact name (no-replace again) and the removal reports failure:
+an entry that appeared at the artifact name after the reader's check is never replaced and
+never deleted, and the run refuses with the durable evidence intact. If the move back itself
+cannot be performed because the artifact name was taken meanwhile, the moved file stays on
+disk at that fresh name — `<artifact name>.<random>.qualification-quarantine` beside it — so
+nothing is lost.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file. The
