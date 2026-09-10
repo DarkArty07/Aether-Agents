@@ -18,6 +18,7 @@ ROOT = Path(__file__).parents[1]
 RESOURCES = ROOT / "src/aether_agents/resources"
 SKILLS = {
     "objective-contract-design": "Morfeo",
+    "contract-result-review": "Morfeo",
     "supervisor-decomposition": "Supervisor",
     "implementation-evidence": "Implementer",
 }
@@ -34,7 +35,12 @@ def test_skill_metadata_and_single_file_scope(name: str, role: str) -> None:
     assert role in metadata["description"]
     assert len(metadata["description"]) <= 60
     assert metadata["version"] == "0.1.0"
-    assert metadata["author"] == "Morfeo (Aether role), Hermes Agent"
+    expected_author = (
+        "Christopher, Hermes Agent"
+        if name == "contract-result-review"
+        else "Morfeo (Aether role), Hermes Agent"
+    )
+    assert metadata["author"] == expected_author
     assert metadata["platforms"] == ["linux", "macos", "windows"]
     for heading in ("When to Use", "Prerequisites", "Procedure", "Pitfalls", "Verification"):
         assert f"## {heading}" in body
