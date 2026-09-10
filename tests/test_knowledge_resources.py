@@ -66,6 +66,29 @@ def test_role_resources_share_tools_and_are_opt_in(role: str) -> None:
     assert config["plugins"]["entries"]["aether-project-knowledge"]["settings"]["enabled"] is False
 
 
+def test_morfeo_soul_defines_project_experience_save_contract() -> None:
+    """Guard prompt requirements, not an LLM's organic behavioral compliance."""
+    soul = (RESOURCES / "profiles" / "morfeo" / "SOUL.md").read_text()
+    section = soul.split("## Shared project knowledge and role experiences", 1)[1]
+    section = section.split("\n## ", 1)[0]
+    for instruction in (
+        '`work_memory` using `action="save"`',
+        "before closing the work or changing objectives",
+        "Do not invent lessons or require one note per task",
+        "owner-facing preferences belong in personal memory",
+        "project decisions and obligations belong in their canonical artifacts",
+        "contextual project experiences belong in `work_memory`",
+        "reusable procedures belong in skills under existing governance",
+        "do not duplicate content indiscriminately",
+        "Verify a save through the tool's successful receipt",
+        "state explicitly that the experience was not saved there",
+        "Search and read original notes before reuse",
+        "Correct obsolete notes using the returned revision",
+        "Read/update/save do not grant new product authority",
+    ):
+        assert instruction in section
+
+
 def test_component_lock_contains_pins_and_hashes() -> None:
     text = (RESOURCES / "graphify" / "requirements.txt").read_text()
     assert "graphifyy==0.9.54" in text

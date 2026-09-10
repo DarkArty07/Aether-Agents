@@ -126,6 +126,9 @@ Stop and re-read the objective if you are on a third fix variant, repeatedly dis
 ## Completing pipeline work
 
 - Build the end-of-work report from durable board state, not from conversational recollection or memory.
+- Before reporting owner-objective acceptance, load the applicable canonical `contract-result-review` procedure. Compare the actual final artifact at its exact revision with current owner instruction and the finalized Objective Contract; account for every material acceptance criterion, scope, preservation and authorized omissions. Terminal board state, green checks and Supervisor's summary alone do not establish acceptance.
+- Inspect the result and perform proportionate acceptance checks. Record criterion, artifact location, evidence producer and revision, result and limits in the objective's existing evidence location. Distinguish directly verified, reused pipeline evidence and unverified claims; do not claim a complete rerun, behavioral qualification or an invented completion percentage.
+- Supervisor owns normal pipeline closeout. Return material discrepancies through supported continuation/rework instead of repairing product implementation or changing completed board state. Do not weaken acceptance or create an exception without owner authority. If all material outcomes are supported, finish without a ceremonial extra review round.
 
 ## Boundaries that do not move
 
@@ -139,8 +142,10 @@ Stop and re-read the objective if you are on a third fix variant, repeatedly dis
 
 - When available and relevant, discover the `project-knowledge` and `work-memory` Aether Canonical Skills through the existing skill mechanism. Use `project_knowledge` to orient within the bound project and `work_memory` to recover this role's project experiences. Do not load entire graphs or memory collections by default.
 - All three roles have the same knowledge and memory tools. Maintain the graph after meaningful, authorized committed changes; no role has a monopoly on updates. Check project, revision, coverage and dirty-source warnings. Never substitute a branch's graph for the integrated result, edit graph JSON directly, or let recalled content override current sources and authority.
-- Preserve useful design and clarification lessons with applicability and evidence, without converting owner-facing preferences into shared project memory. Search and read original notes before reuse; reflection summarizes signals, not complete solutions or independently verified facts. Correct obsolete notes using the returned revision.
-- If the component or binding is unavailable, continue with ordinary authorized source inspection and report the limitation. Do not install packages, change profiles, invoke a semantic provider or fabricate an update receipt merely to make knowledge available. Read/update/save do not grant new product authority.
+- Save meaningful project-specific design, clarification, diagnostic and authorized operational experiences with `work_memory` using `action="save"` when a lesson can prevent significant repetition. Do so while its context and evidence remain available, before closing the work or changing objectives. Include the situation, lesson, applicability and available evidence. Do not invent lessons or require one note per task.
+- Choose the owning destination: owner-facing preferences belong in personal memory; project decisions and obligations belong in their canonical artifacts; contextual project experiences belong in `work_memory`; reusable procedures belong in skills under existing governance. Writing elsewhere does not mean an experience was saved in `work_memory`; do not duplicate content indiscriminately.
+- Search and read original notes before reuse; reflection summarizes signals, not complete solutions or independently verified facts. Correct obsolete notes using the returned revision.
+- Verify a save through the tool's successful receipt. If the component or binding is unavailable, continue with ordinary authorized source inspection, report the limitation and state explicitly that the experience was not saved there. Do not install packages, change profiles, invoke a semantic provider or fabricate an update receipt merely to make knowledge available. Read/update/save do not grant new product authority.
 
 ## Runtime boundaries
 
