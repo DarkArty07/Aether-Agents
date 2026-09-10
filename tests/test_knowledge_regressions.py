@@ -922,6 +922,148 @@ def test_d38_triage_prs_moving_head_once_and_twice(
     assert "impact analysis unavailable" in triage_fail["content"]
 
 
+def test_d38_pr_impact_incomplete_pagination_fails_closed(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    backend_calls: list[str] = []
+    original_run = store.backend.run
+
+    def record_backend_run(action: str, **kwargs: Any) -> Any:
+        backend_calls.append(action)
+        return original_run(action, **kwargs)
+
+    monkeypatch.setattr(store.backend, "run", record_backend_run)
+
+    def mock_gh_incomplete(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha-incomplete"}
+            return {
+                "number": 301,
+                "title": "PR with incomplete file pagination",
+                "headRefOid": "sha-incomplete",
+                "changedFiles": 1,
+                "files": [],
+            }
+        if "api" in args:
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_incomplete)
+
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.execute(ctx, "pr_impact", {"pr_number": 301})
+    assert exc_info.value.code == "GITHUB_UNAVAILABLE"
+    assert "pagination incomplete" in str(exc_info.value)
+    assert backend_calls == []
+
+    def mock_gh_malformed(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha-malformed"}
+            return {
+                "number": 303,
+                "headRefOid": "sha-malformed",
+                "changedFiles": "not-an-integer",
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_malformed)
+    with pytest.raises(KnowledgeError) as malformed_info:
+        store.execute(ctx, "pr_impact", {"pr_number": 303})
+    assert malformed_info.value.code == "GITHUB_UNAVAILABLE"
+    assert "pagination incomplete" in str(malformed_info.value)
+    assert backend_calls == []
+
+
+def test_d38_triage_incomplete_pagination_is_unavailable_not_zero_impact(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    backend_calls: list[str] = []
+    original_run = store.backend.run
+
+    def record_backend_run(action: str, **kwargs: Any) -> Any:
+        backend_calls.append(action)
+        return original_run(action, **kwargs)
+
+    monkeypatch.setattr(store.backend, "run", record_backend_run)
+
+    prs_list = [
+        {
+            "number": 302,
+            "title": "PR with incomplete file pagination",
+            "headRefName": "feature-302",
+            "baseRefName": "main",
+            "headRefOid": "sha302",
+            "baseRefOid": "base302",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 1,
+        }
+    ]
+
+    def mock_gh_incomplete(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha302"}
+            return {
+                "number": 302,
+                "headRefOid": "sha302",
+                "changedFiles": 1,
+                "files": [],
+            }
+        if "api" in args:
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_incomplete)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+
+    assert triage_res["ok"] is True
+    impact = triage_res["prs"][0]["impact"]
+    assert impact["status"] == "unavailable"
+    assert "pagination incomplete" in impact["error"]
+    assert impact["node_count"] is None
+    assert backend_calls == []
+    assert "0 nodes affected" not in triage_res["content"]
+    assert "impact analysis unavailable" in triage_res["content"]
+
+    def mock_gh_malformed(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha302"}
+            return {
+                "number": 302,
+                "headRefOid": "sha302",
+                "changedFiles": "not-an-integer",
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_malformed)
+    malformed_triage = store.execute(ctx, "triage_prs", {"limit": 10})
+    malformed_impact = malformed_triage["prs"][0]["impact"]
+    assert malformed_impact["status"] == "unavailable"
+    assert "pagination incomplete" in malformed_impact["error"]
+    assert malformed_impact["node_count"] is None
+    assert backend_calls == []
+    assert "0 nodes affected" not in malformed_triage["content"]
+    assert "impact analysis unavailable" in malformed_triage["content"]
+
+
 def test_d36_semantic_lifecycle_cache_and_enrichment(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

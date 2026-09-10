@@ -163,6 +163,36 @@ def _require_head_sha(value: Any, description: str) -> str:
     return head_sha
 
 
+def _parse_known_total(raw: dict[str, Any], description: str) -> int | None:
+    """Parse GitHub's changed-files total without accepting an ambiguous value."""
+    if "changedFiles" not in raw:
+        return None
+
+    value = raw["changedFiles"]
+    if type(value) is int:
+        total = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        total = int(value.strip())
+    else:
+        raise KnowledgeError(
+            "GITHUB_UNAVAILABLE",
+            f"PR changed-files total is malformed during {description}; pagination incomplete.",
+        )
+    if total < 0:
+        raise KnowledgeError(
+            "GITHUB_UNAVAILABLE",
+            f"PR changed-files total is invalid during {description}; pagination incomplete.",
+        )
+    return total
+
+
+def _pagination_incomplete(pr_number: int, detail: str) -> KnowledgeError:
+    return KnowledgeError(
+        "GITHUB_UNAVAILABLE",
+        f"PR #{pr_number} file pagination incomplete: {detail}",
+    )
+
+
 def _fetch_pr_files(
     root: Path,
     repo: str,
@@ -173,68 +203,107 @@ def _fetch_pr_files(
     known_total: int | None = None,
     initial_files: list[dict[str, Any]] | None = None,
 ) -> tuple[list[str], int, bool]:
-    """Fetch PR files through bounded pagination with honest total and truncated state."""
+    """Fetch a bounded file prefix, refusing to analyze a known shortfall."""
+    if max_files < 1 or page_size < 1:
+        raise KnowledgeError("ARGUMENT_INVALID", "PR file pagination bounds must be positive.")
+    if known_total is not None and (type(known_total) is not int or known_total < 0):
+        raise _pagination_incomplete(pr_number, "the declared total is invalid")
+
     file_paths: list[str] = []
     seen: set[str] = set()
+    initial_count = len(initial_files) if initial_files else 0
 
     if initial_files:
-        for f in initial_files:
-            if isinstance(f, dict):
-                path = str(f.get("path") or f.get("filename") or "").strip()
+        for item in initial_files:
+            if isinstance(item, dict):
+                path = str(item.get("path") or item.get("filename") or "").strip()
                 if path and path not in seen:
                     seen.add(path)
                     file_paths.append(path)
 
-    # Determine if additional pages are needed:
-    # 1. If known_total indicates more files exist than returned in initial_files, and we haven't reached max_files.
-    # 2. If initial_files is not provided (or empty) and known_total != 0.
-    # 3. If initial_files returned exactly page_size items (GitHub default cap) and known_total is unknown.
-    need_pagination = False
-    if known_total is not None and known_total > len(file_paths) and len(file_paths) < max_files:
-        need_pagination = True
-    elif not initial_files and (known_total is None or known_total > 0):
-        need_pagination = True
-    elif (
-        initial_files
-        and len(initial_files) >= page_size
-        and known_total is None
-        and len(file_paths) < max_files
-    ):
-        need_pagination = True
+    if known_total is not None and len(file_paths) > known_total:
+        raise _pagination_incomplete(
+            pr_number,
+            f"the response contains {len(file_paths)} unique files but declares {known_total}",
+        )
+
+    target_files = min(known_total, max_files) if known_total is not None else max_files
+    need_pagination = len(file_paths) < target_files and (
+        known_total is not None or not initial_files or initial_count >= page_size
+    )
+    pagination_complete = False
 
     if need_pagination:
-        start_page = (len(file_paths) // page_size) + 1
+        start_page = (initial_count // page_size) + 1
         page = start_page
         max_pages = (max_files + page_size - 1) // page_size + 1
-        while len(file_paths) < max_files and page <= max_pages:
+        while len(file_paths) < target_files and page <= max_pages:
             args = ["api", f"repos/{repo}/pulls/{pr_number}/files?per_page={page_size}&page={page}"]
             page_data = _run_gh(root, args)
             items = page_data.get("files") if isinstance(page_data, dict) else page_data
-            if not isinstance(items, list) or not items:
+            if not isinstance(items, list):
+                raise _pagination_incomplete(pr_number, "a page returned an invalid response")
+            if not items:
+                if known_total is not None and len(file_paths) < target_files:
+                    raise _pagination_incomplete(
+                        pr_number,
+                        f"page {page} ended at {len(file_paths)} of {target_files} required files",
+                    )
+                pagination_complete = True
                 break
+
+            before_count = len(file_paths)
             for item in items:
                 if isinstance(item, dict):
                     path = str(item.get("filename") or item.get("path") or "").strip()
                     if path and path not in seen:
                         seen.add(path)
                         file_paths.append(path)
-                        if len(file_paths) >= max_files:
+                        if known_total is not None and len(file_paths) > known_total:
+                            raise _pagination_incomplete(
+                                pr_number,
+                                f"the response exceeds its declared total of {known_total}",
+                            )
+                        if len(file_paths) >= target_files:
                             break
+
             if len(items) < page_size:
+                if known_total is not None and len(file_paths) < target_files:
+                    raise _pagination_incomplete(
+                        pr_number,
+                        f"page {page} ended at {len(file_paths)} of {target_files} required files",
+                    )
+                pagination_complete = True
                 break
+            if len(file_paths) == before_count:
+                raise _pagination_incomplete(
+                    pr_number,
+                    f"page {page} contained no new file paths",
+                )
             page += 1
 
+        if len(file_paths) < target_files and not pagination_complete:
+            raise _pagination_incomplete(
+                pr_number,
+                f"bounded pagination stopped at {len(file_paths)} of {target_files} required files",
+            )
+
     if known_total is not None:
-        total_files = max(known_total, len(file_paths))
+        total_files = known_total
     else:
         total_files = len(file_paths)
 
-    truncated = False
     if len(file_paths) > max_files:
         file_paths = file_paths[:max_files]
-        truncated = True
-    elif total_files > len(file_paths):
-        truncated = True
+
+    if known_total is not None:
+        truncated = known_total > max_files
+    elif len(file_paths) >= max_files:
+        # Without changedFiles, reaching the cap is only a lower bound unless the
+        # final REST page explicitly proved exhaustion.
+        truncated = not pagination_complete
+    else:
+        truncated = False
 
     return file_paths, total_files, truncated
 
@@ -318,12 +387,7 @@ def execute_pr_impact(
 
     pr_summary = _parse_pr_summary(raw)
     head_before = _require_head_sha(pr_summary["head_sha"], "initial analysis")
-    known_total = raw.get("changedFiles")
-    if known_total is not None:
-        try:
-            known_total = int(known_total)
-        except (ValueError, TypeError):
-            known_total = None
+    known_total = _parse_known_total(raw, "initial analysis")
 
     initial_files = raw.get("files")
     if not isinstance(initial_files, list):
@@ -365,12 +429,7 @@ def execute_pr_impact(
             )
         pr_summary = _parse_pr_summary(raw)
         head_retry = _require_head_sha(pr_summary["head_sha"], "retry analysis")
-        known_total = raw.get("changedFiles")
-        if known_total is not None:
-            try:
-                known_total = int(known_total)
-            except (ValueError, TypeError):
-                known_total = None
+        known_total = _parse_known_total(raw, "retry analysis")
         initial_files = raw.get("files")
         if not isinstance(initial_files, list):
             initial_files = None
@@ -475,12 +534,7 @@ def execute_triage_prs(
                 view_raw.get("headRefOid") or p.get("head_sha"),
                 f"initial triage analysis for PR #{pr_num}",
             )
-            known_total = view_raw.get("changedFiles")
-            if known_total is not None:
-                try:
-                    known_total = int(known_total)
-                except (ValueError, TypeError):
-                    known_total = None
+            known_total = _parse_known_total(view_raw, f"initial triage analysis for PR #{pr_num}")
 
             initial_files = view_raw.get("files")
             if not isinstance(initial_files, list):
@@ -527,12 +581,9 @@ def execute_triage_prs(
                     view_raw.get("headRefOid"),
                     f"retry triage analysis for PR #{pr_num}",
                 )
-                known_total = view_raw.get("changedFiles")
-                if known_total is not None:
-                    try:
-                        known_total = int(known_total)
-                    except (ValueError, TypeError):
-                        known_total = None
+                known_total = _parse_known_total(
+                    view_raw, f"retry triage analysis for PR #{pr_num}"
+                )
                 initial_files = view_raw.get("files")
                 if not isinstance(initial_files, list):
                     initial_files = None
