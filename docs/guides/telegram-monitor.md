@@ -236,20 +236,28 @@ effect. What it does, in order:
    unreadable, symlinked, multi-linked or unstably replaced one refuses the run with the
    bounded `registry-unreadable` error before anything is changed — and its bytes are then
    captured in a durable, verified-private `0600` recovery record installed next to the
-   registry with the same no-clobber discipline as the receipt. Only after that record is
-   durable is the registry replaced, for the duration of the run, by a registry containing
-   only two honestly labelled synthetic projects (markers, finalized contracts, canonical
-   boards, origin/finalizer sessions) plus one direct no-contract session. The manifest
+   registry with the same no-clobber discipline as the receipt. The replacement itself never
+   destroys a byte: the operator's own file is *moved aside* to a private held name (a single
+   rename, not an unlink or a replace), the moved bytes are checked against the capture, and
+   the registry is then presented — for the duration of the run — as one containing only two
+   honestly labelled synthetic projects (markers, finalized contracts, canonical boards,
+   origin/finalizer sessions) plus one direct no-contract session. A concurrent write that
+   lands while the registry is captured or swapped is detected instead of being replaced: the
+   changed file is put back (or stays at the held name, recoverable) and the run refuses with
+   the bounded `registry-changed` error. The manifest
    and the local project files exist before the first native row is created, so every
    failure path removes exactly the scope this run holds. Everything the run creates —
-   native project rows, boards, sessions, direct-turn spool files — is removed afterwards
+   native project rows, boards, sessions, direct-turn spool files, and the registry entries
+   the scope's own runtime probe registers for the synthetic projects — is removed afterwards
    and each removal is verified absent: a surviving object is recorded as residue and gates
    the verdict instead of being ignored. The registry is restored to the state the run
    found: the exact operator bytes are written back (or the harness's own synthetic file is
    removed when the run found none), and a legitimate registry update that appeared while
    the synthetic registry was in place is preserved — the operator's original entries are
-   merged back under it and no concurrent entry is ever deleted, with the write re-read and
-   verified after each bounded attempt. The qualification never invents a real
+   merged back under it and no concurrent entry is ever deleted. Entries this run registered
+   for its own synthetic projects are removed only while they still carry exactly the value
+   this run registered; an entry for a run-owned id that changed is never deleted and fails
+   the restore instead. The qualification never invents a real
    project identity, never edits a source database and never restarts or kills an agent.
 2. **Environment pre-flight.** The installation's own read-only sources are probed before
    the fixture introduces its deliberate gap. Any permanent gap refuses the run before it
@@ -312,17 +320,21 @@ effect. What it does, in order:
    other result gates the verdict with `restore-registry` and keeps the durable recovery
    record for reconciliation.
 
-Registry recovery after an interruption. The durable record
-`<state_root>/projects/registry.json.qualification-recovery.json` holds the operator's
-registry state exactly as the run found it — its bytes in base64 with their SHA-256, or the
-recorded true absence — plus the SHA-256 of the synthetic registry the run installed. A
-process terminated during the run leaves the record, the synthetic registry and any
-concurrent update on disk, so the original bytes stay recoverable; the next live run
-refuses with `registry-recovery-exists`, and the existing record is never replaced, so no
-run can silently discard the evidence of an earlier one. An operator restores the bytes
-from the record (or removes the record when the state needs no recovery) before re-running.
-A completed run removes exactly the record it installed and verifies it gone; a restore
-that cannot prove the operator state was preserved fails the run and keeps the record.
+Registry recovery after an interruption. Two durable artifacts live next to the operator
+registry for the duration of a live run: `registry.json.qualification-recovery.json` holds
+the operator's registry state exactly as the run found it — its bytes in base64 with their
+SHA-256 and file identity, or the recorded true absence — plus the SHA-256 of the synthetic
+registry the run installs, and `registry.json.qualification-held` *is* the operator's own
+file (moved aside, never deleted). A process terminated during the run leaves both on disk,
+so the operator's bytes stay recoverable; the next live run refuses with
+`registry-recovery-exists` (or `registry-held-exists` for a held file without a record), and
+an existing artifact is never replaced, so no run can silently discard the evidence of an
+earlier one. An operator restores the bytes from the held file (or the record) and removes
+the artifacts before re-running. A completed run removes exactly the artifacts it created,
+each verified against the identity and content it installed, and only after the restored
+state — including the absence of every registry entry this run registered for its synthetic
+projects — has been verified; a restore that cannot prove that fails the run and keeps the
+artifacts.
 
 Private receipts (message and session handles, report identifiers, paths, the raw native
 run record, the canonical/emitted D12 comparison) go only to the `--output` file. The

@@ -2351,6 +2351,12 @@ class _FakeBackends:
             "original": b"{}",
         }
 
+    def owned_registry_entries(
+        self, registry_path: Path, project_ids: Sequence[str]
+    ) -> tuple[dict[str, Any], list[str]]:
+        self.calls.append("owned_registry_entries")
+        return {}, []
+
     def restore_registry(self, isolation: Mapping[str, Any] | None) -> str:
         self.calls.append("restore_registry")
         return self.registry_restore_value
@@ -4341,6 +4347,8 @@ def _registry_world(
         "state_root": state_root,
         "registry_path": registry_path,
         "recovery_path": module._registry_recovery_path(registry_path),
+        "held_path": module._registry_held_path(registry_path),
+        "outgoing_path": module._registry_outgoing_path(registry_path),
     }
 
 
@@ -4485,6 +4493,9 @@ def test_interrupted_registry_isolation_retains_durable_recovery_and_refuses_a_n
     assert record["original_state"] == "present"
     assert record["original_sha256"] == hashlib.sha256(operator).hexdigest()
     assert base64.b64decode(record["original_base64"]) == operator
+    # The operator's own file was *moved*, not destroyed: it is still on disk under the held name.
+    held = world["held_path"]
+    assert json.loads(held.read_bytes().decode("utf-8"))["projects"].keys() == {REGISTRY_PROJECT_A}
     preserved = recovery_path.read_bytes()
 
     with pytest.raises(module.QualificationError) as failure:
@@ -4596,3 +4607,201 @@ def test_live_restore_accepts_the_concurrency_preserving_registry_outcomes(
         assert "restore-registry" not in {entry["code"] for entry in record["errors"]}
         assert record["public_summary"]["registry_restored"] == code
         assert record["public_summary"]["qualified"] is True
+
+
+# ---------------------------------------------------------------------------
+# Live-shaped registry cycles and ownership fences (round 11)
+# ---------------------------------------------------------------------------
+
+SYNTHETIC_PROJECT_ONE = "44444444-4444-4444-8444-444444444444"
+SYNTHETIC_PROJECT_TWO = "55555555-5555-4555-8555-555555555555"
+
+
+def _register_scope_projects(
+    registry_path: Path, module: Any, tmp_path: Path, *, concurrent: bool
+) -> dict[str, Any]:
+    """The registrations the live scope probe performs, plus an optional operator update."""
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    registry = ProjectRegistry()
+    synthetic_paths = {
+        SYNTHETIC_PROJECT_ONE: tmp_path / "synthetic-one",
+        SYNTHETIC_PROJECT_TWO: tmp_path / "synthetic-two",
+    }
+    for project_id, project_path in synthetic_paths.items():
+        assert registry.register(
+            project_id, project_path, name="Synthetic scope", hermes_project_id="native-scope"
+        )
+    owned, missing = module._registry_owned_entries(registry_path, list(synthetic_paths))
+    assert missing == []
+    assert sorted(owned) == sorted(synthetic_paths)
+    if concurrent:
+        assert registry.register(
+            REGISTRY_PROJECT_B, tmp_path / "concurrent-project", name="Concurrent B"
+        )
+    return owned
+
+
+def test_live_shaped_registry_cycle_removes_only_the_owned_synthetic_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Isolation + both synthetic registrations + restore leaves no synthetic project behind."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=False
+    )
+
+    assert module._restore_registry(isolation) == "merged-concurrent"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_A}
+    assert payload["projects"][REGISTRY_PROJECT_A]["name"] == "Operator A"
+    # Every artifact this run created is gone; only the operator registry remains.
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+
+
+def test_live_shaped_registry_cycle_keeps_the_operator_and_a_concurrent_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same cycle with a real concurrent registration: it survives, the scope does not."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+    isolation["owned_entries"] = _register_scope_projects(
+        registry_path, module, tmp_path, concurrent=True
+    )
+
+    assert module._restore_registry(isolation) == "merged-concurrent"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_A, REGISTRY_PROJECT_B}
+    assert payload["projects"][REGISTRY_PROJECT_B]["name"] == "Concurrent B"
+    assert not ({SYNTHETIC_PROJECT_ONE, SYNTHETIC_PROJECT_TWO} & set(payload["projects"]))
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+
+
+def test_registry_restore_refuses_when_an_owned_entry_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run-owned id whose entry changed is never deleted; the restore fails closed."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+
+    isolation = module._isolate_registry()
+    from aether_agents.observation.context import ProjectRegistry
+
+    registry = ProjectRegistry()
+    assert registry.register(SYNTHETIC_PROJECT_ONE, tmp_path / "synthetic-one", name="Synthetic")
+    owned, missing = module._registry_owned_entries(registry_path, [SYNTHETIC_PROJECT_ONE])
+    assert missing == []
+    isolation["owned_entries"] = owned
+    # Something rewrote the run-owned entry to a different value, which is never deleted here.
+    assert registry.register(SYNTHETIC_PROJECT_ONE, tmp_path / "elsewhere", name="Changed")
+
+    assert module._restore_registry(isolation) == "failed"
+
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {SYNTHETIC_PROJECT_ONE}
+    assert payload["projects"][SYNTHETIC_PROJECT_ONE]["name"] == "Changed"
+    # The durable evidence is kept because the state could not be proven safe.
+    assert world["recovery_path"].exists()
+
+
+def test_registry_isolation_refuses_an_update_that_lands_before_the_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An operator update injected between capture and the replacement is never replaced."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    from aether_agents.observation.context import ProjectRegistry
+
+    real_move = module._move_registry_file_aside
+
+    def injected(registry_path_arg: Path, aside_path: Path, *, expected: bytes) -> Any:
+        # The operator registers a project exactly between the capture and the replacement.
+        assert ProjectRegistry().register(
+            REGISTRY_PROJECT_B, tmp_path / "concurrent-project", name="Concurrent B"
+        )
+        return real_move(registry_path_arg, aside_path, expected=expected)
+
+    monkeypatch.setattr(module, "_move_registry_file_aside", injected)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-changed"
+    # The operator's update is intact at the registry path — nothing was replaced or deleted.
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_A, REGISTRY_PROJECT_B}
+    # The operator state is provably intact, so this run's record is not needed and is dropped.
+    assert not world["recovery_path"].exists()
+    assert not world["held_path"].exists()
+    assert not world["outgoing_path"].exists()
+    assert [path.name for path in registry_path.parent.iterdir()] == ["registry.json"]
+
+
+def test_registry_isolation_refuses_a_registry_that_appears_before_the_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registry created after the operator file was moved aside is never replaced."""
+
+    operator = _operator_registry_bytes(
+        {REGISTRY_PROJECT_A: {"path": "/operator/project-a", "name": "Operator A"}}
+    )
+    world = _registry_world(tmp_path, monkeypatch, operator_bytes=operator)
+    module = world["module"]
+    registry_path = world["registry_path"]
+    held_path = world["held_path"]
+    recovery_path = world["recovery_path"]
+    from aether_agents.observation.context import ProjectRegistry
+
+    real_install = module._install_registry_file
+
+    def injected(registry_path_arg: Path, data: bytes) -> None:
+        # A concurrent registration lands exactly at the installation seam.
+        assert ProjectRegistry().register(
+            REGISTRY_PROJECT_B, tmp_path / "concurrent-project", name="Concurrent B"
+        )
+        return real_install(registry_path_arg, data)
+
+    monkeypatch.setattr(module, "_install_registry_file", injected)
+
+    with pytest.raises(module.QualificationError) as failure:
+        module._isolate_registry()
+
+    assert failure.value.code == "registry-changed"
+    # The file that appeared at the seam is left exactly as it was found...
+    payload = json.loads(registry_path.read_bytes().decode("utf-8"))
+    assert set(payload["projects"]) == {REGISTRY_PROJECT_B}
+    # ...and the operator's own file is preserved on disk and in the durable record.
+    held = json.loads(held_path.read_bytes().decode("utf-8"))
+    assert set(held["projects"]) == {REGISTRY_PROJECT_A}
+    record = json.loads(recovery_path.read_text(encoding="utf-8"))
+    assert base64.b64decode(record["original_base64"]) == operator
+    assert not world["outgoing_path"].exists()
+    assert not list(registry_path.parent.glob("*.tmp"))
