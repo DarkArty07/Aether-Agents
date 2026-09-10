@@ -9,8 +9,11 @@ two disjoint surfaces:
   runs, which never control the monitor.
 * ``aether_monitor_report_snapshot`` in the dedicated ``aether_monitor_reporting``
   toolset — the only tool a reporter run may use.  The hourly native job sets
-  ``enabled_toolsets=["aether_monitor_reporting"]`` so terminal, file, messaging, board
-  lifecycle, delegation, cron and control tools are provably absent from narration.
+  ``enabled_toolsets=["aether_monitor_reporting", "no_mcp"]``: the dedicated toolset
+  restricts the surface, and the supported ``no_mcp`` sentinel keeps the native
+  scheduler from default-expanding the per-job list with every enabled MCP server, so
+  terminal, file, messaging, board lifecycle, delegation, cron and control tools are
+  provably absent from narration.
 
 Hooks never send messages from ordinary sessions: ``post_tool_call`` only enrolls
 project-bound direct work, ``post_llm_call`` validates and persists a reporter narrative,
@@ -146,7 +149,17 @@ def _control_handler(ctx: Any, args: Mapping[str, Any], **runtime: Any) -> str:
                 "monitor runs cannot control the monitor",
             )
         )
-    envelope = monitor_runtime.execute_action(action, limit=limit, store=_store(ctx))
+    try:
+        envelope = monitor_runtime.execute_action(action, limit=limit, store=_store(ctx))
+    except Exception:
+        # The control tool always answers with the fixed envelope: a broken native
+        # runtime fails closed instead of raising into the session.
+        envelope = error_envelope(
+            action,
+            "RUNTIME_UNAVAILABLE",
+            "the provisioned Hermes runtime failed the monitor request; "
+            "the monitor state was not changed",
+        )
     return _json(envelope)
 
 

@@ -193,7 +193,17 @@ def execute_action(action: str, *, limit: int | None = None) -> dict[str, Any]:
     from aether_agents.monitor import runtime as monitor_runtime
 
     if monitor_runtime.hermes_available():
-        envelope = monitor_runtime.execute_action(action, limit=limit)
+        try:
+            envelope = monitor_runtime.execute_action(action, limit=limit)
+        except Exception:
+            # A broken in-process runtime must never escape the fixed JSON interface;
+            # the action fails closed and no hidden retry is attempted.
+            return error_envelope(
+                action,
+                "RUNTIME_UNAVAILABLE",
+                "the provisioned Hermes runtime failed the monitor request; "
+                "the monitor state was not changed",
+            )
         validated = _valid_envelope(envelope, action)
         if validated is not None:
             return validated

@@ -29,7 +29,7 @@ from aether_agents.monitor.delivery import (
     TelegramDeliveryAdapter,
     canonical_target_reference,
 )
-from aether_agents.monitor.models import WorkItem
+from aether_agents.monitor.models import Lease, WorkItem
 from aether_agents.monitor.runtime import (
     NARRATION_LEASE_TTL_SECONDS,
     configured_owner_language,
@@ -657,7 +657,11 @@ def test_precheck_retries_unconfirmed_parts_without_rerunning_the_narrator(
 
     collector = _FakeCollector(store, error=AssertionError("recovery must precede collection"))
     sender = _Sender()
-    code, output, _ = _run_precheck(store, collector, delivery=_adapter(store, sender))
+    # An explicit tick clock keeps this regression independent of the host wall clock:
+    # the retry resolves the seeded report and the tick stays in its already-collected cut.
+    code, output, _ = _run_precheck(
+        store, collector, delivery=_adapter(store, sender), clock=_clock(ANCHOR)
+    )
 
     assert code == 0
     assert sender.calls == parts
@@ -676,7 +680,9 @@ def test_precheck_sends_one_labeled_service_notice_for_failed_narration(tmp_path
     collector = _FakeCollector(store, error=AssertionError("recovery must precede collection"))
     sender = _Sender()
 
-    code, output, _ = _run_precheck(store, collector, delivery=_adapter(store, sender))
+    code, output, _ = _run_precheck(
+        store, collector, delivery=_adapter(store, sender), clock=_clock(ANCHOR)
+    )
 
     assert code == 0
     assert len(sender.calls) == 1
@@ -690,7 +696,9 @@ def test_precheck_sends_one_labeled_service_notice_for_failed_narration(tmp_path
 
     # A second pre-check never adds a second notice for the same cut.
     repeat = _Sender()
-    code, output, _ = _run_precheck(store, collector, delivery=_adapter(store, repeat))
+    code, output, _ = _run_precheck(
+        store, collector, delivery=_adapter(store, repeat), clock=_clock(ANCHOR)
+    )
     assert code == 0
     assert repeat.calls == []
     assert len(store.list_deliveries("report-alpha")) == 1
@@ -1487,6 +1495,196 @@ def test_precheck_child_handoff_reaches_the_exact_reporter(tmp_path: Path) -> No
     assert repeat.calls == []
 
 
+def test_two_real_precheck_children_wake_exactly_one_narration(tmp_path: Path) -> None:
+    """A live handoff is a real cross-process pre-inference fence.
+
+    A pending report can only be handed over once: while the exact pre-check's handoff
+    is live, a second real child process must not wake a second narration for the same
+    digest.  After the handoff expires the next child recovers the report, and then the
+    exact reporter session claims and delivers it exactly once.
+    """
+
+    state_root = tmp_path / "aether"
+    home = tmp_path / "hermes-home"
+    home.mkdir()
+    store = MonitorStore(state_root=state_root, clock=_STORE_CLOCK)
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=PROFILE,
+        destination_ref=TARGET_REF,
+        timezone_name="UTC",
+    )
+    store.set_enabled(True)
+    _seed_report(store, narrative_status="pending")
+    cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
+
+    driver = tmp_path / "precheck-child.py"
+    driver.write_text(
+        textwrap.dedent(
+            """
+            from aether_agents.monitor import runtime as monitor_runtime
+
+            # The imported-runtime preflight has its own release-locked regression;
+            # this probe exercises the cross-process fence mechanics themselves.
+            monitor_runtime._module_problems = lambda: []
+            raise SystemExit(monitor_runtime.main_precheck())
+            """
+        ),
+        encoding="utf-8",
+    )
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
+        "XDG_STATE_HOME": str(tmp_path),
+        "HERMES_HOME": str(home),
+    }
+
+    def run_child() -> dict[str, Any]:
+        completed = subprocess.run(
+            [sys.executable, str(driver)],
+            cwd=Path(__file__).parents[1],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert completed.returncode == 0, completed.stderr
+        lines = [line for line in completed.stdout.splitlines() if line.strip()]
+        assert lines, completed.stderr
+        return json.loads(lines[-1])
+
+    first = run_child()
+    assert first["wakeAgent"] is True and first["reason"] == "pending-report"
+    handoff_path = runtime_module._handoff_path(store, "report-alpha")
+    live_bytes = handoff_path.read_bytes()
+
+    # A second real child sees the live handoff and must not wake a second narration:
+    # it neither rewrites the transfer nor recovers the report's lease.
+    second = run_child()
+    assert second == {
+        "wakeAgent": False,
+        "reason": "narration-in-progress",
+        "report_id": "report-alpha",
+    }
+    assert handoff_path.read_bytes() == live_bytes
+
+    # Wall-clock advance is represented by expiring the handoff artifact exactly as the
+    # live check resolves it after its TTL; the next child then recovers the report.
+    payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+    payload["expires_at_utc"] = "2020-01-01T00:00:00.000000Z"
+    handoff_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    third = run_child()
+    assert third["wakeAgent"] is True and third["reason"] == "pending-report"
+    assert third["report_id"] == "report-alpha" and third["cutoff_utc"] == cutoff_text
+
+    # The exact reporter session claims the recovered report and delivers exactly once.
+    parent = MonitorStore(state_root=state_root, clock=_STORE_CLOCK)
+    response = json.dumps(_narrative("report-alpha"))
+    accepted = handle_post_llm_call(
+        _reporter_payload(assistant_response=response), store=parent, profile_name=PROFILE
+    )
+    assert accepted == "report-alpha"
+    sender = _Sender()
+    run = handle_session_end(
+        _reporter_payload(completed=True),
+        store=parent,
+        profile_name=PROFILE,
+        delivery=_adapter(parent, sender),
+    )
+    assert run is not None
+    expected_parts = reporting.render_parts(
+        _payload("report-alpha", ANCHOR), _narrative("report-alpha")
+    )
+    assert sender.calls == expected_parts
+    assert parent.get_snapshot("report-alpha").resolved_at_utc is not None
+
+
+def test_reporter_snapshot_requires_the_exact_live_handoff(tmp_path: Path) -> None:
+    """The reporter read path validates report, cutoff, job, holder and claimed session."""
+
+    store = _store(tmp_path)
+    _seed_report(store, narrative_status="pending")
+    cutoff_text = store.get_snapshot("report-alpha").cutoff_utc
+    session = f"cron_{JOB_ID}_20260910_120000"
+    payload = {"session_id": session, "platform": "cron"}
+
+    # No handoff at all: there is nothing this run may read.
+    with pytest.raises(MonitorActionError) as missing:
+        runtime_module.reporter_snapshot(payload, store=store, profile_name=PROFILE)
+    assert missing.value.code == "REPORTER_CONTEXT_REQUIRED"
+
+    # The exact live pre-check handoff is claimed by this session and reads once.
+    _handoff_from_dead_precheck(store)
+    snapshot = json.loads(
+        runtime_module.reporter_snapshot(payload, store=store, profile_name=PROFILE)
+    )
+    assert snapshot["report_id"] == "report-alpha"
+    claimed = runtime_module._read_handoff(store, "report-alpha")
+    assert claimed is not None
+    assert claimed["holder"] == "reporter" and claimed["session_id"] == session
+
+    # A second cron session of the same job can no longer read the claimed report.
+    second = {"session_id": f"cron_{JOB_ID}_20260910_130000", "platform": "cron"}
+    with pytest.raises(MonitorActionError) as stolen:
+        runtime_module.reporter_snapshot(second, store=store, profile_name=PROFILE)
+    assert stolen.value.code == "REPORTER_CONTEXT_REQUIRED"
+
+    def write_handoff(**overrides: Any) -> bool:
+        fields: dict[str, Any] = {
+            "report_id": "report-alpha",
+            "cutoff_utc": cutoff_text,
+            "job_id": JOB_ID,
+            "lease": SimpleNamespace(
+                token="foreign-token",
+                acquired_at_utc=_stamp(ANCHOR),
+                expires_at_utc="2099-01-01T00:00:00.000000Z",
+            ),
+            "holder": "reporter",
+            "session_id": session,
+        }
+        fields.update(overrides)
+        return runtime_module._write_handoff(store, **fields)
+
+    # A foreign holder, a foreign job, a foreign cutoff and an expired handoff each
+    # refuse the read without touching the store's live claim.
+    for overrides in (
+        {"holder": "intruder", "session_id": ""},
+        {"job_id": "job-other", "holder": "precheck", "session_id": ""},
+        {"cutoff_utc": _stamp(ANCHOR + timedelta(hours=1)), "holder": "precheck", "session_id": ""},
+        {
+            "lease": SimpleNamespace(
+                token="expired-token",
+                acquired_at_utc=_stamp(ANCHOR),
+                expires_at_utc="2020-01-01T00:00:00.000000Z",
+            ),
+            "holder": "precheck",
+            "session_id": "",
+        },
+    ):
+        assert write_handoff(**overrides), overrides
+        with pytest.raises(MonitorActionError) as refused:
+            runtime_module.reporter_snapshot(payload, store=store, profile_name=PROFILE)
+        assert refused.value.code == "REPORTER_CONTEXT_REQUIRED", overrides
+
+    # Once this session's own claim is released, a fresh exact handoff reads again.
+    assert claimed["token"]
+    released = Lease(
+        lease_key=f"collection:{cutoff_text}",
+        lease_kind="collection",
+        owner_id=runtime_module._narration_owner(JOB_ID),
+        token=claimed["token"],
+        acquired_at_utc=claimed["acquired_at_utc"],
+        expires_at_utc=claimed["expires_at_utc"],
+    )
+    assert store.release_collection_lease(released)
+    assert write_handoff(holder="precheck", session_id="")
+    snapshot = json.loads(
+        runtime_module.reporter_snapshot(payload, store=store, profile_name=PROFILE)
+    )
+    assert snapshot["report_id"] == "report-alpha"
+
+
 def test_reporter_requires_the_exact_precheck_handoff(tmp_path: Path) -> None:
     store = _store(tmp_path)
     _seed_report(store, narrative_status="pending")
@@ -1674,6 +1872,50 @@ def test_reporter_context_requires_the_exact_profile(tmp_path: Path) -> None:
     }
 
 
+def test_reporter_context_requires_the_persisted_binding(tmp_path: Path) -> None:
+    """An enabled monitor without a persisted Morfeo binding matches no reporter path."""
+
+    store = MonitorStore(state_root=tmp_path / "state", clock=_STORE_CLOCK)
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=None,
+        destination_ref=TARGET_REF,
+        timezone_name="UTC",
+    )
+    store.set_enabled(True)
+    session = f"cron_{JOB_ID}_20260910_120000"
+
+    assert store.get_settings().profile_binding is None
+    assert (
+        reporter_context(store, profile_name=PROFILE, session_id=session, platform="cron") is None
+    )
+
+    _seed_report(store, narrative_status="pending")
+    _handoff_from_dead_precheck(store)
+    assert (
+        handle_post_llm_call(
+            _reporter_payload(assistant_response=json.dumps(_narrative("report-alpha"))),
+            store=store,
+            profile_name=PROFILE,
+        )
+        is None
+    )
+    assert store.get_narrative("report-alpha").attempt_status == "pending"
+
+    # The exact persistence pin restores the reporter path.
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=PROFILE,
+        destination_ref=TARGET_REF,
+        timezone_name="UTC",
+    )
+    assert reporter_context(store, profile_name=PROFILE, session_id=session, platform="cron") == {
+        "job_id": JOB_ID,
+        "session_id": session,
+        "profile": PROFILE,
+    }
+
+
 def test_on_requires_the_exact_morfeo_identity_before_any_mutation(tmp_path: Path) -> None:
     for index, profile in enumerate((None, "implementer", "supervisor")):
         store = _store(tmp_path / f"case-{index}", configured=False, enabled=False)
@@ -1720,6 +1962,111 @@ def test_failed_enable_never_flips_the_monitor_on(tmp_path: Path) -> None:
     assert code == 0
     assert _gate_line(output) == {"reason": "disabled", "wakeAgent": False}
     assert collector.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Native failure envelopes
+# ---------------------------------------------------------------------------
+
+
+class _ExplodingNative(_FakeNative):
+    """Native runtime whose selected effect raises a raw, non-taxonomy error."""
+
+    def __init__(self, failing: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.failing = failing
+
+    def _explode(self, operation: str) -> None:
+        if self.failing == operation:
+            raise RuntimeError(f"raw native failure in {operation}")
+
+    def runtime_identity(self) -> Mapping[str, Any]:
+        self._explode("identity")
+        return super().runtime_identity()
+
+    def resolve_destination(self) -> Mapping[str, Any]:
+        self._explode("destination")
+        return super().resolve_destination()
+
+    def ensure_job(self, *, job_id, script_name, schedule, name) -> Mapping[str, Any]:
+        self._explode("ensure")
+        return super().ensure_job(
+            job_id=job_id, script_name=script_name, schedule=schedule, name=name
+        )
+
+    def pause_job(self, job_id: str) -> Mapping[str, Any]:
+        self._explode("pause")
+        return super().pause_job(job_id)
+
+    def resume_job(self, job_id: str) -> Mapping[str, Any]:
+        self._explode("resume")
+        return super().resume_job(job_id)
+
+    def job_state(self, job_id: str) -> Mapping[str, Any] | None:
+        self._explode("state")
+        return super().job_state(job_id)
+
+
+def test_native_failures_never_escape_the_control_envelope(tmp_path: Path) -> None:
+    """Every native get/create/resume/pause/status failure keeps the fixed envelope."""
+
+    expected_codes = {
+        "identity": "RUNTIME_UNAVAILABLE",
+        "destination": "DESTINATION_UNAVAILABLE",
+        "ensure": "JOB_OPERATION_FAILED",
+        "resume": "JOB_OPERATION_FAILED",
+    }
+    for index, failing in enumerate(expected_codes):
+        store = _OrderingStore(state_root=tmp_path / f"on-{index}" / "state", clock=_STORE_CLOCK)
+        native = _ExplodingNative(failing, events=store.events)
+        store.events.clear()
+
+        envelope = MonitorService(store=store, native=native, clock=_clock(ANCHOR)).execute("on")
+
+        assert envelope["schema_version"] == "aether.telegram-monitor.v1", failing
+        assert envelope["ok"] is False and envelope["action"] == "on", failing
+        assert envelope["error"]["code"] == expected_codes[failing], failing
+        settings = store.get_settings()
+        # A failed enable never claims or makes an unauthorized transition.
+        assert settings.enabled is False and settings.first_enabled_at_utc is None, failing
+        assert "enabled:True" not in store.events, failing
+        if failing != "resume":
+            assert settings.native_job_id is None, failing
+            assert settings.destination_ref is None, failing
+
+    # status is read-only: a broken job read degrades to a bounded job_error.
+    store = _store(tmp_path / "status")
+    envelope = MonitorService(
+        store=store, native=_ExplodingNative("state"), clock=_clock(ANCHOR)
+    ).execute("status")
+    assert envelope["ok"] is True
+    assert envelope["result"]["runtime"]["job_error"] == "JOB_OPERATION_FAILED"
+    assert envelope["result"]["native_job"] is None
+    assert store.get_settings().enabled is True
+
+    # off stays durably off and reports the pause failure as a bounded warning.
+    store = _OrderingStore(state_root=tmp_path / "off" / "state", clock=_STORE_CLOCK)
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=PROFILE,
+        destination_ref=TARGET_REF,
+        timezone_name="UTC",
+    )
+    store.set_enabled(True)
+    store.events.clear()
+    envelope = MonitorService(
+        store=store, native=_ExplodingNative("pause", events=store.events), clock=_clock(ANCHOR)
+    ).execute("off")
+    assert envelope["ok"] is True and envelope["result"]["enabled"] is False
+    assert envelope["result"]["job_paused"] is False
+    assert envelope["result"]["warning"] == "JOB_OPERATION_FAILED"
+    assert store.get_settings().enabled is False and "enabled:False" in store.events
+
+    # history never touches the native runtime and stays a complete envelope.
+    envelope = MonitorService(
+        store=store, native=_ExplodingNative("state"), clock=_clock(ANCHOR)
+    ).execute("history", limit=5)
+    assert envelope["ok"] is True and envelope["result"]["count"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -1812,6 +2159,52 @@ def test_status_keeps_a_resolvable_persisted_zone_over_a_local_label(tmp_path: P
     # A local abbreviation is not a zone: the real persisted IANA zone still renders.
     assert result["next_cut_utc"] == _stamp(datetime(2026, 9, 10, 13, 30, tzinfo=UTC))
     assert result["next_cut_local"] == "2026-09-10T19:00:00+05:30"
+
+
+def test_status_describes_one_clock_and_exposes_pinned_drift(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=PROFILE,
+        destination_ref=TARGET_REF,
+        timezone_name="Asia/Kolkata",
+    )
+    now = datetime(2026, 9, 10, 12, 45, tzinfo=UTC)
+
+    # A changed native zone: the reported zone, the local rendering and the UTC cut all
+    # describe the clock cron now fires on, and the older pin is exposed, never mixed in.
+    result = MonitorService(
+        store=store, native=_FakeNative(), clock=_clock(now), timezone_name="America/New_York"
+    ).execute("status")["result"]
+    assert result["timezone"] == "America/New_York"
+    assert result["timezone_drift"] is True
+    assert result["pinned_timezone"] == "Asia/Kolkata"
+    assert result["next_cut_local"] == "2026-09-10T09:00:00-04:00"
+    assert result["next_cut_utc"] == _stamp(datetime(2026, 9, 10, 13, 0, tzinfo=UTC))
+
+    # An unresolvable local label is never reported as the clock, and the real pinned
+    # zone that renders is not drift.
+    result = MonitorService(
+        store=store, native=_FakeNative(), clock=_clock(now), timezone_name="CEST"
+    ).execute("status")["result"]
+    assert result["timezone"] == "Asia/Kolkata"
+    assert result["pinned_timezone"] == "Asia/Kolkata"
+    assert result["timezone_drift"] is False
+    assert result["next_cut_local"] == "2026-09-10T19:00:00+05:30"
+
+    # After `on` re-pins the current zone the two clocks agree again.
+    store.configure(
+        native_job_id=JOB_ID,
+        profile_binding=PROFILE,
+        destination_ref=TARGET_REF,
+        timezone_name="America/New_York",
+    )
+    result = MonitorService(
+        store=store, native=_FakeNative(), clock=_clock(now), timezone_name="America/New_York"
+    ).execute("status")["result"]
+    assert result["timezone"] == "America/New_York" and result["timezone_drift"] is False
+    assert result["next_cut_local"] == "2026-09-10T09:00:00-04:00"
+    assert result["next_cut_utc"] == _stamp(datetime(2026, 9, 10, 13, 0, tzinfo=UTC))
 
 
 def test_on_pins_the_resolvable_configured_zone(tmp_path: Path) -> None:
@@ -2229,6 +2622,41 @@ def test_pause_and_resume_revalidate_ownership(
     assert runtime.resume_job("job-owned")["state"] == "active"
     assert cron.get_job("job-owned")["enabled"] is True
     assert cron.get_job("job-unrelated")["enabled"] is True
+
+
+def test_resume_revalidates_the_fixed_shape_after_reconciliation(
+    tmp_path: Path, job_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drift between `ensure_job` and resume is detected; the record is never resumed."""
+
+    cron = _FakeCronModule([_native_job("job-owned")])
+    runtime = _cron_runtime(monkeypatch, cron)
+    runtime.ensure_job(
+        job_id="job-owned",
+        script_name=PRECHECK_SCRIPT_NAME,
+        schedule=NATIVE_SCHEDULE,
+        name=NATIVE_JOB_NAME,
+    )
+
+    # A behavior-bearing hijack lands after reconciliation but before resume.
+    for job in cron.jobs:
+        if job.get("id") == "job-owned":
+            job["prompt"] = "FOREIGN BEHAVIOR"
+            job["enabled_toolsets"] = ["terminal"]
+
+    with pytest.raises(MonitorActionError) as conflict:
+        runtime.resume_job("job-owned")
+
+    assert conflict.value.code == "JOB_CONFLICT"
+    assert cron.resume_calls == []
+    untouched = cron.get_job("job-owned")
+    assert untouched["prompt"] == "FOREIGN BEHAVIOR"
+    assert untouched["enabled_toolsets"] == ["terminal"]
+    assert untouched["enabled"] is True, "the drifted record must not be resumed"
+
+    # Pausing the same identified record is fail-safe and needs no fixed shape.
+    assert runtime.pause_job("job-owned")["state"] == "paused"
+    assert cron.get_job("job-owned")["enabled"] is False
 
 
 # ---------------------------------------------------------------------------

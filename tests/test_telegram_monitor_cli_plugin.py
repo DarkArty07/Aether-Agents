@@ -316,6 +316,48 @@ def test_reporter_tool_is_restricted_to_the_dedicated_toolset_and_exact_run(
     assert sorted(context.hooks) == ["on_session_end", "post_llm_call", "post_tool_call"]
 
 
+def test_control_tool_returns_a_bounded_envelope_when_the_runtime_raises(
+    isolated_environment: Path, hermes_free: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raw native failure never escapes the control tool's fixed JSON envelope."""
+
+    _monitor_store()
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    control = next(tool for tool in context.tools if tool["name"] == runtime_module.CONTROL_TOOL)
+
+    def explode(action: str, *, limit: int | None = None, store: Any = None) -> None:
+        raise RuntimeError("raw native failure")
+
+    monkeypatch.setattr(runtime_module, "execute_action", explode)
+
+    envelope = json.loads(control["handler"]({"action": "on"}))
+
+    assert envelope["schema_version"] == "aether.telegram-monitor.v1"
+    assert envelope["ok"] is False and envelope["action"] == "on"
+    assert envelope["error"]["code"] == "RUNTIME_UNAVAILABLE"
+
+
+def test_cli_control_action_returns_the_envelope_when_the_runtime_raises(
+    isolated_environment: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The in-process CLI boundary converts a raw native failure into the fixed envelope."""
+
+    monkeypatch.setattr(runtime_module, "hermes_available", lambda: True)
+    monkeypatch.setattr(commands_module, "runtime_interpreter", lambda: None)
+
+    def explode(action: str, *, limit: int | None = None) -> None:
+        raise RuntimeError("raw native failure")
+
+    monkeypatch.setattr(runtime_module, "execute_action", explode)
+
+    envelope = commands_module.execute_action("status")
+
+    assert envelope["schema_version"] == "aether.telegram-monitor.v1"
+    assert envelope["ok"] is False and envelope["action"] == "status"
+    assert envelope["error"]["code"] == "RUNTIME_UNAVAILABLE"
+
+
 def test_tool_registration_is_morfeo_only_and_opt_in() -> None:
     for profile, enabled in (("implementer", True), ("supervisor", True), ("morfeo", False)):
         context = FakePluginContext(profile_name=profile, enabled=enabled)
@@ -584,6 +626,21 @@ def test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job(
         assert runtime.resume_job(owned_id)["state"] == "active"
         assert cron_jobs.get_job(owned_id)["enabled"] is True
         assert json.dumps(cron_jobs.get_job(unrelated["id"]), sort_keys=True) == unrelated_bytes
+
+        # Behavior drift that lands after reconciliation is refused at resume time by
+        # the real release-locked store, and the refused resume mutates nothing.
+        cron_jobs.update_job(
+            owned_id, {"prompt": "FOREIGN BEHAVIOR", "enabled_toolsets": ["terminal"]}
+        )
+        latest_drift = cron_jobs.get_job(owned_id)
+        assert latest_drift["prompt"] == "FOREIGN BEHAVIOR"
+        with pytest.raises(runtime_module.MonitorActionError) as late_conflict:
+            runtime.resume_job(owned_id)
+        assert late_conflict.value.code == "JOB_CONFLICT"
+        untouched = cron_jobs.get_job(owned_id)
+        assert untouched["prompt"] == "FOREIGN BEHAVIOR"
+        assert untouched["enabled_toolsets"] == ["terminal"]
+        assert untouched["enabled"] is True
 
         # The packaged deterministic pre-check is installed verbatim.
         installed = home / "scripts" / "aether_monitor_precheck.py"

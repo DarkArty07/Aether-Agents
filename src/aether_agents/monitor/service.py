@@ -21,7 +21,7 @@ content crosses this boundary.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence
 from zoneinfo import ZoneInfo
 
 from aether_agents.monitor.store import MonitorStore, MonitorStoreError
@@ -275,33 +275,91 @@ class MonitorService:
                 "STORE_UNAVAILABLE",
                 "monitor state is unavailable; run 'aether doctor' before retrying",
             )
-        except (OSError, ValueError):
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
             return error_envelope(
                 action,
                 "MONITOR_OPERATION_FAILED",
                 "the monitor operation could not be completed; no partial effect is claimed",
             )
 
+    # -- native boundary ------------------------------------------------------
+
+    def _native(
+        self,
+        operation: str,
+        call: Callable[[], Any],
+        *,
+        code: str = "RUNTIME_UNAVAILABLE",
+    ) -> Any:
+        """Run one native effect, converting every failure into the bounded taxonomy.
+
+        The runtime protocol promises :class:`MonitorActionError`, but a drifted or
+        broken native runtime can raise anything.  Nothing may escape the fixed public
+        JSON control interface, so an unexpected failure becomes one sanitized code
+        whose message never carries native detail.
+        """
+
+        try:
+            return call()
+        except MonitorActionError:
+            raise
+        except Exception as error:
+            raise MonitorActionError(
+                code,
+                f"the native runtime failed the monitor {operation}; "
+                "the operation was not completed",
+            ) from error
+
+    @staticmethod
+    def _native_mapping(
+        operation: str, value: Any, *, code: str = "RUNTIME_UNAVAILABLE"
+    ) -> Mapping[str, Any]:
+        """Require one native effect result to be a usable mapping."""
+
+        if not isinstance(value, Mapping):
+            raise MonitorActionError(
+                code, f"the native runtime returned an unusable monitor {operation} result"
+            )
+        return value
+
     # -- actions --------------------------------------------------------------
 
     def _status(self) -> dict[str, Any]:
         settings = self.store.get_settings()
         now = self.clock()
-        # An unresolvable local label must never mask a real persisted IANA zone.
+        # One clock: the IANA zone the native schedule actually cuts hours in
+        # (configured first, then the persisted pin). `timezone`, `next_cut_local` and
+        # `next_cut_utc` therefore always describe the same clock, and any difference
+        # from the persisted pin is exposed instead of hidden.
         zone_name = first_resolvable_zone(self._timezone_name, settings.timezone)
         boundary = next_hour_boundary(now, zone_name)
+        effective_zone = zone_name or now.astimezone().tzname() or "UTC"
+        pinned_zone = (
+            settings.timezone.strip()
+            if isinstance(settings.timezone, str) and settings.timezone.strip()
+            else None
+        )
         runtime: dict[str, Any] = {"available": self.native is not None}
         if settings.profile_binding:
             runtime["profile"] = settings.profile_binding
         job: Mapping[str, Any] | None = None
         if settings.native_job_id:
             runtime["job_id"] = settings.native_job_id
-            if self.native is None:
+            native = self.native
+            if native is None:
                 runtime["job_error"] = "RUNTIME_UNAVAILABLE"
             else:
+                job_id = settings.native_job_id
                 try:
-                    job = self.native.job_state(settings.native_job_id)
+                    job = self._native(
+                        "job status read",
+                        lambda: native.job_state(job_id),
+                        code="JOB_OPERATION_FAILED",
+                    )
+                    if job is not None:
+                        job = self._native_mapping("job status", job, code="JOB_OPERATION_FAILED")
                 except MonitorActionError as error:
+                    job = None
                     runtime["job_error"] = error.code
         snapshots = self.store.list_snapshots(limit=1)
         last_report = None
@@ -326,7 +384,9 @@ class MonitorService:
             "first_enabled_at_utc": settings.first_enabled_at_utc,
             "paused_at_utc": settings.paused_at_utc,
             "last_cutoff_utc": settings.last_cutoff_utc,
-            "timezone": settings.timezone,
+            "timezone": effective_zone,
+            "pinned_timezone": pinned_zone,
+            "timezone_drift": bool(pinned_zone and pinned_zone != effective_zone),
             "destination_pinned": bool(settings.destination_ref),
             "next_cut_utc": _utc_text(boundary),
             "next_cut_local": _local_text(boundary, zone_name),
@@ -339,12 +399,16 @@ class MonitorService:
         return result
 
     def _on(self) -> dict[str, Any]:
-        if self.native is None:
+        native = self.native
+        if native is None:
             raise MonitorActionError(
                 "RUNTIME_UNAVAILABLE",
                 "the provisioned Morfeo runtime is unavailable; the monitor was not changed",
             )
-        identity = self.native.runtime_identity()
+        identity = self._native_mapping(
+            "runtime identity read",
+            self._native("runtime identity read", native.runtime_identity),
+        )
         settings = self.store.get_settings()
         profile = identity.get("profile")
         profile_text = (
@@ -363,7 +427,15 @@ class MonitorService:
                 "RUNTIME_MISMATCH",
                 "the monitor is bound to a different profile; no job or destination was changed",
             )
-        destination = self.native.resolve_destination()
+        destination = self._native_mapping(
+            "destination read",
+            self._native(
+                "destination read",
+                native.resolve_destination,
+                code="DESTINATION_UNAVAILABLE",
+            ),
+            code="DESTINATION_UNAVAILABLE",
+        )
         reference = destination.get("reference")
         if not isinstance(reference, str) or not reference:
             raise MonitorActionError(
@@ -379,11 +451,19 @@ class MonitorService:
             self._timezone_name, identity.get("timezone"), settings.timezone
         )
         timezone_name = timezone_name or "UTC"
-        job = self.native.ensure_job(
-            job_id=settings.native_job_id,
-            script_name=PRECHECK_SCRIPT_NAME,
-            schedule=NATIVE_SCHEDULE,
-            name=NATIVE_JOB_NAME,
+        job = self._native_mapping(
+            "job reconciliation",
+            self._native(
+                "job reconciliation",
+                lambda: native.ensure_job(
+                    job_id=settings.native_job_id,
+                    script_name=PRECHECK_SCRIPT_NAME,
+                    schedule=NATIVE_SCHEDULE,
+                    name=NATIVE_JOB_NAME,
+                ),
+                code="JOB_OPERATION_FAILED",
+            ),
+            code="JOB_OPERATION_FAILED",
         )
         job_id = job.get("id")
         if not isinstance(job_id, str) or not job_id:
@@ -399,7 +479,15 @@ class MonitorService:
         # Native scheduling is resumed before the durable switch flips, so a failed
         # enable can never leave the monitor claiming "on" (or a racing pre-check
         # collecting) while the owned job is not actually scheduled.
-        resumed = self.native.resume_job(job_id)
+        resumed = self._native_mapping(
+            "job resume",
+            self._native(
+                "job resume",
+                lambda: native.resume_job(job_id),
+                code="JOB_OPERATION_FAILED",
+            ),
+            code="JOB_OPERATION_FAILED",
+        )
         self.store.set_enabled(True)
         settings = self.store.get_settings()
         return {
@@ -418,15 +506,25 @@ class MonitorService:
         # Manual off is durable before any native pause so a racing precheck or send
         # rechecks the disabled switch and stops.
         self.store.set_enabled(False)
+        native = self.native
         job: Mapping[str, Any] | None = None
         paused = False
         warning: str | None = None
         if settings.native_job_id:
-            if self.native is None:
+            job_id = settings.native_job_id
+            if native is None:
                 warning = "RUNTIME_UNAVAILABLE"
             else:
                 try:
-                    job = self.native.pause_job(settings.native_job_id)
+                    job = self._native_mapping(
+                        "job pause",
+                        self._native(
+                            "job pause",
+                            lambda: native.pause_job(job_id),
+                            code="JOB_OPERATION_FAILED",
+                        ),
+                        code="JOB_OPERATION_FAILED",
+                    )
                     paused = True
                 except MonitorActionError as error:
                     warning = error.code

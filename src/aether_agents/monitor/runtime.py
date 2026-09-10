@@ -564,9 +564,17 @@ class HermesRuntime:
             )
         return self._summary(created, created=True)
 
-    def _validated_job(self, job_id: str, *, action: str) -> Mapping[str, Any]:
+    def _validated_job(
+        self, job_id: str, *, action: str, require_fixed_shape: bool = False
+    ) -> Mapping[str, Any]:
         cron_jobs = _cron_jobs()
-        job = cron_jobs.get_job(job_id)
+        try:
+            job = cron_jobs.get_job(job_id)
+        except Exception as error:
+            raise MonitorActionError(
+                "JOB_OPERATION_FAILED",
+                f"the owned native job cannot be read; it was not {action}",
+            ) from error
         if not isinstance(job, Mapping):
             raise MonitorActionError(
                 "JOB_OPERATION_FAILED",
@@ -578,21 +586,49 @@ class HermesRuntime:
                 f"the persisted monitor job id no longer names the monitor job; "
                 f"it was not {action}",
             )
+        if require_fixed_shape:
+            # Revalidate the full behavior-bearing shape immediately before the native
+            # mutation. A record that drifted after `ensure_job` reconciled it (or was
+            # swapped in) must never be resumed as the monitor's job, because resuming
+            # would re-arm a foreign prompt/toolset/model on the monitor's schedule.
+            if self._drift(job, script_name=PRECHECK_SCRIPT_NAME, schedule=NATIVE_SCHEDULE):
+                raise MonitorActionError(
+                    "JOB_CONFLICT",
+                    "the persisted monitor job does not carry the fixed monitor job "
+                    f"shape; it was not {action}",
+                )
         return job
 
     def pause_job(self, job_id: str) -> Mapping[str, Any]:
+        # Pausing is fail-safe: stopping the record at the persisted id is the correct
+        # response even when its behavior-bearing shape has drifted, so only the
+        # ownership identity is required here.
         self._validated_job(job_id, action="paused")
-        paused = _cron_jobs().pause_job(job_id)
+        paused = self._mutate_job("pause", job_id)
         if not isinstance(paused, Mapping) or str(paused.get("id") or "") != str(job_id):
             raise MonitorActionError("JOB_OPERATION_FAILED", "the native job pause failed")
         return self._summary(paused, created=False)
 
     def resume_job(self, job_id: str) -> Mapping[str, Any]:
-        self._validated_job(job_id, action="resumed")
-        resumed = _cron_jobs().resume_job(job_id)
+        self._validated_job(job_id, action="resumed", require_fixed_shape=True)
+        resumed = self._mutate_job("resume", job_id)
         if not isinstance(resumed, Mapping) or str(resumed.get("id") or "") != str(job_id):
             raise MonitorActionError("JOB_OPERATION_FAILED", "the native job resume failed")
         return self._summary(resumed, created=False)
+
+    @staticmethod
+    def _mutate_job(operation: str, job_id: str) -> Any:
+        """Call one native pause/resume, converting raw failures into the taxonomy."""
+
+        cron_jobs = _cron_jobs()
+        try:
+            return getattr(cron_jobs, f"{operation}_job")(job_id)
+        except MonitorActionError:
+            raise
+        except Exception as error:
+            raise MonitorActionError(
+                "JOB_OPERATION_FAILED", f"the native job {operation} failed"
+            ) from error
 
     def job_state(self, job_id: str) -> Mapping[str, Any] | None:
         job = _cron_jobs().get_job(job_id)
@@ -725,6 +761,33 @@ def _read_handoff(
         if expires is None or expires <= current:
             return None
     return dict(payload)
+
+
+def _fence_handoff(
+    store: MonitorStore,
+    report_id: str,
+    *,
+    cutoff_utc: str,
+    job_id: str,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Return the live exact pre-check/reporter handoff for one report, or ``None``.
+
+    A fresh, exactly-bound handoff means this report's narration is already owned
+    across the process boundary: either the exact pre-check wrote it for this cut and
+    job, or the exact reporter session has claimed it.  This is the pre-inference
+    fence a later tick must honour, so one pending report can never wake two
+    narrations (D9/AC-6).
+    """
+
+    handoff = _read_handoff(store, report_id, now=now)
+    if handoff is None:
+        return None
+    if handoff["job_id"] != job_id or handoff["cutoff_utc"] != cutoff_utc:
+        return None
+    if str(handoff.get("holder") or "") not in {"precheck", "reporter"}:
+        return None
+    return handoff
 
 
 def _write_handoff(
@@ -1103,6 +1166,23 @@ def _resume_pending_narration(
         status = None if narrative is None else str(narrative.attempt_status)
         if status not in {None, "pending"}:
             continue
+        if (
+            _fence_handoff(
+                store,
+                snapshot.report_id,
+                cutoff_utc=snapshot.cutoff_utc,
+                job_id=job_id,
+            )
+            is not None
+        ):
+            # This report's narration already owns a live cross-process handoff (a
+            # pre-check woke its exact reporter, or that reporter claimed it). Waking
+            # again would narrate the same digest twice.
+            print(
+                _gate(False, reason="narration-in-progress", report_id=snapshot.report_id),
+                file=stream,
+            )
+            return True
         try:
             lease = store.acquire_collection_lease(
                 snapshot.cutoff_utc,
@@ -1190,10 +1270,13 @@ def reporter_context(
         return None
     if not session_id or not session_id.startswith(f"cron_{settings.native_job_id}_"):
         return None
-    # The bound profile is required exactly: a missing identity is never accepted.
+    # The bound profile is required exactly: a missing persisted binding is never
+    # accepted (the durable pin is the installation's own record of which profile owns
+    # the monitor), and neither the callback identity nor the persisted binding may be
+    # anything but the provisioned Morfeo profile.
     if profile_name != MORFEO_PROFILE:
         return None
-    if settings.profile_binding and settings.profile_binding != profile_name:
+    if settings.profile_binding != profile_name:
         return None
     return {
         "job_id": settings.native_job_id,
@@ -1224,6 +1307,16 @@ def _claim_pending_lease(
         return None
     if handoff["job_id"] != job_id or handoff["cutoff_utc"] != snapshot.cutoff_utc:
         return None
+    holder = str(handoff.get("holder") or "")
+    claimed_session = str(handoff.get("session_id") or "")
+    if holder == "reporter":
+        # Only the exact session that already claimed this report may claim again.
+        if not session_id or claimed_session != session_id:
+            return None
+    elif holder != "precheck" or claimed_session:
+        # Anything that is neither the pre-check's own transfer for this cut nor this
+        # session's earlier claim is not this report's narration.
+        return None
     owner = _narration_owner(job_id)
     try:
         probe = store.acquire_collection_lease(
@@ -1234,11 +1327,10 @@ def _claim_pending_lease(
     except (MonitorStoreError, ValueError):
         return None
     if probe is None:
-        # An unexpired lease is held. Only the report's own prior claim by this exact
-        # reporter session may be refreshed; every other live holder wins, so a second
-        # session or a foreign narration can never steal or duplicate a narration.
-        if handoff.get("holder") != "reporter" or handoff.get("session_id") != session_id:
-            return None
+        # An unexpired lease is held. The handoff above is either this exact session's
+        # earlier claim or the pre-check's own transfer for this report, so the takeover
+        # proceeds only by releasing that exact token: every other live holder (a second
+        # session, a foreign narration) owns a different token and keeps its lease.
         previous = Lease(
             lease_key=f"collection:{handoff['cutoff_utc']}",
             lease_kind="collection",
@@ -1495,9 +1587,16 @@ def reporter_snapshot(
     if target is None:
         raise MonitorActionError("NO_PENDING_REPORT", "no monitor snapshot is awaiting narration")
     snapshot, _narrative = target
-    if _read_handoff(store, snapshot.report_id) is None:
-        # Without the exact pre-check handoff this session is not the reporter the
-        # pending report belongs to; it may not read the snapshot.
+    if (
+        _claim_pending_lease(
+            store, snapshot, job_id=context["job_id"], session_id=context["session_id"]
+        )
+        is None
+    ):
+        # The read is itself the fence: only the exact fresh pre-check handoff for this
+        # report, cutoff and persisted job, claimed by this exact session (or already
+        # claimed by it), exposes the snapshot.  A wrong-job/wrong-cutoff/foreign-holder
+        # handoff and a second session of the same job are all refused here.
         raise MonitorActionError(
             "REPORTER_CONTEXT_REQUIRED", "no pending monitor narration belongs to this run"
         )

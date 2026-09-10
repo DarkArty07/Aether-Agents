@@ -4,10 +4,10 @@
 **Task:** `t_8608f340`
 **Objective Contract:** `oc_f8c9fc9320587cf3@v1` (SHA-256 `0de5f55efe6844174efd8abf9f72f492c6d36981af42bb730fb34ce8774c9d24`)
 **Base commit:** `fbf0b1d922b8e72943f3a6e99620520dc8d9f9d9` (reviewed MON-01..MON-04 replay; see "Base reconstruction")
-**Implementation tree SHA (before this evidence file):** `b8181e06325690a616a52604e69e0ab919ccf9d4` (`git write-tree` with the implementation and tests staged, this evidence file excluded)
-**Status:** self-verified against review round 1 corrections; ready for same-card Supervisor
+**Implementation tree SHA (before this evidence file):** `d487a99e152983b59e7104592e72aa8b96a6c7ed` (`git write-tree` with the implementation and tests staged, this evidence file excluded)
+**Status:** self-verified against review round 2 corrections; ready for same-card Supervisor
 review.
-**Review round:** 2 (round-1 changes requested at candidate `383fe376e098a62d5068518cf7e0fff1ce1bc930`).
+**Review round:** 3 (round-2 changes requested at candidate `5deb29f428142dd68d4363383314557825e16dd7`).
 
 ## Scope and changed paths
 
@@ -135,14 +135,22 @@ read-only; no Hermes file was modified and no Hermes patch is proposed.
   child process, so the handoff (mode-0600 JSON under `<state>/monitor/handoff/`) is what
   carries the exact pending report to the exact reporter session after the child exits; the
   lease row alone cannot survive the boundary because the store recovers dead owners by
-  design. Reports whose parts never confirmed are retried through the transport only (never a
-  model call), and a failed/rejected narration is re-sent as the single fixed labeled service
-  notice per report cut.
+  design. That live handoff is also the pre-inference fence: a later tick that finds it
+  emits a non-wake `narration-in-progress` gate instead of waking a second narration for the
+  same digest, and the reporter read path only exposes a snapshot after claiming the exact
+  handoff for this report, cutoff, persisted job and session. Reports whose parts never
+  confirmed are retried through the transport only (never a model call), and a
+  failed/rejected narration is re-sent as the single fixed labeled service notice per report
+  cut.
 - **Reporter recognition.** A reporter is exactly a native cron session whose id starts with
-  `cron_<persisted job id>_`, on platform `cron`, for the exact bound Morfeo profile, with a
-  valid pre-check handoff for the unresolved report. Taking the narration lease over is
-  token-fenced: a live foreign narration, or a *different* cron session of the same job,
-  can never steal or refresh the claim, while the claiming session may refresh its own claim
+  `cron_<persisted job id>_`, on platform `cron`, for the exact bound Morfeo profile (the
+  callback identity and the durable persisted pin must both be Morfeo — a missing pin never
+  matches), and whose unresolved report carries a fresh private handoff bound to that report,
+  cutoff and persisted job; the snapshot read itself claims that exact handoff for the claiming
+  session before any snapshot is exposed. Taking the narration lease over is
+  token-fenced: a live foreign narration, a wrong-job/wrong-cutoff/foreign-holder handoff, or a
+  *different* cron session of the same job, can never steal or refresh the claim, while the
+  claiming session may refresh its own claim
   across `post_llm_call` → `on_session_end`. `post_llm_call` validates the narrative against
   the canonical snapshot and persists `accepted`/`rejected`; `on_session_end` renders and
   delivers only for that exact session, releases the narration lease and deletes the handoff,
@@ -262,6 +270,76 @@ assertion in the plain lane; the exact lane exercises the real native
 `get_job`/`update_job`/`pause_job`/`resume_job` reconciliation cycle, the real scheduler
 toolset resolution, and the real packaged-script execution.
 
+## Review round 3 corrections (supersedes round-2 claims)
+
+Round 2 requested changes against `5deb29f428142dd68d4363383314557825e16dd7`. Each item below
+lists the reproduced defect, the correction in this candidate, and the regression that now
+covers it.
+
+1. **The handoff was not a real cross-process fence.** After the pre-check child exited,
+   `_resume_pending_narration()` recovered its dead-process lease without consulting the
+   still-live handoff and rewrote it, so two sequential real pre-check children against the
+   same pending report each emitted `{"wakeAgent": true, "reason": "pending-report"}` — two
+   narrations for one digest. `reporter_snapshot()` likewise only checked that *some* fresh
+   handoff file existed: an independently written wrong-job handoff exposed the report, and a
+   second same-job session could read after another session had claimed. Correction:
+   `_fence_handoff()` resolves a live, exactly-bound handoff (report + cutoff + persisted job
+   + known holder) and `_resume_pending_narration()` now consults it *before* any lease
+   acquisition, emitting the non-wake `narration-in-progress` gate for a consumed tick;
+   `_claim_pending_lease()` validates the handoff's holder and claimed session exactly (the
+   pre-check's own transfer, or the exact claiming session only) before any takeover, and
+   `reporter_snapshot()` performs that exact claim itself so the read is the fence.
+   Regressions: `test_two_real_precheck_children_wake_exactly_one_narration` (two real child
+   processes: the first wakes, the second emits `{"reason": "narration-in-progress"}` and
+   leaves the handoff byte-identical, the expired fence then recovers, and exactly one
+   reporter delivery follows) and `test_reporter_snapshot_requires_the_exact_live_handoff`
+   (no handoff, foreign holder, foreign job, foreign cutoff, expired handoff and a second
+   session are all refused; a released claim plus a fresh exact handoff reads again).
+2. **The persisted profile binding was still optional.** `reporter_context()` accepted an
+   enabled store with `profile_binding=None`, so a reporter path matched without the durable
+   Morfeo pin. Correction: `settings.profile_binding == profile_name == MORFEO_PROFILE` is
+   required on every reporter path. Regression:
+   `test_reporter_context_requires_the_persisted_binding` (missing persisted binding refuses
+   `reporter_context` and `post_llm_call`; re-pinning restores it).
+3. **Raw native failures escaped the fixed JSON interface.** `on`, `status` and `off` raised
+   raw `RuntimeError` out of `ensure_job`, `job_state` and `pause_job` with no
+   `aether.telegram-monitor.v1` envelope. Correction: `MonitorService._native` /
+   `_native_mapping` wrap every native identity, destination, get/create/update/pause/resume
+   and status call into the sanitized `MonitorActionError` taxonomy, and both the CLI
+   in-process boundary and the plugin control handler fail closed with the fixed envelope if
+   the runtime raises. Regression: `test_native_failures_never_escape_the_control_envelope`
+   (raw `RuntimeError` from identity/destination/ensure/resume/pause/state; all four public
+   actions keep a valid envelope and make no unauthorized transition) plus
+   `test_control_tool_returns_a_bounded_envelope_when_the_runtime_raises` and
+   `test_cli_control_action_returns_the_envelope_when_the_runtime_raises`.
+4. **Resume accepted a drifted record.** `_validated_job()` checked only name/script/deliver,
+   so a paused persisted-id record with a hijacked prompt and `enabled_toolsets=["terminal"]`
+   was resumed. Correction: `_validated_job(..., require_fixed_shape=True)` re-reads the
+   record and revalidates the full behavior-bearing fixed shape (`_drift`) immediately before
+   the native resume, failing as `JOB_CONFLICT` without any native mutation; `pause_job`
+   deliberately keeps the fail-safe identity-only policy so a drifted record can still be
+   stopped. Regressions: `test_resume_revalidates_the_fixed_shape_after_reconciliation` and
+   the drift-after-reconciliation block inside the exact-lane
+   `test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job` against the real
+   release-locked `cron.jobs` store.
+5. **`status` could label one clock while rendering another.** With the persisted pin
+   `Asia/Kolkata` and the current configured zone `America/New_York`, `status` reported
+   `timezone: Asia/Kolkata` while `next_cut_local`/`next_cut_utc` rendered `America/New_York`.
+   Correction: `_status()` reports one effective clock (`timezone`), renders
+   `next_cut_local`/`next_cut_utc` in that same zone, and exposes the persisted pin
+   (`pinned_timezone`) and explicit `timezone_drift`; the process-local label is used only when
+   no IANA zone resolves. Regression:
+   `test_status_describes_one_clock_and_exposes_pinned_drift` (changed configured zone,
+   unresolvable local label, and re-pinned agreement).
+
+Also in this round: the `hermes_plugin.py` docstring now states the load-bearing `no_mcp`
+sentinel explicitly, and two pre-existing wall-clock-dependent regressions
+(`test_precheck_retries_unconfirmed_parts_without_rerunning_the_narrator` and the second tick
+of `test_precheck_sends_one_labeled_service_notice_for_failed_narration`) now pass an explicit
+tick clock. The first failed identically on the round-2 candidate after the host clock crossed
+the seeded cut (07:00 America/Mexico_City); no assertion was weakened, and the recovery
+sequence is now deterministic on any wall clock.
+
 ## Requirement-to-evidence mapping
 
 | Obligation (TM/D/AC/plan) | Check executed | Observed result |
@@ -271,12 +349,12 @@ toolset resolution, and the real packaged-script execution.
 | AC-1/D5: `off` persists before pausing; unrelated jobs untouched | `test_off_persists_disabled_before_pausing_the_exact_job`; `test_exact_hermes_interfaces_...` | Recorded event order `enabled:False` before `pause:<job-id>`; only the owned id paused/resumed; an unrelated job's JSON bytes were identical before and after the on/off cycle. |
 | AC-1: repeated `on` after restart/activity stays off | `test_off_persists_disabled_before_pausing_the_exact_job` (status after restart) | Status reported `enabled: false`; only `on` writes enablement. |
 | AC-1: missing/changed/ambiguous destination fails without credential request | `test_on_fails_closed_on_missing_or_changed_destination`; `test_on_rejects_a_different_profile_or_changed_pin` | `DESTINATION_MISSING`, `DESTINATION_CHANGED`, `RUNTIME_MISMATCH`; no job call, no pin persisted, enablement unchanged. |
-| AC-2/D2: hourly wall-clock cuts in the configured zone, late ticks visible, DST, repeat suppression | `test_precheck_uses_the_local_wall_clock_hour_and_suppresses_a_repeat_tick`; `test_precheck_cuts_hours_in_the_configured_native_zone`; `test_next_hour_boundary_is_always_a_future_wall_clock_hour`; `test_hour_boundary_follows_the_configured_zone_across_a_dst_fold`; `test_status_renders_the_next_cut_in_the_persisted_zone`; `test_precheck_collection_and_gate_stay_well_inside_the_start_bound` | Late 12:59:30 tick produced the 12:00 local cutoff record and `wakeAgent:true`; with `Asia/Kolkata` configured the cut landed at `:30` UTC (12:30Z for 12:45Z) rather than the UTC-grid 12:00Z; `status` rendered the next cut as `2026-09-10T19:00:00+05:30`; across the `Europe/Madrid` configured fold both instants resolved to the same wall-clock hour with differing explicit offsets and monotonic UTC cutoffs; deterministic pre-check work stayed far below the 120 s start bound. |
-| AC-2/D4/D8: idle is silent, source failure wakes, no unreported loss, cross-process handoff | `test_precheck_idle_resolves_the_report_and_skips_inference`; `test_precheck_source_failure_wakes_instead_of_looking_idle`; `test_precheck_runtime_mismatch_is_observable_and_never_idle`; `test_precheck_resumes_an_unfinished_report_instead_of_collecting_again`; `test_precheck_waits_while_a_live_narration_owns_the_report`; `test_precheck_child_handoff_reaches_the_exact_reporter` | Idle emitted `{"reason":"idle","wakeAgent":false}` before any inference and resolved the report; collection error, pre-check error and runtime mismatch emitted `wakeAgent:true`; an un-narrated prior report was re-surfaced with its bounded context, a fresh lease and its handoff instead of a second cut; a live narration produced no duplicate narration and no second collection; a real pre-check child process exited before the parent reporter, whose store still claimed the `pending-report` handoff and delivered the report exactly once. |
+| AC-2/D2: hourly wall-clock cuts in the configured zone, late ticks visible, DST, repeat suppression, one clock in `status` | `test_precheck_uses_the_local_wall_clock_hour_and_suppresses_a_repeat_tick`; `test_precheck_cuts_hours_in_the_configured_native_zone`; `test_next_hour_boundary_is_always_a_future_wall_clock_hour`; `test_hour_boundary_follows_the_configured_zone_across_a_dst_fold`; `test_status_renders_the_next_cut_in_the_persisted_zone`; `test_status_describes_one_clock_and_exposes_pinned_drift`; `test_precheck_collection_and_gate_stay_well_inside_the_start_bound` | Late 12:59:30 tick produced the 12:00 local cutoff record and `wakeAgent:true`; with `Asia/Kolkata` configured the cut landed at `:30` UTC (12:30Z for 12:45Z) rather than the UTC-grid 12:00Z; `status` rendered the next cut as `2026-09-10T19:00:00+05:30`; across the `Europe/Madrid` configured fold both instants resolved to the same wall-clock hour with differing explicit offsets and monotonic UTC cutoffs; with the pin `Asia/Kolkata` and the configured zone `America/New_York` the reported `timezone`, `next_cut_local` (`09:00:00-04:00`) and `next_cut_utc` described that one clock with `pinned_timezone`/`timezone_drift` exposing the stale pin, an unresolvable local label never became the reported clock, and re-pinning restored agreement; deterministic pre-check work stayed far below the 120 s start bound. |
+| AC-2/D4/D8: idle is silent, source failure wakes, no unreported loss, cross-process handoff, one wake per pending digest | `test_precheck_idle_resolves_the_report_and_skips_inference`; `test_precheck_source_failure_wakes_instead_of_looking_idle`; `test_precheck_runtime_mismatch_is_observable_and_never_idle`; `test_precheck_resumes_an_unfinished_report_instead_of_collecting_again`; `test_precheck_waits_while_a_live_narration_owns_the_report`; `test_precheck_child_handoff_reaches_the_exact_reporter`; `test_two_real_precheck_children_wake_exactly_one_narration` | Idle emitted `{"reason":"idle","wakeAgent":false}` before any inference and resolved the report; collection error, pre-check error and runtime mismatch emitted `wakeAgent:true`; an un-narrated prior report was re-surfaced with its bounded context, a fresh lease and its handoff instead of a second cut; a live narration produced no duplicate narration and no second collection; a real pre-check child process exited before the parent reporter, whose store still claimed the `pending-report` handoff and delivered the report exactly once; two sequential real pre-check children produced exactly one wake (the second emitted `narration-in-progress` and left the handoff byte-identical), and after the fence expired the next child recovered the report and one exact reporter delivery followed. |
 | AC-2/AC-6: bounded transport retry without extra narration | `test_precheck_retries_unconfirmed_parts_without_rerunning_the_narrator` | A failed part was re-rendered from the accepted structure and confirmed on the next tick; narrative stayed `accepted`; no collector ran. |
 | AC-4: unreported final retained; root completion not closure | covered by accepted MON-02 source tests; MON-05 wakes for unreported finals | `_markers_for_snapshot` advances a work key only after all covering parts confirm; the recovery path keeps a report pending until then. |
 | AC-6/D8/D10: narration failure yields only the labeled notice, once per cut | `test_precheck_sends_one_labeled_service_notice_for_failed_narration`; `test_session_end_sends_only_a_notice_for_rejected_narration`; `test_post_llm_call_rejects_malformed_or_fabricated_narratives` | A `failed` narration produced exactly one `[SERVICE NOTICE]`/`[NO PROGRESS COVERAGE]` notice, no coverage marker; a second tick added nothing; a rejected narrative was persisted as `rejected` and never became an official report. |
-| AC-6: exact reporter match, handoff transfer, session fence, recursion exclusion | `test_reporter_context_requires_the_exact_owned_cron_binding`; `test_reporter_context_requires_the_exact_profile`; `test_reporter_requires_the_exact_precheck_handoff`; `test_reporter_claim_is_fenced_to_the_exact_session`; `test_reporter_claim_loses_to_a_live_foreign_narration`; `test_post_llm_call_persists_only_a_validated_narrator_result`; `test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confirm`; `test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter` | Wrong job id, wrong platform, missing/foreign profile, disabled monitor and foreign session all failed to match; a report without its pre-check handoff, with a wrong-job handoff or with an expired handoff was refused; a live foreign narration and a second cron session of the same job could neither claim nor deliver; only the exact `cron_<job_id>_…` session with the handoff persisted/validated the narrative and delivered, then released the lease and deleted the handoff, and a repeat session-end sent nothing. |
+| AC-6: exact reporter match, handoff transfer, session fence, recursion exclusion | `test_reporter_context_requires_the_exact_owned_cron_binding`; `test_reporter_context_requires_the_exact_profile`; `test_reporter_context_requires_the_persisted_binding`; `test_reporter_requires_the_exact_precheck_handoff`; `test_reporter_snapshot_requires_the_exact_live_handoff`; `test_reporter_claim_is_fenced_to_the_exact_session`; `test_reporter_claim_loses_to_a_live_foreign_narration`; `test_post_llm_call_persists_only_a_validated_narrator_result`; `test_session_end_delivers_only_for_the_owned_reporter_and_advances_on_confirm`; `test_exact_packaged_precheck_child_hands_the_lease_to_the_reporter` | Wrong job id, wrong platform, missing/foreign profile, a missing persisted Morfeo binding, disabled monitor and foreign session all failed to match; a report without its pre-check handoff, with a wrong-job handoff or with an expired handoff was refused; the snapshot read itself claims the exact handoff, so a foreign holder, a foreign job, a foreign cutoff, an expired handoff and a second session of the same job are all refused and a released claim plus a fresh exact handoff reads again; a live foreign narration and a second cron session of the same job could neither claim nor deliver; only the exact `cron_<job_id>_…` session with the handoff persisted/validated the narrative and delivered, then released the lease and deleted the handoff, and a repeat session-end sent nothing. |
 | AC-6: manual off blocks narration/send and retry | `test_manual_off_blocks_narration_delivery_and_retry` | The racing session-end performed no send and left the report pending/durable; re-enabling let the next pre-check deliver the preserved report exactly once without another narration. |
 | AC-4/D3: direct project-bound work, exact source, no invented contract | `test_direct_enrollment_requires_an_exact_project_bound_session`; `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles`; `test_direct_turn_end_marks_flags_and_continuation_opens_a_new_interval`; `test_direct_turn_end_requires_an_enrolled_interval` | Only the exact local-interactive session whose workdir matched the marker-verified registered project enrolled; a matching-cwd `telegram` gateway session and a `tool` sub-agent session enrolled nothing, as did a foreign profile; `cron_` sessions, monitor-control calls and unbound sessions enrolled nothing; a turn recorded `completed` with a bounded summary and the continuation opened a new `unknown` interval. |
 | D7/D12 privacy: no raw transcripts/paths/identifiers | `test_direct_records_reject_unsafe_reported_summaries`; `test_control_tool_matches_the_cli_envelope_and_rejects_bad_arguments` | URL/path/`@`-bearing reported summaries were dropped; a 4000-character summary was truncated to the 600-character bound; the durable record held no raw content. |
@@ -285,43 +363,45 @@ toolset resolution, and the real packaged-script execution.
 | AC-8/plan §7: restricted reporter toolset, Morfeo-only opt-in, no default expansion | `test_reporter_tool_is_restricted_to_the_dedicated_toolset_and_exact_run`; `test_tool_registration_is_morfeo_only_and_opt_in`; `test_morfeo_portable_opt_in_is_the_only_profile_that_enables_the_monitor`; `test_exact_hermes_interfaces_...` (real registry and real scheduler resolver) | Exactly two tools registered; reporter toolset resolved to exactly `{aether_monitor_report_snapshot}` and control toolset to exactly `{aether_monitor}` in the release-locked registry; the native scheduler resolver turned `["aether_monitor_reporting"]` into `["aether_monitor_reporting","provisioned-mcp"]` and resolved the fixed job list `["aether_monitor_reporting","no_mcp"]` to exactly `["aether_monitor_reporting"]`; authoring/registration for Supervisor/Implementer and disabled settings produced no tools. |
 | AC-8: packaged entry point and resources | `test_only_one_plugin_entry_point_is_declared_for_the_monitor`; `test_wheel_exposes_the_fourth_entry_point_and_monitor_resources`; `test_wheel_has_exact_official_plugin_entrypoints_and_role_profile_opt_ins`; `test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadowing` | Wheel declares exactly four plugin entry points; monitor resources and profile opt-in ship byte-equal; manager and runtime installs agree. |
 | Plan §6: capability preflight against the imported runtime | `test_exact_hermes_interfaces_hooks_toolset_and_owned_cron_job`; `_module_problems` source check | `_module_problems()` returned `[]` against the verified release-locked checkout, and the wake-gate/hook/toolset facts above were read from the actual sources. |
-| AC-1/plan §6: exact Morfeo identity before any mutation | `test_on_requires_the_exact_morfeo_identity_before_any_mutation`; `test_reporter_context_requires_the_exact_profile`; `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles` | Missing/`implementer`/`supervisor` identities returned `RUNTIME_MISMATCH` with no enablement, job id, destination or profile binding persisted and no native call; `profile_name=None` matched no reporter context; foreign-profile direct turns enrolled nothing. |
+| AC-1/plan §6: exact Morfeo identity before any mutation | `test_on_requires_the_exact_morfeo_identity_before_any_mutation`; `test_reporter_context_requires_the_exact_profile`; `test_reporter_context_requires_the_persisted_binding`; `test_direct_enrollment_rejects_gateway_service_and_foreign_profiles` | Missing/`implementer`/`supervisor` identities returned `RUNTIME_MISMATCH` with no enablement, job id, destination or profile binding persisted and no native call; `profile_name=None` matched no reporter context; an enabled store with `profile_binding=None` matched no reporter path and persisted no narrative; foreign-profile direct turns enrolled nothing. |
+| AC-1/D5/plan §4: native failures keep the fixed JSON envelope | `test_native_failures_never_escape_the_control_envelope`; `test_control_tool_returns_a_bounded_envelope_when_the_runtime_raises`; `test_cli_control_action_returns_the_envelope_when_the_runtime_raises` | Raw `RuntimeError` from identity, destination, ensure, resume, pause and job-state left every action (`on`/`off`/`status`/`history`) a valid `aether.telegram-monitor.v1` envelope; failed enables never flipped `enabled` or `first_enabled_at_utc`, `status` degraded to a bounded `job_error`, `off` stayed durably off with a bounded warning, and the CLI/tool boundaries converted a raising in-process runtime into the same envelope. |
 | AC-1: failed enable cannot flip the monitor on | `test_failed_enable_never_flips_the_monitor_on` | A native resume failure returned `JOB_OPERATION_FAILED`, left `enabled=false` and `first_enabled_at_utc` empty with no `enabled:True` event, persisted the owned binding for a retry, and the racing pre-check emitted `disabled` with no collection. |
-| AC-1/D1: job ownership fail-closed (no name adoption, replaced ids, inventory/update failures) | `test_ensure_job_refuses_same_name_adoption_without_a_persisted_id`; `test_ensure_job_rejects_replaced_ids_and_inventory_failures`; `test_ensure_job_reconciles_the_full_fixed_shape`; `test_ensure_job_fails_when_the_native_update_does_not_apply`; `test_pause_and_resume_revalidate_ownership`; exact-lane pause of a foreign id | A same-name foreign job without a persisted id, a replaced record at the persisted id, a duplicate monitor name and an unreadable inventory all failed with no create/update/mutation; a forced no-op update failed as `JOB_OPERATION_FAILED` without touching the record; the drifted record was repaired to the full fixed shape; a foreign id was never paused and its bytes were unchanged. |
+| AC-1/D1: job ownership fail-closed (no name adoption, replaced ids, inventory/update failures, resume shape) | `test_ensure_job_refuses_same_name_adoption_without_a_persisted_id`; `test_ensure_job_rejects_replaced_ids_and_inventory_failures`; `test_ensure_job_reconciles_the_full_fixed_shape`; `test_ensure_job_fails_when_the_native_update_does_not_apply`; `test_pause_and_resume_revalidate_ownership`; `test_resume_revalidates_the_fixed_shape_after_reconciliation`; exact-lane pause of a foreign id and drift-after-reconciliation resume | A same-name foreign job without a persisted id, a replaced record at the persisted id, a duplicate monitor name and an unreadable inventory all failed with no create/update/mutation; a forced no-op update failed as `JOB_OPERATION_FAILED` without touching the record; the drifted record was repaired to the full fixed shape; behavior drift landing after reconciliation (prompt + `enabled_toolsets`) made resume fail `JOB_CONFLICT` against both the fake and the real release-locked store with the record left unmutated, while the fail-safe pause still stopped the identified record; a foreign id was never paused and its bytes were unchanged. |
 
 ## Verification record
 
 All commands were run in the assigned worktree with the locked `uv` environment. Counts below
-are from the final candidate (review round 2).
+are from the final candidate (review round 3).
 
 - Quickstart focused files (`quickstart.md` §2), plain lane
   (`uv run --frozen pytest -q -m "not hermes_exact" <file>`):
-  - `tests/test_telegram_monitor_state.py` → **20 passed in 0.17s**
-  - `tests/test_telegram_monitor_sources.py` → **39 passed in 0.61s**
-  - `tests/test_telegram_monitor_reporting.py` → **61 passed in 2.01s**
-  - `tests/test_telegram_monitor_delivery.py` → **21 passed, 1 deselected in 0.33s**
-  - `tests/test_telegram_monitor_runtime.py` → **49 passed in 0.64s**
-  - `tests/test_telegram_monitor_cli_plugin.py` → **9 passed, 3 deselected in 0.54s**
-  - combined plain lane of all six files → **199 passed, 4 deselected in 3.56s**
+  - `tests/test_telegram_monitor_state.py` → **20 passed in 0.16s**
+  - `tests/test_telegram_monitor_sources.py` → **39 passed in 0.32s**
+  - `tests/test_telegram_monitor_reporting.py` → **61 passed in 1.90s**
+  - `tests/test_telegram_monitor_delivery.py` → **21 passed, 1 deselected in 0.32s**
+  - `tests/test_telegram_monitor_runtime.py` → **55 passed in 1.15s**
+  - `tests/test_telegram_monitor_cli_plugin.py` → **11 passed, 3 deselected in 0.59s**
+  - combined plain lane of all six files → **207 passed, 4 deselected in 4.41s**
 - MON-05 runtime/CLI plus the complete accepted monitor surface through the exact-Hermes
   bootstrap lane:
   `uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_runtime.py tests/test_telegram_monitor_cli_plugin.py tests/test_telegram_monitor_state.py tests/test_telegram_monitor_sources.py tests/test_telegram_monitor_reporting.py tests/test_telegram_monitor_delivery.py`
-  → **203 passed in 5.53s** (the release-locked checkout is verified before pytest starts;
+  → **211 passed in 6.14s** (the release-locked checkout is verified before pytest starts;
   all four `hermes_exact` tests executed rather than skipped).
 - Regression surfaces in the same lane:
   `... tests/test_observation_cli_plugin.py tests/test_observation_packaging.py tests/test_public_artifacts.py tests/test_knowledge_plugin_cli.py tests/test_objective_contracts.py`
-  → **1 failed, 106 passed, 1 skipped**; the failure is the pre-existing public-artifact
-  issue #364 (see "Pre-existing baseline failures").
+  → **1 failed, 106 passed, 1 skipped in 11.20s**; the failure is the pre-existing
+  public-artifact issue #364 (see "Pre-existing baseline failures").
 - Full repository suite through the exact-Hermes bootstrap lane:
   `uv run --frozen python scripts/run_tests.py -- -q`
-  → **7 failed, 1281 passed, 60 skipped, 373 subtests passed in 120.76s**. One failure is
+  → **7 failed, 1289 passed, 60 skipped, 373 subtests passed in 144.32s**. One failure is
   the pre-existing issue #364 (below). The other six are candidate-caused and are a
   cross-unit collision that MON-05 cannot repair inside its writable boundary — see the
   next section.
-- Packaging: `uv build` through `test_wheel_exposes_the_fourth_entry_point_and_monitor_resources`
-  and `test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadowing`
-  → passed (four entry points, shipped resources, manager/runtime fingerprint equality,
-  monitor help with a broken Hermes import).
+- Packaging: the wheel built inside the exact lane by
+  `test_wheel_exposes_the_fourth_entry_point_and_monitor_resources` (four entry points,
+  shipped resources) and `tests/test_observation_packaging.py` → **9 passed in 2.41s**
+  (including `test_same_wheel_installs_in_isolated_manager_and_runtime_without_path_shadowing`
+  and the monitor help check with a broken Hermes import).
 - Static gates:
   - `uv run --frozen ruff check src/aether_agents/monitor tests/test_telegram_monitor_runtime.py tests/test_telegram_monitor_cli_plugin.py src/aether_agents/cli.py src/aether_agents/resources/monitor/precheck.py` → **All checks passed**
   - `uv run --frozen ruff format --check src/aether_agents/monitor tests/test_telegram_monitor_runtime.py tests/test_telegram_monitor_cli_plugin.py src/aether_agents/cli.py src/aether_agents/resources/monitor/precheck.py tests/test_observation_packaging.py tests/test_public_artifacts.py` → **17 files already formatted**
@@ -332,6 +412,12 @@ are from the final candidate (review round 2).
   - `uv run --frozen python scripts/check_hermes_baseline_drift.py --json` → exit 0
     (baseline `v2026.8.18` / `e624e9f…`)
   - `git diff --check` → passed
+- Round-3 regression check: with the new fence temporarily reverted, the unchanged
+  `test_two_real_precheck_children_wake_exactly_one_narration` fails with the reviewer's
+  reproduction (`{'wakeAgent': True, 'reason': 'pending-report'}` from the second child);
+  it passes with the fence in place. The pre-existing wall-clock-dependent failure
+  (`test_precheck_retries_unconfirmed_parts_without_rerunning_the_narrator`) was reproduced
+  identically on the round-2 candidate before the deterministic tick clock was added.
 - Deliberate non-effects: no live model call, no Telegram send, no profile/job activation, no
   source database write, no credential operation, no dependency or lockfile change, no push,
   PR, merge or issue mutation. All native checks ran against disposable homes, disposable
@@ -413,9 +499,11 @@ Residual risks, stated honestly:
   root (directory mode 0700, file mode 0600, bounded at 8 KiB, `aether.telegram-monitor.handoff.v1`);
   it holds no message text, chat identity, credential or source content.
 - `on` pins the resolvable configured IANA zone. The pre-check always follows the native
-  configuration in force at fire time (that is the clock cron uses); `status` renders the
-  persisted pin, so an operator who changes the native zone should re-run `on` to re-pin,
-  and until then the reported `timezone` field shows the older pin rather than a guess.
+  configuration in force at fire time (that is the clock cron uses), and `status` reports
+  that same effective clock for `timezone`, `next_cut_local` and `next_cut_utc` while
+  exposing the persisted pin as `pinned_timezone` plus an explicit `timezone_drift` flag, so
+  an operator who changes the native zone sees the drift instead of a mixed or stale clock
+  (re-running `on` re-pins and clears the flag).
 - The pre-check's runtime-mismatch path wakes the agent with a diagnostic instead of a
   snapshot; the reporter cannot match it, so no report is sent and the failure is visible in
   the cron output. Live qualification of that path belongs to MON-INT.
