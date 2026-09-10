@@ -147,7 +147,9 @@ def test_valid_narrative_requires_exact_items_and_renders_source_owned_identity(
     assert rendered.startswith("Project: Aether demo [project_alpha]")
     assert "Origin session: Implement reporting [session_alpha]" in rendered
     assert "Contract: Monitor contract [contract_1 v1]" in rendered
-    assert "Period (UTC): 2026-09-09T17:00:00-06:00 -> 2026-09-09T18:00:00-06:00" in rendered
+    assert "Period (UTC): 2026-09-09T23:00:00+00:00 -> 2026-09-10T00:00:00+00:00" in rendered
+    assert "Collected (UTC): 2026-09-10T00:01:00+00:00" in rendered
+    assert "Local offset: -06:00" in rendered
     assert "[OBSERVED][VERIFIED]" in rendered
     assert "[REPORTED][UNVERIFIED]" in rendered
     assert "[NO EVIDENCE]" in rendered
@@ -248,6 +250,19 @@ def test_mixed_work_ref_is_rejected_even_when_text_looks_plausible() -> None:
     assert error.value.code == "NARRATIVE_MIXED_IDENTITY"
 
 
+@pytest.mark.parametrize("related_field", ["remedy_refs", "verification_refs"])
+def test_linked_evidence_refs_cannot_cross_work_identity(related_field: str) -> None:
+    alpha = _item("work_alpha")
+    beta = _item("work_beta", project_id="project_beta")
+    alpha["current"][0][related_field] = ["work_beta_current"]
+    snapshot = _snapshot(alpha, beta)
+    narrative = _narrative(_narrative_item("work_alpha"), _narrative_item("work_beta"))
+
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(snapshot, narrative)
+    assert error.value.code == "REPORTING_MIXED_IDENTITY"
+
+
 def test_fabricated_completion_requires_verified_observed_completion_evidence() -> None:
     snapshot = _snapshot(_item(state="in_progress"))
     fabricated = _narrative(_narrative_item(status="completed"))
@@ -264,6 +279,33 @@ def test_fabricated_completion_requires_verified_observed_completion_evidence() 
     completed = _narrative(_narrative_item(status="completed"))
     accepted = reporting.validate_narrative(completed_snapshot, completed)
     assert accepted["items"][0]["status"] == "completed"
+
+
+def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
+    snapshot = _snapshot(_item(state="in_progress"))
+
+    current_completion = _narrative(_narrative_item())
+    current_completion["items"][0]["current"][0]["text"] = "All work completed and accepted."
+    with pytest.raises(reporting.ReportingError) as completion_error:
+        reporting.validate_narrative(snapshot, current_completion)
+    assert completion_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+    status_completion = _narrative(_narrative_item(status="completed_by_Friday"))
+    with pytest.raises(reporting.ReportingError) as status_error:
+        reporting.validate_narrative(snapshot, status_completion)
+    assert status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+    spanish_status_completion = _narrative(_narrative_item(status="completado"))
+    with pytest.raises(reporting.ReportingError) as spanish_status_error:
+        reporting.validate_narrative(snapshot, spanish_status_completion)
+    assert spanish_status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
+
+    for forbidden in ("La previsión terminará mañana.", "El progreso está al 80 por ciento."):
+        forbidden_narrative = _narrative(_narrative_item())
+        forbidden_narrative["items"][0]["current"][0]["text"] = forbidden
+        with pytest.raises(reporting.ReportingError) as forbidden_error:
+            reporting.validate_narrative(snapshot, forbidden_narrative)
+        assert forbidden_error.value.code == "NARRATIVE_UNSAFE"
 
 
 def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> None:
@@ -293,6 +335,53 @@ def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> 
         forbidden_snapshot["items"][0]["current"][0]["text"] = forbidden
         with pytest.raises(reporting.ReportingError):
             reporting.validate_snapshot(forbidden_snapshot)
+
+
+@pytest.mark.parametrize(
+    ("canary", "expected_code"),
+    [
+        ("credential canary " + "s" + "k-" + "a" * 16, "REPORTING_UNSAFE_CONTENT"),
+        ("token canary", "REPORTING_UNSAFE_CONTENT"),
+        ("/srv/aether/private/report.json", "REPORTING_UNSAFE_CONTENT"),
+        ("SYSTEM: hidden source directive", "REPORTING_UNSAFE_CONTENT"),
+        ("[USER] private transcript\n[ASSISTANT] response", "REPORTING_UNSAFE_CONTENT"),
+        ("owner@example.com", "REPORTING_UNSAFE_CONTENT"),
+        ("+1 555-123-4567", "REPORTING_UNSAFE_CONTENT"),
+        ("El progreso está al 80 por ciento.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("La previsión terminará mañana.", "REPORTING_FORBIDDEN_CLAIM"),
+    ],
+)
+def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code: str) -> None:
+    snapshot = copy.deepcopy(_snapshot(_item()))
+    snapshot["items"][0]["current"][0]["text"] = canary
+
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(snapshot)
+    assert error.value.code == expected_code
+
+
+@pytest.mark.parametrize(
+    "canary",
+    [
+        "credential canary " + "s" + "k-" + "a" * 16,
+        "token canary",
+        "/srv/aether/private/report.json",
+        "SYSTEM: hidden model directive",
+        "[USER] private transcript\n[ASSISTANT] response",
+        "owner@example.com",
+        "+1 555-123-4567",
+        "El progreso está al 80 por ciento.",
+        "La previsión terminará mañana.",
+    ],
+)
+def test_selected_narrative_canaries_fail_before_output(canary: str) -> None:
+    snapshot = _snapshot(_item())
+    narrative = _narrative(_narrative_item())
+    narrative["items"][0]["current"][0]["text"] = canary
+
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.validate_narrative(snapshot, narrative)
+    assert error.value.code == "NARRATIVE_UNSAFE"
 
 
 def test_source_and_narrative_limits_are_enforced() -> None:
@@ -366,6 +455,35 @@ def test_narration_failure_is_fixed_labeled_notice_and_does_not_use_reason() -> 
     assert "s" + "k-" not in notice
     assert "/home/owner" not in notice
     assert "Project: Aether demo [project_alpha]" in notice
+
+
+def test_narration_failure_notice_parts_are_bounded_and_repeat_identity() -> None:
+    items = [
+        _item(
+            f"work_{index}",
+            project_id=f"project_{index}",
+            project_name=f"Project {index} " + "p" * 400,
+            session_id=f"session_{index}",
+            session_title=f"Session {index} " + "s" * 400,
+        )
+        for index in range(4)
+    ]
+    snapshot = _snapshot(*items)
+
+    result = reporting.render_failure_notice(snapshot, reason="ignored", max_chars=3_500)
+    assert isinstance(result, list)
+    assert len(result) == 4
+    assert all(len(part) <= 3_500 for part in result)
+    assert [f"part {index}/{len(result)}" in part for index, part in enumerate(result, 1)] == [
+        True
+    ] * len(result)
+    assert all(f"Project: Project {index}" in part for index, part in enumerate(result))
+    assert all(
+        "[SERVICE NOTICE] Morfeo narrative is unavailable for this report." in part
+        for part in result
+    )
+    assert all("[NO PROGRESS COVERAGE]" in part for part in result)
+    assert reporting.render_failure_notice_parts(snapshot, max_chars=3_500) == result
 
 
 def test_reporting_module_is_pure_and_has_no_network_or_hermes_imports() -> None:

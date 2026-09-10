@@ -17,7 +17,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Final, NoReturn, cast
 
 __all__ = [
@@ -50,6 +50,7 @@ __all__ = [
     "prepare_narration_context",
     "prepare_snapshot",
     "render_failure_notice",
+    "render_failure_notice_parts",
     "render_narrative",
     "render_parts",
     "render_report",
@@ -109,8 +110,8 @@ _SENSITIVE_WORD_RE: Final = re.compile(
     re.IGNORECASE,
 )
 _ABSOLUTE_PATH_RE: Final = re.compile(
-    r"(?:^|[\s\"'=:(])(?:/home(?:/|\b)|/Users(?:/|\b)|/root(?:/|\b)|"
-    r"/tmp(?:/|\b)|/var(?:/|\b)|/etc(?:/|\b)|file://|[A-Za-z]:[\\/])",
+    r"(?:file://|[A-Za-z]:[\\/]|(?<![A-Za-z0-9_/])/(?![/\s])"
+    r"[^\s\"'<>]+)",
     re.IGNORECASE,
 )
 _EMAIL_RE: Final = re.compile(
@@ -122,22 +123,46 @@ _PHONE_RE: Final = re.compile(
     re.ASCII,
 )
 _PROMPT_INJECTION_RE: Final = re.compile(
-    r"(?:\b(?:ignore|disregard|override|forget|follow)\b.{0,80}\b"
+    r"(?:"
+    r"\b(?:ignore|disregard|override|forget|follow)\b.{0,80}\b"
     r"(?:previous|earlier|system|developer|assistant|instruction|prompt)s?\b|"
     r"\b(?:call|use|invoke|run|execute)\b.{0,40}\b(?:tool|command|function|terminal)\b|"
-    r"\b(?:send|post|deliver)\b.{0,60}\b(?:message|telegram|chat|recipient)\b)",
+    r"\b(?:send|post|deliver)\b.{0,60}\b(?:message|telegram|chat|recipient)\b|"
+    r"(?<![A-Za-z0-9_])(?:system|developer|assistant|user|tool)\s*:\s*|"
+    r"(?<![A-Za-z0-9_])\[(?:system|developer|assistant|user|tool)\]\s*"
+    r")",
     re.IGNORECASE | re.DOTALL,
 )
 _FORBIDDEN_CLAIM_RE: Final = re.compile(
-    r"(?:\b\d+(?:[.,]\d+)?\s*%|\b(?:percent|percentage|porcentaje)\b|"
-    r"(?<![A-Za-z])e\.?t\.?a\.?\b|\bestimated\s+time\s+of\s+arrival\b|"
-    r"\b(?:forecast|forecasted|projected|predicted)\b|"
+    r"(?:"
+    r"\b\d+(?:[.,]\d+)?\s*%|"
+    r"\b(?:percent|percentage|porcentaje|por\s+ciento|porciento)\b|"
+    r"(?<![A-Za-z])e\.?t\.?a\.?\b|"
+    r"\b(?:estimated\s+time\s+of\s+arrival|forecast(?:ed)?|projected?|"
+    r"predicted?|estimate(?:d)?|projection)\b|"
+    r"\b(?:pron[oó]stico|previsi[oó]n|previst[oa]s?|estimaci[oó]n|estimad[oa]s?|"
+    r"proyectad[oa]s?|predich[oa]s?)\b|"
+    r"\b(?:se\s+espera|esperamos|se\s+prev[eé])\b|"
     r"\b(?:finish|finished|complete|completed)\s+(?:by|in)\s+"
     r"(?:\d|today\b|tomorrow\b|yesterday\b|this\s+(?:hour|morning|week)\b|"
     r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)|"
+    r"\b(?:termin(?:ar|ará)|finalizar(?:á)?|completar(?:á)?)\b.{0,40}"
+    r"\b(?:mañana|hoy|ayer|lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b|"
     r"\b(?:worked|spent|took|used)\s+\d+(?:[.,]\d+)?\s*"
     r"(?:seconds?|minutes?|hours?|days?)\b|"
-    r"\b(?:cpu|agent|active)\s*[- ]?hours?\b|\b(?:cpu|agent)\s*[- ]?hrs?\b)",
+    r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+\d+(?:[.,]\d+)?\s*"
+    r"(?:segundos?|minutos?|horas?|días?)\b|"
+    r"\b(?:cpu|agent|active)\s*[- ]?hours?\b|\b(?:cpu|agent)\s*[- ]?hrs?\b|"
+    r"\b\d+(?:[.,]\d+)?\s*horas?\s+(?:de\s+)?(?:cpu|agente|trabajo)\b"
+    r")",
+    re.IGNORECASE,
+)
+_COMPLETION_ASSERTION_RE: Final = re.compile(
+    r"(?<![A-Za-z])(?:complete(?:d|s|ing)?|done|finish(?:ed|es|ing)?|resolved|"
+    r"accepted|closed|succeed(?:ed|s)?|passed|complet(?:e|o|a|ad[oa]s?|ar(?:á|án)?|ó)|"
+    r"termin(?:ad[oa]s?|ar|ó|ará)|finaliz(?:ad[oa]s?|ar|ará)|resuelt[oa]s?|"
+    r"aceptad[oa]s?|cerrad[oa]s?|aprobado[as]?)"
+    r"(?![A-Za-z])",
     re.IGNORECASE,
 )
 
@@ -152,6 +177,22 @@ _COMPLETION_STATUSES: Final = frozenset(
         "success",
         "succeeded",
         "passed",
+        "completo",
+        "completa",
+        "completado",
+        "completada",
+        "terminado",
+        "terminada",
+        "finalizado",
+        "finalizada",
+        "resuelto",
+        "resuelta",
+        "aceptado",
+        "aceptada",
+        "cerrado",
+        "cerrada",
+        "aprobado",
+        "aprobada",
     }
 )
 _TERMINAL_OBSERVED_STATES: Final = frozenset(
@@ -165,6 +206,22 @@ _TERMINAL_OBSERVED_STATES: Final = frozenset(
         "succeeded",
         "success",
         "passed",
+        "completo",
+        "completa",
+        "completado",
+        "completada",
+        "terminado",
+        "terminada",
+        "finalizado",
+        "finalizada",
+        "resuelto",
+        "resuelta",
+        "aceptado",
+        "aceptada",
+        "cerrado",
+        "cerrada",
+        "aprobado",
+        "aprobada",
     }
 )
 
@@ -329,7 +386,16 @@ def _version(value: Any) -> int | str:
 def _status(value: Any) -> str:
     if not isinstance(value, str) or _STATUS_RE.fullmatch(value) is None:
         _fail("REPORTING_SCHEMA_INVALID", "narrative status is invalid")
-    return value.lower()
+    normalized = _bounded_text(
+        value,
+        max_chars=64,
+        code="NARRATIVE_UNSAFE",
+        check_claims=True,
+        check_injection=True,
+    ).lower()
+    if _COMPLETION_ASSERTION_RE.search(normalized) and normalized not in _COMPLETION_STATUSES:
+        _fail("NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded")
+    return normalized
 
 
 def _timestamp(value: Any, *, required: bool) -> tuple[str | None, datetime | None]:
@@ -617,15 +683,6 @@ def _source_index(snapshot: Mapping[str, Any]) -> dict[str, _SourceFact]:
                         verification_refs=tuple(fact.get("verification_refs", [])),
                     ),
                 )
-        for section in _SECTION_NAMES:
-            for fact in item[section]:
-                for related in ("remedy_refs", "verification_refs"):
-                    for ref in fact.get(related, []):
-                        if ref not in index:
-                            _fail(
-                                "REPORTING_UNKNOWN_REF",
-                                "fact relation references an unknown source",
-                            )
         # Structured per-item coverage entries are diagnostics, never claimable narrative
         # sources; validate their references only for identity consistency if present.
         for gap in item["coverage_gaps"]:
@@ -638,6 +695,23 @@ def _source_index(snapshot: Mapping[str, Any]) -> dict[str, _SourceFact]:
                             "REPORTING_MIXED_IDENTITY",
                             "coverage reference belongs to mixed work identities",
                         )
+    for item in snapshot["items"]:
+        work_key = cast(str, item["work_key"])
+        for section in _SECTION_NAMES:
+            for fact in item[section]:
+                for related in ("remedy_refs", "verification_refs"):
+                    for ref in fact.get(related, []):
+                        existing = index.get(ref)
+                        if existing is None:
+                            _fail(
+                                "REPORTING_UNKNOWN_REF",
+                                "fact relation references an unknown source",
+                            )
+                        if existing.work_key != work_key:
+                            _fail(
+                                "REPORTING_MIXED_IDENTITY",
+                                "fact relation crosses work identities",
+                            )
     return index
 
 
@@ -986,6 +1060,7 @@ def validate_narrative(
             )
         normalized_item: dict[str, Any] = {"work_key": work_key}
         seen_refs: set[str] = set()
+        completion_claim = False
         for section in _SECTION_NAMES:
             claims = _sequence(
                 mapping[section], "NARRATIVE_MALFORMED", "narrative section is invalid"
@@ -995,6 +1070,13 @@ def validate_narrative(
             normalized_claims: list[dict[str, str]] = []
             for claim_value in claims:
                 claim = _narrative_claim(claim_value)
+                if _COMPLETION_ASSERTION_RE.search(claim["text"]):
+                    completion_claim = True
+                    if section != "resolved":
+                        _fail(
+                            "NARRATIVE_FABRICATED_COMPLETION",
+                            "narrative completion is not evidence-grounded",
+                        )
                 ref = claim["ref"]
                 source = sources.get(ref)
                 if source is None:
@@ -1028,9 +1110,16 @@ def validate_narrative(
                 normalized_claims.append(claim)
             normalized_item[section] = sorted(normalized_claims, key=lambda claim: claim["ref"])
         normalized_item["status"] = _status(mapping["status"])
-        if normalized_item["status"] in _COMPLETION_STATUSES and not _is_authoritative_completion(
+        authoritative_completion = _is_authoritative_completion(
             expected_items[work_key], normalized_item, sources
+        )
+        if completion_claim and (
+            normalized_item["status"] not in _COMPLETION_STATUSES or not authoritative_completion
         ):
+            _fail(
+                "NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded"
+            )
+        if normalized_item["status"] in _COMPLETION_STATUSES and not authoritative_completion:
             _fail(
                 "NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded"
             )
@@ -1059,6 +1148,17 @@ def _short_identifier(value: str) -> str:
     if len(value) <= 24:
         return value
     return f"{value[:12]}…{value[-8:]}"
+
+
+def _utc_text(value: str) -> str:
+    candidate = value[:-1] + "+00:00" if value.endswith(("Z", "z")) else value
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError:
+        return "unknown"
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return "unknown"
+    return parsed.astimezone(timezone.utc).isoformat()
 
 
 def _offset_text(value: str) -> str:
@@ -1153,7 +1253,13 @@ def _identity_header(
             f"{labels['contract']}: {_one_line(contract['title'])} "
             f"[{contract['id']} {version_label}]"
         )
-    previous = snapshot["previous_cutoff_utc"] or labels["unknown"]
+    previous = (
+        _utc_text(snapshot["previous_cutoff_utc"])
+        if snapshot["previous_cutoff_utc"]
+        else labels["unknown"]
+    )
+    cutoff_utc = _utc_text(snapshot["cutoff_utc"])
+    collected_utc = _utc_text(snapshot["collected_at_utc"])
     return "\n".join(
         (
             f"{labels['project']}: {_one_line(item['project']['name'])} [{item['project']['id']}]",
@@ -1161,8 +1267,8 @@ def _identity_header(
             f"[{_short_identifier(item['origin_session']['id'])}]",
             contract_line,
             f"{labels['report']}: {snapshot['report_id']}",
-            f"{labels['period']}: {previous} -> {snapshot['cutoff_utc']}",
-            f"{labels['collected']}: {snapshot['collected_at_utc']}",
+            f"{labels['period']}: {previous} -> {cutoff_utc}",
+            f"{labels['collected']}: {collected_utc}",
             f"{labels['offset']}: {_offset_text(snapshot['cutoff_utc'])}",
         )
     )
@@ -1206,9 +1312,10 @@ def _render_body(
     )
     started = item.get("started_at_utc")
     ended = item.get("ended_at_utc")
+    started_utc = _utc_text(started) if started else labels["unknown"]
+    ended_utc = _utc_text(ended) if ended else labels["unknown"]
     interval_label = (
-        f"{started or labels['unknown']} -> {ended or labels['unknown']} "
-        f"[OBSERVED] (elapsed: {_elapsed(started, ended)})"
+        f"{started_utc} -> {ended_utc} [OBSERVED] (elapsed: {_elapsed(started, ended)})"
     )
     lines = [
         f"{labels['state']}: {_one_line(item['observed_state'])} [OBSERVED] (evidence: {state_refs})",
@@ -1244,12 +1351,18 @@ def _report_groups(
             )
         )
     if not groups:
-        previous = snapshot["previous_cutoff_utc"] or labels["unknown"]
+        previous = (
+            _utc_text(snapshot["previous_cutoff_utc"])
+            if snapshot["previous_cutoff_utc"]
+            else labels["unknown"]
+        )
+        cutoff_utc = _utc_text(snapshot["cutoff_utc"])
+        collected_utc = _utc_text(snapshot["collected_at_utc"])
         header = "\n".join(
             (
                 f"{labels['report']}: {snapshot['report_id']}",
-                f"{labels['period']}: {previous} -> {snapshot['cutoff_utc']}",
-                f"{labels['collected']}: {snapshot['collected_at_utc']}",
+                f"{labels['period']}: {previous} -> {cutoff_utc}",
+                f"{labels['collected']}: {collected_utc}",
                 f"{labels['offset']}: {_offset_text(snapshot['cutoff_utc'])}",
             )
         )
@@ -1399,12 +1512,13 @@ def render_failure_notice(
     language: str = "English",
     owner_language: str | None = None,
     max_chars: int | None = None,
-) -> str:
+) -> str | list[str]:
     """Render the fixed service notice used when narration fails.
 
     ``reason`` is accepted for integration ergonomics but intentionally ignored: model or
     source error text must never become a report.  The notice states that it is not progress
-    coverage; callers must preserve the pending source/report state separately.
+    coverage; callers must preserve the pending source/report state separately.  When
+    ``max_chars`` is supplied, return ordered bounded parts rather than an aggregate string.
     """
 
     del reason
@@ -1425,14 +1539,20 @@ def render_failure_notice(
             )
         )
     if not groups:
-        previous = normalized["previous_cutoff_utc"] or labels["unknown"]
+        previous = (
+            _utc_text(normalized["previous_cutoff_utc"])
+            if normalized["previous_cutoff_utc"]
+            else labels["unknown"]
+        )
+        cutoff_utc = _utc_text(normalized["cutoff_utc"])
+        collected_utc = _utc_text(normalized["collected_at_utc"])
         groups.append(
             (
                 "\n".join(
                     (
                         f"{labels['report']}: {normalized['report_id']}",
-                        f"{labels['period']}: {previous} -> {normalized['cutoff_utc']}",
-                        f"{labels['collected']}: {normalized['collected_at_utc']}",
+                        f"{labels['period']}: {previous} -> {cutoff_utc}",
+                        f"{labels['collected']}: {collected_utc}",
                         f"{labels['offset']}: {_offset_text(normalized['cutoff_utc'])}",
                     )
                 ),
@@ -1445,8 +1565,23 @@ def render_failure_notice(
             )
         )
     if max_chars is not None:
-        return "\n\n".join(_render_groups_as_parts(groups, normalized["report_id"], max_chars))
+        return _render_groups_as_parts(groups, normalized["report_id"], max_chars)
     return _check_rendered("\n\n".join(header + "\n" + body for header, body in groups))
+
+
+def render_failure_notice_parts(
+    snapshot: Mapping[str, Any],
+    reason: str | None = None,
+    language: str = "English",
+    owner_language: str | None = None,
+    max_chars: int = MAX_TELEGRAM_CHARS,
+) -> list[str]:
+    """Return the fixed failure notice as ordered Telegram-sized parts."""
+
+    result = render_failure_notice(snapshot, reason, language, owner_language, max_chars)
+    if not isinstance(result, list):
+        _fail("REPORTING_SPLIT_LIMIT", "failure notice did not produce bounded parts")
+    return result
 
 
 def narration_failure_notice(
@@ -1455,7 +1590,7 @@ def narration_failure_notice(
     language: str = "English",
     owner_language: str | None = None,
     max_chars: int | None = None,
-) -> str:
+) -> str | list[str]:
     return render_failure_notice(snapshot, reason, language, owner_language, max_chars)
 
 
@@ -1465,7 +1600,7 @@ def failure_notice(
     language: str = "English",
     owner_language: str | None = None,
     max_chars: int | None = None,
-) -> str:
+) -> str | list[str]:
     return render_failure_notice(snapshot, reason, language, owner_language, max_chars)
 
 
