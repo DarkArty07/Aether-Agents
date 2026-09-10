@@ -10,7 +10,7 @@
 - Maintained fork base: `28b593efa86bbc674b32f488c35932a4e7e85a51`
 - Maintained fork PR: [DarkArty07/aether-hermes#5](https://github.com/DarkArty07/aether-hermes/pull/5)
 - Maintained fork merge: `8a6b33ae480373015178b80e87c88fe0abda3919`
-- Aether PR: recorded in the durable terminal task/PR after this candidate report is committed.
+- Aether PR: [DarkArty07/Aether-Agents#370](https://github.com/DarkArty07/Aether-Agents/pull/370); exact merge is recorded in the durable terminal task/PR after required checks complete.
 
 All 16 implementation/evidence units completed independent same-card Supervisor review before integration. The fork PR was merged first so the exact fork merge could be pinned in `HERMES_LOCAL_PATCHES.md` before the Aether PR. Inherited fork Actions remain disabled and were NOT RUN; they are not reported green.
 
