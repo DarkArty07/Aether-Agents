@@ -133,11 +133,13 @@ produced the same failure):
   state.db write lock for over 1s — likely a long maintenance operation …; the
   database itself is healthy)` — the product's own storage-busy surface, from
   `hermes_state.py:3984`/`:4029`.
-- Scale measurements of the same publication path in that fixture (detached read-only
-  worktree, temp DB): legacy inline layout **0.75 ms/row** (400 rows), **0.79 ms/row**
-  (1,200 rows), **0.89 ms/row** (2,400 rows); v23 external-content layout 0.16 s per
-  1,200 rows; with the FTS triggers detached 0.06 ms/row — i.e. **≥ 90 % of the
-  critical section is FTS trigger work, not Python preparation**.
+- Scale measurements of the same publication path (detached read-only worktree, temp
+  DB): legacy inline layout **0.76 ms/row** (400 rows), **0.81 ms/row** (1,200 rows),
+  **0.86-0.89 ms/row** (2,400 rows); v23 external-content layout 0.16 s per 1,200
+  rows; with the FTS triggers detached **0.06 ms/row** on the same rows (0.58-2.78
+  ms/row with them) — i.e. ~90-98 % of the critical section is FTS trigger work, of
+  which the injected-preparation saving in item 1 below is the remainder. Python
+  preparation is *not* the dominated cost; the transaction length is.
 - Negative control (in-fixture and in `tests/state/test_write_lock_patience.py`): a
   0.2 s lock held by a plain SQLite connection is waited out; an append only fails
   when a *product* transaction holds the lock past the budget.
@@ -191,8 +193,9 @@ and rollback; move pure preparation outside the writer transaction where suffici
 1. **Preparation outside the transaction (necessary, measurably insufficient alone).**
    `_insert_message_rows` performs per-row `_encode_content` / `_scrub_surrogates` /
    JSON dumping inside the transaction (`hermes_state.py:9530-9621`). Moving that into a
-   pre-serialised row plan is safe and reversible, but it removes only ~6-10 % of the
-   measured hold (0.06 ms of 0.79 ms per row). It must not be presented as the fix.
+   pre-serialised row plan is safe and reversible, but it removes only ~2-10 % of the
+   measured hold (0.06 ms of 0.58-2.78 ms per row). It must not be presented as the
+   fix.
 2. **Bounded staging is genuinely necessary.** The dominant cost is FTS trigger work
    that cannot be moved out of the insert, so the critical section can only be bounded
    by *committing the publication in several short transactions*. A shape that reuses
