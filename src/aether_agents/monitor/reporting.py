@@ -138,18 +138,23 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r"\b\d+(?:[.,]\d+)?\s*(?:%|pct\.?|percent|percentage|porciento|por\s+ciento)(?!\w)|"
     r"\b(?:percent|percentage|porcentaje|por\s+ciento|porciento)\b|(?<!\w)pct\.?(?!\w)|"
     r"(?<![A-Za-z])e\.?t\.?a\.?\b|"
-    r"\b(?:estimated\s+time\s+of\s+arrival|forecast(?:ed)?|projected?|"
-    r"predicted?|estimate(?:d)?|projection)\b|"
+    r"\b(?:estimated\s+time\s+of\s+arrival|forecast(?:ed|ing)?|projected?|projecting|"
+    r"predicted?|predicting|estimate(?:d|s|ing)?|projection)\b|"
     r"\b(?:pron[oó]stico|previsi[oó]n|previst[oa]s?|estimaci[oó]n|estimad[oa]s?|"
     r"proyectad[oa]s?|predich[oa]s?|esperad[oa]s?)\b|"
-    r"\b(?:se\s+espera|esperamos|se\s+prev[eé]|se\s+pronostica)\b|"
-    r"\b(?:finish|finished|complete|completed|ready|done|ship|shipped|deliver|delivered)\s+(?:by|in|on|before|for)\s+"
+    r"\b(?:se\s+espera|esperamos|se\s+prev[eé]|se\s+pronostica|se\s+estima|se\s+proyecta)\b|"
+    r"\b(?:completion|finish|delivery|resolution|work|task|item)\s+(?:is\s+)?expected\b|"
+    r"\bexpected\s+(?:completion|finish|delivery|resolution|by|in|on|before|for|to|at|"
+    r"today|tomorrow|yesterday|this\s+(?:hour|morning|afternoon|week|month)|"
+    r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|\d)\b|"
+    r"\b(?:finish|finished|complete|completed|ready|done|ship|shipped|deliver|delivered|conclude|concluded)\s+(?:by|in|on|before|for)\s+"
     r"(?:\d|today\b|tomorrow\b|yesterday\b|this\s+(?:hour|morning|afternoon|week|month)\b|"
     r"(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)|"
-    r"\b(?:will\s+be\s+(?:ready|finished|completed|done|shipped|delivered)|will\s+(?:finish|complete|ship|deliver))\b|"
-    r"\b(?:estar[áa]n?|quedar[áa]n?|ser[áa]n?|va\s+a\s+estar)\s+(?:list[oa]s?|terminad[oa]s?|finalizad[oa]s?|completad[oa]s?|entregad[oa]s?|desplegad[oa]s?)\b|"
-    r"\b(?:list[oa]s?|termin(?:ar|ar[áa]|ad[oa]s?)|finaliz(?:ar|ar[áa]|ad[oa]s?)|complet(?:ar|ar[áa]|ad[oa]s?)|entreg(?:ar|ar[áa]|ad[oa]s?)|despleg(?:ar|ar[áa]|ad[oa]s?))\b.{0,40}"
+    r"\b(?:will\s+be\s+(?:ready|finished|completed|done|shipped|delivered|concluded)|will\s+(?:finish|complete|ship|deliver|conclude))\b|"
+    r"\b(?:estar[áa]n?|quedar[áa]n?|ser[áa]n?|va\s+a\s+estar)\s+(?:list[oa]s?|terminad[oa]s?|finalizad[oa]s?|completad[oa]s?|entregad[oa]s?|desplegad[oa]s?|concluid[oa]s?)\b|"
+    r"\b(?:list[oa]s?|termin(?:ar|ar[áa]n?|ad[oa]s?)|finaliz(?:ar|ar[áa]n?|ad[oa]s?)|complet(?:ar|ar[áa]n?|ad[oa]s?)|entreg(?:ar|ar[áa]n?|ad[oa]s?)|despleg(?:ar|ar[áa]n?|ad[oa]s?)|conclu(?:ir|ir[áa]n?|ye|yen)|culmin(?:ar|ar[áa]n?|ad[oa]s?))\b.{0,40}"
     r"\b(?:mañana|hoy|ayer|pronto|este\s+(?:mes|año|fin\s+de\s+semana)|esta\s+semana|(?:el\s+|pr[oó]xim[oa]\s+)?(?:lunes|martes|mi[eé]rcoles|miercoles|jueves|viernes|s[aá]bado|sabado|domingo))\b|"
+    r"\b(?:concluir[áa]n?|culminar[áa]n?)\b|"
     r"\b(?:worked|spent|took|used)\s+\d+(?:[.,]\d+)?\s*"
     r"(?:seconds?|minutes?|hours?|days?)\b|"
     r"\b(?:trabaj(?:é|e|o)|invert(?:í|i)|tard(?:é|e|o|ó))\s+\d+(?:[.,]\d+)?\s*"
@@ -159,20 +164,57 @@ _FORBIDDEN_CLAIM_RE: Final = re.compile(
     r")",
     re.IGNORECASE,
 )
+
+_GATE_READINESS_RE: Final = re.compile(
+    r"\b(?:"
+    r"(?:ready|list[oa]s?)\s+for\s+(?:review|inspection|testing|verification|qa|audit|approval|evaluation|merge)\b|"
+    r"(?:ready|list[oa]s?)\s+para\s+(?:revisi[oó]n|inspecci[oó]n|pruebas?|test(?:ing)?|verificaci[oó]n|qa|auditor[ií]a|aprobaci[oó]n|evaluaci[oó]n)\b|"
+    r"(?:preparad[oa]s?)\s+para\s+(?:revisi[oó]n|inspecci[oó]n|pruebas?|verificaci[oó]n)\b|"
+    r"(?:ready|list[oa]s?)\s+to\s+(?:be\s+reviewed|review|be\s+tested|test|be\s+verified|verify|be\s+inspected|inspect)\b|"
+    r"list[oa]s?\s+para\s+(?:ser\s+revisad[oa]s?|revisar|ser\s+probad[oa]s?|probar|ser\s+verificad[oa]s?|verificar)"
+    r")",
+    re.IGNORECASE,
+)
+
+_EXPLICIT_NEGATION_RE: Final = re.compile(
+    r"\b(?:"
+    r"(?:is|are|was|were|has|have|had|can|could|did|do|does|would|should)n[\x27\x60\u2019]t\s+(?:yet\s+)?(?:fully\s+|completely\s+)?(?:\w+\s+){0,2}(?:complet(?:ed?|ion|e)|done|finish(?:ed)?|resolv(?:ed?)|ready|shipped|delivered|accepted|closed|succeeded|passed)\b|"
+    r"(?:not|never|neither)\s+(?:yet\s+)?(?:be\s+|been\s+|is\s+|are\s+|was\s+|were\s+)?(?:fully\s+|completely\s+)?(?:\w+\s+){0,2}(?:complet(?:ed?|ion|e)|done|finish(?:ed)?|resolv(?:ed?)|ready|shipped|delivered|accepted|closed|succeeded|passed)\b|"
+    r"(?:is|are|was|were|has|have|had)\s+not\s+(?:yet\s+)?(?:fully\s+|completely\s+)?(?:\w+\s+){0,2}(?:complet(?:ed?|ion|e)|done|finish(?:ed)?|resolv(?:ed?)|ready|shipped|delivered|accepted|closed|succeeded|passed)\b|"
+    r"(?:cannot|can\s+not|could\s+not)\s+be\s+(?:complet(?:ed?|ion|e)|done|finish(?:ed)?|resolv(?:ed?)|ready|shipped|delivered|accepted|closed)\b|"
+    r"yet\s+to\s+be\s+(?:completed?|done|finished|resolved|shipped|delivered|accepted|closed)\b|"
+    r"(?:uncompleted|incomplete|unfinished|unresolved)\b|"
+    r"(?:no|sin|tampoco)\s+(?:est[áa]n?|ha\s+sido|se\s+ha|fue|fueron|qued[óo]|a[úu]n|todav[ií]a)?\s*(?:totalmente\s+|completamente\s+)?(?:\w+\s+){0,2}(?:completad[oa]s?|terminad[oa]s?|finalizad[oa]s?|resuelt[oa]s?|list[oa]s?|entregad[oa]s?|aceptad[oa]s?|cerrad[oa]s?|aprobad[oa]s?|completar|terminar|finalizar|resolver)\b|"
+    r"(?:a[úu]n|todav[ií]a)\s+no\s+(?:est[áa]n?|se\s+ha|ha\s+sido)?\s*(?:list[oa]s?|completad[oa]s?|terminad[oa]s?|finalizad[oa]s?|resuelt[oa]s?|entregad[oa]s?|cerrad[oa]s?)\b|"
+    r"(?:incomplet[oa]s?|sin\s+completar|sin\s+terminar|sin\s+finalizar|sin\s+resolver)"
+    r")",
+    re.IGNORECASE,
+)
+
+_DELIVERY_DEGRADATION_RE: Final = re.compile(
+    r"\b(?:"
+    r"(?:delivery|service|message|channel)\s+(?:acknowledgement|confirmation|receipt|status|failure|error|timeout|uncertainty|uncertain|degraded|degradation|delay)\b|"
+    r"(?:acknowledgement|confirmation|status|failure|error|timeout|degradation)\s+of\s+delivery\b|"
+    r"(?:acuse|confirmaci[oó]n|estado|fallo|error|degradaci[oó]n)\s+de\s+entrega\b|"
+    r"entrega\s+(?:incierta|fallida|demorada|pendiente|de\s+mensajes)"
+    r")",
+    re.IGNORECASE,
+)
+
 _COMPLETION_ASSERTION_RE: Final = re.compile(
     r"(?<![A-Za-zÁÉÍÓÚáéíóúÑñ])(?:"
-    r"complete(?:d|s|ing|tion)?|"
+    r"complete(?:d|s|ing)?|"
     r"done|"
     r"finish(?:ed|es|ing)?|"
-    r"resolv(?:ed?|es|ing)|resolution|"
-    r"accept(?:ed?|s|ing|ance)?|"
+    r"resolv(?:ed?|es|ing)|"
+    r"accept(?:ed?|s|ing)?|"
     r"clos(?:ed?|es|ing)|"
     r"succeed(?:ed|s|ing)?|success(?:ful)?|"
     r"pass(?:ed|es|ing)?|"
     r"ready|"
-    r"ship(?:ped|s|ping|ment)?|"
-    r"deliver(?:ed?|s|ing|y)?|"
-    r"deploy(?:ed?|s|ing|ment)?|"
+    r"ship(?:ped|s|ping)?|"
+    r"deliver(?:ed|s|ing)?|"
+    r"deploy(?:ed|s|ing)?|"
     r"release(?:d?|s|ing)?|"
     r"complet(?:e|o|a|os|as|ad[oa]s?|ar(?:á|án|on)?|ó)|"
     r"termin(?:o|ó|ad[oa]s?|ar(?:á|án|on)?)|"
@@ -189,6 +231,16 @@ _COMPLETION_ASSERTION_RE: Final = re.compile(
     r")(?![A-Za-zÁÉÍÓÚáéíóúÑñ])",
     re.IGNORECASE,
 )
+
+
+def _has_completion_assertion(text: str) -> bool:
+    """Return True if text asserts terminal completion rather than pending/readiness/diagnostics."""
+    normalized = re.sub(r"[-_]+", " ", text)
+    masked = _EXPLICIT_NEGATION_RE.sub(" ", normalized)
+    masked = _GATE_READINESS_RE.sub(" ", masked)
+    masked = _DELIVERY_DEGRADATION_RE.sub(" ", masked)
+    return bool(_COMPLETION_ASSERTION_RE.search(masked))
+
 
 _COMPLETION_STATUSES: Final = frozenset(
     {
@@ -445,13 +497,15 @@ def _bounded_text(
         _fail(unsafe_code, "reporting text contains personal content")
     if check_injection and _PROMPT_INJECTION_RE.search(text):
         _fail(unsafe_code, "reporting text contains instruction-like content")
-    if check_claims and _FORBIDDEN_CLAIM_RE.search(text):
-        claim_code = (
-            "NARRATIVE_UNSAFE"
-            if code != "REPORTING_SCHEMA_INVALID"
-            else "REPORTING_FORBIDDEN_CLAIM"
-        )
-        _fail(claim_code, "reporting text contains a forbidden forecast or metric")
+    if check_claims:
+        words = re.sub(r"[-_]+", " ", text)
+        if _FORBIDDEN_CLAIM_RE.search(text) or _FORBIDDEN_CLAIM_RE.search(words):
+            claim_code = (
+                "NARRATIVE_UNSAFE"
+                if code != "REPORTING_SCHEMA_INVALID"
+                else "REPORTING_FORBIDDEN_CLAIM"
+            )
+            _fail(claim_code, "reporting text contains a forbidden forecast or metric")
     return text
 
 
@@ -490,11 +544,14 @@ def _status(value: Any) -> str:
         value,
         max_chars=64,
         code="NARRATIVE_UNSAFE",
-        check_claims=True,
+        check_claims=False,
         check_injection=True,
     ).lower()
-    if _COMPLETION_ASSERTION_RE.search(normalized) and normalized not in _COMPLETION_STATUSES:
+    as_words = re.sub(r"[-_]+", " ", normalized)
+    if _has_completion_assertion(as_words) and normalized not in _COMPLETION_STATUSES:
         _fail("NARRATIVE_FABRICATED_COMPLETION", "narrative completion is not evidence-grounded")
+    if _FORBIDDEN_CLAIM_RE.search(normalized) or _FORBIDDEN_CLAIM_RE.search(as_words):
+        _fail("NARRATIVE_UNSAFE", "narrative status contains a forbidden forecast or metric")
     return normalized
 
 
@@ -580,7 +637,7 @@ def _coverage_list(value: Any, *, field: str) -> list[Any]:
                 check_claims=True,
                 check_injection=True,
             )
-            if _COMPLETION_ASSERTION_RE.search(text):
+            if _has_completion_assertion(text):
                 _fail("REPORTING_FORBIDDEN_CLAIM", "coverage entry contains a completion claim")
             result.append(text)
             continue
@@ -589,7 +646,10 @@ def _coverage_list(value: Any, *, field: str) -> list[Any]:
         if {"ref", "text", "provenance", "status"}.issubset(keys):
             # Structured gaps may carry the same evidence vocabulary as a fact, but are
             # diagnostics and never become claimable narrative sources.
-            result.append(_fact(mapping, source=True))
+            fact = _fact(mapping, source=True)
+            if _has_completion_assertion(fact["text"]):
+                _fail("REPORTING_FORBIDDEN_CLAIM", "coverage entry contains a completion claim")
+            result.append(fact)
             continue
         if keys != {"code", "message"}:
             _fail("REPORTING_SCHEMA_INVALID", "coverage entry is invalid")
@@ -599,7 +659,7 @@ def _coverage_list(value: Any, *, field: str) -> list[Any]:
             check_claims=True,
             check_injection=True,
         )
-        if _COMPLETION_ASSERTION_RE.search(message):
+        if _has_completion_assertion(message):
             _fail("REPORTING_FORBIDDEN_CLAIM", "coverage entry contains a completion claim")
         result.append(
             {
@@ -1174,7 +1234,7 @@ def validate_narrative(
             normalized_claims: list[dict[str, str]] = []
             for claim_value in claims:
                 claim = _narrative_claim(claim_value)
-                if _COMPLETION_ASSERTION_RE.search(claim["text"]):
+                if _has_completion_assertion(claim["text"]):
                     completion_claim = True
                     if section != "resolved":
                         _fail(

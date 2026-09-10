@@ -311,6 +311,17 @@ def test_model_completion_and_spanish_forbidden_claims_fail_closed() -> None:
             reporting.validate_narrative(snapshot, status_completion)
         assert status_error.value.code == "NARRATIVE_FABRICATED_COMPLETION"
 
+    for forbidden_status in (
+        "eta_Friday",
+        "forecast_Friday",
+        "progress_80_pct",
+        "progress_80_percent",
+    ):
+        status_narrative = _narrative(_narrative_item(status=forbidden_status))
+        with pytest.raises(reporting.ReportingError) as status_error:
+            reporting.validate_narrative(snapshot, status_narrative)
+        assert status_error.value.code == "NARRATIVE_UNSAFE"
+
     for forbidden in (
         "La previsión terminará mañana.",
         "El progreso está al 80 por ciento.",
@@ -386,20 +397,116 @@ def test_coverage_gap_claim_boundary_and_legitimate_notices() -> None:
         reporting.build_narration_prompt(bad_structured_completion)
     assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
 
-    # Legitimate compacted notice and diagnostic codes are preserved
+    # Global fact-shaped coverage gap with completion assertion
+    bad_global_fact = copy.deepcopy(snapshot)
+    bad_global_fact["coverage_gaps"] = [
+        {
+            "ref": "gap_fact_global",
+            "text": "Todo está listo.",
+            "provenance": "observed",
+            "status": "verified",
+        }
+    ]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_global_fact)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Per-item fact-shaped coverage gap with completion assertion
+    bad_item_fact = copy.deepcopy(snapshot)
+    bad_item_fact["items"][0]["coverage_gaps"] = [
+        {
+            "ref": "gap_fact_item",
+            "text": "Todo está listo.",
+            "provenance": "observed",
+            "status": "verified",
+        }
+    ]
+    with pytest.raises(reporting.ReportingError) as error:
+        reporting.build_narration_prompt(bad_item_fact)
+    assert error.value.code == "REPORTING_FORBIDDEN_CLAIM"
+
+    # Legitimate compacted notice, diagnostic codes, and delivery uncertainty are preserved
     legit_snapshot = copy.deepcopy(snapshot)
     legit_snapshot["coverage_gaps"] = [
         "[COMPACTED] Source detail was bounded for narration; 10 fact(s) require handling.",
         {"code": "GAP_UNTRACKED", "message": "Untracked files were skipped during collection"},
+        "Delivery acknowledgement is uncertain.",
+        {"code": "GAP_DELIVERY", "message": "Delivery acknowledgement is uncertain."},
+        {
+            "ref": "gap_fact_delivery",
+            "text": "Delivery acknowledgement is uncertain.",
+            "provenance": "observed",
+            "status": "unverified",
+        },
     ]
     prompt = reporting.build_narration_prompt(legit_snapshot)
     assert "[COMPACTED]" in prompt
     assert "GAP_UNTRACKED" in prompt
+    assert "Delivery acknowledgement is uncertain." in prompt
 
     narrative = _narrative(_narrative_item())
     rendered = reporting.render_report(legit_snapshot, narrative)
     assert "[COMPACTED]" in rendered
     assert "GAP_UNTRACKED" in rendered
+    assert "Delivery acknowledgement is uncertain." in rendered
+
+
+def test_legitimate_pending_readiness_and_delivery_controls_preserved() -> None:
+    # 1. Gate readiness in current: "The change is ready for review."
+    current_item = _item(state="in_progress")
+    current_item["current"] = [
+        _fact("work_alpha_ready_for_review", "The change is ready for review.")
+    ]
+    current_snapshot = _snapshot(current_item)
+    n_item_current = _narrative_item()
+    n_item_current["current"] = [
+        {"ref": "work_alpha_ready_for_review", "text": "The change is ready for review."}
+    ]
+    current_narrative = _narrative(n_item_current)
+    validated_current = reporting.validate_narrative(current_snapshot, current_narrative)
+    assert validated_current["items"][0]["current"][0]["text"] == "The change is ready for review."
+    rendered_current = reporting.render_report(current_snapshot, current_narrative)
+    assert "The change is ready for review." in rendered_current
+
+    # 2. Negated completion in pending: "The work is not completed."
+    pending_item = _item(state="in_progress")
+    pending_item["pending"] = [_fact("work_alpha_not_completed", "The work is not completed.")]
+    pending_snapshot = _snapshot(pending_item)
+    n_item_pending = _narrative_item()
+    n_item_pending["pending"] = [
+        {"ref": "work_alpha_not_completed", "text": "The work is not completed."}
+    ]
+    pending_narrative = _narrative(n_item_pending)
+    validated_pending = reporting.validate_narrative(pending_snapshot, pending_narrative)
+    assert validated_pending["items"][0]["pending"][0]["text"] == "The work is not completed."
+    rendered_pending = reporting.render_report(pending_snapshot, pending_narrative)
+    assert "The work is not completed." in rendered_pending
+
+    # Contractions are also explicit negation, not terminal completion.
+    for negated in ("The work isn't completed.", "The work hasn't shipped."):
+        negated_item = _item(state="in_progress")
+        negated_item["pending"] = [_fact("work_alpha_negated", negated)]
+        negated_snapshot = _snapshot(negated_item)
+        negated_narrative_item = _narrative_item()
+        negated_narrative_item["pending"] = [{"ref": "work_alpha_negated", "text": negated}]
+        reporting.validate_narrative(negated_snapshot, _narrative(negated_narrative_item))
+
+    # 3. Delivery uncertainty is a diagnostic, not a completion assertion.
+    delivery_item = _item(state="in_progress")
+    delivery_item["complications"] = [
+        _fact("work_alpha_delivery_uncertain", "Delivery acknowledgement is uncertain.")
+    ]
+    delivery_snapshot = _snapshot(delivery_item)
+    delivery_narrative_item = _narrative_item()
+    delivery_narrative_item["complications"] = [
+        {"ref": "work_alpha_delivery_uncertain", "text": "Delivery acknowledgement is uncertain."}
+    ]
+    delivery_narrative = _narrative(delivery_narrative_item)
+    validated_delivery = reporting.validate_narrative(delivery_snapshot, delivery_narrative)
+    assert (
+        validated_delivery["items"][0]["complications"][0]["text"]
+        == "Delivery acknowledgement is uncertain."
+    )
 
 
 def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> None:
@@ -447,6 +554,8 @@ def test_forbidden_claims_and_unsafe_canaries_fail_before_prompt_or_output() -> 
         ("El progreso es 80 pct.", "REPORTING_FORBIDDEN_CLAIM"),
         ("Work is 80% complete.", "REPORTING_FORBIDDEN_CLAIM"),
         ("Progress is 100 pct.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("Completion expected Friday.", "REPORTING_FORBIDDEN_CLAIM"),
+        ("La tarea concluirá el viernes.", "REPORTING_FORBIDDEN_CLAIM"),
     ],
 )
 def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code: str) -> None:
@@ -474,6 +583,8 @@ def test_selected_source_canaries_fail_before_prompt(canary: str, expected_code:
         "El progreso es 80 pct.",
         "Work is 80% complete.",
         "Progress is 100 pct.",
+        "Completion expected Friday.",
+        "La tarea concluirá el viernes.",
     ],
 )
 def test_selected_narrative_canaries_fail_before_output(canary: str) -> None:
