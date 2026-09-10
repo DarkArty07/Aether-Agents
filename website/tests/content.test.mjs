@@ -176,6 +176,7 @@ test('documentation manifest, grouped routes and revision-pinned sources cover t
   assert.equal(indexPage.documentElement.getAttribute('lang'),'es-MX');
   assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('data-source-path'),'docs/index.md');
   assert.equal(indexPage.querySelector('[data-doc-content]').getAttribute('lang'),'en');
+  assert.equal(indexPage.querySelector('#docs-canonical-source-label').getAttribute('lang'),'en');
   assert.match(normalize(text(indexPage.querySelector('[data-doc-content]'))),/canonical English manual/);
   assert.ok(indexPage.querySelector('[data-doc-content] h1[id][tabindex="-1"]'));
   const groups=[...indexPage.querySelectorAll('.docs-index-group[data-doc-group]')];

@@ -29,6 +29,7 @@ test.describe('grouped documentation UX', () => {
     await expect(page.locator('a[href="/docs/index/"]')).toHaveCount(0);
     await expect(page.locator('html')).toHaveAttribute('lang', 'es-MX');
     await expect(page.locator('[data-doc-content]')).toHaveAttribute('lang', 'en');
+    await expect(page.locator('#docs-canonical-source-label')).toHaveAttribute('lang', 'en');
     expect(await page.locator('.docs-index-group h2').evaluateAll(headings => headings.map(heading => heading.getAttribute('lang')))).toEqual(Array(5).fill('en'));
     expect(await page.locator('.docs-group-header > p').evaluateAll(descriptions => descriptions.map(description => description.getAttribute('lang')))).toEqual(Array(5).fill('es-MX'));
     expect(await page.locator('.docs-index-list article[data-document] h3, .docs-index-list article[data-document] > p:not(.docs-card-meta)').evaluateAll(metadata => metadata.map(element => element.getAttribute('lang')))).toEqual(Array(recordCount * 2).fill('en'));
