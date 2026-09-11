@@ -73,3 +73,15 @@ runner returned **48 passed in 7.44s**; documentation and `git diff --check` pas
 proves source/contract consistency only. No credential value was read or written by this
 authoring phase, no profile/config/provider/model changed, no live command was rerun and
 no qualification/production acceptance is claimed.
+
+## D15 — autonomous additional live-attempt authority
+
+After D14R candidate `f603f8f1ace4dbb112afb05e032da620642e7050` passed independent
+review and integrated verification, the owner instructed Morfeo to stop asking for this
+routine continuation and work autonomously. One additional live qualification attempt is
+therefore authorized on that exact candidate and a new no-overwrite private target. The
+prior v3 failure remains preserved and produced no job, scheduler, model or Telegram
+effect. Pre-effect recovery remains bounded and reversible; any failure after external
+qualification effects begin stops without an automatic rerun. This is authority to run
+the existing accepted test, not evidence that it passed or authority to change the
+candidate, destination, credentials, provider/model or acceptance criteria.

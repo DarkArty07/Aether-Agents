@@ -62,6 +62,21 @@ is authorized with a new no-overwrite receipt target. This is an explicit contin
 not an automatic retry. Any subsequent live failure stops the experiment under the
 existing rule.
 
+### D15 autonomous continuation after recovered provisioned-runtime drift
+
+The owner explicitly renewed autonomous continuation after the single v3 attempt failed
+before any job, scheduler, model or Telegram effect. D14R candidate
+`f603f8f1ace4dbb112afb05e032da620642e7050` is independently reviewed and integrated;
+the provisioned editable metadata was recovered without changing source, dependencies,
+profiles, credentials or running processes. One additional live qualification attempt is
+authorized on that exact candidate with a new no-overwrite private target. Morfeo and
+Supervisor must not ask again for routine bounded, reversible recovery that occurs before
+external qualification effects and stays within the existing recovery limits. Once the
+attempt starts a lab job/scheduler, model call or Telegram send, a failure stops the live
+experiment with evidence and no automatic rerun. This authorization does not permit a
+different candidate, destination, provider/model change, credential widening, weakened
+acceptance, fabricated receipt or unbounded retry loop.
+
 This is operational isolation for cooperating processes and controlled paths, not an OS sandbox against a malicious process of the same user. Production state may legitimately change because other agents work; do not demand that all production files remain byte-identical. The harness itself must never replace, restore, quarantine, merge or delete the production registry.
 
 ## Live sequence and budget
