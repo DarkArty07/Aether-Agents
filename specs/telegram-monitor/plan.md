@@ -106,6 +106,11 @@ use; invalid data cannot redirect files, commands, source DB selection or recipi
 
 ## 4. Enrollment and sources
 
+### Canonical board contract before merge
+
+For a board carrying a validated lowercase 40-character `worktree_base_ref`, read `.aether/project.toml` and the exact `.aether/objective-contracts/<contract>/v<version>.md` blob from that commit in the registered project repository. Validate marker, contract and board identities together before constructing `BoardBinding`. Never read contract authority from `tasks.workspace_path` or another mutable worktree. Legacy boards without a usable base ref may use the registered primary artifact only when it independently passes the same checks; they cannot borrow another board's contract. A rejected board contributes a bounded gap but does not erase valid bindings from other boards.
+
+
 Enumerate Aether `ProjectRegistry` and verify every marker/path; never a global last-project
 pointer. Enumerate native board metadata read-only, requiring consistent portable project,
 contract/version, canonical board grammar, Hermes project/path binding and finalized

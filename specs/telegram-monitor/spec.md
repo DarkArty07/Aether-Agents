@@ -99,6 +99,10 @@ single production cut preserve the original hourly product oracle. Objective Con
 supersedes v3 for this testing-standard change.
 
 ## Acceptance criteria
+### D18 — Active contract resolution from the execution-board base
+
+Morfeo post-merge reception rejected completion because the first natural production snapshot contained zero work items while reportable Aether work existed. A canonical execution board may reference a finalized contract committed at its validated `worktree_base_ref` before that contract reaches the registered primary checkout. The collector must resolve the project marker and contract bytes from that exact Git object using validated argument-array Git access or an equivalent read-only object API; it must not use shell interpolation, mutable task workspaces or a recency fallback. The marker UUID, contract identity/version/status and created/finalized session IDs must still agree with board metadata. Missing, invalid, unreachable or conflicting refs remain a labeled gap for that board. Unrelated invalid legacy projects/boards remain visible as coverage gaps but must not suppress a separately valid active board. Acceptance requires a production snapshot with at least one correctly attributed real work item when reportable work exists.
+
 ### D17 — Pragmatic terminal acceptance
 
 The owner directs the fastest complete closeout and ends further live-laboratory attempts. Retained v7 model/narration/Telegram evidence plus independently accepted D16U deterministic/replay evidence replace another laboratory run. Production acceptance requires activation of the same reviewed candidate, one immediate native `cron run` with confirmed delivery, persisted `0 * * * *` schedule and next due time, rollback readiness, and normal repository closeout. The first natural permanent-job hour is monitored post-close evidence; failure reopens #367 and triggers scoped rollback. The report must disclose that no pre-close natural-hour execution was claimed.

@@ -127,6 +127,9 @@ No lab result alone establishes production activation or final acceptance.
 
 ## 5. Review, integration and activation
 
+D18 regression must include a contract that exists only at the canonical board's `worktree_base_ref`, not in the primary checkout. Require the valid board to yield an attributed work item while unrelated invalid legacy sources remain labeled. Negative cases cover unreachable refs, marker mismatch, wrong contract/version and mutable-worktree-only artifacts. After scoped activation, run the permanent job once and require at least one real attributed item when current reportable work exists; an empty snapshot with source gaps is a failed functional canary, not completion.
+
+
 Supervisor independently verifies code, AC/test mapping, real receipts and exact candidate
 before integration. Use one normal PR with all repository checks green, preserve unit
 commits and do not bypass/rewrite history. Before local activation, record prior monitor

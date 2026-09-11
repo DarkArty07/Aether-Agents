@@ -78,6 +78,10 @@ no qualification/production acceptance is claimed.
 
 After approximately 44 hours of pipeline activity, the owner directed the fastest complete closeout without omitting product behavior. D17 ends further live-laboratory attempts. Retained v7 evidence already records one real Morfeo narration and three confirmed Telegram parts; D16U must be independently accepted and replay that evidence while deterministically proving the legitimate `pending -> accepted` transition and genuine duplicate refusal. Production then uses the exact reviewed candidate, a verified zero-worker activation window, one immediate native `cron run`, confirmed delivery, unchanged `0 * * * *` schedule/next due and rollback. The first natural permanent-job run is post-close monitoring and cannot be claimed as pre-close evidence. This changes verification allocation, not the product's hourly cadence, identity, privacy, deduplication or silence behavior.
 
+## v5 reception discrepancy — D18
+
+Direct Morfeo reception of merged main `42bf4b9` and the installed production state found the permanent job active at `0 * * * *` and a confirmed natural Telegram delivery, but its snapshot had `items: []` and eleven coverage gaps while an active canonical Aether board contained reportable work. The active board's contract was absent from the registered primary checkout but present at the exact `worktree_base_ref` Git object with the expected digest. The source adapter currently reads contract metadata only from the primary filesystem and therefore rejects the valid board as `FINAL_CONTRACT_UNREADABLE`. Issue #367 was reopened and the monitor paused with receipts/job preserved. D18 owns the focused repair; the previous merge, activation and real transport evidence remain valid inputs but do not establish installation-wide attribution.
+
 ## D15 — autonomous additional live-attempt authority
 
 After D14R candidate `f603f8f1ace4dbb112afb05e032da620642e7050` passed independent
