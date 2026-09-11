@@ -1,13 +1,13 @@
 # Evidence — PR8-REVIEW (#385)
 
-**Unit:** PR8-REVIEW (`t_e6992ea2`)  
-**Objective:** `oc_c780a10d94b78d85@v1` (§R385, `plan.md` §D3 U-REVIEW)  
-**Issue:** #385 — review topology guidance cannot be mistaken for terminal integration  
-**Fork Repository:** `DarkArty07/aether-hermes`  
-**Base Commit (`origin/aether-main`):** `6551b7c31cc665d59103c6d89cb5e0c60666f803`  
-**Candidate Commit:** `9fba8552bba30004ab452823668a105dee1ee89d`  
-**Fork Branch:** `fix/pr8-385-review-guidance`  
-**Fork Pull Request:** https://github.com/DarkArty07/aether-hermes/pull/9  
+**Unit:** PR8-REVIEW (`t_e6992ea2`)
+**Objective:** `oc_c780a10d94b78d85@v1` (§R385, `plan.md` §D3 U-REVIEW)
+**Issue:** #385 — review topology guidance cannot be mistaken for terminal integration
+**Fork Repository:** `DarkArty07/aether-hermes`
+**Base Commit (`origin/aether-main`):** `6551b7c31cc665d59103c6d89cb5e0c60666f803`
+**Candidate Commit:** `9fba8552bba30004ab452823668a105dee1ee89d`
+**Fork Branch:** `fix/pr8-385-review-guidance`
+**Fork Pull Request:** https://github.com/DarkArty07/aether-hermes/pull/9
 
 ---
 
@@ -198,7 +198,7 @@ git diff --check
 
 ## 3. Exact Files and Hunks for Portable Patch
 
-Commit: `9fba8552bba30004ab452823668a105dee1ee89d`  
+Commit: `9fba8552bba30004ab452823668a105dee1ee89d`
 Diff against `6551b7c31cc665d59103c6d89cb5e0c60666f803`:
 
 ```diff
@@ -227,7 +227,7 @@ index e0698f981d..02e50f40d9 100644
 --- a/tests/hermes_cli/test_kanban_review_surfaces.py
 +++ b/tests/hermes_cli/test_kanban_review_surfaces.py
 @@ -233,7 +233,15 @@ def test_worker_guidance_distinguishes_same_card_and_downstream_review() -> None
- 
+
      assert "lists child IDs" in KANBAN_GUIDANCE
      assert "inspect those cards" in KANBAN_GUIDANCE
 -    assert "pre-created review, QA, or release child" in KANBAN_GUIDANCE
@@ -245,8 +245,8 @@ index e0698f981d..02e50f40d9 100644
      assert "`kanban_request_changes`" in KANBAN_GUIDANCE
 @@ -250,6 +258,21 @@ def test_worker_guidance_distinguishes_same_card_and_downstream_review() -> None
      assert "escalate" in skill_text.lower()
- 
- 
+
+
 +def test_worker_guidance_terminal_child_does_not_replace_review() -> None:
 +    """#385 regression: guidance must not treat terminal/release children as unit review."""
 +    from agent.prompt_builder import KANBAN_GUIDANCE
