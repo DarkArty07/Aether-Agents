@@ -1,0 +1,89 @@
+{
+  "id": "HLP-382",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-382--bounded-atomic-transcript-publication",
+  "components": [
+    "HLP-382",
+    "hermes_state.py",
+    "hermes_state_common.py",
+    "hermes_state_compaction.py",
+    "hermes_state_search.py",
+    "agent/conversation_compression.py",
+    "pyproject.toml",
+    "tests/state/test_compaction_publication.py"
+  ],
+  "required_behavior": "A transcript replacement stages its rewritten rows in a hidden internal session in bounded committed batches and publishes with one metadata-only cutover transaction, so no single write transaction holds the store's write lock for the whole transcript; concurrent appends and lease refreshes remain admissible, staging rows stay invisible to every public read mode, and the pre-fix failure remains reproducible at base.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/382"
+      },
+      {
+        "kind": "issue",
+        "url": "https://github.com/NousResearch/hermes-agent/pull/100273"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_state.py",
+        "result": "The inspected revision still documents and implements archive_and_compact as an atomic in-place compaction in one write transaction; it preserves concurrent appends only through a watermark captured at compression start and carries no staged/batched publication."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/tree/4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "result": "No equivalent bounded-publication module exists at the inspected revision (hermes_state_compaction.py is absent), and upstream pull request #100273 was closed without merge at inspection."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release bounds the transcript-publication critical section with equivalent visibility, ownership, ordering, counter, model-patch and rollback semantics and passes the unchanged causal oracle plus the recorded fault-injection matrix.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "specs/006-tools-memory-stability/fixtures/ts382_transcript_replacement_oracle.py at fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "Deterministic pre-fix RED: 2 failed / 8 passed, including a longest publication transaction hold of 1.917 s against the fixture's 1.0 s budget and a concurrent append exhausting its budget."
+      },
+      {
+        "kind": "test",
+        "reference": "same oracle against the reviewed candidate 72890d48304fb61b88dc00ed6ab4749a505ed20a and the integrated fork tree",
+        "result": "Post-fix green: 10 passed per run, including the two legacy contention cases and the visibility/counter/rollback preservation cases."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-382-bounded-transcript-publication.patch",
+        "result": "passed",
+        "ledger_sha256": "84fe697c314544f725bace1eb260647ec7dd9b8787d33409e958e0c5e31a7ff3",
+        "computed_sha256": "84fe697c314544f725bace1eb260647ec7dd9b8787d33409e958e0c5e31a7ff3",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against an archived tree at fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      }
+    ],
+    "blocker": "Portable reconstruction, the reviewed fork candidate and the integrated tree passed locally. Public upstream equivalence is unavailable because no equivalent landed upstream change exists at the inspected revision."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The historical holder that first exhausted the append budget was never identified; the causal class (unbounded publication transaction) is proven and the repair is verified against that class, not against the unavailable historical identity."
+  ],
+  "summary": "Retain HLP-382. Transcript publication is now bounded and atomic: staged batches in the existing store, exact-once preservation of interleaved concurrent appends, one metadata-only cutover, and bounded target-local cleanup. The unchanged oracle is deterministically RED at the fork base and green on the candidate and integrated tree."
+}

@@ -1,0 +1,85 @@
+{
+  "id": "HLP-389",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-389--quoted-interpreter-heredoc-data-is-not-an-executable-reference",
+  "components": [
+    "HLP-389",
+    "cron/lifecycle_guard.py",
+    "tests/tools/test_lifecycle_guard_heredoc_data.py"
+  ],
+  "required_behavior": "Executable-reference discovery gives a well-formed, terminated, quoted non-shell interpreter heredoc body a syntax-aware view so that data read by that body cannot be promoted to a shell script candidate, while the original source text still feeds direct lifecycle detection and real referenced shell scripts remain blocked; malformed, unquoted, unknown-consumer and compound forms keep the conservative walk.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/389"
+      }
+    ],
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "same TS-389 canary run against an extracted tree at upstream 4f22543509d1b91dc45bcb369447126c5eb14fb7",
+        "result": "The inspected upstream revision reproduces the defect: the harmless quoted-Python heredoc log read is still blocked, while the direct restart and referenced real script are correctly blocked and the python3 -c equivalent is allowed."
+      },
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/lifecycle_guard.py",
+        "result": "Upstream masks inert heredoc bodies only for the direct lifecycle scan; referenced-script discovery still receives the raw command, so a path inside a quoted interpreter heredoc body is still promoted to a script candidate."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release provides a syntax-aware referenced-script walk that accepts inert interpreter heredoc data while still blocking direct lifecycle commands and referenced real scripts, verified against the recorded control matrix.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/tools/test_lifecycle_guard_heredoc_data.py on an independently archived tree at fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "Causal RED: exactly 6 failed / 17 passed, the failures being the acceptance cases; all control assertions green at base."
+      },
+      {
+        "kind": "test",
+        "reference": "recorded control matrix re-run on the reviewed candidate and the adopted live runtime",
+        "result": "19 required controls with 0 mismatches, only the harmless reader cases flipping block to allow; direct lifecycle commands and referenced real scripts remain blocked."
+      },
+      {
+        "kind": "test",
+        "reference": "cron/lifecycle_guard.py from upstream 4f22543509d1b91dc45bcb369447126c5eb14fb7 overlaid on an archived fork-base tree",
+        "result": "Not retired: the same canary that passes on the maintained candidate fails on the inspected upstream revision."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-389-heredoc-data-vs-executable.patch",
+        "result": "passed",
+        "ledger_sha256": "5806cb304a2520055b1d2954e89220fdb4a0bc32f86edb8484672583c23e05d3",
+        "computed_sha256": "5806cb304a2520055b1d2954e89220fdb4a0bc32f86edb8484672583c23e05d3",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against an archived tree at fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      }
+    ],
+    "blocker": "Portable reconstruction and the reviewed fork candidate passed locally. Public upstream equivalence is unavailable because the inspected upstream revision still reproduces the false positive."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The syntax-aware view intentionally matches the already-permitted `python3 -c` form: a path that appears only inside a quoted non-shell interpreter heredoc body is no longer scanned as a shell script. Direct lifecycle text in that body is still blocked."
+  ],
+  "summary": "Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked."
+}

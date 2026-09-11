@@ -1,0 +1,3223 @@
+diff --git a/agent/conversation_compression.py b/agent/conversation_compression.py
+index ad28602f10..8513261a0d 100644
+--- a/agent/conversation_compression.py
++++ b/agent/conversation_compression.py
+@@ -3415,13 +3415,22 @@ def compress_context(
+                     from agent.context_compressor import (
+                         PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY,
+                     )
++                    from hermes_state_compaction import (
++                        invoke_archive_and_compact,
++                    )
+ 
+-                    agent._session_db.archive_and_compact(
++                    # This path already holds the session's compression lease
++                    # (_lock_holder): hand it to the bounded publisher so every
++                    # staged batch and the cutover verify it is still ours, and
++                    # so an out-of-tree store still receives the historic call.
++                    invoke_archive_and_compact(
++                        agent._session_db,
+                         agent.session_id,
+                         compressed,
+                         model_config_patch={
+                             PROACTIVE_PRUNE_REARM_MODEL_CONFIG_KEY: None,
+                         },
++                        known_holder=_lock_holder,
+                     )
+                     split_status = "in_place_committed"
+                     # Reset the flush identity set so the next turn's appends are
+diff --git a/hermes_state.py b/hermes_state.py
+index 1f3c92d681..a31ba19885 100644
+--- a/hermes_state.py
++++ b/hermes_state.py
+@@ -57,6 +57,8 @@ from hermes_state_common import (  # noqa: F401  (re-exported for back-compat)
+     _RESET_END_REASONS,
+     _RESET_END_REASONS_SQL,
+     _ephemeral_child_sql,
++    _internal_session_exclusion,
++    _internal_session_id_exclusion,
+     _legacy_reset_child_sql,
+     _shape_preview,
+     _sql_session_last_active,
+@@ -79,6 +81,10 @@ from hermes_state_common import (  # noqa: F401  (re-exported for back-compat)
+     _PREVIEW_SCAFFOLD_WINDOW,
+     _PREVIEW_SCAFFOLDED_SQL,
+ )
++from hermes_state_compaction import (
++    SessionCompactionPublicationMixin,
++    _PreparedMessage,
++)
+ from hermes_state_portability import SessionPortabilityMixin
+ from hermes_state_schema import SessionSchemaMixin
+ from hermes_state_search import SessionSearchMixin
+@@ -3063,7 +3069,12 @@ def classify_session_status(
+     return SESSION_STATUS_COMPLETE
+ 
+ 
+-class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin):
++class SessionDB(
++    SessionCompactionPublicationMixin,
++    SessionSearchMixin,
++    SessionSchemaMixin,
++    SessionPortabilityMixin,
++):
+     """
+     SQLite-backed session storage with FTS5 search.
+ 
+@@ -3981,6 +3992,14 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         while True:
+             try:
+                 with self._lock:
++                    # A publication cutover may declare a pre-BEGIN preflight:
++                    # it runs under THIS instance lock but before BEGIN
++                    # IMMEDIATE, so validation never nests the non-reentrant
++                    # lock and never holds SQLite's writer slot. Ordinary
++                    # writer callables are unaffected (no attribute).
++                    preflight = getattr(fn, "_publication_preflight", None)
++                    if preflight is not None:
++                        preflight()
+                     self._conn.execute("BEGIN IMMEDIATE")
+                     try:
+                         result = fn(self._conn)
+@@ -7723,7 +7742,7 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+                 "COALESCE(sp.prompt, s.system_prompt) AS _system_prompt_resolved "
+                 "FROM sessions s "
+                 "LEFT JOIN system_prompts sp ON sp.hash = s.system_prompt_hash "
+-                "WHERE s.id = ?",
++                f"WHERE s.id = ? AND {_internal_session_id_exclusion()}",
+                 (session_id,),
+             )
+             row = cursor.fetchone()
+@@ -7743,7 +7762,9 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         escaped = _escape_like(session_id_or_prefix)
+         with self._lock:
+             cursor = self._conn.execute(
+-                "SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\\' ORDER BY started_at DESC LIMIT 2",
++                "SELECT id FROM sessions WHERE id LIKE ? ESCAPE '\\' "
++                f"AND {_internal_session_id_exclusion('sessions')} "
++                "ORDER BY started_at DESC LIMIT 2",
+                 (f"{escaped}%",),
+             )
+             matches = [row["id"] for row in cursor.fetchall()]
+@@ -8561,6 +8582,10 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+             where_clauses.append("s.archived = 0")
+         if not include_hidden:
+             where_clauses.append("s.hidden = 0")
++        # Internal staging sessions are never a public listing row: the modes
++        # above (hidden/archived) are caller-controlled, so the reserved
++        # staging id is excluded unconditionally (TS-382 design D2).
++        where_clauses.append(_internal_session_id_exclusion())
+ 
+         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+         # Snapshot the filter params before the query builders below extend
+@@ -9527,97 +9552,137 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+ 
+         return row[0] if row else None
+ 
++    def _prepare_message_row(
++        self, msg: Any, now_ts: float
++    ) -> tuple["_PreparedMessage", float]:
++        """Encode ONE message into a private prepared row.
++
++        Runs the exact row-serialization the insert seam has always run
++        (``_encode_content`` / ``_scrub_surrogates`` / ``_reasoning_json_text``
++        / tool-call parsing / timestamp defaulting / display metadata), so a
++        prepared row is byte-for-byte what :meth:`_insert_message_rows` would
++        have written — only computed OUTSIDE the caller's writer transaction.
++        Returns ``(prepared_row, next_now_ts)``; ``now_ts`` advances exactly as
++        the historical in-transaction loop advanced it, keeping the synthesized
++        timestamps of a batch strictly increasing.
++
++        Caller dictionaries are never mutated here; ``_row_id`` is stamped by
++        :meth:`_insert_message_rows` (dict inputs) or after a successful
++        publication (prepared rows carrying ``source``).
++        """
++        role = msg.get("role", "unknown")
++        tool_calls = msg.get("tool_calls")
++        message_timestamp = now_ts
++        if msg.get("timestamp") is not None:
++            try:
++                ts_value = msg.get("timestamp")
++                if hasattr(ts_value, "timestamp"):
++                    message_timestamp = float(ts_value.timestamp())
++                else:
++                    message_timestamp = float(ts_value)
++            except (TypeError, ValueError):
++                logger.debug("Ignoring invalid explicit message timestamp: %r", msg.get("timestamp"))
++        reasoning_details = msg.get("reasoning_details") if role == "assistant" else None
++        codex_reasoning_items = (
++            msg.get("codex_reasoning_items") if role == "assistant" else None
++        )
++        codex_message_items = (
++            msg.get("codex_message_items") if role == "assistant" else None
++        )
++        reasoning_details_json = self._reasoning_json_text(reasoning_details)
++        codex_items_json = self._reasoning_json_text(codex_reasoning_items)
++        codex_message_items_json = self._reasoning_json_text(codex_message_items)
++        # tool_calls may arrive as a Python list (from the live agent)
++        # or as a JSON string (from import_sessions / export_session,
++        # which store it as TEXT). json.dumps on an already-serialized
++        # string double-encodes it, so parse first.
++        if isinstance(tool_calls, str):
++            try:
++                tool_calls = json.loads(tool_calls)
++            except (json.JSONDecodeError, TypeError):
++                tool_calls = []
++        tool_calls_json = json.dumps(tool_calls) if tool_calls else None
++        # Accept either `platform_message_id` (new explicit name) or
++        # `message_id` (yuanbao's existing convention on message dicts).
++        platform_msg_id = (
++            msg.get("platform_message_id") or msg.get("message_id")
++        )
++
++        api_content = msg.get("api_content")
++
++        values = (
++            role,
++            self._encode_content(msg.get("content")),
++            msg.get("tool_call_id"),
++            tool_calls_json,
++            _scrub_surrogates(msg.get("tool_name")),
++            msg.get("effect_disposition"),
++            message_timestamp,
++            msg.get("token_count"),
++            msg.get("finish_reason"),
++            _scrub_surrogates(msg.get("reasoning")) if role == "assistant" else None,
++            _scrub_surrogates(msg.get("reasoning_content")) if role == "assistant" else None,
++            reasoning_details_json,
++            codex_items_json,
++            codex_message_items_json,
++            platform_msg_id,
++            1 if msg.get("observed") else 0,
++            1,
++            0,
++            _scrub_surrogates(api_content) if isinstance(api_content, str) else None,
++            _scrub_surrogates(msg.get("display_kind")) if isinstance(msg.get("display_kind"), str) else None,
++            self._encode_display_metadata(msg.get("display_metadata")),
++        )
++        tool_calls_total = 0
++        if tool_calls is not None:
++            tool_calls_total = len(tool_calls) if isinstance(tool_calls, list) else 1
++        next_now_ts = max(now_ts + 1e-6, message_timestamp + 1e-6)
++        return (
++            _PreparedMessage(values, tool_calls_total),
++            next_now_ts,
++        )
++
+     def _insert_message_rows(self, conn, session_id: str, messages: List[Dict[str, Any]]) -> tuple[int, int]:
+         """Insert *messages* as fresh active rows for *session_id*.
+ 
+         Shared by :meth:`replace_messages` (delete-then-insert) and
+-        :meth:`archive_and_compact` (soft-archive-then-insert). Runs inside the
++        ``archive_and_compact`` (bounded staged publication). Runs inside the
+         caller's write transaction (takes the live ``conn``). Returns
+         ``(inserted_count, tool_call_count)``. Does NOT touch sessions.* counters
+-        — the caller owns that, since the two flows reconcile counts differently.
++        — the caller owns that, since the flows reconcile counts differently.
++
++        *messages* may hold plain message dicts (the historical shape, encoded
++        here exactly as before) or private :class:`_PreparedMessage` rows
++        prepared outside the transaction by a bounded publisher — the seam and
++        its positional shape are unchanged for every existing caller.
+         """
+         now_ts = time.time()
+         inserted = 0
+         tool_calls_total = 0
+         for msg in messages:
+-            role = msg.get("role", "unknown")
+-            tool_calls = msg.get("tool_calls")
+-            message_timestamp = now_ts
+-            if msg.get("timestamp") is not None:
+-                try:
+-                    ts_value = msg.get("timestamp")
+-                    if hasattr(ts_value, "timestamp"):
+-                        message_timestamp = float(ts_value.timestamp())
+-                    else:
+-                        message_timestamp = float(ts_value)
+-                except (TypeError, ValueError):
+-                    logger.debug("Ignoring invalid explicit message timestamp: %r", msg.get("timestamp"))
+-            reasoning_details = msg.get("reasoning_details") if role == "assistant" else None
+-            codex_reasoning_items = (
+-                msg.get("codex_reasoning_items") if role == "assistant" else None
+-            )
+-            codex_message_items = (
+-                msg.get("codex_message_items") if role == "assistant" else None
+-            )
+-            reasoning_details_json = self._reasoning_json_text(reasoning_details)
+-            codex_items_json = self._reasoning_json_text(codex_reasoning_items)
+-            codex_message_items_json = self._reasoning_json_text(codex_message_items)
+-            # tool_calls may arrive as a Python list (from the live agent)
+-            # or as a JSON string (from import_sessions / export_session,
+-            # which store it as TEXT). json.dumps on an already-serialized
+-            # string double-encodes it, so parse first.
+-            if isinstance(tool_calls, str):
+-                try:
+-                    tool_calls = json.loads(tool_calls)
+-                except (json.JSONDecodeError, TypeError):
+-                    tool_calls = []
+-            tool_calls_json = json.dumps(tool_calls) if tool_calls else None
+-            # Accept either `platform_message_id` (new explicit name) or
+-            # `message_id` (yuanbao's existing convention on message dicts).
+-            platform_msg_id = (
+-                msg.get("platform_message_id") or msg.get("message_id")
+-            )
+-
+-            api_content = msg.get("api_content")
+-
++            if isinstance(msg, _PreparedMessage):
++                prepared = msg
++            else:
++                prepared, now_ts = self._prepare_message_row(msg, now_ts)
++            values = prepared.values
+             cur = conn.execute(
+                 """INSERT INTO messages (session_id, role, content, tool_call_id,
+                    tool_calls, tool_name, effect_disposition, timestamp, token_count, finish_reason,
+                    reasoning, reasoning_content, reasoning_details, codex_reasoning_items,
+-                   codex_message_items, platform_message_id, observed, active, api_content, display_kind, display_metadata)
+-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+-                (
+-                    session_id,
+-                    role,
+-                    self._encode_content(msg.get("content")),
+-                    msg.get("tool_call_id"),
+-                    tool_calls_json,
+-                    _scrub_surrogates(msg.get("tool_name")),
+-                    msg.get("effect_disposition"),
+-                    message_timestamp,
+-                    msg.get("token_count"),
+-                    msg.get("finish_reason"),
+-                    _scrub_surrogates(msg.get("reasoning")) if role == "assistant" else None,
+-                    _scrub_surrogates(msg.get("reasoning_content")) if role == "assistant" else None,
+-                    reasoning_details_json,
+-                    codex_items_json,
+-                    codex_message_items_json,
+-                    platform_msg_id,
+-                    1 if msg.get("observed") else 0,
+-                    1,
+-                    _scrub_surrogates(api_content) if isinstance(api_content, str) else None,
+-                    _scrub_surrogates(msg.get("display_kind")) if isinstance(msg.get("display_kind"), str) else None,
+-                    self._encode_display_metadata(msg.get("display_metadata")),
+-                ),
+-            )
+-            if isinstance(msg, dict) and cur.lastrowid is not None:
+-                msg["_row_id"] = cur.lastrowid
++                   codex_message_items, platform_message_id, observed, active, compacted, api_content, display_kind, display_metadata)
++                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
++                (session_id, *values),
++            )
++            if cur.lastrowid is not None:
++                prepared.row_id = cur.lastrowid
++                if isinstance(msg, dict):
++                    # Historical behavior for plain dicts: the caller's own
++                    # message object learns its row id immediately. Prepared
++                    # rows are stamped by their publisher only after a
++                    # successful (and therefore committed) publication.
++                    msg["_row_id"] = cur.lastrowid
+             inserted += 1
+-            if tool_calls is not None:
+-                tool_calls_total += (
+-                    len(tool_calls) if isinstance(tool_calls, list) else 1
+-                )
+-            now_ts = max(now_ts + 1e-6, message_timestamp + 1e-6)
++            tool_calls_total += prepared.tool_call_count
+         return inserted, tool_calls_total
+ 
+     def replace_messages(
+@@ -9720,79 +9785,19 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+             )
+             return cursor.fetchone() is not None
+ 
+-    def archive_and_compact(
+-        self,
+-        session_id: str,
+-        compacted_messages: List[Dict[str, Any]],
+-        model_config_patch: Optional[Dict[str, Any]] = None,
+-    ) -> int:
+-        """Non-destructive in-place compaction for a single durable session id.
+-
+-        Soft-archives every currently-active message (``active = 0``) and
+-        inserts *compacted_messages* as fresh active rows — atomically, in one
+-        write transaction. The conversation keeps ONE session id for life
+-        (#38763) WITHOUT destroying history:
+-
+-        - The live-context load (:meth:`get_messages_as_conversation`,
+-          :meth:`get_messages`) filters ``active = 1`` by default, so the model
+-          reloads ONLY the compacted set.
+-        - The archived pre-compaction turns stay on disk (active=0) and stay
+-          DISCOVERABLE: they are marked compacted=1, and search_messages()
+-          includes compacted=1 rows by default — so session_search still finds
+-          them, unlike rewind/undo rows (active=0, compacted=0) which stay
+-          hidden. They remain in the FTS index (the messages_fts* triggers
+-          index on INSERT / drop on DELETE and don't key on active/compacted;
+-          flipping to active=0 is a content-preserving UPDATE) and are
+-          recoverable via get_messages(..., include_inactive=True).
+-
+-        This is the durability-preserving alternative to :meth:`replace_messages`
+-        for compaction. ``message_count`` is set to the ACTIVE (compacted) count,
+-        matching what the live load returns. ``model_config_patch`` is merged
+-        into the session's JSON config in the same transaction; a ``None``
+-        value removes that key. Returns the new active count.
+-        """
+-
+-        def _do(conn):
+-            patched_model_config = None
+-            if model_config_patch is not None:
+-                # on_missing="raise": a prune/compaction must not commit
+-                # against a vanished session row (the compressor's caller
+-                # converts the raised error into a safe keep-the-original
+-                # no-op), unlike the flag setters which tolerate missing rows.
+-                patched_model_config = self._merge_model_config_json(
+-                    conn, session_id, model_config_patch, on_missing="raise"
+-                )
+-
+-            # Soft-archive the live turns: active=0 hides them from the live
+-            # context load, compacted=1 marks them as "summarized away" (vs
+-            # rewind/undo's active=0+compacted=0, which means "user took it
+-            # back"). search_messages includes compacted=1 rows by default so
+-            # the pre-compaction transcript stays discoverable; live-context
+-            # loads (active=1 only) still exclude them.
+-            conn.execute(
+-                "UPDATE messages SET active = 0, compacted = 1 "
+-                "WHERE session_id = ? AND active = 1",
+-                (session_id,),
+-            )
+-            inserted, tool_calls_total = self._insert_message_rows(
+-                conn, session_id, compacted_messages
+-            )
+-            # message_count / tool_call_count reflect the LIVE (active) set —
+-            # the archived rows are still on disk but not part of the live count.
+-            if model_config_patch is None:
+-                conn.execute(
+-                    "UPDATE sessions SET message_count = ?, tool_call_count = ? WHERE id = ?",
+-                    (inserted, tool_calls_total, session_id),
+-                )
+-            else:
+-                conn.execute(
+-                    "UPDATE sessions SET message_count = ?, tool_call_count = ?, "
+-                    "model_config = ? WHERE id = ?",
+-                    (inserted, tool_calls_total, patched_model_config, session_id),
+-                )
+-            return inserted
++    # ``archive_and_compact`` and ``capture_publication_snapshot`` are provided
++    # by SessionCompactionPublicationMixin (hermes_state_compaction): the
++    # original single-transaction implementation is replaced by a bounded,
++    # staged publication with one metadata-only cutover (TS-382 D1-D7).
++    def _compaction_owner_process_is_dead(self, holder: str) -> bool:
++        """Liveness probe for a structured publication owner token.
+ 
+-        return self._execute_write(_do)
++        Host seam for the compaction-publication mixin: it reuses the native
++        compression-holder convention (``pid=<n>:...``) and its conservative
++        dead-local-process test, so a publication whose owner process died is
++        reclaimable without waiting out the full lease TTL.
++        """
++        return _compression_lock_holder_process_is_dead(holder)
+ 
+     def set_latest_user_api_content(
+         self, session_id: str, content: Any, api_content: str
+@@ -9882,9 +9887,11 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         else:
+             active_clause = " AND active = 1"
+         keyset_clause = " AND id > ?" if after_id is not None else ""
++        staging_clause = f" AND {_internal_session_exclusion('messages')}"
+         sql = (
+             "SELECT * FROM messages WHERE session_id = ?"
+-            f"{active_clause}{keyset_clause} ORDER BY id {'DESC' if latest else 'ASC'}"
++            f"{active_clause}{keyset_clause}{staging_clause}"
++            f" ORDER BY id {'DESC' if latest else 'ASC'}"
+         )
+         params: list = [session_id]
+         if after_id is not None:
+@@ -9901,6 +9908,7 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+             with self._read_ctx() as conn:
+                 cursor = conn.execute(
+                     "SELECT * FROM messages WHERE session_id = ?" + active_clause
++                    + staging_clause
+                     + " ORDER BY id ASC",
+                     [session_id],
+                 )
+@@ -9975,6 +9983,7 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+                     f"""SELECT session_id, content FROM messages
+                         WHERE session_id IN ({placeholders})
+                           AND role = 'tool' AND content LIKE '%/pull/%'
++                          AND {_internal_session_exclusion('messages')}
+                         ORDER BY id ASC""",
+                     chunk,
+                 ).fetchall()
+@@ -10011,7 +10020,8 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         with self._read_ctx() as conn:
+             # Confirm the anchor exists in this session.
+             anchor_exists = conn.execute(
+-                "SELECT 1 FROM messages WHERE id = ? AND session_id = ? LIMIT 1",
++                "SELECT 1 FROM messages WHERE id = ? AND session_id = ? "
++                f"AND {_internal_session_exclusion('messages')} LIMIT 1",
+                 (around_message_id, session_id),
+             ).fetchone()
+             if not anchor_exists:
+@@ -10186,6 +10196,7 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+             session_ids = self._session_lineage_root_to_tip(session_id)
+ 
+         active_clause = "" if include_inactive else " AND active = 1"
++        staging_clause = f" AND {_internal_session_exclusion('messages')}"
+         with self._read_ctx() as conn:
+             placeholders = ",".join("?" for _ in session_ids)
+             rows = conn.execute(
+@@ -10199,7 +10210,7 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+                 # after its tool response, breaking tool-call/response adjacency
+                 # and triggering an HTTP 400 on replay. This matches get_messages
+                 # — see c03acca50 for the original fix.
+-                f"{active_clause} ORDER BY id",
++                f"{active_clause}{staging_clause} ORDER BY id",
+                 tuple(session_ids),
+             ).fetchall()
+ 
+@@ -10762,6 +10773,8 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         )
+         where_clauses = []
+         params: list = []
++        # Internal staging sessions are never listed, under any mode (TS-382 D2).
++        where_clauses.append(_internal_session_id_exclusion())
+         if source:
+             where_clauses.append("s.source = ?")
+             params.append(source)
+@@ -10811,6 +10824,8 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         """
+         where_clauses = []
+         params = []
++        # Internal staging sessions are never counted, under any mode (TS-382 D2).
++        where_clauses.append(_internal_session_id_exclusion())
+ 
+         if exclude_children:
+             # Mirror list_sessions_rich's child-exclusion clause exactly so the
+@@ -10857,7 +10872,11 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         is irrelevant.
+         """
+         with self._lock:
+-            cursor = self._conn.execute("SELECT 1 FROM sessions LIMIT ?", (n,))
++            cursor = self._conn.execute(
++                f"SELECT 1 FROM sessions s WHERE {_internal_session_id_exclusion()} "
++                "LIMIT ?",
++                (n,),
++            )
+             rows = cursor.fetchall()
+         return len(rows) >= n
+ 
+@@ -10883,6 +10902,8 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         """
+         where_clauses = []
+         params: list = []
++        # Internal staging sessions are never counted, under any mode (TS-382 D2).
++        where_clauses.append(_internal_session_id_exclusion())
+ 
+         if exclude_children:
+             where_clauses.append(_LISTABLE_CHILD_SQL)
+@@ -10911,7 +10932,9 @@ class SessionDB(SessionSearchMixin, SessionSchemaMixin, SessionPortabilityMixin)
+         with self._lock:
+             if session_id:
+                 cursor = self._conn.execute(
+-                    "SELECT COUNT(*) FROM messages WHERE session_id = ?", (session_id,)
++                    "SELECT COUNT(*) FROM messages WHERE session_id = ? "
++                    f"AND {_internal_session_exclusion('messages')}",
++                    (session_id,),
+                 )
+             else:
+                 cursor = self._conn.execute("SELECT COUNT(*) FROM messages")
+diff --git a/hermes_state_common.py b/hermes_state_common.py
+index 657542178b..d055af9f61 100644
+--- a/hermes_state_common.py
++++ b/hermes_state_common.py
+@@ -236,6 +236,61 @@ FTS_STORAGE_VERSION = 1
+ MAX_FTS5_QUERY_CHARS = 2_048
+ 
+ 
++# ── TS-382 bounded transcript publication ──────────────────────────────────
++# ``archive_and_compact`` publishes a rewritten transcript through hidden,
++# incrementally committed staging rows instead of one unbounded write
++# transaction (see hermes_state_compaction and TS-382-design.md D1-D7). These
++# names are the durable contract between the writer, the search surfaces that
++# must keep staging rows invisible (hermes_state_search), and the session
++# listing flags (hidden/archived).
++COMPACTION_STAGING_SESSION_SOURCE = "hermes-compaction-stage-v1"
++#: Reserved staging-session id prefix. MUST stay free of LIKE metacharacters
++#: (``_`` / ``%``): hermes_state_search matches it with a NOT LIKE predicate.
++COMPACTION_STAGING_SESSION_PREFIX = "hermes-compaction-stage-v1-"
++#: state_meta key prefix for the durable per-target publication ownership row;
++#: the exact target session id is appended as its SHA-256 hex digest.
++COMPACTION_PUBLICATION_MARKER_PREFIX = "hermes.compaction.publication.v1:"
++COMPACTION_PUBLICATION_VERSION = 1
++#: At most 128 rows or 512 KiB of prepared serialized values per transaction,
++#: whichever is reached first; the writer yields OUTSIDE the instance lock and
++#: SQLite's writer lock for this long between batches (D3).
++COMPACTION_PUBLICATION_BATCH_ROWS = 128
++COMPACTION_PUBLICATION_BATCH_BYTES = 512 * 1024
++COMPACTION_PUBLICATION_YIELD_S = 0.010
++#: Bounded catch-up/final-validation rounds per publication; exceeding them is
++#: an explicit conflict, never a spin or a timeout extension (D4).
++COMPACTION_PUBLICATION_MAX_ROUNDS = 8
++#: Publication lease duration — the existing compression-lease duration (D1).
++COMPACTION_PUBLICATION_LEASE_S = 300.0
++
++
++def _internal_session_exclusion(alias: str = "m") -> str:
++    """SQL predicate excluding internal transcript-publication staging rows.
++
++    ``archive_and_compact`` stages a rewritten transcript as hidden rows of an
++    internal session (``hermes-compaction-stage-v1-*``, ``hidden=1``,
++    ``archived=1``, ``active=0, compacted=0``). Flag-based visibility alone
++    hides them from the default paths, but the explicit ``include_inactive``
++    mode deliberately drops that filter — a staging session id must never
++    surface through ANY public read variant, so every query adds this clause
++    unconditionally (hermes_state_search's seven search paths,
++    ``get_messages``, ``get_messages_as_conversation``, ``get_messages_around``,
++    ``list_recent_user_messages``, ``find_pr_url_messages``, ``message_count``).
++    The prefix constant is LIKE-safe by construction (no ``_``/``%``).
++    """
++    return f"{alias}.session_id NOT LIKE '{COMPACTION_STAGING_SESSION_PREFIX}%'"
++
++
++def _internal_session_id_exclusion(alias: str = "s") -> str:
++    """SQL predicate excluding internal staging sessions themselves.
++
++    Sessions-table sibling of :func:`_internal_session_exclusion`: a staging
++    session must not appear in public listing, counting or by-id lookup
++    surfaces, including their explicit hidden/archived modes (TS-382 D2).
++    """
++    return f"{alias}.id NOT LIKE '{COMPACTION_STAGING_SESSION_PREFIX}%'"
++
++
+ _FTS_TRIGGERS = (
+     "messages_fts_insert",
+     "messages_fts_delete",
+diff --git a/hermes_state_compaction.py b/hermes_state_compaction.py
+new file mode 100644
+index 0000000000..ab6bb57cf8
+--- /dev/null
++++ b/hermes_state_compaction.py
+@@ -0,0 +1,1229 @@
++"""Bounded, atomic transcript publication for ``SessionDB`` (TS-382).
++
++Implements the recorded design at
++``specs/006-tools-memory-stability/TS-382-design.md`` decisions D1-D7: an
++``archive_and_compact`` publication stages its replacement rows in a hidden
++internal session, commits them in bounded batches, relocates concurrent
++interleaved appends, and publishes with one metadata-only cutover transaction.
++The store's single write lock is therefore never held for the whole rewritten
++transcript (which is what starved concurrent transcript appends and lease
++refreshes — see ``evidence/TS-382-research.md`` and ``evidence/TS-382.md``).
++
++Mixin contract: this is a plain mixin class consumed by
++``hermes_state.SessionDB`` (like ``hermes_state_search``). It defines no
++``__init__`` and no per-instance state of its own; methods use the host's
++attributes (``self._conn``, ``self._lock``, ``self._execute_write``,
++``self._insert_message_rows``, ``self._merge_model_config_json``, ...)
++established by ``SessionDB.__init__``. Module-level imports must not include
++``hermes_state`` (cycle) — the host-defined busy error this module raises on a
++lost compression lease is resolved lazily inside that cold branch.
++
++Everything here is durable local bookkeeping in the EXISTING database: no new
++table/column, schema version, attached store, queue, service, reaper or live
++maintenance. Staging rows are ordinary ``messages`` rows of a hidden internal
++session (``source='hermes-compaction-stage-v1'``, ``hidden=1``, ``archived=1``,
++reserved ``hermes-compaction-stage-v1-*`` id) committed with
++``active = 0, compacted = 0`` — the existing rewind marking every public read
++path already hides.
++"""
++
++from __future__ import annotations
++
++import hashlib
++import inspect
++import json
++import logging
++import os
++import secrets
++import sqlite3
++import threading
++import time
++from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
++
++from hermes_state_common import (
++    COMPACTION_PUBLICATION_BATCH_BYTES,
++    COMPACTION_PUBLICATION_BATCH_ROWS,
++    COMPACTION_PUBLICATION_LEASE_S,
++    COMPACTION_PUBLICATION_MARKER_PREFIX,
++    COMPACTION_PUBLICATION_MAX_ROUNDS,
++    COMPACTION_PUBLICATION_VERSION,
++    COMPACTION_PUBLICATION_YIELD_S,
++    COMPACTION_STAGING_SESSION_PREFIX,
++    COMPACTION_STAGING_SESSION_SOURCE,
++)
++
++# Moved methods logged under the "hermes_state" logger before the split; keep
++# that logger identity so log filtering/capture behavior is unchanged.
++logger = logging.getLogger("hermes_state")
++
++ConnT = sqlite3.Connection
++
++
++class PublicationConflictError(RuntimeError):
++    """A publication could not proceed against the store's current state.
++
++    Raised when the durable per-target ownership is held by another live
++    publication, when the stable source prefix was invalidated by a concurrent
++    writer, when the generation's staged identity no longer agrees with the
++    store, or when the bounded catch-up/validation round budget is exhausted
++    under continuous same-session mutation. Callers keep the original
++    transcript (and every committed append); nothing is published.
++    """
++
++
++class PublicationLeaseLostError(PublicationConflictError):
++    """The compression lease that authorized an in-place publication moved on."""
++
++
++class _VersionFenceTrippedError(RuntimeError):
++    """Internal: an external commit landed between validation and BEGIN."""
++
++
++# ``_insert_message_rows`` owns the canonical INSERT (session_id first). This
++# is the same column list, used to read stored rows back for relocation and
++# prefix digests. ``_assert_copy_columns_known`` fails the publication rather
++# than silently dropping a column someone later adds to ``messages``.
++_MESSAGE_INSERT_COLUMNS: Tuple[str, ...] = (
++    "role",
++    "content",
++    "tool_call_id",
++    "tool_calls",
++    "tool_name",
++    "effect_disposition",
++    "timestamp",
++    "token_count",
++    "finish_reason",
++    "reasoning",
++    "reasoning_content",
++    "reasoning_details",
++    "codex_reasoning_items",
++    "codex_message_items",
++    "platform_message_id",
++    "observed",
++    "active",
++    "compacted",
++    "api_content",
++    "display_kind",
++    "display_metadata",
++)
++
++_TOOL_CALLS_INDEX = _MESSAGE_INSERT_COLUMNS.index("tool_calls")
++
++#: Marker row values are private local runtime metadata, never public logs.
++_MARKER_PHASE_STAGING = "staging"
++_MARKER_PHASE_CLEANUP = "cleanup_failed"
++
++#: Maximum ids bound into one metadata UPDATE inside the cutover transaction
++#: (portable across SQLite builds with a 999-variable limit and far below the
++#: modern 32766 default).
++_ACTIVATION_ID_CHUNK = 480
++
++
++class PublicationSnapshot:
++    """Immutable identity of the target prefix a publication replaces.
++
++    Produced by :meth:`SessionCompactionPublicationMixin.capture_publication_snapshot`
++    and re-validated by the writer immediately before the cutover. It is a
++    private, non-durable fingerprint (row count + digest of the persisted row
++    values) — not a copy of transcript content and not model-supplied identity.
++    """
++
++    __slots__ = ("target", "watermark", "row_count", "digest", "target_exists")
++
++    def __init__(
++        self,
++        target: str,
++        watermark: int,
++        row_count: int,
++        digest: str,
++        target_exists: bool,
++    ) -> None:
++        self.target = target
++        self.watermark = int(watermark)
++        self.row_count = int(row_count)
++        self.digest = digest
++        self.target_exists = bool(target_exists)
++
++
++class _PreparedMessage:
++    """Private, self-contained row plan for one transcript message.
++
++    Built OUTSIDE the SQLite writer transaction so per-row encoding/scrubbing
++    happens once, then inserted by ``SessionDB._insert_message_rows`` through
++    its existing seam. ``values`` is already in INSERT order (session_id is
++    passed separately by the caller of the seam). The caller's own dict is
++    never mutated while the publication is in flight: ``source`` is stamped
++    with ``_row_id`` only after a successful cutover.
++    """
++
++    __slots__ = ("values", "tool_call_count", "row_id", "source", "size_bytes")
++
++    def __init__(
++        self,
++        values: Tuple[Any, ...],
++        tool_call_count: int,
++        source: Optional[Dict[str, Any]] = None,
++    ) -> None:
++        self.values = values
++        self.tool_call_count = int(tool_call_count)
++        self.row_id: Optional[int] = None
++        self.source = source
++        self.size_bytes = _row_payload_bytes(values)
++
++
++def _row_payload_bytes(values: Sequence[Any]) -> int:
++    """Approximate serialized size of a prepared row for the batch budget."""
++    total = 0
++    for value in values:
++        if isinstance(value, str):
++            total += len(value)
++        elif isinstance(value, (bytes, bytearray)):
++            total += len(value)
++        else:
++            total += 8
++    return total
++
++
++def _tool_call_count_from_stored(value: Any) -> int:
++    """Exact tool-call count of a STORED ``tool_calls`` column value.
++
++    ``_insert_message_rows`` counts a live Python list per element; a stored
++    row holds the serialized JSON text, which must be parsed back to keep the
++    relocated tail's counter contribution exact (D4).
++    """
++    if value is None:
++        return 0
++    if isinstance(value, str):
++        text = value.strip()
++        if not text:
++            return 0
++        try:
++            value = json.loads(text)
++        except (json.JSONDecodeError, TypeError):
++            return 1
++    if isinstance(value, list):
++        return len(value)
++    if value is None:
++        return 0
++    return 1
++
++
++def _publication_marker_key(session_id: str) -> str:
++    """Durable per-target ownership key: prefix + SHA-256 of the exact id."""
++    digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()
++    return f"{COMPACTION_PUBLICATION_MARKER_PREFIX}{digest}"
++
++
++def _publication_owner_token() -> str:
++    """Structured owner token, matching the native lock-holder convention.
++
++    ``pid=<n>`` first so the native dead-local-process probe (and an operator
++    reading diagnostics) can tell a crashed publication owner from a live one.
++    """
++    return (
++        f"pid={os.getpid()}:tid={threading.get_ident()}:"
++        f"compaction-publication:{secrets.token_hex(8)}"
++    )
++
++
++def _parse_publication_marker(raw: Any) -> Optional[Dict[str, Any]]:
++    if raw is None:
++        return None
++    if isinstance(raw, dict):
++        return dict(raw)
++    if not isinstance(raw, str):
++        return None
++    try:
++        parsed = json.loads(raw)
++    except (json.JSONDecodeError, TypeError):
++        return None
++    return parsed if isinstance(parsed, dict) else None
++
++
++def _serialize_publication_marker(marker: Dict[str, Any]) -> str:
++    return json.dumps(marker, sort_keys=True, separators=(",", ":"))
++
++
++def _iter_publication_batches(
++    rows: Sequence[_PreparedMessage],
++    max_rows: int = COMPACTION_PUBLICATION_BATCH_ROWS,
++    max_bytes: int = COMPACTION_PUBLICATION_BATCH_BYTES,
++) -> Iterable[List[_PreparedMessage]]:
++    """Yield bounded row batches: ``max_rows`` or ``max_bytes``, whichever first.
++
++    A single already-supported oversized row is yielded alone — never
++    truncated and never rejected by a new size limit (D3).
++    """
++    batch: List[_PreparedMessage] = []
++    batch_bytes = 0
++    for row in rows:
++        row_bytes = row.size_bytes
++        if batch and (len(batch) >= max_rows or batch_bytes + row_bytes > max_bytes):
++            yield batch
++            batch = []
++            batch_bytes = 0
++        batch.append(row)
++        batch_bytes += row_bytes
++    if batch:
++        yield batch
++
++
++def _chunk_ids(
++    ids: Sequence[int], chunk_rows: int = COMPACTION_PUBLICATION_BATCH_ROWS
++) -> Iterable[Sequence[int]]:
++    for start in range(0, len(ids), chunk_rows):
++        yield ids[start : start + chunk_rows]
++
++
++def _callable_accepts_keyword(fn: Any, name: str) -> bool:
++    """True when *fn* declares keyword *name* (or takes ``**kwargs``)."""
++    try:
++        signature = inspect.signature(fn)
++    except (TypeError, ValueError):  # builtins / C callables: stay conservative
++        return False
++    for parameter in signature.parameters.values():
++        if parameter.name == name:
++            return True
++        if parameter.kind is inspect.Parameter.VAR_KEYWORD:
++            return True
++    return False
++
++
++def invoke_archive_and_compact(
++    session_db: Any,
++    session_id: str,
++    compacted_messages: List[Dict[str, Any]],
++    *,
++    model_config_patch: Optional[Dict[str, Any]] = None,
++    known_holder: Optional[str] = None,
++    snapshot: Optional["PublicationSnapshot"] = None,
++) -> int:
++    """Call ``session_db.archive_and_compact`` with private publication context.
++
++    Native callers pass the compression lease they already own (and a snapshot
++    when they captured one before computing the replacement). Duck-typed
++    third-party stores keep receiving exactly the historic call shape: the
++    publication keyword arguments are forwarded ONLY when the resolved callable
++    declares them, so an out-of-tree store never sees an unexpected argument.
++    """
++    fn = getattr(session_db, "archive_and_compact", None)
++    if not callable(fn):
++        raise TypeError("session store does not support archive_and_compact")
++    extra: Dict[str, Any] = {}
++    for name, value in (("snapshot", snapshot), ("known_holder", known_holder)):
++        if value is not None and _callable_accepts_keyword(fn, name):
++            extra[name] = value
++    return fn(
++        session_id,
++        compacted_messages,
++        model_config_patch=model_config_patch,
++        **extra,
++    )
++
++
++class SessionCompactionPublicationMixin:
++    """Bounded publication half of ``archive_and_compact`` (TS-382 D1-D7)."""
++
++    # ── Public entry points ────────────────────────────────────────────────
++
++    def capture_publication_snapshot(self, session_id: str) -> PublicationSnapshot:
++        """Fingerprint the target's live prefix before a replacement is built.
++
++        Native callers may capture this before they compute the replacement so
++        the writer can prove the prefix it archives is the one the replacement
++        was derived from. Without it the writer captures the same snapshot at
++        method entry. Read-only; needs no writer lock.
++        """
++        with self._read_ctx() as conn:
++            exists = (
++                conn.execute(
++                    "SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)
++                ).fetchone()
++                is not None
++            )
++            watermark_row = conn.execute(
++                "SELECT COALESCE(MAX(id), 0) FROM messages WHERE session_id = ?",
++                (session_id,),
++            ).fetchone()
++            watermark = int(watermark_row[0] or 0)
++            row_count, digest = self._digest_publication_prefix(
++                conn, session_id, watermark
++            )
++        return PublicationSnapshot(session_id, watermark, row_count, digest, exists)
++
++    def archive_and_compact(
++        self,
++        session_id: str,
++        compacted_messages: List[Dict[str, Any]],
++        model_config_patch: Optional[Dict[str, Any]] = None,
++        *,
++        snapshot: Optional[PublicationSnapshot] = None,
++        known_holder: Optional[str] = None,
++    ) -> int:
++        """Non-destructive in-place compaction for a single durable session id.
++
++        Soft-archives every currently-active message (``active = 0,
++        compacted = 1``) and inserts *compacted_messages* as fresh active rows —
++        atomically, in one final metadata-only cutover transaction. The
++        conversation keeps ONE session id for life (#38763) WITHOUT destroying
++        history:
++
++        - The live-context load (:meth:`get_messages_as_conversation`,
++          :meth:`get_messages`) filters ``active = 1`` by default, so the model
++          reloads ONLY the compacted set.
++        - The archived pre-compaction turns stay on disk (active=0) and stay
++          DISCOVERABLE: they are marked compacted=1, and search_messages()
++          includes compacted=1 rows by default — so session_search still finds
++          them, unlike rewind/undo rows (active=0, compacted=0) which stay
++          hidden. They remain in the FTS index (the messages_fts* triggers
++          index on INSERT / drop on DELETE and don't key on active/compacted;
++          flipping to active=0 is a content-preserving UPDATE) and are
++          recoverable via get_messages(..., include_inactive=True).
++
++        This is the durability-preserving alternative to :meth:`replace_messages`
++        for compaction. ``message_count`` is set to the ACTIVE (compacted) count,
++        matching what the live load returns. ``model_config_patch`` is merged
++        into the session's JSON config in the same cutover transaction; a
++        ``None`` value removes that key. Returns the new active count.
++
++        The publication is BOUNDED (TS-382): the rewritten transcript is
++        staged in hidden rows through several short transactions and published
++        by one metadata-only cutover, so the store's single write lock is never
++        held for the whole replacement. Concurrent appends that land during
++        staging are preserved exactly once, in append order, after the
++        replacement. ``known_holder`` carries the caller's own compression
++        lease holder when the caller already owns one (in-place compaction);
++        the writer verifies it in every batch and in the cutover but never
++        acquires, steals, releases or extends a compression/turn lease itself.
++        """
++        if not session_id:
++            raise ValueError("archive_and_compact requires a session_id")
++
++        target_snapshot = snapshot or self.capture_publication_snapshot(session_id)
++        if target_snapshot.target != session_id:
++            raise PublicationConflictError(
++                "publication snapshot does not match the target session"
++            )
++
++        marker_key = _publication_marker_key(session_id)
++        owner = _publication_owner_token()
++        stage_id = f"{COMPACTION_STAGING_SESSION_PREFIX}{secrets.token_hex(16)}"
++        prepared = self._prepare_publication_rows(compacted_messages)
++
++        marker: Dict[str, Any] = {
++            "v": COMPACTION_PUBLICATION_VERSION,
++            "target": session_id,
++            "stage": stage_id,
++            "owner": owner,
++            "expires_at": time.time() + COMPACTION_PUBLICATION_LEASE_S,
++            "watermark": target_snapshot.watermark,
++            "source_digest": target_snapshot.digest,
++            "source_rows": target_snapshot.row_count,
++            "phase": _MARKER_PHASE_STAGING,
++            "staged_rows": 0,
++            "staged_tool_calls": 0,
++            "staged_max_id": None,
++            "tail_watermark": target_snapshot.watermark,
++            "tail_rows": 0,
++            "tail_tool_calls": 0,
++        }
++
++        self._claim_publication(marker_key, marker)
++
++        try:
++            marker = self._stage_publication_rows(
++                marker_key, marker, prepared, known_holder
++            )
++            active_count = self._finalize_publication(
++                marker_key,
++                marker,
++                target_snapshot,
++                known_holder,
++                model_config_patch,
++            )
++        except BaseException as exc:  # noqa: BLE001 - cleanup must not mask it
++            self._abandon_publication(marker_key, marker, exc)
++            raise
++
++        # Post-commit bookkeeping only: nothing below may fail the publication
++        # or rewrite the published view (D6).
++        try:
++            for row in prepared:
++                if row.source is not None and row.row_id is not None:
++                    row.source["_row_id"] = row.row_id
++        except Exception:  # pragma: no cover - a caller dict refusing writes
++            logger.debug("post-publication row-id stamping failed", exc_info=True)
++        return active_count
++
++    # ── Preparation ────────────────────────────────────────────────────────
++
++    def _prepare_publication_rows(
++        self,
++        messages: Sequence[Any],
++        *,
++        with_source: bool = True,
++    ) -> List[_PreparedMessage]:
++        """Encode *messages* into private prepared rows, outside any txn."""
++        prepared: List[_PreparedMessage] = []
++        now_ts = time.time()
++        for message in messages:
++            if isinstance(message, _PreparedMessage):
++                prepared.append(message)
++                continue
++            row, now_ts = self._prepare_message_row(message, now_ts)
++            if with_source and isinstance(message, dict):
++                row.source = message
++            prepared.append(row)
++        return prepared
++
++    # ── Ownership claim / lazy reclamation ─────────────────────────────────
++
++    def _read_publication_marker_row(
++        self, marker_key: str
++    ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
++        """Read the durable ownership row: ``(present, raw, parsed)``.
++
++        ``present`` distinguishes "no publication" from "a row this code cannot
++        understand": unknown/malformed ownership is an explicit conflict, never
++        adopted and never silently replaced (D1).
++        """
++        with self._read_ctx() as conn:
++            row = conn.execute(
++                "SELECT value FROM state_meta WHERE key = ?", (marker_key,)
++            ).fetchone()
++        if row is None:
++            return False, None, None
++        raw = row[0]
++        return True, str(raw), _parse_publication_marker(raw)
++
++    def _read_publication_marker(self, marker_key: str) -> Optional[Dict[str, Any]]:
++        present, _raw, parsed = self._read_publication_marker_row(marker_key)
++        return parsed if present else None
++
++    def _marker_is_reclaimable(self, marker: Dict[str, Any]) -> bool:
++        """True only for an expired lease or a proven-dead local owner (D1).
++
++        A fresh/live owner is never reaped merely by age, a different caller or
++        a malformed marker; unknown or incomplete ownership is treated as a
++        conflict and left alone.
++        """
++        owner = marker.get("owner")
++        stage = marker.get("stage")
++        if not isinstance(owner, str) or not isinstance(stage, str):
++            return False
++        try:
++            expired = float(marker.get("expires_at")) < time.time()
++        except (TypeError, ValueError):
++            return False
++        if expired:
++            return True
++        return bool(self._compaction_owner_process_is_dead(owner))
++
++    def _claim_publication(self, marker_key: str, marker: Dict[str, Any]) -> None:
++        """Reclaim a dead generation if needed, then claim ownership atomically."""
++        present, _raw, existing = self._read_publication_marker_row(marker_key)
++        if present:
++            if existing is None:
++                raise PublicationConflictError(
++                    "publication marker is unreadable; refusing to adopt or "
++                    "replace unknown ownership"
++                )
++            if not self._marker_is_reclaimable(existing):
++                raise PublicationConflictError(
++                    "another live publication owns this session's transcript "
++                    "publication marker"
++                )
++            self._reap_publication_generation(marker_key, existing)
++
++        def _do(conn: ConnT) -> None:
++            row = conn.execute(
++                "SELECT value FROM state_meta WHERE key = ?", (marker_key,)
++            ).fetchone()
++            if row is not None:
++                current = _parse_publication_marker(row[0])
++                if current is None:
++                    raise PublicationConflictError(
++                        "publication marker is unreadable; refusing to adopt or "
++                        "replace unknown ownership"
++                    )
++                if not self._marker_is_reclaimable(current):
++                    raise PublicationConflictError(
++                        "another live publication claimed this session while this "
++                        "one was preparing"
++                    )
++            conn.execute(
++                "INSERT INTO sessions (id, source, started_at, message_count, "
++                "tool_call_count, model_config, hidden, archived) "
++                "VALUES (?, ?, ?, 0, 0, ?, 1, 1)",
++                (
++                    marker["stage"],
++                    COMPACTION_STAGING_SESSION_SOURCE,
++                    time.time(),
++                    _serialize_publication_marker(
++                        {
++                            "v": COMPACTION_PUBLICATION_VERSION,
++                            "target": marker["target"],
++                            "owner": marker["owner"],
++                        }
++                    ),
++                ),
++            )
++            self._write_publication_marker(conn, marker_key, marker)
++
++        self._execute_write(_do)
++
++    def _reap_publication_generation(
++        self, marker_key: str, marker: Dict[str, Any]
++    ) -> None:
++        """Delete ONLY this exact generation's hidden rows/session/marker (D6)."""
++        stage = marker.get("stage")
++        if not isinstance(stage, str):
++            raise PublicationConflictError(
++                "unreadable publication generation left in place for its owner"
++            )
++        self._delete_publication_rows(stage)
++        raw_marker = _serialize_publication_marker(marker)
++
++        def _do(conn: ConnT) -> None:
++            remaining = conn.execute(
++                "SELECT 1 FROM messages WHERE session_id = ? LIMIT 1", (stage,)
++            ).fetchone()
++            if remaining is not None:
++                raise PublicationConflictError(
++                    "publication generation still holds rows; not reaping"
++                )
++            conn.execute(
++                "DELETE FROM sessions WHERE id = ? AND source = ?",
++                (stage, COMPACTION_STAGING_SESSION_SOURCE),
++            )
++            conn.execute(
++                "DELETE FROM state_meta WHERE key = ? AND value = ?",
++                (marker_key, raw_marker),
++            )
++
++        self._execute_write(_do)
++
++    def _delete_publication_rows(
++        self, stage: str, batch_rows: int = COMPACTION_PUBLICATION_BATCH_ROWS
++    ) -> None:
++        """Delete one generation's rows in bounded batches, releasing the lock."""
++        while True:
++            deleted = self._execute_write(
++                lambda conn, stage=stage, batch_rows=batch_rows: conn.execute(
++                    "DELETE FROM messages WHERE id IN ("
++                    "SELECT id FROM messages WHERE session_id = ? "
++                    "ORDER BY id LIMIT ?)",
++                    (stage, batch_rows),
++                ).rowcount
++            )
++            if deleted < batch_rows:
++                return
++            time.sleep(COMPACTION_PUBLICATION_YIELD_S)
++
++    # ── Staging ────────────────────────────────────────────────────────────
++
++    def _stage_publication_rows(
++        self,
++        marker_key: str,
++        marker: Dict[str, Any],
++        prepared: Sequence[_PreparedMessage],
++        known_holder: Optional[str],
++    ) -> Dict[str, Any]:
++        current = marker
++        for batch in _iter_publication_batches(prepared):
++            current = self._execute_write(
++                lambda conn, batch=batch, current=current: self._stage_publication_batch(
++                    conn, marker_key, current, batch, known_holder
++                )
++            )
++            # Release both the instance lock and SQLite's writer slot, then
++            # yield so same-instance and separate-instance writers get an
++            # opportunity between batches (D3).
++            time.sleep(COMPACTION_PUBLICATION_YIELD_S)
++        return current
++
++    def _stage_publication_batch(
++        self,
++        conn: ConnT,
++        marker_key: str,
++        base_marker: Dict[str, Any],
++        batch: Sequence[_PreparedMessage],
++        known_holder: Optional[str],
++    ) -> Dict[str, Any]:
++        marker, raw = self._owned_publication_row(
++            conn, marker_key, base_marker["owner"]
++        )
++        self._verify_known_holder(conn, marker["target"], known_holder)
++        inserted, tool_calls = self._insert_message_rows(
++            conn, marker["stage"], list(batch)
++        )
++        # ``_insert_message_rows`` inserts live rows; staging rows must be
++        # inactive before this batch commits and no reader may observe the
++        # intermediate state (same transaction, so it cannot).
++        conn.execute(
++            "UPDATE messages SET active = 0, compacted = 0 "
++            "WHERE session_id = ? AND active = 1",
++            (marker["stage"],),
++        )
++        marker["staged_rows"] = int(marker.get("staged_rows") or 0) + inserted
++        marker["staged_tool_calls"] = (
++            int(marker.get("staged_tool_calls") or 0) + tool_calls
++        )
++        staged_ids = [row.row_id for row in batch if row.row_id is not None]
++        if staged_ids:
++            marker["staged_max_id"] = max(
++                int(marker.get("staged_max_id") or 0), max(staged_ids)
++            )
++        marker["phase"] = _MARKER_PHASE_STAGING
++        self._renew_publication_marker(conn, marker_key, raw, marker)
++        return marker
++
++    # ── Tail preservation, validation and cutover ──────────────────────────
++
++    def _finalize_publication(
++        self,
++        marker_key: str,
++        marker: Dict[str, Any],
++        snapshot: PublicationSnapshot,
++        known_holder: Optional[str],
++        model_config_patch: Optional[Dict[str, Any]],
++    ) -> int:
++        current = marker
++        rounds = 0
++        while True:
++            rounds += 1
++            if rounds > COMPACTION_PUBLICATION_MAX_ROUNDS:
++                raise PublicationConflictError(
++                    "publication could not reach a stable tail within its "
++                    "bounded catch-up/validation rounds"
++                )
++            if self._copy_publication_tail(marker_key, current, known_holder) is not None:
++                current = self._read_publication_marker(marker_key) or current
++                continue
++            try:
++                return self._publish_publication_cutover(
++                    marker_key,
++                    current,
++                    snapshot,
++                    known_holder,
++                    model_config_patch,
++                )
++            except _VersionFenceTrippedError:
++                # An external commit slipped in after validation. Re-plan and
++                # re-validate within the same bounded round budget (D5/D4).
++                continue
++
++    def _copy_publication_tail(
++        self,
++        marker_key: str,
++        marker: Dict[str, Any],
++        known_holder: Optional[str],
++    ) -> Optional[int]:
++        """Relocate target rows interleaved with the staged ids, exactly once.
++
++        Target rows whose ids exceed the last staged id already follow the
++        whole staged set and stay in place. Returns the number of relocated
++        rows, or ``None`` when there is nothing to relocate (the caller then
++        validates and publishes).
++        """
++        staged_max_id = marker.get("staged_max_id")
++        if staged_max_id is None:
++            return None
++        lower = max(int(marker.get("tail_watermark") or 0), int(marker["watermark"]))
++        pending = self._read_interleaved_tail_ids(
++            marker["target"], lower, int(staged_max_id)
++        )
++        if not pending:
++            return None
++
++        relocated = 0
++        for id_batch in _chunk_ids(pending):
++            marker = self._execute_write(
++                lambda conn, id_batch=id_batch, marker=marker: self._relocate_tail_batch(
++                    conn, marker_key, marker, id_batch, known_holder
++                )
++            )
++            relocated += len(id_batch)
++            time.sleep(COMPACTION_PUBLICATION_YIELD_S)
++        return relocated
++
++    def _read_interleaved_tail_ids(
++        self, target: str, lower: int, upper: int
++    ) -> List[int]:
++        if upper <= lower:
++            return []
++        with self._read_ctx() as conn:
++            rows = conn.execute(
++                "SELECT id FROM messages WHERE session_id = ? AND id > ? "
++                "AND id <= ? AND active = 1 ORDER BY id",
++                (target, lower, upper),
++            ).fetchall()
++        return [int(row[0]) for row in rows]
++
++    def _relocate_tail_batch(
++        self,
++        conn: ConnT,
++        marker_key: str,
++        base_marker: Dict[str, Any],
++        message_ids: Sequence[int],
++        known_holder: Optional[str],
++    ) -> Dict[str, Any]:
++        marker, raw = self._owned_publication_row(
++            conn, marker_key, base_marker["owner"]
++        )
++        self._verify_known_holder(conn, marker["target"], known_holder)
++        self._assert_copy_columns_known(conn)
++        columns = ", ".join(_MESSAGE_INSERT_COLUMNS)
++        staged: List[_PreparedMessage] = []
++        for message_id in message_ids:
++            row = conn.execute(
++                f"SELECT {columns} FROM messages WHERE id = ? AND session_id = ?",
++                (message_id, marker["target"]),
++            ).fetchone()
++            if row is None:
++                # The row vanished (concurrent delete/replace) — it is no longer
++                # part of the live tail and must not be copied.
++                continue
++            values = tuple(row[index] for index in range(len(_MESSAGE_INSERT_COLUMNS)))
++            staged.append(
++                _PreparedMessage(
++                    values,
++                    _tool_call_count_from_stored(values[_TOOL_CALLS_INDEX]),
++                )
++            )
++        if not staged:
++            return marker
++        inserted, tool_calls = self._insert_message_rows(conn, marker["stage"], staged)
++        # Relocated copies preserve their STORED visibility flags (an interleaved
++        # live row is active=1, compacted as stored); only activation is parked
++        # while they sit in staging.
++        conn.execute(
++            "UPDATE messages SET active = 0 "
++            "WHERE session_id = ? AND active = 1",
++            (marker["stage"],),
++        )
++        staged_ids = [row.row_id for row in staged if row.row_id is not None]
++        if staged_ids:
++            marker["staged_max_id"] = max(
++                int(marker.get("staged_max_id") or 0), max(staged_ids)
++            )
++        marker["tail_watermark"] = max(
++            int(marker.get("tail_watermark") or 0), max(int(i) for i in message_ids)
++        )
++        marker["tail_rows"] = int(marker.get("tail_rows") or 0) + inserted
++        marker["tail_tool_calls"] = (
++            int(marker.get("tail_tool_calls") or 0) + tool_calls
++        )
++        self._renew_publication_marker(conn, marker_key, raw, marker)
++        return marker
++
++    def _publish_publication_cutover(
++        self,
++        marker_key: str,
++        marker: Dict[str, Any],
++        snapshot: PublicationSnapshot,
++        known_holder: Optional[str],
++        model_config_patch: Optional[Dict[str, Any]],
++    ) -> int:
++        """Validate outside a writer transaction, then publish in one cutover."""
++        state: Dict[str, Any] = {}
++
++        def pre_begin() -> None:
++            # Runs under the instance lock, BEFORE BEGIN IMMEDIATE: no local
++            # writer can interleave between validation and the cutover, and the
++            # connection's data_version fences an external commit.
++            version = self._read_data_version()
++            plan = self._validate_publication_plan(
++                marker_key, marker, snapshot, known_holder
++            )
++            if self._read_data_version() != version:
++                raise _VersionFenceTrippedError()
++            state["version"] = version
++            state["plan"] = plan
++
++        def _cutover(conn: ConnT) -> int:
++            if self._read_data_version() != state.get("version"):
++                # An external commit landed between validation and BEGIN; the
++                # validated plan is stale and must not be mutated against (D5).
++                raise _VersionFenceTrippedError()
++            plan = state["plan"]
++            current, _raw = self._owned_publication_row(
++                conn, marker_key, marker["owner"]
++            )
++            self._verify_known_holder(conn, current["target"], known_holder)
++            if plan["target_exists"] and not self._target_row_exists(
++                conn, current["target"]
++            ):
++                raise PublicationConflictError(
++                    "target session row disappeared during publication"
++                )
++            staged_ids = [
++                int(row[0])
++                for row in conn.execute(
++                    "SELECT id FROM messages WHERE session_id = ? ORDER BY id",
++                    (current["stage"],),
++                ).fetchall()
++            ]
++            if len(staged_ids) != int(plan["staged_rows"]):
++                raise PublicationConflictError(
++                    "staged generation identity no longer matches the store"
++                )
++            # 1. Archive the proven source prefix (metadata-only: no update
++            #    trigger keys on active/compacted, so no FTS work happens here).
++            conn.execute(
++                "UPDATE messages SET active = 0, compacted = 1 "
++                "WHERE session_id = ? AND id <= ? AND active = 1",
++                (current["target"], snapshot.watermark),
++            )
++            # 2. Hide the exact relocated-tail originals: they were copied into
++            #    the staged set, so the originals are recoverable (active=0,
++            #    compacted=0) rather than duplicated into the live transcript.
++            tail_watermark = int(
++                current.get("tail_watermark") or snapshot.watermark
++            )
++            if tail_watermark > snapshot.watermark:
++                conn.execute(
++                    "UPDATE messages SET active = 0, compacted = 0 "
++                    "WHERE session_id = ? AND id > ? AND id <= ? AND active = 1",
++                    (current["target"], snapshot.watermark, tail_watermark),
++                )
++            # 3. Move the exact staging generation onto the target and make it
++            #    live; unrelocated tail rows stay active where they are.
++            moved = 0
++            for id_batch in _chunk_ids(staged_ids, _ACTIVATION_ID_CHUNK):
++                placeholders = ",".join("?" for _ in id_batch)
++                moved += conn.execute(
++                    "UPDATE messages SET session_id = ?, active = 1 "
++                    f"WHERE session_id = ? AND id IN ({placeholders})",
++                    (current["target"], current["stage"], *id_batch),
++                ).rowcount
++            if int(moved) != int(plan["staged_rows"]):
++                raise PublicationConflictError(
++                    "staged row count changed during cutover"
++                )
++            # 4. Reconcile live counters and merge the model_config patch
++            #    against the CURRENT target config (None removes a key).
++            live_count = int(plan["staged_rows"]) + int(plan["unrelocated_rows"])
++            tool_calls = int(plan["staged_tool_calls"]) + int(
++                plan["unrelocated_tool_calls"]
++            )
++            if model_config_patch is None:
++                conn.execute(
++                    "UPDATE sessions SET message_count = ?, tool_call_count = ? "
++                    "WHERE id = ?",
++                    (live_count, tool_calls, current["target"]),
++                )
++            else:
++                patched = self._merge_model_config_json(
++                    conn, current["target"], model_config_patch, on_missing="raise"
++                )
++                conn.execute(
++                    "UPDATE sessions SET message_count = ?, tool_call_count = ?, "
++                    "model_config = ? WHERE id = ?",
++                    (live_count, tool_calls, patched, current["target"]),
++                )
++            # 5. Remove the now-empty staging session and this operation marker.
++            conn.execute(
++                "DELETE FROM sessions WHERE id = ? AND source = ?",
++                (current["stage"], COMPACTION_STAGING_SESSION_SOURCE),
++            )
++            conn.execute(
++                "DELETE FROM state_meta WHERE key = ? AND value = ?",
++                (marker_key, _serialize_publication_marker(current)),
++            )
++            return live_count
++
++        # A private pre-BEGIN preflight recognized by ``_execute_write``: it
++        # runs under the existing instance lock before BEGIN, so it never nests
++        # a non-reentrant lock and never holds SQLite's writer slot while
++        # hashing the transcript.
++        _cutover._publication_preflight = pre_begin  # type: ignore[attr-defined]
++        return self._execute_write(_cutover)
++
++    def _validate_publication_plan(
++        self,
++        marker_key: str,
++        marker: Dict[str, Any],
++        snapshot: PublicationSnapshot,
++        known_holder: Optional[str],
++    ) -> Dict[str, Any]:
++        """Prove the source prefix and staged generation are still the ones we own.
++
++        Runs read-only on the writer connection, outside any writer transaction.
++        Any disagreement is an explicit conflict: the caller keeps the original
++        transcript and every committed append.
++        """
++        conn = self._conn
++        current, _raw = self._owned_publication_row(
++            conn, marker_key, marker["owner"]
++        )
++        if current.get("phase") != _MARKER_PHASE_STAGING:
++            raise PublicationConflictError("publication not in staging phase")
++        plan = {
++            "target_exists": self._target_row_exists(conn, current["target"]),
++            # The staging session holds the replacement rows AND the relocated
++            # interleaved-tail copies; both become live at the cutover.
++            "staged_rows": int(current.get("staged_rows") or 0)
++            + int(current.get("tail_rows") or 0),
++            "staged_tool_calls": int(current.get("staged_tool_calls") or 0)
++            + int(current.get("tail_tool_calls") or 0),
++            "unrelocated_rows": 0,
++            "unrelocated_tool_calls": 0,
++        }
++        if plan["target_exists"] != snapshot.target_exists:
++            raise PublicationConflictError(
++                "target session existence changed during publication"
++            )
++        # No explicit source snapshot may be silently replaced by a newer one.
++        row_count, digest = self._digest_publication_prefix(
++            conn, current["target"], snapshot.watermark
++        )
++        if row_count != snapshot.row_count or digest != snapshot.digest:
++            raise PublicationConflictError(
++                "source transcript prefix changed during publication"
++            )
++        staged_rows, staged_max_id, staged_inactive = conn.execute(
++            "SELECT COUNT(*), COALESCE(MAX(id), 0), "
++            "COALESCE(SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END), 0) "
++            "FROM messages WHERE session_id = ?",
++            (current["stage"],),
++        ).fetchone()
++        if int(staged_rows) != plan["staged_rows"]:
++            raise PublicationConflictError(
++                "staged row count no longer matches the publication marker"
++            )
++        if int(staged_inactive) != int(staged_rows):
++            raise PublicationConflictError(
++                "staged rows are not all inactive; refusing to publish"
++            )
++        if int(staged_max_id) and int(current.get("staged_max_id") or 0) and int(
++            staged_max_id
++        ) != int(current["staged_max_id"]):
++            raise PublicationConflictError(
++                "staged generation id range no longer matches the marker"
++            )
++        tail_watermark = int(current.get("tail_watermark") or snapshot.watermark)
++        unrelocated = conn.execute(
++            "SELECT tool_calls FROM messages WHERE session_id = ? AND id > ? "
++            "AND active = 1",
++            (current["target"], tail_watermark),
++        ).fetchall()
++        plan["unrelocated_rows"] = len(unrelocated)
++        plan["unrelocated_tool_calls"] = sum(
++            _tool_call_count_from_stored(row[0]) for row in unrelocated
++        )
++        if known_holder:
++            self._verify_known_holder(conn, current["target"], known_holder)
++        return plan
++
++    # ── Host seams ─────────────────────────────────────────────────────────
++
++    def _owned_publication_row(
++        self, conn: ConnT, marker_key: str, owner: str
++    ) -> Tuple[Dict[str, Any], str]:
++        """Re-read the marker inside a transaction and prove we still own it."""
++        row = conn.execute(
++            "SELECT value FROM state_meta WHERE key = ?", (marker_key,)
++        ).fetchone()
++        raw = row[0] if row is not None else None
++        marker = _parse_publication_marker(raw)
++        if marker is None:
++            raise PublicationConflictError("publication marker disappeared")
++        if marker.get("owner") != owner:
++            raise PublicationConflictError("publication ownership was reassigned")
++        try:
++            expires_at = float(marker.get("expires_at"))
++        except (TypeError, ValueError):
++            raise PublicationConflictError("publication marker has no lease")
++        if expires_at < time.time():
++            raise PublicationConflictError("publication lease expired")
++        return marker, str(raw)
++
++    def _renew_publication_marker(
++        self,
++        conn: ConnT,
++        marker_key: str,
++        raw_expected: str,
++        marker: Dict[str, Any],
++    ) -> None:
++        """Renew the publication lease, but only against the exact owned row.
++
++        Compare-and-set on the committed value: a reclaimed owner (or any
++        other writer that touched the marker) cannot have its lease silently
++        extended by a writer that no longer owns the generation.
++        """
++        renewal = dict(marker)
++        renewal["expires_at"] = time.time() + COMPACTION_PUBLICATION_LEASE_S
++        updated = conn.execute(
++            "UPDATE state_meta SET value = ? WHERE key = ? AND value = ?",
++            (_serialize_publication_marker(renewal), marker_key, raw_expected),
++        ).rowcount
++        if not updated:
++            raise PublicationConflictError(
++                "publication marker changed underneath this writer"
++            )
++        marker["expires_at"] = renewal["expires_at"]
++
++    def _write_publication_marker(
++        self, conn: ConnT, marker_key: str, marker: Dict[str, Any]
++    ) -> None:
++        conn.execute(
++            "INSERT INTO state_meta (key, value) VALUES (?, ?) "
++            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
++            (marker_key, _serialize_publication_marker(marker)),
++        )
++
++    def _abandon_publication(
++        self, marker_key: str, marker: Dict[str, Any], error: BaseException
++    ) -> None:
++        """Best-effort cleanup of ONLY this generation; never masks *error* (D6)."""
++        try:
++            latest = self._read_publication_marker(marker_key) or marker
++            if latest.get("owner") == marker.get("owner"):
++                self._reap_publication_generation(marker_key, latest)
++        except Exception as cleanup_error:  # noqa: BLE001
++            logger.warning(
++                "publication cleanup failed after %s: %s: %s",
++                type(error).__name__,
++                type(cleanup_error).__name__,
++                cleanup_error,
++            )
++            try:
++                self._mark_publication_cleanup_failed(
++                    marker_key, marker, cleanup_error
++                )
++            except Exception:  # pragma: no cover - best effort only
++                logger.debug(
++                    "could not record the publication cleanup marker",
++                    exc_info=True,
++                )
++
++    def _mark_publication_cleanup_failed(
++        self, marker_key: str, marker: Dict[str, Any], cleanup_error: BaseException
++    ) -> None:
++        def _do(conn: ConnT) -> None:
++            row = conn.execute(
++                "SELECT value FROM state_meta WHERE key = ?", (marker_key,)
++            ).fetchone()
++            raw = row[0] if row is not None else None
++            current = _parse_publication_marker(raw)
++            if current is None or current.get("owner") != marker.get("owner"):
++                return
++            current["phase"] = _MARKER_PHASE_CLEANUP
++            current["cleanup_error"] = type(cleanup_error).__name__
++            conn.execute(
++                "UPDATE state_meta SET value = ? WHERE key = ? AND value = ?",
++                (_serialize_publication_marker(current), marker_key, str(raw)),
++            )
++
++        self._execute_write(_do)
++
++    def _verify_known_holder(
++        self, conn: ConnT, session_id: str, known_holder: Optional[str]
++    ) -> None:
++        """Prove the caller's own compression lease is still the live owner.
++
++        Never acquires, steals, releases or extends a lease: a foreign live
++        holder is handled exactly as the native append guard handles it, and a
++        caller that supplied a holder which no longer owns the row fails fast
++        with the native permanent (non-retryable) busy error.
++        """
++        if not known_holder:
++            return
++        row = conn.execute(
++            "SELECT holder FROM compression_locks WHERE session_id = ?",
++            (session_id,),
++        ).fetchone()
++        holder = None
++        if row is not None:
++            holder = row["holder"] if isinstance(row, sqlite3.Row) else row[0]
++        if holder == known_holder:
++            return
++        try:
++            from hermes_state import (  # local import: mixin/host cycle
++                CompressionSessionBusyError,
++                SessionCompressionInProgressError,
++            )
++        except Exception:  # pragma: no cover - host always provides these
++            raise PublicationLeaseLostError(
++                "compression lease is no longer owned by this publisher"
++            )
++        if holder is None:
++            raise CompressionSessionBusyError(
++                f"Session {session_id!r} compression lease disappeared; "
++                "refusing transcript publication"
++            )
++        raise SessionCompressionInProgressError(
++            f"Session {session_id!r} is being compressed by another writer"
++        )
++
++    def _read_data_version(self, conn: Optional[ConnT] = None) -> Optional[int]:
++        """The connection's ``PRAGMA data_version`` fence value (D5)."""
++        cursor = conn if conn is not None else self._conn
++        row = cursor.execute("PRAGMA data_version").fetchone()
++        if row is None:
++            return None
++        try:
++            return int(row[0])
++        except (TypeError, ValueError):  # pragma: no cover - pragma is numeric
++            return None
++
++    def _target_row_exists(self, conn: ConnT, session_id: str) -> bool:
++        return (
++            conn.execute(
++                "SELECT 1 FROM sessions WHERE id = ? LIMIT 1", (session_id,)
++            ).fetchone()
++            is not None
++        )
++
++    def _digest_publication_prefix(
++        self, conn: ConnT, session_id: str, watermark: int
++    ) -> Tuple[int, str]:
++        """Count + digest of the exact persisted values of the live prefix.
++
++        Only rows at or below *watermark* (the largest stored id when the
++        snapshot was taken) that are active can be part of the replaced
++        prefix; everything above is a concurrent append preserved as tail.
++        """
++        digest = hashlib.sha256()
++        row_count = 0
++        columns = ", ".join(_MESSAGE_INSERT_COLUMNS)
++        cursor = conn.execute(
++            f"SELECT id, {columns} FROM messages WHERE session_id = ? "
++            "AND id <= ? AND active = 1 ORDER BY id",
++            (session_id, int(watermark)),
++        )
++        for row in cursor:
++            row_count += 1
++            for value in row:
++                if value is None:
++                    digest.update(b"\x00")
++                    continue
++                if isinstance(value, bytes):
++                    payload = value
++                else:
++                    payload = str(value).encode("utf-8", "surrogatepass")
++                digest.update(str(len(payload)).encode("ascii"))
++                digest.update(b":")
++                digest.update(payload)
++                digest.update(b"\x1f")
++        return row_count, digest.hexdigest()
++
++    def _assert_copy_columns_known(self, conn: ConnT) -> None:
++        """Refuse to relocate rows through a column set this code doesn't know.
++
++        A ``messages`` column added later would otherwise be silently dropped
++        from the relocated tail copy; failing the publication keeps the
++        original transcript and the appended rows intact instead.
++        """
++        known = set(_MESSAGE_INSERT_COLUMNS) | {"id", "session_id"}
++        unknown = [
++            row[1]
++            for row in conn.execute("PRAGMA table_info(messages)").fetchall()
++            if row[1] not in known
++        ]
++        if unknown:
++            raise PublicationConflictError(
++                "messages table has columns this publication cannot preserve: "
++                + ", ".join(sorted(unknown))
++            )
+diff --git a/hermes_state_search.py b/hermes_state_search.py
+index c3894b147f..2a7d9b0d13 100644
+--- a/hermes_state_search.py
++++ b/hermes_state_search.py
+@@ -26,6 +26,7 @@ from hermes_state_common import (
+     MAX_FTS5_QUERY_CHARS,
+     SCHEMA_VERSION,
+     _FTS_CJK_TRIGGERS,
++    _internal_session_exclusion,
+     escape_like as _escape_like,
+ )
+ 
+@@ -33,6 +34,7 @@ from hermes_state_common import (
+ # keep that logger identity so log filtering/capture behavior is unchanged.
+ logger = logging.getLogger("hermes_state")
+ 
++
+ # Characters FTS5's query grammar rejects outside a quoted phrase. Anything
+ # missing from this set reaches MATCH raw and raises, which the execute site
+ # swallows into zero results — the failure this strip step exists to prevent.
+@@ -1121,6 +1123,10 @@ class SessionSearchMixin:
+         active_clause = "" if include_inactive else " AND active = 1"
+         # Match CLI/desktop: only real user turns, not timeline bookkeeping.
+         display_clause = " AND (display_kind IS NULL OR display_kind = '')"
++        # Staging rows are never a user turn of any session (TS-382 D2), so the
++        # internal-session clause is unconditional: include_inactive drops only
++        # the rewind/undo visibility rule, never this exclusion.
++        staging_clause = f" AND {_internal_session_exclusion('messages')}"
+         # Legacy standalone compaction handoffs (persisted pre-#80622) are
+         # durable role='user' rows with NO display_kind — SQL can't see them,
+         # so fetch with headroom and drop them in the decode loop below.
+@@ -1132,7 +1138,7 @@ class SessionSearchMixin:
+             cursor = self._conn.execute(
+                 "SELECT id, timestamp, content FROM messages "
+                 "WHERE session_id = ? AND role = 'user'"
+-                f"{active_clause}{display_clause} "
++                f"{active_clause}{display_clause}{staging_clause} "
+                 "ORDER BY id DESC LIMIT ?",
+                 (session_id, fetch_limit),
+             )
+@@ -1373,6 +1379,9 @@ class SessionSearchMixin:
+         trigram_query = " ".join(parts)
+         tri_where = [f"{table} MATCH ?"]
+         tri_params: list = [trigram_query]
++        # Internal publication staging rows are never a public search result,
++        # including under include_inactive (TS-382 design D2).
++        tri_where.append(_internal_session_exclusion())
+         if not include_inactive:
+             tri_where.append("(m.active = 1 OR m.compacted = 1)")
+         if source_filter is not None:
+@@ -1560,6 +1569,9 @@ class SessionSearchMixin:
+             return []
+ 
+         where = [f"({predicate})"]
++        # Internal publication staging rows are never a public search result,
++        # including under include_inactive (TS-382 design D2).
++        where.append(_internal_session_exclusion())
+         if not include_inactive:
+             where.append("(m.active = 1 OR m.compacted = 1)")
+         if source_filter is not None:
+@@ -1809,6 +1821,9 @@ class SessionSearchMixin:
+         # Build WHERE clauses dynamically
+         where_clauses = ["messages_fts MATCH ?"]
+         params: list = [query]
++        # Internal publication staging rows are never a public search result,
++        # including under include_inactive (TS-382 design D2).
++        where_clauses.append(_internal_session_exclusion())
+         if not include_inactive:
+             # Live rows (active=1) AND compaction-archived rows (compacted=1)
+             # are discoverable; only rewind/undo rows (active=0, compacted=0)
+@@ -1911,6 +1926,9 @@ class SessionSearchMixin:
+                 cjk_query = " ".join(parts)
+                 cjk_where = ["messages_fts_cjk MATCH ?"]
+                 cjk_params: list = [cjk_query]
++                # Internal publication staging rows are never a public search result,
++                # including under include_inactive (TS-382 design D2).
++                cjk_where.append(_internal_session_exclusion())
+                 if not include_inactive:
+                     cjk_where.append("(m.active = 1 OR m.compacted = 1)")
+                 if source_filter is not None:
+@@ -1999,6 +2017,9 @@ class SessionSearchMixin:
+                 trigram_query = " ".join(parts)
+                 tri_where = ["messages_fts_trigram MATCH ?"]
+                 tri_params: list = [trigram_query]
++                # Internal publication staging rows are never a public search result,
++                # including under include_inactive (TS-382 design D2).
++                tri_where.append(_internal_session_exclusion())
+                 if not include_inactive:
+                     tri_where.append("(m.active = 1 OR m.compacted = 1)")
+                 if source_filter is not None:
+@@ -2089,6 +2110,9 @@ class SessionSearchMixin:
+                     )
+                     like_params += [f"%{esc}%", f"%{esc}%", f"%{esc}%"]
+                 like_where = [f"({' OR '.join(token_clauses)})"]
++                # Internal publication staging rows are never a public search result,
++                # including under include_inactive (TS-382 design D2).
++                like_where.append(_internal_session_exclusion())
+                 if not include_inactive:
+                     # Same visibility rule as the FTS5 paths: live rows and
+                     # compaction-archived rows are discoverable; rewind/undo
+@@ -2268,6 +2292,9 @@ class SessionSearchMixin:
+                 "OR m.tool_calls LIKE ? ESCAPE '\\')"
+             )
+             params += [f"%{esc}%"] * 3
++        # Internal publication staging rows are never a public search result,
++        # including under include_inactive (TS-382 design D2).
++        where.append(_internal_session_exclusion())
+         if not include_inactive:
+             where.append("(m.active = 1 OR m.compacted = 1)")
+         if source_filter is not None:
+diff --git a/pyproject.toml b/pyproject.toml
+index 476010d3f5..612da56fc8 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -424,6 +424,7 @@ py-modules = [
+   "hermes_constants",
+   "hermes_state",
+   "hermes_state_common",
++  "hermes_state_compaction",
+   "hermes_state_portability",
+   "hermes_state_schema",
+   "hermes_state_search",
+diff --git a/tests/state/test_compaction_publication.py b/tests/state/test_compaction_publication.py
+new file mode 100644
+index 0000000000..3057b52907
+--- /dev/null
++++ b/tests/state/test_compaction_publication.py
+@@ -0,0 +1,1270 @@
++"""TS-382 bounded transcript publication — deterministic coverage (design D1-D7).
++
++Complements the approved research oracle (``specs/006-tools-memory-stability/
++fixtures/ts382_transcript_replacement_oracle.py``) with deterministic
++barrier/fault-injection coverage: no test here depends on a race outcome for
++its assertion. Everything runs against temporary databases and the real
++``SessionDB``; the live runtime tree and live state DB are never touched.
++"""
++
++from __future__ import annotations
++
++import json
++import sqlite3
++import threading
++import time
++from pathlib import Path
++from typing import Any, Dict, List, Optional
++
++import pytest
++
++from hermes_state import SessionDB
++from hermes_state_common import (
++    COMPACTION_PUBLICATION_BATCH_BYTES,
++    COMPACTION_PUBLICATION_BATCH_ROWS,
++    COMPACTION_PUBLICATION_MARKER_PREFIX,
++    COMPACTION_PUBLICATION_MAX_ROUNDS,
++    COMPACTION_STAGING_SESSION_PREFIX,
++    COMPACTION_STAGING_SESSION_SOURCE,
++    FTS_TOOL_FULL_CONTENT_HIGH_WATER_KEY,
++    LEGACY_FTS_SQL,
++    LEGACY_FTS_TRIGRAM_SQL,
++)
++from hermes_state_compaction import (
++    PublicationConflictError,
++    PublicationSnapshot,
++    _PreparedMessage,
++    _iter_publication_batches,
++    _publication_marker_key,
++    invoke_archive_and_compact,
++)
++
++SESSION_ID = "ts382-publication-session"
++OTHER_SESSION = "ts382-unrelated-session"
++MODEL_KEY = "_ts382_patch"
++_REARM_KEY = "proactive_prune_rearm_tokens"
++
++
++# ── helpers ────────────────────────────────────────────────────────────────
++
++
++def _message(index: int, tag: str, tool: bool = True) -> Dict[str, Any]:
++    if tool:
++        call_id = f"call-{tag}-{index}"
++        return {
++            "role": "tool",
++            "content": f"{tag} tool result {index:05d} " + ("x" * 200),
++            "tool_name": "read_file",
++            "tool_call_id": call_id,
++            # One call per row keeps tool_call_count exact and predictable.
++            "tool_calls": [
++                {
++                    "id": call_id,
++                    "type": "function",
++                    "function": {"name": "read_file", "arguments": '{"path": "/tmp/x"}'},
++                }
++            ],
++        }
++    return {"role": "user", "content": f"{tag} user {index:05d}"}
++
++
++def _messages(count: int, tag: str, tool: bool = True) -> List[Dict[str, Any]]:
++    return [_message(i, tag, tool) for i in range(count)]
++
++
++def _staged_replacement() -> List[Dict[str, Any]]:
++    """Replacement rows that WOULD surface publicly if staging leaked.
++
++    The tool rows exercise the search/transcript paths; the trailing user row
++    and PR-url tool row make the ``list_recent_user_messages`` and
++    ``find_pr_url_messages`` assertions non-vacuous (those paths return nothing
++    for tool-only content regardless of the exclusion).
++    """
++    rows = _messages(300, "needle-stage")
++    rows.append({"role": "user", "content": "needle-stage user turn"})
++    rows.append(
++        {
++            "role": "tool",
++            "content": "needle-stage pr https://github.com/DarkArty07/aether-hermes/pull/999",
++            "tool_name": "run_shell",
++            "tool_call_id": "call-needle-pr",
++        }
++    )
++    return rows
++
++
++def _mkdb(tmp_path: Path, *, legacy: bool = False) -> SessionDB:
++    db = SessionDB(tmp_path / "state.db")
++    db.create_session(SESSION_ID, source="tui")
++    if legacy:
++        _force_legacy_layout(db)
++    db.append_messages_batch(SESSION_ID, _messages(6, "old"))
++    return db
++
++
++def _force_legacy_layout(db: SessionDB) -> None:
++    """Reproduce the production store's pre-v23 inline-FTS layout (#305 bound)."""
++    with db._lock:
++        db._drop_fts_triggers(db._conn)
++        db._conn.executescript(
++            "DROP TABLE IF EXISTS messages_fts;"
++            "DROP TABLE IF EXISTS messages_fts_trigram;"
++            "DROP VIEW IF EXISTS messages_fts_trigram_src;"
++            + LEGACY_FTS_SQL
++            + LEGACY_FTS_TRIGRAM_SQL
++        )
++        db._conn.execute(
++            "INSERT INTO state_meta(key, value) VALUES (?, '0') "
++            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
++            (FTS_TOOL_FULL_CONTENT_HIGH_WATER_KEY,),
++        )
++        db._conn.commit()
++
++
++def _live(db: SessionDB, session_id: str = SESSION_ID) -> List[Dict[str, Any]]:
++    return db.get_messages(session_id)
++
++
++def _counters(db: SessionDB, session_id: str = SESSION_ID) -> Dict[str, int]:
++    return dict(
++        db._conn.execute(
++            "SELECT message_count, tool_call_count FROM sessions WHERE id = ?",
++            (session_id,),
++        ).fetchone()
++    )
++
++
++def _staging_sessions(db: SessionDB) -> List[str]:
++    return [
++        row[0]
++        for row in db._conn.execute(
++            "SELECT id FROM sessions WHERE source = ?", (COMPACTION_STAGING_SESSION_SOURCE,)
++        ).fetchall()
++    ]
++
++
++def _marker(db: SessionDB, session_id: str = SESSION_ID) -> Optional[Dict[str, Any]]:
++    row = db._conn.execute(
++        "SELECT value FROM state_meta WHERE key = ?",
++        (_publication_marker_key(session_id),),
++    ).fetchone()
++    return json.loads(row[0]) if row is not None else None
++
++
++def _seed_marker(
++    db: SessionDB,
++    *,
++    owner: str,
++    expires_at: float,
++    stage: str,
++    phase: str = "staging",
++    session_id: str = SESSION_ID,
++    staged_rows: int = 0,
++) -> Dict[str, Any]:
++    marker = {
++        "v": 1,
++        "target": session_id,
++        "stage": stage,
++        "owner": owner,
++        "expires_at": expires_at,
++        "watermark": 0,
++        "source_digest": "x",
++        "source_rows": 0,
++        "phase": phase,
++        "staged_rows": staged_rows,
++        "staged_tool_calls": 0,
++        "staged_max_id": None,
++        "tail_watermark": 0,
++        "tail_rows": 0,
++        "tail_tool_calls": 0,
++    }
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT INTO state_meta(key, value) VALUES (?, ?) "
++            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
++            (_publication_marker_key(session_id), json.dumps(marker, sort_keys=True)),
++        )
++    )
++    return marker
++
++
++class _PauseInsideFirstBatch:
++    """Pause a publication INSIDE its first staging batch, before it commits.
++
++    The ownership claim (the staging session row) is already committed when the
++    pause is reached; this batch's message rows are not — the pause sits after
++    the insert call and before the flags UPDATE + COMMIT, inside
++    ``_execute_write``'s transaction. Lets a test observe that pre-commit state
++    deterministically (a real barrier, not a sleep). To assert against
++    COMMITTED staged rows, use ``_PauseAfterWriteCall`` instead.
++    """
++
++    def __init__(self, db: SessionDB, calls: int = 1) -> None:
++        self.db = db
++        self.entered = threading.Event()
++        self.resume = threading.Event()
++        self._original = db._insert_message_rows
++        self._remaining = calls
++
++        def observed(conn, session_id, messages):
++            result = self._original(conn, session_id, messages)
++            if self._remaining > 0:
++                self._remaining -= 1
++                self.entered.set()
++                assert self.resume.wait(30.0), "test never resumed the publication"
++            return result
++
++        db._insert_message_rows = observed
++
++    def release(self) -> None:
++        self.db._insert_message_rows = self._original
++        self.resume.set()
++
++
++class _PauseAfterWriteCall:
++    """Pause a publication between two committed transactions.
++
++    The pause happens AFTER ``_execute_write`` returns, so the publisher holds
++    neither the instance lock nor SQLite's write lock: other connections can
++    append freely (which is what an interleaved-tail test needs) and readers
++    see only committed state.
++    """
++
++    def __init__(self, db: SessionDB, after_calls: int) -> None:
++        self.db = db
++        self.entered = threading.Event()
++        self.resume = threading.Event()
++        self._original = db._execute_write
++        self._target = after_calls
++        self._calls = 0
++
++        def observed(fn, patience_s=None):
++            result = self._original(fn, patience_s=patience_s)
++            self._calls += 1
++            if self._calls >= self._target:
++                self.entered.set()
++                assert self.resume.wait(60.0), "test never resumed the publication"
++            return result
++
++        db._execute_write = observed
++
++    def release(self) -> None:
++        self.db._execute_write = self._original
++        self.resume.set()
++
++
++def _publish(db: SessionDB, messages: List[Dict[str, Any]], **kwargs) -> int:
++    return db.archive_and_compact(SESSION_ID, messages, **kwargs)
++
++
++# ── D5: the metadata-only cutover needs no FTS work ────────────────────────
++
++
++@pytest.mark.parametrize("legacy", [False, True])
++def test_update_triggers_never_key_on_metadata_columns(tmp_path, legacy):
++    """Verify the design's premise against BOTH candidate store layouts.
++
++    The cutover only rewrites ``session_id``/``active``/``compacted`` on
++    existing rows. That is cheap only while no UPDATE trigger's column list
++    names those columns; the legacy inline and v23 external-content families
++    differ, so both are checked at the store, not in a comment.
++    """
++    db = _mkdb(tmp_path, legacy=legacy)
++    rows = db._conn.execute(
++        "SELECT name, sql FROM sqlite_master WHERE type = 'trigger' "
++        "AND name LIKE 'messages_fts%'"
++    ).fetchall()
++    assert rows, "no FTS triggers found"
++    update_triggers = [(n, s) for n, s in rows if n.endswith("_update")]
++    assert update_triggers, "expected update triggers in both layouts"
++    for name, sql in update_triggers:
++        upper = sql.upper()
++        marker = "AFTER UPDATE OF"
++        assert marker in upper, f"unrecognized update trigger shape: {name}"
++        start = upper.index(marker) + len(marker)
++        on_index = upper.index(" ON ", start)
++        columns = {column.strip().lower() for column in sql[start:on_index].split(",")}
++        assert columns, name
++        assert not (columns & {"session_id", "active", "compacted", "id"}), (
++            name,
++            columns,
++        )
++    db.close()
++
++
++# ── D3: concrete batch and fairness policy ─────────────────────────────────
++
++
++def test_batch_limits_rows_and_bytes():
++    """At most BATCH_ROWS rows or BATCH_BYTES of serialized values, first wins."""
++    small = [_PreparedMessage(("user", "a" * 100), 0) for _ in range(300)]
++    batches = list(_iter_publication_batches(small))
++    assert all(len(batch) <= COMPACTION_PUBLICATION_BATCH_ROWS for batch in batches)
++    assert sum(len(batch) for batch in batches) == 300
++    assert len(batches) == 3
++
++    large = [
++        _PreparedMessage(("tool", "x" * (COMPACTION_PUBLICATION_BATCH_BYTES // 2 - 4096)), 0)
++    ] * 4
++    batches = list(_iter_publication_batches(large))
++    assert [len(batch) for batch in batches] == [2, 2]
++
++    # A single oversized row is processed alone — never truncated, never rejected.
++    oversized = [_PreparedMessage(("tool", "z" * (COMPACTION_PUBLICATION_BATCH_BYTES * 3)), 0)]
++    assert [len(batch) for batch in _iter_publication_batches(oversized)] == [1]
++
++
++def test_publication_uses_several_bounded_transactions(tmp_path):
++    """The publication must not hold the write lock for the whole replacement."""
++    db = _mkdb(tmp_path)
++    holds: List[float] = []
++    original = db._execute_write
++
++    def timed(fn, patience_s=None):
++        start = time.monotonic()
++        try:
++            return original(fn, patience_s=patience_s)
++        finally:
++            holds.append(time.monotonic() - start)
++
++    db._execute_write = timed
++    _publish(db, _messages(600, "new"))
++    db._execute_write = original
++
++    assert len(holds) >= 5, "publication did not commit in batches"
++    assert max(holds) < 2.0, f"a single transaction held the lock for {max(holds):.2f}s"
++    assert _counters(db)["message_count"] == 600
++    db.close()
++
++
++# ── D2: staged rows are invisible on every public surface ──────────────────
++
++
++@pytest.mark.parametrize("legacy", [False, True])
++def test_staged_rows_are_invisible_while_publishing(tmp_path, legacy):
++    """No committed staging row reaches a transcript/search read, in any mode.
++
++    The barrier pauses AFTER the claim and the first staging batch have
++    COMMITTED, and every surface is read through a FRESH ``SessionDB`` (its own
++    pooled read connection). The assertions are therefore made against real
++    persisted staging state — they fail if the exclusion is missing — not
++    against an uncommitted buffer. The publisher holds neither the instance
++    lock nor SQLite's writer lock at the pause point.
++    """
++    db = _mkdb(tmp_path, legacy=legacy)
++    db.append_message(SESSION_ID, role="user", content="old user turn")
++    old_live = _live(db)
++    barrier = _PauseAfterWriteCall(db, after_calls=2)
++    replacement = _staged_replacement()
++    errors: List[BaseException] = []
++
++    def publish():
++        try:
++            _publish(db, replacement)
++        except BaseException as exc:  # pragma: no cover - surfaced below
++            errors.append(exc)
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    reader: Optional[SessionDB] = None
++    try:
++        assert barrier.entered.wait(30.0), "publication never committed a staging batch"
++        reader = SessionDB(tmp_path / "state.db")
++        raw_conn = reader._conn
++        assert raw_conn is not None
++        staged_ids = _staging_sessions(reader)
++        assert len(staged_ids) == 1, "no committed staging session"
++        staging_id = staged_ids[0]
++        committed_rows = raw_conn.execute(
++            "SELECT COUNT(*) FROM messages WHERE session_id = ?", (staging_id,)
++        ).fetchone()[0]
++        assert committed_rows > 0, (
++            "barrier must sit after a COMMITTED staging batch or these "
++            "assertions pass vacuously"
++        )
++        flags = {
++            (row[0], row[1])
++            for row in raw_conn.execute(
++                "SELECT DISTINCT active, compacted FROM messages WHERE session_id = ?",
++                (staging_id,),
++            ).fetchall()
++        }
++        assert flags == {(0, 0)}, f"committed staging rows carry flags {flags}"
++        staged_row_id = raw_conn.execute(
++            "SELECT id FROM messages WHERE session_id = ? ORDER BY id LIMIT 1",
++            (staging_id,),
++        ).fetchone()[0]
++
++        # Transcript surfaces: explicit inactive mode must not expose staging rows.
++        assert reader.get_messages(staging_id) == []
++        assert reader.get_messages(staging_id, include_inactive=True) == []
++        assert reader.get_messages_as_conversation(staging_id, include_inactive=True) == []
++        assert reader.get_messages_around(staging_id, staged_row_id)["window"] == []
++        assert reader.list_recent_user_messages(staging_id, include_inactive=True) == []
++
++        # Search surfaces: default and explicit inactive mode.
++        assert reader.search_messages("needle-stage") == []
++        assert reader.search_messages("needle-stage", include_inactive=True) == []
++        assert (
++            reader.search_messages(
++                "needle-stage", role_filter=["tool"], include_inactive=True
++            )
++            == []
++        )
++
++        # Control: the same surfaces DO see the target's own committed rows, so
++        # the emptiness above is caused by the exclusion, not by a dead query.
++        assert reader.get_messages(SESSION_ID, include_inactive=True) == old_live
++        assert reader.list_recent_user_messages(SESSION_ID, include_inactive=True)
++        assert reader.search_messages("old", include_inactive=True)
++        assert reader.get_messages_around(SESSION_ID, old_live[-1]["id"])["window"]
++    finally:
++        if reader is not None:
++            reader.close()
++        barrier.release()
++        thread.join(timeout=60.0)
++
++    assert not errors, f"publication failed: {errors[0]!r}"
++    assert len(_live(db)) == len(replacement)
++    assert not _staging_sessions(db), "staging session survived the cutover"
++    assert _marker(db) is None, "publication marker survived the cutover"
++    assert db.search_messages("needle-stage"), "published text is not searchable"
++    db.close()
++
++
++def test_staged_text_invisible_when_fts_is_disabled(tmp_path):
++    """The LIKE fallback path must not expose committed staging rows either."""
++    db = _mkdb(tmp_path)
++    barrier = _PauseAfterWriteCall(db, after_calls=2)
++    errors: List[BaseException] = []
++
++    def publish():
++        try:
++            _publish(db, _messages(120, "needle-fts-off"))
++        except BaseException as exc:  # pragma: no cover
++            errors.append(exc)
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    reader: Optional[SessionDB] = None
++    try:
++        assert barrier.entered.wait(30.0), "publication never committed a staging batch"
++        reader = SessionDB(tmp_path / "state.db")
++        staged_ids = _staging_sessions(reader)
++        assert len(staged_ids) == 1
++        staging_id = staged_ids[0]
++        raw_conn = reader._conn
++        assert raw_conn is not None
++        assert (
++            raw_conn.execute(
++                "SELECT COUNT(*) FROM messages WHERE session_id = ?", (staging_id,)
++            ).fetchone()[0]
++            > 0
++        ), "no committed staging rows to test the fallback against"
++        reader._fts_stale = True  # force the LIKE fallback paths
++        assert reader.search_messages("needle-fts-off") == []
++        assert reader.search_messages("needle-fts-off", include_inactive=True) == []
++        assert reader.get_messages(staging_id, include_inactive=True) == []
++        # Control: the fallback path still answers for the target's own rows.
++        assert reader.search_messages("old")
++    finally:
++        if reader is not None:
++            reader.close()
++        barrier.release()
++        thread.join(timeout=60.0)
++    assert not errors, f"publication failed: {errors[0]!r}"
++    db.close()
++
++
++@pytest.mark.parametrize("legacy", [False, True])
++def test_staging_session_is_invisible_to_listing_counts_and_lookup(tmp_path, legacy):
++    """No listing, count or by-id lookup mode may surface the staging session.
++
++    Same commit-boundary barrier as the transcript test: the staging session
++    row and its first batch are committed before every assertion, and the
++    reader is a fresh ``SessionDB``. Counts are compared against the exact
++    pre-publication values, so a staging session appearing in any of them is a
++    hard failure rather than a shifted expectation.
++    """
++    db = _mkdb(tmp_path, legacy=legacy)
++    before = {
++        "all": db.session_count(include_archived=True),
++        "archived_only": db.session_count(archived_only=True),
++        "by_source": db.session_count_by_source(include_archived=True),
++        "ge2": db.session_count_ge(2),
++    }
++    assert before == {
++        "all": 1,
++        "archived_only": 0,
++        "by_source": {"tui": 1},
++        "ge2": False,
++    }, f"unexpected pre-publication counts: {before}"
++    barrier = _PauseAfterWriteCall(db, after_calls=2)
++    errors: List[BaseException] = []
++
++    def publish():
++        try:
++            _publish(db, _staged_replacement())
++        except BaseException as exc:  # pragma: no cover
++            errors.append(exc)
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    reader: Optional[SessionDB] = None
++    try:
++        assert barrier.entered.wait(30.0), "publication never committed a staging batch"
++        reader = SessionDB(tmp_path / "state.db")
++        raw_conn = reader._conn
++        assert raw_conn is not None
++        staged_ids = _staging_sessions(reader)
++        assert len(staged_ids) == 1
++        staging_id = staged_ids[0]
++        assert (
++            raw_conn.execute(
++                "SELECT COUNT(*) FROM messages WHERE session_id = ?", (staging_id,)
++            ).fetchone()[0]
++            > 0
++        ), "no committed staging rows to test listing/counting against"
++
++        listed = {
++            row["id"]
++            for row in reader.list_sessions_rich(
++                limit=500, include_hidden=True, include_archived=True
++            )
++        }
++        assert SESSION_ID in listed, "target session missing from the listing"
++        assert staging_id not in listed, "staging session leaked into the listing"
++
++        searched = {row["id"] for row in reader.search_sessions(limit=500)}
++        assert SESSION_ID in searched
++        assert staging_id not in searched, "staging session leaked into search_sessions"
++
++        assert reader.session_count(include_archived=True) == before["all"]
++        assert reader.session_count(archived_only=True) == before["archived_only"]
++        assert (
++            reader.session_count_by_source(include_archived=True) == before["by_source"]
++        )
++        assert reader.session_count_ge(2) is before["ge2"]
++
++        assert reader.get_session(staging_id) is None, "staging session is lookupable"
++        assert reader.get_session(SESSION_ID) is not None
++        assert reader.export_session(staging_id) is None, "staging session is exportable"
++        assert reader.find_pr_url_messages([staging_id]) == [], (
++            "staged content is reachable through the PR scan"
++        )
++        assert reader.message_count(staging_id) == 0, (
++            "staged rows are counted for the staging session"
++        )
++        # Control: the target's own export remains intact.
++        export = reader.export_session(SESSION_ID)
++        assert export is not None and export["messages"]
++    finally:
++        if reader is not None:
++            reader.close()
++        barrier.release()
++        thread.join(timeout=60.0)
++
++    assert not errors, f"publication failed: {errors[0]!r}"
++    db.close()
++
++
++def test_uncommitted_first_batch_is_not_observable(tmp_path):
++    """The in-flight batch is invisible to a fresh connection before it commits.
++
++    The ownership claim (the staging session row) is committed; this batch's
++    message rows are not — the barrier sits inside that batch's transaction.
++    A fresh connection must see zero message rows for the staging session.
++    """
++    db = _mkdb(tmp_path)
++    # Open the reader BEFORE the publication starts: SessionDB.__init__ runs
++    # schema-init writes, which cannot proceed while the publisher holds the
++    # SQLite writer slot inside the batch transaction.
++    reader = SessionDB(tmp_path / "state.db")
++    barrier = _PauseInsideFirstBatch(db)
++    errors: List[BaseException] = []
++
++    def publish():
++        try:
++            _publish(db, _messages(20, "replacement"))
++        except BaseException as exc:  # pragma: no cover
++            errors.append(exc)
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    try:
++        assert barrier.entered.wait(30.0), "publication never entered a batch"
++        raw_conn = reader._conn
++        assert raw_conn is not None
++        staged_ids = _staging_sessions(reader)
++        assert len(staged_ids) == 1, "the claim must be committed before the batch"
++        visible = raw_conn.execute(
++            "SELECT COUNT(*) FROM messages WHERE session_id = ?", (staged_ids[0],)
++        ).fetchone()[0]
++        assert visible == 0, "an uncommitted staging batch is observable"
++    finally:
++        barrier.release()
++        thread.join(timeout=60.0)
++        reader.close()
++    assert not errors, f"publication failed: {errors[0]!r}"
++    db.close()
++
++
++# ── D4: concurrent appends and stable ordering ─────────────────────────────
++
++
++def test_interleaved_tail_preserved_in_order_and_exactly_once(tmp_path):
++    """A tail row whose id interleaves with staged ids is relocated, once."""
++    db = _mkdb(tmp_path)
++    appender = SessionDB(tmp_path / "state.db")
++    # Pause after the claim + first staged batch, so appends land BETWEEN
++    # staged batches and their ids interleave with the remaining staged ids.
++    barrier = _PauseAfterWriteCall(db, after_calls=2)
++    replacement = _messages(200, "replacement")
++    errors: List[BaseException] = []
++
++    def publish():
++        try:
++            _publish(db, replacement)
++        except BaseException as exc:  # pragma: no cover
++            errors.append(exc)
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    tail_rows: List[Dict[str, Any]] = []
++    try:
++        assert barrier.entered.wait(30.0)
++        # Land concurrent appends WHILE the publisher still has batches to
++        # stage, so their ids interleave with the staged ids.
++        for index in range(3):
++            tail_rows.append(
++                {
++                    "role": "tool",
++                    "content": f"concurrent tail {index}",
++                    "tool_name": "read_file",
++                    "tool_call_id": f"call-tail-{index}",
++                    "reasoning": f"reasoning {index}",
++                    "api_content": f"api {index}",
++                    "display_metadata": {"index": index},
++                }
++            )
++            appender.append_message(
++                SESSION_ID,
++                role="tool",
++                content=f"concurrent tail {index}",
++                tool_name="read_file",
++                tool_call_id=f"call-tail-{index}",
++                reasoning=f"reasoning {index}",
++                api_content=f"api {index}",
++                display_metadata={"index": index},
++                tool_calls=[
++                    {
++                        "id": f"call-tail-{index}",
++                        "type": "function",
++                        "function": {"name": "read_file", "arguments": "{}"},
++                    }
++                ],
++            )
++    finally:
++        barrier.release()
++        thread.join(timeout=120.0)
++        appender.close()
++
++    assert not errors, f"publication failed: {errors[0]!r}"
++    live = _live(db)
++    assert len(live) == len(replacement) + len(tail_rows)
++    # Order: replacement -> concurrent tail, each tail row exactly once.
++    assert [m["content"] for m in live[len(replacement):]] == [
++        row["content"] for row in tail_rows
++    ]
++    for row in tail_rows:
++        assert [m["content"] for m in live].count(row["content"]) == 1
++    # Sidecars survive the relocation byte-for-byte.
++    relocated = live[len(replacement):]
++    assert [m["reasoning"] for m in relocated] == ["reasoning 0", "reasoning 1", "reasoning 2"]
++    assert [m["api_content"] for m in relocated] == ["api 0", "api 1", "api 2"]
++    assert [m["display_metadata"] for m in relocated] == [
++        {"index": 0},
++        {"index": 1},
++        {"index": 2},
++    ]
++    # The originals are recoverable but not duplicated into the live view.
++    hidden = db._conn.execute(
++        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND active = 0 "
++        "AND compacted = 0 AND content LIKE 'concurrent tail%'",
++        (SESSION_ID,),
++    ).fetchone()[0]
++    assert hidden == len(tail_rows), "relocated originals were not hidden"
++    counters = _counters(db)
++    assert counters["message_count"] == len(replacement) + len(tail_rows)
++    assert counters["tool_call_count"] == len(replacement) + len(tail_rows)
++    db.close()
++
++
++def test_unrelocated_tail_keeps_its_rows_and_order(tmp_path):
++    """Tail rows above the last staged id stay in place (active, same ids)."""
++    db = _mkdb(tmp_path)
++    appender = SessionDB(tmp_path / "state.db")
++    _publish(db, _messages(80, "replacement"))
++    appended = appender.append_message(SESSION_ID, role="user", content="after-publish")
++    live = _live(db)
++    assert len(live) == 80 + 1
++    assert live[-1]["content"] == "after-publish"
++    row = db._conn.execute(
++        "SELECT active, compacted FROM messages WHERE id = ?", (appended,)
++    ).fetchone()
++    assert (row["active"], row["compacted"]) == (1, 0)
++    appender.close()
++    db.close()
++
++
++def test_tail_relocation_counts_parsed_tool_calls(tmp_path):
++    """A relocated row's stored multi-call payload keeps its exact count."""
++    db = _mkdb(tmp_path)
++    appender = SessionDB(tmp_path / "state.db")
++    barrier = _PauseAfterWriteCall(db, after_calls=2)
++
++    def publish():
++        _publish(db, _messages(120, "replacement"))
++
++    thread = threading.Thread(target=publish)
++    thread.start()
++    try:
++        assert barrier.entered.wait(30.0)
++        appender.append_message(
++            SESSION_ID,
++            role="assistant",
++            content="",
++            tool_calls=[
++                {"id": "a", "type": "function", "function": {"name": "x"}},
++                {"id": "b", "type": "function", "function": {"name": "y"}},
++            ],
++        )
++    finally:
++        barrier.release()
++        thread.join(timeout=60.0)
++        appender.close()
++
++    counters = _counters(db)
++    assert counters["message_count"] == 121
++    # 120 single-call replacement rows + one relocated two-call row.
++    assert counters["tool_call_count"] == 122
++    db.close()
++
++
++def test_bounded_conflict_under_continuous_tail_activity(tmp_path):
++    """A permanently moving tail exits as an explicit conflict, losing nothing."""
++    db = _mkdb(tmp_path)
++    appender = SessionDB(tmp_path / "state.db")
++    before = [m["content"] for m in _live(db)]
++    original_scan = SessionDB._read_interleaved_tail_ids
++    calls = {"n": 0}
++
++    def always_moving(self, target, lower, upper):
++        calls["n"] += 1
++        return original_scan(self, target, lower, upper)
++
++    # Every validation round sees brand-new interleaved rows: nothing settles.
++    def scan_and_append(self, target, lower, upper):
++        calls["n"] += 1
++        appender.append_message(SESSION_ID, role="user", content=f"churn {calls['n']}")
++        return [
++            row[0]
++            for row in self._conn.execute(
++                "SELECT id FROM messages WHERE session_id = ? AND active = 1 "
++                "AND id > ? ORDER BY id",
++                (SESSION_ID, lower),
++            ).fetchall()
++        ]
++
++    SessionDB._read_interleaved_tail_ids = scan_and_append
++    try:
++        with pytest.raises(PublicationConflictError):
++            _publish(db, _messages(120, "replacement"))
++    finally:
++        SessionDB._read_interleaved_tail_ids = original_scan
++
++    assert calls["n"] <= COMPACTION_PUBLICATION_MAX_ROUNDS + 1
++    # Every committed append survives; the original transcript is still there.
++    remaining = [m["content"] for m in _live(db)]
++    for content in before:
++        assert content in remaining, "original transcript row was lost"
++    appended = db._conn.execute(
++        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND content LIKE 'churn %'",
++        (SESSION_ID,),
++    ).fetchone()[0]
++    assert appended >= 1, "committed appends were lost on the conflict path"
++    assert _marker(db) is None, "conflict left a publication marker behind"
++    assert not _staging_sessions(db), "conflict left a staging session behind"
++    appender.close()
++    db.close()
++
++
++# ── D5: one atomic cutover, version-fenced ─────────────────────────────────
++
++
++def test_external_commit_between_validation_and_begin_is_fenced(tmp_path):
++    """An external commit must never slip between validation and publication."""
++    db = _mkdb(tmp_path)
++    other = SessionDB(tmp_path / "state.db")
++    original_version = db._read_data_version
++    state = {"calls": 0, "injected": False}
++
++    def version_with_external_commit(conn=None):
++        state["calls"] += 1
++        if state["calls"] == 2 and not state["injected"]:
++            # Between the pre-validation version read and the post-validation
++            # one: exactly the window the fence exists for. The publisher holds
++            # no transaction here, so this is a real external commit.
++            state["injected"] = True
++            other.append_message(SESSION_ID, role="user", content="external commit")
++        return original_version(conn)
++
++    db._read_data_version = version_with_external_commit
++    try:
++        published = _publish(db, _messages(200, "replacement"))
++    finally:
++        db._read_data_version = original_version
++
++    assert state["injected"], "the external commit was never injected"
++    assert published >= 200
++    contents = [m["content"] for m in _live(db)]
++    assert "external commit" in contents, "the external append was lost"
++    assert contents.count("external commit") == 1, "the external append was duplicated"
++    other.close()
++    db.close()
++
++
++def test_cutover_failure_rolls_back_and_leaves_target_intact(tmp_path):
++    """A failing cutover must not publish anything or damage the old view."""
++    db = _mkdb(tmp_path)
++    old_live = _live(db)
++    old_counters = _counters(db)
++    db.create_session(OTHER_SESSION, source="tui")
++    db.append_messages_batch(OTHER_SESSION, _messages(3, "unrelated"))
++
++    original_merge = SessionDB._merge_model_config_json
++
++    def failing_merge(*args, **kwargs):
++        raise RuntimeError("ts382 injected cutover failure")
++
++    SessionDB._merge_model_config_json = failing_merge
++    try:
++        with pytest.raises(RuntimeError, match="injected cutover failure"):
++            _publish(
++                db,
++                _messages(150, "replacement"),
++                model_config_patch={MODEL_KEY: 1},
++            )
++    finally:
++        SessionDB._merge_model_config_json = original_merge
++
++    assert _live(db) == old_live, "visible transcript changed after a failed cutover"
++    assert _counters(db) == old_counters, "counters changed after a failed cutover"
++    assert not db.search_messages("replacement"), "failed publication text is searchable"
++    assert _marker(db) is None, "failed publication left its marker behind"
++    assert not _staging_sessions(db), "failed publication left staging rows behind"
++    assert [m["content"] for m in _live(db, OTHER_SESSION)] == [
++        m["content"] for m in _messages(3, "unrelated")
++    ]
++    db.close()
++
++
++def test_preparation_failure_creates_nothing(tmp_path):
++    db = _mkdb(tmp_path)
++    old_live = _live(db)
++    original_prepare = SessionDB._prepare_message_row
++
++    def failing_prepare(self, msg, now_ts):
++        if msg.get("content", "").startswith("boom"):
++            raise RuntimeError("ts382 injected preparation failure")
++        return original_prepare(self, msg, now_ts)
++
++    SessionDB._prepare_message_row = failing_prepare
++    try:
++        with pytest.raises(RuntimeError, match="injected preparation failure"):
++            _publish(db, [_message(0, "fine"), _message(1, "boom")])
++    finally:
++        SessionDB._prepare_message_row = original_prepare
++
++    assert _live(db) == old_live
++    assert _marker(db) is None
++    assert not _staging_sessions(db)
++    db.close()
++
++
++def test_cleanup_failure_retains_a_typed_marker_and_the_original_error(tmp_path):
++    db = _mkdb(tmp_path)
++    old_live = _live(db)
++    original_delete = SessionDB._delete_publication_rows
++    original_insert = db._insert_message_rows
++
++    def failing_delete(self, stage, batch_rows=COMPACTION_PUBLICATION_BATCH_ROWS):
++        raise RuntimeError("ts382 injected cleanup failure")
++
++    def failing_insert(conn, session_id, messages):
++        raise RuntimeError("ts382 injected staging failure")
++
++    db._insert_message_rows = failing_insert
++    SessionDB._delete_publication_rows = failing_delete
++    try:
++        with pytest.raises(RuntimeError, match="injected staging failure"):
++            _publish(db, _messages(5, "replacement"))
++    finally:
++        db._insert_message_rows = original_insert
++        SessionDB._delete_publication_rows = original_delete
++
++    assert _live(db) == old_live, "a failed publication changed the live transcript"
++    marker = _marker(db)
++    assert marker is not None, "cleanup failure lost the generation identity"
++    assert marker.get("phase") == "cleanup_failed"
++    # The identifiable generation is reclaimable once its owner is gone.
++    db._execute_write(
++        lambda conn: conn.execute(
++            "UPDATE state_meta SET value = ? WHERE key = ?",
++            (
++                json.dumps({**marker, "expires_at": 0.0}, sort_keys=True),
++                _publication_marker_key(SESSION_ID),
++            ),
++        )
++    )
++    assert _publish(db, _messages(10, "after-reclaim")) == 10
++    assert _marker(db) is None
++    assert not _staging_sessions(db)
++    db.close()
++
++
++# ── D1/D6: ownership, reclamation, leases ──────────────────────────────────
++
++
++def test_concurrent_live_publisher_is_excluded(tmp_path):
++    db = _mkdb(tmp_path)
++    old_live = _live(db)
++    stage = f"{COMPACTION_STAGING_SESSION_PREFIX}other-live"
++    _seed_marker(
++        db,
++        owner=f"pid={__import__('os').getpid()}:other:compaction-publication:abc",
++        expires_at=time.time() + 300.0,
++        stage=stage,
++        staged_rows=2,
++    )
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT INTO sessions (id, source, started_at, message_count, "
++            "tool_call_count, model_config, hidden, archived) "
++            "VALUES (?, ?, ?, 0, 0, NULL, 1, 1)",
++            (stage, COMPACTION_STAGING_SESSION_SOURCE, time.time()),
++        )
++    )
++    with pytest.raises(PublicationConflictError):
++        _publish(db, _messages(10, "replacement"))
++    assert _live(db) == old_live
++    assert _marker(db) is not None, "a live owner's marker was stolen"
++    db.close()
++
++
++def test_expired_owner_is_reclaimed_lazily_with_bounded_cleanup(tmp_path):
++    db = _mkdb(tmp_path)
++    stale_stage = f"{COMPACTION_STAGING_SESSION_PREFIX}stale"
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT INTO sessions (id, source, started_at, message_count, "
++            "tool_call_count, model_config, hidden, archived) "
++            "VALUES (?, ?, ?, 0, 0, NULL, 1, 1)",
++            (stale_stage, COMPACTION_STAGING_SESSION_SOURCE, time.time()),
++        )
++    )
++    with db._lock:
++        db._conn.execute("BEGIN IMMEDIATE")
++        for index in range(5):
++            db._conn.execute(
++                "INSERT INTO messages (session_id, role, content, timestamp, active, compacted) "
++                "VALUES (?, 'user', ?, ?, 0, 0)",
++                (stale_stage, f"stale {index}", time.time()),
++            )
++        db._conn.commit()
++    _seed_marker(
++        db,
++        owner="pid=999999:crashed:compaction-publication:dead",
++        expires_at=time.time() - 1.0,
++        stage=stale_stage,
++        staged_rows=5,
++    )
++
++    assert _publish(db, _messages(20, "replacement")) == 20
++    assert db._conn.execute(
++        "SELECT COUNT(*) FROM messages WHERE session_id = ?", (stale_stage,)
++    ).fetchone()[0] == 0
++    assert stale_stage not in _staging_sessions(db)
++    assert _marker(db) is None
++    assert len(_live(db)) == 20
++    db.close()
++
++
++def test_malformed_marker_is_a_conflict_not_adopted(tmp_path):
++    db = _mkdb(tmp_path)
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT INTO state_meta(key, value) VALUES (?, ?) "
++            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
++            (_publication_marker_key(SESSION_ID), "{not json"),
++        )
++    )
++    with pytest.raises(PublicationConflictError):
++        _publish(db, _messages(10, "replacement"))
++    db.close()
++
++
++def test_known_holder_must_still_own_the_compression_lease(tmp_path):
++    db = _mkdb(tmp_path)
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT OR REPLACE INTO compression_locks "
++            "(session_id, holder, acquired_at, expires_at) VALUES (?, ?, ?, ?)",
++            (SESSION_ID, "pid=1:other:compressor", time.time(), time.time() + 300.0),
++        )
++    )
++    with pytest.raises(Exception) as excinfo:
++        _publish(db, _messages(20, "replacement"), known_holder="pid=1:mine:compressor")
++    assert "another writer" in str(excinfo.value) or "lease" in str(excinfo.value)
++    assert _live(db) and len(_live(db)) == 6, "publication proceeded under a foreign lease"
++    assert _marker(db) is None
++    db.close()
++
++
++def test_publication_never_steals_or_extends_the_native_lease(tmp_path):
++    db = _mkdb(tmp_path)
++    holder = "pid=1:mine:compressor"
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT OR REPLACE INTO compression_locks "
++            "(session_id, holder, acquired_at, expires_at) VALUES (?, ?, ?, ?)",
++            (SESSION_ID, holder, 100.0, time.time() + 300.0),
++        )
++    )
++    before = db._conn.execute(
++        "SELECT holder, acquired_at, expires_at FROM compression_locks WHERE session_id = ?",
++        (SESSION_ID,),
++    ).fetchone()
++    assert _publish(db, _messages(20, "replacement"), known_holder=holder) == 20
++    after = db._conn.execute(
++        "SELECT holder, acquired_at, expires_at FROM compression_locks WHERE session_id = ?",
++        (SESSION_ID,),
++    ).fetchone()
++    assert tuple(before) == tuple(after), "publication touched the native lease"
++    db.close()
++
++
++# ── preservation: archive/search/counters/config/rewind ────────────────────
++
++
++def test_publication_preserves_archive_search_and_config_semantics(tmp_path):
++    db = _mkdb(tmp_path)
++    db.create_session(OTHER_SESSION, source="tui")
++    db.append_messages_batch(OTHER_SESSION, _messages(3, "unrelated", tool=False))
++    second_row_id = db._conn.execute(
++        "SELECT id FROM messages WHERE session_id = ? ORDER BY id LIMIT 1 OFFSET 1",
++        (OTHER_SESSION,),
++    ).fetchone()[0]
++    db.rewind_to_message(OTHER_SESSION, second_row_id)
++    rewind_before = db.get_messages(OTHER_SESSION, include_inactive=True)
++    db._execute_write(
++        lambda conn: conn.execute(
++            "UPDATE sessions SET model_config = ? WHERE id = ?",
++            (json.dumps({"keep": "value", MODEL_KEY: "old"}), SESSION_ID),
++        )
++    )
++    replacement = _messages(40, "new-needle")
++    assert (
++        db.archive_and_compact(
++            SESSION_ID, replacement, model_config_patch={MODEL_KEY: None}
++        )
++        == 40
++    )
++    config = json.loads(
++        db._conn.execute(
++            "SELECT model_config FROM sessions WHERE id = ?", (SESSION_ID,)
++        ).fetchone()[0]
++    )
++    assert config == {"keep": "value"}, "None patch value did not remove its key"
++    assert db.search_messages("new-needle"), "published rows are not searchable"
++    assert db.search_messages("old tool"), "archived prefix lost discoverability"
++    archived = db._conn.execute(
++        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND active = 0 AND compacted = 1",
++        (SESSION_ID,),
++    ).fetchone()[0]
++    assert archived == 6
++    assert db.get_messages(OTHER_SESSION, include_inactive=True) == rewind_before, (
++        "unrelated rewind rows were touched"
++    )
++    assert db._conn.execute(
++        "SELECT COUNT(*) FROM messages WHERE session_id = ? AND active = 0 AND compacted = 0",
++        (OTHER_SESSION,),
++    ).fetchone()[0] == 2, "a rewind row was swept by cleanup"
++    db.close()
++
++
++def test_row_ids_are_stamped_only_after_a_successful_publication(tmp_path):
++    db = _mkdb(tmp_path)
++    messages = _messages(12, "replacement")
++    assert all("_row_id" not in message for message in messages)
++    _publish(db, messages)
++    assert all(isinstance(message.get("_row_id"), int) for message in messages)
++    db_ids = {
++        row[0]
++        for row in db._conn.execute(
++            "SELECT id FROM messages WHERE session_id = ? AND active = 1",
++            (SESSION_ID,),
++        ).fetchall()
++    }
++    assert {message["_row_id"] for message in messages} == db_ids, (
++        "stamped row ids do not match the published rows"
++    )
++
++    failing = _messages(4, "boom")
++    original_prepare = SessionDB._prepare_message_row
++
++    def failing_prepare(self, msg, now_ts):
++        raise RuntimeError("ts382 injected preparation failure")
++
++    SessionDB._prepare_message_row = failing_prepare
++    try:
++        with pytest.raises(RuntimeError):
++            _publish(db, failing)
++    finally:
++        SessionDB._prepare_message_row = original_prepare
++    assert all("_row_id" not in message for message in failing)
++    db.close()
++
++
++def test_no_new_tables_columns_or_schema_version(tmp_path):
++    db = _mkdb(tmp_path)
++    before = db._conn.execute(
++        "SELECT type, name, sql FROM sqlite_master ORDER BY name"
++    ).fetchall()
++    version_before = db._conn.execute("PRAGMA user_version").fetchone()[0]
++    _publish(db, _messages(30, "replacement"))
++    after = db._conn.execute(
++        "SELECT type, name, sql FROM sqlite_master ORDER BY name"
++    ).fetchall()
++    assert [tuple(r) for r in before] == [tuple(r) for r in after], (
++        "the publication changed the schema"
++    )
++    assert db._conn.execute("PRAGMA user_version").fetchone()[0] == version_before
++    db.close()
++
++
++# ── caller propagation contract ────────────────────────────────────────────
++
++
++def test_micro_compaction_caller_inherits_bound_and_stamps_only_on_success(tmp_path):
++    """The unconfigured micro-compaction sync is a publication caller too.
++
++    It must inherit the bounded writer (several short transactions, not one
++    unbounded rewrite) and stamp ``_DB_PERSISTED_MARKER`` only after the
++    publication actually succeeded.
++    """
++    from agent.context_compressor import ContextCompressor, _DB_PERSISTED_MARKER
++
++    db = _mkdb(tmp_path)
++    compressor = ContextCompressor(
++        model="test-model",
++        threshold_percent=0.75,
++        protect_first_n=1,
++        protect_last_n=2,
++        quiet_mode=True,
++        config_context_length=40960,
++        provider="test",
++    )
++    compressor._session_db = db
++    compressor._session_id = SESSION_ID
++    compacted = _messages(300, "micro")
++
++    calls = {"n": 0}
++    original = db._execute_write
++
++    def counting(fn, patience_s=None):
++        calls["n"] += 1
++        return original(fn, patience_s=patience_s)
++
++    db._execute_write = counting
++    compressor._sync_micro_compact_to_db(compacted)
++    db._execute_write = original
++    assert calls["n"] >= 3, "micro-compaction sync did not use the bounded writer"
++    assert all(message.get(_DB_PERSISTED_MARKER) for message in compacted), (
++        "successful publication did not stamp the persisted markers"
++    )
++    assert len(_live(db)) == 300
++
++    # Failure path: no marker may be stamped and the live view stays intact.
++    failing = _messages(10, "micro-failure")
++    original_insert = db._insert_message_rows
++
++    def failing_insert(conn, session_id, messages):
++        raise RuntimeError("ts382 injected staging failure")
++
++    db._insert_message_rows = failing_insert
++    try:
++        compressor._sync_micro_compact_to_db(failing)
++    finally:
++        db._insert_message_rows = original_insert
++    assert not any(message.get(_DB_PERSISTED_MARKER) for message in failing), (
++        "a failed publication stamped the persisted markers"
++    )
++    assert len(_live(db)) == 300
++    assert _marker(db) is None
++    db.close()
++
++
++def test_invoke_archive_and_compact_feature_detects_private_context(tmp_path):
++    db = _mkdb(tmp_path)
++    holder = "pid=1:mine:compressor"
++    db._execute_write(
++        lambda conn: conn.execute(
++            "INSERT OR REPLACE INTO compression_locks "
++            "(session_id, holder, acquired_at, expires_at) VALUES (?, ?, ?, ?)",
++            (SESSION_ID, holder, time.time(), time.time() + 300.0),
++        )
++    )
++    calls: List[Dict[str, Any]] = []
++    original = db.archive_and_compact
++
++    def recording(session_id, messages, model_config_patch=None, **kwargs):
++        calls.append(kwargs)
++        return original(
++            session_id, messages, model_config_patch=model_config_patch, **kwargs
++        )
++
++    db.archive_and_compact = recording
++    invoke_archive_and_compact(
++        db,
++        SESSION_ID,
++        _messages(8, "replacement"),
++        model_config_patch={"k": 1},
++        known_holder=holder,
++    )
++    assert calls and calls[0].get("known_holder") == holder
++
++    class DuckStore:
++        def __init__(self):
++            self.seen: Dict[str, Any] = {}
++
++        def archive_and_compact(self, session_id, messages, model_config_patch=None):
++            self.seen = {"model_config_patch": model_config_patch}
++            return len(messages)
++
++    duck = DuckStore()
++    assert (
++        invoke_archive_and_compact(
++            duck,
++            "s",
++            [{"role": "user"}],
++            model_config_patch={"k": 1},
++            known_holder="pid=1:mine:compressor",
++            snapshot=PublicationSnapshot("s", 0, 0, "d", True),
++        )
++        == 1
++    )
++    assert duck.seen == {"model_config_patch": {"k": 1}}, (
++        "a duck-typed store received arguments it does not accept"
++    )
++    db.close()

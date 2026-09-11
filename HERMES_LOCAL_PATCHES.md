@@ -44,6 +44,9 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-362` | `#362` | initial independent review requires a different reviewer; self-review and legacy reviewer-null claims fail closed | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-293/306` | `#293`, `#306` | generic local-gateway metadata is parsed by response shape and preserves advertised context windows | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-296/303` | `#296`, `#303` | auxiliary Chat-only negotiation and fallback attribution preserve existing request/auth boundaries | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-275` | `#275` | auxiliary vision applies the existing embed cap before the first request; oversized inputs are prepared by the existing resizer with scale disclosure, and within-cap bytes stay exact | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-382` | `#382` | transcript publication stages bounded batches in the existing store and publishes with one metadata-only cutover, so concurrent appends are never starved and staging rows stay invisible | upstream PR `#100273` closed unmerged at contract inspection; no landed equivalent | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-389` | `#389` | quoted interpreter heredoc data is not promoted to an executable shell reference; direct lifecycle detection and referenced real scripts remain enforced | current upstream reproduces the false positive and loses one direct control the maintained source retains | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
 ## HLP-188 — sticky `initial_status=blocked`
 
@@ -515,3 +518,47 @@ These entries record independently reviewed source for Objective Contract `oc_dd
 - **Retirement gate:** An adopted exact Hermes release provides equivalent negotiation and attribution behavior with the same boundary tests.
 
 The #349 tests-only commit `59ee7d05a7b67d52dbbfa95b6b2ced57ec6df20e` corrected stale trace instrumentation without changing product FTS source, so it is recorded in `ABR-349.md` and the fork ledger but is not an active downstream behavior patch.
+
+## HLP-275 — proactive auxiliary-image preparation
+
+- **Reason:** the auxiliary vision path in `tools/vision_tools.py` did not apply the embed cap the native path already uses, so a small-byte, extremely tall image reached the provider oversized and was rejected with a generic HTTP 400 decode-limit error; the reactive size classifier cannot fire on a generic detail for a small payload, so the failure was unrecoverable in-process.
+- **Primary active files:**
+  - `tools/vision_tools.py`
+  - `tests/tools/test_vision_aux_image_prep.py`
+- **Local evidence:** `specs/006-tools-memory-stability/evidence/TS-275-research.md` (route qualification, approved round 3 at `9245d435410eb23cf5a2f0fd29add94cc8c1f20e`), `TS-275.md` (candidate `780a6f6c7550cb6202069a1f8821fe4d4d785633`, approved round 1), and design decisions `TS-275-design.md` V1-V5. PRE reproduced the decode-limit rejection on the untouched runtime revision; POST through the provisioned route returned `success:true` with the image-only token read, one attempt, scale disclosed.
+- **Portable artifact:** `patches/hermes/HLP-275-aux-image-prep-cap.patch`, SHA-256 `10a964f82d9ad5818105cd052ce71febd50d91e8c1e99f171e2464b1b2887f0e`. Applies cleanly to the fork base.
+- **Upstream:** no equivalent at contract inspection; upstream prepares the auxiliary payload the same way and rejects the same oversized input.
+- **Rollback:** revert fork commit `780a6f6c7550cb6202069a1f8821fe4d4d785633`. The change is one guarded preparation block plus its focused test module; do not restore unrelated regions of `vision_tools.py`.
+- **Retirement gate:** an adopted exact Hermes release either accepts the oversized auxiliary input or applies an equivalent proactive cap (encoded-data/embedded-dimension) while preserving within-cap byte fidelity, verified with the same pre/post oracle.
+- **Activation:** adopted into the live editable runtime (file SHA-256 `b09720eab0e9994c4b47c25f81cb204f52df73b3d8e2f6ece03c3d668cb77491`). End-to-end image interpretation through the provisioned route is currently blocked by a separate routing/product condition documented in `specs/006-tools-memory-stability/evidence.md`; issue #275 remains open.
+
+## HLP-382 — bounded, atomic transcript publication
+
+- **Reason:** `archive_and_compact` published a rewritten transcript inside one `BEGIN IMMEDIATE` transaction that re-inserted every row with per-row legacy FTS triggers firing, holding SessionDB's single write lock for the whole rewrite. A concurrent transcript append exhausted its patience budget and surfaced as the product's storage-busy/session-persistence failure.
+- **Primary active files:**
+  - `hermes_state.py`
+  - `hermes_state_common.py`
+  - `hermes_state_compaction.py` (new focused module)
+  - `hermes_state_search.py`
+  - `agent/conversation_compression.py`
+  - `pyproject.toml`
+  - `tests/state/test_compaction_publication.py`
+- **Local evidence:** causal qualification `specs/006-tools-memory-stability/evidence/TS-382-research.md` (approved `26f0a885287cb380d12c92d13ede992f2dcd6f7c`), implementation `evidence/TS-382.md` (candidate `72890d48304fb61b88dc00ed6ab4749a505ed20a`, approved round 2), and design decisions `TS-382-design.md` D1-D7. The unchanged oracle is deterministically RED at fork base `266e412f` (2 failed / 8 passed; longest publication hold 1.917 s against a 1.0 s budget) and green on the candidate.
+- **Portable artifact:** `patches/hermes/HLP-382-bounded-transcript-publication.patch`, SHA-256 `84fe697c314544f725bace1eb260647ec7dd9b8787d33409e958e0c5e31a7ff3`. Applies cleanly to the fork base.
+- **Upstream:** upstream pull request `#100273` proposed staged compaction but was closed unmerged at contract inspection and is a hypothesis source only; no landed equivalent.
+- **Rollback:** revert fork commits `72890d48304fb61b88dc00ed6ab4749a505ed20a` and `c13ff2b9b6` and delete `hermes_state_compaction.py`. Do not restore whole state modules.
+- **Retirement gate:** an adopted exact Hermes release bounds the publication critical section with equivalent visibility, ownership, ordering, counters and rollback semantics and passes the unchanged oracle plus the design's D7 fault-injection matrix.
+- **Activation:** adopted into the live editable runtime (`hermes_state.py` `d8b454178867158036a1e0d95053c4a1948966423bc0d41d7763a7d6d9373f8b`, `hermes_state_compaction.py` `4065f688b97823a6b9933873765453d4c4c967bd34b2afa9c335230ed5f05bc7`). Canary oracle 10/10 passed twice on the adopted tree; live database untouched.
+
+## HLP-389 — quoted interpreter heredoc data is not an executable reference
+
+- **Reason:** the referenced-script walker treated a path appearing inside a well-formed quoted Python heredoc body as a standalone executable, so reading a log that contained lifecycle-looking text was blocked even though the direct lifecycle scan found nothing. Upstream additionally loses one direct Python lifecycle-source control the maintained source retains, so a blind cherry-pick is rejected.
+- **Primary active files:**
+  - `cron/lifecycle_guard.py`
+  - `tests/tools/test_lifecycle_guard_heredoc_data.py`
+- **Local evidence:** `specs/006-tools-memory-stability/evidence/TS-389.md` (candidate `6c96428f640d1405a8f34d8619ac6d6378cb53c0`, approved round 1). Causal RED reproduced from an independently archived base tree (exactly 6 failed / 17 passed, failures = the acceptance cases); control matrix 19 required controls with 0 mismatches, only the harmless reader cases flipping block→allow.
+- **Portable artifact:** `patches/hermes/HLP-389-heredoc-data-vs-executable.patch`, SHA-256 `5806cb304a2520055b1d2954e89220fdb4a0bc32f86edb8484672583c23e05d3`. Applies cleanly to the fork base.
+- **Upstream:** current upstream `NousResearch/hermes-agent@2ddeba9e17a1df5471802481e3efef20885a20b2` reproduces the false positive and does not retain the direct Python-source control; no equivalent.
+- **Rollback:** revert fork commit `6c96428f640d1405a8f34d8619ac6d6378cb53c0` (`cron/lifecycle_guard.py` plus the new focused test module).
+- **Retirement gate:** an adopted exact Hermes release provides a syntax-aware reference walk that accepts inert interpreter heredoc data while still blocking direct lifecycle commands and referenced real scripts, verified with the same control matrix.
+- **Activation:** adopted into the live editable runtime (`cron/lifecycle_guard.py` SHA-256 `7789323846a406fa708434580b2b0201aa0f195572ffe444b607879080c81a74`). Runtime canary: the harmless Python log-read path is accepted while a direct restart and a referenced real script remain blocked (pre-fix base blocks the harmless path).

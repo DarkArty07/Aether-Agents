@@ -58,3 +58,35 @@ Supervisor/Implementer append evidence for the two causal gates here, attributed
 exact source/candidate revision and real versus synthetic producer. Morfeo owns any
 resulting material design decision in plan.md. Do not replace recorded unknowns with
 plausible narratives or call a diagnostic outcome an issue fix.
+
+## Research results appended by the execution pipeline
+
+**TS-382 causal result (U382R, approved `26f0a885287cb380d12c92d13ede992f2dcd6f7c`).** The
+starvation class is unbounded transcript publication: `archive_and_compact` re-inserted the
+whole rewritten transcript inside one `BEGIN IMMEDIATE` transaction while legacy FTS triggers
+fired per row, so a concurrent append exhausted its patience budget. Reproduced
+deterministically with the unchanged oracle at fork base `266e412fb83ad32af92ed391db942f88993d76a2`
+(2 failed / 8 passed twice; longest publication hold 1.917 s against the 1.0 s fixture
+budget). The historical holder identity remains unavailable and is not invented. Morfeo's
+recorded design (`TS-382-design.md` D1-D7) and the repaired candidate are recorded in
+`evidence/TS-382.md`; the full repair acceptance is separate from this research outcome.
+
+**TS-275 route result (U275R, approved `9245d435410eb23cf5a2f0fd29add94cc8c1f20e`).** The
+effective auxiliary branch was resolved from the live role configuration and the real
+invocations established that the provisioned route **could** interpret image-only content at
+that time: the tall image was rejected pre-fix with a decode-limit error and prepared
+post-fix, and the three tokens `QUARTZ-77` / `MARLIN-31` / `ZEPHYR-42` were read back through
+the route. The proven causal boundary was auxiliary preparation, not routing, transport or
+byte handling. Later the same day, the terminal card's own bounded calls (see `evidence.md`)
+could no longer obtain image interpretation through the same operation — including for
+controls that never touch this repair — so the end-to-end acceptance is currently blocked by
+a separate routing/product condition and issue #275 stays open.
+
+**Upstream comparison at the reconciliation revision
+`4f22543509d1b91dc45bcb369447126c5eb14fb7` (Supervisor-observed).** Referenced-script
+discovery still receives the raw command, so upstream reproduces the TS-389 false positive
+(verified by running the same canary against an extracted upstream tree). `archive_and_compact`
+still publishes in one write transaction at that revision, and no bounded-publication module
+exists. The auxiliary vision path does carry an equivalent proactive cap with materially
+stricter thresholds (256 KiB / 1568 px), which is why HLP-275 is recorded as an upstream
+partial rather than an upstream miss.
