@@ -6170,3 +6170,127 @@ def test_d14_preserved_prior_refusal_receipt_and_log_unchanged() -> None:
 
     assert receipt_sha == "eb2f3ad3fda8ffb1e5439ad2d26694aec0d97f468bab5aa49dcd065afea94578"
     assert log_sha == "5a9ca1fe13d358a44d6907d5d23d99b1e599f70c0087f2eb6fc0d77ff774fdaa"
+
+
+# --- D14R Production module chain resolution and stale mapping refusal tests ---
+
+
+def _write_stale_mapping_native_tree(root: Path) -> Path:
+    """Materialize a native tree where hermes_state cannot be imported early.
+
+    Simulates the stale editable-install mapping: importing hermes_state directly fails with
+    ModuleNotFoundError unless cron.scheduler_provider was imported first.
+    """
+    native_root = _write_chain_native_tree(root)
+    hs = native_root / "hermes_state.py"
+    original_hs = hs.read_text(encoding="utf-8")
+    hs.write_text(
+        "import sys\n"
+        'if "_HERMES_BOOTSTRAPPED" not in sys.modules:\n'
+        "    raise ModuleNotFoundError(\"No module named 'hermes_state_compaction'\")\n"
+        + original_hs,
+        encoding="utf-8",
+    )
+
+    cron_sp = native_root / "cron" / "scheduler_provider.py"
+    original_sp = cron_sp.read_text(encoding="utf-8")
+    cron_sp.write_text(
+        "import sys\nsys.modules['_HERMES_BOOTSTRAPPED'] = True\n" + original_sp,
+        encoding="utf-8",
+    )
+    return native_root
+
+
+def test_d14r_stale_mapping_reproduction_refuses_at_preflight_before_lab_created(
+    tmp_path: Path,
+) -> None:
+    """Stale mapping is refused at the read-only preflight before laboratory creation."""
+    native_root = _write_stale_mapping_native_tree(tmp_path / "native")
+    profile, environment = _chain_context(tmp_path, native_root)
+
+    facts = _run_chain_driver(tmp_path, environment, profile)
+
+    assert "driver_error" not in facts, facts
+    # Refusal happens in read-only preflight:
+    assert any("fixture-imports" in p for p in facts["phase1_problems"])
+    assert any("writer-interface-missing" in p for p in facts["phase1_problems"])
+    assert facts["root_after_phase1"] is False
+    # Laboratory root was never created:
+    assert facts.get("created", False) is False
+    assert not (tmp_path / "lab-host").exists()
+    assert facts["reached_fixture"] is False
+    assert facts["reached_transition"] is False
+
+
+def test_d14r_in_lab_gate_exercises_fixture_import_order_unmasked_by_cron(
+    tmp_path: Path,
+) -> None:
+    """The in-laboratory gate exercises fixture import order and is not masked by cron."""
+    q = _qualification_module()
+    native_root = _write_stale_mapping_native_tree(tmp_path / "native")
+    _, environment = _chain_context(tmp_path, native_root)
+
+    lab_root = tmp_path / "lab-root"
+    lab_root.mkdir()
+    isolated = q._lab_destination(
+        Path(sys.executable), environment=dict(environment), lab_root=lab_root
+    )
+
+    problems = isolated.get("problems", [])
+    assert any("fixture-imports" in p for p in problems)
+    assert any("writer-interface-missing:hermes_state.SessionDB" in p for p in problems)
+
+
+def test_d14r_preflight_refuses_missing_hermes_state_writer_surface(
+    tmp_path: Path,
+) -> None:
+    """Preflight refuses missing SessionDB writer methods before lab creation."""
+    native_root = _write_chain_native_tree(tmp_path / "native", drop="create_session")
+    profile, environment = _chain_context(tmp_path, native_root)
+
+    facts = _run_chain_driver(tmp_path, environment, profile)
+
+    assert "driver_error" not in facts, facts
+    assert facts["phase1_problems"] == [
+        "provisioned-writer-interface-missing:hermes_state.SessionDB.create_session"
+    ]
+    assert facts["root_after_phase1"] is False
+    assert facts.get("created", False) is False
+    assert not (tmp_path / "lab-host").exists()
+
+
+def test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway() -> None:
+    """_LAB_NATIVE_PROBE imports fixture chain before cron and gateway."""
+    q = _qualification_module()
+    body = q._LAB_NATIVE_PROBE
+
+    state_pos = body.find("from hermes_state import SessionDB")
+    cron_pos = body.find("from cron.scheduler_provider import InProcessCronScheduler")
+    gw_pos = body.find("load_gateway_config()")
+
+    assert state_pos != -1, "from hermes_state import SessionDB missing from probe body"
+    assert cron_pos != -1, "InProcessCronScheduler missing from probe body"
+    assert gw_pos != -1, "load_gateway_config missing from probe body"
+    assert state_pos < cron_pos, "fixture import chain must precede cron imports"
+    assert state_pos < gw_pos, "fixture import chain must precede gateway config"
+
+
+def test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged() -> None:
+    """The preserved v3 failure receipt and console log match recorded SHA-256 digests."""
+    env_dir = os.environ.get("AETHER_TELEGRAM_MONITOR_EVIDENCE_DIR", "").strip()
+    evidence_dir = (
+        Path(env_dir)
+        if env_dir
+        else Path.home() / ".local" / "qualification" / "telegram-monitor-evidence"
+    )
+    receipt = evidence_dir / "telegram-monitor-live-v3.json"
+    console_log = evidence_dir / "live-run-v3-console.log"
+
+    if not evidence_dir.is_dir() or not receipt.is_file() or not console_log.is_file():
+        pytest.skip("preserved v3 failed qualification evidence not available on this machine")
+
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    console_sha = hashlib.sha256(console_log.read_bytes()).hexdigest()
+
+    assert receipt_sha == "c23096fe793fd2263a2f59525b23799729b64eb3f61b9803932ae9b9496b79e8"
+    assert console_sha == "a6046560aedbdc6d47d209010baa2e9c63ee1ae66c8a841f274a88347e81189d"

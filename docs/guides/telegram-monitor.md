@@ -284,21 +284,23 @@ laboratory root exists, the provisioned runtime interpreter, the provisioned pro
 either the multi-profile installation root or the exact `profiles/morfeo` home to the verified
 canonical Morfeo profile, while rejecting missing, ambiguous, linked, conflicting or differently
 named candidates), the decision-only configuration, the borrowed access names, the verified child
-context, the native interfaces the lane depends on (the imported `cron` store and the native
-scheduler's own `start(stop_event, …)` signature) and the provisioned reference destination
-(resolved through Hermes' native dotenv loader before gateway config in a restricted child rooted
-at the normalized profile home, without injecting lab access into the reference probe). A refused
-layout stops here — *nothing is created and no credential is read for it* — and every gap is
-reported by name (`lab-preflight` is the bounded code; `lab-root-inside-repository`,
-`lab-root-exists`, `lab-profile`, `lab-config`, `lab-access-missing`, `lab-context-escape`,
-`provisioned-…`, `destination-missing` are its problems). The harness never invents a
-replacement trigger: if no compatible provisioned native scheduler is available, the run
+context, the exact production module chain (`hermes_state` → `SessionDB` / writer surface,
+exercising the fixture's import order before `cron` or `gateway` imports), the native interfaces
+the lane depends on (the imported `cron` store and the native scheduler's own `start(stop_event, …)`
+signature) and the provisioned reference destination (resolved through Hermes' native dotenv loader
+before gateway config in a restricted child rooted at the normalized profile home, without injecting
+lab access into the reference probe). A refused layout stops here — *nothing is created and no
+credential is read for it* — and every gap is reported by name (`lab-preflight` is the bounded code;
+`lab-root-inside-repository`, `lab-root-exists`, `lab-profile`, `lab-config`, `lab-access-missing`,
+`lab-context-escape`, `provisioned-…`, `destination-missing` are its problems). The harness never
+invents a replacement trigger: if no compatible provisioned native scheduler is available, the run
 stops with that capability gap.
 
 **The private root, then the in-laboratory gate.** The private root is created exclusively
 first, as bootstrap requires, and the loaded candidate and native interfaces are then
 resolved *inside it*: an isolated probe runs in the real laboratory child context and
-resolves the exact destination — compared with the provisioned one, so a difference is
+exercises the fixture's own import order first (before `cron` or `gateway` can mask a
+stale mapping), resolves the exact destination — compared with the provisioned one, so a difference is
 reported as `destination-drift` and refuses the run, because configuration drift invalidates
 the qualification — the native scheduler interface, and *every native writer the fixture will
 call*: presence and accepted keywords, at the funnel that validates them

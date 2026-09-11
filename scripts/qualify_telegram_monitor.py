@@ -2886,6 +2886,68 @@ for entry in (SOURCE_ROOT, SCRIPT_ROOT):
 
 payload = {"problems": [], "interfaces": {}, "destination_digest": None}
 
+
+def _resolve(qualified):
+    parts = qualified.split(".")
+    for index in range(len(parts) - 1, 0, -1):
+        try:
+            loaded = importlib.import_module(".".join(parts[:index]))
+        except Exception:  # noqa: BLE001 - an unimportable prefix is not the target
+            continue
+        target = loaded
+        for attribute in parts[index:]:
+            target = getattr(target, attribute, None)
+            if target is None:
+                return None
+        return target
+    return None
+
+
+# 1. Exercise the fixture's own import order and resolve the production module chain
+# (hermes_state -> SessionDB / writer surface) BEFORE any cron or gateway import can
+# bootstrap sys.path or mask a stale editable mapping.
+try:
+    from aether_agents.monitor import runtime as monitor_runtime
+    from aether_agents.monitor.store import MonitorStore
+    from aether_agents.observation.context import ProjectRegistry
+    from hermes_cli import kanban_db, projects_db
+    from hermes_state import SessionDB
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"fixture-imports: {type(error).__name__}")
+
+import telegram_monitor_lab as lab
+
+# Resolve the hermes_state writer surface and artifact in both preflight and laboratory
+for name, parameters in (
+    ("hermes_state.SessionDB.create_session", ("cwd", "git_repo_root", "profile_name")),
+    ("hermes_state.SessionDB.set_session_title", ()),
+):
+    target = _resolve(name)
+    if not callable(target):
+        payload["problems"].append(f"writer-interface-missing:{name}")
+        continue
+    accepted = set()
+    for candidate in (target, *(_resolve(funnel) for funnel in lab.WRITER_PARAMETER_FUNNELS.get(name, ()))):
+        if candidate is None:
+            continue
+        try:
+            accepted.update(inspect.signature(candidate).parameters)
+        except (TypeError, ValueError):
+            continue
+    for parameter in parameters:
+        if parameter not in accepted:
+            payload["problems"].append(f"writer-parameter-missing:{name}:{parameter}")
+
+try:
+    loaded = importlib.import_module("hermes_state")
+    path = Path(str(getattr(loaded, "__file__", "") or ""))
+    raw = path.read_bytes()
+    if len(raw) == 0 or len(hashlib.sha256(raw).hexdigest()) != 64:
+        payload["problems"].append("writer-artifact-missing:hermes_state")
+except Exception:  # noqa: BLE001
+    payload["problems"].append("writer-artifact-missing:hermes_state")
+
+# 2. Resolve scheduler and cron jobs (only after the fixture's module chain has been exercised)
 try:
     from cron.scheduler_provider import InProcessCronScheduler
 
@@ -2960,23 +3022,6 @@ except Exception as error:  # noqa: BLE001
     payload["problems"].append(f"destination-unavailable: {type(error).__name__}")
 
 if LAB_ROOT_JSON:
-    import telegram_monitor_lab as lab
-
-    def _resolve(qualified):
-        parts = qualified.split(".")
-        for index in range(len(parts) - 1, 0, -1):
-            try:
-                loaded = importlib.import_module(".".join(parts[:index]))
-            except Exception:  # noqa: BLE001 - an unimportable prefix is not the target
-                continue
-            target = loaded
-            for attribute in parts[index:]:
-                target = getattr(target, attribute, None)
-                if target is None:
-                    return None
-            return target
-        return None
-
     writers = {}
     for name, _required in lab.WRITER_REQUIREMENTS:
         entry = {"present": False, "parameters": []}
