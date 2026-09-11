@@ -5,7 +5,7 @@
 **Objective Contract:** `oc_f8c9fc9320587cf3@v4` (SHA-256 `765a2f48842835d91049f959defd6c3bd15cd43de9ef97da67a37d1a819bcfe0`)
 **Base commit:** `81d8cad489702fac6580aee54e3ad3fc976d7d96` (v4 breakdown on integration base `828b736745fe1cd86ef51e5620ffc1094a952c32`)
 **Candidate implementation commit:** `1d5c74e38f40dd5155c08f040d7ec6041ae91f41` (includes `369b08a`, `312fd90`)
-**Phase:** Implementer unit; **no live effect performed** — no `--live` run, model call, Telegram send, scheduler start, lab-job enable, profile/config/credential/provider mutation, runtime modification, retained-lab cleanup, push, PR or issue mutation.
+**Phase:** Implementer unit; **no live effect performed** — no `--live` run, model call, Telegram send, scheduler start, lab-job enable, profile/config/credential/provider mutation, provisioned runtime/venv modification, retained-lab cleanup, push, PR or issue mutation.
 
 ## Scope and changed paths
 
@@ -30,7 +30,7 @@
 - `specs/telegram-monitor/evidence/MON-D16.md`
   - This bounded evidence record.
 
-Preserved unchanged: design and contract documents, prior evidence, the public harness option names and fixed count, production monitor implementation and schedule, D14/D14R/D15R behavior, private evidence/retained labs, runtime/profile/config/credentials, and unrelated state.
+Preserved unchanged: design and contract documents, prior evidence, the public harness option names and fixed count, the production monitor's default hourly behavior and fixed schedule, D14/D14R/D15R behavior, private evidence/retained labs, provisioned runtime/profile/config/credentials, and unrelated state.
 
 ## Acceptance coverage
 
