@@ -30,6 +30,16 @@ the incident runtime and the repair source execute the same state-store code:
 | `hermes_state_search.py` | `04ca7657f83756d6b195fa22cc5b9c96dac10d918b1f2130a37c2fb8de47c0ad` |
 | `tests/state/test_write_lock_patience.py` | `a45f61bf55e54a1ada9dcacbef6a529fa4309e59a54facd1ddaca2629815c9fc` |
 
+The caller-path and gate files cited in §1 and §4 were hash-checked the same way and are
+also byte-identical between the two trees: `agent/context_compressor.py`
+(`c5c713fdc2c8284ebc9440134e9fd68de3de3645e93c3f3a3b6b8c201ad7189a`),
+`agent/conversation_compression.py`
+(`6d88778dbe4f4a74cf766f4d07c4beaa4bc48a85d7ea15d1f74c42709402da05`),
+`agent/agent_init.py`
+(`b6a13b185e3267d86b0ed5eadf00bd2b8a32b02a6230cd6e3626334b46d215de`),
+`hermes_cli/config_defaults.py`
+(`9bfea089870d444650d062a1d8adbbca704a68c398b829654b42cc52a873e527`).
+
 ### Write path (one writer, one lock, one budget)
 
 - `SessionDB._execute_write` — `hermes_state.py:3935`; `BEGIN IMMEDIATE` at `:3984`;
@@ -47,11 +57,23 @@ the incident runtime and the repair source execute the same state-store code:
   fork/import rewrites.
 - **`archive_and_compact` — `:9723` (transaction `:9755-9795`)**: soft-archives every
   live row (`:9772-9776`) and re-inserts the published set (`:9777-9779`) in one
-  transaction. Automatic callers:
+  transaction. Automatic callers (three; the writer-level bound proposed in §4 covers
+  all of them, because it lives inside this publication path):
   - in-place compaction — `agent/conversation_compression.py:3419-3426`;
   - **proactive tool-result prune — `agent/context_compressor.py:3758-3764`**
     (`prune_tool_results_only`, `:3665-3776`), whose `pruned_msgs` is the *entire live
-    message list* with old tool results rewritten — not just the changed rows.
+    message list* with old tool results rewritten — not just the changed rows;
+  - **micro-compaction DB sync — `agent/context_compressor.py:6675`**
+    (`_sync_micro_compact_to_db`), called from `_micro_compact` (`:6410`) on both its
+    branches — defrag `:6483`, absorbed exchange `:6549` — and handing the whole
+    compacted message set to `archive_and_compact(session_id, compacted_messages)`
+    (`:6697`): the same unbounded single-transaction publication, with the same
+    whole-transcript re-insert. Gate `compression.micro_compact`
+    (`hermes_cli/config_defaults.py:708`, default `False`, read at
+    `agent/agent_init.py:2131`, checked at `agent/context_compressor.py:6429`); set in
+    **none** of the live profiles, so it is not the affected store's observed trigger
+    — but a path of the same writer, and it must inherit the bound rather than be
+    special-cased per caller.
 - Maintenance writers with their own bounds: `_try_incremental_merge_fts`
   (`hermes_state_search.py:82`, 1000-write cadence, bounded `merge` commands — the
   unbounded `optimize` was already removed, `hermes_state.py:3126-3140`),
@@ -79,7 +101,9 @@ with the prune trigger configured) is a **legacy inline-FTS** install:
   external-content layout that excludes tool rows from the trigram index
   (`hermes_state_common.py:478-560`).
 - The six `messages_fts*` triggers are present with the #305 8192-character
-  tool-content bound and `AFTER UPDATE OF` forms; no CJK objects; no `fts_stale`
+  tool-content bound and the **legacy inline** `AFTER UPDATE OF content, tool_name,
+  tool_calls, role` forms (`hermes_state_common.py:660-661`, `:688-689`) — not the
+  narrower v23 external-content forms; no CJK objects; no `fts_stale`
   breadcrumb; no `last_auto_prune` / `last_vacuum` markers on any profile store.
 - On the session that failed first, the store holds **21,706 rows: 20,660 archived
   (`active = 0, compacted = 1`) and 1,046 live**, distributed over **29 contiguous
@@ -206,10 +230,21 @@ and rollback; move pure preparation outside the writer transaction where suffici
    - publish with **one short transaction**: archive the old live set
      (`active = 0, compacted = 1`), flip the staged set to `active = 1`, apply the
      counter/model-config patch. `active`/`compacted` flips do not fire the FTS update
-     triggers (`AFTER UPDATE OF content, tool_name, tool_calls`), so this final
-     transaction is cheap; readers observe complete-old or complete-new, never partial.
+     triggers in either trigger family, so this final transaction is cheap — the
+     affected store's **legacy inline** family is
+     `AFTER UPDATE OF content, tool_name, tool_calls, role`
+     (`hermes_state_common.py:660-661`, `:688-689`), and the v23 external-content
+     family (`:510-511`, `:579-580`) excludes the same flips with the narrower
+     `AFTER UPDATE OF content, tool_name, tool_calls` list plus its `WHEN` gate. The
+     operative claim is identical for both because neither family lists `active`,
+     `compacted`, `id` or the counters; readers observe complete-old or
+     complete-new, never partial.
    - `append_messages_batch`'s `chunk_rows` (`:9234-9241`) and the chunked FTS rebuild
      engine (`:4392-4424`) are the existing in-repo discipline to reuse.
+   The bound lives in `archive_and_compact` — the publication writer — not in each
+   caller, so all three automatic callers named in §1 (in-place compaction, proactive
+   prune, gated micro-compaction sync) inherit it; `U382F` must not add a per-caller
+   guard, which would leave the same unbounded publication reachable.
 3. **What Morfeo must decide before `U382F` builds it** (these are product semantics,
    not local choices):
    - **staging identity/visibility boundary**: how a staged row is durably identified
