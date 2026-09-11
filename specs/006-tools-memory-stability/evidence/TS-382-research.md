@@ -103,9 +103,9 @@ with the prune trigger configured) is a **legacy inline-FTS** install:
 - The error text raised is exactly the `_execute_write` storage-busy message
   (`hermes_state.py:4029-4035`): "database is locked (another Hermes process held the
   state.db write lock for over 60s …)". It is raised when `BEGIN IMMEDIATE` fails
-  against *another connection*: a different process **or** a second `SessionDB`
-  instance in the same process (the runtime creates one per agent and a separate one
-  for turn leases).
+  against *another connection*: a different process (CLI, cron, kanban worker,
+  desktop) **or** another writable `SessionDB` connection in the same process (for
+  example the TUI gateway's own store handle alongside an agent's).
 
 ### Deterministic reproduction (temporary database, real code paths)
 
