@@ -28,6 +28,7 @@ CANONICAL_SKILLS = (
     "semver-release",
     "canonical-skill-governance",
     "objective-contract-design",
+    "contract-result-review",
     "supervisor-decomposition",
     "implementation-evidence",
     "project-knowledge",

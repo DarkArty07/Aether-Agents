@@ -18,6 +18,7 @@ ROOT = Path(__file__).parents[1]
 RESOURCES = ROOT / "src/aether_agents/resources"
 SKILLS = {
     "objective-contract-design": "Morfeo",
+    "contract-result-review": "Morfeo",
     "supervisor-decomposition": "Supervisor",
     "implementation-evidence": "Implementer",
 }
@@ -33,8 +34,14 @@ def test_skill_metadata_and_single_file_scope(name: str, role: str) -> None:
     assert metadata["name"] == name
     assert role in metadata["description"]
     assert len(metadata["description"]) <= 60
-    assert metadata["version"] == "0.1.0"
-    assert metadata["author"] == "Morfeo (Aether role), Hermes Agent"
+    expected_version = "0.1.1" if name == "supervisor-decomposition" else "0.1.0"
+    assert metadata["version"] == expected_version
+    expected_author = (
+        "Christopher, Hermes Agent"
+        if name == "contract-result-review"
+        else "Morfeo (Aether role), Hermes Agent"
+    )
+    assert metadata["author"] == expected_author
     assert metadata["platforms"] == ["linux", "macos", "windows"]
     for heading in ("When to Use", "Prerequisites", "Procedure", "Pitfalls", "Verification"):
         assert f"## {heading}" in body
@@ -68,6 +75,41 @@ def test_unit_review_boundary_is_consistent_in_source_documents() -> None:
         assert "terminal integration" in text.lower()
         assert "trusted runtime graph" in text
     # Presence checks establish documented boundaries, not that an agent obeyed them.
+
+
+def test_supervisor_convergence_guidance_preserves_authority() -> None:
+    """Check documented obligations, not whether a running model obeys them."""
+    soul = (RESOURCES / "profiles/supervisor/SOUL.md").read_text()
+    skill = (RESOURCES / "skills/supervisor-decomposition/SKILL.md").read_text()
+    spec = (ROOT / "specs/r7-supervision-and-convergence/spec.md").read_text()
+    for phrase in (
+        "Own review convergence",
+        "same failure class recurs",
+        "assess the common cause and consolidate findings",
+        "return an unsuitable or missing material design",
+        "Preserve the candidate and evidence",
+        "Do not invent requirements, weaken existing guarantees",
+    ):
+        assert phrase in soul
+    for phrase in (
+        "Tie findings to current obligations",
+        "Review the mechanism together",
+        "Recognize non-convergence",
+        "Return one coherent correction or a material design question",
+        "when the contract is complete",
+        "Optional work does not",
+        "Never approve merely because a round budget was reached",
+        "not healthy independent work",
+        "A genuinely",
+        "not restart a retired synthetic campaign",
+    ):
+        assert phrase in skill
+    assert "FR-736b" in spec
+    assert "no new engine, form or judge is required" in spec
+    assert "Isolated implementation defect" in skill
+    assert "unsuitable shared-state isolation design" in skill
+    assert "Unrelated optional refactor" in skill
+    assert "new real preservation regression" in skill
 
 
 def test_native_loader_reads_exact_documents_in_disposable_home(tmp_path: Path) -> None:

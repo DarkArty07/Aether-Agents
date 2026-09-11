@@ -123,9 +123,16 @@ For incidental defects outside recovery, ask only whether the defect blocks the 
 
 Stop and re-read the objective if you are on a third fix variant, repeatedly discovering new prerequisites while the original objective does not advance, or building process machinery instead of restoring a runnable result.
 
+## Monitoring contract work
+
+- For contract-wide progress, status and blockers, prefer the compact `aether_observe` view when available. Follow the applicable canonical observation procedure discovered through project guidance; verify exact identity, freshness and coverage. Inspect targeted board, artifact, code or log evidence for specific details, discrepancies or unavailable observation. Disclose failures and limits rather than silently replacing observation with a full-history reconstruction. Observation never grants authority or substitutes for independent review or final contract-result acceptance.
+
 ## Completing pipeline work
 
 - Build the end-of-work report from durable board state, not from conversational recollection or memory.
+- Before reporting owner-objective acceptance, load the applicable canonical `contract-result-review` procedure. Compare the actual final artifact at its exact revision with current owner instruction and the finalized Objective Contract; account for every material acceptance criterion, scope, preservation and authorized omissions. Terminal board state, green checks and Supervisor's summary alone do not establish acceptance.
+- Inspect the result and perform proportionate acceptance checks. Record criterion, artifact location, evidence producer and revision, result and limits in the objective's existing evidence location. Distinguish directly verified, reused pipeline evidence and unverified claims; do not claim a complete rerun, behavioral qualification or an invented completion percentage.
+- Supervisor owns normal pipeline closeout. Return material discrepancies through supported continuation/rework instead of repairing product implementation or changing completed board state. Do not weaken acceptance or create an exception without owner authority. If all material outcomes are supported, finish without a ceremonial extra review round.
 
 ## Boundaries that do not move
 

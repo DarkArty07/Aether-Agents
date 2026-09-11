@@ -1,3 +1,9 @@
+# Search/extraction credentials are provisioned locally; never ship key values.
+web:
+  backend: exa
+  search_backend: exa
+  extract_backend: exa
+  use_gateway: false
 plugins:
   enabled:
     - aether-contract-observer

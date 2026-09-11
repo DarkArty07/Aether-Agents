@@ -46,7 +46,9 @@ jobs:
           .aether/objective-contracts/oc_59cd48430a56d93c/v4.md
           .aether/objective-contracts/oc_59cd48430a56d93c/v5.md
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
+          .aether/objective-contracts/oc_644c0b407d13366a/v1.md
           .aether/objective-contracts/oc_75401d18c602d787/v1.md
+          .aether/objective-contracts/oc_7a35eca6393f18a7/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v2.md
           .aether/objective-contracts/oc_8b7b84c924ba0d71/v1.md
@@ -75,6 +77,7 @@ jobs:
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
           .aether/project.toml
+          .aether/skills/aether-observe/SKILL.md
           AGENTS.md
           CHANGELOG.md
           CLAUDE.md
@@ -116,12 +119,14 @@ jobs:
           INTEGRATIONS.md
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
           patches/hermes/HLP-280-bounded-flow-recovery.patch
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
@@ -267,6 +272,7 @@ jobs:
           src/aether_agents/resources/profiles/supervisor/SOUL.md
           src/aether_agents/resources/profiles/supervisor/config.yaml
           src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
+          src/aether_agents/resources/skills/contract-result-review/SKILL.md
           src/aether_agents/resources/skills/git-github-closeout/SKILL.md
           src/aether_agents/resources/skills/semver-release/SKILL.md
           src/aether_agents/resources/skills/objective-contract-design/SKILL.md
@@ -282,6 +288,7 @@ jobs:
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
           tests/test_contract_quality_documents.py
+          tests/test_contract_result_review.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py
@@ -340,6 +347,8 @@ jobs:
           tests/test_knowledge_plugin_cli.py
           tests/test_knowledge_regressions.py
           tests/test_knowledge_resources.py
+          tests/test_observation_usage_guidance.py
+          tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py
           tests/test_project_knowledge_engine.py
           tests/test_work_memory.py
@@ -483,8 +492,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import subprocess
 
-          root = Path('.')
           spec = Path('specs/r0-design-governance/spec.md').read_text()
           research = Path('specs/r0-design-governance/research.md').read_text()
           roadmap = Path('ROADMAP.md').read_text()
@@ -496,11 +505,20 @@ jobs:
           assert sc == [f'{i:03d}' for i in range(1, len(sc) + 1)]
           assert decisions == [f'{i:02d}' for i in range(1, len(decisions) + 1)]
           assert len(re.findall(r'^\| R\d+ \|', roadmap, re.M)) == 14
+
+          md_files = [
+              Path(p)
+              for p in subprocess.check_output(
+                  ['git', 'ls-files', '*.md'], text=True
+              ).splitlines()
+              if p
+          ]
+          assert md_files, 'tracked markdown manifest must not be empty'
           assert '001-r0-design-governance' not in '\n'.join(
-              p.read_text(errors='ignore') for p in root.rglob('*.md')
+              p.read_text(errors='ignore') for p in md_files
           )
 
-          for path in root.rglob('*.md'):
+          for path in md_files:
               text = path.read_text()
               assert text.count('```') % 2 == 0, f'unbalanced fence: {path}'
               for target in re.findall(r'(?<!!)\[[^]]+\]\(([^)]+)\)', text):

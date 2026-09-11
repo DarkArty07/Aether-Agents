@@ -2,6 +2,37 @@
 
 Aether declares four public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
 
+## Default worker tool selection
+
+Supervisor and every Implementer instance are headless workers. Their portable
+profiles use native `agent.disabled_toolsets: [computer_use, clarify]`, applied by
+Hermes when resolving each platform's tools. Desktop control is excluded to avoid
+unwanted interactions; interactive clarification is excluded because no owner is
+present in a worker session. Workers report missing input through the existing
+Kanban block/comment lifecycle. This is tool selection, **not a security sandbox**:
+terminal/file access and all existing authority boundaries remain unchanged.
+
+All three portable roles select Exa for search and extraction with `web.backend`,
+`web.search_backend`, and `web.extract_backend` set to `exa`, and
+`web.use_gateway: false`. `web_search` and `web_extract` are native Hermes tools,
+not new Aether plugin endpoints. Exa requires an already provisioned `EXA_API_KEY`
+in the appropriate ignored profile environment. A selected backend without usable
+credentials is unavailable; a template does not manufacture or distribute access.
+The installed provider/SDK requirements must also pass the native readiness check.
+
+**Existing profiles** are not overwritten by a repository merge. Apply these exact
+settings using native Hermes configuration, retain unrelated platform selections,
+and remove the two excluded toolsets from any saved platform lists. Reuse an
+existing Exa credential only for the profiles/destination the owner authorized,
+without printing, committing, or copying other credentials. Existing running agents
+may retain their startup tool list; apply at the next natural worker start or an
+explicitly authorized controlled restart, preserving task/worktree state.
+
+Morfeo keeps its own interaction/tool selection. Browser automation, voice, image
+capabilities, models, reasoning, fallback routes, approvals, and SOUL documents are
+not changed by this adjustment. Runtime availability and real Exa results must be
+verified separately from portable resource tests.
+
 ## Package entry points
 
 | Entry point | Module | Current behavior |

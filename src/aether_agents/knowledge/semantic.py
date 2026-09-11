@@ -90,9 +90,9 @@ def resolve_auxiliary_route(
     # Try resolving via Hermes auxiliary client if available and details are missing
     try:
         from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]  # pyright: ignore[reportMissingImports]
-            _resolve_task_provider_model,
-            _read_main_provider,
             _read_main_model,
+            _read_main_provider,
+            _resolve_task_provider_model,
         )
 
         res_provider, res_model, _base_url, _api_key, res_api_mode = _resolve_task_provider_model(
