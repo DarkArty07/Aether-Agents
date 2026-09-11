@@ -59,11 +59,13 @@ bytes if required. This is an autonomous design checkpoint, not a routine owner
 approval question. Healthy independent work must continue. Supervisor/Implementer
 must not invent an unresolved transport, persistence or external-product design.
 
-Current gate disposition: **TS-382 is build-ready** after the approved research at
-`26f0a885287cb380d12c92d13ede992f2dcd6f7c` and Morfeo's recorded
-[TS-382 design](TS-382-design.md), D1-D7. This fulfills the existing v1 research gate;
-its acceptance and protected boundaries remain unchanged. **TS-275 remains gated**
-until its approved research result and its separate Morfeo design checkpoint.
+Current gate disposition: **TS-382 and TS-275 are build-ready** under the original v1
+acceptance and protected boundaries. Morfeo's [TS-382 design](TS-382-design.md), D1-D7,
+consumes approved research `26f0a885287cb380d12c92d13ede992f2dcd6f7c`;
+Morfeo's [TS-275 design](TS-275-design.md), V1-V5, consumes approved research
+`9245d435410eb23cf5a2f0fd29add94cc8c1f20e`. These recorded decisions fulfill the existing
+research gates; they do not claim implemented fixes, permit a different backend or
+waive the unchanged real-route/atomic-persistence verification.
 
 ## Authority boundary
 

@@ -113,32 +113,26 @@ Implementer consume the exact committed checkpoint before resuming U382F, and re
 independent review plus integrated/runtime acceptance. No implementation or issue closure
 is claimed by this design record.
 
-## TS-275: real route qualification, then compatible boundary repair
+## TS-275: research gate satisfied; auxiliary preparation design recorded
 
-Owners in the maintained fork: tools/vision_tools.py, agent/image_routing.py,
-agent/codex_responses_adapter.py, agent/transports/codex.py. Offline evidence proves
-byte preservation, not current-turn route selection or backend success.
+**Morfeo checkpoint: build-ready for U275F under the existing v1 contract.**
+The approved research at `9245d435410eb23cf5a2f0fd29add94cc8c1f20e` separates the
+historical external session-header episode (not repaired by this unit) from the real
+remaining extreme-dimension rejection in the auxiliary vision path. Routing and
+byte-exact adapter conversion are not the broken boundary.
 
-Bounded research: recover effective routing from native turn context, not shell defaults.
-Use only the already provisioned tool/client and credentials; do not print keys or add
-providers. Make a small real baseline call with a valid synthetic image containing
-image-only content; retain sanitized request-shape, response status/reason and correlation
-metadata privately. A loopback server, HTTP 200 without image interpretation or a manually
-forced unrelated model does not qualify the real route. Check the actual protocol/API
-schema before assigning blame to an upstream backend.
+The normative payload/preparation decision is [TS-275-design.md](TS-275-design.md),
+V1-V5: reuse the existing 4-MiB encoded-data / 7,900-px embed policy proactively before
+the first auxiliary request, only when a bound is exceeded, using the existing bounded
+CPU executor and resizer. Already-compliant supported images remain byte-identical;
+necessary rescaling preserves image meaning/aspect ratio and the existing scale note.
+No provider/model/configuration/transport change or generic HTTP-400 retry is authorized.
 
-Selected repair envelope after the causal gate: preserve image bytes, tool call identity,
-response chronology and supported public tool interface. Correct the smallest proven
-preparation/routing/adapter boundary. A protocol-specific normalization must preserve
-semantics and remain isolated to that protocol; do not globally drop/replace image content
-or silently change configured provider/model. Do not embed a secondary agent, acquire
-credentials or edit a separate router product as an assumed prerequisite. If only external
-backend entitlement/service changes can solve it, return the evidence and exact authority
-needed; keep this issue open and continue the other repairs.
-
-Morfeo records the exact payload/transport decision after the research result before the
-new behavior is built. Real candidate qualification must interpret image-only content
-through the operator's supported provisioned route, with the route explicitly evidenced.
+This fulfills the evidence-backed design point reserved by v1 without superseding its
+contract bytes, authority or acceptance. The exact reviewed three-fixture pre/post
+oracle still requires real image-only content interpretation; a 200 status is insufficient.
+Supervisor/Implementer consume the committed checkpoint before building and preserve
+independent review, scoped runtime qualification and normal terminal closeout.
 
 ## Integration and judgement
 
