@@ -212,3 +212,102 @@ live attempt and owns closeout.
   branch, worktree, stash and job.
 - The terminal phase spends the environment's single corrected live attempt and stops on the
   contract's stop conditions; failure preserves integrated HEAD and keeps issue #367 open.
+
+## v4 continuation — D16 accelerated laboratory schedule (Supervisor)
+
+**Status:** verified executable continuation/decomposition for Objective Contract
+`oc_f8c9fc9320587cf3@v4`.
+
+**Derived by:** Supervisor (root task `t_43b26502`, flow
+`aether.flow.v1:8ea1f13c3800fae8d22534c349f03a5ff1d6cfbf3e6d3342c3c29d812d705481`).
+
+**Source contract:** `.aether/objective-contracts/oc_f8c9fc9320587cf3/v4.md`
+(SHA-256 `765a2f48842835d91049f959defd6c3bd15cd43de9ef97da67a37d1a819bcfe0`) on base
+`2aec2b73789a0baf14093b6fbb8de04b852fc157`.
+
+The v2 and v3 sections above remain the accepted historical breakdown. This section is the
+executable continuation for the remaining work; it does not widen the contract, re-implement
+any accepted unit or record feature acceptance.
+
+### v4 receipt
+
+| Check | Observed |
+| --- | --- |
+| Portable project | `.aether/project.toml` `project_id` `12027989-a08f-41cd-a82c-54ff1bfb6b03` matches the envelope; repository `DarkArty07/Aether-Agents` |
+| Contract bytes | SHA-256 `765a2f48842835d91049f959defd6c3bd15cd43de9ef97da67a37d1a819bcfe0`; `status: final`, `version: 4`, supersedes the immutable v3 |
+| Base / branch | Base `2aec2b73789a0baf14093b6fbb8de04b852fc157`; objective branch `aether-agents-2/t_43b26502-telegram-monitor-v4-accelerate-isolated` |
+| Design sufficiency | D16 (`spec.md` §D16, `qualification-isolation.md` §"D16 proportionate accelerated laboratory schedule", `plan.md`, `quickstart.md`) settles the lab-only minute schedule, the native `cron.jobs.update_job` interface used inside the private lab store, the two-active/one-idle minute cuts, the truthful accelerated labelling rule, the unchanged `0 * * * *` production cadence and the single natural production hour; the inspected native `cron.jobs.compute_next_run`/`update_job`/`get_due_jobs` and `cron.scheduler_provider.InProcessCronScheduler` exist in the pinned baseline. No missing material product decision |
+| Preserved candidate chain | D14/D14R candidate `f603f8f1ace4dbb112afb05e032da620642e7050` and the D15R correction `7d433b3835654d605056d4d4e7826bbf9c6feb28` (code candidate `b59e0e06bcffe6722f84aadd3c44995a165a479a`), approved by the independent same-card Supervisor review on v3 card `t_125d63bf` (run 22 "round-3 contract-lens review APPROVED", 0 live runs / 0 model calls / 0 sends), are consumed inputs; harness, monitor modules, tests and evidence records arrive intact |
+| Integration base | `828b736745fe1cd86ef51e5620ffc1094a952c32`, the merge of `2aec2b7` with the approved D15R tip `7d433b3`; computed with `git merge-tree` before the merge: no conflict, `.github/workflows/policy.yml` is the only path both sides changed and auto-merged keeping both manifest additions. `git diff --check` clean and the policy manifest emulation exact (377 = 377, no missing/extra) on the integrated tree |
+| Preserved live evidence | The private qualification receipts/logs under the operator's private evidence directory and the retained laboratory roots stay untouched; the preserved pre-D14 refusal is unchanged |
+| Prior units | MON-01…MON-06R, MON-LC1, D14, D14R and D15R commits/evidence are preserved inputs; none is re-implemented or re-reviewed |
+| Profiles / capacity | `implementer`, `supervisor`, `morfeo` exist; no new role or profile required |
+| Project Canonical Skills | `.aether/skills/aether-observe/SKILL.md` (present after integration) is a procedure for contract observation using the native `aether_observe` tool; no other `.aether/skills/` entry is relevant to this objective |
+| Tracker | issue #367 is open; tracking, not contract authority |
+
+### v4 continuation map
+
+| Source | Unit | Outcome |
+| --- | --- | --- |
+| D16 (`spec.md` §D16, `qualification-isolation.md` §D16, `plan.md`, `quickstart.md` §live sequence), the D16 half of the testing standard and of AC-2/AC-7/AC-9 | **D16** `t_37daf6b2` (Implementer, root-gated) | bounded harness/tests/docs change: the one private lab job is created and validated through the shipped control service with production shape `0 * * * *`, then only its private lab record is updated through the native `cron.jobs.update_job` interface to `* * * * *`; the same native due selection and `InProcessCronScheduler` cross two active and one idle real minute boundaries; receipts name the actual accelerated expression/timestamps and never claim elapsed-hour evidence; deterministic controls prove the unchanged hourly production shape and reject manual/fake-clock/custom-scheduler evidence; no live effect |
+| AC-1..AC-9 integrated verification, the accelerated laboratory live qualification, production activation + one natural hourly due/report/ack, PR/checks/merge/#367/residue | **MON-V4-INT** `t_84c2812b` (Supervisor, terminal) | terminal integration and closeout |
+| Preservation, authority, privacy, no clock mutation, no production cadence change, no new credential/provider/model/destination/expense | every unit plus MON-V4-INT | bounded local and reversible work only |
+
+### v4 execution graph
+
+```text
+t_43b26502 (v4 root: receipt, integration base, continuation handoff)
+    └── D16 t_37daf6b2 (Implementer; base 828b7367 + this breakdown)
+
+D16  ->  MON-V4-INT t_84c2812b (Supervisor, terminal=true, same flow affinity)
+```
+
+D16 is the only implementation unit: `scripts/qualify_telegram_monitor.py` remains a
+single-writer hotspot, so no second unit may touch it. MON-V4-INT is serialized by design —
+it consumes the reviewed unit, pins the exact final tree, spends the single authorized
+accelerated live qualification, activates the same candidate in production and owns
+closeout.
+
+### Shared decisions stamped into the v4 unit cards
+
+1. Authority is Objective Contract `oc_f8c9fc9320587cf3@v4` plus the named owning artifacts
+   and this breakdown; skills provide procedure only.
+2. The isolated lab job is created and validated through the normal monitor service with the
+   production shape `0 * * * *`; only its private lab record is then updated, through the
+   native `cron.jobs.update_job` interface and inside the private lab store, to
+   `* * * * *`. Production and every non-lab job remain exactly hourly.
+3. No system-clock mutation, no monkeypatched/fake scheduler clock, no manual or forced tick
+   as evidence, no custom scheduler, no production cadence change. The existing
+   `--wait-hourly-boundaries 2` spelling stays fixed and now selects two accelerated lab
+   scheduled boundaries plus one accelerated lab idle boundary.
+4. Receipts state the actual lab cron expression and timestamps and never label those cuts
+   as production-hourly or elapsed-hour evidence; the single natural production due/report/
+   ack after activation remains the only wall-clock hourly oracle.
+5. Implementation units make no live external effect: no `--live`, no model or Telegram
+   call, no lab job enable, no scheduler start, no profile/job/plugin/service activation, no
+   push/PR/merge/issue mutation.
+6. Unit review uses the native same-card lane; MON-V4-INT consumes the reviewed unit and does
+   not replace its review.
+7. The unit writes one evidence record under `specs/telegram-monitor/evidence/` with
+   requirement mapping, candidate commit, exact commands/results and residual risk; the
+   sanitized AC mapping and the aggregate release conclusions belong to MON-V4-INT
+   (`release_impact=minor`, `release_action=defer`, `release_channel=none`, only if observed
+   evidence confirms).
+8. Exactly one accelerated live qualification attempt is authorized after review, with a new
+   no-overwrite private target; a failure after lab job/scheduler/model/Telegram effects
+   begin stops with durable private evidence and no automatic rerun. The superseded
+   multi-hour lane and the superseded v3 terminal card `t_b8077e66` are not resumed.
+
+### Preservation and residue (v4)
+
+- Never edit, stage or exact-copy the canonical Objective Contract; immutable v1/v2/v3 stay intact.
+- No SOUL edits, no credential acquisition/widening or persisted copies, no
+  profile/config/provider/model/router change, no production registry replacement or
+  restoration, no forced restart or active-agent interruption, no package publication or
+  deployment.
+- Preserve the blocked v2 board cards (`t_e7a3aafb`, `t_d22ba5b9`, `t_287d682d`), the v3
+  board and its cards/evidence, and every concurrent or unrelated branch, worktree, stash,
+  job, board, profile and native source database.
+- The terminal phase spends the environment's single accelerated live qualification and
+  stops on the contract's stop conditions; failure preserves integrated HEAD and keeps
+  issue #367 open.
