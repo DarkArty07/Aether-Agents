@@ -2571,7 +2571,7 @@ class _FakeBackends:
     ) -> str | None:
         return "English"
 
-    def environment_gaps(self, store: Any) -> list[str]:
+    def environment_gaps(self, store: Any, *args: Any, **kwargs: Any) -> list[str]:
         self.calls.append("environment_gaps")
         return list(self.environment_gap_values)
 
@@ -5363,6 +5363,16 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "    if board:\n"
         "        return boards_root() / board / 'kanban.db'\n"
         "    return kanban_home() / 'kanban.db'\n\n\n"
+        "def board_dir(board=None):\n"
+        "    return boards_root() / (board or 'default')\n\n\n"
+        "def init_db(db_path=None, *, board=None):\n"
+        "    return _connect(Path(db_path) if db_path else kanban_db_path(board))\n\n\n"
+        "def read_board_metadata(board):\n"
+        "    import json\n"
+        "    path = board_dir(board) / 'board.json'\n"
+        "    if path.is_file():\n"
+        "        return json.loads(path.read_text())\n"
+        "    return None\n\n\n"
         "def _connect(path):\n"
         "    path.parent.mkdir(parents=True, exist_ok=True)\n"
         "    connection = sqlite3.connect(path)\n"
@@ -5428,6 +5438,19 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "    connection = sqlite3.connect(path)\n"
         "    connection.executescript(SCHEMA)\n"
         "    return connection\n\n\n"
+        "from contextlib import contextmanager\n\n\n"
+        "@contextmanager\n"
+        "def connect_closing(db_path=None):\n"
+        "    conn = connect(db_path)\n"
+        "    try:\n"
+        "        yield conn\n"
+        "    finally:\n"
+        "        conn.close()\n\n\n"
+        "def list_projects(conn, include_archived=False):\n"
+        "    cursor = conn.execute('SELECT id, name, slug, primary_path FROM projects')\n"
+        "    from collections import namedtuple\n"
+        "    P = namedtuple('Project', ['id', 'name', 'slug', 'primary_path'])\n"
+        "    return [P(*row) for row in cursor.fetchall()]\n\n\n"
         "def create_project(conn, *, name, slug=None, folders=None, primary_path=None,\n"
         "                   description=None, icon=None, color=None, board_slug=None,\n"
         "                   allow_duplicate_path=False):\n"
@@ -6315,3 +6338,335 @@ def test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged() -> None:
 
     assert receipt_sha == "c23096fe793fd2263a2f59525b23799729b64eb3f61b9803932ae9b9496b79e8"
     assert console_sha == "a6046560aedbdc6d47d209010baa2e9c63ee1ae66c8a841f274a88347e81189d"
+
+
+def test_d15r_coverage_probe_context_binds_to_lab_hermes_home() -> None:
+    """The coverage probe evaluates using the lab's Hermes root, never the parent profile."""
+    q = _qualification_module()
+
+    captured: dict[str, Any] = {}
+
+    class SpyBackends(q.LiveBackends):
+        def environment_gaps(self, store: Any, *args: Any, **kwargs: Any) -> list[str]:
+            captured.update(kwargs)
+            return []
+
+    backends = SpyBackends()
+    fake_lab = {
+        "hermes_home": "/tmp/isolated/lab/hermes",
+        "state_root": "/tmp/isolated/lab/xdg-state/aether",
+    }
+    fake_store = q.MonitorStore(Path("/tmp/isolated/lab/xdg-state/aether"))
+
+    backends.environment_gaps(
+        fake_store,
+        hermes_home=Path(str(fake_lab["hermes_home"])),
+        lab=fake_lab,
+    )
+
+    assert captured.get("hermes_home") == Path("/tmp/isolated/lab/hermes")
+    assert captured.get("lab") == fake_lab
+
+
+def test_d15r_reproduction_and_corrected_gap_free_laboratory(tmp_path: Path) -> None:
+    """Reproduction of pre-correction false refusal vs corrected gap-free lab."""
+    import sqlite3
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    q = _qualification_module()
+
+    project_schema = (
+        "CREATE TABLE projects (id TEXT PRIMARY KEY, slug TEXT NOT NULL, "
+        "name TEXT NOT NULL, primary_path TEXT, archived INTEGER NOT NULL DEFAULT 0);"
+    )
+    board_schema = (
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL, "
+        "project_id TEXT, session_id TEXT, created_at REAL, started_at REAL, completed_at REAL, "
+        "workspace_path TEXT, current_run_id INTEGER, session_affinity TEXT, block_kind TEXT, "
+        "last_heartbeat_at REAL, max_runtime_seconds INTEGER, result TEXT, "
+        "consecutive_failures INTEGER NOT NULL DEFAULT 0);"
+        "CREATE TABLE task_links (parent_id TEXT NOT NULL, child_id TEXT NOT NULL);"
+        "CREATE TABLE task_runs (id INTEGER PRIMARY KEY, task_id TEXT, status TEXT, outcome TEXT, "
+        "started_at REAL, ended_at REAL, last_heartbeat_at REAL, summary TEXT, error TEXT, profile TEXT);"
+        "CREATE TABLE task_events (id INTEGER PRIMARY KEY, task_id TEXT, run_id INTEGER, kind TEXT, "
+        "payload TEXT, created_at REAL);"
+    )
+    session_schema = (
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, title TEXT, "
+        "display_name TEXT, cwd TEXT, git_repo_root TEXT, started_at REAL, ended_at REAL, last_activity_at REAL);"
+        "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL);"
+    )
+
+    lab_root = tmp_path / "lab"
+    lab_hermes = lab_root / "hermes"
+    lab_state = lab_root / "xdg-state" / "aether"
+    scope_root = lab_root / "scope"
+    lab_hermes.mkdir(parents=True)
+    lab_state.mkdir(parents=True)
+    scope_root.mkdir(parents=True)
+
+    stamp = "20260911T053000Z"
+    manifest = q._scope_manifest(scope_root, stamp)
+    q._write_scope_projects(scope_root, manifest)
+
+    with sqlite3.connect(lab_hermes / "projects.db") as pconn:
+        pconn.executescript(project_schema)
+        for entry in manifest:
+            pconn.execute(
+                "INSERT INTO projects VALUES (?, ?, ?, ?, 0)",
+                (
+                    f"p_native_{entry['letter'].lower()}",
+                    entry["board_slug"],
+                    entry["name"],
+                    entry["path"],
+                ),
+            )
+
+    with sqlite3.connect(lab_hermes / "state.db") as sconn:
+        sconn.executescript(session_schema)
+        for entry in manifest:
+            for s in entry["sessions"]:
+                sconn.execute(
+                    "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, 1000.0, 1000.0, 1000.0)",
+                    (s["id"], s["source"], s["title"], s["title"], s["cwd"], s["git_repo_root"]),
+                )
+
+    reg = ProjectRegistry(lab_state)
+    for entry in manifest:
+        reg.register(
+            entry["project_id"],
+            Path(entry["path"]),
+            entry["name"],
+            f"p_native_{entry['letter'].lower()}",
+        )
+
+    for entry in manifest:
+        bdir = lab_hermes / "kanban" / "boards" / entry["board_slug"]
+        bdir.mkdir(parents=True)
+        (bdir / "board.json").write_text(
+            json.dumps(
+                {
+                    "slug": entry["board_slug"],
+                    "name": entry["name"],
+                    "description": "Execution board",
+                    "icon": "",
+                    "color": "",
+                    "default_workdir": entry["path"],
+                    "project_id": f"p_native_{entry['letter'].lower()}",
+                    "aether_project_id": entry["project_id"],
+                    "aether_contract_id": entry["contract_id"],
+                    "aether_contract_version": 1,
+                    "created_at": 1789104311,
+                    "archived": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with sqlite3.connect(bdir / "kanban.db") as bconn:
+            bconn.executescript(board_schema)
+            for idx, task in enumerate(entry["tasks"]):
+                tid = f"t_{entry['letter'].lower()}{idx + 1:07d}"
+                bconn.execute(
+                    "INSERT INTO tasks (id, title, status, project_id, session_id, created_at, started_at, completed_at, workspace_path, result) "
+                    "VALUES (?, ?, ?, ?, ?, 1000.0, 1000.0, 1000.0, ?, ?)",
+                    (
+                        tid,
+                        task["title"],
+                        task["status"],
+                        f"p_native_{entry['letter'].lower()}",
+                        entry["origin_session"],
+                        entry["path"],
+                        task.get("result"),
+                    ),
+                )
+
+    store = q.MonitorStore(lab_state)
+
+    # 1. Pre-correction reproduction: probe against empty/unrelated root yields coverage gaps
+    empty_prod_hermes = tmp_path / "prod"
+    empty_prod_hermes.mkdir()
+    prod_gaps = q._environment_gaps(store, hermes_home=empty_prod_hermes)
+    assert prod_gaps != []
+    assert any(
+        g in prod_gaps
+        for g in (
+            "NATIVE_PROJECTS_UNREADABLE",
+            "SESSION_DB_UNREADABLE",
+            "BOARD_METADATA_UNREADABLE",
+        )
+    )
+
+    # 2. Corrected candidate: probe against lab_hermes yields ZERO coverage gaps
+    lab_gaps = q._environment_gaps(store, hermes_home=lab_hermes)
+    assert lab_gaps == []
+
+
+def test_d15r_negative_control_broken_lab_refuses(tmp_path: Path) -> None:
+    """A deliberately broken lab still refuses with matching coverage gap codes."""
+    import sqlite3
+
+    from aether_agents.observation.context import ProjectRegistry
+
+    q = _qualification_module()
+
+    project_schema = (
+        "CREATE TABLE projects (id TEXT PRIMARY KEY, slug TEXT NOT NULL, "
+        "name TEXT NOT NULL, primary_path TEXT, archived INTEGER NOT NULL DEFAULT 0);"
+    )
+    board_schema = (
+        "CREATE TABLE tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, status TEXT NOT NULL, "
+        "project_id TEXT, session_id TEXT, created_at REAL, started_at REAL, completed_at REAL, "
+        "workspace_path TEXT, current_run_id INTEGER, session_affinity TEXT, block_kind TEXT, "
+        "last_heartbeat_at REAL, max_runtime_seconds INTEGER, result TEXT, "
+        "consecutive_failures INTEGER NOT NULL DEFAULT 0);"
+        "CREATE TABLE task_links (parent_id TEXT NOT NULL, child_id TEXT NOT NULL);"
+        "CREATE TABLE task_runs (id INTEGER PRIMARY KEY, task_id TEXT, status TEXT, outcome TEXT, "
+        "started_at REAL, ended_at REAL, last_heartbeat_at REAL, summary TEXT, error TEXT, profile TEXT);"
+        "CREATE TABLE task_events (id INTEGER PRIMARY KEY, task_id TEXT, run_id INTEGER, kind TEXT, "
+        "payload TEXT, created_at REAL);"
+    )
+    session_schema = (
+        "CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, title TEXT, "
+        "display_name TEXT, cwd TEXT, git_repo_root TEXT, started_at REAL, ended_at REAL, last_activity_at REAL);"
+        "CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT, role TEXT, content TEXT, timestamp REAL);"
+    )
+
+    lab_root = tmp_path / "broken_lab"
+    lab_hermes = lab_root / "hermes"
+    lab_state = lab_root / "xdg-state" / "aether"
+    scope_root = lab_root / "scope"
+    lab_hermes.mkdir(parents=True)
+    lab_state.mkdir(parents=True)
+    scope_root.mkdir(parents=True)
+
+    manifest = q._scope_manifest(scope_root, "20260911T053500Z")
+    q._write_scope_projects(scope_root, manifest)
+
+    with sqlite3.connect(lab_hermes / "projects.db") as pconn:
+        pconn.executescript(project_schema)
+        for entry in manifest:
+            pconn.execute(
+                "INSERT INTO projects VALUES (?, ?, ?, ?, 0)",
+                (
+                    f"p_native_{entry['letter'].lower()}",
+                    entry["board_slug"],
+                    entry["name"],
+                    entry["path"],
+                ),
+            )
+
+    with sqlite3.connect(lab_hermes / "state.db") as sconn:
+        sconn.executescript(session_schema)
+        for entry in manifest:
+            for s in entry["sessions"]:
+                sconn.execute(
+                    "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, 1000.0, 1000.0, 1000.0)",
+                    (s["id"], s["source"], s["title"], s["title"], s["cwd"], s["git_repo_root"]),
+                )
+
+    reg = ProjectRegistry(lab_state)
+    for entry in manifest:
+        reg.register(
+            entry["project_id"],
+            Path(entry["path"]),
+            entry["name"],
+            f"p_native_{entry['letter'].lower()}",
+        )
+
+    for entry in manifest:
+        bdir = lab_hermes / "kanban" / "boards" / entry["board_slug"]
+        bdir.mkdir(parents=True)
+        (bdir / "board.json").write_text(
+            json.dumps(
+                {
+                    "slug": entry["board_slug"],
+                    "name": entry["name"],
+                    "description": "Execution board",
+                    "icon": "",
+                    "color": "",
+                    "default_workdir": entry["path"],
+                    "project_id": f"p_native_{entry['letter'].lower()}",
+                    "aether_project_id": entry["project_id"],
+                    "aether_contract_id": entry["contract_id"],
+                    "aether_contract_version": 1,
+                    "created_at": 1789104311,
+                    "archived": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        with sqlite3.connect(bdir / "kanban.db") as bconn:
+            bconn.executescript(board_schema)
+
+    # 1. Deliberately break board A: remove portable project ID from metadata
+    meta_a = lab_hermes / "kanban" / "boards" / manifest[0]["board_slug"] / "board.json"
+    data = json.loads(meta_a.read_text(encoding="utf-8"))
+    del data["aether_project_id"]
+    meta_a.write_text(json.dumps(data), encoding="utf-8")
+
+    store = q.MonitorStore(lab_state)
+    gaps_unbound = q._environment_gaps(store, hermes_home=lab_hermes)
+    assert "BOARD_PROJECT_UNBOUND" in gaps_unbound
+
+    # 2. Deliberately break contract B: remove final contract artifact
+    contract_b_artifact = (
+        Path(manifest[1]["path"])
+        / ".aether"
+        / "objective-contracts"
+        / manifest[1]["contract_id"]
+        / "v1.md"
+    )
+    contract_b_artifact.unlink()
+
+    gaps_missing_contract = q._environment_gaps(store, hermes_home=lab_hermes)
+    assert "FINAL_CONTRACT_UNREADABLE" in gaps_missing_contract
+
+
+def test_d15r_fixture_and_environment_gaps_chain_end_to_end(tmp_path: Path) -> None:
+    """When product runtime is available, the full fixture + environment_gaps chain yields zero gaps."""
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    runtime_py: Path | None = None
+    env_py = os.environ.get("AETHER_HERMES_PYTHON", "").strip()
+    if env_py and Path(env_py).is_file():
+        runtime_py = Path(env_py)
+    else:
+        try:
+            runtime_py = q._runtime_python()
+        except Exception:
+            pass
+    if runtime_py is None or not runtime_py.is_file():
+        for parent in Path(__file__).resolve().parents:
+            cand = parent / "home" / ".venv-hermes" / "bin" / "python"
+            if cand.is_file():
+                runtime_py = cand
+                break
+    if runtime_py is None or not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T054500Z", token="abcdef012345")
+    preflight = {
+        "problems": [],
+        "config_text": "",
+        "config_digest": "0" * 64,
+        "_environment": {
+            "HERMES_HOME": str(plan.hermes_home),
+            "HOME": str(plan.home),
+            "TMPDIR": str(plan.tmp),
+            "PYTHONPATH": os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))),
+        },
+    }
+    lab_record = q._lab_create(plan, preflight)
+    scope_root = Path(lab_record["scope_root"])
+    manifest = q._scope_manifest(scope_root, plan.stamp)
+    q._write_scope_projects(scope_root, manifest)
+
+    seeded = q._lab_fixture(runtime_py, lab_record, manifest)
+    assert len(seeded["boards"]) == 2
+    assert len(seeded["tasks"]) == 8
+
+    store = q.MonitorStore(Path(lab_record["state_root"]))
+    gaps = q._environment_gaps(store, hermes_home=Path(lab_record["hermes_home"]))
+    assert gaps == []

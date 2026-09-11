@@ -55,7 +55,10 @@ _BOARD_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$", re.ASCII)
 _VERSION_RE = re.compile(r"^v([1-9][0-9]*)$", re.ASCII)
 _SAFE_REF_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 _EMAIL_RE = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d .()_-]{8,}\d)(?!\d)")
+_PHONE_RE = re.compile(
+    r"(?<!\d)(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{3}[ .-])\d{3}[ .-]\d{4}(?!\d)",
+    re.ASCII,
+)
 _ABSOLUTE_PATH_RE = re.compile(
     r"(?:^|[\s\"'=:])(?:/(?:home|Users|root|tmp|var|etc|opt)/|[A-Za-z]:[\\/])"
 )
@@ -649,11 +652,19 @@ def _resolve_board_paths(
             root = Path(get_hermes_home())
         except Exception:
             return ()
-    paths: list[tuple[str, Path]] = [("default", root / "kanban.db")]
+    paths: list[tuple[str, Path]] = []
+    default_db = root / "kanban.db"
+    default_dir = root / "kanban" / "boards" / "default"
+    if (
+        default_db.is_file()
+        or (default_dir / "board.json").is_file()
+        or (default_dir / "kanban.db").is_file()
+    ):
+        paths.append(("default", default_db))
     boards_root = root / "kanban" / "boards"
     if boards_root.is_dir() and not boards_root.is_symlink():
         for child in sorted(boards_root.iterdir(), key=lambda item: item.name):
-            if _BOARD_RE.fullmatch(child.name):
+            if child.name != "default" and _BOARD_RE.fullmatch(child.name):
                 paths.append((child.name, child / "kanban.db"))
     return tuple(paths)
 

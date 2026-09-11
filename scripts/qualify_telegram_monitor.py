@@ -2736,7 +2736,11 @@ def _inspect_idle(
 # ---------------------------------------------------------------------------
 
 
-def _environment_gaps(store: MonitorStore) -> list[str]:
+def _environment_gaps(
+    store: MonitorStore,
+    *,
+    hermes_home: Path | str | None = None,
+) -> list[str]:
     """Read-only probe: gaps the installation itself reports for this isolated scope.
 
     The monitor never treats a coverage gap as idle (D8), so an installation whose
@@ -2747,8 +2751,13 @@ def _environment_gaps(store: MonitorStore) -> list[str]:
     from aether_agents.monitor.sources import ReadOnlySources
 
     try:
+        resolved_home = (
+            Path(hermes_home).expanduser().resolve()
+            if hermes_home is not None
+            else monitor_runtime.hermes_home()
+        )
         collection = ReadOnlySources(
-            state_root=store.state_root, hermes_home=monitor_runtime.hermes_home()
+            state_root=store.state_root, hermes_home=resolved_home
         ).collect(cutoff_utc=_utc_text(_utc_now()))
     except Exception as error:  # noqa: BLE001 - a failed probe is a bounded failure
         raise QualificationError(
@@ -3172,6 +3181,10 @@ try:
     from aether_agents.monitor import runtime as monitor_runtime
     from aether_agents.monitor.store import MonitorStore
     from aether_agents.observation.context import ProjectRegistry
+    from aether_agents.objective_contracts.hermes_plugin import (
+        _create_metadata_exclusive,
+        _provision_execution_board,
+    )
     from hermes_cli import kanban_db, projects_db
     from hermes_state import SessionDB
 except Exception as error:  # noqa: BLE001
@@ -3261,16 +3274,41 @@ for entry in MANIFEST:
     except Exception as error:  # noqa: BLE001
         fail("fixture-sessions", error)
 
-    # Canonical native board + tasks + links through the shipped kanban writers.  The task
-    # identity the writer returns is the identity the whole lane must use afterwards, so it
-    # is reported back per manifest key.
+    # Canonical native board + tasks + links through the shipped execution-board writer.
+    # The task identity the writer returns is the identity the whole lane must use afterwards,
+    # so it is reported back per manifest key.
     try:
-        kanban_db.create_board(
-            entry["board_slug"],
-            name=entry["name"],
-            default_workdir=str(project_root),
-            project_id=native_id,
-        )
+        try:
+            _provision_execution_board(
+                project_id=entry["project_id"],
+                project_root=project_root,
+                contract_id=entry["contract_id"],
+                version=1,
+            )
+        except Exception:
+            board_dir = kanban_db.boards_root() / entry["board_slug"]
+            board_dir.mkdir(parents=True, exist_ok=True)
+            metadata_path = board_dir / "board.json"
+            db_path = board_dir / "kanban.db"
+            if not metadata_path.exists():
+                _create_metadata_exclusive(
+                    metadata_path,
+                    slug=entry["board_slug"],
+                    project_root=project_root,
+                    runtime_project_id=native_id,
+                    aether_project_id=entry["project_id"],
+                    contract_id=entry["contract_id"],
+                    version=1,
+                )
+            if hasattr(kanban_db, "init_db"):
+                kanban_db.init_db(db_path=db_path)
+            else:
+                kanban_db.create_board(
+                    entry["board_slug"],
+                    name=entry["name"],
+                    default_workdir=str(project_root),
+                    project_id=native_id,
+                )
         board_connection = kanban_db.connect(board=entry["board_slug"])
     except Exception as error:  # noqa: BLE001
         fail("fixture-board", error)
@@ -4405,8 +4443,18 @@ class LiveBackends:
     ) -> str | None:
         return _owner_language(interpreter, environment=environment)
 
-    def environment_gaps(self, store: Any) -> list[str]:
-        return _environment_gaps(store)
+    def environment_gaps(
+        self,
+        store: Any,
+        *,
+        hermes_home: Path | str | None = None,
+        lab: Mapping[str, Any] | None = None,
+    ) -> list[str]:
+        if hermes_home is None and lab is not None:
+            raw = lab.get("hermes_home")
+            if raw:
+                hermes_home = Path(str(raw))
+        return _environment_gaps(store, hermes_home=hermes_home)
 
     def write_output(
         self,
@@ -4581,7 +4629,9 @@ def _live_run(
         # 2a. The laboratory's own read-only sources are probed *after* the fixture: a gap
         #     the fixture did not deliberately create would fabricate an hourly gap report
         #     and cannot be distinguished from a coverage failure, so it refuses here.
-        environment_gaps = backends.environment_gaps(store)
+        environment_gaps = backends.environment_gaps(
+            store, hermes_home=Path(str(lab["hermes_home"])), lab=lab
+        )
         record["environment"] = {"gaps": environment_gaps}
         if environment_gaps:
             abort(

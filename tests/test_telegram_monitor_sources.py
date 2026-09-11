@@ -20,6 +20,8 @@ from aether_agents.monitor.sources import (
     ReadOnlySources,
     SourceCollection,
     SourceItem,
+    _read_board_bindings,
+    _resolve_board_paths,
     enumerate_project_bindings,
     open_read_only_sqlite,
 )
@@ -1303,3 +1305,48 @@ def test_active_identity_bound_can_fail_when_compaction_cannot_fit() -> None:
             source=huge,
             max_chars=1_000,
         )
+
+
+def test_root_without_default_board_store_produces_no_phantom_metadata_gap(
+    tmp_path: Path,
+) -> None:
+    """A root that has no default board store must not produce a BOARD_METADATA_UNREADABLE gap."""
+    hermes_home = tmp_path / "hermes"
+    hermes_home.mkdir()
+    paths = _resolve_board_paths(board_paths=None, hermes_home=hermes_home)
+    assert "default" not in [slug for slug, _ in paths]
+    _, gaps = _read_board_bindings([], board_paths=None, hermes_home=hermes_home)
+    assert "BOARD_METADATA_UNREADABLE" not in gaps
+
+
+def test_root_with_unreadable_or_unbound_default_store_preserves_gap(
+    tmp_path: Path,
+) -> None:
+    """A default store that exists but is unreadable or unbound keeps existing gap behavior."""
+    # 1. Unreadable default store (kanban.db exists, but no board.json metadata)
+    hermes_unreadable = tmp_path / "hermes_unreadable"
+    hermes_unreadable.mkdir()
+    (hermes_unreadable / "kanban.db").touch()
+    paths = _resolve_board_paths(board_paths=None, hermes_home=hermes_unreadable)
+    assert ("default", hermes_unreadable / "kanban.db") in paths
+    _, gaps = _read_board_bindings([], board_paths=None, hermes_home=hermes_unreadable)
+    assert "BOARD_METADATA_UNREADABLE" in gaps
+
+    # 2. Unbound default store (kanban.db and board.json exist, but unbound/missing project id)
+    hermes_unbound = tmp_path / "hermes_unbound"
+    (hermes_unbound / "kanban" / "boards" / "default").mkdir(parents=True)
+    (hermes_unbound / "kanban.db").touch()
+    (hermes_unbound / "kanban" / "boards" / "default" / "board.json").write_text(
+        json.dumps({"slug": "default", "name": "Default"}),
+        encoding="utf-8",
+    )
+    _, unbound_gaps = _read_board_bindings([], board_paths=None, hermes_home=hermes_unbound)
+    assert "BOARD_PROJECT_UNBOUND" in unbound_gaps
+
+
+def test_iso_dates_in_task_result_do_not_produce_task_result_unsafe() -> None:
+    """ISO dates (YYYY-MM-DD) in task results must not be rejected as phone numbers."""
+    from aether_agents.monitor.sources import _safe_text
+
+    text = "Phase two rollout will finish by 2099-12-31 according to the latest draft."
+    assert _safe_text(text, limit=1200) is not None
