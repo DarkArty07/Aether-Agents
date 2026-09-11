@@ -2194,12 +2194,15 @@ def _job_run_evidence(
     window_start: datetime,
     window_end: datetime,
     expected_report_id: str | None = None,
+    require_silent: bool = False,
 ) -> dict[str, Any]:
     """Read the native scheduler's own run record(s) inside one bounded window.
 
     Active reports are filtered to the report id observed at the scheduled cut.  A minute
     cadence can legitimately create another native run before narration/delivery finishes;
     counting that later run as evidence for the earlier cut would make the receipt ambiguous.
+    Similarly, the idle cut requires the silent wakeAgent=false marker so a preceding active
+    run whose execution window overlaps the minute interval is not counted as idle evidence.
     """
 
     if output_dir is None:
@@ -2221,6 +2224,8 @@ def _job_run_evidence(
             )
     if expected_report_id is not None:
         selected = [item for item in selected if expected_report_id in str(item.get("text", ""))]
+    if require_silent:
+        selected = [item for item in selected if bool(item.get("silent"))]
     return {
         "available": True,
         "count": len(selected),
@@ -5081,9 +5086,6 @@ def _live_run(
         output_dir_value = job_record.get("output_dir") if job_record else None
         output_dir = Path(str(output_dir_value)) if output_dir_value else None
         language = backends.owner_language(interpreter, environment)
-        cut_one = accelerated_cut
-        cut_two = cut_one + timedelta(minutes=1)
-        cut_idle = cut_one + timedelta(minutes=2)
         direct_entry = manifest[0]
         interval_zero = direct_entry["direct"]["intervals"][0]
         interval_one = direct_entry["direct"]["intervals"][1]
@@ -5117,6 +5119,9 @@ def _live_run(
                 },
             )
         # 5. One bounded initial native model+transport smoke before the scheduled wait.
+        #    The smoke may legally cross minute boundaries; the native scheduler skips
+        #    in-flight jobs and advances their next_run_at, so the active and idle cuts
+        #    must be selected from the job's native next_run_at read after the smoke finishes.
         baseline_reports = frozenset()
         record["smoke"] = _smoke_phase(
             backends,
@@ -5126,12 +5131,29 @@ def _live_run(
             output_dir=output_dir,
             language=language,
             baseline_report_ids=baseline_reports,
-            cut_one=cut_one,
+            cut_one=accelerated_cut,
             expected_items=expected_before,
             expected_item_gaps={direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)},
             stream=stream,
             environment=environment,
         )
+        post_smoke_job = backends.job_record(interpreter, job_id, environment)
+        cut_one = _parse_utc(post_smoke_job.get("next_run_at") if post_smoke_job else None)
+        if (
+            cut_one is None
+            or cut_one <= backends.now()
+            or cut_one.second != 0
+            or cut_one.microsecond != 0
+        ):
+            abort(
+                "lab-schedule-next-run",
+                "the native scheduler did not maintain a future minute boundary after the initial smoke",
+                detail={
+                    "next_run_at": post_smoke_job.get("next_run_at") if post_smoke_job else None
+                },
+            )
+        cut_two = cut_one + timedelta(minutes=1)
+        cut_idle = cut_one + timedelta(minutes=2)
         # 6. Two real scheduled laboratory cuts executed by the native scheduler.  The
         #    expression is accelerated only in the private store; these timestamps are not
         #    production-hourly or elapsed-hour evidence.
@@ -5180,10 +5202,7 @@ def _live_run(
                 )
                 backends.sleep(BOUNDARY_POLL_SECONDS)
             run_window_start = expected_cut - timedelta(minutes=1)
-            # Stop the evidence window at the actual observation time.  A fixed hourly
-            # window would include later minute-cadence runs and could make one cut appear
-            # to have multiple native executions.
-            run_window_end = backends.now()
+            run_window_end = expected_cut + timedelta(minutes=1)
             fresh_job = backends.job_record(interpreter, job_id, environment)
             run_evidence = _job_run_evidence(
                 output_dir,
@@ -5249,7 +5268,8 @@ def _live_run(
             run_evidence = _job_run_evidence(
                 output_dir,
                 window_start=cut_idle - timedelta(minutes=1),
-                window_end=backends.now(),
+                window_end=cut_idle + timedelta(minutes=1),
+                require_silent=True,
             )
             decision = _inspect_idle(
                 store,

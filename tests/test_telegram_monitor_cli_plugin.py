@@ -2275,6 +2275,15 @@ class _FakeBackends:
                 self.job_last_run[job_id] = phase if previous is None else max(previous, phase)
         last_run = self.job_last_run.get(job_id)
         schedule = str(job.get("schedule") or self.module.NATIVE_SCHEDULE)
+        next_cut = self.enable_next_cut
+        if next_cut <= self.clock.now():
+            future_phases = [phase for phase in self.clock.phases if phase > self.clock.now()]
+            if future_phases:
+                next_cut = future_phases[0]
+            else:
+                next_cut = (self.clock.now() + timedelta(minutes=1)).replace(
+                    second=0, microsecond=0
+                )
         return {
             "id": job_id,
             "name": self.module.NATIVE_JOB_NAME,
@@ -2297,7 +2306,7 @@ class _FakeBackends:
             "workdir_set": False,
             "monitor_script_set": False,
             "monitor_url_set": False,
-            "next_run_at": _stamp(self.enable_next_cut),
+            "next_run_at": _stamp(next_cut),
             "last_run_at": _stamp(last_run) if last_run else None,
             "last_status": "ok" if last_run else None,
             "last_error": None,
@@ -2950,7 +2959,7 @@ def _build_world(
             narrative=before_narrative,
             deliveries=_confirmed_parts(before_payload, before_narrative),
         )
-        _native_run(output_dir, CUT_ONE - timedelta(seconds=5), report_id=before_report)
+        _native_run(output_dir, CUT_ONE + timedelta(seconds=5), report_id=before_report)
 
         after_report = "rpt_" + "c" * 32
         after_payload = _snapshot_payload(
@@ -2970,7 +2979,7 @@ def _build_world(
             narrative=after_narrative,
             deliveries=_confirmed_parts(after_payload, after_narrative),
         )
-        _native_run(output_dir, CUT_TWO - timedelta(seconds=5), report_id=after_report)
+        _native_run(output_dir, CUT_TWO + timedelta(seconds=5), report_id=after_report)
 
         idle_report = "rpt_" + "d" * 32
         store.expose(
@@ -2987,7 +2996,7 @@ def _build_world(
             },
             resolved=True,
         )
-        _native_run(output_dir, CUT_IDLE - timedelta(seconds=4))
+        _native_run(output_dir, CUT_IDLE + timedelta(seconds=4))
     return world
 
 
@@ -3533,6 +3542,184 @@ print(json.dumps({"owned": schedule(owned), "other": schedule(other)}))
     )
     inspected = module._runtime_execute(runtime, inspect_body, environment=environment, cwd=cwd)
     assert inspected == {"owned": "* * * * *", "other": "0 * * * *"}
+
+
+def test_job_run_evidence_distinguishes_active_and_idle_runs_across_overlapping_minute_window(
+    tmp_path: Path,
+) -> None:
+    """The idle run record is attributed by its silent gate across overlapping windows."""
+
+    module = _qualification_module()
+    output_dir = tmp_path / "native-runs"
+    output_dir.mkdir(parents=True)
+
+    base_time = datetime(2026, 9, 10, 11, 0, tzinfo=timezone.utc)
+    cut_two = base_time + timedelta(minutes=1)  # 11:01:00
+    cut_idle = base_time + timedelta(minutes=2)  # 11:02:00
+
+    # Active cut 2 completes and writes output at 11:01:05 (non-silent).
+    path_cut2 = output_dir / "run-cut2.md"
+    path_cut2.write_text("digest rpt_cut2_active\nConfirmed delivery parts.", encoding="utf-8")
+    t_cut2 = (cut_two + timedelta(seconds=5)).timestamp()
+    os.utime(path_cut2, (t_cut2, t_cut2))
+
+    # Idle cut completes and writes output at 11:02:04 (silent).
+    path_idle = output_dir / "run-idle.md"
+    path_idle.write_text(
+        "# Cron Job: Aether Telegram Monitor\n\n"
+        "Script gate returned `wakeAgent=false` — agent skipped.\n",
+        encoding="utf-8",
+    )
+    t_idle = (cut_idle + timedelta(seconds=4)).timestamp()
+    os.utime(path_idle, (t_idle, t_idle))
+
+    # 1. Active cut 2 evidence: expected_report_id selects the active run.
+    active_ev = module._job_run_evidence(
+        output_dir,
+        window_start=cut_two - timedelta(minutes=1),
+        window_end=cut_two + timedelta(minutes=1),
+        expected_report_id="rpt_cut2_active",
+    )
+    assert active_ev["count"] == 1
+    assert active_ev["silent"] is False
+    assert active_ev["contents"][0]["name"] == "run-cut2.md"
+
+    # 2. Idle window [cut_idle - 1min, cut_idle + 1min] contains both cut2 and idle files.
+    unfiltered = module._job_run_evidence(
+        output_dir,
+        window_start=cut_idle - timedelta(minutes=1),
+        window_end=cut_idle + timedelta(minutes=1),
+    )
+    assert unfiltered["count"] == 2
+
+    # 3. Idle cut with require_silent=True filters out the active cut and isolates the idle run.
+    idle_ev = module._job_run_evidence(
+        output_dir,
+        window_start=cut_idle - timedelta(minutes=1),
+        window_end=cut_idle + timedelta(minutes=1),
+        require_silent=True,
+    )
+    assert idle_ev["count"] == 1
+    assert idle_ev["silent"] is True
+    assert idle_ev["contents"][0]["name"] == "run-idle.md"
+
+
+def test_accelerated_lab_selects_boundary_after_overrunning_smoke(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the initial smoke overruns across a minute boundary, the harness selects
+
+    the next boundary that will actually fire rather than aborting on the dropped cut.
+    """
+
+    skipped_cut = datetime(2026, 9, 10, 10, 6, tzinfo=timezone.utc)
+    smoke_done = datetime(2026, 9, 10, 10, 6, 20, tzinfo=timezone.utc)
+    cut_one = datetime(2026, 9, 10, 10, 7, tzinfo=timezone.utc)
+    cut_two = datetime(2026, 9, 10, 10, 8, tzinfo=timezone.utc)
+    cut_idle = datetime(2026, 9, 10, 10, 9, tzinfo=timezone.utc)
+    phases = (skipped_cut, smoke_done, cut_one, cut_two, cut_idle)
+
+    world = _build_world(tmp_path, monkeypatch, expose_evidence=False, phases=phases)
+    store = world["store"]
+    output_dir = world["output_dir"]
+    manifest = world["manifest"]
+    entry_a, entry_b = manifest
+    interval_zero = entry_a["direct"]["intervals"][0]
+    interval_one = entry_a["direct"]["intervals"][1]
+
+    # At trigger time, the upcoming cut is skipped_cut (10:06:00), 60s in the future.
+    world["backends"].enable_next_cut = skipped_cut
+
+    # The smoke runs and overruns past skipped_cut (finishing at 10:06:20).
+    smoke_report = "rpt_" + "a" * 32
+    smoke_payload = _snapshot_payload(
+        report_id=smoke_report,
+        cutoff=SMOKE_CUTOFF,
+        items=(
+            _pipeline_item(entry_a, state="running"),
+            _pipeline_item(entry_b, state="review"),
+            _direct_item(entry_a, interval_zero, "turn_ended_unknown"),
+        ),
+    )
+    smoke_narrative = _narrative(smoke_payload)
+    store.expose(
+        smoke_report,
+        SMOKE_CUTOFF,
+        payload=smoke_payload,
+        narrative=smoke_narrative,
+        deliveries=_confirmed_parts(smoke_payload, smoke_narrative),
+        reveal=smoke_done,
+        collected=smoke_done - timedelta(seconds=5),
+    )
+    _native_run(output_dir, smoke_done - timedelta(seconds=5), report_id=smoke_report)
+
+    # Active cuts are scheduled at cut_one and cut_two, and idle cut at cut_idle.
+    before_report = "rpt_" + "b" * 32
+    before_payload = _snapshot_payload(
+        report_id=before_report,
+        cutoff=cut_one,
+        items=(
+            _pipeline_item(entry_a, state="running"),
+            _pipeline_item(entry_b, state="review"),
+            _direct_item(entry_a, interval_zero, "turn_ended_unknown"),
+        ),
+    )
+    before_narrative = _narrative(before_payload)
+    store.expose(
+        before_report,
+        cut_one,
+        payload=before_payload,
+        narrative=before_narrative,
+        deliveries=_confirmed_parts(before_payload, before_narrative),
+    )
+    _native_run(output_dir, cut_one + timedelta(seconds=5), report_id=before_report)
+
+    after_report = "rpt_" + "c" * 32
+    after_payload = _snapshot_payload(
+        report_id=after_report,
+        cutoff=cut_two,
+        items=(
+            _pipeline_item(entry_a, state="completed", final=True),
+            _pipeline_item(entry_b, state="completed", final=True),
+            _direct_item(entry_a, interval_one, "turn_ended_completed"),
+        ),
+    )
+    after_narrative = _narrative(after_payload)
+    store.expose(
+        after_report,
+        cut_two,
+        payload=after_payload,
+        narrative=after_narrative,
+        deliveries=_confirmed_parts(after_payload, after_narrative),
+    )
+    _native_run(output_dir, cut_two + timedelta(seconds=5), report_id=after_report)
+
+    idle_report = "rpt_" + "d" * 32
+    store.expose(
+        idle_report,
+        cut_idle,
+        payload={
+            "schema_version": "aether.telegram-monitor.snapshot.v1",
+            "report_id": idle_report,
+            "cutoff_utc": _stamp(cut_idle),
+            "collected_at_utc": _stamp(cut_idle + timedelta(seconds=30)),
+            "previous_cutoff_utc": _stamp(cut_two),
+            "items": [],
+            "coverage_gaps": [],
+        },
+        resolved=True,
+    )
+    _native_run(output_dir, cut_idle + timedelta(seconds=4))
+
+    output = tmp_path / "private" / "receipt.json"
+    record = _run_live(world, output)
+    assert record["ok"] is True
+    assert record["smoke"]["confirmed"] is True
+    boundaries = record["boundaries"]
+    assert len(boundaries) == 2
+    assert boundaries[0]["expected_cutoff_utc"] == _stamp(cut_one)
+    assert boundaries[1]["expected_cutoff_utc"] == _stamp(cut_two)
+    assert record["idle"]["cutoff_utc"] == _stamp(cut_idle)
 
 
 def test_live_refuses_non_native_schedule_update_before_scheduler(
