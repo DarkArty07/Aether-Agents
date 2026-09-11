@@ -5016,6 +5016,7 @@ _PROBE_STUB_MODULES: dict[str, str] = {
         "        return True\n"
     ),
     "hermes_cli/__init__.py": "",
+    "hermes_cli/env_loader.py": "def load_hermes_dotenv(*args, **kwargs):\n    return []\n",
     "hermes_cli/kanban_db.py": (
         "import os\n"
         "from pathlib import Path\n\n\n"
@@ -5332,6 +5333,18 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "        return True\n"
     ),
     "hermes_cli/__init__.py": "",
+    "hermes_cli/env_loader.py": (
+        "import os\n"
+        "from pathlib import Path\n\n\n"
+        "def load_hermes_dotenv(*args, **kwargs):\n"
+        "    env_path = Path(os.environ.get('HERMES_HOME', '')) / '.env'\n"
+        "    if env_path.is_file():\n"
+        "        for line in env_path.read_text(encoding='utf-8').splitlines():\n"
+        "            if '=' in line and not line.startswith('#'):\n"
+        "                k, v = line.split('=', 1)\n"
+        "                os.environ[k.strip()] = v.strip()\n"
+        "    return []\n"
+    ),
     "hermes_cli/kanban_db.py": (
         "import os\n"
         "import sqlite3\n"
@@ -5592,7 +5605,7 @@ def _chain_context(tmp_path: Path, native_root: Path) -> tuple[Path, dict[str, s
     (hermes_home / "gateway-home.json").write_text(
         json.dumps({"chat_id": "-100000", "thread_id": None}), encoding="utf-8"
     )
-    profile = tmp_path / "profile"
+    profile = hermes_home / "profiles" / "morfeo"
     profile.mkdir(parents=True, exist_ok=True)
     (profile / "config.yaml").write_text(
         "model:\n  default: candidate\n  provider: aether-router\n"
@@ -5852,3 +5865,238 @@ def test_every_fail_closed_laboratory_stage_never_qualifies(
         assert ("lab_scheduler_start" in backends.calls) == (
             "lab_scheduler_stop" in backends.calls or backends.scheduler_stop_failure
         )
+
+
+# --- D14 Provisioned profile normalization and reference destination tests ---
+
+
+def test_d14_hermes_home_both_shapes_normalize_to_same_profile(tmp_path: Path) -> None:
+    """Both HERMES_HOME conventions normalize to the same verified Morfeo profile."""
+    q = _qualification_module()
+
+    multi_root = tmp_path / "hermes_multi"
+    exact_profile = multi_root / "profiles" / "morfeo"
+    exact_profile.mkdir(parents=True)
+    (exact_profile / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+
+    norm_multi, class_multi, digest_multi = q._normalize_profile_home(multi_root)
+    norm_exact, class_exact, digest_exact = q._normalize_profile_home(exact_profile)
+
+    assert norm_multi == exact_profile.resolve()
+    assert norm_exact == exact_profile.resolve()
+    assert class_multi == "multi-profile-root"
+    assert class_exact == "exact-profile"
+    assert digest_multi == digest_exact
+    assert len(digest_multi) == 64
+    assert str(exact_profile) not in digest_multi
+
+
+def test_d14_normalize_profile_refuses_missing_and_wrong_candidates(tmp_path: Path) -> None:
+    """Missing and differently named candidates refuse before any effect."""
+    q = _qualification_module()
+
+    with pytest.raises(q.QualificationError) as missing_err:
+        q._normalize_profile_home(tmp_path / "nonexistent")
+    assert missing_err.value.code == "lab-profile"
+    assert "does not exist" in missing_err.value.message
+
+    wrong_named = tmp_path / "implementer"
+    wrong_named.mkdir()
+    (wrong_named / "config.yaml").write_text("agent:\n  name: implementer\n", encoding="utf-8")
+    with pytest.raises(q.QualificationError) as wrong_err:
+        q._normalize_profile_home(wrong_named)
+    assert wrong_err.value.code == "lab-profile"
+    assert "differently named candidate is refused" in wrong_err.value.message
+
+
+def test_d14_normalize_profile_refuses_ambiguous_and_symlinked_candidates(tmp_path: Path) -> None:
+    """Ambiguous and symlinked profile candidates refuse before any effect."""
+    q = _qualification_module()
+
+    ambig = tmp_path / "ambiguous_root" / "morfeo"
+    ambig.mkdir(parents=True)
+    (ambig / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+    child = ambig / "profiles" / "morfeo"
+    child.mkdir(parents=True)
+    (child / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+
+    with pytest.raises(q.QualificationError) as ambig_err:
+        q._normalize_profile_home(ambig)
+    assert ambig_err.value.code == "lab-profile"
+    assert "ambiguous candidate is refused" in ambig_err.value.message
+
+    real_prof = tmp_path / "real_dir" / "morfeo"
+    real_prof.mkdir(parents=True)
+    (real_prof / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+    sym_prof = tmp_path / "sym_prof"
+    sym_prof.symlink_to(real_prof)
+
+    with pytest.raises(q.QualificationError) as sym_err:
+        q._normalize_profile_home(sym_prof)
+    assert sym_err.value.code == "lab-profile"
+    assert "symbolic link" in sym_err.value.message
+
+
+def test_d14_normalize_profile_refuses_missing_and_symlinked_config(tmp_path: Path) -> None:
+    """Profiles missing configuration or using symlinked configuration are refused."""
+    q = _qualification_module()
+
+    no_cfg = tmp_path / "no_cfg" / "morfeo"
+    no_cfg.mkdir(parents=True)
+    with pytest.raises(q.QualificationError) as no_cfg_err:
+        q._normalize_profile_home(no_cfg)
+    assert no_cfg_err.value.code == "lab-profile"
+    assert "config.yaml missing" in no_cfg_err.value.message
+
+    sym_cfg_prof = tmp_path / "sym_cfg" / "morfeo"
+    sym_cfg_prof.mkdir(parents=True)
+    external_cfg = tmp_path / "external_config.yaml"
+    external_cfg.write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+    (sym_cfg_prof / "config.yaml").symlink_to(external_cfg)
+    with pytest.raises(q.QualificationError) as sym_cfg_err:
+        q._normalize_profile_home(sym_cfg_prof)
+    assert sym_cfg_err.value.code == "lab-profile"
+    assert "symbolic link" in sym_cfg_err.value.message
+
+
+def test_d14_normalize_profile_refuses_relative_path_and_worker_identity_substitution(
+    tmp_path: Path,
+) -> None:
+    """Relative paths, cwd fallback, and inherited worker identities cannot substitute."""
+    q = _qualification_module()
+
+    with pytest.raises(q.QualificationError) as rel_err:
+        q._normalize_profile_home(Path("relative/morfeo"))
+    assert rel_err.value.code == "lab-profile"
+    assert "relative paths and cwd fallback are refused" in rel_err.value.message
+
+    worker_prof = tmp_path / "profiles" / "implementer"
+    worker_prof.mkdir(parents=True)
+    (worker_prof / "config.yaml").write_text("agent:\n  name: implementer\n", encoding="utf-8")
+
+    environ = {
+        "HERMES_HOME": str(worker_prof),
+        "HERMES_PROFILE": "morfeo",
+        "HERMES_KANBAN_TASK": "t_dummy",
+    }
+    with pytest.raises(q.QualificationError) as subst_err:
+        q._normalize_profile_home(environ=environ)
+    assert subst_err.value.code == "lab-profile"
+    assert "differently named candidate is refused" in subst_err.value.message
+
+
+def test_d14_provisioned_reference_environment_strips_access(tmp_path: Path) -> None:
+    """The provisioned reference environment is rooted at Morfeo and strips access names."""
+    q = _qualification_module()
+
+    prof = tmp_path / "profiles" / "morfeo"
+    prof.mkdir(parents=True)
+    (prof / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+
+    environ = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/home/user",
+        "TELEGRAM_BOT_TOKEN": "secret-token",
+        "TELEGRAM_HOME_CHANNEL": "secret-channel",
+        "AETHER_ROUTER_API_KEY": "secret-key",
+        "HERMES_TIMEZONE": "UTC",
+    }
+    ref_env = q._provisioned_reference_environment(prof, environ=environ)
+    assert ref_env["HERMES_HOME"] == str(prof)
+    assert ref_env["HERMES_TIMEZONE"] == "UTC"
+    assert "TELEGRAM_BOT_TOKEN" not in ref_env
+    assert "TELEGRAM_HOME_CHANNEL" not in ref_env
+    assert "AETHER_ROUTER_API_KEY" not in ref_env
+    assert not any(k.startswith(("TELEGRAM_", "AETHER_ROUTER_")) for k in ref_env)
+
+
+def test_d14_negative_control_reference_probe_rejects_injected_lab_access(
+    tmp_path: Path,
+) -> None:
+    """Supplying lab access to the reference probe is rejected (negative control)."""
+    q = _qualification_module()
+
+    prof = tmp_path / "profiles" / "morfeo"
+    prof.mkdir(parents=True)
+    (prof / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+
+    with pytest.raises(q.QualificationError) as err1:
+        q._lab_destination(
+            Path(sys.executable),
+            environment={"TELEGRAM_HOME_CHANNEL": "12345"},
+            lab_root=None,
+            profile_home=prof,
+        )
+    assert err1.value.code == "lab-reference-access-rejected"
+
+    with pytest.raises(q.QualificationError) as err2:
+        q._lab_destination(
+            Path(sys.executable),
+            environment={"TELEGRAM_BOT_TOKEN": "token123"},
+            lab_root=None,
+            profile_home=prof,
+        )
+    assert err2.value.code == "lab-reference-access-rejected"
+
+
+def test_d14_native_probe_body_executes_load_hermes_dotenv_before_load_gateway_config() -> None:
+    """_LAB_NATIVE_PROBE calls load_hermes_dotenv before load_gateway_config."""
+    q = _qualification_module()
+    body = q._LAB_NATIVE_PROBE
+
+    dotenv_pos = body.find("load_hermes_dotenv()")
+    gw_pos = body.find("load_gateway_config()")
+
+    assert dotenv_pos != -1, "load_hermes_dotenv() call missing from probe body"
+    assert gw_pos != -1, "load_gateway_config() call missing from probe body"
+    assert dotenv_pos < gw_pos, "load_hermes_dotenv must execute before load_gateway_config"
+
+
+def test_d14_target_digest_equality_and_no_access_values(tmp_path: Path) -> None:
+    """Target digest matches between reference and lab probe, and no access values leak."""
+    lab_mod = _lab_module()
+
+    chat_id = "test-chat-42"
+    expected_digest = hashlib.sha256(f"{chat_id}\0".encode("utf-8")).hexdigest()
+
+    access = {"TELEGRAM_HOME_CHANNEL": chat_id, "TELEGRAM_BOT_TOKEN": "test-bot-token"}
+    fingerprint = lab_mod.access_fingerprint(access)
+    assert chat_id not in str(fingerprint)
+    assert "test-bot-token" not in str(fingerprint)
+    assert len(expected_digest) == 64
+    assert chat_id not in expected_digest
+
+
+def test_d14_runtime_reference_destination_probe_matches_gateway_context() -> None:
+    """When the product runtime is available, reference probe resolves with matching digest."""
+    q = _qualification_module()
+    runtime_py = Path("/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/bin/python")
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    prof = Path("/home/darkarty/Desktop/agentes/aether/home/profiles/morfeo")
+    if not prof.is_dir():
+        pytest.skip("provisioned Morfeo profile not available")
+
+    res = q._lab_destination(runtime_py, environment=None, profile_home=prof)
+    assert res.get("problems") == []
+    digest = res.get("destination_digest")
+    assert digest is not None
+    assert digest.startswith("36007c9a8b0f8394")
+    assert res.get("destination_thread_present") is False
+
+
+def test_d14_preserved_prior_refusal_receipt_and_log_unchanged() -> None:
+    """The preserved v2 refusal receipt and log match their recorded SHA-256 digests."""
+    evidence_dir = Path("/home/darkarty/.local/qualification/telegram-monitor-evidence")
+    receipt = evidence_dir / "telegram-monitor-live.json"
+    log = evidence_dir / "live-run.log"
+
+    assert receipt.is_file(), f"preserved receipt missing at {receipt}"
+    assert log.is_file(), f"preserved log missing at {log}"
+
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    log_sha = hashlib.sha256(log.read_bytes()).hexdigest()
+
+    assert receipt_sha == "eb2f3ad3fda8ffb1e5439ad2d26694aec0d97f468bab5aa49dcd065afea94578"
+    assert log_sha == "5a9ca1fe13d358a44d6907d5d23d99b1e599f70c0087f2eb6fc0d77ff774fdaa"

@@ -873,6 +873,46 @@ def _check_lab_context(workspace: Path) -> tuple[str, str]:
             return "fail", f"an existing laboratory root was not refused: {error.code}"
     else:
         return "fail", "an existing laboratory root was adopted instead of refused"
+
+    test_root = workspace / "d14-norm-test"
+    test_prof = test_root / "profiles" / "morfeo"
+    test_prof.mkdir(parents=True, exist_ok=True)
+    (test_prof / "config.yaml").write_text("agent:\n  name: Morfeo\n", encoding="utf-8")
+
+    norm_root, class_root, dig_root = _normalize_profile_home(test_root)
+    norm_prof, class_prof, dig_prof = _normalize_profile_home(test_prof)
+    if norm_root != test_prof.resolve() or norm_prof != test_prof.resolve():
+        return (
+            "fail",
+            "the D14 profile normalization did not resolve both shapes to the same profile",
+        )
+    if class_root != "multi-profile-root" or class_prof != "exact-profile":
+        return "fail", "the D14 profile normalization recorded incorrect path classes"
+    if dig_root != dig_prof:
+        return "fail", "the D14 profile normalization did not produce matching digests"
+
+    try:
+        _normalize_profile_home(workspace / "no-such-profile")
+    except QualificationError as err:
+        if err.code != "lab-profile":
+            return "fail", f"missing profile did not raise lab-profile: {err.code}"
+    else:
+        return "fail", "missing profile candidate was not refused"
+
+    ref_env = _provisioned_reference_environment(
+        test_prof,
+        environ={
+            "PATH": "/bin",
+            "TELEGRAM_BOT_TOKEN": "secret",
+            "TELEGRAM_HOME_CHANNEL": "chan",
+            "AETHER_ROUTER_API_KEY": "key",
+        },
+    )
+    if any(k.startswith(("TELEGRAM_", "AETHER_ROUTER_")) for k in ref_env):
+        return "fail", "the provisioned reference environment leaked access names"
+    if ref_env.get("HERMES_HOME") != str(test_prof):
+        return "fail", "the provisioned reference environment is not rooted at the profile home"
+
     return (
         "pass",
         "the private laboratory root, its decision-only configuration, the borrowed access "
@@ -957,6 +997,7 @@ def _runtime_execute(
     *,
     timeout: int = 300,
     environment: Mapping[str, str] | None = None,
+    cwd: Path | str | None = None,
 ) -> dict[str, Any]:
     """Run a bounded JSON probe inside the provisioned runtime interpreter.
 
@@ -984,6 +1025,7 @@ def _runtime_execute(
         capture_output=True,
         text=True,
         env=environment,
+        cwd=str(cwd) if cwd is not None else None,
         timeout=timeout,
     )
     lines = [line for line in completed.stdout.splitlines() if line.strip()]
@@ -2889,6 +2931,14 @@ except Exception as error:  # noqa: BLE001
     payload["problems"].append(f"product-runtime-unavailable: {type(error).__name__}")
 
 try:
+    from hermes_cli.env_loader import load_hermes_dotenv
+
+    load_hermes_dotenv()
+    payload["interfaces"]["env_loader"] = {"load_hermes_dotenv": True}
+except Exception as error:  # noqa: BLE001
+    payload["problems"].append(f"env-loader-unavailable: {type(error).__name__}")
+
+try:
     from gateway.config import Platform, load_gateway_config
 
     config = load_gateway_config()
@@ -3442,25 +3492,215 @@ def _script_root() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _provisioned_profile_home() -> Path:
-    """Resolve the provisioned Morfeo profile directory of this installation."""
+def _normalize_profile_home(
+    candidate: Path | str | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Path, str, str]:
+    """Normalize and validate the provisioned Morfeo profile directory.
+
+    Accepts either:
+    1. The multi-profile installation root containing a ``profiles/morfeo`` directory.
+    2. The exact canonical ``profiles/morfeo`` profile home.
+
+    Returns:
+        (profile_home, path_class, path_digest) where path_class is either
+        ``"multi-profile-root"`` or ``"exact-profile"``, and path_digest is the
+        sha256 hex digest of the canonical resolved path.
+
+    Rejects:
+    - Missing candidates or missing required directories.
+    - Symbolic links (at the candidate root, child directory, or config.yaml).
+    - Ambiguous candidates (e.g. named "morfeo" but also containing a "profiles/morfeo" child).
+    - Differently named profile directories (e.g. other profile names like "implementer").
+    - Profiles missing expected configuration (config.yaml).
+    - Current worker cwd or profile/identity fallback.
+    """
+
+    env = environ if environ is not None else os.environ
+    if candidate is not None:
+        raw = Path(candidate)
+    else:
+        configured = env.get("HERMES_HOME", "").strip()
+        if not configured:
+            try:
+                configured = str(monitor_runtime.hermes_home()).strip()
+            except Exception:
+                configured = str(Path.home() / ".hermes")
+        raw = Path(configured)
+
+    raw = raw.expanduser()
+    if not raw.is_absolute():
+        raise QualificationError(
+            "lab-profile",
+            "the provisioned Hermes home candidate must be an absolute path; relative "
+            "paths and cwd fallback are refused",
+        )
 
     try:
-        home = monitor_runtime.hermes_home()
-    except Exception as error:  # noqa: BLE001 - a broken installation fails closed below
+        is_sym = raw.is_symlink()
+    except OSError as error:
         raise QualificationError(
-            "lab-context",
-            "the provisioned Hermes home could not be resolved; the laboratory cannot "
-            "borrow the existing route without it",
+            "lab-profile",
+            f"the provisioned Hermes home candidate could not be accessed: {type(error).__name__}",
         ) from error
-    return Path(home) / "profiles" / "morfeo"
+
+    if is_sym:
+        raise QualificationError(
+            "lab-profile",
+            "the provisioned Hermes home candidate is a symbolic link; linked profile "
+            "candidates are refused",
+        )
+
+    try:
+        exists = raw.exists()
+        is_dir = raw.is_dir() if exists else False
+    except OSError as error:
+        raise QualificationError(
+            "lab-profile",
+            f"the provisioned Hermes home candidate could not be inspected: {type(error).__name__}",
+        ) from error
+
+    if not exists:
+        raise QualificationError(
+            "lab-profile",
+            "the provisioned Hermes home candidate does not exist",
+        )
+    if not is_dir:
+        raise QualificationError(
+            "lab-profile",
+            "the provisioned Hermes home candidate is not a directory",
+        )
+
+    is_named_morfeo = raw.name == "morfeo"
+    child_candidate = raw / "profiles" / "morfeo"
+    try:
+        child_is_sym = child_candidate.is_symlink()
+        has_child = child_candidate.exists()
+    except OSError as error:
+        raise QualificationError(
+            "lab-profile",
+            f"the 'profiles/morfeo' child could not be inspected: {type(error).__name__}",
+        ) from error
+
+    if is_named_morfeo and has_child:
+        raise QualificationError(
+            "lab-profile",
+            "the candidate is named 'morfeo' but also contains a 'profiles/morfeo' child; "
+            "ambiguous candidate is refused",
+        )
+
+    if is_named_morfeo:
+        cfg = raw / "config.yaml"
+        try:
+            cfg_is_sym = cfg.is_symlink()
+            cfg_exists = cfg.is_file()
+        except OSError as error:
+            raise QualificationError(
+                "lab-profile",
+                f"the profile configuration could not be inspected: {type(error).__name__}",
+            ) from error
+
+        if cfg_is_sym:
+            raise QualificationError(
+                "lab-profile",
+                "the profile configuration is a symbolic link; linked configuration is refused",
+            )
+        if not cfg_exists:
+            raise QualificationError(
+                "lab-profile",
+                "the candidate is named 'morfeo' but carries no profile configuration (config.yaml missing)",
+            )
+        resolved_home = raw.resolve()
+        path_class = "exact-profile"
+    else:
+        if not has_child:
+            raise QualificationError(
+                "lab-profile",
+                "the candidate is not named 'morfeo' and has no 'profiles/morfeo' child; "
+                "differently named candidate is refused",
+            )
+        if child_is_sym:
+            raise QualificationError(
+                "lab-profile",
+                "the 'profiles/morfeo' child is a symbolic link; linked profile candidates are refused",
+            )
+        if not child_candidate.is_dir():
+            raise QualificationError(
+                "lab-profile",
+                "the 'profiles/morfeo' child is not a directory",
+            )
+        cfg = child_candidate / "config.yaml"
+        try:
+            cfg_is_sym = cfg.is_symlink()
+            cfg_exists = cfg.is_file()
+        except OSError as error:
+            raise QualificationError(
+                "lab-profile",
+                f"the profile configuration could not be inspected: {type(error).__name__}",
+            ) from error
+
+        if cfg_is_sym:
+            raise QualificationError(
+                "lab-profile",
+                "the profile configuration is a symbolic link; linked configuration is refused",
+            )
+        if not cfg_exists:
+            raise QualificationError(
+                "lab-profile",
+                "the 'profiles/morfeo' child carries no profile configuration (config.yaml missing)",
+            )
+        resolved_home = child_candidate.resolve()
+        path_class = "multi-profile-root"
+
+    if resolved_home.is_symlink():
+        raise QualificationError(
+            "lab-profile",
+            "the resolved profile home is a symbolic link; linked profile candidates are refused",
+        )
+
+    path_digest = hashlib.sha256(str(resolved_home).encode("utf-8")).hexdigest()
+    return resolved_home, path_class, path_digest
+
+
+def _provisioned_profile_home(*, environ: Mapping[str, str] | None = None) -> Path:
+    """Resolve the provisioned Morfeo profile directory of this installation."""
+
+    profile_home, _path_class, _path_digest = _normalize_profile_home(environ=environ)
+    return profile_home
 
 
 def _provisioned_env_files(profile_home: Path) -> tuple[Path, ...]:
     """The operator's own access files, read into memory and never copied."""
 
     candidates = [profile_home / ".env", profile_home.parent.parent / ".env"]
-    return tuple(path for path in candidates if path.is_file())
+    return tuple(path for path in candidates if path.is_file() and not path.is_symlink())
+
+
+def _provisioned_reference_environment(
+    profile_home: Path, *, environ: Mapping[str, str] | None = None
+) -> dict[str, str]:
+    """Build the restricted process environment for the provisioned reference probe.
+
+    Rooted at the normalized Morfeo profile home with Hermes environment files taking effect
+    via native dotenv loading. Explicitly strips all lab/transport access names and current
+    worker selectors to prevent injection into the reference side.
+    """
+
+    base = environ if environ is not None else os.environ
+    env = {
+        "PATH": base.get("PATH", ""),
+        "HOME": base.get("HOME", ""),
+        "PYTHONPATH": base.get("PYTHONPATH", ""),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "HERMES_HOME": str(profile_home),
+    }
+    for name in ("XDG_STATE_HOME", "AETHER_HERMES_PYTHON", "HERMES_TIMEZONE"):
+        value = base.get(name)
+        if value:
+            env[name] = value
+
+    return {k: v for k, v in env.items() if not k.startswith(("TELEGRAM_", "AETHER_ROUTER_"))}
 
 
 def _lab_plan(state_root: Path, stamp: str) -> Any:
@@ -3525,13 +3765,40 @@ def _lab_destination(
     *,
     environment: Mapping[str, str] | None,
     lab_root: Path | None = None,
+    profile_home: Path | None = None,
 ) -> dict[str, Any]:
     """Resolve the exact destination and native interfaces in one bounded probe.
 
     ``lab_root`` selects the laboratory child context: only then does the probe resolve the
     native writer surface, the loaded artifact digests and the effective roots a lab child
     actually resolves.
+
+    When ``lab_root`` is ``None``, this executes the provisioned reference probe in a
+    restricted child rooted at ``profile_home``. Injected lab access in ``environment`` is
+    strictly rejected (negative control).
     """
+
+    if lab_root is None:
+        if environment is not None:
+            injected_access = [
+                key for key in environment if key.startswith(("TELEGRAM_", "AETHER_ROUTER_"))
+            ]
+            if injected_access:
+                raise QualificationError(
+                    "lab-reference-access-rejected",
+                    "supplying lab access to the provisioned reference probe is rejected; "
+                    "the reference probe must resolve via native dotenv loading without "
+                    f"injected access: {', '.join(sorted(injected_access))}",
+                    detail={"injected_access": sorted(injected_access)},
+                )
+        resolved_profile = profile_home if profile_home is not None else _provisioned_profile_home()
+        probe_env = _provisioned_reference_environment(resolved_profile, environ=environment)
+        return _runtime_execute(
+            interpreter,
+            _native_probe_body(lab_root=None),
+            environment=probe_env,
+            cwd=resolved_profile,
+        )
 
     return _runtime_execute(
         interpreter, _native_probe_body(lab_root=lab_root), environment=environment
@@ -3592,13 +3859,20 @@ def _lab_preflight(
             "interfaces": {},
             "destination_digest": None,
             "destination_thread_present": None,
+            "profile_class": None,
+            "profile_digest": None,
             "_access": {},
             "_environment": {},
         }
-    config = _lab_config(interpreter, profile_home)
-    access = _lab_access(names=config["access_names"], profile_home=profile_home, environ=environ)
+    resolved_profile, profile_class, profile_digest = _normalize_profile_home(
+        environ.get("HERMES_HOME", profile_home), environ=environ
+    )
+    config = _lab_config(interpreter, resolved_profile)
+    access = _lab_access(
+        names=config["access_names"], profile_home=resolved_profile, environ=environ
+    )
     environment = _lab_child_environment(plan, access=access, environ=environ)
-    provisioned = _lab_destination(interpreter, environment=None)
+    provisioned = _lab_destination(interpreter, environment=None, profile_home=resolved_profile)
     problems.extend(f"provisioned-{problem}" for problem in provisioned.get("problems", ()))
     provisioned_digest = provisioned.get("destination_digest")
     if not provisioned_digest:
@@ -3613,6 +3887,8 @@ def _lab_preflight(
         "interfaces": provisioned.get("interfaces") or {},
         "destination_digest": provisioned_digest,
         "destination_thread_present": bool(provisioned.get("destination_thread_present")),
+        "profile_class": profile_class,
+        "profile_digest": profile_digest,
         "_access": access,
         "_environment": environment,
     }
@@ -4008,7 +4284,7 @@ class LiveBackends:
         return Path(state_root())
 
     def profile_home(self) -> Path:
-        return _provisioned_profile_home()
+        return _provisioned_profile_home(environ=self.environ())
 
     def environ(self) -> Mapping[str, str]:
         return dict(os.environ)

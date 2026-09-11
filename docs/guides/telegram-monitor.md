@@ -280,13 +280,17 @@ value. No credential is acquired, refreshed or widened, and no token, destinatio
 or model input is accepted from the command line.
 
 **The read-only phase (before anything exists).** A read-only preflight resolves, before the
-laboratory root exists, the provisioned runtime interpreter, the provisioned profile, the
-decision-only configuration, the borrowed access names, the verified child context, the
-native interfaces the lane depends on (the imported `cron` store and the native scheduler's
-own `start(stop_event, …)` signature) and the provisioned route/destination. A refused
+laboratory root exists, the provisioned runtime interpreter, the provisioned profile (normalizing
+either the multi-profile installation root or the exact `profiles/morfeo` home to the verified
+canonical Morfeo profile, while rejecting missing, ambiguous, linked, conflicting or differently
+named candidates), the decision-only configuration, the borrowed access names, the verified child
+context, the native interfaces the lane depends on (the imported `cron` store and the native
+scheduler's own `start(stop_event, …)` signature) and the provisioned reference destination
+(resolved through Hermes' native dotenv loader before gateway config in a restricted child rooted
+at the normalized profile home, without injecting lab access into the reference probe). A refused
 layout stops here — *nothing is created and no credential is read for it* — and every gap is
 reported by name (`lab-preflight` is the bounded code; `lab-root-inside-repository`,
-`lab-root-exists`, `lab-config`, `lab-access-missing`, `lab-context-escape`,
+`lab-root-exists`, `lab-profile`, `lab-config`, `lab-access-missing`, `lab-context-escape`,
 `provisioned-…`, `destination-missing` are its problems). The harness never invents a
 replacement trigger: if no compatible provisioned native scheduler is available, the run
 stops with that capability gap.
