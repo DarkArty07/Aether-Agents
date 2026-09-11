@@ -90,9 +90,9 @@ def resolve_auxiliary_route(
     # Try resolving via Hermes auxiliary client if available and details are missing
     try:
         from agent.auxiliary_client import (  # type: ignore[import-not-found,import-untyped]  # pyright: ignore[reportMissingImports]
-            _resolve_task_provider_model,
-            _read_main_provider,
             _read_main_model,
+            _read_main_provider,
+            _resolve_task_provider_model,
         )
 
         res_provider, res_model, _base_url, _api_key, res_api_mode = _resolve_task_provider_model(
@@ -142,10 +142,7 @@ def is_route_resolved(route: dict[str, Any] | None) -> bool:
     if not provider or not model or not api_mode:
         return False
     unresolved_markers = {"", "none", "null", "auto", "unresolved"}
-    if any(
-        str(v).strip().casefold() in unresolved_markers
-        for v in (provider, model, api_mode)
-    ):
+    if any(str(v).strip().casefold() in unresolved_markers for v in (provider, model, api_mode)):
         return False
     return True
 
@@ -645,10 +642,9 @@ def run_semantic_extraction(
 
                     # Check finish_reason: incomplete reasons (e.g. length) must not be applied or cached
                     finish_reason = usage.get("finish_reason") if isinstance(usage, dict) else None
-                    is_terminal_finish = (
-                        finish_reason is None
-                        or str(finish_reason).strip().lower() in ("stop", "tool_calls")
-                    )
+                    is_terminal_finish = finish_reason is None or str(
+                        finish_reason
+                    ).strip().lower() in ("stop", "tool_calls")
                     if not is_terminal_finish:
                         logger.warning(
                             "Chunk %d has non-terminal finish_reason: %s", cid, finish_reason

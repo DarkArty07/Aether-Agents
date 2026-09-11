@@ -46,7 +46,9 @@ jobs:
           .aether/objective-contracts/oc_59cd48430a56d93c/v4.md
           .aether/objective-contracts/oc_59cd48430a56d93c/v5.md
           .aether/objective-contracts/oc_5c2dad1b37b20a80/v1.md
+          .aether/objective-contracts/oc_644c0b407d13366a/v1.md
           .aether/objective-contracts/oc_75401d18c602d787/v1.md
+          .aether/objective-contracts/oc_7a35eca6393f18a7/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v1.md
           .aether/objective-contracts/oc_7beb699ef34a7f04/v2.md
           .aether/objective-contracts/oc_8b7b84c924ba0d71/v1.md
@@ -64,6 +66,7 @@ jobs:
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
+          .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v1.md
@@ -76,6 +79,7 @@ jobs:
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v3.md
           .aether/project.toml
+          .aether/skills/aether-observe/SKILL.md
           AGENTS.md
           CHANGELOG.md
           CLAUDE.md
@@ -91,6 +95,7 @@ jobs:
           docs/guides/observation.md
           docs/guides/policy-and-recovery.md
           docs/guides/project-initialization.md
+          docs/guides/telegram-monitor.md
           docs/index.md
           docs/product-boundary.md
           docs/reference/capabilities.md
@@ -116,12 +121,14 @@ jobs:
           INTEGRATIONS.md
           patches/hermes/HLP-211b-flow-blocker-routing.patch
           patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch
+          patches/hermes/HLP-226c-cross-board-project-inheritance.patch
           patches/hermes/HLP-262-origin-signal-sticky.patch
           patches/hermes/HLP-263-gateway-process-ownership.patch
           patches/hermes/HLP-280-bounded-flow-recovery.patch
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
@@ -177,7 +184,9 @@ jobs:
           scripts/check_documentation.py
           scripts/check_public_artifacts.py
           scripts/check_hermes_baseline_drift.py
+          scripts/qualify_telegram_monitor.py
           scripts/run_tests.py
+          scripts/telegram_monitor_lab.py
           scripts/validate_hermes_patch_reconciliation.py
           scripts/e2e/README.md
           scripts/e2e/collect.py
@@ -208,6 +217,17 @@ jobs:
           src/aether_agents/lab/validation.py
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
+          src/aether_agents/monitor/__init__.py
+          src/aether_agents/monitor/collector.py
+          src/aether_agents/monitor/commands.py
+          src/aether_agents/monitor/delivery.py
+          src/aether_agents/monitor/hermes_plugin.py
+          src/aether_agents/monitor/models.py
+          src/aether_agents/monitor/reporting.py
+          src/aether_agents/monitor/runtime.py
+          src/aether_agents/monitor/service.py
+          src/aether_agents/monitor/sources.py
+          src/aether_agents/monitor/store.py
           src/aether_agents/objective_contracts/__init__.py
           src/aether_agents/objective_contracts/execution_boards.py
           src/aether_agents/objective_contracts/hermes_plugin.py
@@ -244,6 +264,8 @@ jobs:
           src/aether_agents/observation/storage.py
           src/aether_agents/paths.py
           src/aether_agents/project_marker.py
+          src/aether_agents/resources/monitor/narration-context.md
+          src/aether_agents/resources/monitor/precheck.py
           src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/observer-requirements.txt
           src/aether_agents/resources/profiles/implementer/config.yaml
@@ -252,6 +274,7 @@ jobs:
           src/aether_agents/resources/profiles/supervisor/SOUL.md
           src/aether_agents/resources/profiles/supervisor/config.yaml
           src/aether_agents/resources/skills/canonical-skill-governance/SKILL.md
+          src/aether_agents/resources/skills/contract-result-review/SKILL.md
           src/aether_agents/resources/skills/git-github-closeout/SKILL.md
           src/aether_agents/resources/skills/semver-release/SKILL.md
           src/aether_agents/resources/skills/objective-contract-design/SKILL.md
@@ -267,6 +290,7 @@ jobs:
           tests/test_a1_contracts.py
           tests/test_aether_tui_launcher.py
           tests/test_contract_quality_documents.py
+          tests/test_contract_result_review.py
           tests/test_documentation.py
           tests/test_authorized_cleanup.py
           tests/test_e2e_harness.py
@@ -292,6 +316,12 @@ jobs:
           tests/test_project_init.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
+          tests/test_telegram_monitor_cli_plugin.py
+          tests/test_telegram_monitor_delivery.py
+          tests/test_telegram_monitor_reporting.py
+          tests/test_telegram_monitor_runtime.py
+          tests/test_telegram_monitor_sources.py
+          tests/test_telegram_monitor_state.py
           uv.lock
           VERSION
           docs/guides/project-knowledge.md
@@ -319,6 +349,8 @@ jobs:
           tests/test_knowledge_plugin_cli.py
           tests/test_knowledge_regressions.py
           tests/test_knowledge_resources.py
+          tests/test_observation_usage_guidance.py
+          tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py
           tests/test_project_knowledge_engine.py
           tests/test_work_memory.py
@@ -462,8 +494,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import subprocess
 
-          root = Path('.')
           spec = Path('specs/r0-design-governance/spec.md').read_text()
           research = Path('specs/r0-design-governance/research.md').read_text()
           roadmap = Path('ROADMAP.md').read_text()
@@ -475,11 +507,20 @@ jobs:
           assert sc == [f'{i:03d}' for i in range(1, len(sc) + 1)]
           assert decisions == [f'{i:02d}' for i in range(1, len(decisions) + 1)]
           assert len(re.findall(r'^\| R\d+ \|', roadmap, re.M)) == 14
+
+          md_files = [
+              Path(p)
+              for p in subprocess.check_output(
+                  ['git', 'ls-files', '*.md'], text=True
+              ).splitlines()
+              if p
+          ]
+          assert md_files, 'tracked markdown manifest must not be empty'
           assert '001-r0-design-governance' not in '\n'.join(
-              p.read_text(errors='ignore') for p in root.rglob('*.md')
+              p.read_text(errors='ignore') for p in md_files
           )
 
-          for path in root.rglob('*.md'):
+          for path in md_files:
               text = path.read_text()
               assert text.count('```') % 2 == 0, f'unbalanced fence: {path}'
               for target in re.findall(r'(?<!!)\[[^]]+\]\(([^)]+)\)', text):
@@ -607,10 +648,10 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
+          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
           uv run --frozen mypy src/aether_agents
-          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
-          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
       - name: Reject operator-specific paths in public artifacts

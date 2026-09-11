@@ -259,8 +259,7 @@ def _validate_execution_metadata(
     else:
         metadata_ref = metadata.get("worktree_base_ref")
         if metadata_ref is not None and (
-            not isinstance(metadata_ref, str)
-            or _BASE_REF_RE.fullmatch(metadata_ref) is None
+            not isinstance(metadata_ref, str) or _BASE_REF_RE.fullmatch(metadata_ref) is None
         ):
             raise ExecutionBoardError(
                 "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
