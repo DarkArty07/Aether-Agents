@@ -1873,3 +1873,620 @@ def test_import_boundary_is_static_and_manager_modules_import_without_hermes() -
     import aether_agents.commands.observe  # noqa: F401
     import aether_agents.observation.query  # noqa: F401
     import aether_agents.observation.report  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# U396 focused RED/GREEN fixture: exact execution board, binding, negatives/greens
+# ---------------------------------------------------------------------------
+
+_U396_PROJECT_A = "11111111-1111-4111-8111-111111111111"
+_U396_PROJECT_B = "22222222-2222-4222-8222-222222222222"
+_U396_CONTRACT_A = "oc_1111111111111111"
+_U396_CONTRACT_B = "oc_2222222222222222"
+_U396_TRACE_A = "ctr_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+_U396_TRACE_B = "ctr_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+
+def _u396_make_project(tmp_path: Path, name: str, project_id: str, *, marker: bool = True) -> Path:
+    project = tmp_path / name
+    marker_path = project / ".aether" / "project.toml"
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    if marker:
+        marker_path.write_text(project_marker(project_id, name=name), encoding="utf-8")
+    return project
+
+
+def _u396_make_board(
+    kanban_home: Path,
+    project_id: str,
+    contract_id: str,
+    version: int,
+    trace_id: str,
+    *,
+    slug_override: str | None = None,
+    metadata_overrides: dict[str, Any] | None = None,
+    write_db: bool = True,
+    write_metadata: bool = True,
+) -> tuple[str, Path, Path]:
+    from hermes_cli import kanban_db  # type: ignore[import-not-found]
+
+    slug = slug_override or execution_board_slug(project_id, contract_id, version)
+    board_dir = kanban_home / "kanban" / "boards" / slug
+    board_dir.mkdir(parents=True, exist_ok=True)
+    db_path = board_dir / "kanban.db"
+    if write_db:
+        kanban_db.init_db(db_path=db_path)
+    if write_metadata:
+        metadata: dict[str, Any] = {
+            "slug": slug,
+            "name": f"Objective {contract_id}@v{version}",
+            "description": "Aether Objective Contract execution board",
+            "icon": "",
+            "color": "",
+            "default_workdir": str(kanban_home),
+            "project_id": project_id,
+            "aether_project_id": project_id,
+            "aether_contract_id": contract_id,
+            "aether_contract_version": version,
+            "observation_trace_id": trace_id,
+            "created_at": 1,
+            "archived": False,
+        }
+        if metadata_overrides:
+            metadata.update(metadata_overrides)
+        (board_dir / "board.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return slug, board_dir, db_path
+
+
+def _u396_seed_root(
+    db_path: Path,
+    project_id: str,
+    trace_id: str,
+    *,
+    task_id: str = "t_10000001",
+    child_id: str | None = "t_10000002",
+    token: str | None = None,
+) -> None:
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            "INSERT INTO tasks (id,title,status,created_at,completed_at,project_id,"
+            "idempotency_key) VALUES (?,?,?,?,?,?,?)",
+            (
+                task_id,
+                "root",
+                "done",
+                100,
+                110,
+                project_id,
+                token if token is not None else correlation_token(trace_id, "root"),
+            ),
+        )
+        if child_id is not None:
+            db.execute(
+                "INSERT INTO tasks (id,title,status,created_at,completed_at,project_id) "
+                "VALUES (?,?,?,?,?,?)",
+                (child_id, "child", "done", 101, 120, project_id),
+            )
+            db.execute(
+                "INSERT INTO task_links (parent_id,child_id) VALUES (?,?)",
+                (task_id, child_id),
+            )
+            db.execute(
+                "INSERT INTO task_runs (task_id,profile,status,started_at,ended_at,outcome) "
+                "VALUES (?,?,?,?,?,?)",
+                (child_id, "implementer", "done", 102, 119, "completed"),
+            )
+        db.commit()
+
+
+def _u396_seed_default_board(kanban_home: Path, project_id: str, trace_id: str) -> Path:
+    from hermes_cli import kanban_db  # type: ignore[import-not-found]
+
+    default_db = kanban_home / "kanban.db"
+    kanban_db.init_db(db_path=default_db)
+    with sqlite3.connect(default_db) as db:
+        db.execute(
+            "INSERT INTO tasks (id,title,status,created_at,completed_at,project_id,"
+            "idempotency_key) VALUES (?,?,?,?,?,?,?)",
+            (
+                "t_default01",
+                "default-board-root",
+                "done",
+                1,
+                2,
+                project_id,
+                correlation_token(trace_id, "root"),
+            ),
+        )
+        db.commit()
+    return default_db
+
+
+def _u396_setup_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
+    xdg = tmp_path / "xdg"
+    kanban_home = tmp_path / "hermes-home"
+    monkeypatch.setenv("XDG_STATE_HOME", str(xdg))
+    monkeypatch.setenv("HERMES_KANBAN_HOME", str(kanban_home))
+    monkeypatch.setenv("HERMES_HOME", str(kanban_home / "profiles" / "morfeo"))
+    for key in (
+        "HERMES_DELEGATED_CHILD_CONTEXT",
+        "HERMES_KANBAN_DB",
+        "HERMES_KANBAN_BOARD",
+        "HERMES_KANBAN_TASK",
+        "HERMES_SESSION_ID",
+        "AETHER_PROJECT_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(
+        "aether_agents.observation.capture.hermes_plugin._NativeReconciliationWorker.start",
+        lambda self: None,
+    )
+    return xdg, kanban_home
+
+
+def _u396_fire_handoff(
+    prepare: Any,
+    project_id: str,
+    contract_id: str,
+    version: int,
+    trace_id: str,
+    slug: str,
+) -> None:
+    prepare(
+        tool_name="objective_contract",
+        tool_call_id="prepare",
+        session_id="s",
+        status="success",
+        args={"action": "prepare_handoff"},
+        result={
+            "project_id": project_id,
+            "contract_id": contract_id,
+            "version": version,
+            "observation_trace_id": trace_id,
+            "execution_board": slug,
+        },
+    )
+
+
+def _u396_summarise(project_id: str, trace_id: str) -> dict[str, Any]:
+    paths = ObservationPaths.for_project(project_id)
+    ingest_pending(paths)
+    reduce_trace(paths, trace_id)
+    summary = query.load_summary(paths, trace_id)
+    gaps = [gap.get("reason_code") for gap in summary.get("coverage", {}).get("gaps", [])]
+    units = summary.get("work_graph", {}).get("units", [])
+    return {
+        "summary": summary,
+        "gaps": sorted(str(g) for g in gaps),
+        "units": sorted(str(unit.get("task_ref")) for unit in units),
+        "relations": sorted(f"{unit.get('task_ref')}:{unit.get('relation')}" for unit in units),
+        "summary_project_id": summary.get("project_id"),
+    }
+
+
+def test_u396_negative_tuple_conflict(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Hook result names a board slug that matches no canonical tuple on disk."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    bogus = execution_board_slug(_U396_PROJECT_B, _U396_CONTRACT_A, 1)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, bogus)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "KANBAN_BOARD_TUPLE_CONFLICT" in result["gaps"]
+        assert result["units"] == []
+        collector = getattr(observer, "_collector", None)
+        assert collector is not None
+        assert collector.health.read().get("KANBAN_BOARD_TUPLE_CONFLICT", 0) >= 1
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_foreign_board_slug(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Hook result names another project's real board for project A's trace."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug_b, _, db_b = _u396_make_board(
+        kanban_home, _U396_PROJECT_B, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_b, _U396_PROJECT_B, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug_b)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_malformed_metadata(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Board metadata tampering causes metadata malformed gap and rejects reconciliation."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home,
+        _U396_PROJECT_A,
+        _U396_CONTRACT_A,
+        1,
+        _U396_TRACE_A,
+        metadata_overrides={"aether_contract_id": _U396_CONTRACT_B},
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "KANBAN_BOARD_METADATA_MALFORMED" in result["gaps"]
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_db_unresolved(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Missing or unresolvable board database emits KANBAN_BOARD_UNRESOLVED and no units."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, _ = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, write_db=False
+    )
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "KANBAN_BOARD_UNRESOLVED" in result["gaps"]
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_default_board_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A current/default board carrying the trace token is ignored; only exact board is read."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A, child_id=None, token="not-this-trace")
+    _u396_seed_default_board(kanban_home, _U396_PROJECT_A, _U396_TRACE_A)
+    monkeypatch.setenv("HERMES_KANBAN_BOARD", "default")
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "BINDING_ROOT_TOKEN_MISSING" in result["gaps"]
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_ambiguous_root_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Multiple tasks claiming the root token emit BINDING_TOKEN_REUSED and prevent binding."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    token = correlation_token(_U396_TRACE_A, "root")
+    _u396_seed_root(
+        db_path, _U396_PROJECT_A, _U396_TRACE_A, task_id="t_10000001", child_id=None, token=token
+    )
+    _u396_seed_root(
+        db_path, _U396_PROJECT_A, _U396_TRACE_A, task_id="t_10000003", child_id=None, token=token
+    )
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "BINDING_TOKEN_REUSED" in result["gaps"]
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_marker_unverified(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Missing or unverified project marker emits PROJECT_MARKER_UNVERIFIED and no units."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A, marker=False)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert "PROJECT_MARKER_UNVERIFIED" in result["gaps"]
+        assert result["units"] == []
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_negative_unregistered_project(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An unregistered project spawns no collector, reads no board, and never falls back."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    _u396_make_project(tmp_path, "a", _U396_PROJECT_A, marker=False)
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        assert getattr(observer, "_collector", None) is None
+        assert len(getattr(observer, "_collectors", {})) == 0
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_green_exact_root_descendants_and_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Exact board root plus descendants and runs are correctly projected."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert result["units"] == ["t_10000001", "t_10000002"]
+        assert result["relations"] == ["t_10000001:root", "t_10000002:unknown"]
+        assert result["summary_project_id"] == _U396_PROJECT_A
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_green_idempotent_repeat(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Repeating reconciliation produces no duplicate events or unit state."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    paths = ObservationPaths.for_project(_U396_PROJECT_A)
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        events_once = len(_journal_events(paths))
+        observer._reconcile_native()
+        events_twice = len(_journal_events(paths))
+        assert events_twice == events_once
+        result = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        assert result["units"] == ["t_10000001", "t_10000002"]
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_green_valid_terminal_outcomes_normalization(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Native outcomes review_requested/changes_requested stay exact; event status is completed."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    ProjectRegistry().register(_U396_PROJECT_A, project, "a")
+    slug, _, db_path = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_path, _U396_PROJECT_A, _U396_TRACE_A)
+    with sqlite3.connect(db_path) as db:
+        db.execute(
+            "UPDATE task_runs SET status='review_requested', outcome='review_requested' "
+            "WHERE task_id='t_10000002'"
+        )
+        db.commit()
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug)
+
+    paths = ObservationPaths.for_project(_U396_PROJECT_A)
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        finished_events = [
+            e for e in _journal_events(paths) if e.get("event_type") == "run.finished"
+        ]
+        assert len(finished_events) >= 1
+        for e in finished_events:
+            assert e.get("status") == "completed"
+            work_unit = e.get("work_unit") or {}
+            assert work_unit.get("run_status") == "review_requested"
+            assert work_unit.get("run_outcome") == "review_requested"
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_green_router_contract_cross_project_isolation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Two registered projects project only their own tasks; foreign tasks never cross-bind."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project_a = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    project_b = _u396_make_project(tmp_path, "b", _U396_PROJECT_B)
+    registry = ProjectRegistry()
+    registry.register(_U396_PROJECT_A, project_a, "a")
+    registry.register(_U396_PROJECT_B, project_b, "b")
+
+    slug_a, _, db_a = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_a, _U396_PROJECT_A, _U396_TRACE_A)
+    slug_b, _, db_b = _u396_make_board(
+        kanban_home, _U396_PROJECT_B, _U396_CONTRACT_B, 1, _U396_TRACE_B
+    )
+    _u396_seed_root(
+        db_b, _U396_PROJECT_B, _U396_TRACE_B, task_id="t_20000001", child_id="t_20000002"
+    )
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug_a)
+    _u396_fire_handoff(prepare, _U396_PROJECT_B, _U396_CONTRACT_B, 1, _U396_TRACE_B, slug_b)
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        observer._reconcile_native()
+        res_a = _u396_summarise(_U396_PROJECT_A, _U396_TRACE_A)
+        res_b = _u396_summarise(_U396_PROJECT_B, _U396_TRACE_B)
+        assert res_a["units"] == ["t_10000001", "t_10000002"]
+        assert res_b["units"] == ["t_20000001", "t_20000002"]
+
+        col_a = getattr(observer, "_collectors", {}).get(_U396_PROJECT_A)
+        col_b = getattr(observer, "_collectors", {}).get(_U396_PROJECT_B)
+        assert col_a is not None and col_b is not None
+        assert col_a.binder.trace_for("t_20000002") is None
+        assert col_b.binder.trace_for("t_10000002") is None
+    finally:
+        context.unload_callbacks[-1]()
+
+
+def test_u396_green_kanban_hook_cross_project(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A kanban hook for project B must not fall back to project A's collector."""
+    from aether_agents.observation.capture import hermes_plugin
+
+    _, kanban_home = _u396_setup_env(monkeypatch, tmp_path)
+    project_a = _u396_make_project(tmp_path, "a", _U396_PROJECT_A)
+    project_b = _u396_make_project(tmp_path, "b", _U396_PROJECT_B)
+    registry = ProjectRegistry()
+    registry.register(_U396_PROJECT_A, project_a, "a")
+    registry.register(_U396_PROJECT_B, project_b, "b")
+
+    slug_a, _, db_a = _u396_make_board(
+        kanban_home, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A
+    )
+    _u396_seed_root(db_a, _U396_PROJECT_A, _U396_TRACE_A)
+    slug_b, _, db_b = _u396_make_board(
+        kanban_home, _U396_PROJECT_B, _U396_CONTRACT_B, 1, _U396_TRACE_B
+    )
+    _u396_seed_root(db_b, _U396_PROJECT_B, _U396_TRACE_B, task_id="t_20000001", child_id=None)
+
+    context = FakePluginContext()
+    hermes_plugin.register(context)
+    prepare = context.hooks["post_tool_call"][0]
+    _u396_fire_handoff(prepare, _U396_PROJECT_A, _U396_CONTRACT_A, 1, _U396_TRACE_A, slug_a)
+
+    claimed = context.hooks["kanban_task_claimed"][0]
+    claimed(
+        task_id="t_20000001",
+        board=slug_b,
+        assignee="implementer",
+        status="running",
+    )
+
+    observer = context.unload_callbacks[-1].__self__
+    try:
+        col_a = getattr(observer, "_collectors", {}).get(_U396_PROJECT_A)
+        assert col_a is not None
+        assert col_a.binder.trace_for("t_20000001") is None
+        a_events = _journal_events(ObservationPaths.for_project(_U396_PROJECT_A))
+        assert not any("t_20000001" in json.dumps(e) for e in a_events)
+    finally:
+        context.unload_callbacks[-1]()
