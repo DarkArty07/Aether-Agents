@@ -64,6 +64,7 @@ jobs:
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v4.md
+          .aether/objective-contracts/oc_ddebf175a40251f7/v1.md
           .aether/objective-contracts/oc_df24bf0cd91490d5/v1.md
           .aether/objective-contracts/oc_e64cc79af0a649a2/v1.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v1.md
@@ -89,6 +90,7 @@ jobs:
           docs/guides/observation.md
           docs/guides/policy-and-recovery.md
           docs/guides/project-initialization.md
+          docs/guides/telegram-monitor.md
           docs/index.md
           docs/product-boundary.md
           docs/reference/capabilities.md
@@ -175,7 +177,9 @@ jobs:
           scripts/check_documentation.py
           scripts/check_public_artifacts.py
           scripts/check_hermes_baseline_drift.py
+          scripts/qualify_telegram_monitor.py
           scripts/run_tests.py
+          scripts/telegram_monitor_lab.py
           scripts/validate_hermes_patch_reconciliation.py
           scripts/e2e/README.md
           scripts/e2e/collect.py
@@ -206,6 +210,17 @@ jobs:
           src/aether_agents/lab/validation.py
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
+          src/aether_agents/monitor/__init__.py
+          src/aether_agents/monitor/collector.py
+          src/aether_agents/monitor/commands.py
+          src/aether_agents/monitor/delivery.py
+          src/aether_agents/monitor/hermes_plugin.py
+          src/aether_agents/monitor/models.py
+          src/aether_agents/monitor/reporting.py
+          src/aether_agents/monitor/runtime.py
+          src/aether_agents/monitor/service.py
+          src/aether_agents/monitor/sources.py
+          src/aether_agents/monitor/store.py
           src/aether_agents/objective_contracts/__init__.py
           src/aether_agents/objective_contracts/execution_boards.py
           src/aether_agents/objective_contracts/hermes_plugin.py
@@ -242,6 +257,8 @@ jobs:
           src/aether_agents/observation/storage.py
           src/aether_agents/paths.py
           src/aether_agents/project_marker.py
+          src/aether_agents/resources/monitor/narration-context.md
+          src/aether_agents/resources/monitor/precheck.py
           src/aether_agents/resources/profiles/implementer/SOUL.md
           src/aether_agents/resources/observer-requirements.txt
           src/aether_agents/resources/profiles/implementer/config.yaml
@@ -290,6 +307,12 @@ jobs:
           tests/test_project_init.py
           tests/test_public_artifacts.py
           tests/test_same_card_phase_predicates.py
+          tests/test_telegram_monitor_cli_plugin.py
+          tests/test_telegram_monitor_delivery.py
+          tests/test_telegram_monitor_reporting.py
+          tests/test_telegram_monitor_runtime.py
+          tests/test_telegram_monitor_sources.py
+          tests/test_telegram_monitor_state.py
           uv.lock
           VERSION
           docs/guides/project-knowledge.md
@@ -605,10 +628,10 @@ jobs:
           else
             git diff-tree --check --root --no-commit-id -r "$GITHUB_SHA"
           fi
-          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
+          uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
           uv run --frozen mypy src/aether_agents
-          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
-          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
+          uv run --frozen ruff format --check src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py
       - name: Build wheel and source distribution
         run: uv build --out-dir "${RUNNER_TEMP}/aether-dist"
       - name: Reject operator-specific paths in public artifacts
