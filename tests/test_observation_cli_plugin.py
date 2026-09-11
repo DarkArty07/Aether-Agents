@@ -1129,7 +1129,7 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
     assert terminal["work_unit"]["run_outcome"] == native_outcome
 
 
-def _create_native_databases(root: Path) -> tuple[Path, Path]:
+def _create_native_databases(monkeypatch: pytest.MonkeyPatch, root: Path) -> tuple[Path, Path]:
     slug = execution_board_slug(PROJECT_ID, "oc_1234567890abcdef", 1)
     board_dir = root / "kanban" / "boards" / slug
     board_dir.mkdir(parents=True, exist_ok=True)
@@ -1153,7 +1153,7 @@ def _create_native_databases(root: Path) -> tuple[Path, Path]:
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     state_home = root / "hermes" / "profiles" / "morfeo"
     state_home.mkdir(parents=True, exist_ok=True)
-    os.environ["HERMES_KANBAN_HOME"] = str(root)
+    monkeypatch.setenv("HERMES_KANBAN_HOME", str(root))
     with sqlite3.connect(board) as connection:
         connection.executescript(
             """
@@ -1384,7 +1384,7 @@ def test_native_session_reconciliation_rejects_aliased_or_non_regular_database(
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
-    board, state_home = _create_native_databases(tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
     external = _make_session_db_unsafe(state_home, tmp_path, link_kind)
     external_bytes = external.read_bytes() if external.is_file() else None
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
@@ -1439,7 +1439,7 @@ def test_native_session_reconciliation_discards_rows_after_database_name_swap(
     """A valid replacement inode cannot govern after the secure descriptor opens."""
     from aether_agents.observation.capture import hermes_plugin
 
-    _, state_home = _create_native_databases(tmp_path)
+    _, state_home = _create_native_databases(monkeypatch, tmp_path)
     state = state_home / "state.db"
     replacement = tmp_path / "replacement-state.db"
     replacement.write_bytes(state.read_bytes())
@@ -1472,7 +1472,7 @@ def test_out_of_band_native_reconciliation_is_allowlisted_causal_and_retry_prese
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
-    board, state_home = _create_native_databases(tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
     monkeypatch.setenv("AETHER_PROJECT_ID", PROJECT_ID)
     monkeypatch.setenv("HERMES_KANBAN_DB", str(board))
     monkeypatch.setenv("HERMES_HOME", str(state_home))
@@ -1530,7 +1530,7 @@ def test_native_reconciliation_maps_exact_hermes_project_path_to_aether_uuid(
     from aether_agents.observation.capture import hermes_plugin
 
     project, paths = _install_project(monkeypatch, tmp_path)
-    board, state_home = _create_native_databases(tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
     with projects_db.connect_closing(state_home / "projects.db") as connection:
         projects_db.create_project(
             connection,
@@ -1606,7 +1606,7 @@ def test_native_reconciliation_rejects_content_shaped_identities_before_aether_p
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
-    board, state_home = _create_native_databases(tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
     with sqlite3.connect(board) as connection:
         connection.execute(
             "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1703,7 +1703,7 @@ def test_native_protocol_violation_marker_is_preserved_without_event_payload(
     from aether_agents.observation.capture import hermes_plugin
 
     _, paths = _install_project(monkeypatch, tmp_path)
-    board, state_home = _create_native_databases(tmp_path)
+    board, state_home = _create_native_databases(monkeypatch, tmp_path)
     with sqlite3.connect(board) as connection:
         connection.execute(
             "INSERT INTO task_events VALUES (?, ?, ?, ?, ?, ?)",
