@@ -2,9 +2,15 @@
 
 ## Execution shape
 
-Supervisor creates three independently reviewed units plus one terminal integration lane. #396 may proceed independently. #397 first consumes the accepted Telegram Monitor v4 result and implements only a demonstrated residual gap. #399 is isolated from Monitor source while that flow is active; terminal integration waits for the Monitor result before touching shared lifecycle, CLI, policy or documentation files.
+Supervisor creates four independently reviewed units plus one terminal integration lane. #396 may proceed independently. #397 first consumes the accepted Telegram Monitor v4 result and implements only a demonstrated residual gap. #399 is isolated from Monitor source while that flow is active; terminal integration waits for the Monitor result before touching shared lifecycle, CLI, policy or documentation files.
 
 All candidates start from the finalized contract base. Terminal integration merges the latest `origin/main` normally and returns semantic conflicts to the owning unit; it does not rebase, squash or rewrite accepted commits.
+
+## D227 — reject terminal truncation sentinels
+
+Extend the package-owned Aether pre-tool policy for `kanban_create`. Inspect only string `title` and `body`; reject when normalized trailing content matches `[truncated]`, `...[truncated]` or Unicode-ellipsis equivalent. The rejection occurs before the Kanban tool handler and therefore produces zero task/event/run writes. Do not make Kanban parse Objective Contract correlation metadata or Aether-specific root keys.
+
+Regression tests cover every role, title/body, trailing whitespace, both markers, ordinary cards and complete prose that mentions the literal marker away from the terminal position. Retain created-card read-back in Morfeo's procedure.
 
 ## D396 — exact board and project reconciliation
 

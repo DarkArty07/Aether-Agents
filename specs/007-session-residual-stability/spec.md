@@ -5,7 +5,11 @@ Owning issues: Aether-Agents #396, #397 and #399. Issue #354 is already closed b
 
 ## Objective
 
-Close the three demonstrated residual defects without interfering with the active Telegram Monitor v4 flow. Integrate intended artifacts to `main`, activate only reviewed changes, close the issues on exact canaries, clean objective-owned residue and preserve unrelated branches, worktrees, stashes, sessions and credentials.
+Close the four demonstrated residual defects without interfering with the active Telegram Monitor v4 flow. Integrate intended artifacts to `main`, activate only reviewed changes, close the issues on exact canaries, clean objective-owned residue and preserve unrelated branches, worktrees, stashes, sessions and credentials.
+
+## SR-227 — truncation fails before Kanban persistence
+
+A `kanban_create` title/body ending in a recognized transport truncation sentinel is rejected by the Aether pre-tool policy before any task, event or run is persisted or dispatched. Recognize terminal `[truncated]`, `...[truncated]` and Unicode-ellipsis equivalents with trailing whitespace; do not reject complete prose that discusses the marker non-terminally. Cover all Aether roles and both fields. Created-card read-back remains defense-in-depth.
 
 ## SR-396 — contract observation follows the exact execution board
 

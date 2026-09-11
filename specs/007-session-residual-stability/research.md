@@ -5,8 +5,12 @@
 - Aether project UUID: `12027989-a08f-41cd-a82c-54ff1bfb6b03`.
 - Contract-design base: `600c08182fc16cee3bc0f6d639029972ee97f03d`.
 - #354 was closed separately after the restored active resolver passed seven focused tests and later contract roots/children received exact bases.
-- #396, #397 and #399 are existing nonduplicate issues.
+- #227, #396, #397 and #399 are existing nonduplicate issues; #227 was reopened from this session's exact recurrence.
 - Telegram Monitor `oc_f8c9fc9320587cf3@v4` is active and owns overlapping lifecycle/lab/CLI/docs files.
+
+## #227 recurrence evidence
+
+The v1 root `t_e963488b` persisted a 236-character body ending literally in `...[truncated]`. The worktree, finalized contract artifact and base were correct, and no children existed at detection. A complete recovery envelope was posted as a root comment and Supervisor was told to stop before decomposition. This proves the loss happened before Kanban persistence and that the current Aether pre-tool policy does not reject the sentinel. Issue #227 was reopened with the exact body hash; v2 includes prevention.
 
 ## #396 causal evidence
 

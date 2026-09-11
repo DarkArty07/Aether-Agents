@@ -14,6 +14,7 @@
 
 | Issue | Candidate evidence | Integrated/runtime evidence | Result |
 |---|---|---|---|
+| #227 | persisted root RED and pre-tool policy candidate | zero-write rejection and clean v2 handoff | reopened |
 | #396 | pending | pending | open |
 | #397 | pending; consume Monitor v4 first | pending | open |
 | #399 | disposable stale-mapping RED/fresh-install GREEN available | pending | open |
