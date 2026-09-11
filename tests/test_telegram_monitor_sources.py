@@ -1350,3 +1350,138 @@ def test_iso_dates_in_task_result_do_not_produce_task_result_unsafe() -> None:
 
     text = "Phase two rollout will finish by 2099-12-31 according to the latest draft."
     assert _safe_text(text, limit=1200) is not None
+
+
+def test_profile_shaped_hermes_home_resolves_kanban_boards_and_is_not_idle(
+    tmp_path: Path,
+) -> None:
+    """A profile-shaped HERMES_HOME (<root>/profiles/morfeo) resolves boards under <root>/kanban/boards."""
+    project = tmp_path / "project"
+    project.mkdir()
+    _write_project(project)
+    _write_contract(project)
+
+    state_root = tmp_path / "aether-state"
+    registry = ProjectRegistry(state_root)
+    assert registry.register(PROJECT_ID, project, "Registry Project", NATIVE_PROJECT)
+
+    hermes_root = tmp_path / "hermes"
+    profile_home = hermes_root / "profiles" / "morfeo"
+    profile_home.mkdir(parents=True)
+
+    for pdb_path in (profile_home / "projects.db", hermes_root / "projects.db"):
+        _sqlite(pdb_path, _PROJECT_SCHEMA)
+        with sqlite3.connect(pdb_path) as conn:
+            conn.execute(
+                "INSERT INTO projects VALUES (?, ?, ?, ?, 0)",
+                (NATIVE_PROJECT, "fixture", "Native Project", str(project)),
+            )
+            conn.commit()
+
+    for sdb_path in (profile_home / "state.db",):
+        _sqlite(sdb_path, _SESSION_SCHEMA)
+        with sqlite3.connect(sdb_path) as conn:
+            conn.execute(
+                "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    ORIGIN,
+                    "tui",
+                    "Origin session",
+                    "Origin session",
+                    str(project),
+                    str(project),
+                    1788955200.0,
+                    None,
+                    1788958800.0,
+                ),
+            )
+            conn.execute(
+                "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    FINALIZER,
+                    "tui",
+                    "Finalizer session",
+                    "Finalizer session",
+                    str(project),
+                    str(project),
+                    1788955200.0,
+                    1788955500.0,
+                    1788955500.0,
+                ),
+            )
+            conn.commit()
+
+    board_dir = hermes_root / "kanban" / "boards" / BOARD_SLUG
+    board_dir.mkdir(parents=True)
+    (board_dir / "board.json").write_text(
+        json.dumps(
+            {
+                "slug": BOARD_SLUG,
+                "name": "Collision Board",
+                "project_id": NATIVE_PROJECT,
+                "default_workdir": str(project.resolve()),
+                "aether_project_id": PROJECT_ID,
+                "aether_contract_id": CONTRACT_ID,
+                "aether_contract_version": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    board_db = board_dir / "kanban.db"
+    _sqlite(board_db, _BOARD_SCHEMA)
+    with sqlite3.connect(board_db) as conn:
+        conn.execute(
+            "INSERT INTO tasks ("
+            "id, title, status, project_id, session_id, created_at, started_at, completed_at, "
+            "workspace_path, current_run_id, session_affinity, last_heartbeat_at, max_runtime_seconds"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "t_11111111",
+                "Root completed",
+                "done",
+                NATIVE_PROJECT,
+                ORIGIN,
+                1788955200,
+                1788955200,
+                1788957000,
+                str(project),
+                1,
+                '{"flow_id":"flow-1"}',
+                1788957000,
+                120,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO task_runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                1,
+                "t_11111111",
+                "done",
+                "completed",
+                1788955200,
+                1788957000,
+                1788957000,
+                "root verified",
+                None,
+                "implementer",
+            ),
+        )
+        conn.commit()
+
+    # 1. Profile-shaped home (<root>/profiles/morfeo) resolves boards and collection is not idle
+    resolved_paths_profile = _resolve_board_paths(board_paths=None, hermes_home=profile_home)
+    assert any(slug == BOARD_SLUG for slug, _ in resolved_paths_profile)
+
+    sources_profile = ReadOnlySources(state_root=state_root, hermes_home=profile_home)
+    collection_profile = sources_profile.collect(cutoff_utc="2026-09-09T15:00:00Z")
+    assert len(collection_profile.items) > 0
+    assert collection_profile.idle is False
+
+    # 2. Plain-root control (<root>) preserving non-profile resolution
+    resolved_paths_plain = _resolve_board_paths(board_paths=None, hermes_home=hermes_root)
+    assert any(slug == BOARD_SLUG for slug, _ in resolved_paths_plain)
+
+    sources_plain = ReadOnlySources(state_root=state_root, hermes_home=hermes_root)
+    collection_plain = sources_plain.collect(cutoff_utc="2026-09-09T15:00:00Z")
+    assert len(collection_plain.items) > 0
+    assert collection_plain.idle is False
