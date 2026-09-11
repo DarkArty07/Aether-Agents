@@ -3383,6 +3383,7 @@ def test_live_preflight_and_full_run_without_external_effects(
         "private_lab_only": True,
         "from": "0 * * * *",
         "to": "* * * * *",
+        "unrelated_jobs_unchanged": True,
     }
     assert public["temporal_oracle"] == "real-minute-boundaries-in-private-lab"
     assert public["production_hourly_evidence"] is False
@@ -5265,11 +5266,16 @@ def test_borrowed_access_is_never_persisted_into_the_laboratory(tmp_path: Path) 
     plan = lab_module.build_plan(tmp_path / "state", "20260910T130000Z", token="abcdef012345")
     environment = lab_module.child_environment(
         plan,
-        base={"HOME": "/production", "PYTHONPATH": ""},
+        base={
+            "HOME": "/production",
+            "PYTHONPATH": "",
+            "AETHER_MONITOR_QUALIFICATION_SCHEDULE": "* * * * *",
+        },
         access=access,
         repository_src=module.SOURCE_ROOT,
     )
     assert environment["TELEGRAM_BOT_TOKEN"] == token  # process context only
+    assert "AETHER_MONITOR_QUALIFICATION_SCHEDULE" not in environment
     module._lab_create(
         plan,
         {"config_text": "model:\n  default: candidate\n", "config_digest": "e" * 64},

@@ -1039,7 +1039,7 @@ def run_offline(workspace: Path) -> dict[str, Any]:
             "read-only phase that refuses a bad layout without creating the root) plus the "
             "in-laboratory native writer gate (required interfaces and keywords, "
             "loaded-artifact digests, effective roots) resolved inside the created root",
-            "the D16 private-lab native schedule update and refusal of forced-tick substitutes",
+            "the D16 private-lab schedule-update contract and refusal of forced-tick substitutes",
         ],
         "unqualified_scope": [
             "real provisioned model narration and Telegram delivery",
@@ -4969,6 +4969,11 @@ def _live_run(
         environment = lab["environment"]
         inventory = backends.job_inventory(interpreter, environment)
         named = [job for job in inventory if job.get("name") == NATIVE_JOB_NAME]
+        unrelated_before = {
+            str(job.get("id")): str(job.get("behaviour_sha256") or "")
+            for job in inventory
+            if str(job.get("id") or "") != job_id
+        }
         job_record = backends.job_record(interpreter, job_id, environment)
         record["enable"] = {
             "job_id": job_id,
@@ -5057,6 +5062,22 @@ def _live_run(
             "next_run_at": accelerated_job.get("next_run_at") if accelerated_job else None,
             "paused": bool(accelerated_job.get("paused")) if accelerated_job else None,
         }
+        inventory_after = backends.job_inventory(interpreter, environment)
+        unrelated_after = {
+            str(job.get("id")): str(job.get("behaviour_sha256") or "")
+            for job in inventory_after
+            if str(job.get("id") or "") != job_id
+        }
+        if unrelated_after != unrelated_before:
+            abort(
+                "lab-schedule-scope",
+                "the accelerated update changed a job outside the owned private lab record",
+                detail={
+                    "before_count": len(unrelated_before),
+                    "after_count": len(unrelated_after),
+                },
+            )
+        record["schedule_update"]["unrelated_jobs_unchanged"] = True
         output_dir_value = job_record.get("output_dir") if job_record else None
         output_dir = Path(str(output_dir_value)) if output_dir_value else None
         language = backends.owner_language(interpreter, environment)
@@ -5432,6 +5453,9 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
             "private_lab_only": bool((record.get("schedule_update") or {}).get("private_lab_only")),
             "from": (record.get("schedule_update") or {}).get("production_schedule"),
             "to": (record.get("schedule_update") or {}).get("accelerated_schedule"),
+            "unrelated_jobs_unchanged": bool(
+                (record.get("schedule_update") or {}).get("unrelated_jobs_unchanged")
+            ),
         },
         "accelerated_boundary_timestamps_utc": [
             boundary.get("expected_cutoff_utc") for boundary in boundaries
