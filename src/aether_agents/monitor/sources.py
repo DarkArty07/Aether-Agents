@@ -652,16 +652,17 @@ def _resolve_board_paths(
             root = Path(get_hermes_home())
         except Exception:
             return ()
+    kanban_root = root.parent.parent if root.parent.name == "profiles" else root
     paths: list[tuple[str, Path]] = []
-    default_db = root / "kanban.db"
-    default_dir = root / "kanban" / "boards" / "default"
+    default_db = kanban_root / "kanban.db"
+    default_dir = kanban_root / "kanban" / "boards" / "default"
     if (
         default_db.is_file()
         or (default_dir / "board.json").is_file()
         or (default_dir / "kanban.db").is_file()
     ):
         paths.append(("default", default_db))
-    boards_root = root / "kanban" / "boards"
+    boards_root = kanban_root / "kanban" / "boards"
     if boards_root.is_dir() and not boards_root.is_symlink():
         for child in sorted(boards_root.iterdir(), key=lambda item: item.name):
             if child.name != "default" and _BOARD_RE.fullmatch(child.name):
@@ -788,6 +789,10 @@ def _resolve_session_paths(
     profiles = root / "profiles"
     if profiles.is_dir() and not profiles.is_symlink():
         candidates.extend(path for path in profiles.glob("*/state.db") if path.is_file())
+    elif root.parent.name == "profiles" and not root.parent.is_symlink():
+        candidates.extend(path for path in root.parent.glob("*/state.db") if path.is_file())
+        if (root.parent.parent / "state.db").is_file():
+            candidates.append(root.parent.parent / "state.db")
     return tuple(sorted(set(candidates)))
 
 

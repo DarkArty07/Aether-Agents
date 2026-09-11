@@ -3476,7 +3476,7 @@ def test_d16_native_update_changes_only_the_private_lab_job(tmp_path: Path) -> N
         pytest.skip("product runtime interpreter not available")
 
     root = tmp_path / "laboratory"
-    hermes_home = root / "hermes"
+    hermes_home = root / "hermes" / "profiles" / "morfeo"
     home = root / "home"
     tmp = root / "tmp"
     cwd = root / "work"
@@ -5513,7 +5513,11 @@ _PROBE_STUB_MODULES: dict[str, str] = {
         "import os\n"
         "from pathlib import Path\n\n\n"
         "def kanban_home():\n"
-        "    return Path(os.environ['HERMES_HOME'])\n\n\n"
+        "    env = os.environ.get('HERMES_HOME', '')\n"
+        "    p = Path(env)\n"
+        "    if p.parent.name == 'profiles':\n"
+        "        return p.parent.parent\n"
+        "    return p\n\n\n"
         "def kanban_db_path(board=None):\n"
         "    return kanban_home() / 'kanban.db'\n\n\n"
         "def boards_root():\n"
@@ -5570,6 +5574,18 @@ _PROBE_STUB_MODULES: dict[str, str] = {
         "        return _HomeChannel()\n\n\n"
         "def load_gateway_config():\n"
         "    return _Config()\n"
+    ),
+    "hermes_cli/plugins.py": (
+        "class _StubPlugin:\n"
+        "    enabled = True\n"
+        "    tools_registered = ['aether_monitor', 'aether_monitor_report_snapshot']\n"
+        "    hooks_registered = ['on_session_end', 'post_llm_call', 'post_tool_call']\n"
+        "    error = None\n\n"
+        "class PluginManager:\n"
+        "    def __init__(self):\n"
+        "        self._plugins = {'aether-telegram-monitor': _StubPlugin()}\n\n"
+        "    def discover_and_load(self, force=False):\n"
+        "        pass\n"
     ),
 }
 
@@ -5854,7 +5870,11 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "    'CREATE TABLE IF NOT EXISTS links (parent_id TEXT, child_id TEXT);'\n"
         ")\n\n\n"
         "def kanban_home():\n"
-        "    return Path(os.environ['HERMES_HOME'])\n\n\n"
+        "    env = os.environ.get('HERMES_HOME', '')\n"
+        "    p = Path(env)\n"
+        "    if p.parent.name == 'profiles':\n"
+        "        return p.parent.parent\n"
+        "    return p\n\n\n"
         "def boards_root():\n"
         "    return kanban_home() / 'kanban' / 'boards'\n\n\n"
         "def kanban_db_path(board=None):\n"
@@ -6011,6 +6031,18 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "        return _Config(None)\n"
         "    return _Config(HomeChannel(chat_id=chat_id, thread_id=thread_id or None))\n"
     ),
+    "hermes_cli/plugins.py": (
+        "class _StubPlugin:\n"
+        "    enabled = True\n"
+        "    tools_registered = ['aether_monitor', 'aether_monitor_report_snapshot']\n"
+        "    hooks_registered = ['on_session_end', 'post_llm_call', 'post_tool_call']\n"
+        "    error = None\n\n"
+        "class PluginManager:\n"
+        "    def __init__(self):\n"
+        "        self._plugins = {'aether-telegram-monitor': _StubPlugin()}\n\n"
+        "    def discover_and_load(self, force=False):\n"
+        "        pass\n"
+    ),
 }
 
 
@@ -6082,7 +6114,10 @@ try:
                 task["key"]: entry["board_slug"] for entry in manifest for task in entry["tasks"]
             }
             rows = {}
-            boards_root = Path(record["hermes_home"]) / "kanban" / "boards"
+            hermes_root = Path(record["hermes_home"])
+            if hermes_root.parent.name == "profiles":
+                hermes_root = hermes_root.parent.parent
+            boards_root = hermes_root / "kanban" / "boards"
             for entry in manifest:
                 connection = kanban.connect(
                     db_path=boards_root / entry["board_slug"] / "kanban.db"
@@ -7208,3 +7243,226 @@ def test_d15r_fixture_and_environment_gaps_chain_end_to_end(tmp_path: Path) -> N
     store = q.MonitorStore(Path(lab_record["state_root"]))
     gaps = q._environment_gaps(store, hermes_home=Path(lab_record["hermes_home"]))
     assert gaps == []
+
+
+def test_d16r_lab_context_resolves_morfeo_profile_and_reads_configuration(tmp_path: Path) -> None:
+    """Lab child resolves the morfeo profile and reads the laboratory configuration."""
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    assert plan.hermes_home == plan.profile_home
+    assert plan.hermes_home.name == "morfeo"
+    assert plan.hermes_home.parent.name == "profiles"
+
+    config_data = {
+        "model": {"default": "candidate-model"},
+        "timezone": "UTC",
+        "plugins": {
+            "enabled": ["aether-telegram-monitor"],
+            "entries": {"aether-telegram-monitor": {"settings": {"enabled": True}}},
+        },
+    }
+    lab.create_root(plan)
+    lab.write_config(plan, lab.serialize_config(config_data))
+
+    env = lab.child_environment(
+        plan,
+        base={"PATH": os.environ.get("PATH", "")},
+        access={"TELEGRAM_BOT_TOKEN": "token-123", "TELEGRAM_HOME_CHANNEL": "-1000"},
+        repository_src=ROOT / "src",
+    )
+    assert env["HERMES_HOME"] == str(plan.profile_home)
+
+    runtime_py = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    probe = """
+import json
+from hermes_cli import profiles
+from hermes_cli.config import load_config
+
+print(json.dumps({
+    "active_profile": profiles.get_active_profile_name(),
+    "model": load_config().get("model"),
+    "plugins": load_config().get("plugins"),
+}))
+"""
+    res = q._runtime_execute(runtime_py, probe, environment=env)
+    assert res["active_profile"] == "morfeo"
+    assert res["model"] == {"default": "candidate-model"}
+    assert "aether-telegram-monitor" in res["plugins"]["enabled"]
+
+
+def test_d16r_child_containment_verifies_roots_inside_lab_and_refuses_escapes(
+    tmp_path: Path,
+) -> None:
+    """Context problems verify roots resolve inside lab and refuse escapes."""
+    from scripts import telegram_monitor_lab as lab
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    env = lab.child_environment(
+        plan,
+        base={"PATH": os.environ.get("PATH", "")},
+        access={"TELEGRAM_BOT_TOKEN": "token-123", "TELEGRAM_HOME_CHANNEL": "-1000"},
+        repository_src=ROOT / "src",
+    )
+    assert lab.context_problems(plan, env) == []
+
+    # Escaping HERMES_HOME is refused
+    bad_env = dict(env)
+    bad_env["HERMES_HOME"] = str(tmp_path / "outside")
+    problems = lab.context_problems(plan, bad_env)
+    assert any("HERMES_HOME" in p for p in problems)
+
+    # Missing plugins_meta in PYTHONPATH is refused
+    no_meta_env = dict(env)
+    no_meta_env["PYTHONPATH"] = str(ROOT / "src")
+    problems_no_meta = lab.context_problems(plan, no_meta_env)
+    assert "plugins-meta-not-in-pythonpath" in problems_no_meta
+
+
+def test_d16r_candidate_plugin_discovered_and_registered_in_lab_child(tmp_path: Path) -> None:
+    """Lab child discovers and registers candidate's monitor plugin with tools and hooks."""
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    lab.create_root(plan)
+    lab.write_config(
+        plan,
+        lab.serialize_config(
+            lab.minimal_config({"model": {"default": "candidate"}, "timezone": "UTC"})
+        ),
+    )
+    env = lab.child_environment(
+        plan,
+        base={"PATH": os.environ.get("PATH", "")},
+        access={"TELEGRAM_BOT_TOKEN": "token-123", "TELEGRAM_HOME_CHANNEL": "-1000"},
+        repository_src=ROOT / "src",
+    )
+
+    runtime_py = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    probe = """
+import json, importlib.metadata
+from hermes_cli.plugins import PluginManager
+
+eps = [ep.name for ep in importlib.metadata.entry_points(group="hermes_agent.plugins")]
+mgr = PluginManager()
+mgr.discover_and_load(force=True)
+plugin = mgr._plugins.get("aether-telegram-monitor")
+
+print(json.dumps({
+    "eps": eps,
+    "plugin_loaded": plugin is not None,
+    "plugin_enabled": getattr(plugin, "enabled", False),
+    "tools": getattr(plugin, "tools_registered", []),
+    "hooks": getattr(plugin, "hooks_registered", []),
+    "error": getattr(plugin, "error", None),
+}))
+"""
+    res = q._runtime_execute(runtime_py, probe, environment=env)
+    assert "aether-telegram-monitor" in res["eps"]
+    assert res["plugin_loaded"] is True
+    assert res["plugin_enabled"] is True
+    assert sorted(res["tools"]) == ["aether_monitor", "aether_monitor_report_snapshot"]
+    assert sorted(res["hooks"]) == ["on_session_end", "post_llm_call", "post_tool_call"]
+    assert res["error"] is None
+
+
+def _make_d16r_test_profile(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    hermes = tmp_path / "prov" / "hermes"
+    prof = hermes / "profiles" / "morfeo"
+    prof.mkdir(parents=True, exist_ok=True)
+    (hermes / "gateway-home.json").write_text(
+        json.dumps({"chat_id": "-1000", "thread_id": None}), encoding="utf-8"
+    )
+    (prof / "config.yaml").write_text(
+        "model:\n  default: candidate\nagent:\n  name: Morfeo\n", encoding="utf-8"
+    )
+    (prof / ".env").write_text(
+        "TELEGRAM_BOT_TOKEN=tok-123\nTELEGRAM_HOME_CHANNEL=-1000\n", encoding="utf-8"
+    )
+    env = dict(os.environ)
+    env["HERMES_HOME"] = str(prof)
+    return prof, env
+
+
+def test_d16r_gate_refuses_lab_when_plugin_cannot_be_loaded(tmp_path: Path) -> None:
+    """In-lab gate refuses fail-closed before any effect when plugin cannot load."""
+    import shutil
+
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    runtime_py = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    profile_home, env_prov = _make_d16r_test_profile(tmp_path)
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    preflight = q._lab_preflight(
+        plan, interpreter=runtime_py, profile_home=profile_home, environ=env_prov
+    )
+    q._lab_create(plan, preflight)
+
+    # 1. Negative case: plugin metadata missing
+    shutil.rmtree(plan.plugins_meta)
+    plan.plugins_meta.mkdir()
+    gate1 = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
+    assert "monitor-plugin-missing" in gate1["problems"]
+
+    # 2. Negative case: plugin disabled in config
+    lab.write_plugin_metadata(plan)
+    cfg_path = plan.profile_home / lab.LAB_CONFIG_NAME
+    cfg_path.write_text(
+        lab.serialize_config({"plugins": {"enabled": [], "entries": {}}}),
+        encoding="utf-8",
+    )
+    gate2 = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
+    assert any("monitor-plugin" in p for p in gate2["problems"])
+
+
+def test_d16r_enable_reaches_native_job_creation_in_lab_context(tmp_path: Path) -> None:
+    """The pre-effect harness chain reaches ACTION_ON and creates the native job without RUNTIME_MISMATCH."""
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    runtime_py = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    profile_home, env_prov = _make_d16r_test_profile(tmp_path)
+
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    preflight = q._lab_preflight(
+        plan, interpreter=runtime_py, profile_home=profile_home, environ=env_prov
+    )
+    assert preflight["problems"] == []
+
+    record = q._lab_create(plan, preflight)
+    gate = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
+    assert gate["problems"] == []
+    assert gate["monitor_plugin"]["present"] is True
+    assert gate["monitor_plugin"]["enabled"] is True
+
+    scope_root = Path(record["scope_root"])
+    manifest = q._scope_manifest(scope_root, plan.stamp)
+    q._write_scope_projects(scope_root, manifest)
+    seeded = q._lab_fixture(runtime_py, record, manifest)
+    assert len(seeded["projects"]) == 2
+
+    store = q.MonitorStore(Path(record["state_root"]))
+    gaps = q._environment_gaps(store, hermes_home=Path(record["hermes_home"]))
+    assert gaps == []
+
+    ctrl = q._lab_control(runtime_py, record, q.ACTION_ON)
+    assert ctrl.get("ok") is True
+    assert ctrl["result"]["enabled"] is True
+    assert ctrl["result"]["profile_binding"] == "morfeo"
+    assert ctrl["result"]["native_job"]["schedule"] == "0 * * * *"

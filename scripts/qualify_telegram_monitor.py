@@ -1390,7 +1390,7 @@ try:
     if (
         not configured_home.is_absolute()
         or resolved_home != expected_home
-        or resolved_home != resolved_root / "hermes"
+        or resolved_home != resolved_root / "hermes" / "profiles" / "morfeo"
         or resolved_home == Path("/")
     ):
         payload["errors"].append("schedule-update-context-escapes-lab")
@@ -1530,7 +1530,7 @@ def _lab_schedule_update(
             detail={"error": type(error).__name__},
         ) from error
     if (
-        resolved_home != resolved_root / "hermes"
+        resolved_home != resolved_root / "hermes" / "profiles" / "morfeo"
         or configured_home != hermes_home
         or configured_home.resolve(strict=False) != resolved_home
     ):
@@ -3399,6 +3399,29 @@ if LAB_ROOT_JSON:
         effective[name] = value
     payload["effective"] = effective
 
+    plugin_summary = {
+        "present": False,
+        "enabled": False,
+        "tools": [],
+        "hooks": [],
+        "error": None,
+    }
+    try:
+        from hermes_cli.plugins import PluginManager
+
+        manager = PluginManager()
+        manager.discover_and_load(force=True)
+        plugin = manager._plugins.get("aether-telegram-monitor")
+        if plugin is not None:
+            plugin_summary["present"] = True
+            plugin_summary["enabled"] = bool(getattr(plugin, "enabled", False))
+            plugin_summary["tools"] = sorted(getattr(plugin, "tools_registered", []))
+            plugin_summary["hooks"] = sorted(getattr(plugin, "hooks_registered", []))
+            plugin_summary["error"] = str(plugin.error) if getattr(plugin, "error", None) else None
+    except Exception as error:  # noqa: BLE001
+        plugin_summary["error"] = f"{type(error).__name__}: {error}"
+    payload["monitor_plugin"] = plugin_summary
+
 print(json.dumps(payload))
 """
 
@@ -4305,12 +4328,45 @@ def _lab_context_preflight(
             if jobs_interfaces.get(name) is not True:
                 problems.append(f"cron-jobs-interface-missing:{name}")
     problems.extend(telegram_monitor_lab.writer_problems(isolated, lab_root=plan.root))
+    plugin_info = isolated.get("monitor_plugin")
+    if not isinstance(plugin_info, Mapping):
+        problems.append("monitor-plugin-missing")
+    else:
+        if not plugin_info.get("present"):
+            problems.append("monitor-plugin-missing")
+        elif not plugin_info.get("enabled"):
+            problems.append("monitor-plugin-not-enabled")
+        else:
+            tools = set(plugin_info.get("tools") or [])
+            for tool_name in ("aether_monitor", "aether_monitor_report_snapshot"):
+                if tool_name not in tools:
+                    problems.append(f"monitor-plugin-tool-missing:{tool_name}")
+            hooks = set(plugin_info.get("hooks") or [])
+            for hook_name in ("post_tool_call", "post_llm_call", "on_session_end"):
+                if hook_name not in hooks:
+                    problems.append(f"monitor-plugin-hook-missing:{hook_name}")
+        if plugin_info.get("error"):
+            problems.append(f"monitor-plugin-error:{plugin_info['error']}")
     return {
         "problems": problems,
         "interfaces": isolated.get("interfaces") or {},
         "writers": telegram_monitor_lab.writer_summary(isolated),
         "artifacts": isolated.get("artifacts") or {},
         "effective": isolated.get("effective") or {},
+        "monitor_plugin": {
+            "present": bool(plugin_info.get("present"))
+            if isinstance(plugin_info, Mapping)
+            else False,
+            "enabled": bool(plugin_info.get("enabled"))
+            if isinstance(plugin_info, Mapping)
+            else False,
+            "tools": sorted(plugin_info.get("tools") or [])
+            if isinstance(plugin_info, Mapping)
+            else [],
+            "hooks": sorted(plugin_info.get("hooks") or [])
+            if isinstance(plugin_info, Mapping)
+            else [],
+        },
         "destination_digest": isolated_digest,
         "destination_thread_present": bool(isolated.get("destination_thread_present")),
     }

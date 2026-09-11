@@ -82,6 +82,7 @@ __all__ = [
     "writer_problems",
     "writer_summary",
     "write_config",
+    "write_plugin_metadata",
     "write_record",
 ]
 
@@ -100,6 +101,7 @@ _LAB_NAME = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$", re.ASCII)
 #: Private roots every lab child is given, relative to the lab root.
 LAB_HOME_DIR = "home"
 LAB_HERMES_DIR = "hermes"
+LAB_PLUGINS_META_DIR = "plugins_meta"
 LAB_TMP_DIR = "tmp"
 LAB_WORK_DIR = "work"
 LAB_XDG_DIRS: Mapping[str, str] = {
@@ -155,7 +157,18 @@ _CONFIG_SECTIONS = (
     "toolsets",
     "timezone",
     "gateway",
+    "plugins",
 )
+
+#: Pinned candidate monitor distribution metadata written to the lab's plugins_meta directory.
+PLUGIN_DIST_NAME = "aether_agents_candidate_monitor-0.24.0.dist-info"
+PLUGIN_ENTRY_POINT_TEXT = """[hermes_agent.plugins]
+aether-telegram-monitor = aether_agents.monitor.hermes_plugin
+"""
+PLUGIN_METADATA_TEXT = """Metadata-Version: 2.1
+Name: aether-agents-candidate-monitor
+Version: 0.24.0
+"""
 _AGENT_DECISION_KEYS = (
     "name",
     "role",
@@ -194,6 +207,7 @@ class LabPlan:
     home: Path
     hermes_home: Path
     profile_home: Path
+    plugins_meta: Path
     tmp: Path
     cwd: Path
     xdg: Mapping[str, Path]
@@ -215,6 +229,7 @@ class LabPlan:
             "home": self.home,
             "hermes_home": self.hermes_home,
             "profile_home": self.profile_home,
+            "plugins_meta": self.plugins_meta,
             "tmp": self.tmp,
             "cwd": self.cwd,
             **{name: Path(path) for name, path in self.xdg.items()},
@@ -242,14 +257,16 @@ def build_plan(state_root: Path | str, stamp: str, *, token: str | None = None) 
     if _LAB_NAME.fullmatch(name) is None:
         raise LabError("lab-plan", "the laboratory name is not the documented shape")
     root = root_state.joinpath(*LAB_SUBDIRECTORY) / name
+    profile_home = root / LAB_HERMES_DIR / "profiles" / LAB_PROFILE
     return LabPlan(
         stamp=stamp,
         token=token,
         state_root=root_state,
         root=root,
         home=root / LAB_HOME_DIR,
-        hermes_home=root / LAB_HERMES_DIR,
-        profile_home=root / LAB_HERMES_DIR / "profiles" / LAB_PROFILE,
+        hermes_home=profile_home,
+        profile_home=profile_home,
+        plugins_meta=root / LAB_PLUGINS_META_DIR,
         tmp=root / LAB_TMP_DIR,
         cwd=root / LAB_WORK_DIR,
         xdg={name: root / relative for name, relative in LAB_XDG_DIRS.items()},
@@ -330,6 +347,12 @@ def create_root(plan: LabPlan) -> dict[str, Any]:
             detail={"error": type(error).__name__},
         ) from error
     _harden_directory(plan.root)
+    hermes_dir = plan.root / LAB_HERMES_DIR
+    hermes_dir.mkdir(parents=True, exist_ok=True)
+    _harden_directory(hermes_dir)
+    profiles_dir = hermes_dir / "profiles"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    _harden_directory(profiles_dir)
     for path in plan.named_roots().values():
         path.mkdir(parents=True, exist_ok=True)
         _harden_directory(path)
@@ -339,6 +362,7 @@ def create_root(plan: LabPlan) -> dict[str, Any]:
     # resolves it inside the laboratory and the retention check has a real object.
     plan.lab_state_root.mkdir(parents=True, exist_ok=True)
     _harden_directory(plan.lab_state_root)
+    write_plugin_metadata(plan)
     record = plan_record(plan)
     write_record(plan, record)
     problems = [
@@ -412,6 +436,38 @@ def minimal_config(provisioned: Mapping[str, Any]) -> dict[str, Any]:
     agent = provisioned.get("agent")
     if isinstance(agent, Mapping):
         config["agent"] = {key: agent[key] for key in _AGENT_DECISION_KEYS if key in agent}
+    plugins = config.get("plugins")
+    if not isinstance(plugins, dict):
+        plugins = {}
+    enabled_plugins = plugins.get("enabled")
+    if not isinstance(enabled_plugins, list):
+        enabled_plugins = []
+    else:
+        enabled_plugins = list(enabled_plugins)
+    if "aether-telegram-monitor" not in enabled_plugins:
+        enabled_plugins.append("aether-telegram-monitor")
+    plugins["enabled"] = enabled_plugins
+
+    entries = plugins.get("entries")
+    if not isinstance(entries, dict):
+        entries = {}
+    else:
+        entries = dict(entries)
+    monitor_entry = entries.get("aether-telegram-monitor")
+    if not isinstance(monitor_entry, dict):
+        monitor_entry = {}
+    else:
+        monitor_entry = dict(monitor_entry)
+    monitor_settings = monitor_entry.get("settings")
+    if not isinstance(monitor_settings, dict):
+        monitor_settings = {}
+    else:
+        monitor_settings = dict(monitor_settings)
+    monitor_settings["enabled"] = True
+    monitor_entry["settings"] = monitor_settings
+    entries["aether-telegram-monitor"] = monitor_entry
+    plugins["entries"] = entries
+    config["plugins"] = plugins
     return config
 
 
@@ -557,7 +613,7 @@ def child_environment(
         environment[name] = str(path)
     environment["PYTHONDONTWRITEBYTECODE"] = "1"
     existing_pythonpath = base.get("PYTHONPATH", "")
-    parts = [str(repository_src)]
+    parts = [str(repository_src), str(plan.plugins_meta)]
     if existing_pythonpath:
         parts.append(existing_pythonpath)
     environment["PYTHONPATH"] = os.pathsep.join(parts)
@@ -603,8 +659,19 @@ def context_problems(plan: LabPlan, environment: Mapping[str, str]) -> list[str]
             continue
         if resolved != resolved_root and resolved_root not in resolved.parents:
             problems.append(f"{name}-escapes-lab")
-    if environment.get("PYTHONPATH", "").split(os.pathsep)[0] == "":
+    try:
+        resolved_meta = plan.plugins_meta.resolve(strict=False)
+    except OSError:
+        problems.append("plugins-meta-unresolvable")
+    else:
+        if resolved_meta != resolved_root and resolved_root not in resolved_meta.parents:
+            problems.append("plugins-meta-escapes-lab")
+    pythonpath = environment.get("PYTHONPATH", "")
+    pythonpath_parts = [p for p in pythonpath.split(os.pathsep) if p]
+    if not pythonpath_parts:
         problems.append("pythonpath-unset")
+    elif str(plan.plugins_meta) not in pythonpath_parts:
+        problems.append("plugins-meta-not-in-pythonpath")
     return problems
 
 
@@ -778,6 +845,19 @@ def write_config(plan: LabPlan, text: str) -> Path:
     path = plan.profile_home / LAB_CONFIG_NAME
     _write_private(path, text)
     return path
+
+
+def write_plugin_metadata(plan: LabPlan) -> Path:
+    """Write the laboratory-scoped pinned candidate plugin distribution metadata."""
+
+    dist_dir = plan.plugins_meta / PLUGIN_DIST_NAME
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    _harden_directory(dist_dir)
+    ep_file = dist_dir / "entry_points.txt"
+    meta_file = dist_dir / "METADATA"
+    _write_private(ep_file, PLUGIN_ENTRY_POINT_TEXT)
+    _write_private(meta_file, PLUGIN_METADATA_TEXT)
+    return dist_dir
 
 
 def serialize_config(config: Mapping[str, Any]) -> str:
