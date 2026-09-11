@@ -17,7 +17,10 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Final, Literal
 
 from aether_agents.observation.contracts import (
+    FINISH_REASON_HISTOGRAM_PATH,
     is_artifact_ref,
+    is_finish_reason_count,
+    is_finish_reason_name,
     is_native_message_id,
     is_opaque_ref,
 )
@@ -392,8 +395,40 @@ def _reference_reason(key: str, value: Any) -> str | None:
     return None
 
 
+def _finish_reason_histogram_reason(value: Any, location: str) -> tuple[str, str] | None:
+    """Validate the one schema-owned histogram (summary schema, section 8.3).
+
+    ``finish_reasons`` is typed data, not a field-name namespace: its keys are bounded
+    schema tokens and are still checked as metadata values, so a secret-shaped or
+    path-shaped name is rejected exactly as it would be anywhere else.  Counts are strict
+    non-negative integers — booleans, floats and strings are not counts, and a nested
+    object or list is never histogram data.
+    """
+    if not isinstance(value, dict):
+        return "INVALID_FINISH_REASON_HISTOGRAM", location
+    for name, count in value.items():
+        if not is_finish_reason_name(name) or _value_reason(name) is not None:
+            # An unvalidated name is never echoed into a location string.
+            return "INVALID_FINISH_REASON_NAME", f"{location}.<name>"
+        if not is_finish_reason_count(count):
+            return "INVALID_FINISH_REASON_COUNT", f"{location}.{name}"
+    return None
+
+
 def scan(payload: Any, location: str = "$") -> tuple[str, str] | None:
     """Return ``(reason_code, location)`` for the first violation, else ``None``."""
+    return _scan(payload, location, ())
+
+
+def _scan(payload: Any, location: str, path: tuple[str | int, ...]) -> tuple[str, str] | None:
+    """Recursive worker for :func:`scan`.
+
+    ``path`` is the exact root-relative key/INDEX path of ``payload`` inside the scanned
+    document.  It is carried separately from the human-readable ``location`` so the guard
+    can recognize the single schema-owned histogram at
+    ``$.model_context_economics.finish_reasons`` without a nested look-alike in an
+    unrelated payload inheriting that recognition.
+    """
     if isinstance(payload, dict):
         native_source_kind = payload.get("source_kind")
         if native_source_kind == "native_reconciliation" and not is_native_source_hook(
@@ -523,6 +558,15 @@ def scan(payload: Any, location: str = "$") -> tuple[str, str] | None:
                 return "INVALID_METADATA_KEY", f"{location}.<field_{index}>"
             key = _normalize_key(raw_key)
             where = f"{location}.{raw_key}"
+            value_path = path + (raw_key,)
+            if value_path == FINISH_REASON_HISTOGRAM_PATH:
+                # The one schema-owned histogram.  Its names are typed data, not payload
+                # field names, so the forbidden-key rule does not apply *inside* it; every
+                # other location, including any look-alike path, keeps that rule.
+                found = _finish_reason_histogram_reason(value, where)
+                if found is not None:
+                    return found
+                continue
             invariant_key = key == "key" and _INVARIANT_KEY_LOCATION_RE.search(where)
             if invariant_key and (
                 not isinstance(value, str) or _INVARIANT_KEY_RE.fullmatch(value) is None
@@ -533,13 +577,13 @@ def scan(payload: Any, location: str = "$") -> tuple[str, str] | None:
             reference_reason = _reference_reason(key, value)
             if reference_reason is not None:
                 return reference_reason, where
-            found = scan(value, where)
+            found = _scan(value, where, value_path)
             if found is not None:
                 return found
         return None
     if isinstance(payload, (list, tuple)):
         for index, value in enumerate(payload):
-            found = scan(value, f"{location}[{index}]")
+            found = _scan(value, f"{location}[{index}]", path + (index,))
             if found is not None:
                 return found
         return None
