@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -3988,21 +3989,23 @@ def test_bounded_smoke_is_required_before_the_hourly_wait(
     assert error.value.code == "smoke-timeout"
     assert timeout_world["backends"].trigger_calls == 1
 
-    close_root = tmp_path / "close"
-    close_root.mkdir()
-    close_world = _build_world(
-        close_root,
-        monkeypatch,
-        expose_evidence=False,
-        phases=(START + timedelta(minutes=5),),
-    )
-    close_world["backends"].enable_next_cut = START + timedelta(minutes=1)
-    close_world["clock"].value = START + timedelta(seconds=58)
-    output = close_root / "private" / "receipt.json"
-    with pytest.raises(close_world["module"].QualificationError) as error:
-        _run_live(close_world, output)
+    # The fail-closed backstop: _smoke_phase refuses if the first cut has inadequate lead.
+    with pytest.raises(world["module"].QualificationError) as error:
+        world["module"]._smoke_phase(
+            world["backends"],
+            world["store"],
+            world["backends"].runtime_python(),
+            job_id="test-job",
+            output_dir=None,
+            language="English",
+            baseline_report_ids=frozenset(),
+            cut_one=world["backends"].now() + timedelta(seconds=2),
+            expected_items={},
+            expected_item_gaps={},
+            stream=None,
+        )
     assert error.value.code == "smoke-window"
-    assert close_world["backends"].trigger_calls == 0
+    assert "lead_seconds" in error.value.detail
 
 
 def test_d12_case_requires_attribution_and_rejects_invented_percentages() -> None:
@@ -7618,3 +7621,106 @@ def test_d16r_enable_reaches_native_job_creation_in_lab_context(tmp_path: Path) 
     assert ctrl["result"]["enabled"] is True
     assert ctrl["result"]["profile_binding"] == "morfeo"
     assert ctrl["result"]["native_job"]["schedule"] == "0 * * * *"
+
+
+def test_d16t_lab_scheduler_stop_detects_cooperative_exit_and_records_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child that exits cooperatively is reported stopped without consuming the bound and status is recorded."""
+    module = _qualification_module()
+    monkeypatch.setattr(module, "LAB_SCHEDULER_STOP_SECONDS", 0.2)
+    monkeypatch.setattr(module, "LAB_SCHEDULER_POLL_SECONDS", 0.02)
+    lab = _fake_lab_record(tmp_path)
+    control = Path(lab["root"]) / "control"
+    control.mkdir(parents=True, exist_ok=True)
+    stop = control / "scheduler-stop"
+
+    child_code = f"""
+import time, sys
+from pathlib import Path
+stop = Path({str(stop)!r})
+while not stop.exists():
+    time.sleep(0.02)
+sys.exit(0)
+"""
+    process = subprocess.Popen([sys.executable, "-c", child_code])
+    scheduler = {
+        "pid": process.pid,
+        "process": process,
+        "stop_file": str(stop),
+        "ready": True,
+    }
+    try:
+        stopped = module._lab_scheduler_stop(lab, scheduler)
+        assert stopped["stopped"] is True
+        assert stopped["cooperative"] is True
+        assert stopped["exit_code"] == 0
+        assert stopped["exit_status"] == 0
+    finally:
+        with contextlib.suppress(OSError):
+            process.kill()
+        process.wait()
+
+
+def test_d16t_lab_scheduler_stop_fails_closed_when_child_ignores_stop_and_sigterm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A child that ignores the stop file and SIGTERM still fails after the bound."""
+    module = _qualification_module()
+    monkeypatch.setattr(module, "LAB_SCHEDULER_STOP_SECONDS", 0.05)
+    monkeypatch.setattr(module, "LAB_SCHEDULER_POLL_SECONDS", 0.01)
+    lab = _fake_lab_record(tmp_path)
+    control = Path(lab["root"]) / "control"
+    control.mkdir(parents=True, exist_ok=True)
+    stop = control / "scheduler-stop"
+
+    child_code = """
+import os, signal, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+while True:
+    time.sleep(0.05)
+"""
+    process = subprocess.Popen([sys.executable, "-c", child_code])
+    scheduler = {
+        "pid": process.pid,
+        "process": process,
+        "stop_file": str(stop),
+        "ready": True,
+    }
+    try:
+        with pytest.raises(module.QualificationError) as exc_info:
+            module._lab_scheduler_stop(lab, scheduler)
+        assert exc_info.value.code == "lab-scheduler-stop"
+    finally:
+        with contextlib.suppress(OSError):
+            os.kill(process.pid, signal.SIGKILL)
+        process.wait()
+
+
+def test_d16t_harness_start_in_last_seconds_reaches_valid_smoke_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A harness start inside the last seconds of a minute waits for the boundary and reaches smoke."""
+    start_time = START + timedelta(seconds=46)
+    world = _build_world(
+        tmp_path,
+        monkeypatch,
+        expose_evidence=False,
+        phases=(
+            START + timedelta(minutes=1),
+            START + timedelta(minutes=2),
+        ),
+    )
+    world["clock"].value = start_time
+    world["backends"].enable_next_cut = START + timedelta(minutes=2)
+    output = tmp_path / "private" / "receipt.json"
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+    # The start lead wait prevented the mistimed start from failing with smoke-window;
+    # it progressed past enable and scheduler start to trigger the smoke.
+    assert error.value.code != "smoke-window"
+    assert any("sleep:14.1" in call for call in world["backends"].calls)
+    assert world["backends"].trigger_calls == 1
+    assert "lab_control:on" in world["backends"].calls
+    assert "lab_scheduler_start" in world["backends"].calls
+    assert "lab_scheduler_stop" in world["backends"].calls

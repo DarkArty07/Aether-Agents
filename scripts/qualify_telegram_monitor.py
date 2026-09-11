@@ -194,6 +194,14 @@ SMOKE_POLL_SECONDS = 5
 #: crossed the first expected cut from being mislabelled as the smoke.
 SMOKE_MIN_LEAD_SECONDS = 5.0
 
+#: Minimum remaining seconds in a minute before enabling the laboratory monitor.
+#: If fewer seconds remain, the lane waits for the next minute boundary so that enable,
+#: schedule update, and scheduler start all complete with adequate lead before the first cut.
+SMOKE_START_MIN_LEAD_SECONDS = 25.0
+
+#: Minimum remaining seconds in a minute before accelerating the laboratory schedule.
+SMOKE_ACCELERATE_MIN_LEAD_SECONDS = 15.0
+
 #: Bounds of the one supervised native scheduler instance the laboratory starts and stops.
 LAB_SCHEDULER_READY_SECONDS = 120.0
 LAB_SCHEDULER_POLL_SECONDS = 1.0
@@ -2088,6 +2096,33 @@ def _smoke_trigger(
         f"SCRIPT_JSON = {PRECHECK_SCRIPT_NAME!r}\n" + _SMOKE_TRIGGER_PROBE
     )
     return _runtime_execute(interpreter, body, environment=environment)
+
+
+def _wait_for_minute_lead(
+    backends: Any,
+    min_lead_seconds: float,
+    *,
+    stream: Any = None,
+    phase_name: str = "qualification",
+) -> None:
+    """Ensure the accelerated lane does not cross a minute boundary with inadequate lead.
+
+    If fewer than ``min_lead_seconds`` remain in the current minute, wait for the
+    next minute boundary so subsequent operations execute with full minute runway.
+    """
+    now = backends.now()
+    seconds_into_minute = now.second + now.microsecond / 1_000_000
+    remaining = 60.0 - seconds_into_minute
+    if remaining < min_lead_seconds:
+        wait_seconds = remaining + 0.1
+        if stream is not None:
+            print(
+                f"waiting {wait_seconds:.2f}s for the next minute boundary before {phase_name} "
+                f"(current lead {remaining:.2f}s < {min_lead_seconds:.1f}s required)",
+                file=stream,
+                flush=True,
+            )
+        backends.sleep(wait_seconds)
 
 
 def _smoke_phase(
@@ -4728,6 +4763,7 @@ def _lab_scheduler_start(interpreter: Path, lab: Mapping[str, Any]) -> dict[str,
         "interval_seconds": payload.get("interval_seconds"),
         "stop_file": str(stop),
         "ready": True,
+        "process": process,
     }
 
 
@@ -4741,24 +4777,69 @@ def _lab_scheduler_stop(lab: Mapping[str, Any], scheduler: Mapping[str, Any]) ->
 
     stop = Path(str(scheduler.get("stop_file") or ""))
     pid = int(scheduler.get("pid") or 0)
-    result: dict[str, Any] = {"stopped": False, "signal": None, "cooperative": False}
+    process: Any = scheduler.get("process")
+    result: dict[str, Any] = {
+        "stopped": False,
+        "signal": None,
+        "cooperative": False,
+        "exit_code": None,
+        "exit_status": None,
+    }
+
+    def _check_stopped() -> tuple[bool, int | None]:
+        if hasattr(process, "poll") and callable(process.poll):
+            polled = process.poll()
+            if isinstance(polled, int):
+                return True, polled
+        try:
+            wpid, status = os.waitpid(pid, os.WNOHANG)
+            if wpid == pid:
+                rc = (
+                    os.WEXITSTATUS(status)
+                    if os.WIFEXITED(status)
+                    else (-os.WTERMSIG(status) if os.WIFSIGNALED(status) else 0)
+                )
+                if hasattr(process, "returncode") and getattr(process, "returncode") is None:
+                    try:
+                        process.returncode = rc
+                    except (AttributeError, TypeError):
+                        pass
+                return True, rc
+        except (ChildProcessError, OSError):
+            pass
+        if not _pid_alive(pid):
+            raw_rc = (
+                getattr(process, "returncode", None) if hasattr(process, "returncode") else None
+            )
+            return True, raw_rc if isinstance(raw_rc, int) else None
+        return False, None
+
     with contextlib.suppress(OSError):
         stop.write_text("stop\n", encoding="utf-8")
     deadline = time.monotonic() + LAB_SCHEDULER_STOP_SECONDS
     while time.monotonic() < deadline:
-        if not _pid_alive(pid):
+        stopped, exit_code = _check_stopped()
+        if stopped:
             result["stopped"] = True
             result["cooperative"] = True
+            result["exit_code"] = exit_code
+            result["exit_status"] = exit_code
             break
         time.sleep(LAB_SCHEDULER_POLL_SECONDS)
     if not result["stopped"]:
         result["signal"] = "SIGTERM"
+        if hasattr(process, "terminate") and callable(process.terminate):
+            with contextlib.suppress(OSError):
+                process.terminate()
         with contextlib.suppress(OSError, ProcessLookupError):
             os.kill(pid, signal.SIGTERM)
         deadline = time.monotonic() + LAB_SCHEDULER_STOP_SECONDS
         while time.monotonic() < deadline:
-            if not _pid_alive(pid):
+            stopped, exit_code = _check_stopped()
+            if stopped:
                 result["stopped"] = True
+                result["exit_code"] = exit_code
+                result["exit_status"] = exit_code
                 break
             time.sleep(LAB_SCHEDULER_POLL_SECONDS)
     if not result["stopped"]:
@@ -4768,6 +4849,14 @@ def _lab_scheduler_stop(lab: Mapping[str, Any], scheduler: Mapping[str, Any]) ->
             "the bounded native scheduler instance did not stop inside the bounded wait; "
             "the objective evidence is retained and the laboratory must be reconciled",
         )
+    if hasattr(process, "stdout"):
+        with contextlib.suppress(OSError):
+            if process.stdout:
+                process.stdout.close()
+    if hasattr(process, "stderr"):
+        with contextlib.suppress(OSError):
+            if process.stderr:
+                process.stderr.close()
     return result
 
 
@@ -4780,6 +4869,13 @@ def _pid_alive(pid: int) -> bool:
         return False
     except PermissionError:
         return True
+    try:
+        stat_text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        state = stat_text.rpartition(")")[2].split()[0]
+        if state in {"Z", "X"}:
+            return False
+    except (OSError, IndexError, ValueError):
+        pass
     return True
 
 
@@ -5136,6 +5232,12 @@ def _live_run(
                 detail={"gaps": environment_gaps},
             )
         # 3. Install the one lab monitor job through the shipped control service.
+        _wait_for_minute_lead(
+            backends,
+            SMOKE_START_MIN_LEAD_SECONDS,
+            stream=stream,
+            phase_name="enabling the laboratory monitor",
+        )
         enable = backends.lab_control(lab, ACTION_ON)
         result = enable["result"]
         job_id = str((result.get("native_job") or {}).get("id") or "")
@@ -5193,6 +5295,12 @@ def _live_run(
         # 3a. Qualification acceleration is a native update of this one job in this one
         #     private store.  It is not a direct store rewrite and it never touches the
         #     operator's production cron store.
+        _wait_for_minute_lead(
+            backends,
+            SMOKE_ACCELERATE_MIN_LEAD_SECONDS,
+            stream=stream,
+            phase_name="accelerating the laboratory schedule",
+        )
         schedule_update = backends.lab_schedule_update(interpreter, lab, job_id)
         record["schedule_update"] = dict(schedule_update)
         if not _schedule_update_evidence_ok(schedule_update):
@@ -5270,7 +5378,7 @@ def _live_run(
         #    is part of the acceptance proof, so a manual/forced/custom runner cannot be
         #    counted as a scheduled boundary.
         scheduler = backends.lab_scheduler_start(interpreter, lab)
-        record["scheduler"] = dict(scheduler)
+        record["scheduler"] = {key: value for key, value in scheduler.items() if key != "process"}
         if not _scheduled_evidence_ok(schedule_update, scheduler):
             abort(
                 "scheduler-evidence",
@@ -5570,20 +5678,31 @@ def _live_run(
         if (scheduler is not None or job_id is not None) and not off_verified:
             disable_lab_before_scheduler_stop()
         if scheduler is not None:
+            stop_result: dict[str, Any] = {}
             try:
-                retention["scheduler_stopped"] = bool(
-                    backends.lab_scheduler_stop(lab or {}, scheduler).get("stopped")
-                )
+                stop_result = backends.lab_scheduler_stop(lab or {}, scheduler)
+                retention["scheduler_stopped"] = bool(stop_result.get("stopped"))
             except QualificationError as error:
                 retention["scheduler_stopped"] = False
                 record["errors"].append(
                     {"code": error.code, "message": error.message, "detail": error.detail}
                 )
             finally:
-                record["scheduler"] = {
-                    **(record.get("scheduler") or {}),
-                    "stopped": bool(retention.get("scheduler_stopped")),
+                record_scheduler = {
+                    key: value
+                    for key, value in (record.get("scheduler") or {}).items()
+                    if key != "process"
                 }
+                record_scheduler["stopped"] = bool(retention.get("scheduler_stopped"))
+                if "exit_code" in stop_result:
+                    record_scheduler["exit_code"] = stop_result.get("exit_code")
+                if "exit_status" in stop_result:
+                    record_scheduler["exit_status"] = stop_result.get("exit_status")
+                if "cooperative" in stop_result:
+                    record_scheduler["cooperative"] = bool(stop_result.get("cooperative"))
+                if stop_result.get("signal") is not None:
+                    record_scheduler["signal"] = stop_result.get("signal")
+                record["scheduler"] = record_scheduler
         else:
             retention["scheduler_stopped"] = True
         if lab is None:
