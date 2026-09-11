@@ -6260,15 +6260,36 @@ def test_d14r_preflight_refuses_missing_hermes_state_writer_surface(
 
 
 def test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway() -> None:
-    """_LAB_NATIVE_PROBE imports fixture chain before cron and gateway."""
+    """_LAB_NATIVE_PROBE imports fixture chain before cron and gateway, matching _LAB_FIXTURE_PROBE."""
     q = _qualification_module()
-    body = q._LAB_NATIVE_PROBE
+    native_body = q._LAB_NATIVE_PROBE
+    fixture_body = q._LAB_FIXTURE_PROBE
 
-    state_pos = body.find("from hermes_state import SessionDB")
-    cron_pos = body.find("from cron.scheduler_provider import InProcessCronScheduler")
-    gw_pos = body.find("load_gateway_config()")
+    chain = [
+        "from aether_agents.monitor import runtime as monitor_runtime",
+        "from aether_agents.monitor.store import MonitorStore",
+        "from aether_agents.observation.context import ProjectRegistry",
+        "from hermes_cli import kanban_db, projects_db",
+        "from hermes_state import SessionDB",
+    ]
 
-    assert state_pos != -1, "from hermes_state import SessionDB missing from probe body"
+    for stmt in chain:
+        assert stmt in native_body, f"{stmt} missing from _LAB_NATIVE_PROBE"
+        assert stmt in fixture_body, f"{stmt} missing from _LAB_FIXTURE_PROBE"
+
+    # Assert identical import order across both probes
+    for first, second in zip(chain[:-1], chain[1:], strict=True):
+        assert native_body.find(first) < native_body.find(second), (
+            f"{first} must precede {second} in _LAB_NATIVE_PROBE"
+        )
+        assert fixture_body.find(first) < fixture_body.find(second), (
+            f"{first} must precede {second} in _LAB_FIXTURE_PROBE"
+        )
+
+    state_pos = native_body.find("from hermes_state import SessionDB")
+    cron_pos = native_body.find("from cron.scheduler_provider import InProcessCronScheduler")
+    gw_pos = native_body.find("load_gateway_config()")
+
     assert cron_pos != -1, "InProcessCronScheduler missing from probe body"
     assert gw_pos != -1, "load_gateway_config missing from probe body"
     assert state_pos < cron_pos, "fixture import chain must precede cron imports"

@@ -67,7 +67,7 @@ To reproduce this deterministically without altering the recovered operator runt
   "root_after_phase1": false
 }
 ```
-*Result:* Harness refuses immediately at the read-only preflight with bounded problem codes. The laboratory creation is never invoked (`created: false`), no laboratory directory is created on disk, no credentials are read, and no inference or transport call is made.
+*Result:* Harness refuses immediately at the read-only preflight with bounded problem codes. The laboratory creation is never invoked (`created: false`), no laboratory directory is created on disk, no credential is acquired, refreshed, injected into the reference probe, copied into the lab root or the receipt, no credential is used, and no model or send effect is made. Note that the pre-existing D14 access collection (`_lab_access` → `telegram_monitor_lab.collect_access`) still performs its local read of the provisioned profile environment file before the chain check; that local read is pre-existing, unchanged, and within D14 access resolution scope.
 
 ## D14R Implementation Details
 
@@ -101,16 +101,26 @@ To reproduce this deterministically without altering the recovered operator runt
 
 | Requirement / AC | Check | Observed Result | Evidence Location |
 | --- | --- | --- | --- |
-| D14R Stale mapping preflight refusal | `test_d14r_stale_mapping_reproduction_refuses_at_preflight_before_lab_created` | PASS: Stale mapping refuses at read-only preflight with bounded codes (`provisioned-fixture-imports`, `provisioned-writer-interface-missing`); `created=false`, no lab root on disk | `tests/test_telegram_monitor_cli_plugin.py:6203` |
-| D14R In-lab gate unmasked by cron | `test_d14r_in_lab_gate_exercises_fixture_import_order_unmasked_by_cron` | PASS: In-lab probe reports `fixture-imports: ModuleNotFoundError` and writer missing even with `cron` present in tree | `tests/test_telegram_monitor_cli_plugin.py:6225` |
-| D14R Preflight SessionDB writer check | `test_d14r_preflight_refuses_missing_hermes_state_writer_surface` | PASS: Dropping `create_session` causes bounded refusal `provisioned-writer-interface-missing:hermes_state.SessionDB.create_session` before lab creation | `tests/test_telegram_monitor_cli_plugin.py:6245` |
-| D14R Native probe import order | `test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway` | PASS: `from hermes_state import SessionDB` strictly precedes `InProcessCronScheduler` and `load_gateway_config` in probe body | `tests/test_telegram_monitor_cli_plugin.py:6262` |
-| D14R Preserved v3 failure receipt | `test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged` | PASS: Preserved v3 receipt SHA-256 `c23096fe...` and console log `a6046560...` unchanged | `tests/test_telegram_monitor_cli_plugin.py:6278` |
-| D14 Preserved prior refusal receipt | `test_d14_preserved_prior_refusal_receipt_and_log_unchanged` | PASS: Preserved v2 receipt SHA-256 `eb2f3ad3...` and log `5a9ca1fe...` unchanged | `tests/test_telegram_monitor_cli_plugin.py:6154` |
-| D14 Destination digest parity | `test_d14_target_digest_equality_and_no_access_values` | PASS: Reference probe and laboratory probe destination digests match (`4e7c5b38...`), no secrets leaked | `tests/test_telegram_monitor_cli_plugin.py:6055` |
-| D14 Runtime reference probe | `test_d14_runtime_reference_destination_probe_matches_gateway_context` | PASS: Reference probe on recovered runtime resolves `36007c9a8b0f8394...` | `tests/test_telegram_monitor_cli_plugin.py:6100` |
+| D14R Stale mapping preflight refusal | `test_d14r_stale_mapping_reproduction_refuses_at_preflight_before_lab_created` | PASS: Stale mapping refuses at read-only preflight with bounded codes (`provisioned-fixture-imports`, `provisioned-writer-interface-missing`); `created=false`, no lab root on disk | `tests/test_telegram_monitor_cli_plugin.py:6204` (`test_d14r_stale_mapping_reproduction_refuses_at_preflight_before_lab_created`) |
+| D14R In-lab gate unmasked by cron | `test_d14r_in_lab_gate_exercises_fixture_import_order_unmasked_by_cron` | PASS: In-lab probe reports `fixture-imports: ModuleNotFoundError` and writer missing even with `cron` present in tree | `tests/test_telegram_monitor_cli_plugin.py:6225` (`test_d14r_in_lab_gate_exercises_fixture_import_order_unmasked_by_cron`) |
+| D14R Preflight SessionDB writer check | `test_d14r_preflight_refuses_missing_hermes_state_writer_surface` | PASS: Dropping `create_session` causes bounded refusal `provisioned-writer-interface-missing:hermes_state.SessionDB.create_session` before lab creation | `tests/test_telegram_monitor_cli_plugin.py:6244` (`test_d14r_preflight_refuses_missing_hermes_state_writer_surface`) |
+| D14R Native probe import order | `test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway` | PASS: `from hermes_state import SessionDB` strictly precedes `InProcessCronScheduler` and `load_gateway_config` in probe body; asserts identical import chain order to `_LAB_FIXTURE_PROBE` | `tests/test_telegram_monitor_cli_plugin.py:6262` (`test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway`) |
+| D14R Preserved v3 failure receipt | `test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged` | PASS: Preserved v3 receipt SHA-256 `c23096fe...` and console log `a6046560...` unchanged | `tests/test_telegram_monitor_cli_plugin.py:6299` (`test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged`) |
+| D14 Preserved prior refusal receipt | `test_d14_preserved_prior_refusal_receipt_and_log_unchanged` | PASS: Preserved v2 receipt SHA-256 `eb2f3ad3...` and log `5a9ca1fe...` unchanged | `tests/test_telegram_monitor_cli_plugin.py:6154` (`test_d14_preserved_prior_refusal_receipt_and_log_unchanged`) |
+| D14 Destination digest parity | `test_d14_target_digest_equality_and_no_access_values` | PASS: Reference probe and laboratory probe destination digests match (`4e7c5b38...`), no secrets leaked | `tests/test_telegram_monitor_cli_plugin.py:6055` (`test_d14_target_digest_equality_and_no_access_values`) |
+| D14 Runtime reference probe | `test_d14_runtime_reference_destination_probe_matches_gateway_context` | PASS: Reference probe on recovered runtime resolves `36007c9a8b0f8394...` | `tests/test_telegram_monitor_cli_plugin.py:6100` (`test_d14_runtime_reference_destination_probe_matches_gateway_context`) |
 | Healthy runtime preflight rehearsal | `_lab_preflight` on recovered runtime | PASS: `problems=[]`, profile digest `de71053213ebdde16a6a1e36c89f3407c2f0a08cdfbe080ff84035fcd0fdab2a`, destination digest `36007c9a8b0f839416989e6aa06b2d8225c11142837fc5539cf8a33b59935f5f` | Rehearsal command |
 | Deterministic offline lane | `uv run --frozen python scripts/qualify_telegram_monitor.py --json` | PASS: 11/11 checks pass, 0 model calls, 0 Telegram sends, `ok=true` | `scripts/qualify_telegram_monitor.py:884` |
+
+### Per-Test Fail-Before / Pass-After Mapping (Candidate vs Base `cf8cf3d`)
+
+| Test Function | Pre-correction (`cf8cf3d`) Result | Corrected Candidate (D14R) Result | Observed Semantics |
+| --- | --- | --- | --- |
+| `test_d14r_stale_mapping_reproduction_refuses_at_preflight_before_lab_created` | FAIL (exit code 3) | PASS (exit code 2) | Pre-correction: preflight passed (`phase1_problems: []`), laboratory created on disk (`created: true`), in-lab gate passed (`gate_problems: []`, masked by `cron`), fixture child failed with `QualificationError: the synthetic laboratory scope could not be materialized through the shipped writers`. Corrected: refuses fail-closed at read-only preflight (`phase1_problems: ["provisioned-fixture-imports: ModuleNotFoundError", "provisioned-writer-interface-missing...", "provisioned-writer-artifact-missing..."]`), `created: false`, zero laboratory root created on disk. |
+| `test_d14r_in_lab_gate_exercises_fixture_import_order_unmasked_by_cron` | FAIL | PASS | Pre-correction: in-lab gate probe reported `problems: []` because earlier `from cron.scheduler_provider import InProcessCronScheduler` bootstrapped `sys.path`, masking the stale mapping. Corrected: in-lab gate executes fixture chain first, detecting `fixture-imports: ModuleNotFoundError` and missing writer interfaces unmasked by cron. |
+| `test_d14r_preflight_refuses_missing_hermes_state_writer_surface` | FAIL | PASS | Pre-correction: `phase1_problems == []` because preflight did not validate `hermes_state` writer surface when `lab_root=None`. Corrected: `phase1_problems` includes `provisioned-writer-interface-missing:hermes_state.SessionDB.create_session` before lab creation. |
+| `test_d14r_native_probe_body_executes_fixture_imports_before_cron_and_gateway` | FAIL | PASS | Pre-correction: `from hermes_state import SessionDB` missing from probe body before cron/gateway imports. Corrected: probe body executes fixture import chain in identical order to `_LAB_FIXTURE_PROBE` before `cron` or `gateway` imports. |
+| `test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged` | PASS | PASS | Preservation-only check: preserved v3 receipt digest `c23096fe...` and console log digest `a6046560...` remain byte-identical on both base and candidate. |
 
 ## Verification Results
 
@@ -124,15 +134,26 @@ To reproduce this deterministically without altering the recovered operator runt
    ```bash
    uv run --frozen python scripts/run_tests.py -- -q tests/test_telegram_monitor_*.py
    ```
-   Result: **309 passed in 21.49s** (exit code 0).
+   Result: **309 passed in 20.40s** (exit code 0).
 
-3. **Documentation validation:**
+3. **Full test suite:**
+   ```bash
+   uv run --frozen python scripts/run_tests.py
+   ```
+   Result: **1495 passed, 64 skipped, 2 failed** (exit code 1).
+   Baseline comparison against `cf8cf3dee85bdf9b8e6c7802629ebcb4456afc38`:
+   - Both 2 failures reproduce identically on base `cf8cf3d`:
+     1. `tests/test_tracked_public_surface.py::test_tracked_public_surface_contains_no_operator_paths`: pre-existing historical contract violation in `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (documented and accepted).
+     2. `tests/test_same_card_phase_predicates.py::test_initial_review_requires_an_independent_reviewer`: pre-existing lifecycle predicate test failure on base.
+   - Baseline parity confirmed; 0 regressions introduced.
+
+4. **Documentation validation:**
    ```bash
    uv run --frozen python scripts/check_documentation.py
    ```
    Result: `documentation validation passed` (exit code 0).
 
-4. **Static quality gates:**
+5. **Static quality gates:**
    ```bash
    uv run --frozen python -m compileall -q src tests scripts/check_documentation.py scripts/qualify_knowledge_expansion.py scripts/qualify_observation.py scripts/qualify_telegram_monitor.py scripts/telegram_monitor_lab.py scripts/check_hermes_baseline_drift.py scripts/check_public_artifacts.py scripts/run_tests.py scripts/validate_hermes_patch_reconciliation.py tests/test_documentation.py
    uv run --frozen mypy src/aether_agents
@@ -143,16 +164,16 @@ To reproduce this deterministically without altering the recovered operator runt
    ```
    Result: all static gates passed cleanly with 0 errors or warnings.
 
-5. **Policy manifest check:**
+6. **Policy manifest check:**
    Policy file list in `.github/workflows/policy.yml` matches `git ls-files` (excluding `specs/`) exactly: 376/376 files, 0 missing, 0 extra.
 
-6. **Public artifact path scan:**
+7. **Public artifact path scan:**
    ```bash
    uv run --frozen python scripts/check_public_artifacts.py --root . --artifact /tmp/aether-dist/*.whl --artifact /tmp/aether-dist/*.tar.gz
    ```
    Result: 0 violations added in tracked surface or built artifacts; baseline parity preserved (only pre-existing `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` flagged).
 
-7. **Confidence check against recovered runtime:**
+8. **Confidence check against recovered runtime:**
    Read-only preflight rehearsal against installation interpreter (`<installation-home>/.venv-hermes/bin/python`) and Morfeo profile confirms:
    - `problems`: `[]`
    - `profile_digest`: `de71053213ebdde16a6a1e36c89f3407c2f0a08cdfbe080ff84035fcd0fdab2a`
