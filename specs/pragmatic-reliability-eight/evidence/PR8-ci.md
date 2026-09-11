@@ -22,9 +22,11 @@ Execution was restricted strictly to the authorized exclusive writable surface:
   - Created portable tombstone `.aether/objective-contracts/oc_0084270d940c98d9/tombstone.json`
 - `.github/workflows/policy.yml`:
   - Replaced line 73 (`.aether/objective-contracts/oc_0084270d940c98d9/v1.md`) with `.aether/objective-contracts/oc_0084270d940c98d9/tombstone.json`.
+  - Added line for `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md` to expected-file manifest (PR8-CI-REWORK-1).
   - Touched no other lines or jobs.
 - `tests/test_public_artifacts.py`:
   - Added `test_historical_contract_oc_0084270d940c98d9_tombstone_preserves_locator`.
+  - Added `test_canonical_base_manifest_matches_tracked_non_specs_files` (PR8-CI-REWORK-1).
 - `specs/pragmatic-reliability-eight/evidence/PR8-ci.md`:
   - Authoring this evidence artifact.
 
@@ -118,12 +120,15 @@ Audit properties:
 ### 3.3 Reference and Manifest Updates
 
 1. `.github/workflows/policy.yml`:
-   Line 73 replaced `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` with `.aether/objective-contracts/oc_0084270d940c98d9/tombstone.json`.
+   - Line 73 replaced `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` with `.aether/objective-contracts/oc_0084270d940c98d9/tombstone.json`.
+   - Line 66 added `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md` (PR8-CI-REWORK-1) to restore canonical base manifest verification to green.
 2. `tests/test_public_artifacts.py`:
-   Added `test_historical_contract_oc_0084270d940c98d9_tombstone_preserves_locator` asserting:
-   - `tombstone.json` is present and well-formed.
-   - `v1.md` is deleted from the current surface.
-   - All audit locators and digests match.
+   - Added `test_historical_contract_oc_0084270d940c98d9_tombstone_preserves_locator` asserting:
+     - `tombstone.json` is present and well-formed.
+     - `v1.md` is deleted from the current surface.
+     - All audit locators and digests match.
+   - Added `test_canonical_base_manifest_matches_tracked_non_specs_files` asserting:
+     - Expected files extracted from `.github/workflows/policy.yml` match `git ls-files | grep -v '^specs/'` sorted.
 
 ---
 
@@ -184,19 +189,37 @@ Audit properties:
 
 ### 4.4 Canonical Base Manifest Step Verification
 
-- **Command:** Local reproduction of `.github/workflows/policy.yml` lines 26-395:
+- **Command:** Self-contained local reproduction of `.github/workflows/policy.yml` lines 26-395:
   ```bash
   expected=$(mktemp)
   actual=$(mktemp)
-  sed -n "35,390p" .github/workflows/policy.yml > "$expected"
-  sed -i "s/^          //" "$expected"
+  awk "/cat >\"\\\$expected\" <<'EOF'/{flag=1;next}/^          EOF\$/{flag=0}flag" .github/workflows/policy.yml > "$expected"
+  sed -i 's/^          //' "$expected"
   sort -o "$expected" "$expected"
   git ls-files | grep -v '^specs/' | sort > "$actual"
   diff -u "$expected" "$actual"
   ```
-- **Result:**
-  - Our replacement of `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` with `.aether/objective-contracts/oc_0084270d940c98d9/tombstone.json` matched perfectly between expected and actual.
-  - **Inherited baseline difference noted:** Commit `0a41438a13a0655b07703910b605e595f55aa660` introduced `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md` into the tracked repository without adding it to the expected list in `.github/workflows/policy.yml`. Per exclusive boundary rules ("only for your own path changes"), this pre-existing defect is reported as inherited and not absorbed.
+- **Pre-fix Finding (Objective-caused defect):**
+  - Commit `0a41438a13a0655b07703910b605e595f55aa660` introduced this objective's own contract file `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md` into the tracked repository without adding it to the expected-file list inside `.github/workflows/policy.yml`.
+  - Because this objective's PR integrates `0a41438a`, the resulting diff failure (`+ .aether/objective-contracts/oc_c780a10d94b78d85/v1.md`) is objective-caused and will fail the required Repository Policy check for the PR8-INT PR.
+  - Pre-fix command output (`diff -u "$expected" "$actual"`):
+    ```diff
+    --- /tmp/tmp.expected
+    +++ /tmp/tmp.actual
+    @@ -30,6 +30,7 @@
+     .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
+     .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
+     .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+    +.aether/objective-contracts/oc_c780a10d94b78d85/v1.md
+     .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
+     .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
+     .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
+    ```
+- **Post-fix Result:**
+  - Added `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md` to `.github/workflows/policy.yml` in the sorted neighborhood between `oc_c53c85ffb6c24f69/v1.md` and `oc_d7d067bf87e67cba/v1.md`.
+  - Re-executed reproduction command: diff is empty and exit code is `0`.
+  - Verified remaining step sub-checks: spec manifest mode/stage/safety/extension/UTF-8/secret scan passed, `VERSION` regex passed, forbidden tracked paths absent, and forbidden vocabulary absent.
+  - Added regression test `test_canonical_base_manifest_matches_tracked_non_specs_files` in `tests/test_public_artifacts.py` to pin the exact CI comparison against the workflow heredoc.
 
 ---
 
@@ -209,7 +232,7 @@ Audit properties:
 | Baseline Drift | `uv run --frozen python scripts/check_hermes_baseline_drift.py --json` | `0` | Baseline matches locked tag `v2026.8.18`, commit `e624e9fde561e1add9388384012b295fde669ade` |
 | Type Checker | `uv run --frozen mypy src/aether_agents` | `0` | `Success: no issues found in 53 source files` |
 | Baseline Tests | `AETHER_EXACT_HERMES_CHECKOUT=/tmp/hermes-exact uv run --frozen pytest -q tests/test_hermes_baseline.py tests/test_observation_qualification.py` | `0` | `65 passed, 12 skipped in 2.97s` |
-| Unit Test Suite | `uv run --frozen pytest -q tests/test_public_artifacts.py` | `0` | `7 passed in 1.51s` |
+| Unit Test Suite | `uv run --frozen pytest -q tests/test_public_artifacts.py` | `0` | `8 passed in 3.87s` |
 
 ---
 

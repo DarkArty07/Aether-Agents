@@ -143,3 +143,36 @@ def test_historical_contract_oc_0084270d940c98d9_tombstone_preserves_locator() -
         == ".aether/objective-contracts/oc_0084270d940c98d9/tombstone.json"
     )
     assert "403" in payload["reason"]
+
+
+def test_canonical_base_manifest_matches_tracked_non_specs_files() -> None:
+    policy_workflow = ROOT / ".github" / "workflows" / "policy.yml"
+    assert policy_workflow.is_file()
+    lines = policy_workflow.read_text(encoding="utf-8").splitlines()
+    in_heredoc = False
+    expected: list[str] = []
+    for line in lines:
+        if 'cat >"$expected" <<\'EOF\'' in line:
+            in_heredoc = True
+            continue
+        if in_heredoc and line.strip() == "EOF":
+            in_heredoc = False
+            break
+        if in_heredoc:
+            stripped = line.strip()
+            if stripped:
+                expected.append(stripped)
+    assert expected, "Failed to extract expected manifest from policy workflow"
+    expected.sort()
+
+    git_ls = subprocess.run(
+        ("git", "ls-files"),
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    actual = sorted(
+        path for path in git_ls.stdout.splitlines() if not path.startswith("specs/")
+    )
+    assert expected == actual
