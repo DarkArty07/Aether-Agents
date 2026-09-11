@@ -8,8 +8,9 @@ execution decomposition and does not widen the contract.
 **Source contract:** `.aether/objective-contracts/oc_c780a10d94b78d85/v1.md`
 (SHA-256 `0fdd7931cc77e75eecc20e37c32f1352afbd8bf91869340aa092ac20e12905a5`).
 
-**Objective board:** `oc-12027989a08f41cda82c54ff1bfb6b03-c780a10d94b78d85-v1`
-(project `p_227bd972`, `worktree_base_ref` `0a41438a13a0655b07703910b605e595f55aa660`).
+**Base revision:** `0a41438a13a0655b07703910b605e595f55aa660`, the executed base of this
+objective's execution branch. The execution board and its native Project are provisioned
+runtime state and are not part of this portable artifact.
 
 Card bodies remain the executable unit deliveries; this file is the canonical
 breakdown and coverage map.
@@ -20,10 +21,10 @@ breakdown and coverage map.
 | --- | --- |
 | Portable project | `.aether/project.toml` project id matches the envelope `12027989-a08f-41cd-a82c-54ff1bfb6b03` |
 | Contract bytes | `sha256sum` = `0fdd7931cc77e75eecc20e37c32f1352afbd8bf91869340aa092ac20e12905a5`; matches the card envelope |
-| Base commit | `0a41438a13a0655b07703910b605e595f55aa660` is the executed HEAD of this objective worktree and the board `worktree_base_ref` |
+| Base commit | `0a41438a13a0655b07703910b605e595f55aa660` is the executed base of this objective's execution branch, verified at receipt |
 | `origin/main` at receipt | `466ee72cbbc984cbeec48ad929e84eeaa4d24f87` (the contract commit's parent) |
 | Maintained fork | `DarkArty07/aether-hermes`; remote `refs/heads/aether-main` = `6551b7c31cc665d59103c6d89cb5e0c60666f803` (matches the contract). Fork Actions are disabled, so fork "required checks" do not exist; fork acceptance is the unit's own executed suites plus independent review |
-| Live runtime (evidence only) | Hermes editable checkout `home/.venv-hermes/src/hermes-agent` (dirty, behind the fork) and Aether runtime `home/runtime/aether-agents-main` (clean at `466ee72`). Neither is an implementation base |
+| Live runtime (evidence only) | The provisioned Hermes editable source checkout (dirty, behind the fork) and the provisioned Aether runtime checkout (clean at `466ee72`); both are local runtime state and neither is an implementation base |
 | Design sufficiency | `specs/pragmatic-reliability-eight/{spec,plan,research,quickstart}.md` decide all eight outcomes, the reuse-before-build rule, the serialized cron lane, the fail-closed boundary, the ledger/retirement requirement, the #403 tombstone choice, activation and the release conclusions. No missing product decision was found; no unit may invent one |
 | Profiles | `implementer`, `supervisor`, `morfeo` exist. Kanban capacity: `max_in_progress_per_profile_overrides` supervisor=1, implementer=3 |
 | Concurrent state | Active Monitor flow `oc_f8c9fc9320587cf3@v4` (terminal card `MON-V4-INT-R` running) and residual contract `oc_291b2fb34b413d92@v2` (U396/U399 candidates complete, U397 blocked on Monitor, terminal integration not done). Preserve both; do not race them |
@@ -34,11 +35,11 @@ breakdown and coverage map.
 | Concern | Settled conclusion | Execution consequence |
 | --- | --- | --- |
 | Reuse before building | `oc_291b2fb34b413d92@v2` is the sole implementation lane for #396/#397/#399 until its accepted commits reach `main` | This objective consumes them in `PR8-CONSUME`, which is an explicit blocked gate. No unit reimplements them |
-| Dual repository | Aether owns #388 (product guard), #357/#403 (CI evidence and public-artifact reconciliation); the maintained fork owns #372, #393, the #388 framework side and the #385 guidance correction | Fork units work in isolated disposable worktrees of `DarkArty07/aether-hermes@6551b7c…`; Aether units work in Aether project worktrees. Never edit the live editable runtime or `home/runtime/aether-agents-main` |
+| Dual repository | Aether owns #388 (product guard), #357/#403 (CI evidence and public-artifact reconciliation); the maintained fork owns #372, #393, the #388 framework side and the #385 guidance correction | Fork units work in isolated disposable worktrees of `DarkArty07/aether-hermes@6551b7c…`; Aether units work in Aether project worktrees. Never edit the live editable Hermes or Aether runtime checkouts |
 | Ledger hotspot | `HERMES_LOCAL_PATCHES.md`, `patches/hermes/**`, `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/**`, `scripts/validate_hermes_patch_reconciliation.py` and `tests/test_hermes_patch_reconciliation.py` share one digest/registry surface across all fork behaviors | One serialized Aether evidence lane (`PR8-LEDGER`). Fork units never edit those files; they hand over exact commits and behavior facts. This is a bounded serialization reason, not a reason for new architecture |
 | Fork file ownership | The cron lane needs `cron/**`, `tools/cronjob_tools.py`, `tools/kanban_tools.py`, `gateway/**`, `agent/**` (auto-subscribe path); the review lane needs `agent/prompt_builder.py` (`KANBAN_GUIDANCE`) and its focused tests | `PR8-CRON` and `PR8-REVIEW` are two disjoint fork branches; `agent/prompt_builder.py` is `PR8-REVIEW`-exclusive, `tools/kanban_tools.py` and `hermes_cli/kanban_db.py` are `PR8-CRON`-exclusive. A unit that finds it must edit a file outside its surface stops and returns to Supervisor |
 | Publication | Implementation units commit on their unit branch, push fork feature branches and open the fork PR; they never merge, never open/merge the Aether PR and never close issues | Fork PR merges, the single Aether integration PR, checks, merge, activation, canaries, issue reconciliation and cleanup belong to `PR8-INT` |
-| Activation | The runtime loads Aether from `home/runtime/aether-agents-main/src` (editable `.pth`) and Hermes from `home/.venv-hermes/src/hermes-agent` | `PR8-INT` adopts the exact merged revisions at a worker-safe boundary, uses the accepted #399 operation for any editable-metadata refresh, and restarts only if changed loaded code requires it |
+| Activation | The live runtime loads Aether from an editable Aether source checkout (`.pth`) and Hermes from the editable Hermes source checkout | `PR8-INT` adopts the exact merged revisions at a worker-safe boundary, uses the accepted #399 operation for any editable-metadata refresh, and restarts only if changed loaded code requires it |
 | Testing | Regression-first with RED on the pristine base and GREEN on the candidate, on disposable state | No retry, skip, timeout increase, `PYTHONPATH` runtime workaround or check bypass counts as a fix. Probes scrub inherited `HERMES_KANBAN_*` and delegated-child identity. Aether gates per `quickstart.md` |
 | Out of scope | #227, #352, unrelated issues, the Monitor feature itself, #348 fork-adoption redesign, providers/models/credentials, publication, deployment, bypass, history rewrite, direct SQL repair of live boards | Report incidental defects separately; only a defect that actively blocks this objective may be folded in as the smallest tracked unblocker (#403 is the only pre-authorized one) |
 
@@ -98,7 +99,7 @@ fourth. `PR8-LEDGER` is serialized by the shared ledger surface, not by preferen
 ## Shared decisions (stamped into every implementation unit)
 
 1. Authority is `oc_c780a10d94b78d85@v1`; skills grant none. Never edit the contract artifact.
-2. Aether work starts in this objective's project worktree on a branch based at `0a41438a…`. Fork work starts from `DarkArty07/aether-hermes` `origin/aether-main` = `6551b7c31cc665d59103c6d89cb5e0c60666f803` in an isolated disposable worktree/clone; never check out `aether-main` in place and never edit the live editable runtime `home/.venv-hermes/src/hermes-agent` or `home/runtime/aether-agents-main`.
+2. Aether work starts in this objective's project worktree on a branch based at `0a41438a…`. Fork work starts from `DarkArty07/aether-hermes` `origin/aether-main` = `6551b7c31cc665d59103c6d89cb5e0c60666f803` in an isolated disposable worktree/clone; never check out `aether-main` in place and never edit the live editable Hermes or Aether runtime checkouts.
 3. Fork target hash mismatch versus `6551b7c…`, or an Aether tree that does not contain `0a41438a…`, is a stop: return to Supervisor.
 4. Regression-first: identical focused tests RED on the pristine base and GREEN on the candidate. Fork suites run with `HERMES_TEST_FILE_RETRIES=0`. No pass-on-retry, skip, timeout increase, `PYTHONPATH` runtime workaround, real credential, live board, production DB or paid model as fixture.
 5. Writable-file ownership is exclusive. A needed edit outside the unit's surface returns to Supervisor instead of being taken.
