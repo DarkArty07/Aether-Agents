@@ -69,7 +69,7 @@ def test_role_resources_share_tools_and_are_opt_in(role: str) -> None:
 def test_morfeo_soul_defines_project_experience_save_contract() -> None:
     """Guard prompt requirements, not an LLM's organic behavioral compliance."""
     soul = (RESOURCES / "profiles" / "morfeo" / "SOUL.md").read_text()
-    section = soul.split("## Shared project knowledge and role experiences", 1)[1]
+    section = soul.split("## 08. Knowledge, memory, and learning", 1)[1]
     section = section.split("\n## ", 1)[0]
     for instruction in (
         '`work_memory` using `action="save"`',
