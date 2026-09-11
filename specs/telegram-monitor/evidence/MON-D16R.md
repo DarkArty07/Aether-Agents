@@ -22,7 +22,7 @@
 - `src/aether_agents/monitor/sources.py`:
   - Resolved kanban root in `_resolve_board_paths` to check `root.parent.parent` when `root.parent.name == "profiles"`, matching Hermes native `kanban_db.boards_root()` behavior.
   - Resolved session DB paths in `_resolve_session_paths` to check sibling profiles and root when `root.parent.name == "profiles"`.
-  - **Non-lab scope disclosure and rationale:** This correction is **not lab-only**; it changes the resolver's behavior whenever `HERMES_HOME` is configured as a profile home directory (`<installation>/profiles/morfeo`), which is precisely the shape used by the provisioned production runtime. In Hermes Agent, kanban boards are stored in `<root>/kanban/boards`, shared across profiles by design (`kanban_db.boards_root()`). Prior to this fix, `_resolve_board_paths` looked for kanban boards strictly under `HERMES_HOME / "kanban" / "boards"`, resolving 0 boards when `HERMES_HOME` pointed to a profile home. That caused `ReadOnlySources.collect()` to return 0 items and report `idle: True`, which would silently render every accelerated cut idle and permanently prevent the production monitor from detecting registered work. Checking `root.parent.parent` when `root.parent.name == "profiles"` (and checking sibling profiles / root for session databases in `_resolve_session_paths`) was therefore strictly required for the monitor to discover boards and sessions in the provisioned production runtime as well as in the laboratory.
+  - **Non-lab scope disclosure and rationale:** This correction is **not lab-only**; it changes the resolver's behavior whenever `HERMES_HOME` is configured as a profile home directory (`<installation>/profiles/morfeo`), which is precisely the shape used by the provisioned production runtime. In Hermes Agent, kanban boards are stored in `<root>/kanban/boards`, shared across profiles by design (`kanban_db.boards_root()`). Prior to this fix, `_resolve_board_paths` looked for kanban boards strictly under `HERMES_HOME / "kanban" / "boards"`, resolving 0 boards when `HERMES_HOME` pointed to a profile home. That caused `ReadOnlySources.collect()` to return 0 items and report `idle: True`, which would silently render every accelerated cut idle and permanently prevent the production monitor from detecting registered work. Checking `root.parent.parent` when `root.parent.name == "profiles"` (and checking sibling profiles / root for session databases in `_resolve_session_paths`) was therefore strictly required for the monitor to discover boards and sessions in the provisioned production runtime as well as in the laboratory. (Note: while kanban board resolution is pinned by `test_profile_shaped_hermes_home_resolves_kanban_boards_and_is_not_idle`, the `_resolve_session_paths` profile-aware hunk for sibling-profile and parent-root `state.db` resolution remains an explicitly known unpinned hunk because reverting it alone leaves sources and the harness chain green, as the laboratory and Morfeo profile resolve their own `state.db` via the primary candidate path).
 - `tests/test_telegram_monitor_sources.py`:
   - Added behavior-bearing regression test `test_profile_shaped_hermes_home_resolves_kanban_boards_and_is_not_idle` pinning that a profile-shaped `HERMES_HOME` (`<root>/profiles/morfeo`) resolves boards under `<root>/kanban/boards` and yields a non-idle collection (`idle: False`, `len(items) > 0`), along with a plain-root control preserving standard resolution. Reverting the `kanban_root` hunk alone in `sources.py` causes this test to fail, proving the pin.
 - `tests/test_telegram_monitor_cli_plugin.py`:
@@ -97,11 +97,11 @@ Result on candidate: **6 passed** (126 passed in `cli_plugin`, 43 passed in `sou
 ## Verification commands and observed results
 
 - `git log --oneline -4`: tip is `98fce3e` (clean starting base).
-- `PYTHONPATH=. uv run --frozen pytest tests/test_telegram_monitor_cli_plugin.py`: **PASS** (126 passed in 33.98s).
+- `PYTHONPATH=. uv run --frozen pytest tests/test_telegram_monitor_cli_plugin.py`: **PASS** (122 passed, 4 skipped without `AETHER_HERMES_PYTHON`; with `AETHER_HERMES_PYTHON=$AETHER_HERMES_PYTHON`: 126 passed in 23.18s).
 - `PYTHONPATH=. uv run --frozen pytest tests/test_telegram_monitor_sources.py`: **PASS** (43 passed in 0.38s).
-- `AETHER_HERMES_PYTHON=/home/darkarty/Desktop/agentes/aether/home/.venv-hermes/bin/python PYTHONPATH=. uv run --frozen pytest tests/test_telegram_monitor_*.py`: **PASS** (329 passed in 26.96s).
+- `AETHER_HERMES_PYTHON=$AETHER_HERMES_PYTHON PYTHONPATH=. uv run --frozen pytest tests/test_telegram_monitor_*.py`: **PASS** (329 passed in 26.96s with provisioned runtime interpreter; without `AETHER_HERMES_PYTHON`: 325 passed, 4 skipped).
 - `TMPDIR=/tmp uv run --frozen python scripts/qualify_telegram_monitor.py --json`: **PASS** (`ok: true`, 12/12 checks, `external_effects: {model_calls: 0, telegram_sends: 0}`).
-- `uv run --frozen python scripts/run_tests.py -- tests/test_telegram_monitor_*.py`: **PASS** (329 passed in 21.07s).
+- `uv run --frozen python scripts/run_tests.py -- tests/test_telegram_monitor_*.py`: **PASS** (325 passed, 4 skipped without `AETHER_HERMES_PYTHON`; with `AETHER_HERMES_PYTHON=$AETHER_HERMES_PYTHON`: 329 passed in 21.07s).
 - `uv run --frozen python scripts/check_documentation.py`: **PASS** (`documentation validation passed`).
 - `uv run --frozen mypy src/aether_agents`: **PASS** (`Success: no issues found in 65 source files`).
 - `uv run --frozen ruff check ...`: **PASS** (`All checks passed!`).
@@ -109,7 +109,7 @@ Result on candidate: **6 passed** (126 passed in `cli_plugin`, 43 passed in `sou
 - `uv run --frozen python -m compileall src tests scripts`: **PASS** (0 errors).
 - `uv build`: **PASS** (`aether_agents-0.24.0.tar.gz` and `aether_agents-0.24.0-py3-none-any.whl`).
 - `git diff --check`: **PASS** (clean diff).
-- `scripts/check_public_artifacts.py`: **PASS** on candidate artifacts and tracked files; known pre-existing finding `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` baseline-compared as expected.
+- `scripts/check_public_artifacts.py`: **FAIL with the two known pre-existing findings only** (`.aether/objective-contracts/oc_0084270d940c98d9/v1.md: absolute-user-home` and `operator-desktop-layout`, issue #364); output is identical to base `98fce3e` (no candidate path reported; dist was removed after scan).
 - `.github/workflows/policy.yml` manifest emulation: **PASS** (`diff -u "$expected" "$actual"` exit code 0).
 
 ## Compatibility and residual risk
