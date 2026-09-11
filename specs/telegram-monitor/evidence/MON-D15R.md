@@ -5,7 +5,7 @@
 **Objective Contract:** `oc_f8c9fc9320587cf3@v3` (`.aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md`, SHA-256 `f21facaf58af20a2d0595cdaa927a99ca6336e5b14b5d073ec3501bbfbf7f47c`)
 **Source:** Owner D15 authorization on card `t_b8077e66` (canonical record `specs/telegram-monitor/qualification-isolation.md` §D15, commit `08d8233065d181a0f43b215ea2d71b2865818f0f`)
 **Base commit:** `f603f8f1ace4dbb112afb05e032da620642e7050`
-**Candidate commit:** the tip commit on this branch (descending from `bec82e265e36a804792543177e580de8fe2ceb51`, which amends with round-1 review corrections)
+**Candidate commit:** `b59e0e06bcffe6722f84aadd3c44995a165a479a`
 **Phase:** implementer unit; **no live effect performed** — no `--live` run, no model call, no Telegram send, no scheduler start, no enable of any lab job, no profiler/registry mutation, no profile/config/credential/provider change, no runtime modification, no cleanup of retained labs/receipts, no push/PR/issue mutation.
 
 ## Scope and changed paths
@@ -15,8 +15,8 @@
   2. `_PHONE_RE`: stated deviation and trade-off — aligned regex with the canonical pattern from `src/aether_agents/monitor/reporting.py:121-124`. Reverting this pattern causes task results containing ISO dates (`YYYY-MM-DD`, e.g. `2099-12-31` in task A3) to be falsely flagged as phone numbers and raise `TASK_RESULT_UNSAFE`, preventing a gap-free laboratory. Trade-off: sources-side screening narrows to the canonical telephone narration pattern that the shipped final gate already uses (`reporting.py`), allowing standard ISO dates to pass while continuing to reject structured phone numbers.
 - `scripts/qualify_telegram_monitor.py`:
   1. `_environment_gaps`: accepted `hermes_home` keyword argument, evaluating the laboratory's own Hermes root (`lab["hermes_home"]`) instead of falling back to the operator's profile home.
-  2. `QualificationBackends.environment_gaps`: accepted `hermes_home` and `lab` keyword arguments, forwarding `hermes_home` to `_environment_gaps`.
-  3. `_qualify` at step 2a: invoked `backends.environment_gaps(store, hermes_home=Path(str(lab["hermes_home"])), lab=lab)` to probe the laboratory's own read-only sources before any enable effect.
+  2. `LiveBackends.environment_gaps`: accepted `hermes_home` and `lab` keyword arguments, forwarding `hermes_home` to `_environment_gaps`.
+  3. `_live_run` at step 2a: invoked `backends.environment_gaps(store, hermes_home=Path(str(lab["hermes_home"])), lab=lab)` to probe the laboratory's own read-only sources before any enable effect.
   4. `_LAB_FIXTURE_PROBE`: seeded the two synthetic boards through the shipped execution-board writer (`_provision_execution_board`) fail-closed, populating complete Objective Contract metadata (`aether_project_id`, `aether_contract_id`, `aether_contract_version`, canonical `project_id`, `default_workdir`, `archived: false`).
 - `tests/test_telegram_monitor_sources.py`:
   Added focused unit tests verifying:
@@ -87,7 +87,10 @@ Running read-only diagnosis against retained lab `20260911T052506Z-2be4d0c9a98a`
 | `test_root_without_default_board_store_produces_no_phantom_metadata_gap` | FAIL (`assert "default" not in paths` failed; `assert "BOARD_METADATA_UNREADABLE" not in gaps` failed) | PASS | Base unconditionally prepended `("default", root / "kanban.db")` and emitted `BOARD_METADATA_UNREADABLE` on roots lacking default store. Corrected candidate includes default only when its store exists on disk. |
 | `test_iso_dates_in_task_result_do_not_produce_task_result_unsafe` | FAIL (`assert _safe_text(...) is not None` failed) | PASS | Base `_PHONE_RE` was overly broad and matched `2099-12-31`, causing `_safe_text` to return `None`. Corrected candidate aligns `_PHONE_RE` with `reporting.py` and treats ISO dates as valid prose. |
 | `test_d15r_reproduction_and_corrected_gap_free_laboratory` | FAIL | PASS | Base evaluated parent's profile home instead of lab's `hermes_home`, and boards lacked execution-board contract metadata. Corrected candidate evaluates lab context with bound boards and reports `[]` (zero gaps). |
-| `test_d15r_fixture_and_environment_gaps_chain_end_to_end` | FAIL | PASS | Full end-to-end chain on base refused with `environment-gaps`. Corrected candidate reaches pre-enable coverage probe and reports zero gaps. |
+| `test_d15r_fixture_and_environment_gaps_chain_end_to_end` | FAIL | PASS | Full end-to-end chain on base refused with `environment-gaps` (and fails with no runtime configured without `AETHER_HERMES_PYTHON`). Corrected candidate reaches pre-enable coverage probe and reports zero gaps. |
+| `test_live_preflight_and_full_run_without_external_effects` | FAIL (`assert gap_call["kwargs"].get("hermes_home") == expected_hermes_home` failed) | PASS | Base `_live_run` invoked `backends.environment_gaps(store)` without forwarding `hermes_home` or `lab`. Corrected candidate forwards both, pinning the coverage probe binding to the laboratory Hermes root at step 2a. |
+| `test_d15r_coverage_probe_context_binds_to_lab_hermes_home` | FAIL (`TypeError: LiveBackends.environment_gaps() got an unexpected keyword argument 'hermes_home'`) | PASS | Base `LiveBackends.environment_gaps` and `_environment_gaps` did not accept `hermes_home` or `lab`. Corrected candidate accepts and forwards them, binding `ReadOnlySources` to the laboratory Hermes root. |
+| `test_d15r_negative_control_broken_lab_refuses` | FAIL (`TypeError: _environment_gaps() got an unexpected keyword argument 'hermes_home'`) | PASS | Base `_environment_gaps` did not accept `hermes_home`. Corrected candidate evaluates broken lab context and confirms `BOARD_PROJECT_UNBOUND` and `FINAL_CONTRACT_UNREADABLE` refusals. |
 
 ## Exact Verification Commands and Output
 
