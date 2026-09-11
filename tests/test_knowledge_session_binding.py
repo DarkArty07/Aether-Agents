@@ -43,6 +43,15 @@ def plain_directory(tmp_path: Path) -> Path:
     return plain
 
 
+def can_traverse(directory: Path) -> bool:
+    """True while this process can still read across ``directory`` (false for root)."""
+    try:
+        (directory / ".git").is_dir()
+    except OSError:
+        return False
+    return True
+
+
 @pytest.mark.parametrize("kind", ["null", "empty", "plain-directory"])
 def test_explicit_binding_resolves_for_ordinary_native_workspace(tmp_path: Path, kind: str) -> None:
     root, state = project(tmp_path)
@@ -210,6 +219,46 @@ def test_unreadable_native_evidence_never_falls_back(tmp_path: Path, kind: str) 
     assert failure.value.code == "PROJECT_UNRESOLVED"
 
 
+@pytest.mark.parametrize(
+    ("kind", "code"),
+    [
+        ("recorded-path", "VIEW_MISMATCH"),
+        ("ancestor", "VIEW_MISMATCH"),
+        ("native-home", "PROJECT_UNRESOLVED"),
+    ],
+)
+def test_untraversable_native_evidence_never_falls_back(
+    tmp_path: Path, kind: str, code: str
+) -> None:
+    """An existing path this process cannot traverse keeps the typed failure.
+
+    ``pathlib`` treats only "not found" errnos as absence, so an ``EACCES`` probe must
+    never be read as an ordinary workspace: the recorded workspace keeps the base
+    ``VIEW_MISMATCH`` and an unreadable native evidence store keeps ``PROJECT_UNRESOLVED``,
+    even while a valid exact-session binding exists.
+    """
+    root, state = project(tmp_path)
+    bind_session(state, PROJECT, "morfeo", SESSION, root=root)
+    blocked = tmp_path / f"untraversable-{kind}"
+    blocked.mkdir()
+    if kind == "ancestor":
+        cwd = blocked / "inner"
+        cwd.mkdir()
+    else:
+        cwd = blocked
+    home = native_home(tmp_path, str(cwd))
+    guarded = home if kind == "native-home" else blocked
+    os.chmod(guarded, 0o000)
+    try:
+        if can_traverse(guarded):
+            pytest.skip("this process can traverse an unreadable directory")
+        with pytest.raises(KnowledgeError) as failure:
+            context_for_session(state, "morfeo", SESSION, hermes_home=home)
+        assert failure.value.code == code
+    finally:
+        os.chmod(guarded, 0o700)
+
+
 def test_missing_native_state_database_stays_unresolved(tmp_path: Path) -> None:
     _root, state = project(tmp_path)
     home = tmp_path / "native-home"
@@ -345,5 +394,20 @@ def test_isolated_native_tool_resolves_plain_cwd_explicit_binding(
         assert read["revision"] == saved["revision"]
         assert "explicit binding" in read["content"]
         assert not (lab_root / "kanban.db").exists()
+
+        # The preserved typed envelope must also hold once this exact session's recorded
+        # workspace becomes unreadable: an untyped escape is not an acceptable answer.
+        os.chmod(plain, 0o000)
+        enforced = not can_traverse(plain)
+        try:
+            denied = json.loads(knowledge.handler({"action": "status"}, session_id=SESSION))
+        finally:
+            os.chmod(plain, 0o700)
+        if enforced:
+            assert denied["ok"] is False
+            assert denied["error"]["code"] == "VIEW_MISMATCH"
+            assert denied["fallback"]
+        else:
+            assert denied["ok"] is True  # directory permissions are not enforced here
     finally:
         assert manager.unload(manifest)

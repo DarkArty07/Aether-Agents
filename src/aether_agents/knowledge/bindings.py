@@ -67,11 +67,21 @@ def bind_session(
 
 
 def _apparent_git_metadata(path: Path) -> bool:
-    """Report whether ``path`` or an ancestor still carries a ``.git`` entry."""
-    for directory in (path, *path.parents):
-        entry = directory / ".git"
-        if entry.is_dir() or entry.is_file() or entry.is_symlink():
-            return True
+    """Report whether ``path`` or an ancestor still carries a ``.git`` entry.
+
+    ``pathlib`` treats only "not found" errnos as absence, so any other ``OSError``
+    (``EACCES``, ``EPERM``, ``EIO``, ``ESTALE``, ...) means the probe itself cannot be
+    trusted and keeps the conservative typed failure instead of reading as absent.
+    """
+    try:
+        for directory in (path, *path.parents):
+            entry = directory / ".git"
+            if entry.is_dir() or entry.is_file() or entry.is_symlink():
+                return True
+    except OSError as exc:
+        raise KnowledgeError(
+            "VIEW_MISMATCH", "Cannot classify the native session workspace."
+        ) from exc
     return False
 
 
@@ -118,7 +128,13 @@ def _native_workspace(home: Path, session: str) -> Path | None:
     an error and is never silently treated as an absent workspace.
     """
     database = home / "state.db"
-    if not database.is_file():
+    try:
+        present = database.is_file()
+    except OSError as exc:
+        raise KnowledgeError(
+            "PROJECT_UNRESOLVED", "Cannot verify the native session workspace."
+        ) from exc
+    if not present:
         return None
     try:
         connection = sqlite3.connect(
@@ -138,7 +154,13 @@ def _native_workspace(home: Path, session: str) -> Path | None:
     candidate = Path(row[0])
     if not candidate.is_absolute():
         raise KnowledgeError("VIEW_MISMATCH", "The native session workspace is not absolute.")
-    if not candidate.is_dir():
+    try:
+        directory = candidate.is_dir()
+    except OSError as exc:
+        raise KnowledgeError(
+            "VIEW_MISMATCH", "Cannot classify the native session workspace."
+        ) from exc
+    if not directory:
         raise KnowledgeError(
             "VIEW_MISMATCH", "The native session workspace is missing or unreadable."
         )
