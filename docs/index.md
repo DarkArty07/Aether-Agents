@@ -37,6 +37,8 @@ This index is navigation only and routes reader questions to the appropriate gui
 ### Operations, safety, and diagnostics
 - **How do I run read-only system observations or qualification checks?**
   See [Observation](guides/observation.md).
+- **How do I read or control the hourly Telegram progress reports?**
+  See [Telegram Monitor](guides/telegram-monitor.md).
 - **What are the edge safety guards and rollback-first recovery policies?**
   See [Policy and recovery](guides/policy-and-recovery.md).
 - **What CLI commands and options are supported in this build?**

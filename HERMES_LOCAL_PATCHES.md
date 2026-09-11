@@ -32,24 +32,18 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-204` | `#204`, `#205` | shared profile-asymmetric limits applied to ready/review; initial topology Supervisor 1 / Implementer 3 | issue `NousResearch/hermes-agent#91259`; PR `#91266` | `ACTIVE_LOCAL / UPSTREAM_OPEN` |
 | `HLP-209` | no new issue/PR; `#209` retains only the prior downstream trace | directories discovered by the walker are not treated as unsafe scripts; devices and actual scripts remain fail-closed | upstream issue `#86753`; integrated commit `9ac1e65b0ae4e83dced9d5c8a406cc57cb589702` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 | `HLP-211` | `#211` | opt-in affinity resumes an exact worker session within a Project/flow/profile and canonical workspace, with lease/generation fencing, Supervisor control of blockers, and terminal/escalated return to the origin | Hermes `#75830`, `#59855`, `#68779`, `#71175`; PR `#75951` covers only block→unblock of the same card; local `HLP-211b` extension still has no issue/PR | `ACTIVE_LOCAL + HLP-211b CANDIDATE / UPSTREAM_PARTIAL` |
-| `HLP-226` | `#226` | a cross-profile child with `workspace_kind=worktree` inherits the worker's canonical Project and receives its own worktree, even from a terminal affinity card that shares the root worktree as `dir` | upstream commit `b9b5481d6` covers the direct worktree source; local `HLP-226b` extension has no equivalent | `ACTIVE_LOCAL + HLP-226b / UPSTREAM_PARTIAL` |
+| `HLP-226` | `#226` | cross-profile worktree inheritance, same-board terminal sharing, and current-board Project recovery for a prior-board shared-worktree leaf remain fail-closed on Project/repository/path/affinity mismatches | upstream commit `b9b5481d6` covers direct source only; HLP-226b/HLP-226c have no equivalent | `ACTIVE_LOCAL + HLP-226b; HLP-226c MAINTAINED_FORK_ONLY / UPSTREAM_PARTIAL` |
 | `HLP-246` | `#246` | attachments validate identity before transport and readback; they persist the computed size and SHA-256 | no equivalent found in `origin/main` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-262` | `#262` | a non-dependency block that emits `origin_signal` remains sticky until explicit resolution/unblock | no equivalent in `NousResearch/hermes-agent@4f2254350` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-263` | `#263` | terminal and direct CLI guards use actual supervised-gateway ownership, not inherited markers | PR `NousResearch/hermes-agent#93267`, issue `#92560`, tip `aa9aaaa6cb31753c3b274db6825fbd0af5f27120` | `ACTIVE_LOCAL / UPSTREAM_VERIFIED` |
 | `HLP-305` | `#305` | transient SQLite contention during a turn-lease refresh is retried only while the current TTL leaves a complete retry budget; a confirmed lease miss or non-transient failure still interrupts | no equivalent in `NousResearch/hermes-agent@4810074d73d9419dc82545202d595507a73f4f0e` | `RELOAD_PENDING / UPSTREAM_MISSING` |
 | `HLP-310` | `#310` | reusable terminal snapshots exclude `HERMES_DELEGATED_CHILD_CONTEXT` and `HERMES_KANBAN_*` | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-354` | `#354` | new-branch Kanban worktrees start at a valid board `worktree_base_ref` instead of incidental `HEAD` | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
-| `HLP-369` | `#369` | review readiness is distinct from final approval; native controller resume retains pending recovery attention | equivalent absent in inspected upstream `1675f1f2c25ce164f07c42e829f2c17a723db94f` and maintained-fork source | `LOCAL_CANARY_GREEN / NATIVE_REVIEW_REACHED` |
-
-### HLP-369 — bounded review-flow recovery
-
-- **Reason:** a goal-mode candidate could not request independent review because the judge demanded that future approval; subsequent recovery parked its controller behind the very parent it had to resume.
-- **Scope:** `tools/kanban_tools.py` and `hermes_cli/kanban.py` provide review-readiness context only for `request_review`. `hermes_cli/kanban_db.py:unblock_task` preserves the native pending-attention exception already honored by claim/recovery; ordinary todo children remain rejected/gated. No judge disabling or completion bypass.
-- **Evidence:** `tests/hermes_cli/test_goal_review_phase_recovery.py` plus review-surfaces, session-affinity and sticky-blocking suites: 53 passed. Controller regression first failed with `todo != ready`. Existing concurrent runtime edits were preserved; the exact local pre-change bytes were backed up before editing. No new service, schema, provider or dependency.
-- **Activation:** fresh processes import the local repair; already-running TUI/gateway-cron callers retain old modules. A fresh Morfeo CLI process invoked the native unblock tool once, and durable board readback confirmed the controller reached ready and then running. No worker-killing restart, board CLI mutation or direct SQLite update. Actual configured judge accepted review readiness on the real card without mutating it; 54 focused tests now cover stale-caller todo as well as blocked controller recovery and normal-child refusal. The real previously failing MON-02 handoff subsequently reached native `review` assigned to Supervisor, ending bounded recovery. This is not MON-02 independent approval or full product delivery. The block-kind/origin-signal mismatch is not repaired by this patch.
-- **Rollback:** restore only the three backed-up file hunks introduced by #369 and remove only its new regression file; never replace other concurrent uncommitted runtime changes. The original pre-change snapshot has private checksums. If the two focused repairs cannot recover the canary, restore that baseline and stop.
-- **Retirement:** remove after the exact maintained/release runtime without this patch passes review-readiness rejection/acceptance, ordinary parent-gating, controller recovery and real independent-review canaries. No upstream PR or package release was made in recovery.
-
+| `HLP-369` | `#369` | goal-mode review requests use a distinct readiness gate and only the exact pending controller recovery route may escape the goal loop | no equivalent in `NousResearch/hermes-agent@6e07eb483` | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-315` | `#315` | tracked package `SOUL.md` is distinguished from protected installed-profile `SOUL.md` across supported path/case variants | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-362` | `#362` | initial independent review requires a different reviewer; self-review and legacy reviewer-null claims fail closed | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-293/306` | `#293`, `#306` | generic local-gateway metadata is parsed by response shape and preserves advertised context windows | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-296/303` | `#296`, `#303` | auxiliary Chat-only negotiation and fallback attribution preserve existing request/auth boundaries | no equivalent adopted and qualified | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
 ## HLP-188 — sticky `initial_status=blocked`
 
@@ -178,13 +172,16 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
   - `tools/kanban_tools.py`
   - `hermes_cli/kanban_db.py`
   - `tests/tools/test_kanban_tools.py`
+  - `tests/tools/test_kanban_cross_board_project.py`
 - **Local change:** where no literal `workspace_path` exists, the handler transmits the worker card as the canonical source. If the creating profile does not have the Project in its `projects.db`, `create_task` derives repository and branch convention from that shared card, retains the UUID, and creates its own path; a different explicit Project is rejected.
 - **HLP-226b extension:** a terminal Supervisor affinity card correctly shares the root worktree and therefore persists `workspace_kind=dir`, `workspace_path=.worktrees/<root-id>`, and a distinct task id. The prior fallback required `workspace_kind=worktree` and `workspace leaf == source task id`; it discarded that canonical source and created rework with `project_id=null`/`workspace_path=null`. HLP-226b accepts only the actual root indicated by the leaf when root and terminal match on Project, assignee, flow, and path; any arbitrary `dir` remains without inheritance.
-- **Evidence:** real reproduction `t_e729952b → t_21b8341a` produced the runnable orphan and reopened #226. Exact regression RED `1 failed` (`project_id None`); GREEN `1 passed`; inherited controls `4 passed`; affinity/tools/worktree suites `80 passed`; `py_compile`, Ruff check, and `git diff --check` green. The same test includes a negative control where a `dir` outside `.worktrees` retains null Project/path.
+- **HLP-226c extension:** a Project/affinity root on the current execution board may share a worktree that was created for a prior board and is persisted as `workspace_kind=dir` with `workspace_path=<board default_workdir>/.worktrees/<prior-board-leaf>`. The HLP-226b fallback required that leaf to resolve as a worktree task in the already-open board, so the prior-board recurrence dropped the Project before affinity validation and `kanban_create` failed with `session-affinity tasks require a canonical project_id`. HLP-226c recovers the identity from the current board's own `project_id` and `default_workdir` binding instead: the source must carry the exact Project and affinity, the board metadata must bind the same Project to the repository that contains the shared path, and the path must resolve to exactly one opaque leaf under `<default_workdir>/.worktrees/`. The leaf is never looked up, no other profile registry is read or copied, there is no cross-board task query, and every board/path/Project/affinity mismatch keeps the existing native fail-closed error. `tools/kanban_tools.py` also carries the exact `kanban_create(board=…)` selection into native creation so recovery can only read the selected board's metadata.
+- **Evidence:** the original HLP-226b reproduction `t_e729952b → t_21b8341a` produced the runnable orphan and reopened #226. Its exact regression RED was `1 failed` (`project_id None`); GREEN was `1 passed`; inherited controls passed `4`; affinity/tools/worktree suites passed `80`; `py_compile`, Ruff check, and `git diff --check` were green. The same test includes a negative control where a `dir` outside `.worktrees` retains null Project/path. For HLP-226c, identical 21-test bytes on unchanged maintained-fork base `415056fee527c5a2302370bd6dba56f84b9a4202` produced `18 passed / 3 failed` with the canonical missing-Project error; candidate `7980bbf1f9f75efdcbee2196ae910bb77138541d` passed all `21`. Reverting only the tool-side board propagation produced `20 passed / 1 failed`, proving the explicit-board path. Terminal independent verification passed the affected matrix `132 passed / 0 failed / 1 Windows-only skip`; the exact final fork runner reported `31022 passed / 2392 known environment-driven failures / 262 skipped`, with the HLP-226c module green and no changed file in the failure set. Compileall, Ruff check/new-test format, and range diff checks passed.
 - **HLP-226b backup and artifact:** prior backup `.aether/backups/hlp226b-affinity-terminal-20260830T144501-0600`; preceding SHA-256 values: `kanban_db.py` `dcb073c15f9e439a7f0a82f958e95f77e13831993e5f881514d4a024c82d9d0f`; test `90b0cc59e76c4727eb30aad28fde7c80ce134e1892bd48369f079b7481e5ac01`. Portable patch `patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch`, SHA-256 `a28fd10888932f421d32d41e1012ec7aad17280ae9e289c4d0329ff492f6c040`; `git apply --check` and byte-for-byte reconstruction green.
-- **Upstream:** `b9b5481d6236edb3ec8aae32cc4b5c661569b872` covers only the direct worktree source. `NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7` does not recognize the terminal affinity/`dir` card; HLP-226b remains local.
-- **Activation status:** `ACTIVE_LOCAL + HLP-226b`; every new worker imports the handler/DB from the editable checkout, so no gateway restart is required.
-- **Retirement gate:** repeat both E2Es with an empty Project registry: direct worktree source and shared terminal-affinity source; retire only if both children retain UUID, worktree, and branch, the real checkout materializes, a conflicting Project is rejected, and a noncanonical `dir` is not used as a source.
+- **HLP-226c artifact:** maintained-fork base `415056fee527c5a2302370bd6dba56f84b9a4202`, reviewed candidate `7980bbf1f9f75efdcbee2196ae910bb77138541d` (tree `0f4912cc1a1f3ccae66d604d3960c259c7e9d618`; commits `d962b73e3d5c73aa21c500c6e1c51026dfb0d686`, `3f981f10924774afd4b9a72d81f525fafe64fd5c`, `7980bbf1f9f75efdcbee2196ae910bb77138541d`), 3 files `+805/-0`. Portable patch `patches/hermes/HLP-226c-cross-board-project-inheritance.patch`, SHA-256 `6b1c5b498d7eab58b301340920d18f2d28b3c87c813ff614445515771dd8f418`; `git apply --check` at the exact base and byte-for-byte file/blob reconstruction of all three candidate files passed. The maintained fork integrated the three reviewed commits plus ledger commit `311f1f4d737df7c2d465d4f16bcfae5334d190ba` through PR #7 at exact merge `266e412fb83ad32af92ed391db942f88993d76a2`; inherited Actions were disabled and therefore NOT RUN, not green. Aether reconciliation binds both patch digests and lists `["HLP-226", "HLP-226b", "HLP-226c"]`; implementation and terminal evidence is in `specs/hlp-226-cross-board-project-inheritance/evidence/HLP-226C.md`.
+- **Upstream:** `b9b5481d6236edb3ec8aae32cc4b5c661569b872` covers only the direct worktree source. `NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7` does not recognize the terminal affinity/`dir` card, and the HLP-226c pre-dispatch inspection at `67764dc0863349a384c16425e73ee8571f3a94b7` found no board-bound prior-leaf equivalent. HLP-226b/HLP-226c remain downstream.
+- **Activation status:** HLP-226/HLP-226b remain `ACTIVE_LOCAL`; HLP-226c is integrated in the maintained fork only and was not installed, reloaded, restarted, or activated by this objective.
+- **Retirement gate:** repeat the direct-worktree and same-board shared-terminal E2Es with an empty Project registry. For HLP-226c, additionally repeat the cross-board recurrence and explicit-target-board regression: a Project/affinity root whose shared `dir` leaf names no task on the current board must recover the board-owned Project/repository and materialize the cross-profile child, while every board/path/Project/affinity mismatch and a conflicting process-current board fail closed. Retire only if all children retain UUID/worktree/branch, real checkouts materialize, explicit conflicts are rejected, and noncanonical `dir` sources never authorize recovery.
 
 ## HLP-246 — verifiable Kanban attachment identity
 
@@ -423,3 +420,102 @@ The active checkout also has a change in `package-lock.json` generated by `peer`
 - **Rollback:** revert fork commit `7d3173e1f3dba107f9a389d4e35c95f215775ee1`. Do not restore whole `kanban_db.py`.
 - **Retirement gate:** upstream Hermes adopts board-level worktree base ref configuration with equivalent validation and fail-closed semantics.
 - **Activation:** not part of this delivery. Live runtime remains unmodified.
+
+## HLP-369 — bounded review-flow recovery
+
+- **Reason:** goal-mode `request_review` used the whole-objective completion judge, so a
+  complete implementation could be required to supply the independent verdict it was
+  requesting. The terminal recovery controller also prescribed
+  `kind="capability", origin_signal="recovery"` while the generic goal-mode block gate
+  rejected that pair.
+- **Primary maintained-fork files:** `hermes_cli/goals.py`, `hermes_cli/kanban.py`,
+  `hermes_cli/kanban_db.py`, `tools/kanban_tools.py`, and the focused CLI/tool/review/
+  session-affinity tests named by the reconciliation entry.
+- **Behavior:** review entry has a distinct implementation-readiness phase that consumes
+  truthful summary and structured verification metadata without supplying the future
+  review verdict. Explicitly incomplete work remains running. Whole-objective completion,
+  independent reviewer ownership, requested changes and re-review remain unchanged. The
+  only additional goal-mode block route is the exact terminal flow-controller pair
+  `capability/recovery` while durable `flow_attention` is unresolved; arbitrary capability
+  and transient blocks remain rejected.
+- **Evidence:** `specs/followup-aether-bugs/evidence/FU-369.md`. Unchanged baseline
+  regressions produced `3 failed, 93 passed`; the independently reviewed candidate and
+  exact-base reconstruction each passed `97` focused tests, and the extended readiness
+  matrix passed `155`. Terminal verification repeated the `97` focused tests. The
+  canonical fork runner with retries disabled reproduced the reviewed unrelated baseline:
+  20 failing files / 80 failed tests plus one collection/no-tests file, with no FU-369
+  focused file in that set. Ruff, compileall and diff checks passed on the changed source.
+- **Maintained fork:** commits `8ddb28c8eb747345254970339f0c1a67d05b454e`,
+  `74a4902200a6754b6ec5271f500f92716da349e7`, and
+  `8b600f3bf508326cd8defdb9da03757b838619b7`; documentation commit
+  `6a4d78df10621b4381ff5ef6925f7f7a92386e80`; exact merge
+  `415056fee527c5a2302370bd6dba56f84b9a4202` in
+  `DarkArty07/aether-hermes` PR #6. Inherited fork Actions were disabled and therefore
+  NOT RUN, not green.
+- **Portable artifact:** `patches/hermes/HLP-369-goal-mode-review-recovery.patch`,
+  SHA-256 `f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c`;
+  it applies to exact maintained-fork base
+  `8a6b33ae480373015178b80e87c88fe0abda3919` and reconstructs all eight changed source/
+  test files byte for byte.
+- **Upstream:** exact inspected `NousResearch/hermes-agent` revision
+  `6e07eb48387044dbcaf12490931c2b8ca7ec8653` retains the circular request-review gate
+  and lacks the exact pending-controller recovery predicate. The correction is
+  downstream-only.
+- **Activation:** source is integrated in the maintained fork only. No live TUI, gateway,
+  profile, service or installation was reloaded or activated. A 2026-09-10 bounded local
+  recovery canary used a fresh Morfeo CLI process that invoked the native unblock tool once;
+  durable board readback confirmed the controller reached `ready` and then `running`, and the
+  previously failing MON-02 handoff reached native `review` assigned to Supervisor. That
+  canary is recovery evidence for review-readiness, not MON-02 approval or product delivery.
+- **Rollback:** revert the maintained-fork PR #6 merge, or the three behavior/test commits
+  in reverse order, without restoring whole files that also contain earlier Aether hunks.
+- **Retirement gate:** an adopted exact Hermes release must pass complete-to-review
+  readiness, incomplete rejection, whole-objective completion, independent review and
+  re-review, exact recovery-origin delivery, pending-attention preservation, and
+  arbitrary-block negative controls without this patch.
+
+## Autonomous bug-remediation maintained-fork corrections (2026-09-10 UTC)
+
+These entries record independently reviewed source for Objective Contract `oc_ddebf175a40251f7@v1`. Exact maintained-fork merge: `DarkArty07/aether-hermes` PR #5, `8a6b33ae480373015178b80e87c88fe0abda3919`. Inherited fork Actions are disabled and therefore NOT RUN, not green. No live runtime, profile, service, or installation was activated.
+
+### HLP-362 / #362 — independent same-card review ownership
+
+- **Issue:** [#362](https://github.com/DarkArty07/Aether-Agents/issues/362)
+- **Commit:** `8afefe7e304f2b3c80cecbbb24bf9e60be72044b`
+- **Evidence:** `specs/autonomous-bug-remediation/evidence/ABR-362.md`
+- **Scope:** `hermes_cli/kanban_db.py`, `tools/kanban_tools.py`, and focused review-lifecycle tests.
+- **Behavior:** Initial review without a different reviewer fails closed before clearing the implementation claim; self-review is rejected; legacy reviewer-null events remain parked; explicit reviewer and re-review provenance remain supported.
+- **Rollback:** Revert fork commit `8afefe7e304f2b3c80cecbbb24bf9e60be72044b`.
+- **Retirement gate:** An adopted exact Hermes release provides equivalent independent-review ownership and passes ABR-362 without this patch.
+
+### HLP-315 / #315 — tracked package SOUL versus installed profile SOUL
+
+- **Issue:** [#315](https://github.com/DarkArty07/Aether-Agents/issues/315)
+- **Commits:** `3bc559b6d29f5f5cb99f34c60e5163de38ae91ad`, `37d03ac30b239d990b515e88d475bed9ec714fdf`
+- **Evidence:** `specs/autonomous-bug-remediation/evidence/ABR-315.md`
+- **Scope:** `tools/file_tools.py` protected-instruction gate and focused file-write tests.
+- **Behavior:** Installed profile `SOUL.md` remains protected across supported path/case variants; ordinary tracked package/project source named `SOUL.md` proceeds without a false prompt. Project-local instruction files remain protected.
+- **Rollback:** Revert the fork commits in reverse order.
+- **Retirement gate:** An adopted exact Hermes release preserves the same source/profile distinction and passes ABR-315 without these commits.
+
+### HLP-293/306 — shape-aware local gateway metadata
+
+- **Issues:** [#293](https://github.com/DarkArty07/Aether-Agents/issues/293), [#306](https://github.com/DarkArty07/Aether-Agents/issues/306)
+- **Commits:** `0d0fbecb54bde61e5caa1eac5d4d66923bc5e71f`, `adaa181c08321e6d7fce4b875b8d36c0998b520a`, `d68132254b088d26730134d86f8b27a7474ef460`
+- **Evidence:** `specs/autonomous-bug-remediation/evidence/ABR-META.md`
+- **Scope:** `agent/model_metadata.py` and focused gateway metadata tests.
+- **Behavior:** The LM Studio branch requires a native `models` shape; generic OpenAI-compatible `data` is parsed by the bounded generic path, preserving advertised context values and existing override/fallback behavior.
+- **Rollback:** Revert the fork commits in reverse order.
+- **Retirement gate:** An adopted exact Hermes release provides equivalent shape-aware metadata parsing and passes ABR-META without these commits.
+
+### HLP-296/303 — Chat-only auxiliaries and fallback attribution
+
+- **Issues:** [#296](https://github.com/DarkArty07/Aether-Agents/issues/296), [#303](https://github.com/DarkArty07/Aether-Agents/issues/303)
+- **Commits:** `b1e3ca80a9a79cf8e0482d6621d329c7ae88e236`, `a134c9c4f4d4963c811a30bad72e4be6ae67254a`, `1ccfb08b8bb86c215c09bc8ee3e45f7c290ae6fc`, `7b75f6e83f06badc09e73c87cba78f484d2625fd`
+- **Evidence:** `specs/autonomous-bug-remediation/evidence/ABR-AUX.md`
+- **Scope:** `agent/auxiliary_client.py` and focused Chat/attribution tests.
+- **Behavior:** Only a clear HTTP 400 surface directive selects the existing Chat path; Responses behavior remains intact. Fallback attribution is request-scoped and destination authentication is not copied.
+- **Rollback:** Revert the fork commits in reverse order.
+- **Retirement gate:** An adopted exact Hermes release provides equivalent negotiation and attribution behavior with the same boundary tests.
+
+The #349 tests-only commit `59ee7d05a7b67d52dbbfa95b6b2ced57ec6df20e` corrected stale trace instrumentation without changing product FTS source, so it is recorded in `ABR-349.md` and the fork ledger but is not an active downstream behavior patch.

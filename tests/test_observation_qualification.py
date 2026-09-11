@@ -7,10 +7,13 @@ import importlib.util
 import inspect
 import json
 import os
+import platform
 import subprocess
 import sys
+from functools import wraps
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Callable
 
 import pytest
 from observation_helpers import PROJECT_ID, TRACE_ID, project_marker
@@ -28,6 +31,72 @@ RUNNER = ROOT / "scripts" / "qualify_observation.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "policy.yml"
 RESULTS_BLOCK_BEGIN = "<!-- BEGIN AETHER_OBSERVATION_QUALIFICATION_RESULTS_V1 -->"
 RESULTS_BLOCK_END = "<!-- END AETHER_OBSERVATION_QUALIFICATION_RESULTS_V1 -->"
+QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION = 1
+QUALIFICATION_DIAGNOSTIC_PREFIX = "AETHER_QUALIFICATION_DIAGNOSTIC="
+QUALIFICATION_TEST_NODE = (
+    "tests/test_observation_qualification.py::"
+    "test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook"
+)
+QUALIFICATION_FAILURE_PHASES = (
+    "registration",
+    "tool_capture",
+    "api_capture",
+    "unload",
+    "persisted_event_privacy",
+)
+_QUALIFICATION_ACTIVE_PHASE = "registration"
+
+
+def _mark_qualification_phase(phase: str) -> None:
+    if phase not in QUALIFICATION_FAILURE_PHASES:
+        raise ValueError("unknown qualification failure phase")
+    global _QUALIFICATION_ACTIVE_PHASE
+    _QUALIFICATION_ACTIVE_PHASE = phase
+
+
+def _emit_qualification_failure(error: Exception) -> None:
+    class_name = type(error).__name__
+    if not class_name.isascii() or not class_name.isidentifier() or len(class_name) > 64:
+        class_name = "UnknownException"
+    assertion_class = class_name if isinstance(error, AssertionError) else None
+    diagnostic = {
+        "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
+        "phase": _QUALIFICATION_ACTIVE_PHASE,
+        "failure_kind": "assertion" if assertion_class else "exception",
+        "failure_class": assertion_class or class_name,
+        "exception_class": class_name,
+        "assertion_class": assertion_class,
+        "test_node": QUALIFICATION_TEST_NODE,
+        "source_commit": HERMES_BASELINE.commit,
+        "runtime": {
+            "python": platform.python_version(),
+            "implementation": platform.python_implementation(),
+        },
+        # Provenance for the runner: only a marker carrying the per-invocation
+        # nonce the runner provisioned for this subprocess can influence
+        # retained runner state.  Without it the runner treats this line as
+        # untrusted output and falls back to its fixed generic class.
+        "nonce": os.environ.get("AETHER_QUALIFICATION_DIAGNOSTIC_NONCE", ""),
+    }
+    print(
+        QUALIFICATION_DIAGNOSTIC_PREFIX
+        + json.dumps(diagnostic, sort_keys=True, separators=(",", ":")),
+        flush=True,
+    )
+
+
+def _diagnose_qualification_failure(function: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        global _QUALIFICATION_ACTIVE_PHASE
+        _QUALIFICATION_ACTIVE_PHASE = "registration"
+        try:
+            return function(*args, **kwargs)
+        except Exception as error:
+            _emit_qualification_failure(error)
+            raise
+
+    return wrapped
 
 
 def _events(paths: ObservationPaths) -> list[dict[str, object]]:
@@ -71,6 +140,7 @@ def _skip_unless_runtime_is_exact_baseline(checkout: Path) -> None:
 
 
 @pytest.mark.hermes_exact
+@_diagnose_qualification_failure
 def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -114,6 +184,7 @@ def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
     assert set(manager._hooks) == set(hermes_plugin.OBSERVED_HOOKS)
     assert all(len(callbacks) == 1 for callbacks in manager._hooks.values())
     assert sum(len(callbacks) for callbacks in manager._hooks.values()) == 22
+    _mark_qualification_phase("tool_capture")
 
     token = correlation_token(TRACE_ID, "t_aaaaaaaa")
     assert (
@@ -173,6 +244,7 @@ def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
         )
         == []
     )
+    _mark_qualification_phase("api_capture")
     assert (
         manager.invoke_hook(
             "pre_api_request",
@@ -231,10 +303,12 @@ def test_real_plugin_context_captures_tool_and_api_then_unloads_every_hook(
         )
         == []
     )
+    _mark_qualification_phase("unload")
 
     assert manager.unload(manifest) is True
     assert hermes_plugin._Observer.dispatch is dispatch
     assert sum(len(callbacks) for callbacks in manager._hooks.values()) == 0
+    _mark_qualification_phase("persisted_event_privacy")
     paths = ObservationPaths.for_project(PROJECT_ID, root=tmp_path / "state" / "aether")
     recorded = _events(paths)
     event_types = {event["event_type"] for event in recorded}
@@ -692,6 +766,239 @@ def test_qualification_source_excludes_ignored_egg_info_and_bytecode(
     assert evidence["source_kind"] == "git_archive_tracked_commit"
 
 
+@pytest.mark.parametrize(
+    ("phase", "failure_kind", "failure_class"),
+    [
+        (phase, failure_kind, failure_class)
+        for phase in QUALIFICATION_FAILURE_PHASES
+        for failure_kind, failure_class in (
+            ("assertion", "AssertionError"),
+            ("exception", "RuntimeError"),
+        )
+    ],
+)
+def test_qualification_failure_diagnostics_are_phase_aware_and_content_free(
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    failure_kind: str,
+    failure_class: str,
+) -> None:
+    """Synthetic phase failures retain only the allowlisted actionable state."""
+    module = _load_runner(f"qualification_diagnostic_{phase}_{failure_kind}")
+    secret = "RAW_ASSERTION_PAYLOAD_SECRET"
+    commit = "b" * 40
+    nonce = "b" * 32
+    marker = {
+        "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
+        "phase": phase,
+        "failure_kind": failure_kind,
+        "failure_class": failure_class,
+        "exception_class": failure_class,
+        "assertion_class": failure_class if failure_kind == "assertion" else None,
+        "test_node": QUALIFICATION_TEST_NODE,
+        "source_commit": commit,
+        "runtime": {"python": "3.13.15", "implementation": "CPython"},
+        "nonce": nonce,
+        "raw_payload": secret,
+        "credential": "token=PRIVATE_TOKEN",
+        "local_path": "/private/operator-project",
+    }
+    stdout = "\n".join(
+        (
+            QUALIFICATION_DIAGNOSTIC_PREFIX
+            + json.dumps(marker, sort_keys=True, separators=(",", ":")),
+            f"FAILED {QUALIFICATION_TEST_NODE} - assert {secret}",
+        )
+    )
+    stderr = f"E {failure_class}: {secret} /private/operator-project\n"
+
+    baseline_tail = module._content_free_stream_tail(stdout + "\n" + stderr)
+    assert "phase" not in baseline_tail
+    assert failure_class not in baseline_tail
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(["pytest"], 1, stdout, stderr),
+    )
+
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(
+            ["pytest"],
+            phase="qualification_harness",
+            env={
+                "AETHER_QUALIFICATION_SOURCE_COMMIT": commit,
+                "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE": nonce,
+            },
+        )
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["schema_version"] == QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION
+    assert diagnostic["phase"] == phase
+    assert diagnostic["failure_kind"] == failure_kind
+    assert diagnostic["failure_class"] == failure_class
+    assert diagnostic["exception_class"] == failure_class
+    assert diagnostic["assertion_class"] == (failure_class if failure_kind == "assertion" else None)
+    assert diagnostic["test_node"] == QUALIFICATION_TEST_NODE
+    assert diagnostic["source_commit"] == commit
+    assert diagnostic["runtime"] == {"python": "3.13.15", "implementation": "CPython"}
+    assert set(diagnostic) <= {
+        "schema_version",
+        "phase",
+        "failure_kind",
+        "failure_class",
+        "exception_class",
+        "assertion_class",
+        "test_node",
+        "source_commit",
+        "runtime",
+    }
+    message = str(captured.value)
+    for private_value in (secret, "PRIVATE_TOKEN", "/private/operator-project"):
+        assert private_value not in message
+
+
+# Runner phase, marker field overrides (None drops the field), expected retained phase.
+_MARKER_FORGERY_CASES: dict[str, tuple[str, dict[str, Any], str]] = {
+    "missing_nonce": ("qualification_harness", {"nonce": None}, "qualification_harness"),
+    "wrong_nonce": ("qualification_harness", {"nonce": "f" * 32}, "qualification_harness"),
+    "foreign_source_commit": (
+        "qualification_harness",
+        {"source_commit": "d" * 40},
+        "qualification_harness",
+    ),
+    "outside_qualification_harness_phase": ("core_execution", {}, "core_execution"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_MARKER_FORGERY_CASES))
+def test_unqualified_marker_cannot_forge_phase_class_source_or_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+) -> None:
+    """A marker without established provenance/exact identity is untrusted output."""
+    module = _load_runner(f"qualification_marker_forgery_{case}")
+    runner_phase, overrides, expected_phase = _MARKER_FORGERY_CASES[case]
+    commit = "c" * 40
+    nonce = "a" * 32
+    marker: dict[str, Any] = {
+        "schema_version": QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION,
+        "phase": "registration",
+        "failure_kind": "exception",
+        "failure_class": "PrivatePayloadError",
+        "exception_class": "PrivatePayloadError",
+        "assertion_class": None,
+        "test_node": QUALIFICATION_TEST_NODE,
+        "source_commit": commit,
+        "runtime": {"python": "9.9.9", "implementation": "SecretRuntime"},
+        "nonce": nonce,
+    }
+    for key, value in overrides.items():
+        if value is None:
+            marker.pop(key)
+        else:
+            marker[key] = value
+    stdout = "\n".join(
+        (
+            QUALIFICATION_DIAGNOSTIC_PREFIX
+            + json.dumps(marker, sort_keys=True, separators=(",", ":")),
+            "FAILED tests/test_safe.py::test_gate - assert PrivatePayloadError",
+        )
+    )
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(["pytest"], 1, stdout, ""),
+    )
+
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(
+            ["pytest"],
+            phase=runner_phase,
+            env={
+                "AETHER_QUALIFICATION_SOURCE_COMMIT": commit,
+                "AETHER_QUALIFICATION_DIAGNOSTIC_NONCE": nonce,
+            },
+        )
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["phase"] == expected_phase
+    assert diagnostic["failure_kind"] == "exception"
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    assert diagnostic["source_commit"] == commit
+    assert "runtime" not in diagnostic
+    assert diagnostic["marker_count"] == 1
+    message = str(captured.value)
+    for forged in ("PrivatePayloadError", "9.9.9", "SecretRuntime", "registration"):
+        assert forged not in message
+
+
+@pytest.mark.parametrize("stream", ("stdout", "stderr"))
+@pytest.mark.parametrize(
+    "identifier",
+    ("PrivatePayloadError", "PrivateAssertionException", "PrivateTokenFailure", "AssertionError"),
+)
+def test_identifier_shaped_stream_values_never_become_retained_classes(
+    stream: str,
+    identifier: str,
+) -> None:
+    """Class-shaped private values in raw streams are not content-free provenance."""
+    module = _load_runner(f"qualification_private_stream_{stream}_{identifier.lower()}")
+    if stream == "stdout":
+        stdout, stderr = f"FAILED tests/test_safe.py::test_gate - assert {identifier}\n", ""
+    else:
+        stdout, stderr = "", f"{identifier}: token=PRIVATE_TOKEN /private/operator\n"
+
+    diagnostic = module._qualification_failure_diagnostic(
+        stdout,
+        stderr,
+        phase="qualification_harness",
+        environment={"AETHER_QUALIFICATION_SOURCE_COMMIT": "c" * 40},
+    )
+
+    assert identifier not in json.dumps(diagnostic, sort_keys=True)
+    assert diagnostic["failure_kind"] == "exception"
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    assert "runtime" not in diagnostic
+
+
+def test_stream_derived_classes_are_never_retained_in_the_raised_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review-round-1 reproduction: raw assertion/stderr values must not become classes."""
+    module = _load_runner("qualification_private_stream_class_message")
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["pytest"],
+            1,
+            "FAILED tests/test_safe.py::test_gate - assert PrivatePayloadError\n",
+            "PrivateTokenFailure: token=PRIVATE_TOKEN /private/operator\n",
+        ),
+    )
+
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(["pytest"], phase="qualification_harness", env={})
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["failure_class"] == "SubprocessFailure"
+    assert diagnostic["exception_class"] == "SubprocessFailure"
+    assert diagnostic["assertion_class"] is None
+    message = str(captured.value)
+    for private_value in (
+        "PrivatePayloadError",
+        "PrivateTokenFailure",
+        "PRIVATE_TOKEN",
+        "/private/operator",
+    ):
+        assert private_value not in message
+
+
 def test_run_failure_reports_bounded_content_free_stdout_and_stderr_tails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -717,6 +1024,189 @@ def test_run_failure_reports_bounded_content_free_stdout_and_stderr_tails(
     assert "RAW_STDOUT_SECRET" not in message
     assert "RAW_STDERR_SECRET" not in message
     assert "/private/path" not in message
+
+
+_INJECTED_FAILURE_DETAIL = "RAW_SYNTHETIC_DETAIL_MUST_NOT_PERSIST"
+_SYNTHETIC_PHASE_FAILURES = (
+    ("registration", "registration", "exception", "SyntheticQualificationFailure"),
+    ("registration_assertion", "registration", "assertion", "AssertionError"),
+    ("tool_capture", "tool_capture", "exception", "SyntheticQualificationFailure"),
+    ("api_capture", "api_capture", "exception", "SyntheticQualificationFailure"),
+    ("unload", "unload", "exception", "SyntheticQualificationFailure"),
+    (
+        "persisted_event_privacy",
+        "persisted_event_privacy",
+        "exception",
+        "SyntheticQualificationFailure",
+    ),
+    (
+        "persisted_missing_events",
+        "persisted_event_privacy",
+        "assertion",
+        "AssertionError",
+    ),
+)
+_SYNTHETIC_PHASE_INJECTION = '''\
+"""Deterministic per-phase fault injection for the real PluginContext lane."""
+
+import os
+
+
+class SyntheticQualificationFailure(RuntimeError):
+    """Raised at one bounded qualification phase to verify diagnostics."""
+
+
+def _raise_synthetic() -> None:
+    raise SyntheticQualificationFailure(
+        os.environ.get("AETHER_SYNTHETIC_FAILURE_DETAIL", "synthetic phase failure")
+    )
+
+
+def _apply_injection() -> None:
+    phase = os.environ.get("AETHER_SYNTHETIC_FAILURE_PHASE", "")
+    if phase == "registration":
+        from aether_agents.observation.capture import hermes_plugin
+
+        hermes_plugin.register = lambda *_args, **_kwargs: _raise_synthetic()
+    elif phase == "registration_assertion":
+        from aether_agents.observation.capture import hermes_plugin
+
+        hermes_plugin.OBSERVED_HOOKS = ()
+    elif phase in {"tool_capture", "api_capture"}:
+        import hermes_cli.plugins as plugins
+
+        hook_name = "pre_tool_call" if phase == "tool_capture" else "pre_api_request"
+        original = plugins.PluginManager.invoke_hook
+
+        def invoke_hook(self, requested, *args, **kwargs):
+            if requested == hook_name:
+                _raise_synthetic()
+            return original(self, requested, *args, **kwargs)
+
+        plugins.PluginManager.invoke_hook = invoke_hook
+    elif phase == "unload":
+        import hermes_cli.plugins as plugins
+
+        plugins.PluginManager.unload = lambda *_args, **_kwargs: _raise_synthetic()
+    elif phase == "persisted_missing_events":
+        from aether_agents.observation.capture import hermes_plugin
+
+        hermes_plugin._Observer.dispatch = lambda *_args, **_kwargs: None
+    elif phase == "persisted_event_privacy":
+        from aether_agents.paths import ObservationPaths
+
+        # Registration resolves the collector without an explicit root; the
+        # persisted-state phase re-resolves it against the temporary root.
+        original_for_project = ObservationPaths.for_project.__func__
+
+        def for_project(cls, *args, **kwargs):
+            if kwargs.get("root") is not None:
+                _raise_synthetic()
+            return original_for_project(cls, *args, **kwargs)
+
+        ObservationPaths.for_project = classmethod(for_project)
+
+
+def pytest_runtest_setup(item):
+    _apply_injection()
+'''
+
+
+@pytest.mark.hermes_exact
+@pytest.mark.parametrize(
+    ("injected_phase", "expected_phase", "expected_kind", "expected_class"),
+    _SYNTHETIC_PHASE_FAILURES,
+)
+def test_real_plugin_context_lane_classifies_injected_phase_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    injected_phase: str,
+    expected_phase: str,
+    expected_kind: str,
+    expected_class: str,
+) -> None:
+    """The exact real lane must retain bounded phase/class state for every phase."""
+    plugins = pytest.importorskip("hermes_cli.plugins")
+    checkout = _exact_source_checkout(Path(plugins.__file__).resolve().parents[1])
+    module = _load_runner(f"qualify_observation_injected_{injected_phase}")
+    plugin_root = tmp_path / "injected-plugins"
+    plugin_root.mkdir()
+    (plugin_root / "aether_synthetic_phase_injection.py").write_text(
+        _SYNTHETIC_PHASE_INJECTION, encoding="utf-8"
+    )
+    detail = f"{_INJECTED_FAILURE_DETAIL} token=PRIVATE_TOKEN_MUST_NOT_PERSIST {tmp_path}"
+    environment = module._qualification_environment(checkout)
+    environment.pop("PYTEST_ADDOPTS", None)
+    environment["PYTHONPATH"] = os.pathsep.join([str(plugin_root), environment["PYTHONPATH"]])
+    environment["AETHER_SYNTHETIC_FAILURE_PHASE"] = injected_phase
+    environment["AETHER_SYNTHETIC_FAILURE_DETAIL"] = detail
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-s",
+        "-q",
+        QUALIFICATION_TEST_NODE,
+        "-p",
+        "aether_synthetic_phase_injection",
+    ]
+
+    real_run = module.subprocess.run
+    completed: list[subprocess.CompletedProcess[str]] = []
+
+    def recording_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        result = real_run(*args, **kwargs)
+        completed.append(result)
+        return result
+
+    monkeypatch.setattr(module.subprocess, "run", recording_run)
+    with pytest.raises(module.QualificationFailure) as captured:
+        module._run(command, env=environment, phase="qualification_harness")
+
+    assert completed and completed[0].returncode != 0
+    if expected_kind == "assertion":
+        # A real assertion trips, so the injected detail is not in the output.
+        assert "AssertionError" in completed[0].stdout
+    else:
+        assert _INJECTED_FAILURE_DETAIL in completed[0].stdout
+    markers = [
+        line
+        for line in completed[0].stdout.splitlines()
+        if line.startswith(QUALIFICATION_DIAGNOSTIC_PREFIX)
+    ]
+    assert len(markers) == 1
+    # The runner accepts the marker only because the harness process received
+    # the exact per-invocation nonce provisioned for this subprocess.
+    emitted_marker = json.loads(markers[0][len(QUALIFICATION_DIAGNOSTIC_PREFIX) :])
+    assert emitted_marker["nonce"] == environment["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"]
+
+    baseline_tail = module._content_free_stream_tail(completed[0].stdout)
+    assert '"phase"' not in baseline_tail
+    assert expected_class not in baseline_tail
+
+    diagnostic = captured.value.diagnostic
+    assert diagnostic["schema_version"] == QUALIFICATION_DIAGNOSTIC_SCHEMA_VERSION
+    assert diagnostic["phase"] == expected_phase
+    assert diagnostic["failure_kind"] == expected_kind
+    assert diagnostic["failure_class"] == expected_class
+    assert diagnostic["exception_class"] == expected_class
+    assert diagnostic["assertion_class"] == (
+        expected_class if expected_kind == "assertion" else None
+    )
+    assert diagnostic["test_node"] == QUALIFICATION_TEST_NODE
+    assert diagnostic["source_commit"] == HERMES_BASELINE.commit
+    assert diagnostic["runtime"] == {
+        "python": platform.python_version(),
+        "implementation": platform.python_implementation(),
+    }
+    message = str(captured.value)
+    for private_value in (
+        detail,
+        _INJECTED_FAILURE_DETAIL,
+        "PRIVATE_TOKEN_MUST_NOT_PERSIST",
+        str(tmp_path),
+    ):
+        assert private_value not in message
 
 
 def test_run_failure_retains_only_sanitized_pytest_failed_and_error_node_ids(
@@ -799,7 +1289,10 @@ def test_run_failure_node_evidence_deduplicates_and_truncates_to_bounded_safe_id
         "tests/test_bound.py::test_alpha,tests/test_bound.py::test_beta,"
         "tests/test_bound.py::test_delta,tests/test_bound.py::test_epsilon)" in message
     )
-    assert message.count("tests/test_bound.py::test_alpha") == 1
+    # The bounded node evidence itself must stay deduplicated; the structured
+    # diagnostic may additionally name the single primary failing node.
+    node_evidence = message.split("; diagnostic=")[0]
+    assert node_evidence.count("tests/test_bound.py::test_alpha") == 1
     assert "tests/test_bound.py::test_gamma" not in message
     assert overlong_node not in message
     for private_value in (
@@ -825,13 +1318,22 @@ def test_qualification_subprocess_environment_excludes_source_and_ambient_python
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setenv("PYTHONPATH", "/private/editable/hermes:/private/aether/src")
+    # A forged ambient nonce must never survive into the qualified subprocess
+    # environment; otherwise raw output could claim harness provenance.
+    monkeypatch.setenv("AETHER_QUALIFICATION_DIAGNOSTIC_NONCE", "f" * 32)
 
     environment = module._qualification_environment(checkout)
+    repeat = module._qualification_environment(checkout)
 
     assert environment["PYTHONPATH"] == str(checkout)
     assert str(ROOT / "src") not in environment["PYTHONPATH"]
     assert str(ROOT / "tests") not in environment["PYTHONPATH"]
     assert "/private" not in environment["PYTHONPATH"]
+    nonce = environment["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"]
+    assert nonce != "f" * 32
+    assert module._QUALIFICATION_DIAGNOSTIC_NONCE_RE.fullmatch(nonce) is not None
+    # Fresh per invocation: two qualified environments never share a nonce.
+    assert repeat["AETHER_QUALIFICATION_DIAGNOSTIC_NONCE"] != nonce
 
 
 def test_benchmark_runner_executes_real_events_and_emits_machine_metadata() -> None:

@@ -102,10 +102,17 @@ KNOWLEDGE_ENTRY_POINT: dict[str, str] = {
     "target": "aether_agents.knowledge.hermes_plugin",
 }
 
+MONITOR_ENTRY_POINT: dict[str, str] = {
+    "plugin_name": "aether-telegram-monitor",
+    "group": "hermes_agent.plugins",
+    "target": "aether_agents.monitor.hermes_plugin",
+}
+
 AETHER_PLUGIN_ENTRY_POINTS: dict[str, str] = {
     OBSERVER_ENTRY_POINT["plugin_name"]: OBSERVER_ENTRY_POINT["target"],
     OBJECTIVE_CONTRACT_ENTRY_POINT["plugin_name"]: OBJECTIVE_CONTRACT_ENTRY_POINT["target"],
     KNOWLEDGE_ENTRY_POINT["plugin_name"]: KNOWLEDGE_ENTRY_POINT["target"],
+    MONITOR_ENTRY_POINT["plugin_name"]: MONITOR_ENTRY_POINT["target"],
 }
 
 
@@ -474,6 +481,7 @@ _CANONICAL_SKILLS = (
     "semver-release",
     "canonical-skill-governance",
     "objective-contract-design",
+    "contract-result-review",
     "supervisor-decomposition",
     "implementation-evidence",
     "project-knowledge",

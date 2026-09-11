@@ -1,6 +1,37 @@
 # Plugins and tools
 
-Aether declares three public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
+Aether declares four public [Hermes plugin entry points](https://hermes-agent.nousresearch.com/docs/). Generic plugin installation, configuration, and toolset behavior remain documented by Hermes; this page covers the Aether-owned registration rules.
+
+## Default worker tool selection
+
+Supervisor and every Implementer instance are headless workers. Their portable
+profiles use native `agent.disabled_toolsets: [computer_use, clarify]`, applied by
+Hermes when resolving each platform's tools. Desktop control is excluded to avoid
+unwanted interactions; interactive clarification is excluded because no owner is
+present in a worker session. Workers report missing input through the existing
+Kanban block/comment lifecycle. This is tool selection, **not a security sandbox**:
+terminal/file access and all existing authority boundaries remain unchanged.
+
+All three portable roles select Exa for search and extraction with `web.backend`,
+`web.search_backend`, and `web.extract_backend` set to `exa`, and
+`web.use_gateway: false`. `web_search` and `web_extract` are native Hermes tools,
+not new Aether plugin endpoints. Exa requires an already provisioned `EXA_API_KEY`
+in the appropriate ignored profile environment. A selected backend without usable
+credentials is unavailable; a template does not manufacture or distribute access.
+The installed provider/SDK requirements must also pass the native readiness check.
+
+**Existing profiles** are not overwritten by a repository merge. Apply these exact
+settings using native Hermes configuration, retain unrelated platform selections,
+and remove the two excluded toolsets from any saved platform lists. Reuse an
+existing Exa credential only for the profiles/destination the owner authorized,
+without printing, committing, or copying other credentials. Existing running agents
+may retain their startup tool list; apply at the next natural worker start or an
+explicitly authorized controlled restart, preserving task/worktree state.
+
+Morfeo keeps its own interaction/tool selection. Browser automation, voice, image
+capabilities, models, reasoning, fallback routes, approvals, and SOUL documents are
+not changed by this adjustment. Runtime availability and real Exa results must be
+verified separately from portable resource tests.
 
 ## Package entry points
 
@@ -9,6 +40,7 @@ Aether declares three public [Hermes plugin entry points](https://hermes-agent.n
 | `aether-contract-observer` | `aether_agents.observation.capture.hermes_plugin` | Passive Contract Observation capture. A configured Morfeo resource can expose the curated `aether_observe` tool. |
 | `aether-objective-contracts` | `aether_agents.objective_contracts.hermes_plugin` | Morfeo-only transactional Objective Contract authoring and execution-board preparation. |
 | `aether-project-knowledge` | `aether_agents.knowledge.hermes_plugin` | Optional shared structural graph and project/role work notes; identical tools for all three roles, disabled in the portable templates until configured. |
+| `aether-telegram-monitor` | `aether_agents.monitor.hermes_plugin` | Morfeo-only hourly Telegram Monitor: control/read tool, restricted reporter read tool, and the lifecycle hooks that enroll direct work and commit reports. Enabled only by the Morfeo profile opt-in. |
 
 The entries are declared in `pyproject.toml` under `hermes_agent.plugins`. Presence in a portable resource bundle is not proof that a local live profile is activated.
 
@@ -96,6 +128,17 @@ Structural updates do not call a model. Configured updates may use the explicitl
 profile-scoped auxiliary task and publish semantic coverage, pending/failed paths, fingerprint
 and observed usage. Missing or ambiguous auxiliary access is unavailable/partial, with no
 primary-model fallback or watcher. This is not a token-saving or universal-superiority claim.
+
+## `aether_monitor` and `aether_monitor_report_snapshot`
+
+The monitor plugin registers exactly two tools and is enabled only when the native profile is `morfeo` and the plugin setting `enabled` is exactly `true`. The portable Supervisor and Implementer profiles do not enable it.
+
+- `aether_monitor` in toolset `aether_monitor` is the control tool for ordinary Morfeo sessions. Its action enum is `status`, `on`, `off`, `history`; the only optional argument is `limit` (1–200, valid only with `history`). It returns the same `aether.telegram-monitor.v1` envelope as the CLI, and refuses control from monitor/report runs with `MONITOR_RUN_CONTROL_REFUSED`. No token, destination, provider or model argument is accepted.
+- `aether_monitor_report_snapshot` in toolset `aether_monitor_reporting` is a read-only tool that returns the pending canonical snapshot for the monitor's own run. It is available only after that run's exact private handoff is claimed for the exact report, cutoff, persisted job and session; any other session — including a second cron session of the same job — is refused (`REPORTER_CONTEXT_REQUIRED` or `SNAPSHOT_UNAVAILABLE`).
+
+The hourly job's per-run toolset is exactly `["aether_monitor_reporting", "no_mcp"]`. The supported `no_mcp` sentinel keeps the native scheduler from default-expanding that list with provisioned MCP servers, so narration cannot reach terminal, file, messaging, board lifecycle, delegation, cron or control tools.
+
+Three lifecycle hooks back the monitor. `post_tool_call` enrolls a project-bound direct local-interactive (`tui`/`cli`) turn; `post_llm_call` validates and persists a reporter narrative, or attaches a bounded reported outcome to a direct interval; `on_session_end` closes a direct interval or commits the reporter outbox through the native Telegram sender. Every non-reporter path only records source evidence and never sends. Read [Telegram Monitor](../guides/telegram-monitor.md).
 
 ## Observer hook boundary
 

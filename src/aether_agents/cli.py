@@ -69,6 +69,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     build_knowledge_subparser(subparsers)
 
+    from aether_agents.monitor.commands import build_subparser as build_monitor_subparser
+
+    build_monitor_subparser(subparsers)
+
     version_parser = subparsers.add_parser("version", help="Report the Aether product version.")
     version_parser.add_argument("--json", action="store_true")
 
@@ -674,6 +678,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from aether_agents.commands.knowledge import run_knowledge
 
         return run_knowledge(args)
+
+    if args.command == "monitor":
+        from aether_agents.monitor.commands import run_monitor
+
+        return run_monitor(args)
 
     if args.command == "version":
         return _run_version(args.json)

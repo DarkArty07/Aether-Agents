@@ -658,6 +658,412 @@ def test_d38_github_pr_operations_and_error_boundaries(
     assert "impact analysis unavailable" in triage_fail_res["content"]
 
 
+def _setup_github_project(
+    tmp_path: Path, native_python: Path
+) -> tuple[Path, Path, KnowledgeStore, Any]:
+    root, state = project(tmp_path)
+    project_toml = root / ".aether" / "project.toml"
+    project_toml.write_text(
+        f'schema_version = 1\nproject_id = "{PROJECT}"\nname = "example"\n'
+        'initialized_by = "1.0.0"\nforge = "github"\ncontract_root = "specs"\n\n'
+        '[github]\nrepository = "org/repo-a"\n'
+    )
+    git_at(root, "remote", "add", "origin", "https://github.com/org/repo-a.git")
+    ctx = resolve_context(PROJECT, "morfeo", state_root=state, root=root)
+    store = KnowledgeStore(state, tmp_path / "cache", GraphifyBackend(native_python))
+    store.execute(ctx, "update", {"reason": "Initial index"})
+    return root, state, store, ctx
+
+
+def test_d38_pr_impact_controlled_pagination_and_analysis_cap(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    # Scenario 1: Controlled >page (150 files: 100 on page 1, 50 on page 2). Cap is 500.
+    # Entire set of 150 files should be fetched across pages and analyzed without truncation.
+    def mock_gh_over_page(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha150"}
+            return {
+                "number": 150,
+                "title": "PR with 150 files",
+                "headRefName": "feat-150",
+                "baseRefName": "main",
+                "headRefOid": "headsha150",
+                "baseRefOid": "basesha00",
+                "isDraft": False,
+                "statusCheckRollup": [],
+                "reviewDecision": None,
+                "updatedAt": "2026-09-06T12:00:00Z",
+                "changedFiles": 150,
+                "files": [{"path": f"module_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            if "page=2" in endpoint:
+                return [{"filename": f"module_{i}.py"} for i in range(100, 150)]
+            if "page=1" in endpoint:
+                return [{"filename": f"module_{i}.py"} for i in range(100)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_over_page)
+    res_150 = store.execute(ctx, "pr_impact", {"pr_number": 150})
+    assert res_150["ok"] is True
+    impact_150 = res_150["impact"]
+    assert impact_150["truncated"] is False
+    assert impact_150["total_files"] == 150
+    assert impact_150["analyzed_files"] == 150
+    assert impact_150["files"] == 150
+    assert "truncated" not in res_150["content"].lower()
+
+    # Scenario 2: Controlled >analysis-cap (650 files > cap 500).
+    # Pages are fetched up to 500 files, then truncated with honest total/truncated state.
+    def mock_gh_over_cap(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "headsha650"}
+            return {
+                "number": 650,
+                "title": "PR with 650 files",
+                "headRefName": "feat-650",
+                "baseRefName": "main",
+                "headRefOid": "headsha650",
+                "baseRefOid": "basesha00",
+                "isDraft": False,
+                "statusCheckRollup": [],
+                "reviewDecision": None,
+                "updatedAt": "2026-09-06T12:00:00Z",
+                "changedFiles": 650,
+                "files": [{"path": f"f_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            for p in range(2, 8):
+                if f"page={p}" in endpoint:
+                    start = (p - 1) * 100
+                    end = min(start + 100, 650)
+                    return [{"filename": f"f_{i}.py"} for i in range(start, end)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_over_cap)
+    res_650 = store.execute(ctx, "pr_impact", {"pr_number": 650})
+    assert res_650["ok"] is True
+    impact_650 = res_650["impact"]
+    assert impact_650["truncated"] is True
+    assert impact_650["total_files"] == 650
+    assert impact_650["analyzed_files"] == 500
+    assert impact_650["files"] == 500
+    assert "truncated" in impact_650["warning"].lower()
+    assert "truncated to first 500 files" in res_650["content"]
+
+
+def test_d38_triage_prs_controlled_pagination_and_analysis_cap(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    prs_list = [
+        {
+            "number": 101,
+            "title": "PR over page size (150 files)",
+            "headRefName": "b1",
+            "baseRefName": "main",
+            "headRefOid": "sha101",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 150,
+        },
+        {
+            "number": 102,
+            "title": "PR over triage cap (250 files)",
+            "headRefName": "b2",
+            "baseRefName": "main",
+            "headRefOid": "sha102",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 250,
+        },
+    ]
+
+    def mock_gh_triage(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            pr_num = args[args.index("view") + 1]
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": f"sha{pr_num}"}
+            total = 150 if pr_num == "101" else 250
+            return {
+                "number": int(pr_num),
+                "headRefOid": f"sha{pr_num}",
+                "changedFiles": total,
+                "files": [{"path": f"file_{pr_num}_{i}.py"} for i in range(100)],
+            }
+        if "api" in args:
+            endpoint = args[args.index("api") + 1]
+            pr_num = "101" if "pulls/101/" in endpoint else "102"
+            if "page=2" in endpoint:
+                start = 100
+                end = 150 if pr_num == "101" else 200
+                return [{"filename": f"file_{pr_num}_{i}.py"} for i in range(start, end)]
+            if "page=3" in endpoint and pr_num == "102":
+                return [{"filename": f"file_{pr_num}_{i}.py"} for i in range(200, 250)]
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_triage)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_res["ok"] is True
+    assert len(triage_res["prs"]) == 2
+
+    pr101 = next(p for p in triage_res["prs"] if p["number"] == 101)
+    assert pr101["impact"]["truncated"] is False
+    assert pr101["impact"]["total_files"] == 150
+    assert pr101["impact"]["analyzed_files"] == 150
+
+    pr102 = next(p for p in triage_res["prs"] if p["number"] == 102)
+    assert pr102["impact"]["truncated"] is True
+    assert pr102["impact"]["total_files"] == 250
+    assert pr102["impact"]["analyzed_files"] == 200  # Capped at TRIAGE_PRS_MAX_FILES (200)
+
+
+def test_d38_triage_prs_moving_head_once_and_twice(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    prs_list = [
+        {
+            "number": 201,
+            "title": "PR moving head",
+            "headRefName": "branch-201",
+            "baseRefName": "main",
+            "headRefOid": "head_initial",
+            "baseRefOid": "basesha",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 1,
+        }
+    ]
+
+    # Scenario A: Moving head once -> retry succeeds, bound to new verified head SHA
+    head_checks = 0
+
+    def mock_gh_move_once(rt: Path, args: list[str]) -> Any:
+        nonlocal head_checks
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                head_checks += 1
+                if head_checks == 1:
+                    return {"headRefOid": "head_moved_1"}
+                return {"headRefOid": "head_moved_1"}
+            current_head = "head_moved_1" if head_checks >= 1 else "head_initial"
+            return {
+                "number": 201,
+                "headRefOid": current_head,
+                "changedFiles": 1,
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_move_once)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_res["ok"] is True
+    p201 = triage_res["prs"][0]
+    assert p201["head_sha"] == "head_moved_1"
+    assert p201["impact"].get("status") != "unavailable"
+    assert p201["impact"]["node_count"] is not None
+    assert head_checks >= 2
+
+    # Scenario B: Moving head twice -> fails with GITHUB_UNAVAILABLE, impact is unavailable
+    head_checks_b = 0
+
+    def mock_gh_move_twice(rt: Path, args: list[str]) -> Any:
+        nonlocal head_checks_b
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                head_checks_b += 1
+                return {"headRefOid": f"head_moved_check_{head_checks_b}"}
+            return {
+                "number": 201,
+                "headRefOid": f"head_moved_view_{head_checks_b}",
+                "changedFiles": 1,
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_move_twice)
+    triage_fail = store.execute(ctx, "triage_prs", {"limit": 10})
+    assert triage_fail["ok"] is True
+    p_fail = triage_fail["prs"][0]
+    assert p_fail["impact"]["status"] == "unavailable"
+    assert "head SHA moved during analysis" in p_fail["impact"]["error"]
+    assert p_fail["impact"]["node_count"] is None
+    assert "0 nodes affected" not in triage_fail["content"]
+    assert "impact analysis unavailable" in triage_fail["content"]
+
+
+def test_d38_pr_impact_incomplete_pagination_fails_closed(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    backend_calls: list[str] = []
+    original_run = store.backend.run
+
+    def record_backend_run(action: str, **kwargs: Any) -> Any:
+        backend_calls.append(action)
+        return original_run(action, **kwargs)
+
+    monkeypatch.setattr(store.backend, "run", record_backend_run)
+
+    def mock_gh_incomplete(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha-incomplete"}
+            return {
+                "number": 301,
+                "title": "PR with incomplete file pagination",
+                "headRefOid": "sha-incomplete",
+                "changedFiles": 1,
+                "files": [],
+            }
+        if "api" in args:
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_incomplete)
+
+    with pytest.raises(KnowledgeError) as exc_info:
+        store.execute(ctx, "pr_impact", {"pr_number": 301})
+    assert exc_info.value.code == "GITHUB_UNAVAILABLE"
+    assert "pagination incomplete" in str(exc_info.value)
+    assert backend_calls == []
+
+    def mock_gh_malformed(rt: Path, args: list[str]) -> Any:
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha-malformed"}
+            return {
+                "number": 303,
+                "headRefOid": "sha-malformed",
+                "changedFiles": "not-an-integer",
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_malformed)
+    with pytest.raises(KnowledgeError) as malformed_info:
+        store.execute(ctx, "pr_impact", {"pr_number": 303})
+    assert malformed_info.value.code == "GITHUB_UNAVAILABLE"
+    assert "pagination incomplete" in str(malformed_info.value)
+    assert backend_calls == []
+
+
+def test_d38_triage_incomplete_pagination_is_unavailable_not_zero_impact(
+    tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state, store, ctx = _setup_github_project(tmp_path, native_python)
+    import aether_agents.knowledge.github as gh_mod
+
+    backend_calls: list[str] = []
+    original_run = store.backend.run
+
+    def record_backend_run(action: str, **kwargs: Any) -> Any:
+        backend_calls.append(action)
+        return original_run(action, **kwargs)
+
+    monkeypatch.setattr(store.backend, "run", record_backend_run)
+
+    prs_list = [
+        {
+            "number": 302,
+            "title": "PR with incomplete file pagination",
+            "headRefName": "feature-302",
+            "baseRefName": "main",
+            "headRefOid": "sha302",
+            "baseRefOid": "base302",
+            "isDraft": False,
+            "statusCheckRollup": [],
+            "reviewDecision": None,
+            "updatedAt": "2026-09-06T12:00:00Z",
+            "changedFiles": 1,
+        }
+    ]
+
+    def mock_gh_incomplete(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha302"}
+            return {
+                "number": 302,
+                "headRefOid": "sha302",
+                "changedFiles": 1,
+                "files": [],
+            }
+        if "api" in args:
+            return []
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_incomplete)
+    triage_res = store.execute(ctx, "triage_prs", {"limit": 10})
+
+    assert triage_res["ok"] is True
+    impact = triage_res["prs"][0]["impact"]
+    assert impact["status"] == "unavailable"
+    assert "pagination incomplete" in impact["error"]
+    assert impact["node_count"] is None
+    assert backend_calls == []
+    assert "0 nodes affected" not in triage_res["content"]
+    assert "impact analysis unavailable" in triage_res["content"]
+
+    def mock_gh_malformed(rt: Path, args: list[str]) -> Any:
+        if "list" in args:
+            return prs_list
+        if "view" in args:
+            if "--json" in args and args[args.index("--json") + 1] == "headRefOid":
+                return {"headRefOid": "sha302"}
+            return {
+                "number": 302,
+                "headRefOid": "sha302",
+                "changedFiles": "not-an-integer",
+                "files": [{"path": "module.py"}],
+            }
+        return {}
+
+    monkeypatch.setattr(gh_mod, "_run_gh", mock_gh_malformed)
+    malformed_triage = store.execute(ctx, "triage_prs", {"limit": 10})
+    malformed_impact = malformed_triage["prs"][0]["impact"]
+    assert malformed_impact["status"] == "unavailable"
+    assert "pagination incomplete" in malformed_impact["error"]
+    assert malformed_impact["node_count"] is None
+    assert backend_calls == []
+    assert "0 nodes affected" not in malformed_triage["content"]
+    assert "impact analysis unavailable" in malformed_triage["content"]
+
+
 def test_d36_semantic_lifecycle_cache_and_enrichment(
     tmp_path: Path, native_python: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1120,7 +1526,7 @@ def test_d35_missing_or_ambiguous_auxiliary_task_unbound(
 
 
 def test_d38_real_gh_read_only_pr_or_honest_skip() -> None:
-    """Exercise real gh read-only PR if authenticated; skip honestly otherwise."""
+    """Exercise real gh read-only PR probe against this public repository if authenticated; skip honestly otherwise."""
     import shutil
     import subprocess
 
@@ -1139,15 +1545,50 @@ def test_d38_real_gh_read_only_pr_or_honest_skip() -> None:
     except Exception as exc:
         pytest.skip(f"GitHub CLI check failed ({exc}).")
 
-    from aether_agents.knowledge.github import _run_gh
+    from aether_agents.knowledge.github import (
+        _fetch_pr_files,
+        _run_gh,
+        resolve_github_repository,
+    )
 
-    # Read-only test against current repo
+    repo_root = Path(__file__).parents[1]
     try:
-        repo_root = Path(__file__).parents[1]
-        prs = _run_gh(repo_root, ["pr", "list", "--limit", "1", "--json", "number,title"])
+        repo = resolve_github_repository(repo_root)
+        prs = _run_gh(
+            repo_root,
+            [
+                "pr",
+                "list",
+                "--state",
+                "all",
+                "--limit",
+                "1",
+                "--json",
+                "number,title,headRefOid,changedFiles",
+            ],
+        )
         assert isinstance(prs, list)
+        if prs:
+            pr_num = int(prs[0]["number"])
+            # Exercise real read-only PR file pagination probe with page_size=5
+            files, total_files, truncated = _fetch_pr_files(
+                repo_root,
+                repo,
+                pr_num,
+                max_files=10,
+                page_size=5,
+                known_total=prs[0].get("changedFiles"),
+            )
+            assert isinstance(files, list)
+            assert len(files) > 0
+            assert total_files >= len(files)
+            if prs[0].get("changedFiles") is not None:
+                assert total_files == int(prs[0]["changedFiles"])
+            assert isinstance(truncated, bool)
+    except KnowledgeError as exc:
+        pytest.skip(f"gh read-only query could not complete ({exc}).")
     except Exception as exc:
-        pytest.skip(f"gh pr list query could not complete ({exc}).")
+        pytest.skip(f"gh read-only query could not complete ({exc}).")
 
 
 def test_d35_live_auxiliary_document_code_relation(tmp_path: Path, native_python: Path) -> None:
@@ -1974,36 +2415,73 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         },
     }
 
-    fp_base = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
-    fp_provider = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_provider)
-    fp_model = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_model)
-    fp_api_mode = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_api_mode)
+    fp_base = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_base
+    )
+    fp_provider = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_provider
+    )
+    fp_model = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_model
+    )
+    fp_api_mode = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_api_mode
+    )
 
     assert fp_base is not None
     assert fp_base != fp_provider, "Changing provider must change semantic fingerprint"
     assert fp_base != fp_model, "Changing model must change semantic fingerprint"
     assert fp_base != fp_api_mode, "Changing api_mode must change semantic fingerprint"
-    assert fp_base == sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
+    assert fp_base == sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_base
+    )
 
     call_count = 0
     actual_route: dict[str, str] = {}
 
-    def mock_aux(task: str, *args: Any, route_info: dict[str, Any] | None = None, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+    def mock_aux(
+        task: str, *args: Any, route_info: dict[str, Any] | None = None, **kwargs: Any
+    ) -> tuple[str, dict[str, Any]]:
         nonlocal call_count
         call_count += 1
         if route_info is not None and actual_route:
             route_info.update(actual_route)
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "Doc1", "label": "Doc1", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "Doc1", "target": "module_process_order", "relation": "specifies"}],
-        })
-        return fake_llm_json, {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150, "route": dict(actual_route)}
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "Doc1",
+                        "label": "Doc1",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {"source": "Doc1", "target": "module_process_order", "relation": "specifies"}
+                ],
+            }
+        )
+        return fake_llm_json, {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+            "route": dict(actual_route),
+        }
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
 
     # 2. Unchanged explicit route yields zero model calls on repeat
-    actual_route = {"provider": "openrouter", "model": "meta-llama/llama-3-70b-instruct", "api_mode": "chat_completions"}
-    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_base})
+    actual_route = {
+        "provider": "openrouter",
+        "model": "meta-llama/llama-3-70b-instruct",
+        "api_mode": "chat_completions",
+    }
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": True, **cfg_base},
+    )
     res1 = store.execute(ctx, "update", {"mode": "configured"})
     assert res1["ok"] is True
     assert res1["semantic"]["state"] == "complete"
@@ -2016,8 +2494,17 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     assert call_count == recorded_calls, "Unchanged explicit route must yield zero model calls"
 
     # 3. Changing route invalidates fingerprint and triggers new model calls
-    store_new_model = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_model})
-    actual_route = {"provider": "openrouter", "model": "openai/gpt-4o-mini", "api_mode": "chat_completions"}
+    store_new_model = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": True, **cfg_model},
+    )
+    actual_route = {
+        "provider": "openrouter",
+        "model": "openai/gpt-4o-mini",
+        "api_mode": "chat_completions",
+    }
     res3 = store_new_model.execute(ctx, "update", {"mode": "configured"})
     assert res3["ok"] is True
     assert res3["outcome"] == "updated"
@@ -2030,7 +2517,7 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         "semantic": {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"},
     }
     actual_route = {"provider": "unresolved", "model": "unresolved", "api_mode": "unresolved"}
-    res_unresolved = sem_mod.run_semantic_extraction(
+    sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
         graph_path=tmp_path / "graph_unres.json",
@@ -2046,10 +2533,18 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     mismatch_cache_root = tmp_path / "mismatch_cache"
     mismatch_cfg = {
         "semantic_auxiliary_task": "web_extract",
-        "semantic": {"provider": "openrouter", "model": "expected-model", "api_mode": "chat_completions"},
+        "semantic": {
+            "provider": "openrouter",
+            "model": "expected-model",
+            "api_mode": "chat_completions",
+        },
     }
-    actual_route = {"provider": "different_provider", "model": "different_model", "api_mode": "chat_completions"}
-    res_mismatch = sem_mod.run_semantic_extraction(
+    actual_route = {
+        "provider": "different_provider",
+        "model": "different_model",
+        "api_mode": "chat_completions",
+    }
+    sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
         graph_path=tmp_path / "graph_mismatch.json",
@@ -2059,7 +2554,9 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         configuration=mismatch_cfg,
     )
     mismatch_cache_dir = mismatch_cache_root / "knowledge" / ctx.project_id / "semantic_cache"
-    mismatch_cached_files = list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
+    mismatch_cached_files = (
+        list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
+    )
     assert len(mismatch_cached_files) == 0, "Mismatched route must not publish to cache"
 
 
@@ -2074,10 +2571,21 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 1. Establish a complete snapshot first
     def mock_complete(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocGood", "label": "DocGood", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocGood", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocGood",
+                        "label": "DocGood",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {"source": "DocGood", "target": "module_process_order", "relation": "specifies"}
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100, "finish_reason": "stop"}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_complete)
@@ -2095,10 +2603,25 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 2. Attempt refresh with finish_reason="length" and parseable JSON
     def mock_length_finish(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocTruncated", "label": "DocTruncated", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocTruncated", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocTruncated",
+                        "label": "DocTruncated",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "DocTruncated",
+                        "target": "module_process_order",
+                        "relation": "specifies",
+                    }
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100, "finish_reason": "length"}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_length_finish)
@@ -2106,7 +2629,11 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
         "enabled": True,
         "semantic_enabled": True,
         "semantic_auxiliary_task": "web_extract",
-        "semantic": {"provider": "openrouter", "model": "gpt-4o-new", "api_mode": "chat_completions"},
+        "semantic": {
+            "provider": "openrouter",
+            "model": "gpt-4o-new",
+            "api_mode": "chat_completions",
+        },
     }
     store_refresh = KnowledgeStore(state, tmp_path / "cache", backend, configuration=new_cfg)
     refresh_res = store_refresh.execute(ctx, "update", {"mode": "configured"})
@@ -2135,16 +2662,37 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 3. Missing/omitted finish_reason remains compatible
     def mock_legacy_omitted(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocLegacy", "label": "DocLegacy", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocLegacy", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocLegacy",
+                        "label": "DocLegacy",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "DocLegacy",
+                        "target": "module_process_order",
+                        "relation": "specifies",
+                    }
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_legacy_omitted)
     legacy_cache = tmp_path / "legacy_cache"
     complete_graph = (
-        tmp_path / "cache" / "knowledge" / PROJECT / complete_snap_id / "graphify-out" / "graph.json"
+        tmp_path
+        / "cache"
+        / "knowledge"
+        / PROJECT
+        / complete_snap_id
+        / "graphify-out"
+        / "graph.json"
     )
     res_legacy = sem_mod.run_semantic_extraction(
         backend=backend,

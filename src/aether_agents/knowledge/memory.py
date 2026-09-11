@@ -24,7 +24,12 @@ from .graphify import GraphifyBackend
 _NOTE_ID = re.compile(r"^wn_[a-f0-9]{32}$")
 _SAVE_KEY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$")
 _SECRETS = re.compile(
-    r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-[A-Za-z0-9_-]{24,}|\bAKIA[A-Z0-9]{16}\b"
+    r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    r"|\bsk-[A-Za-z0-9_-]{24,}"
+    r"|\bAKIA[A-Z0-9]{16}\b"
+    r"|\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{8,}\b"
+    r"|(?i:\b(?:password|passwd)[\"']?\s*[:=]\s*(?:\\?[\"'][^\r\n\"'\\]{6,}\\?[\"']|[^\s\"'\\]{6,}))"
+    r"|(?i:\b(?:(?:proxy-)?authorization[\"']?\s*[:=]\s*\\?['\"]?bearer\s+\S+|bearer\s+[A-Za-z0-9._~+/-]{16,}))"
 )
 
 
@@ -224,7 +229,9 @@ class WorkMemoryStore:
             except KnowledgeError:
                 pass
             fields = {key: str(item.get(key, ""))[:1500] for key in ("locator", "result")}
-            if _SECRETS.search(json.dumps(fields)):
+            if any(_SECRETS.search(v) for v in fields.values()) or _SECRETS.search(
+                json.dumps(fields)
+            ):
                 raise KnowledgeError("SENSITIVE_CONTENT", "Evidence must not contain credentials.")
             evidence.append(
                 {
