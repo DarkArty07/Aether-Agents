@@ -51,3 +51,25 @@ remains an explicit preflight in D13 before spending the approved live budget. N
 product code, credentials, profiles or existing worker state were mutated by authoring.
 The existing Project knowledge component returned VIEW_MISMATCH for the native session
 workspace; direct current source inspection was used, not a substituted graph result.
+
+## v3 — provisioned profile and destination preflight
+
+Supervisor integrated every accepted v2 unit at `19dfc9d68e797f7d365f078ef65be70fbd16f158`,
+completed deterministic verification and preserved a no-effect `lab-config` refusal. The
+refusal proved two interface gaps before the experiment boundary: the harness assumed
+`HERMES_HOME` was always a multi-profile root although this installation uses the exact
+Morfeo profile home, and its restricted reference probe neither inherited `TELEGRAM_*`
+nor invoked the provisioned dotenv loader. No lab, credential read, model or send occurred.
+
+Morfeo selected one source-owned resolution: normalize both supported HERMES_HOME forms
+to the exact verified Morfeo profile; establish the provisioned reference in a restricted
+child by loading the profile dotenv with Hermes' native loader before gateway config; keep
+lab access separate and ephemeral; compare only bounded target/config digests. Injecting
+lab access into the reference probe is rejected. The preserved refusal consumed no live
+budget; after D14 correction and independent review, exactly one corrected attempt remains.
+
+The v3 draft passed structural validation with all sections present. The existing authoring
+runner returned **48 passed in 7.44s**; documentation and `git diff --check` passed. This
+proves source/contract consistency only. No credential value was read or written by this
+authoring phase, no profile/config/provider/model changed, no live command was rerun and
+no qualification/production acceptance is claimed.

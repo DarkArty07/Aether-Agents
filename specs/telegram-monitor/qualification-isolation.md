@@ -1,6 +1,6 @@
 # D13 — isolated live qualification and production activation
 
-**Authority:** owner approved Morfeo's presented design and requested a renewed Supervisor handoff. This document owns the material qualification design for `oc_f8c9fc9320587cf3@v2`; spec.md and quickstart.md reference it. No constitutional change. No implementation or live success is claimed by authoring it.
+**Authority:** owner approved Morfeo's presented design and requested a renewed Supervisor handoff. This document owns the material qualification design for `oc_f8c9fc9320587cf3@v3`; spec.md and quickstart.md reference it. Version 3 resolves the provisioned-profile/destination preflight returned from terminal integration. No constitutional change. No implementation or live success is claimed by authoring it.
 
 ## Decision and preserved outcome
 
@@ -27,6 +27,40 @@ Use the existing qualification harness and provisioned runtime interpreter. Esta
 5. Verify resolved paths, exact route/destination, privacy of the output target and native interfaces before external effects. Configuration drift invalidates qualification; do not silently change the route. These are fail-closed checks inside the harness, not a new global permission engine.
 6. Seed only labeled synthetic projects, contracts, boards and native session/work records with the shipped product/native writers. Drive direct-work lifecycle via its supported callbacks. Do not inject accepted snapshots, model answers, delivery acknowledgments or successful summaries. Create enough native source metadata to distinguish real idle from coverage failure.
 7. Install one lab monitor job through its normal service with production script/prompt/toolset, `0 * * * *`, `deliver=local` and no per-job model overrides. Run the native InProcessCronScheduler in a bounded supervised child, with only the lab profile and no receiver, gateway housekeeping, profile multiplexing or implementation dispatcher. The native code owns due selection, execution and receipts; the harness only drives scenarios and observes evidence.
+
+### D14 provisioned profile and destination preflight
+
+The qualification command is valid when `HERMES_HOME` denotes either the installation's
+multi-profile root or the exact `profiles/morfeo` home used by a profile-scoped runtime.
+Normalize both forms to one exact, existing Morfeo profile directory: use the current
+path directly only when it is canonically the named profile and carries the expected
+profile configuration; otherwise resolve its `profiles/morfeo` child. Reject missing,
+ambiguous, linked, conflicting or differently named candidates. Current worker cwd or
+profile identity is not a fallback. Record only the normalized-path class and a digest,
+never a machine path in public evidence.
+
+After that identity is fixed, establish the **provisioned reference destination** in a
+restricted child using the exact Morfeo profile home. The child invokes Hermes'
+provisioned `hermes_cli.env_loader.load_hermes_dotenv()` before
+`gateway.config.load_gateway_config()`, so profile-local `.env` configuration is visible
+through the runtime's supported loader. It returns only the existing bounded destination
+projection/digest and presence flags. It must not print, persist, copy or return
+credential values, and it performs no model or transport call.
+
+Separately collect only the already-authorized access names needed by the lab into the
+parent's ephemeral memory and pass them only to lab children. The lab's resolved target,
+route and relevant configuration digests must exactly match the provisioned reference.
+Supplying those values to the reference probe would compare an injected environment to
+itself and is rejected; loading the provisioned dotenv is the reference side, while
+ephemeral access is the lab side. No new CLI credential/destination input is added.
+
+The preserved `lab-config` refusal occurred during bootstrap preflight, before laboratory
+creation, credential loading, model/sender calls or the experiment attempt boundary. It
+consumed none of the one-smoke/two-active-cut/idle-cut budget. After the D14 correction is
+implemented and independently reviewed, exactly one corrected live qualification attempt
+is authorized with a new no-overwrite receipt target. This is an explicit continuation,
+not an automatic retry. Any subsequent live failure stops the experiment under the
+existing rule.
 
 This is operational isolation for cooperating processes and controlled paths, not an OS sandbox against a malicious process of the same user. Production state may legitimately change because other agents work; do not demand that all production files remain byte-identical. The harness itself must never replace, restore, quarantine, merge or delete the production registry.
 

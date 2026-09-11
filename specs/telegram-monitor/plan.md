@@ -271,6 +271,18 @@ production registry. This is v2's explicit qualification/authority revision, not
 reason to omit remaining functional or privacy acceptance. Keep approved MON-01..05
 and reviewed test corrections; Supervisor owns continuation of the unfinished work.
 
+### D14: resolve the actual provisioned profile before live spending
+
+Accept both the multi-profile-root and exact Morfeo-profile `HERMES_HOME` conventions,
+normalizing either to one verified profile without using cwd/current worker identity.
+Build the provisioned destination reference by running Hermes' native dotenv loader in a
+restricted child rooted at that exact profile, then load gateway configuration and return
+only a bounded digest/presence projection. Keep the lab's access in memory and require its
+independently resolved destination/route to match that reference. Do not inject the lab
+access into the reference probe, persist credentials, or add credential/destination CLI
+inputs. The recorded no-effect `lab-config` refusal precedes the experiment boundary;
+after this correction and review, one explicit corrected live attempt remains authorized.
+
 Document `docs/guides/telegram-monitor.md`, relevant CLI/plugin references, and
 `docs/capabilities.toml` plus generated reference. Keep status claims at observed capability
 level only. Reconcile the workflow's **literal** tracked-file/entry-point allowlists with

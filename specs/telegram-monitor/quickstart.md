@@ -92,7 +92,15 @@ uv run --frozen python scripts/qualify_telegram_monitor.py --live \
 
 Without `--live`, zero model/sender calls. Before live effects verify candidate/runtime
 compatibility, isolated mutable paths, output privacy and the unchanged approved route
-and destination. No CLI token/model/recipient overrides or persisted credential copies.
+and destination. Preflight accepts either the installation-root or exact Morfeo-profile
+`HERMES_HOME` convention and normalizes it to one verified profile. Its restricted
+reference child calls Hermes' native dotenv loader and returns only destination/config
+digests and presence flags; it makes no model/send call and never returns credential
+values. The lab resolves the target separately from ephemeral in-memory access and must
+match that reference. Do not inject lab access into the reference side. The preserved
+initial `lab-config` refusal consumed no experiment budget; after reviewed D14 correction,
+use one new no-overwrite output target for the single authorized corrected attempt.
+No CLI token/model/recipient overrides or persisted credential copies.
 The supported native scheduler runs only the private lab profile; no receiver, dispatcher,
 custom scheduler or permanent service. The production gateway and projects are untouched.
 

@@ -109,4 +109,16 @@ Under delegated authority, use behavior-focused regression tests, deterministic 
 
 Retain the three roles. A reporting execution of Morfeo is not a fourth role. Reporting is read-only with respect to source work: it cannot advance tasks, accept milestones, repair blockers or change a contract. Its own enrollment/report/cursor records and the identified monitor cron may change under the product controls. Do not expose credentials, raw transcripts, user identifiers, machine paths or private provider bindings in public artifacts. Avoid unrelated cleanup. Except for D13's isolated bounded native scheduler instance, no new bot, scheduler daemon, Telegram poller, Desktop frontend, cross-machine collector, percentage engine, time-billing service, inbound command router, provider or package release is included. The owner requested up-front review of protected identity edits; all three SOUL sources were inspected and require no modification. They and installed SOUL copies remain outside scope. The sole protected AGENTS exception link was applied through its normal guard after that explicit owner instruction.
 
-Objective Contract `oc_f8c9fc9320587cf3@v2` supersedes v1 with D13 at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v2.md`; immutable v1 remains preserved. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
+### D14 — Provisioned-profile and destination resolution
+
+The owner-authorized continuation accepts both actual Hermes `HERMES_HOME` conventions:
+the multi-profile installation root and the exact named Morfeo profile home. The harness
+must normalize either to the same verified Morfeo profile and reject ambiguity. Its
+reference destination probe loads that profile's provisioned dotenv through Hermes'
+native loader, emits only bounded digests/presence, and makes no model/send call. Lab
+children receive only already-provisioned access in ephemeral memory and must resolve an
+identical destination/route. No credential value is copied or accepted as CLI input.
+The preserved preflight refusal consumed no live budget; one corrected attempt is allowed
+after independent review, and a later live failure stops normally.
+
+Objective Contract `oc_f8c9fc9320587cf3@v3` supersedes v2 with D14 at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md`; immutable v1 and v2 remain preserved. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
