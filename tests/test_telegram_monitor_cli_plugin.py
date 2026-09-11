@@ -7723,10 +7723,10 @@ def _make_d16r_test_profile(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     return prof, env
 
 
-def test_d16r_gate_refuses_lab_when_plugin_cannot_be_loaded(tmp_path: Path) -> None:
+def test_d16r_gate_refuses_lab_when_plugin_cannot_be_loaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """In-lab gate refuses fail-closed before any effect when plugin cannot load."""
-    import shutil
-
     from scripts import qualify_telegram_monitor as q
     from scripts import telegram_monitor_lab as lab
 
@@ -7742,11 +7742,45 @@ def test_d16r_gate_refuses_lab_when_plugin_cannot_be_loaded(tmp_path: Path) -> N
     )
     q._lab_create(plan, preflight)
 
-    # 1. Negative case: plugin metadata missing
-    shutil.rmtree(plan.plugins_meta)
-    plan.plugins_meta.mkdir()
+    # 1. Negative cases: the gate refuses when the laboratory child cannot provide the
+    #    monitor plugin.  Shadowing the module through the lab source root no longer works
+    #    once the provisioned installation itself declares the monitor entry point
+    #    (post-activation): the child then loads the plugin from the installed distribution
+    #    regardless of sys.path order, and the installation must not be modified by a test.
+    #    The refusal branches are therefore pinned directly on the probe payload, while the
+    #    real child path stays covered positively by
+    #    ``test_d16r_enable_reaches_native_job_creation_in_lab_context`` and by the
+    #    not-enabled integration case below.
+    real_destination = q._lab_destination
+
+    def _destination_with(plugin_summary: Any):
+        def _stub(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            payload = dict(real_destination(*args, **kwargs))
+            payload["monitor_plugin"] = plugin_summary
+            return payload
+
+        return _stub
+
+    monkeypatch.setattr(q, "_lab_destination", _destination_with(None))
     gate1 = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
     assert "monitor-plugin-missing" in gate1["problems"]
+
+    monkeypatch.setattr(
+        q,
+        "_lab_destination",
+        _destination_with(
+            {
+                "present": True,
+                "enabled": True,
+                "tools": ["aether_monitor", "aether_monitor_report_snapshot"],
+                "hooks": ["post_tool_call", "post_llm_call", "on_session_end"],
+                "error": "ImportError: sabotaged monitor plugin",
+            }
+        ),
+    )
+    gate1b = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
+    assert "monitor-plugin-error:ImportError: sabotaged monitor plugin" in gate1b["problems"]
+    monkeypatch.setattr(q, "_lab_destination", real_destination)
 
     # 2. Negative case: plugin disabled in config
     lab.write_plugin_metadata(plan)

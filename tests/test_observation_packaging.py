@@ -394,9 +394,7 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             assert frontmatter["description"].endswith(".")
             # Packaged canonical resources carry an explicit, intentional version per
             # skill: a bump must be recorded here so accidental drift stays caught.
-            expected_version = (
-                "0.1.1" if skill_name == "supervisor-decomposition" else "0.1.0"
-            )
+            expected_version = "0.1.1" if skill_name == "supervisor-decomposition" else "0.1.0"
 
             assert frontmatter["version"] == expected_version
             assert isinstance(frontmatter["author"], str) and frontmatter["author"]
