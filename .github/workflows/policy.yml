@@ -125,6 +125,9 @@ jobs:
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
+          patches/hermes/HLP-275-aux-image-prep-cap.patch
+          patches/hermes/HLP-382-bounded-transcript-publication.patch
+          patches/hermes/HLP-389-heredoc-data-vs-executable.patch
           patches/hermes/tests/test_hlp280_live_routing_probe.py
           patches/hermes/tests/test_hlp280_recovery_compatibility.py
           lab/fixtures/manifest.json
@@ -327,6 +330,7 @@ jobs:
           tests/test_observation_usage_guidance.py
           tests/test_worker_tool_defaults.py
           tests/test_knowledge_schema.py
+          tests/test_knowledge_session_binding.py
           tests/test_project_knowledge_engine.py
           tests/test_work_memory.py
           website/.gitignore
