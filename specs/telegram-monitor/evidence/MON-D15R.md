@@ -5,19 +5,19 @@
 **Objective Contract:** `oc_f8c9fc9320587cf3@v3` (`.aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md`, SHA-256 `f21facaf58af20a2d0595cdaa927a99ca6336e5b14b5d073ec3501bbfbf7f47c`)
 **Source:** Owner D15 authorization on card `t_b8077e66` (canonical record `specs/telegram-monitor/qualification-isolation.md` §D15, commit `08d8233065d181a0f43b215ea2d71b2865818f0f`)
 **Base commit:** `f603f8f1ace4dbb112afb05e032da620642e7050`
-**Candidate commit:** `2ea97e17926ce46700c02fb3411fc414589d3d37`
+**Candidate commit:** the tip commit on this branch (descending from `bec82e265e36a804792543177e580de8fe2ceb51`, which amends with round-1 review corrections)
 **Phase:** implementer unit; **no live effect performed** — no `--live` run, no model call, no Telegram send, no scheduler start, no enable of any lab job, no profiler/registry mutation, no profile/config/credential/provider change, no runtime modification, no cleanup of retained labs/receipts, no push/PR/issue mutation.
 
 ## Scope and changed paths
 
 - `src/aether_agents/monitor/sources.py`:
   1. `_resolve_board_paths`: only include implicit default board entry when its store exists (`kanban.db` or `boards/default/board.json` or `boards/default/kanban.db`), and exclude `default` from the `boards_root` iteration to avoid creating duplicate invalid paths.
-  2. `_PHONE_RE`: aligned regex with the canonical pattern from `src/aether_agents/monitor/reporting.py`, preventing ISO dates (such as `2099-12-31` in task results) from being falsely flagged as phone numbers and raising `TASK_RESULT_UNSAFE`.
+  2. `_PHONE_RE`: stated deviation and trade-off — aligned regex with the canonical pattern from `src/aether_agents/monitor/reporting.py:121-124`. Reverting this pattern causes task results containing ISO dates (`YYYY-MM-DD`, e.g. `2099-12-31` in task A3) to be falsely flagged as phone numbers and raise `TASK_RESULT_UNSAFE`, preventing a gap-free laboratory. Trade-off: sources-side screening narrows to the canonical telephone narration pattern that the shipped final gate already uses (`reporting.py`), allowing standard ISO dates to pass while continuing to reject structured phone numbers.
 - `scripts/qualify_telegram_monitor.py`:
   1. `_environment_gaps`: accepted `hermes_home` keyword argument, evaluating the laboratory's own Hermes root (`lab["hermes_home"]`) instead of falling back to the operator's profile home.
   2. `QualificationBackends.environment_gaps`: accepted `hermes_home` and `lab` keyword arguments, forwarding `hermes_home` to `_environment_gaps`.
   3. `_qualify` at step 2a: invoked `backends.environment_gaps(store, hermes_home=Path(str(lab["hermes_home"])), lab=lab)` to probe the laboratory's own read-only sources before any enable effect.
-  4. `_LAB_FIXTURE_PROBE`: seeded the two synthetic boards through the shipped execution-board writer (`_provision_execution_board` with fallback to `_create_metadata_exclusive` + `kanban_db.init_db`/`create_board`), populating complete Objective Contract metadata (`aether_project_id`, `aether_contract_id`, `aether_contract_version`, canonical `project_id`, `default_workdir`, `archived: false`).
+  4. `_LAB_FIXTURE_PROBE`: seeded the two synthetic boards through the shipped execution-board writer (`_provision_execution_board`) fail-closed, populating complete Objective Contract metadata (`aether_project_id`, `aether_contract_id`, `aether_contract_version`, canonical `project_id`, `default_workdir`, `archived: false`).
 - `tests/test_telegram_monitor_sources.py`:
   Added focused unit tests verifying:
   1. Root without default store emits no `BOARD_METADATA_UNREADABLE`.
@@ -25,16 +25,16 @@
   3. Root with unbound default store (`kanban.db` and empty `board.json`) preserves `BOARD_PROJECT_UNBOUND`.
   4. ISO dates in task results do not produce `TASK_RESULT_UNSAFE`.
 - `tests/test_telegram_monitor_cli_plugin.py`:
-  1. Updated `FakeQualificationBackends.environment_gaps` to accept `*args, **kwargs`.
+  1. Updated `_FakeBackends.environment_gaps` to record received call kwargs (`self.environment_gaps_calls`).
   2. Updated `_CHAIN_STUB_MODULES` with `board_dir`, `init_db`, `read_board_metadata`, `connect_closing`, `list_projects` stubs.
-  3. Added `test_d15r_coverage_probe_context_binds_to_lab_hermes_home` verifying coverage probe binds to lab hermes root.
+  3. Added `test_d15r_coverage_probe_context_binds_to_lab_hermes_home` verifying coverage probe binds to lab hermes root via `ReadOnlySources` construction spy across explicit `hermes_home`, `lab` mapping, and direct `_environment_gaps` paths; and pinned step 2a call-site kwargs in `test_live_preflight_and_full_run_without_external_effects`.
   4. Added `test_d15r_reproduction_and_corrected_gap_free_laboratory` verifying pre-correction mixed context refusal vs corrected gap-free lab (`[]`).
   5. Added `test_d15r_negative_control_broken_lab_refuses` verifying broken lab metadata and missing contract artifact refuse with `BOARD_PROJECT_UNBOUND` and `FINAL_CONTRACT_UNREADABLE`.
   6. Added `test_d15r_fixture_and_environment_gaps_chain_end_to_end` exercising the real runtime chain (`_lab_create` → `_scope_manifest` → `_write_scope_projects` → `_lab_fixture` → `_environment_gaps`) yielding zero gaps.
 - `CHANGELOG.md`: added entry under `[Unreleased]`.
 - `specs/telegram-monitor/evidence/MON-D15R.md`: this evidence record.
 
-Preserved unchanged: all design specifications in `specs/telegram-monitor/{spec,plan,quickstart,qualification-isolation,research,tasks}.md`, Objective Contracts `v1.md`, `v2.md`, `v3.md`, prior evidence records (`MON-06.md`, `MON-D14.md`, `MON-D14R.md`), the harness public CLI (`--json`, `--live`, `--wait-hourly-boundaries`, `--output`), the private evidence directory `/home/darkarty/.local/qualification/telegram-monitor-evidence/`, retained laboratory roots under `/home/darkarty/.local/state/aether/monitor/lab/`, and `.github/workflows/policy.yml` (manifest list exact at 376 files).
+Preserved unchanged: all design specifications in `specs/telegram-monitor/{spec,plan,quickstart,qualification-isolation,research,tasks}.md`, Objective Contracts `v1.md`, `v2.md`, `v3.md`, prior evidence records (`MON-06.md`, `MON-D14.md`, `MON-D14R.md`), the harness public CLI (`--json`, `--live`, `--wait-hourly-boundaries`, `--output`), the private evidence directory (qualification receipts and logs), retained laboratory roots under the local state directory (including the retained failure attempts), and `.github/workflows/policy.yml` (manifest list exact at 376 files).
 
 ## Defect statement and reproduction
 
@@ -57,7 +57,7 @@ This refusal occurred after lab creation and fixture seeding, but strictly befor
 1. **Wrong context (harness):** `_environment_gaps(store)` in `scripts/qualify_telegram_monitor.py:2739` constructed `ReadOnlySources(state_root=store.state_root, hermes_home=monitor_runtime.hermes_home())` in the parent process. Because the parent process was not running with the lab's environment, `hermes_home` resolved to the operator's production profile home while `state_root` was the lab's `xdg-state/aether`. This mixed context caused `NATIVE_PROJECT_MISSING` (lab projects not registered in production native state) and `SESSION_TITLE_UNAVAILABLE` (production sessions unmapped to lab projects).
 2. **Phantom default board (product):** Even when evaluating with the lab's own Hermes root (`lab_hermes`), `_resolve_board_paths` unconditionally prepended `("default", root / "kanban.db")`. `_read_board_bindings` then looked for `<root>/kanban/boards/default/board.json`. In a fresh root without a default board store (such as the lab), this missing file produced a false `BOARD_METADATA_UNREADABLE`. Furthermore, because a default board slug (`default`) can never match the execution-board grammar (`oc-<portable>-<contract>-v<n>`), no laboratory could ever be gap-free while this phantom entry was emitted.
 3. **Unbound synthetic boards (fixture):** The lab's synthetic boards carry slugs in the exact execution-board convention (`oc-<portable-project>-<contract>-v1`) and the fixture writes final contract artifacts (`.aether/objective-contracts/<contract>/v1.md`), but the boards were created with plain `kanban_db.create_board(...)`. Consequently, `board.json` lacked `aether_project_id`, `aether_contract_id`, and `aether_contract_version`, yielding `BOARD_PROJECT_UNBOUND`.
-4. **Over-broad phone regex rejecting dates (product):** In `src/aether_agents/monitor/sources.py:58`, `_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d .()_-]{8,}\d)(?!\d)")` was overly broad and matched ISO date formats `YYYY-MM-DD` (e.g. `2099-12-31` in task A3's result `"Phase two rollout will finish by 2099-12-31 according to the latest draft."`), causing `_safe_text` to return `None` and raising `TASK_RESULT_UNSAFE`. Aligning `_PHONE_RE` with `reporting.py:121` (`r"(?<!\d)(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{3}[ .-])\d{3}[ .-]\d{4}(?!\d)"`) resolves this without weakening real phone number detection.
+4. **Over-broad phone regex rejecting dates (product, stated deviation and trade-off):** In `src/aether_agents/monitor/sources.py:58`, `_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d[\d .()_-]{8,}\d)(?!\d)")` was overly broad and matched ISO date formats `YYYY-MM-DD` (e.g. `2099-12-31` in task A3's result `"Phase two rollout will finish by 2099-12-31 according to the latest draft."`), causing `_safe_text` to return `None` and raising `TASK_RESULT_UNSAFE`. Aligning `_PHONE_RE` with `reporting.py:121` (`r"(?<!\d)(?:\+\d{1,3}[ .-]?)?(?:\(\d{2,4}\)[ .-]?|\d{3}[ .-])\d{3}[ .-]\d{4}(?!\d)"`) resolves this. Trade-off: sources-side screening narrows to the canonical telephone narration pattern that the shipped final gate already uses (`reporting.py`), allowing standard ISO dates to pass while continuing to reject structured phone numbers.
 
 ### Reproduction results
 
@@ -70,7 +70,7 @@ Running read-only diagnosis against retained lab `20260911T052506Z-2be4d0c9a98a`
 
 | Requirement / AC | Check | Observed Result | Evidence Location |
 | --- | --- | --- | --- |
-| 1. Probe bound to lab context | `test_d15r_coverage_probe_context_binds_to_lab_hermes_home` | PASS: `backends.environment_gaps` forwards `hermes_home=Path(str(lab["hermes_home"]))`, resolving isolated lab context | `tests/test_telegram_monitor_cli_plugin.py` |
+| 1. Probe bound to lab context | `test_d15r_coverage_probe_context_binds_to_lab_hermes_home` & `test_live_preflight_and_full_run_without_external_effects` | PASS: `_live_run` step 2a passes lab `hermes_home` and `lab` to `backends.environment_gaps`; `LiveBackends.environment_gaps` forwards `hermes_home` to `_environment_gaps`, which initializes `ReadOnlySources(hermes_home=lab_hermes)` (verified via `ReadOnlySources` construction spy and `_FakeBackends` call recording) | `tests/test_telegram_monitor_cli_plugin.py` |
 | 2. Fixture boards bind like real ones | `test_d15r_fixture_and_environment_gaps_chain_end_to_end` | PASS: Seeding boards through shipped execution-board writer populates all Objective Contract bindings; `environment_gaps` reports `[]` | `tests/test_telegram_monitor_cli_plugin.py` |
 | 3. No phantom default gap | `test_root_without_default_board_store_produces_no_phantom_metadata_gap` | PASS: Root without default store omits `default` slug and produces no `BOARD_METADATA_UNREADABLE` gap | `tests/test_telegram_monitor_sources.py` |
 | 3b. Default store gap preservation | `test_root_with_unreadable_or_unbound_default_store_preserves_gap` | PASS: Root with unreadable default store preserves `BOARD_METADATA_UNREADABLE`; unbound store preserves `BOARD_PROJECT_UNBOUND` | `tests/test_telegram_monitor_sources.py` |
@@ -145,7 +145,7 @@ Running read-only diagnosis against retained lab `20260911T052506Z-2be4d0c9a98a`
    uv run --frozen python scripts/check_public_artifacts.py --root . --artifact dist/*.whl --artifact dist/*.tar.gz
    rm -rf dist
    ```
-   Result: 0 violations added in tracked surface or built artifacts; baseline parity preserved (only pre-existing `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` flagged).
+   Result: 0 violations added in tracked surface or built artifacts; baseline parity preserved (only two pre-existing findings in `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` flagged; exit code 1 identical to base `f603f8f`).
 
 9. **Whitespace and conflict marker check:**
    ```bash

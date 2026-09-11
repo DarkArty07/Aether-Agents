@@ -3182,7 +3182,6 @@ try:
     from aether_agents.monitor.store import MonitorStore
     from aether_agents.observation.context import ProjectRegistry
     from aether_agents.objective_contracts.hermes_plugin import (
-        _create_metadata_exclusive,
         _provision_execution_board,
     )
     from hermes_cli import kanban_db, projects_db
@@ -3278,37 +3277,12 @@ for entry in MANIFEST:
     # The task identity the writer returns is the identity the whole lane must use afterwards,
     # so it is reported back per manifest key.
     try:
-        try:
-            _provision_execution_board(
-                project_id=entry["project_id"],
-                project_root=project_root,
-                contract_id=entry["contract_id"],
-                version=1,
-            )
-        except Exception:
-            board_dir = kanban_db.boards_root() / entry["board_slug"]
-            board_dir.mkdir(parents=True, exist_ok=True)
-            metadata_path = board_dir / "board.json"
-            db_path = board_dir / "kanban.db"
-            if not metadata_path.exists():
-                _create_metadata_exclusive(
-                    metadata_path,
-                    slug=entry["board_slug"],
-                    project_root=project_root,
-                    runtime_project_id=native_id,
-                    aether_project_id=entry["project_id"],
-                    contract_id=entry["contract_id"],
-                    version=1,
-                )
-            if hasattr(kanban_db, "init_db"):
-                kanban_db.init_db(db_path=db_path)
-            else:
-                kanban_db.create_board(
-                    entry["board_slug"],
-                    name=entry["name"],
-                    default_workdir=str(project_root),
-                    project_id=native_id,
-                )
+        _provision_execution_board(
+            project_id=entry["project_id"],
+            project_root=project_root,
+            contract_id=entry["contract_id"],
+            version=1,
+        )
         board_connection = kanban_db.connect(board=entry["board_slug"])
     except Exception as error:  # noqa: BLE001
         fail("fixture-board", error)

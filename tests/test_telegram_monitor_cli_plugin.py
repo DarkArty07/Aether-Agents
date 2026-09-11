@@ -2220,6 +2220,7 @@ class _FakeBackends:
         self.calls: list[str] = []
         self.trigger_calls = 0
         self.environment_gap_values: list[str] = []
+        self.environment_gaps_calls: list[dict[str, Any]] = []
         self.trigger_result: dict[str, Any] = {"triggered": True, "errors": []}
         self.output_payloads: dict[str, Any] = {}
         self.output_parents: dict[str, Any] = {}
@@ -2573,6 +2574,7 @@ class _FakeBackends:
 
     def environment_gaps(self, store: Any, *args: Any, **kwargs: Any) -> list[str]:
         self.calls.append("environment_gaps")
+        self.environment_gaps_calls.append({"store": store, "args": args, "kwargs": kwargs})
         return list(self.environment_gap_values)
 
     def session_sources(
@@ -3179,6 +3181,12 @@ def test_live_preflight_and_full_run_without_external_effects(
 
     assert record["ok"] is True, record["errors"]
     assert record["environment"] == {"gaps": []}
+    assert len(backends.environment_gaps_calls) == 1
+    gap_call = backends.environment_gaps_calls[0]
+    expected_hermes_home = Path(backends.lab_plan_value.hermes_home)
+    assert gap_call["kwargs"].get("hermes_home") == expected_hermes_home
+    assert gap_call["kwargs"].get("lab") is not None
+    assert Path(gap_call["kwargs"]["lab"]["hermes_home"]) == expected_hermes_home
     assert record["enable"]["named_job_count"] == 1
     assert record["enable"]["second_enable_same_job"] is True
     assert record["enable"]["shape_ok"] is True
@@ -6340,32 +6348,57 @@ def test_d14r_preserved_v3_failed_receipt_and_console_log_unchanged() -> None:
     assert console_sha == "a6046560aedbdc6d47d209010baa2e9c63ee1ae66c8a841f274a88347e81189d"
 
 
-def test_d15r_coverage_probe_context_binds_to_lab_hermes_home() -> None:
+def test_d15r_coverage_probe_context_binds_to_lab_hermes_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The coverage probe evaluates using the lab's Hermes root, never the parent profile."""
+    from aether_agents.monitor import sources as monitor_sources
+
     q = _qualification_module()
 
-    captured: dict[str, Any] = {}
+    captured_sources: list[dict[str, Any]] = []
 
-    class SpyBackends(q.LiveBackends):
-        def environment_gaps(self, store: Any, *args: Any, **kwargs: Any) -> list[str]:
-            captured.update(kwargs)
-            return []
+    class SpyReadOnlySources:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            captured_sources.append(kwargs)
 
-    backends = SpyBackends()
+        def collect(self, *args: Any, **kwargs: Any) -> Any:
+            class DummyCollection:
+                coverage_gaps: tuple[str, ...] = ()
+
+            return DummyCollection()
+
+    monkeypatch.setattr(monitor_sources, "ReadOnlySources", SpyReadOnlySources)
+
+    lab_hermes = (tmp_path / "lab_hermes").resolve()
+    lab_state = (tmp_path / "lab_state").resolve()
     fake_lab = {
-        "hermes_home": "/tmp/isolated/lab/hermes",
-        "state_root": "/tmp/isolated/lab/xdg-state/aether",
+        "hermes_home": str(lab_hermes),
+        "state_root": str(lab_state),
     }
-    fake_store = q.MonitorStore(Path("/tmp/isolated/lab/xdg-state/aether"))
+    store = q.MonitorStore(lab_state)
 
-    backends.environment_gaps(
-        fake_store,
-        hermes_home=Path(str(fake_lab["hermes_home"])),
-        lab=fake_lab,
-    )
+    # 1. Real LiveBackends.environment_gaps with explicit hermes_home
+    backends = q.LiveBackends()
+    gaps1 = backends.environment_gaps(store, hermes_home=lab_hermes)
+    assert gaps1 == []
+    assert len(captured_sources) == 1
+    assert captured_sources[0]["hermes_home"] == lab_hermes
+    assert captured_sources[0]["state_root"] == lab_state
 
-    assert captured.get("hermes_home") == Path("/tmp/isolated/lab/hermes")
-    assert captured.get("lab") == fake_lab
+    # 2. Real LiveBackends.environment_gaps with lab mapping (derives hermes_home)
+    gaps2 = backends.environment_gaps(store, lab=fake_lab)
+    assert gaps2 == []
+    assert len(captured_sources) == 2
+    assert captured_sources[1]["hermes_home"] == lab_hermes
+    assert captured_sources[1]["state_root"] == lab_state
+
+    # 3. Direct real _environment_gaps with hermes_home
+    gaps3 = q._environment_gaps(store, hermes_home=lab_hermes)
+    assert gaps3 == []
+    assert len(captured_sources) == 3
+    assert captured_sources[2]["hermes_home"] == lab_hermes
+    assert captured_sources[2]["state_root"] == lab_state
 
 
 def test_d15r_reproduction_and_corrected_gap_free_laboratory(tmp_path: Path) -> None:
