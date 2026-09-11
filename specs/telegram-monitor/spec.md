@@ -99,6 +99,9 @@ single production cut preserve the original hourly product oracle. Objective Con
 supersedes v3 for this testing-standard change.
 
 ## Acceptance criteria
+### D17 — Pragmatic terminal acceptance
+
+The owner directs the fastest complete closeout and ends further live-laboratory attempts. Retained v7 model/narration/Telegram evidence plus independently accepted D16U deterministic/replay evidence replace another laboratory run. Production acceptance requires activation of the same reviewed candidate, one immediate native `cron run` with confirmed delivery, persisted `0 * * * *` schedule and next due time, rollback readiness, and normal repository closeout. The first natural permanent-job hour is monitored post-close evidence; failure reopens #367 and triggers scoped rollback. The report must disclose that no pre-close natural-hour execution was claimed.
 
 | ID | Observable outcome |
 | --- | --- |

@@ -141,13 +141,19 @@ Preflight output capture before any costly effect. Use an exclusively owned evid
 
 ## Real installation activation
 
+### D17 — pragmatic terminal acceptance without another live laboratory
+
+The owner directs the fastest complete closeout and rejects further live laboratory attempts. The retained v7 evidence proves the actual Morfeo model/narration/native sender path and three confirmed Telegram parts. Independently accepted D16U must prove, with the shipped store/runtime APIs and a read-only replay of v7, that one `pending -> accepted` narrative is accepted and a genuine second narration is refused. Together these replace another live laboratory run; neither alone proves production activation.
+
+Activate the same reviewed candidate in the provisioned Morfeo runtime only during a verified zero-worker window. Keep the production job at `0 * * * *`. Immediately request one run of that installed job through Hermes' native `cron run` operation; this is an installation and delivery canary, not evidence of a natural hourly trigger. Verify its result, Telegram acknowledgment, persisted monitor status, exact job identity/schedule and next hourly due time. Existing successful hourly execution of the temporary build reporter proves the provisioned scheduler infrastructure; the first natural run of the permanent job is post-close operational confirmation. If the immediate production canary fails, rollback and do not close. If the later natural run fails, reopen #367 and apply the documented scoped rollback. Closeout may proceed after the production canary, required repository checks and merge; label the omitted pre-close natural-hour observation explicitly rather than claiming it ran.
+
 After independent lab review, use the supported scoped monitor activation and rollback, preserving the running gateway/agents:
 
-1. Revalidate exact candidate modules/plugins and relevant provisioned configuration. Cached code from a different candidate is not parity. If safe loading cannot happen without interrupting active work, report an activation blocker; no forced restart or silent alternative path.
+1. Revalidate exact candidate modules/plugins and relevant provisioned configuration. Cached code from a different candidate is not parity. Activate only during a verified zero-worker window; if work appears, wait rather than interrupt it.
 2. Register/reuse the production monitor with D3's actual installation-wide scope. Never copy lab job IDs, cursors, snapshots, source records, receipts or approval flags into production.
-3. Observe its first real hourly gateway execution and normal report to the existing destination: authoritative source identity, period, actual tool/plugin path and Telegram ack. If no reportable real work exists, record the real condition and keep first-delivery acceptance pending; do not seed production just to get a report.
-4. Do not force production idle while other agents work. Lab demonstrates idle; production demonstrates actual scope and gateway activation. Both evidence sets are required and separately labeled.
-5. Retire the exact temporary build reporter only after confirmed first production monitor delivery. On failure, retain evidence, scoped rollback and the appropriate existing reporter; do not close issue #367 or claim feature completion.
+3. Request one immediate run through the native cron interface and verify authoritative source identity, period, actual tool/plugin path, Telegram acknowledgment, `0 * * * *` persistence and next due time. Do not call this a natural hourly run.
+4. Keep the first natural permanent-job hour as monitored post-close evidence. Do not force production idle while other agents work; deterministic coverage proves idle. A natural-run failure reopens #367 and invokes scoped rollback.
+5. Retire the exact temporary build reporter only after the production canary is confirmed and the permanent hourly job is verified scheduled. On canary failure, retain evidence, roll back and keep #367 open.
 
 ## Continuation and preservation of previous work
 

@@ -83,6 +83,12 @@ pre-existing failures with baseline comparison instead of silently skipping them
 D13's [qualification-isolation.md](qualification-isolation.md) is normative for this
 phase and supersedes the previous shared-installation synthetic-scope approach.
 
+D17 closes the live-laboratory lane: do not run another `--live` attempt. Reuse the
+retained v7 real model/narration/Telegram receipt only with independently accepted D16U
+deterministic and read-only replay evidence. The command below remains the implemented
+operator interface and historical reproduction shape, not an instruction to spend a new
+live attempt during this closeout.
+
 ```bash
 uv run --frozen python scripts/qualify_telegram_monitor.py --json
 # PRIVATE_EVIDENCE is an approved private directory outside every Git worktree.
@@ -128,10 +134,12 @@ configuration/job identity/package source and a reversible rollback path using s
 product lifecycle/native interfaces. Rollback disables only the feature and preserves
 monitor receipts and all unrelated work; no destructive database cleanup.
 
-After the independently accepted laboratory, verify the exact candidate on the existing
-production gateway with the full D3 real scope and exactly one first normal hourly
-due execution/report/ack. This one natural production cut is the hourly wall-clock oracle;
-the lab supplies the accepted idle behavior, so no second idle production hour is required.
+After D16U acceptance, activate the exact candidate on the existing production gateway
+with the full D3 real scope. Request one immediate execution through Hermes' native
+`cron run` operation and require a confirmed report/ack plus persisted `0 * * * *`
+schedule and next hourly due time. This is an installation/delivery canary, not a natural
+hourly-trigger claim. Monitor the first natural permanent-job hour after closeout; failure
+reopens #367 and applies the documented scoped rollback.
 Do not copy lab job IDs, cursors, source records or acceptance state into production; do
 not hide real work to force idle. If there is no reportable real work, keep first-delivery
 acceptance pending rather than fabricate an outcome. A cached incompatible gateway

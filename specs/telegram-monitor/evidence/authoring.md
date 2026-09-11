@@ -74,6 +74,10 @@ proves source/contract consistency only. No credential value was read or written
 authoring phase, no profile/config/provider/model changed, no live command was rerun and
 no qualification/production acceptance is claimed.
 
+## D17 — owner-approved pragmatic terminal closeout
+
+After approximately 44 hours of pipeline activity, the owner directed the fastest complete closeout without omitting product behavior. D17 ends further live-laboratory attempts. Retained v7 evidence already records one real Morfeo narration and three confirmed Telegram parts; D16U must be independently accepted and replay that evidence while deterministically proving the legitimate `pending -> accepted` transition and genuine duplicate refusal. Production then uses the exact reviewed candidate, a verified zero-worker activation window, one immediate native `cron run`, confirmed delivery, unchanged `0 * * * *` schedule/next due and rollback. The first natural permanent-job run is post-close monitoring and cannot be claimed as pre-close evidence. This changes verification allocation, not the product's hourly cadence, identity, privacy, deduplication or silence behavior.
+
 ## D15 — autonomous additional live-attempt authority
 
 After D14R candidate `f603f8f1ace4dbb112afb05e032da620642e7050` passed independent
