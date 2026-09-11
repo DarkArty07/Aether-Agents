@@ -2055,8 +2055,8 @@ def test_live_state_fingerprint_uses_cutoff_and_relative_paths(
 START = datetime(2026, 9, 10, 10, 5, tzinfo=timezone.utc)
 STAMP = START.strftime("%Y%m%dT%H%M%SZ")
 CUT_ONE = datetime(2026, 9, 10, 11, 0, tzinfo=timezone.utc)
-CUT_TWO = datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc)
-CUT_IDLE = datetime(2026, 9, 10, 13, 0, tzinfo=timezone.utc)
+CUT_TWO = datetime(2026, 9, 10, 11, 1, tzinfo=timezone.utc)
+CUT_IDLE = datetime(2026, 9, 10, 11, 2, tzinfo=timezone.utc)
 SMOKE_CUTOFF = datetime(2026, 9, 10, 10, 0, tzinfo=timezone.utc)
 SYNTHETIC_JOB_ID = "native-job-qualification"
 PRIOR_JOB_ID = "prior-job"
@@ -2239,6 +2239,9 @@ class _FakeBackends:
         self.retention_problems: list[str] = []
         self.scheduler_running = False
         self.lab_plan_value: Any = None
+        self.schedule_update_result: dict[str, Any] | None = None
+        self.schedule_update_failure: str | None = None
+        self.scheduler_result: dict[str, Any] | None = None
         # Identity seams: the fake owns task identity (like the shipped writer), and the
         # lane may only use what the writer returned.  ``fixture_binds_identities=False``
         # reproduces a lane that keeps an identity of its own instead.
@@ -2271,12 +2274,13 @@ class _FakeBackends:
                 previous = self.job_last_run.get(job_id)
                 self.job_last_run[job_id] = phase if previous is None else max(previous, phase)
         last_run = self.job_last_run.get(job_id)
+        schedule = str(job.get("schedule") or self.module.NATIVE_SCHEDULE)
         return {
             "id": job_id,
             "name": self.module.NATIVE_JOB_NAME,
             "script": self.module.PRECHECK_SCRIPT_NAME,
             "deliver": "local",
-            "schedule": self.module.NATIVE_SCHEDULE,
+            "schedule": schedule,
             "expected_schedule": self.module.NATIVE_SCHEDULE,
             "enabled_toolsets": list(runtime_module.REPORTER_JOB_TOOLSETS),
             "expected_toolsets": list(runtime_module.REPORTER_JOB_TOOLSETS),
@@ -2311,7 +2315,13 @@ class _FakeBackends:
             "config_text": "model:\n  default: candidate\n",
             "access": {"names": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_HOME_CHANNEL"], "present": {}},
             "interfaces": {
-                "scheduler": {"class": "cron.scheduler_provider.InProcessCronScheduler"}
+                "scheduler": {"class": "cron.scheduler_provider.InProcessCronScheduler"},
+                "jobs": {
+                    "get_job": True,
+                    "update_job": True,
+                    "compute_next_run": True,
+                    "get_due_jobs": True,
+                },
             },
             "destination_digest": "d" * 64,
             "destination_thread_present": False,
@@ -2327,7 +2337,13 @@ class _FakeBackends:
         return {
             "problems": list(self.context_preflight_problems),
             "interfaces": {
-                "scheduler": {"class": "cron.scheduler_provider.InProcessCronScheduler"}
+                "scheduler": {"class": "cron.scheduler_provider.InProcessCronScheduler"},
+                "jobs": {
+                    "get_job": True,
+                    "update_job": True,
+                    "compute_next_run": True,
+                    "get_due_jobs": True,
+                },
             },
             # The same projection the shipped gate produces: names, digests, entry points
             # and versions, never a module file or laboratory path.
@@ -2447,12 +2463,18 @@ class _FakeBackends:
                 self.scheduler_start_failure, "injected scheduler start failure"
             )
         self.scheduler_running = True
-        return {
+        result = {
             "pid": 4242,
             "scheduler": "builtin",
+            "scheduler_class": "cron.scheduler_provider.InProcessCronScheduler",
+            "execution_mode": "native-scheduled-tick",
+            "interval_seconds": self.module.LAB_SCHEDULER_INTERVAL_SECONDS,
             "stop_file": str(Path(lab["root"]) / "control" / "scheduler-stop"),
             "ready": True,
         }
+        if self.scheduler_result is not None:
+            result.update(self.scheduler_result)
+        return result
 
     def lab_scheduler_stop(
         self, lab: Mapping[str, Any], scheduler: Mapping[str, Any]
@@ -2536,6 +2558,7 @@ class _FakeBackends:
             self.jobs[job_id] = {
                 "id": job_id,
                 "name": self.module.NATIVE_JOB_NAME,
+                "schedule": self.module.NATIVE_SCHEDULE,
                 "paused": False,
                 "behaviour_sha256": "monitor-job",
             }
@@ -2566,6 +2589,52 @@ class _FakeBackends:
                 "paused_at_utc": _stamp(self.clock.now()),
             }
         }
+
+    def lab_schedule_update(
+        self, interpreter: Path, lab: Mapping[str, Any], job_id: str
+    ) -> dict[str, Any]:
+        self.calls.append(f"lab_schedule_update:{job_id}")
+        if self.schedule_update_failure is not None:
+            raise self.module.QualificationError(
+                self.schedule_update_failure, "injected schedule update failure"
+            )
+        job = self.jobs.get(job_id)
+        before_schedule = str(job.get("schedule") or self.module.NATIVE_SCHEDULE) if job else None
+        if job is None:
+            raise self.module.QualificationError(
+                "lab-schedule-update", "injected missing schedule-update job"
+            )
+        job["schedule"] = self.module.ACCELERATED_LAB_SCHEDULE
+        result = {
+            "updated": True,
+            "native_interface": "cron.jobs.update_job",
+            "execution_mode": "native-lab-schedule-update",
+            "private_lab_only": True,
+            "production_schedule": before_schedule,
+            "accelerated_schedule": self.module.ACCELERATED_LAB_SCHEDULE,
+            "before": {
+                "id": job_id,
+                "name": self.module.NATIVE_JOB_NAME,
+                "script": self.module.PRECHECK_SCRIPT_NAME,
+                "deliver": "local",
+                "schedule": before_schedule,
+                "next_run_at": _stamp(self.enable_next_cut),
+                "paused": False,
+            },
+            "after": {
+                "id": job_id,
+                "name": self.module.NATIVE_JOB_NAME,
+                "script": self.module.PRECHECK_SCRIPT_NAME,
+                "deliver": "local",
+                "schedule": self.module.ACCELERATED_LAB_SCHEDULE,
+                "next_run_at": _stamp(self.enable_next_cut),
+                "paused": False,
+            },
+            "store_root": str(lab["hermes_home"]),
+        }
+        if self.schedule_update_result is not None:
+            result.update(self.schedule_update_result)
+        return result
 
     def owner_language(
         self, interpreter: Path, environment: Mapping[str, str] | None = None
@@ -2881,7 +2950,7 @@ def _build_world(
             narrative=before_narrative,
             deliveries=_confirmed_parts(before_payload, before_narrative),
         )
-        _native_run(output_dir, CUT_ONE + timedelta(seconds=5), report_id=before_report)
+        _native_run(output_dir, CUT_ONE - timedelta(seconds=5), report_id=before_report)
 
         after_report = "rpt_" + "c" * 32
         after_payload = _snapshot_payload(
@@ -2901,7 +2970,7 @@ def _build_world(
             narrative=after_narrative,
             deliveries=_confirmed_parts(after_payload, after_narrative),
         )
-        _native_run(output_dir, CUT_TWO + timedelta(seconds=5), report_id=after_report)
+        _native_run(output_dir, CUT_TWO - timedelta(seconds=5), report_id=after_report)
 
         idle_report = "rpt_" + "d" * 32
         store.expose(
@@ -2918,7 +2987,7 @@ def _build_world(
             },
             resolved=True,
         )
-        _native_run(output_dir, CUT_IDLE + timedelta(seconds=4))
+        _native_run(output_dir, CUT_IDLE - timedelta(seconds=4))
     return world
 
 
@@ -3174,6 +3243,7 @@ def test_live_preflight_and_full_run_without_external_effects(
     """The whole live orchestration runs against fakes: enable, smoke, two cuts, idle."""
 
     world = _build_world(tmp_path, monkeypatch)
+    module = world["module"]
     backends = world["backends"]
     output = tmp_path / "private" / "receipt.json"
 
@@ -3190,11 +3260,25 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert record["enable"]["named_job_count"] == 1
     assert record["enable"]["second_enable_same_job"] is True
     assert record["enable"]["shape_ok"] is True
+    assert record["enable"]["production_schedule"] == "0 * * * *"
+    assert record["enable"]["production_shape_validated"] is True
+    assert record["schedule_update"]["native_interface"] == "cron.jobs.update_job"
+    assert record["schedule_update"]["private_lab_only"] is True
+    assert record["schedule_update"]["before"]["schedule"] == "0 * * * *"
+    assert record["schedule_update"]["after"]["schedule"] == "* * * * *"
+    assert record["schedule_update"]["validated_job"]["schedule"] == "* * * * *"
+    assert record["schedule_update"]["validated_job"]["next_run_at"] is not None
     assert record["smoke"]["confirmed"] is True
     assert record["smoke"]["narration_writes"] == 1
     assert record["smoke"]["part_count"] == 3
     assert [len(boundary["work_keys"]) for boundary in record["boundaries"]] == [3, 3]
     assert [boundary["coverage_gaps"] for boundary in record["boundaries"]] == [[], []]
+    first_cut = module._parse_utc(record["boundaries"][0]["expected_cutoff_utc"])
+    second_cut = module._parse_utc(record["boundaries"][1]["expected_cutoff_utc"])
+    idle_cut = module._parse_utc(record["idle"]["cutoff_utc"])
+    assert first_cut is not None and second_cut is not None and idle_cut is not None
+    assert second_cut - first_cut == timedelta(minutes=1)
+    assert idle_cut - second_cut == timedelta(minutes=1)
     assert sorted(record["boundaries"][0]["item_states"].values()) == [
         "review",
         "running",
@@ -3259,7 +3343,10 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert order.index("lab_context_preflight") < order.index("lab_fixture")
     assert order.index("lab_context_preflight") < order.index("lab_control:on")
     assert order.index("lab_fixture") < order.index("lab_control:on")
-    assert order.index("lab_control:on") < order.index("lab_scheduler_start")
+    assert order.index("lab_control:on") < order.index("lab_schedule_update:" + SYNTHETIC_JOB_ID)
+    assert order.index("lab_schedule_update:" + SYNTHETIC_JOB_ID) < order.index(
+        "lab_scheduler_start"
+    )
     assert order.index("lab_scheduler_start") < order.index("trigger_job:" + SYNTHETIC_JOB_ID)
     assert order.index("lab_transition") < order.index("lab_control:off")
     assert order.index("lab_control:off") < order.index("lab_scheduler_stop")
@@ -3281,6 +3368,27 @@ def test_live_preflight_and_full_run_without_external_effects(
     for private in ("rpt_", "90000", "90001", str(output)):
         assert private not in rendered, private
     assert public["qualified"] is True
+    assert public["production_schedule"] == "0 * * * *"
+    assert public["production_shape_validated"] is True
+    assert public["accelerated_lab_schedule"] == "* * * * *"
+    assert public["accelerated_schedule_update"] == {
+        "updated": True,
+        "native_interface": "cron.jobs.update_job",
+        "private_lab_only": True,
+        "from": "0 * * * *",
+        "to": "* * * * *",
+    }
+    assert public["temporal_oracle"] == "real-minute-boundaries-in-private-lab"
+    assert public["production_hourly_evidence"] is False
+    assert public["elapsed_hour_evidence"] is False
+    assert public["accelerated_boundary_timestamps_utc"] == [
+        record["boundaries"][0]["expected_cutoff_utc"],
+        record["boundaries"][1]["expected_cutoff_utc"],
+    ]
+    assert public["accelerated_idle_timestamp_utc"] == record["idle"]["cutoff_utc"]
+    assert public["native_scheduler_class"] == "cron.scheduler_provider.InProcessCronScheduler"
+    assert public["scheduler_execution_mode"] == "native-scheduled-tick"
+    assert public["scheduler_interval_seconds"] == 1
     assert public["smoke_confirmed"] is True
     assert public["laboratory_retained"] is True
     assert public["scheduler_stopped"] is True
@@ -3292,6 +3400,182 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert public["semantic_certification"]["retained_private_comparison"] is True
     assert any("deterministic" in entry for entry in public["qualified_scope"])
     assert any("adjudication" in entry for entry in public["unqualified_scope"])
+
+
+def test_d16_schedule_evidence_rejects_manual_and_custom_substitutes() -> None:
+    """The qualification contract accepts only native update and scheduler attestations."""
+
+    module = _qualification_module()
+    update = {
+        "updated": True,
+        "native_interface": "cron.jobs.update_job",
+        "execution_mode": "native-lab-schedule-update",
+        "private_lab_only": True,
+        "production_schedule": "0 * * * *",
+        "accelerated_schedule": "* * * * *",
+        "before": {"schedule": "0 * * * *"},
+        "after": {"schedule": "* * * * *"},
+    }
+    scheduler = {
+        "scheduler_class": "cron.scheduler_provider.InProcessCronScheduler",
+        "execution_mode": "native-scheduled-tick",
+        "interval_seconds": 1,
+    }
+    assert module._schedule_update_evidence_ok(update) is True
+    assert module._scheduled_evidence_ok(update, scheduler) is True
+    assert (
+        module._schedule_update_evidence_ok({**update, "native_interface": "manual_tick"}) is False
+    )
+    assert module._schedule_update_evidence_ok({**update, "execution_mode": "forced-fire"}) is False
+    assert (
+        module._scheduled_evidence_ok(update, {**scheduler, "scheduler_class": "custom.Scheduler"})
+        is False
+    )
+    assert (
+        module._scheduled_evidence_ok(update, {**scheduler, "execution_mode": "manual-tick"})
+        is False
+    )
+    assert module._check_lab_schedule_contract() == (
+        "pass",
+        "production remains 0 * * * *, the private lab alone updates through "
+        "cron.jobs.update_job to * * * * *, and scheduled evidence excludes forced ticks",
+    )
+
+
+def test_d16_native_update_changes_only_the_private_lab_job(tmp_path: Path) -> None:
+    """The real cron API updates one lab job and leaves a sibling job unchanged."""
+
+    module = _qualification_module()
+    runtime = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime.is_file():
+        runtime = next(
+            (
+                parent / "home" / ".venv-hermes" / "bin" / "python"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "home" / ".venv-hermes" / "bin" / "python").is_file()
+            ),
+            Path(""),
+        )
+    if not runtime.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    root = tmp_path / "laboratory"
+    hermes_home = root / "hermes"
+    home = root / "home"
+    tmp = root / "tmp"
+    cwd = root / "work"
+    for path in (hermes_home, home, tmp, cwd):
+        path.mkdir(parents=True, exist_ok=True)
+    environment = {
+        "PATH": os.environ.get("PATH", ""),
+        "HOME": str(home),
+        "HERMES_HOME": str(hermes_home),
+        "TMPDIR": str(tmp),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONPATH": str(module.SOURCE_ROOT),
+    }
+    create_body = """
+import json
+from cron import jobs
+
+owned = jobs.create_job(
+    prompt="test monitor",
+    schedule="0 * * * *",
+    name="Aether Telegram Monitor",
+    deliver="local",
+    script="aether_monitor_precheck.py",
+)
+other = jobs.create_job(
+    prompt="unrelated",
+    schedule="0 * * * *",
+    name="Unrelated qualification job",
+    deliver="local",
+    script="unrelated.py",
+)
+print(json.dumps({"owned": owned["id"], "other": other["id"]}))
+"""
+    created = module._runtime_execute(runtime, create_body, environment=environment, cwd=cwd)
+    lab = {
+        "root": str(root),
+        "hermes_home": str(hermes_home),
+        "cwd": str(cwd),
+        "environment": environment,
+    }
+
+    result = module._lab_schedule_update(runtime, lab, str(created["owned"]))
+
+    assert result["native_interface"] == "cron.jobs.update_job"
+    assert result["private_lab_only"] is True
+    assert result["before"]["schedule"] == "0 * * * *"
+    assert result["after"]["schedule"] == "* * * * *"
+    assert result["after"]["next_run_at"]
+    inspect_body = """
+import json
+from cron import jobs
+
+owned = jobs.get_job(OWNED_JSON)
+other = jobs.get_job(OTHER_JSON)
+def schedule(job):
+    value = job.get("schedule") if isinstance(job, dict) else None
+    return value.get("expr") if isinstance(value, dict) else value
+print(json.dumps({"owned": schedule(owned), "other": schedule(other)}))
+"""
+    inspect_body = (
+        f"OWNED_JSON = {str(created['owned'])!r}\n"
+        f"OTHER_JSON = {str(created['other'])!r}\n" + inspect_body
+    )
+    inspected = module._runtime_execute(runtime, inspect_body, environment=environment, cwd=cwd)
+    assert inspected == {"owned": "* * * * *", "other": "0 * * * *"}
+
+
+def test_live_refuses_non_native_schedule_update_before_scheduler(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manual/forced schedule substitute cannot reach the scheduler or model path."""
+
+    world = _build_world(tmp_path, monkeypatch, expose_evidence=False)
+    backends = world["backends"]
+    backends.schedule_update_result = {
+        "native_interface": "manual_tick",
+        "execution_mode": "forced-fire",
+    }
+    output = tmp_path / "private" / "receipt.json"
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+
+    assert error.value.code == "lab-schedule-update"
+    assert "lab_schedule_update:" + SYNTHETIC_JOB_ID in backends.calls
+    assert "lab_scheduler_start" not in backends.calls
+    assert backends.trigger_calls == 0
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["schedule_update"]["native_interface"] == "manual_tick"
+
+
+def test_live_refuses_custom_scheduler_evidence_before_smoke(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A custom/forced scheduler cannot be counted as a native scheduled laboratory cut."""
+
+    world = _build_world(tmp_path, monkeypatch, expose_evidence=False)
+    backends = world["backends"]
+    backends.scheduler_result = {
+        "scheduler_class": "qualification.CustomScheduler",
+        "execution_mode": "forced-tick",
+    }
+    output = tmp_path / "private" / "receipt.json"
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+
+    assert error.value.code == "scheduler-evidence"
+    assert backends.trigger_calls == 0
+    assert "lab_scheduler_start" in backends.calls
+    assert "lab_scheduler_stop" in backends.calls
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["ok"] is False
+    assert receipt["scheduler"]["scheduler_class"] == "qualification.CustomScheduler"
 
 
 def test_live_refuses_to_continue_without_writer_task_identities(
@@ -3493,7 +3777,8 @@ def test_bounded_smoke_is_required_before_the_hourly_wait(
         expose_evidence=False,
         phases=(START + timedelta(minutes=5),),
     )
-    close_world["backends"].enable_next_cut = START + timedelta(minutes=5)
+    close_world["backends"].enable_next_cut = START + timedelta(minutes=1)
+    close_world["clock"].value = START + timedelta(seconds=58)
     output = close_root / "private" / "receipt.json"
     with pytest.raises(close_world["module"].QualificationError) as error:
         _run_live(close_world, output)
@@ -5067,7 +5352,13 @@ _PROBE_STUB_MODULES: dict[str, str] = {
         "    def start(self, stop_event, interval=60):\n"
         "        return None\n"
     ),
-    "cron/jobs.py": "def list_jobs():\n    return []\n",
+    "cron/jobs.py": (
+        "def list_jobs():\n    return []\n\n"
+        "def get_job(job_id):\n    return None\n\n"
+        "def update_job(job_id, updates):\n    return None\n\n"
+        "def compute_next_run(schedule, last_run_at=None):\n    return None\n\n"
+        "def get_due_jobs():\n    return []\n"
+    ),
     "gateway/__init__.py": "",
     "gateway/config.py": (
         "class Platform:\n"
@@ -5479,7 +5770,13 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "    def start(self, stop_event, interval=60):\n"
         "        return None\n"
     ),
-    "cron/jobs.py": "def list_jobs():\n    return []\n",
+    "cron/jobs.py": (
+        "def list_jobs():\n    return []\n\n"
+        "def get_job(job_id):\n    return None\n\n"
+        "def update_job(job_id, updates):\n    return None\n\n"
+        "def compute_next_run(schedule, last_run_at=None):\n    return None\n\n"
+        "def get_due_jobs():\n    return []\n"
+    ),
     "gateway/__init__.py": "",
     "gateway/config.py": (
         "import json\n"
@@ -5793,7 +6090,16 @@ def test_bounded_native_scheduler_instance_starts_and_stops_cooperatively(
         match = re.search(r'READY_JSON = ("(?:[^"\\\\]|\\\\.)*")', body)
         assert match is not None, "the scheduler body must carry its ready marker"
         Path(json.loads(match.group(1))).write_text(
-            '{"pid": 5150, "scheduler": "builtin"}', encoding="utf-8"
+            json.dumps(
+                {
+                    "pid": 5150,
+                    "scheduler": "builtin",
+                    "scheduler_class": "cron.scheduler_provider.InProcessCronScheduler",
+                    "execution_mode": "native-scheduled-tick",
+                    "interval_seconds": module.LAB_SCHEDULER_INTERVAL_SECONDS,
+                }
+            ),
+            encoding="utf-8",
         )
         return _Process()
 

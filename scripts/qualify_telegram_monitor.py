@@ -15,11 +15,12 @@ code a private ``HOME``, ``HERMES_HOME``, XDG roots, temporary directory, workin
 and Aether state root.  Inside it the shipped writers seed an honestly labelled synthetic
 scope, the shipped control service installs and enables the one lab monitor job, and one
 bounded supervised instance of the native ``InProcessCronScheduler`` executes one bounded
-model/transport smoke, two natural wall-clock hourly cuts with the synthetic lifecycle
-completed between them through its supported callbacks, and a later natural no-work cut
-whose scheduler run must show the native ``wakeAgent=false`` gate.  Manual ``off`` is
-verified, the lab scheduler is stopped cooperatively, and the laboratory root and its
-private receipt are *retained* as declared objective evidence.
+model/transport smoke, two native scheduled cuts on the lab's accelerated minute
+expression with the synthetic lifecycle completed between them through its supported
+callbacks, and a later native no-work cut whose scheduler run must show the native
+``wakeAgent=false`` gate.  Manual ``off`` is verified, the lab scheduler is stopped
+cooperatively, and the laboratory root and its private receipt are *retained* as declared
+objective evidence.
 
 The harness never replaces, restores, quarantines, merges or deletes this installation's
 project registry: the isolation is containment, not swapping, so no operator state has to
@@ -33,24 +34,24 @@ private context, its exact candidate/route/destination or its own shutdown never
 itself qualified.
 
 ``--live`` requires an absolute ``--output`` outside every Git worktree and the fixed
-``--wait-hourly-boundaries 2``: the accepted qualification is exactly two natural native
-wall-clock cuts plus the later idle cut, and every other count is refused with exit status
-2 before the live lane, an output file or any other effect.  The receipt target itself is
-validated and established before the first live effect: it must be a new, literally spelled
-file whose immediate parent is already a private ``0700`` directory owned by the current
-user, or one missing level the harness creates as its own dedicated private leaf.  An
-existing directory is never hardened, and a target that cannot capture the private
-handles is refused with exit status 1 and no effect.  Establishment records the identity
-of that private directory, and the receipt is then installed with a single no-clobber
-link relative to the descriptor of that same directory: an entry that appears at the
-receipt path after the target was established is never replaced, and a parent that was
-already renamed or replaced — or removed — when the write begins is refused read-only with
-the bounded ``output-unsafe-target`` error, so a run never writes its handles into a
-directory it did not establish.  A rename that lands after that descriptor is bound cannot
-redirect the write: the receipt is installed inside the established directory itself
-(which then lives under its new name) and the final path verification fails with the
-bounded ``private-output`` error, so no qualified verdict is emitted and the private
-receipt can only remain inside the established ``0700`` directory.
+``--wait-hourly-boundaries 2``: the accepted qualification is exactly two native scheduled
+cuts on the private laboratory's accelerated minute expression plus the later idle cut,
+and every other count is refused with exit status 2 before the live lane, an output file or
+any other effect.  The receipt target itself is validated and established before the first
+live effect: it must be a new, literally spelled file whose immediate parent is already a
+private ``0700`` directory owned by the current user, or one missing level the harness
+creates as its own dedicated private leaf.  An existing directory is never hardened, and
+a target that cannot capture the private handles is refused with exit status 1 and no
+effect.  Establishment records the identity of that private directory, and the receipt is
+then installed with a single no-clobber link relative to the descriptor of that same
+directory: an entry that appears at the receipt path after the target was established is
+never replaced, and a parent that was already renamed or replaced — or removed — when the
+write begins is refused read-only with the bounded ``output-unsafe-target`` error, so a run
+never writes its handles into a directory it did not establish.  A rename that lands after
+that descriptor is bound cannot redirect the write: the receipt is installed inside the
+established directory itself (which then lives under its new name) and the final path
+verification fails with the bounded ``private-output`` error, so no qualified verdict is
+emitted and the private receipt can only remain inside the established ``0700`` directory.
 
 Live mode reuses only the access this installation already provisioned for the exact route
 and destination, carries it to lab children through their process environment only, and
@@ -130,7 +131,14 @@ from aether_agents.paths import (  # noqa: E402
 )
 
 SCHEMA_VERSION = "aether.telegram-monitor.qualification.v1"
-#: The accepted qualification waits for exactly two real native hourly boundaries; the
+#: The fixed production schedule owned by the monitor runtime.  Qualification must validate
+#: this shape before it changes only the private laboratory record.
+PRODUCTION_LAB_SCHEDULE = NATIVE_SCHEDULE
+#: Qualification-only schedule used inside the isolated laboratory.  It is never a product
+#: or production schedule and is applied only through the native cron update interface.
+ACCELERATED_LAB_SCHEDULE = "* * * * *"
+LAB_SCHEDULE = ACCELERATED_LAB_SCHEDULE
+#: The accepted qualification selects exactly two native scheduled laboratory cuts; the
 #: option value is fixed at that count and every other value is refused before any effect.
 REQUIRED_WAIT_HOURLY_BOUNDARIES = 2
 #: Boundary counts the entry point must refuse without an output file or any live effect.
@@ -138,8 +146,8 @@ REFUSED_BOUNDARY_COUNTS = (-1, 0, 1, 3, 24, 25)
 #: Stable refusal text shared by the entry point and the offline self-check.
 BOUNDARY_COUNT_REFUSAL = (
     "--wait-hourly-boundaries is fixed at exactly "
-    f"{REQUIRED_WAIT_HOURLY_BOUNDARIES}: the accepted qualification waits for two real "
-    "native hourly boundaries"
+    f"{REQUIRED_WAIT_HOURLY_BOUNDARIES}: the accepted qualification selects two real "
+    "native scheduled laboratory boundaries"
 )
 PRECHECK_RESOURCE = "resources/monitor/precheck.py"
 NARRATION_RESOURCE = "resources/monitor/narration-context.md"
@@ -166,26 +174,33 @@ FORBIDDEN_OPTIONS = (
 #: Modules whose presence proves that a native Hermes boundary was touched.
 NATIVE_MODULES = ("cron", "hermes_cli", "gateway", "hermes_constants", "tools.registry")
 
-#: Slop added after the requested boundaries before the live wait fails closed.
-BOUNDARY_SLOP = timedelta(minutes=30)
+#: Slop added after the requested scheduled laboratory cuts before the live wait fails
+#: closed.  Ten minutes matches the existing ordinary delivery bound; collection itself
+#: remains a separate 120-second oracle below.
+BOUNDARY_SLOP = timedelta(minutes=10)
 
-#: D2 operational limit: a healthy scheduler begins collection within 120 seconds.
+#: D2 operational limit: a healthy scheduler begins collection within 120 seconds of a
+#: scheduled cut, including the accelerated laboratory cadence.
 COLLECTION_DEADLINE_SECONDS = 120.0
 
-#: Bounded poll interval while waiting for a real native boundary.
-BOUNDARY_POLL_SECONDS = 20
+#: Bounded poll interval while waiting for a real native scheduled boundary.
+BOUNDARY_POLL_SECONDS = 5
 
-#: D9 bounded initial smoke: one native model+transport run before the hourly wait.
+#: D9 bounded initial smoke: one native model+transport run before the scheduled wait.
 SMOKE_DEADLINE_SECONDS = 900.0
-SMOKE_POLL_SECONDS = 15
-#: The smoke must finish comfortably before the first expected cut; the native trigger
-#: schedules the job for `now`, so a boundary too close by would consume that boundary.
-SMOKE_MIN_LEAD_SECONDS = 900.0
+SMOKE_POLL_SECONDS = 5
+#: The smoke is allowed to run close to a minute boundary because this qualification uses
+#: the native minute schedule.  A very small lead still prevents a trigger that has already
+#: crossed the first expected cut from being mislabelled as the smoke.
+SMOKE_MIN_LEAD_SECONDS = 5.0
 
 #: Bounds of the one supervised native scheduler instance the laboratory starts and stops.
 LAB_SCHEDULER_READY_SECONDS = 120.0
 LAB_SCHEDULER_STOP_SECONDS = 120.0
 LAB_SCHEDULER_POLL_SECONDS = 1.0
+#: The native ticker checks every second so a real minute due time is observed inside the
+#: 120-second collection oracle; due selection remains owned by Hermes cron.
+LAB_SCHEDULER_INTERVAL_SECONDS = 1
 
 #: The native scheduler's own record that the pre-check gate suppressed the agent run.
 NATIVE_SILENT_MARKER = "Script gate returned `wakeAgent=false` — agent skipped."
@@ -504,7 +519,7 @@ def _check_precheck_resource(workspace: Path) -> tuple[str, str]:
 def _boundary_contract_defect() -> str | None:
     """Describe how the fixed boundary count was not enforced, or ``None`` when it is.
 
-    The fixed contract is exactly two real native hourly boundaries.  Every other count
+    The fixed contract is exactly two real native scheduled laboratory boundaries.  Every other count
     must be refused at the entry point with exit ``2`` and the stable message, before the
     workspace, the output policy and the live lane, so the probe redirects ``TMPDIR`` and
     asserts no file and no stdout were produced.
@@ -561,6 +576,63 @@ def _check_harness_options() -> tuple[str, str]:
     return "pass", (
         "--live/--json/--output/--wait-hourly-boundaries (fixed at exactly two boundaries), "
         "no external identity, non-contract counts refused before any effect"
+    )
+
+
+def _schedule_update_evidence_ok(schedule_update: Mapping[str, Any] | None) -> bool:
+    """Return whether the lab cadence was changed by the one approved native interface."""
+
+    if not isinstance(schedule_update, Mapping):
+        return False
+    before = schedule_update.get("before")
+    after = schedule_update.get("after")
+    return (
+        schedule_update.get("native_interface") == "cron.jobs.update_job"
+        and schedule_update.get("execution_mode") == "native-lab-schedule-update"
+        and schedule_update.get("production_schedule") == PRODUCTION_LAB_SCHEDULE
+        and schedule_update.get("accelerated_schedule") == ACCELERATED_LAB_SCHEDULE
+        and bool(schedule_update.get("updated"))
+        and bool(schedule_update.get("private_lab_only"))
+        and isinstance(before, Mapping)
+        and before.get("schedule") == PRODUCTION_LAB_SCHEDULE
+        and isinstance(after, Mapping)
+        and after.get("schedule") == ACCELERATED_LAB_SCHEDULE
+    )
+
+
+def _scheduled_evidence_ok(
+    schedule_update: Mapping[str, Any] | None,
+    scheduler: Mapping[str, Any] | None,
+) -> bool:
+    """Return whether the receipt can attribute cuts to the native scheduled lab path."""
+
+    if not isinstance(scheduler, Mapping) or not _schedule_update_evidence_ok(schedule_update):
+        return False
+    return (
+        scheduler.get("scheduler_class") == "cron.scheduler_provider.InProcessCronScheduler"
+        and scheduler.get("execution_mode") == "native-scheduled-tick"
+        and scheduler.get("interval_seconds") == LAB_SCHEDULER_INTERVAL_SECONDS
+    )
+
+
+def _check_lab_schedule_contract() -> tuple[str, str]:
+    """Prove the qualification-only cadence and the native-only evidence path statically."""
+
+    if PRODUCTION_LAB_SCHEDULE != "0 * * * *":
+        return "fail", "the monitor production schedule is not exactly 0 * * * *"
+    if ACCELERATED_LAB_SCHEDULE != "* * * * *":
+        return "fail", "the accelerated laboratory schedule is not exactly * * * * *"
+    if "cron_jobs.update_job" not in _LAB_SCHEDULE_UPDATE_PROBE:
+        return "fail", "the accelerated path does not call cron.jobs.update_job"
+    if "cron_jobs.get_due_jobs" in _LAB_SCHEDULE_UPDATE_PROBE:
+        return "fail", "the schedule update probe contains a hand-written due selector"
+    if "fire_due" in _LAB_SCHEDULER_BODY or "force_fire" in _LAB_SCHEDULER_BODY:
+        return "fail", "the laboratory scheduler body exposes a forced-fire substitute"
+    if "InProcessCronScheduler" not in _LAB_SCHEDULER_BODY:
+        return "fail", "the laboratory scheduler is not the native in-process scheduler"
+    return "pass", (
+        "production remains 0 * * * *, the private lab alone updates through "
+        "cron.jobs.update_job to * * * * *, and scheduled evidence excludes forced ticks"
     )
 
 
@@ -936,6 +1008,7 @@ def run_offline(workspace: Path) -> dict[str, Any]:
         ("control-service", lambda: _check_control_service(workspace)),
         ("packaged-precheck", lambda: _check_precheck_resource(workspace)),
         ("lab-bootstrap-preflight", lambda: _check_lab_context(workspace)),
+        ("lab-schedule-contract", _check_lab_schedule_contract),
         ("d12-safety-boundary", _check_d12_safety_boundary),
         ("no-external-effects", lambda: _check_no_external_effects(modules_before)),
         ("live-state-untouched", lambda: _check_live_state_untouched(live_state_before)),
@@ -961,10 +1034,11 @@ def run_offline(workspace: Path) -> dict[str, Any]:
             "read-only phase that refuses a bad layout without creating the root) plus the "
             "in-laboratory native writer gate (required interfaces and keywords, "
             "loaded-artifact digests, effective roots) resolved inside the created root",
+            "the D16 private-lab native schedule update and refusal of forced-tick substitutes",
         ],
         "unqualified_scope": [
             "real provisioned model narration and Telegram delivery",
-            "two real native wall-clock hourly cuts and the live idle skip",
+            "two real native scheduled laboratory minute cuts and the live idle skip",
             "the bounded supervised native scheduler instance and the semantic fidelity of "
             "the observed D12 cases (independent adjudication required)",
             "the installation's own production scope, activation and first delivery",
@@ -1247,6 +1321,114 @@ print(json.dumps(payload))
 """
 
 
+#: Native-only schedule update used after the shipped control service has validated the
+#: production shape.  The child receives the already-built laboratory environment and
+#: verifies that context before calling the supported cron API; no store file is rewritten
+#: by the harness.
+_LAB_SCHEDULE_UPDATE_PROBE = r"""
+import json
+import os
+from pathlib import Path
+
+from cron import jobs as cron_jobs
+
+JOB_ID = JOB_ID_JSON
+NAME = NAME_JSON
+SCRIPT = SCRIPT_JSON
+FROM_SCHEDULE = FROM_SCHEDULE_JSON
+TO_SCHEDULE = TO_SCHEDULE_JSON
+LAB_ROOT = Path(LAB_ROOT_JSON)
+LAB_HERMES_HOME = Path(LAB_HERMES_HOME_JSON)
+payload = {
+    "updated": False,
+    "native_interface": "cron.jobs.update_job",
+    "execution_mode": "native-lab-schedule-update",
+    "private_lab_only": False,
+    "production_schedule": FROM_SCHEDULE,
+    "accelerated_schedule": TO_SCHEDULE,
+    "before": None,
+    "after": None,
+    "store_root": str(LAB_HERMES_HOME),
+    "errors": [],
+}
+
+
+def schedule_text(job):
+    schedule = job.get("schedule")
+    if isinstance(schedule, str):
+        return schedule.strip()
+    if isinstance(schedule, dict):
+        for key in ("expr", "display", "value"):
+            value = schedule.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def summary(job):
+    return {
+        "id": str(job.get("id") or ""),
+        "name": str(job.get("name") or ""),
+        "script": str(job.get("script") or ""),
+        "deliver": str(job.get("deliver") or ""),
+        "schedule": schedule_text(job),
+        "next_run_at": job.get("next_run_at") if isinstance(job.get("next_run_at"), str) else None,
+        "paused": bool(job.get("paused")) or str(job.get("state") or "").startswith("paused"),
+    }
+
+
+try:
+    configured_home = Path(os.environ.get("HERMES_HOME", ""))
+    resolved_root = LAB_ROOT.resolve(strict=False)
+    resolved_home = configured_home.resolve(strict=False)
+    expected_home = LAB_HERMES_HOME.resolve(strict=False)
+    if (
+        not configured_home.is_absolute()
+        or resolved_home != expected_home
+        or resolved_home != resolved_root / "hermes"
+        or resolved_home == Path("/")
+    ):
+        payload["errors"].append("schedule-update-context-escapes-lab")
+        print(json.dumps(payload))
+        raise SystemExit(0)
+    job = cron_jobs.get_job(JOB_ID)
+    if not isinstance(job, dict):
+        payload["errors"].append("schedule-update-job-missing")
+    else:
+        before = summary(job)
+        payload["before"] = before
+        if before["id"] != JOB_ID or before["name"] != NAME or before["script"] != SCRIPT:
+            payload["errors"].append("schedule-update-identity-refused")
+        elif before["deliver"] != "local" or before["paused"]:
+            payload["errors"].append("schedule-update-state-refused")
+        elif before["schedule"] != FROM_SCHEDULE:
+            payload["errors"].append("schedule-update-production-shape-refused")
+        else:
+            # This is the only mutation in this child.  update_job normalizes the cron
+            # expression and recomputes next_run_at through Hermes' native interface.
+            updated = cron_jobs.update_job(JOB_ID, {"schedule": TO_SCHEDULE})
+            after = summary(updated) if isinstance(updated, dict) else None
+            payload["after"] = after
+            if (
+                after is None
+                or after["id"] != JOB_ID
+                or after["name"] != NAME
+                or after["script"] != SCRIPT
+                or after["deliver"] != "local"
+                or after["paused"]
+                or after["schedule"] != TO_SCHEDULE
+                or not after["next_run_at"]
+            ):
+                payload["errors"].append("schedule-update-result-invalid")
+            else:
+                payload["updated"] = True
+                payload["private_lab_only"] = True
+except Exception as error:  # surfaced to the operator, never swallowed
+    payload["errors"].append(type(error).__name__)
+print(json.dumps(payload))
+"""
+
+
 def _job_probe_body(mode: str, *, job_id: str = "") -> str:
     return (
         f"FIELDS_JSON = {json.dumps(JOB_BEHAVIOR_FIELDS)!r}\n"
@@ -1296,6 +1478,97 @@ def _job_record(
     if record is not None:
         record["output_dir"] = payload.get("output_dir")
     return record
+
+
+def _lab_schedule_update(
+    interpreter: Path,
+    lab: Mapping[str, Any],
+    job_id: str,
+    *,
+    from_schedule: str = PRODUCTION_LAB_SCHEDULE,
+    to_schedule: str = ACCELERATED_LAB_SCHEDULE,
+) -> dict[str, Any]:
+    """Update only the owned laboratory job through native ``cron.jobs.update_job``.
+
+    The generated child runs with the laboratory's already-established environment.  It
+    refuses a missing/foreign/drifted job and records the native before/after schedule plus
+    the recomputed ``next_run_at``.  The parent-side checks deliberately validate the
+    environment binding before the child can perform its one native mutation.
+    """
+
+    root = Path(str(lab.get("root") or ""))
+    hermes_home = Path(str(lab.get("hermes_home") or ""))
+    if from_schedule != PRODUCTION_LAB_SCHEDULE or to_schedule != ACCELERATED_LAB_SCHEDULE:
+        raise QualificationError(
+            "lab-schedule-contract",
+            "the laboratory schedule update can only use the fixed production and accelerated expressions",
+            detail={"from_schedule": from_schedule, "to_schedule": to_schedule},
+        )
+    environment = lab.get("environment")
+    if (
+        not root.is_absolute()
+        or not hermes_home.is_absolute()
+        or not isinstance(environment, Mapping)
+    ):
+        raise QualificationError(
+            "lab-schedule-context",
+            "the accelerated schedule update has no complete private laboratory context",
+        )
+    try:
+        resolved_root = root.resolve(strict=False)
+        resolved_home = hermes_home.resolve(strict=False)
+        configured_home = Path(str(environment.get("HERMES_HOME") or ""))
+    except OSError as error:
+        raise QualificationError(
+            "lab-schedule-context",
+            "the accelerated schedule update could not resolve its private laboratory context",
+            detail={"error": type(error).__name__},
+        ) from error
+    if (
+        resolved_home != resolved_root / "hermes"
+        or configured_home != hermes_home
+        or configured_home.resolve(strict=False) != resolved_home
+    ):
+        raise QualificationError(
+            "lab-schedule-context",
+            "the accelerated schedule update was not bound to the private laboratory store",
+            detail={"environment_home_matches": configured_home == hermes_home},
+        )
+    body = (
+        f"JOB_ID_JSON = {job_id!r}\n"
+        f"NAME_JSON = {NATIVE_JOB_NAME!r}\n"
+        f"SCRIPT_JSON = {PRECHECK_SCRIPT_NAME!r}\n"
+        f"FROM_SCHEDULE_JSON = {from_schedule!r}\n"
+        f"TO_SCHEDULE_JSON = {to_schedule!r}\n"
+        f"LAB_ROOT_JSON = {str(root)!r}\n"
+        f"LAB_HERMES_HOME_JSON = {str(hermes_home)!r}\n" + _LAB_SCHEDULE_UPDATE_PROBE
+    )
+    payload = _runtime_execute(
+        interpreter,
+        body,
+        environment=dict(environment),
+        cwd=Path(str(lab.get("cwd") or root)),
+    )
+    if payload.get("errors"):
+        raise QualificationError(
+            "lab-schedule-update",
+            "the private laboratory job did not accept the native accelerated schedule update",
+            detail={"errors": payload.get("errors"), "payload": payload},
+        )
+    if (
+        payload.get("native_interface") != "cron.jobs.update_job"
+        or payload.get("execution_mode") != "native-lab-schedule-update"
+        or payload.get("production_schedule") != from_schedule
+        or payload.get("accelerated_schedule") != to_schedule
+        or not payload.get("updated")
+        or not payload.get("private_lab_only")
+    ):
+        raise QualificationError(
+            "lab-schedule-update",
+            "the accelerated schedule evidence did not prove one native update in the private lab",
+            detail={"payload": payload},
+        )
+    return payload
 
 
 #: The historical instruction-like canary reclassified by D12.  The shipped deterministic
@@ -1641,7 +1914,7 @@ def _inspect_boundary(
             "state": "narration-failed",
             "snapshot": snapshot,
             "narrative": narrative,
-            "detail": "the real hourly digest did not produce an accepted narrative",
+            "detail": "the scheduled digest did not produce an accepted narrative",
         }
     deliveries = store.list_deliveries(snapshot.report_id)
     if not deliveries:
@@ -1658,7 +1931,7 @@ def _inspect_boundary(
             "snapshot": snapshot,
             "narrative": narrative,
             "deliveries": deliveries,
-            "detail": "an hourly digest did not confirm every part",
+            "detail": "the scheduled digest did not confirm every part",
         }
     if any(state != "confirmed" for state in states):
         return {
@@ -1815,13 +2088,13 @@ def _smoke_phase(
     stream: Any,
     environment: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """One bounded provisioned model+transport smoke before the long hourly wait.
+    """One bounded provisioned model+transport smoke before the scheduled wait.
 
     The smoke uses the shipped path end to end: the owned native job is triggered
     through the native API and the resulting run must produce exactly one real
     collected report, one accepted single-write narration, the shipped renderer's
     parts and one confirmed delivery.  It is bounded, is never a substitute for a
-    real hourly boundary, and refuses to start when the first boundary is too close.
+    native scheduled boundary, and refuses to start when the first boundary is too close.
     """
 
     now = backends.now()
@@ -1829,7 +2102,7 @@ def _smoke_phase(
     if lead < SMOKE_MIN_LEAD_SECONDS:
         raise QualificationError(
             "smoke-window",
-            "the first real hourly boundary is too close to run the bounded initial "
+            "the first accelerated boundary is too close to run the bounded initial "
             "smoke; the monitor is returned to its prior state",
             detail={"lead_seconds": round(lead, 3)},
         )
@@ -1855,6 +2128,7 @@ def _smoke_phase(
                 output_dir,
                 window_start=triggered_at - timedelta(minutes=1),
                 window_end=observed_at,
+                expected_report_id=str(decision["snapshot"].report_id),
             )
             entry = _boundary_record(
                 decision,
@@ -1910,9 +2184,18 @@ def _job_output_files(output_dir: Path) -> list[Path]:
 
 
 def _job_run_evidence(
-    output_dir: Path | None, *, window_start: datetime, window_end: datetime
+    output_dir: Path | None,
+    *,
+    window_start: datetime,
+    window_end: datetime,
+    expected_report_id: str | None = None,
 ) -> dict[str, Any]:
-    """The native scheduler's own saved run records inside one boundary window."""
+    """Read the native scheduler's own run record(s) inside one bounded window.
+
+    Active reports are filtered to the report id observed at the scheduled cut.  A minute
+    cadence can legitimately create another native run before narration/delivery finishes;
+    counting that later run as evidence for the earlier cut would make the receipt ambiguous.
+    """
 
     if output_dir is None:
         return {"available": False, "count": 0, "silent": False, "contains_report": False}
@@ -1931,10 +2214,13 @@ def _job_run_evidence(
             selected.append(
                 {"name": path.name, "silent": NATIVE_SILENT_MARKER in text, "text": text}
             )
+    if expected_report_id is not None:
+        selected = [item for item in selected if expected_report_id in str(item.get("text", ""))]
     return {
         "available": True,
         "count": len(selected),
         "silent": any(item["silent"] for item in selected),
+        "contains_report": expected_report_id is None or bool(selected),
         "contents": selected,
     }
 
@@ -2031,7 +2317,7 @@ def _boundary_record(
     if cutoff_mode == "exact":
         if observed_cutoff != reference_cutoff:
             raise QualificationError(
-                "boundary-mismatch", "the observed cut is not the expected real hourly cut"
+                "boundary-mismatch", "the observed cut is not the expected scheduled boundary"
             )
     elif observed_cutoff is None or reference_cutoff is None or observed_cutoff > reference_cutoff:
         raise QualificationError(
@@ -2049,7 +2335,7 @@ def _boundary_record(
     if observed_keys != expected_keys:
         raise QualificationError(
             "scope-items",
-            "the real hourly digest did not contain exactly the expected synthetic "
+            "the scheduled digest did not contain exactly the expected synthetic "
             f"work identities (expected {len(expected_keys)}, observed {len(observed_keys)})",
             detail={"expected": sorted(expected_keys), "observed": sorted(observed_keys)},
         )
@@ -2069,7 +2355,7 @@ def _boundary_record(
     if gaps != set(expected_gaps):
         raise QualificationError(
             "scope-gaps",
-            "the real hourly digest reported unexpected coverage gaps for the synthetic scope",
+            "the scheduled digest reported unexpected coverage gaps for the synthetic scope",
             detail={"expected": sorted(expected_gaps), "observed": sorted(gaps)},
         )
     for work_key, expected_item_gap_values in (expected_item_gaps or {}).items():
@@ -2088,7 +2374,7 @@ def _boundary_record(
             )
     collected_lateness = _seconds_between(cutoff, snapshot.collected_at_utc)
     if cutoff_mode == "exact":
-        # D2's 120-second collection deadline is a property of the scheduled hourly cadence;
+        # D2's 120-second collection deadline is a property of each native scheduled cadence;
         # the bounded smoke is a manual trigger and is bounded by its own deadline instead.
         if collected_lateness is None or collected_lateness > COLLECTION_DEADLINE_SECONDS:
             raise QualificationError(
@@ -2110,7 +2396,7 @@ def _boundary_record(
     if states != ["confirmed"]:
         raise QualificationError(
             "delivery-unconfirmed",
-            "an hourly digest completed without every part confirmed",
+            "a scheduled digest completed without every part confirmed",
             detail={"delivery_states": states},
         )
     if any(delivery.message_id is None for delivery in ordered):
@@ -2782,14 +3068,18 @@ def _owner_language(
     return value if isinstance(value, str) and value.strip() else None
 
 
-def _job_shape_ok(job: Mapping[str, Any] | None) -> bool:
+def _job_shape_ok(
+    job: Mapping[str, Any] | None,
+    *,
+    schedule: str = PRODUCTION_LAB_SCHEDULE,
+) -> bool:
     if job is None:
         return False
     if str(job.get("name") or "") != NATIVE_JOB_NAME:
         return False
     if job.get("script") != PRECHECK_SCRIPT_NAME or job.get("deliver") != "local":
         return False
-    if str(job.get("schedule") or "") != NATIVE_SCHEDULE:
+    if str(job.get("schedule") or "") != schedule:
         return False
     if list(job.get("enabled_toolsets") or []) != list(monitor_runtime.REPORTER_JOB_TOOLSETS):
         return False
@@ -2980,8 +3270,12 @@ try:
     from cron import jobs as cron_jobs
 
     payload["interfaces"]["jobs"] = {
-        "list_jobs": callable(getattr(cron_jobs, "list_jobs", None))
+        name: callable(getattr(cron_jobs, name, None))
+        for name in ("list_jobs", "get_job", "update_job", "compute_next_run", "get_due_jobs")
     }
+    for name, present in payload["interfaces"]["jobs"].items():
+        if not present:
+            payload["problems"].append(f"cron-jobs-interface-missing:{name}")
 except Exception as error:  # noqa: BLE001
     payload["problems"].append(f"cron-jobs-unavailable: {type(error).__name__}")
 
@@ -3535,7 +3829,16 @@ from cron.scheduler_provider import InProcessCronScheduler  # noqa: E402
 
 scheduler = InProcessCronScheduler()
 READY.write_text(
-    json.dumps({"pid": os.getpid(), "scheduler": scheduler.name}), encoding="utf-8"
+    json.dumps(
+        {
+            "pid": os.getpid(),
+            "scheduler": scheduler.name,
+            "scheduler_class": f"{type(scheduler).__module__}.{type(scheduler).__qualname__}",
+            "execution_mode": "native-scheduled-tick",
+            "interval_seconds": INTERVAL,
+        }
+    ),
+    encoding="utf-8",
 )
 try:
     scheduler.start(stop_event, interval=INTERVAL)
@@ -3984,6 +4287,13 @@ def _lab_context_preflight(
         problems.append("destination-drift")
     if not isolated.get("interfaces", {}).get("scheduler"):
         problems.append("scheduler-unavailable")
+    jobs_interfaces = isolated.get("interfaces", {}).get("jobs")
+    if not isinstance(jobs_interfaces, Mapping):
+        problems.append("cron-jobs-unavailable")
+    else:
+        for name in ("get_job", "update_job", "compute_next_run", "get_due_jobs"):
+            if jobs_interfaces.get(name) is not True:
+                problems.append(f"cron-jobs-interface-missing:{name}")
     problems.extend(telegram_monitor_lab.writer_problems(isolated, lab_root=plan.root))
     return {
         "problems": problems,
@@ -4167,7 +4477,7 @@ def _lab_scheduler_start(interpreter: Path, lab: Mapping[str, Any]) -> dict[str,
     body = (
         f"READY_JSON = {json.dumps(str(ready))}\n"
         f"STOP_JSON = {json.dumps(str(stop))}\n"
-        f"INTERVAL_JSON = {json.dumps(60)}\n" + _LAB_SCHEDULER_BODY
+        f"INTERVAL_JSON = {json.dumps(LAB_SCHEDULER_INTERVAL_SECONDS)}\n" + _LAB_SCHEDULER_BODY
     )
     try:
         process = subprocess.Popen(  # noqa: S603 - a fixed, self-authored interpreter body
@@ -4211,9 +4521,27 @@ def _lab_scheduler_start(interpreter: Path, lab: Mapping[str, Any]) -> dict[str,
             "lab-scheduler",
             "the bounded native scheduler instance reported no usable readiness record",
         ) from error
+    if (
+        payload.get("scheduler_class") != "cron.scheduler_provider.InProcessCronScheduler"
+        or payload.get("execution_mode") != "native-scheduled-tick"
+        or payload.get("interval_seconds") != LAB_SCHEDULER_INTERVAL_SECONDS
+    ):
+        _terminate(process)
+        raise QualificationError(
+            "scheduler-evidence",
+            "the laboratory did not start the supported native scheduler in scheduled-tick mode",
+            detail={
+                "scheduler_class": payload.get("scheduler_class"),
+                "execution_mode": payload.get("execution_mode"),
+                "interval_seconds": payload.get("interval_seconds"),
+            },
+        )
     return {
         "pid": int(payload.get("pid") or process.pid),
         "scheduler": payload.get("scheduler"),
+        "scheduler_class": payload.get("scheduler_class"),
+        "execution_mode": payload.get("execution_mode"),
+        "interval_seconds": payload.get("interval_seconds"),
         "stop_file": str(stop),
         "ready": True,
     }
@@ -4392,6 +4720,11 @@ class LiveBackends:
     def lab_control(self, lab: Mapping[str, Any], action: str) -> dict[str, Any]:
         return _lab_control(self.runtime_python(), lab, action)
 
+    def lab_schedule_update(
+        self, interpreter: Path, lab: Mapping[str, Any], job_id: str
+    ) -> dict[str, Any]:
+        return _lab_schedule_update(interpreter, lab, job_id)
+
     def job_inventory(
         self, interpreter: Path, environment: Mapping[str, str] | None = None
     ) -> list[dict[str, Any]]:
@@ -4470,7 +4803,7 @@ def run_live(args: argparse.Namespace, stream: Any) -> dict[str, Any]:
     if args.wait_hourly_boundaries != REQUIRED_WAIT_HOURLY_BOUNDARIES:
         raise QualificationError(
             "boundaries-unsupported",
-            "--live implements exactly two real hourly boundaries; the option surface stays fixed",
+            "--live implements exactly two real scheduled laboratory boundaries; the option surface stays fixed",
         )
     established_parent = _establish_private_output_target(output)
     return _live_run(
@@ -4496,9 +4829,11 @@ def _live_run(
     exists, the lab root is created before its configuration is written, the in-laboratory
     gate (writer surface, loaded artifacts, effective roots, destination drift) runs inside
     the created root before anything is seeded or spent, the synthetic scope is seeded
-    through the shipped writers before the job is enabled, the bounded supervised native
-    scheduler starts before the smoke, and one bounded smoke runs before the two real hourly
-    boundaries.  The laboratory root and its receipt are retained as declared objective
+    through the shipped writers before the job is enabled, the owned job is validated at
+    the fixed production schedule and then updated through native ``cron.jobs.update_job``
+    to the private laboratory's accelerated minute schedule, the bounded supervised native
+    scheduler starts before the smoke, and one bounded smoke runs before the two real
+    scheduled laboratory cuts.  The laboratory root and its receipt are retained as
     evidence — nothing is restored or deleted — and any recorded error clears ``ok``.
 
     ``established_parent`` is the identity of the private receipt directory the caller
@@ -4523,6 +4858,7 @@ def _live_run(
         "lab": None,
         "scope": None,
         "enable": None,
+        "schedule_update": None,
         "scheduler": None,
         "smoke": None,
         "boundaries": [],
@@ -4601,7 +4937,7 @@ def _live_run(
             },
         }
         # 2a. The laboratory's own read-only sources are probed *after* the fixture: a gap
-        #     the fixture did not deliberately create would fabricate an hourly gap report
+        #     the fixture did not deliberately create would fabricate a scheduled gap report
         #     and cannot be distinguished from a coverage failure, so it refuses here.
         environment_gaps = backends.environment_gaps(
             store, hermes_home=Path(str(lab["hermes_home"])), lab=lab
@@ -4632,6 +4968,8 @@ def _live_run(
         record["enable"] = {
             "job_id": job_id,
             "created": bool(result.get("job_created")),
+            "production_schedule": PRODUCTION_LAB_SCHEDULE,
+            "production_shape_validated": False,
             "next_cut_utc": result.get("next_cut_utc"),
             "destination_pinned": bool(result.get("destination_pinned")),
             "profile_binding": result.get("profile_binding"),
@@ -4654,13 +4992,58 @@ def _live_run(
         if not record["enable"]["second_enable_same_job"]:
             abort("job-idempotency", "a second enable did not reconcile the same owned job")
         if not record["enable"]["shape_ok"]:
-            abort("job-shape", "the owned native job does not carry the fixed monitor shape")
+            abort("job-shape", "the owned native job does not carry the fixed production shape")
+        if record["enable"]["job_state"]["schedule"] != PRODUCTION_LAB_SCHEDULE:
+            abort(
+                "production-schedule",
+                "the laboratory job was not validated at the fixed production schedule",
+                detail={"schedule": record["enable"]["job_state"]["schedule"]},
+            )
+        record["enable"]["production_shape_validated"] = True
+        # 3a. Qualification acceleration is a native update of this one job in this one
+        #     private store.  It is not a direct store rewrite and it never touches the
+        #     operator's production cron store.
+        schedule_update = backends.lab_schedule_update(interpreter, lab, job_id)
+        record["schedule_update"] = dict(schedule_update)
+        if not _schedule_update_evidence_ok(schedule_update):
+            abort(
+                "lab-schedule-update",
+                "the private lab schedule update did not prove one approved native update",
+                detail={"schedule_update": schedule_update},
+            )
+        accelerated_job = backends.job_record(interpreter, job_id, environment)
+        if not _job_shape_ok(accelerated_job, schedule=ACCELERATED_LAB_SCHEDULE):
+            abort(
+                "lab-schedule-shape",
+                "the owned private lab job did not retain its behavior shape after acceleration",
+            )
+        accelerated_cut = _parse_utc(
+            accelerated_job.get("next_run_at") if accelerated_job else None
+        )
+        if (
+            accelerated_cut is None
+            or accelerated_cut <= backends.now()
+            or accelerated_cut.second != 0
+            or accelerated_cut.microsecond != 0
+        ):
+            abort(
+                "lab-schedule-next-run",
+                "the native accelerated update did not produce a future minute boundary",
+                detail={
+                    "next_run_at": accelerated_job.get("next_run_at") if accelerated_job else None
+                },
+            )
+        record["schedule_update"]["validated_job"] = {
+            "schedule": accelerated_job.get("schedule") if accelerated_job else None,
+            "next_run_at": accelerated_job.get("next_run_at") if accelerated_job else None,
+            "paused": bool(accelerated_job.get("paused")) if accelerated_job else None,
+        }
         output_dir_value = job_record.get("output_dir") if job_record else None
         output_dir = Path(str(output_dir_value)) if output_dir_value else None
         language = backends.owner_language(interpreter, environment)
-        cut_one = next_cut
-        cut_two = cut_one + timedelta(hours=1)
-        cut_idle = cut_one + timedelta(hours=2)
+        cut_one = accelerated_cut
+        cut_two = cut_one + timedelta(minutes=1)
+        cut_idle = cut_one + timedelta(minutes=2)
         direct_entry = manifest[0]
         interval_zero = direct_entry["direct"]["intervals"][0]
         interval_one = direct_entry["direct"]["intervals"][1]
@@ -4678,10 +5061,22 @@ def _live_run(
         }
         # 4. One bounded supervised instance of the native scheduler owns due selection,
         #    execution and receipts for the whole laboratory; closing the test TUI never
-        #    stops it and no custom scheduling loop exists here.
+        #    stops it and no custom scheduling loop exists here.  The readiness attestation
+        #    is part of the acceptance proof, so a manual/forced/custom runner cannot be
+        #    counted as a scheduled boundary.
         scheduler = backends.lab_scheduler_start(interpreter, lab)
         record["scheduler"] = dict(scheduler)
-        # 5. One bounded initial native model+transport smoke before the long wait.
+        if not _scheduled_evidence_ok(schedule_update, scheduler):
+            abort(
+                "scheduler-evidence",
+                "the laboratory scheduler did not attest to the supported native scheduled path",
+                detail={
+                    "scheduler_class": scheduler.get("scheduler_class"),
+                    "execution_mode": scheduler.get("execution_mode"),
+                    "interval_seconds": scheduler.get("interval_seconds"),
+                },
+            )
+        # 5. One bounded initial native model+transport smoke before the scheduled wait.
         baseline_reports = frozenset()
         record["smoke"] = _smoke_phase(
             backends,
@@ -4697,7 +5092,9 @@ def _live_run(
             stream=stream,
             environment=environment,
         )
-        # 6. Two natural wall-clock hourly cuts executed by the native scheduler.
+        # 6. Two real scheduled laboratory cuts executed by the native scheduler.  The
+        #    expression is accelerated only in the private store; these timestamps are not
+        #    production-hourly or elapsed-hour evidence.
         boundaries: list[dict[str, Any]] = []
         boundary_plan: tuple[tuple[datetime, dict[str, str], dict[str, Sequence[str]]], ...] = (
             (cut_one, expected_before, {direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)}),
@@ -4731,22 +5128,28 @@ def _live_run(
                 if backends.now() > deadline:
                     abort(
                         "boundary-timeout",
-                        f"real hourly boundary {index + 1} of 2 was not observed before "
-                        "the bounded wait expired",
+                        f"real scheduled laboratory boundary {index + 1} of 2 was not observed "
+                        "before the bounded wait expired",
                         detail={"cutoff_utc": _utc_text(expected_cut)},
                     )
                 print(
-                    f"waiting for real hourly boundary {index + 1} of 2 "
+                    f"waiting for scheduled laboratory boundary {index + 1} of 2 "
                     f"(cut {_utc_text(expected_cut)}): {decision.get('detail')}",
                     file=stream,
                     flush=True,
                 )
                 backends.sleep(BOUNDARY_POLL_SECONDS)
             run_window_start = expected_cut - timedelta(minutes=1)
-            run_window_end = expected_cut + timedelta(hours=1)
+            # Stop the evidence window at the actual observation time.  A fixed hourly
+            # window would include later minute-cadence runs and could make one cut appear
+            # to have multiple native executions.
+            run_window_end = backends.now()
             fresh_job = backends.job_record(interpreter, job_id, environment)
             run_evidence = _job_run_evidence(
-                output_dir, window_start=run_window_start, window_end=run_window_end
+                output_dir,
+                window_start=run_window_start,
+                window_end=run_window_end,
+                expected_report_id=str(decision["snapshot"].report_id),
             )
             boundary = _boundary_record(
                 decision,
@@ -4763,7 +5166,7 @@ def _live_run(
             # and independent adjudication; only sanitized counts leave publicly.
             record["boundaries"] = list(boundaries)
             print(
-                f"real hourly boundary {index + 1} of 2 captured: "
+                f"scheduled laboratory boundary {index + 1} of 2 captured: "
                 f"{len(boundary['work_keys'])} synthetic identities, "
                 f"{boundary['part_count']} confirmed part(s)",
                 file=stream,
@@ -4806,7 +5209,7 @@ def _live_run(
             run_evidence = _job_run_evidence(
                 output_dir,
                 window_start=cut_idle - timedelta(minutes=1),
-                window_end=cut_idle + timedelta(hours=1),
+                window_end=backends.now(),
             )
             decision = _inspect_idle(
                 store,
@@ -5001,6 +5404,23 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
             "retained_private_comparison": bool(adjudication.get("retained_private_comparison")),
         },
         "native_run_files": [boundary.get("native_run_files") for boundary in boundaries],
+        "production_schedule": PRODUCTION_LAB_SCHEDULE,
+        "production_shape_validated": bool(enable.get("production_shape_validated")),
+        "accelerated_lab_schedule": ACCELERATED_LAB_SCHEDULE,
+        "accelerated_schedule_update": {
+            "updated": bool((record.get("schedule_update") or {}).get("updated")),
+            "native_interface": (record.get("schedule_update") or {}).get("native_interface"),
+            "private_lab_only": bool((record.get("schedule_update") or {}).get("private_lab_only")),
+            "from": (record.get("schedule_update") or {}).get("production_schedule"),
+            "to": (record.get("schedule_update") or {}).get("accelerated_schedule"),
+        },
+        "accelerated_boundary_timestamps_utc": [
+            boundary.get("expected_cutoff_utc") for boundary in boundaries
+        ],
+        "accelerated_idle_timestamp_utc": idle.get("cutoff_utc"),
+        "temporal_oracle": "real-minute-boundaries-in-private-lab",
+        "production_hourly_evidence": False,
+        "elapsed_hour_evidence": False,
         "native_job_shape_ok": bool(enable.get("shape_ok")),
         "idempotent_enable": bool(enable.get("second_enable_same_job")),
         "manual_off_verified": bool((record.get("off") or {}).get("job_paused"))
@@ -5013,6 +5433,9 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         "laboratory_config_digest": lab.get("config_digest"),
         "laboratory_retained": bool(laboratory.get("retained")),
         "scheduler_stopped": bool(retention.get("scheduler_stopped")),
+        "native_scheduler_class": (record.get("scheduler") or {}).get("scheduler_class"),
+        "scheduler_execution_mode": (record.get("scheduler") or {}).get("execution_mode"),
+        "scheduler_interval_seconds": (record.get("scheduler") or {}).get("interval_seconds"),
         "operator_registry_touched": bool(retention.get("registry_touched")),
         "preflight_destination_digest": preflight.get("destination_digest"),
         "preflight_interfaces": sorted(str(name) for name in (preflight.get("interfaces") or {})),
@@ -5026,8 +5449,9 @@ def _public_live_summary(record: Mapping[str, Any]) -> dict[str, Any]:
         # cases, whose retained source/output comparison requires independent adjudication.
         "qualified": bool(record.get("ok")),
         "qualified_scope": [
-            "two real native hourly cuts with a single accepted narration each",
+            "two real native scheduled laboratory minute cuts with a single accepted narration each",
             "one bounded provisioned model and transport smoke",
+            "the private lab's native production-shape validation and accelerated schedule update",
             "native job shape, idempotency, manual off and the native idle skip",
             "deterministic structural invariants over the live output",
             "the private laboratory context, its retained evidence and the cooperative "
@@ -5592,7 +6016,8 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="qualify_telegram_monitor.py",
         description=(
             "Qualify the Aether Telegram Monitor. The default lane is deterministic and "
-            "performs no external effect; --live adds the provisioned hourly qualification."
+            "performs no external effect; --live adds the provisioned qualification in an "
+            "isolated lab with a native accelerated minute schedule."
         ),
     )
     parser.add_argument(
@@ -5601,8 +6026,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Run the provisioned qualification in the D13 isolated native-runtime laboratory: "
             "one private root outside every Git worktree, the shipped writers, one lab monitor "
-            "job, one bounded native scheduler instance, a real model/Telegram smoke, two "
-            "natural hourly cuts and a later idle cut. This installation's project registry, "
+            "job validated first at 0 * * * * and then updated natively to * * * * *, one "
+            "bounded native scheduler instance, a real model/Telegram smoke, two scheduled "
+            "minute-boundary cuts and a later idle cut. This is accelerated lab evidence, not "
+            "production-hourly or elapsed-hour evidence. This installation's project registry, "
             "boards, sessions, cron jobs and monitor state are never hidden, swapped or "
             "restored, and no credential is acquired. See the Telegram Monitor guide."
         ),
@@ -5633,9 +6060,10 @@ def _build_parser() -> argparse.ArgumentParser:
         default=REQUIRED_WAIT_HOURLY_BOUNDARIES,
         metavar="N",
         help=(
-            "Real native hourly boundaries required by --live. The accepted "
+            "Real native scheduled laboratory minute boundaries required by --live. The accepted "
             f"qualification is fixed at exactly {REQUIRED_WAIT_HOURLY_BOUNDARIES}; every "
-            "other value is refused before any file or live effect."
+            "other value is refused before any file or live effect. These cuts are not "
+            "production-hourly or elapsed-hour evidence."
         ),
     )
     return parser
