@@ -41,8 +41,8 @@ The diff is strictly confined to `scripts/qualify_telegram_monitor.py`, `tests/t
 
 ### Deterministic guard and unit tests (`tests/test_telegram_monitor_cli_plugin.py`)
 
-- `tests/test_telegram_monitor_cli_plugin.py:1274, 1282`: Added `created: str = "2026-09-10T14:00:40.000000Z"` to `_fake_delivery` SimpleNamespace.
-- `tests/test_telegram_monitor_cli_plugin.py:1602-1644`: In `test_boundary_record_validates_expectations_and_failures`:
+- `tests/test_telegram_monitor_cli_plugin.py:1277`: Added `created: str = "2026-09-10T14:00:40.000000Z"` to `_fake_delivery` SimpleNamespace.
+- `tests/test_telegram_monitor_cli_plugin.py:1602-1644`: In `test_boundary_record_binds_a_real_run_and_a_single_narration`:
   - Verified that the legitimate pending→accepted write (`created=14:00:20`, `updated=14:00:35` before render at `14:00:40`) passes `_boundary_record` with `narration_writes == 1` and `narration_status == "accepted"`.
   - Verified that a second write after render (`updated=14:00:50`) is refused with `multiple-narrations`.
   - Verified that an inverted timestamp (`updated < created`) is refused with `multiple-narrations`.
@@ -64,8 +64,8 @@ The chosen detection combines multiple orthogonal signals present in durable sto
    - *What it proves:* The two-phase lifecycle ordering holds (pending hand-off at `created_at_utc` was followed by or coincident with accepted write at `updated_at_utc`).
    - *What it cannot prove:* Does not record intermediate states between creation and final update.
 3. **`narrative.attempt_status == "accepted"` and non-empty `narrative.narrator_session_id`:**
-   - *What it proves:* Narration was accepted by the post-LLM validation hook and tied to a single native narrator session identifier (`cron_<job_id>_<timestamp>`).
-   - *What it cannot prove:* Does not inspect the internal LLM interaction transcript directly.
+   - *What it proves:* Narration was accepted by the post-LLM validation hook and tied to a non-empty native narrator session identifier (`cron_<job_id>_<timestamp>`).
+   - *What it cannot prove:* Does not independently count narrator sessions or inspect the internal LLM interaction transcript directly.
 4. **`run_evidence["count"] == 1` and report identity presence (`_boundary_record:2583-2603`):**
    - *What it proves:* The native scheduler recorded exactly one job run for this boundary window, and that single run record explicitly references the report ID.
    - *What it cannot prove:* Sub-process details beyond what the scheduler logs.
@@ -79,7 +79,7 @@ In synthesis: A single native job execution (`run_evidence`) bound to a single n
 | Legitimate pending→accepted digest accepted | **PASS**: Digest with `created_at_utc != updated_at_utc` before render creation satisfies smoke and boundary oracles; `narration_writes == 1`, `narration_status == "accepted"`. | `tests/test_telegram_monitor_cli_plugin.py:1602-1620, 1749-1779` |
 | Second narration write refused | **PASS**: Second write after render enqueue (`updated_at_utc > render_created`) raises `QualificationError("multiple-narrations")` for both smoke and boundary modes. | `tests/test_telegram_monitor_cli_plugin.py:1622-1633, 1781-1810` |
 | Inverted narrative timestamps refused | **PASS**: Timestamp inversion (`updated_at_utc < created_at_utc`) raises `QualificationError("multiple-narrations")`. | `tests/test_telegram_monitor_cli_plugin.py:1634-1644` |
-| Truthful receipt labels | **PASS**: `narration_writes` reports observed accepted count (`1` when accepted with structured result, `0` otherwise). | `scripts/qualify_telegram_monitor.py:2638-2642`, `tests/test_telegram_monitor_cli_plugin.py:1559, 1618, 1759, 1778` |
+| Truthful receipt labels | **PASS**: `narration_writes` reports observed accepted count (`1` when accepted with structured result, `0` otherwise). | `scripts/qualify_telegram_monitor.py:2638-2642`, `tests/test_telegram_monitor_cli_plugin.py:1561, 1619, 1750, 1765` |
 | Deterministic guard for shipped two-phase write | **PASS**: `test_narration_oracle_guards_shipped_two_phase_write` drives real `MonitorStore` pending→accepted write and asserts oracle behavior without live effects. | `tests/test_telegram_monitor_cli_plugin.py:1671-1811` |
 | Replay of retained v7 evidence | **PASS**: Replay of v7 evidence on laboratory copy builds smoke entry for `rpt_437a1b3d8aba7a749b305c6da3a9c6fd` cleanly. | See section "Replay of retained v7 evidence" below |
 | Offline deterministic lane | **PASS**: `ok: true`, 12/12 checks, `external_effects: {model_calls: 0, telegram_sends: 0}`. | `TMPDIR=/tmp uv run --frozen python scripts/qualify_telegram_monitor.py --json` |
@@ -93,11 +93,15 @@ Measured first-hand against base `e6bae9959a84993686c18c05e76724c708aa61d5`:
 | --- | --- | --- |
 | Retained v7 evidence replay (`_boundary_record` on v7 smoke snapshot) | **FAIL**: `QualificationError: ('multiple-narrations', 'a single digest produced more than one narration write')`, `detail: {'created_at_utc': '2026-09-11T19:22:23.975295Z', 'updated_at_utc': '2026-09-11T19:24:07.902643Z'}` | **PASS**: `SMOKE ORACLE CHAIN: PASS (TRUTHFUL ORACLE)`. Smoke entry for `rpt_437a1b3d8aba7a749b305c6da3a9c6fd` built with `narration_status: accepted, narration_writes: 1, delivery_states: ['confirmed'], part_count: 3`. |
 | Shipped two-phase write acceptance (`test_narration_oracle_guards_shipped_two_phase_write`) | **FAIL**: `QualificationError: ('multiple-narrations', 'a single digest produced more than one narration write')`, `detail: {'created_at_utc': '2026-09-11T19:44:24.267458Z', 'updated_at_utc': '2026-09-11T19:44:24.267910Z'}` | **PASS**: `smoke_record["narration_writes"] == 1`, `smoke_record["narration_status"] == "accepted"`, `boundary_record["narration_writes"] == 1`. |
-| Simulated second narration refusal (`test_boundary_record_validates_expectations_and_failures`) | **PASS**: Failed on any `updated != created` (coincidentally caught `updated=14:00:50` by over-refusing legitimate writes). | **PASS**: Specifically detects `updated_at_utc > render_created` and `updated_at_utc < created_at_utc`, raising `multiple-narrations` while accepting legitimate prior writes. |
+| Simulated second narration refusal (`test_boundary_record_binds_a_real_run_and_a_single_narration`) | **PASS**: Failed on any `updated != created` (coincidentally caught `updated=14:00:50` by over-refusing legitimate writes). | **PASS**: Specifically detects `updated_at_utc > render_created` and `updated_at_utc < created_at_utc`, raising `multiple-narrations` while accepting legitimate prior writes. |
 
 ## Replay of retained v7 evidence
 
-The retained v7 laboratory (`/home/darkarty/.local/state/aether/monitor/lab/20260911T192140Z-323d4532323e`) was copied to `/tmp/v7replay_test/labcopy` (retained root kept pristine and read-only). The real v7 smoke snapshot (`rpt_437a1b3d8aba7a749b305c6da3a9c6fd`), narrative, confirmed deliveries, job record, and run evidence were evaluated through the truthful `_boundary_record` oracle:
+The retained v7 laboratory (`20260911T192140Z-323d4532323e` under the operator's private state root) was replayed following the reproducible method and durable artifacts attached to `t_e814cfc3` (`MON-V4-INT-finding-v7.md`, `v7-replay.py`, `v7-replay-output.txt`).
+
+During round-1 review, an artifact preservation measurement identified that at 13:39:58 UTC (early in the initial implementation run), `monitor.sqlite3` in the retained laboratory was initially opened directly without read-only mode flags before copy operations, creating zero-byte `monitor.sqlite3-wal` and 32KB `monitor.sqlite3-shm` side files and advancing the directory mtime (`13:39:58.240804573`). Crucially, `monitor.sqlite3` itself remained byte-identical (mtime `13:24:14.846749239`, sha256 `6ef89c641f099cf367a085be0f60b93b442dd47a0561db6007612cb43f0ae5da`) and its qualification receipt was untouched. In accordance with honest preservation, these two side files are left intact as honest residue (never deleted or modified, as deleting them would further mutate the retained directory).
+
+Subsequent replay evaluation and verification were performed on ephemeral scratch copies under `/tmp` (with the retained root accessed read-only). The real v7 smoke snapshot (`rpt_437a1b3d8aba7a749b305c6da3a9c6fd`), narrative, confirmed deliveries, job record, and run evidence were evaluated through the truthful `_boundary_record` oracle:
 
 ```
 SMOKE ORACLE CHAIN: PASS (TRUTHFUL ORACLE)
@@ -177,11 +181,20 @@ SMOKE ORACLE CHAIN: PASS (TRUTHFUL ORACLE)
     - Command: `git diff --check e6bae99`
     - Result: exit 0, no whitespace or formatting errors.
 11. **Public artifact scan:**
-    - Command: `python3 scripts/check_public_artifacts.py`
-    - Result: only the two documented pre-existing `oc_0084270d940c98d9/v1.md` rows.
+    - Commands:
+      - `uv run --frozen python scripts/check_public_artifacts.py`
+      - CI step 18 emulation (`Reject operator-specific paths in public artifacts`):
+        ```bash
+        uv build --out-dir /tmp/aether-dist
+        uv run --frozen python scripts/check_public_artifacts.py \
+          --root . \
+          --artifact /tmp/aether-dist/*.whl \
+          --artifact /tmp/aether-dist/*.tar.gz
+        ```
+    - Result: only the two documented pre-existing `oc_0084270d940c98d9/v1.md` rows (`absolute-user-home` and `operator-desktop-layout`), identical to base `e6bae99`. No third row or operator path from `MON-D16U.md`.
 12. **Policy manifest emulation:**
     - Command: bash script emulating `.github/workflows/policy.yml` lines 26–440.
-    - Result: `Diff exit: 0`, 377 paths in base manifest exact match, 172 spec rows validated.
+    - Result: `Diff exit: 0`, 377 paths in base manifest exact match, 173 spec rows validated.
 
 ## Preservation, compatibility and residual risk
 

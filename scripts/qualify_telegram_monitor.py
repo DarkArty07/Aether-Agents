@@ -2144,7 +2144,7 @@ def _smoke_phase(
 
     The smoke uses the shipped path end to end: the owned native job is triggered
     through the native API and the resulting run must produce exactly one real
-    collected report, one accepted single-write narration, the shipped renderer's
+    collected report, one accepted narration, the shipped renderer's
     parts and one confirmed delivery.  It is bounded, is never a substitute for a
     native scheduled boundary, and refuses to start when the first boundary is too close.
     """
