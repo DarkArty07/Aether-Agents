@@ -1,5 +1,5 @@
 {
-  "observed_at_utc": "2026-09-11T16:00:00Z",
+  "observed_at_utc": "2026-09-11T22:55:11Z",
   "overall_blockers": [
     {
       "detail": "Retirement gate status is failed.",
@@ -2430,7 +2430,7 @@
     }
   ],
   "schema_version": "aether.hermes-patch-reconciliation.v1",
-  "source_ledger_sha256": "8e3efa53348c24f14b84466dee11b73b989a370c58283fde217e41bb82883e2b",
+  "source_ledger_sha256": "43b25f9497e9b84b7108d40878b1e2f09694c7a70edab7bd75759000d66b0890",
   "upstream": {
     "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
     "repository": "https://github.com/NousResearch/hermes-agent"

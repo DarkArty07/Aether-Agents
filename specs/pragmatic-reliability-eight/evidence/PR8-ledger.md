@@ -6,7 +6,7 @@
 **Fork Repository:** `DarkArty07/aether-hermes`
 **Declared Fork Base Commit:** `6551b7c31cc665d59103c6d89cb5e0c60666f803` (`origin/aether-main`)
 **Hermes Baseline (public release):** `v2026.8.18` (tag `9f13bbbf8423427e159c78066356ca0e27ca6b74`, commit `e624e9fde561e1add9388384012b295fde669ade`)
-**Inspected Upstream Revisions:** `4f22543509d1b91dc45bcb369447126c5eb14fb7` (reconciliation baseline) and `31d0a2428e9db346d6781da66f5b37ff3e12def2` (current upstream `NousResearch/hermes-agent` tip)
+**Inspected Upstream Revisions:** `4f22543509d1b91dc45bcb369447126c5eb14fb7` (reconciliation baseline) and `31d0a2428e9db346d6781da66f5b37ff3e12def2` (upstream `NousResearch/hermes-agent` main revision inspected for this reconciliation)
 
 ---
 
@@ -28,12 +28,13 @@ The fork candidate commits were verified directly against remote `https://github
 - `git ls-remote origin fix/pr8-385-review-guidance` -> `9fba8552bba30004ab452823668a105dee1ee89d` (PR #9 head matches)
 - `git ls-remote origin fix/pr8-cron-script-root-origin-cwd` -> `4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62` (PR #10 head matches)
 
-Every patch was tested with `git apply --check` against declared fork base `6551b7c31cc665d59103c6d89cb5e0c60666f803`:
-- `HLP-362-independent-review-ownership.patch`: git apply --check passed (exit 0; also applies cleanly to pristine public baseline `e624e9fde561e1add9388384012b295fde669ade`)
+`HLP-372`, `HLP-385`, `HLP-388` and `HLP-393` were tested with `git apply --check` against declared fork base `6551b7c31cc665d59103c6d89cb5e0c60666f803`:
 - `HLP-372-profile-cron-script-root.patch`: git apply --check passed (exit 0)
 - `HLP-385-review-topology-guidance.patch`: git apply --check passed (exit 0)
 - `HLP-388-cron-session-launch-workdir.patch`: git apply --check passed (exit 0)
 - `HLP-393-cron-commissioning-origin-subscription.patch`: git apply --check passed (exit 0)
+
+`HLP-362` needs no reconstruction from `6551b7c31cc665d59103c6d89cb5e0c60666f803`: its change is already merged into the maintained fork base via PR #5 (merge `8a6b33ae480373015178b80e87c88fe0abda3919` is an ancestor of `6551b7c`), so `git apply --check` of `HLP-362-independent-review-ownership.patch` against `6551b7c` exits 1, with all six target files already carrying the change (`tests/hermes_cli/test_kanban_review_independence.py` already exists there). It was verified against its own parent base `28b593efa86bbc674b32f488c35932a4e7e85a51` (git apply --check passed, exit 0) and against the pristine public baseline `e624e9fde561e1add9388384012b295fde669ade` (git apply --check passed, exit 0).
 
 Sequential application of `HLP-372` + `HLP-393` + `HLP-388` against `6551b7c31cc665d59103c6d89cb5e0c60666f803` reproduces fork tip `4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62` with 0 diff.
 
@@ -67,7 +68,7 @@ Verified by `test_initial_review_requires_an_independent_reviewer`: 11/11 tests 
 ## 4. Verification Suite Results
 
 1. **Reconciliation Validator:**
-   `uv run --frozen python scripts/validate_hermes_patch_reconciliation.py --observed-at-utc "2026-09-11T16:00:00Z" --upstream-repository "https://github.com/NousResearch/hermes-agent" --upstream-revision "4f22543509d1b91dc45bcb369447126c5eb14fb7"`
+   `uv run --frozen python scripts/validate_hermes_patch_reconciliation.py --observed-at-utc "2026-09-11T22:55:11Z" --upstream-repository "https://github.com/NousResearch/hermes-agent" --upstream-revision "4f22543509d1b91dc45bcb369447126c5eb14fb7"`
    Result: `reconciliation validation passed: specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation.v1.json, specs/001-aether-v1-productization/evidence/hermes-patch-preflight.md` (exit 0)
 
 2. **Reconciliation Suite:**
