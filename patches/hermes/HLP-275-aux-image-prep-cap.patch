@@ -1,0 +1,486 @@
+diff --git a/tests/tools/test_vision_aux_image_prep.py b/tests/tools/test_vision_aux_image_prep.py
+new file mode 100644
+index 0000000000..19892440d5
+--- /dev/null
++++ b/tests/tools/test_vision_aux_image_prep.py
+@@ -0,0 +1,440 @@
++"""Auxiliary vision path — proactive embed preparation BEFORE the first request.
++
++TS-275F regression coverage.  The auxiliary ("legacy") vision branch used to
++send whatever it had encoded: the proactive embed policy (4 MiB encoded data /
++7900 px longest side) was applied only by the native fast path.  A small-byte,
++extreme-dimension image (a tall full-page screenshot) therefore reached the
++provider unprepared and was rejected on the provider's per-side *decode* limit,
++and the reactive retry could not recover it — the routing hop reduces the
++upstream body to a generic client detail, so the size classifier never matches,
++and the payload never approaches the 5 MB resize target.
++
++These tests capture the image actually handed to the auxiliary call boundary,
++so every assertion is about the transmitted payload's geometry/bytes.  They
++never assert on prose and never on an HTTP status: a request that is accepted
++but never reads the image is not a pass.
++"""
++
++import base64
++import hashlib
++import io
++import json
++import os
++import threading
++from unittest.mock import AsyncMock, MagicMock, patch
++
++import pytest
++
++PIL = pytest.importorskip("PIL")  # noqa: F841 — fixtures need a real encoder
++from PIL import Image  # noqa: E402
++
++from tools import vision_tools  # noqa: E402
++from tools.vision_tools import (  # noqa: E402
++    _EMBED_MAX_DIMENSION,
++    _EMBED_TARGET_BYTES,
++    vision_analyze_tool,
++)
++
++
++# ---------------------------------------------------------------------------
++# helpers
++# ---------------------------------------------------------------------------
++
++
++def _solid_png(path, size, color=(30, 60, 120)):
++    Image.new("RGB", size, color).save(path, format="PNG")
++    return path
++
++
++def _noise_png(path, size):
++    """An incompressible PNG — guarantees an over-budget encoded payload."""
++    img = Image.frombytes("RGB", size, os.urandom(size[0] * size[1] * 3))
++    img.save(path, format="PNG")
++    return path
++
++
++def _decode(url):
++    head, b64 = url.split(";base64,", 1)
++    return head, base64.b64decode(b64)
++
++
++def _sent_image_url(mock_llm, index=0):
++    """The image data URL handed to the auxiliary call (call ``index``)."""
++    msgs = mock_llm.await_args_list[index].kwargs["messages"]
++    return msgs[0]["content"][1]["image_url"]["url"]
++
++
++def _sent_size(url):
++    _, raw = _decode(url)
++    with Image.open(io.BytesIO(raw)) as img:
++        return img.size
++
++
++def _ok_response(text="described"):
++    resp = MagicMock()
++    choice = MagicMock()
++    choice.message.content = text
++    resp.choices = [choice]
++    return resp
++
++
++def _mock_aux(text="described"):
++    mock = AsyncMock(return_value=_ok_response(text))
++    return patch("tools.vision_tools.async_call_llm", mock), mock
++
++
++# ---------------------------------------------------------------------------
++# the cap fires before the first request, on the encoded payload
++# ---------------------------------------------------------------------------
++
++
++class TestAuxiliaryEmbedCap:
++    @pytest.mark.asyncio
++    async def test_dimension_oversize_resized_before_first_request(self, tmp_path):
++        """Tall small-byte image: dimension bound alone triggers preparation."""
++        img = _solid_png(tmp_path / "tall.png", (128, 8000))
++        encoded = vision_tools._image_to_base64_data_url(img)
++        # The byte bound is NOT exceeded — this is the dimension-only case.
++        assert len(encoded) <= _EMBED_TARGET_BYTES
++
++        ctx, mock_llm = _mock_aux("a tall page")
++        with ctx:
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert mock_llm.await_count == 1  # prepared on the FIRST request
++        url = _sent_image_url(mock_llm)
++        assert max(_sent_size(url)) <= _EMBED_MAX_DIMENSION
++        assert len(url) <= _EMBED_TARGET_BYTES
++        # The deliberate rescale is disclosed by the existing scale note.
++        assert result.get("scale_note")
++        assert "128x8000" in result["scale_note"]
++        assert result["analysis"].startswith("[Image downscaled")
++
++    @pytest.mark.asyncio
++    async def test_byte_oversize_resized_before_first_request(self, tmp_path):
++        """Byte bound alone triggers preparation (dimensions well inside)."""
++        img = _noise_png(tmp_path / "wide.png", (512, 512))
++        encoded = vision_tools._image_to_base64_data_url(img)
++        cap = len(encoded) // 2
++        assert len(encoded) > cap
++
++        ctx, mock_llm = _mock_aux("a photo")
++        with patch.object(vision_tools, "_EMBED_TARGET_BYTES", cap), ctx:
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert mock_llm.await_count == 1
++        url = _sent_image_url(mock_llm)
++        assert len(url) <= cap
++        assert max(_sent_size(url)) <= _EMBED_MAX_DIMENSION
++
++    @pytest.mark.asyncio
++    async def test_both_bounds_oversize_resized_before_first_request(self, tmp_path):
++        """Both bounds exceeded: a single prepared payload is sent."""
++        img = _noise_png(tmp_path / "tall_noise.png", (128, 8000))
++        encoded = vision_tools._image_to_base64_data_url(img)
++        cap = len(encoded) // 2
++
++        ctx, mock_llm = _mock_aux("a tall noisy page")
++        with patch.object(vision_tools, "_EMBED_TARGET_BYTES", cap), ctx:
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert mock_llm.await_count == 1
++        url = _sent_image_url(mock_llm)
++        assert len(url) <= cap
++        assert max(_sent_size(url)) <= _EMBED_MAX_DIMENSION
++
++    @pytest.mark.asyncio
++    async def test_exact_byte_edge_is_not_prepared(self, tmp_path):
++        """At exactly the byte bound the image is sent untouched."""
++        img = _solid_png(tmp_path / "edge.png", (64, 64))
++        encoded = vision_tools._image_to_base64_data_url(img)
++
++        ctx, mock_llm = _mock_aux("a small square")
++        with (
++            patch.object(vision_tools, "_EMBED_TARGET_BYTES", len(encoded)),
++            patch.object(
++                vision_tools,
++                "_resize_image_for_vision",
++                side_effect=AssertionError("resize must not run at the edge"),
++            ),
++            ctx,
++        ):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert "scale_note" not in result
++
++    @pytest.mark.asyncio
++    async def test_within_bounds_sent_byte_identical(self, tmp_path):
++        """Inside both caps: decoded outbound bytes equal the source bytes."""
++        img = _solid_png(tmp_path / "ok.png", (320, 240))
++        source = img.read_bytes()
++        source_sha = hashlib.sha256(source).hexdigest()
++
++        ctx, mock_llm = _mock_aux("a small image")
++        with (
++            patch.object(
++                vision_tools,
++                "_resize_image_for_vision",
++                side_effect=AssertionError("within-bounds image must not resize"),
++            ),
++            ctx,
++        ):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert "scale_note" not in result
++        head, raw = _decode(_sent_image_url(mock_llm))
++        assert head == "data:image/png"
++        assert hashlib.sha256(raw).hexdigest() == source_sha
++
++    @pytest.mark.asyncio
++    async def test_exact_dimension_edge_is_not_prepared(self, tmp_path):
++        """A longest side of exactly the dimension bound is already compliant."""
++        img = _solid_png(tmp_path / "exact.png", (20, _EMBED_MAX_DIMENSION))
++
++        ctx, mock_llm = _mock_aux("an exact-edge page")
++        with (
++            patch.object(
++                vision_tools,
++                "_resize_image_for_vision",
++                side_effect=AssertionError("resize must not run at the edge"),
++            ),
++            ctx,
++        ):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert "scale_note" not in result
++        assert _sent_size(_sent_image_url(mock_llm)) == (20, _EMBED_MAX_DIMENSION)
++
++
++# ---------------------------------------------------------------------------
++# crop ordering and disclosure
++# ---------------------------------------------------------------------------
++
++
++class TestCropBeforeCap:
++    @pytest.mark.asyncio
++    async def test_compliant_crop_is_not_resized_and_offset_disclosed(self, tmp_path):
++        """The crop is taken BEFORE the cap; a compliant crop stays untouched."""
++        img = _solid_png(tmp_path / "big_tall.png", (128, 8000))
++        region = [0, 0, 128, 100]
++
++        ctx, mock_llm = _mock_aux("a cropped strip")
++        with (
++            patch.object(
++                vision_tools,
++                "_resize_image_for_vision",
++                side_effect=AssertionError("compliant crop must not be resized"),
++            ),
++            ctx,
++        ):
++            result = json.loads(
++                await vision_analyze_tool(str(img), "describe", region=region)
++            )
++
++        assert result["success"] is True
++        url = _sent_image_url(mock_llm)
++        assert _sent_size(url) == (128, 100)
++        # The crop's own coordinate disclosure survives; no downscale clause.
++        assert "cropped region" in result["scale_note"]
++        assert "downscaled" not in result["scale_note"]
++
++    @pytest.mark.asyncio
++    async def test_oversize_crop_is_prepared_with_both_notes(self, tmp_path):
++        """A crop that is still over the dimension bound gets prepared."""
++        img = _solid_png(tmp_path / "full.png", (128, 8000))
++
++        ctx, mock_llm = _mock_aux("a cropped tall page")
++        with ctx:
++            result = json.loads(
++                await vision_analyze_tool(
++                    str(img), "describe", region=[0, 0, 128, 8000]
++                )
++            )
++
++        assert result["success"] is True
++        url = _sent_image_url(mock_llm)
++        assert max(_sent_size(url)) <= _EMBED_MAX_DIMENSION
++        note = result["scale_note"]
++        assert "downscaled" in note and "cropped region" in note
++
++
++# ---------------------------------------------------------------------------
++# rejected sources never reach the auxiliary call
++# ---------------------------------------------------------------------------
++
++
++class TestRejectedSourcesBeforeModelCall:
++    @pytest.mark.asyncio
++    async def test_non_image_local_file_rejected_before_aux_call(self, tmp_path):
++        secret = tmp_path / "notes.txt"
++        secret.write_text("not an image\n", encoding="utf-8")
++
++        ctx, mock_llm = _mock_aux()
++        with ctx:
++            result = json.loads(await vision_analyze_tool(str(secret), "read it"))
++
++        assert result["success"] is False
++        mock_llm.assert_not_awaited()
++
++    @pytest.mark.asyncio
++    async def test_missing_local_file_rejected_before_aux_call(self, tmp_path):
++        ctx, mock_llm = _mock_aux()
++        with ctx:
++            result = json.loads(
++                await vision_analyze_tool(str(tmp_path / "absent.png"), "read it")
++            )
++
++        assert result["success"] is False
++        mock_llm.assert_not_awaited()
++
++
++# ---------------------------------------------------------------------------
++# no new retry class, no CPU on the event loop, no residue
++# ---------------------------------------------------------------------------
++
++
++class TestNoNewRetryOrResidue:
++    @pytest.mark.asyncio
++    async def test_generic_400_is_not_retried(self, tmp_path):
++        """A generic rejection detail (no size semantics) gets no retry."""
++        img = _solid_png(tmp_path / "page.png", (128, 8000))
++        err = Exception("Error code: 400 - {'detail': 'opencode rejected the request'}")
++
++        mock_llm = AsyncMock(side_effect=err)
++        with patch("tools.vision_tools.async_call_llm", mock_llm):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is False
++        assert mock_llm.await_count == 1
++
++    @pytest.mark.asyncio
++    async def test_size_classified_rejection_below_resize_target_not_retried(
++        self, tmp_path
++    ):
++        """Existing classifier behavior is preserved, not broadened."""
++        img = _solid_png(tmp_path / "page.png", (128, 8000))
++        err = Exception("Error code: 400 - image_url exceeds the size limit")
++
++        mock_llm = AsyncMock(side_effect=err)
++        with patch("tools.vision_tools.async_call_llm", mock_llm):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        # Prepared payload is far below the 5 MB resize target -> single attempt.
++        assert result["success"] is False
++        assert "scale_note" not in result
++        assert mock_llm.await_count == 1
++
++    @pytest.mark.asyncio
++    async def test_preparation_runs_on_the_bounded_cpu_executor(self, tmp_path):
++        """Dimension inspection and resizing stay off the event-loop thread."""
++        img = _solid_png(tmp_path / "tall.png", (128, 8000))
++        seen = {}
++        real_dims = vision_tools._image_exceeds_dimension
++        real_resize = vision_tools._resize_image_for_vision
++
++        def spy_dims(*args, **kwargs):
++            seen["dims_thread"] = threading.current_thread().name
++            return real_dims(*args, **kwargs)
++
++        def spy_resize(*args, **kwargs):
++            seen["resize_thread"] = threading.current_thread().name
++            return real_resize(*args, **kwargs)
++
++        ctx, mock_llm = _mock_aux("a tall page")
++        with (
++            patch.object(
++                vision_tools, "_image_exceeds_dimension", side_effect=spy_dims
++            ),
++            patch.object(
++                vision_tools, "_resize_image_for_vision", side_effect=spy_resize
++            ),
++            ctx,
++        ):
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        loop_thread = threading.current_thread().name
++        for key in ("dims_thread", "resize_thread"):
++            assert key in seen
++            assert seen[key] != loop_thread
++            assert seen[key].startswith("vision-encode")
++
++    @pytest.mark.asyncio
++    async def test_no_temp_residue_and_source_file_untouched(self, tmp_path):
++        """User originals are never consumed; temp encodes are cleaned up."""
++        img = _solid_png(tmp_path / "mine.png", (128, 8000))
++        before = img.read_bytes()
++
++        from hermes_constants import get_hermes_dir
++
++        temp_dir = get_hermes_dir("cache/vision", "temp_vision_images")
++
++        ctx, mock_llm = _mock_aux("a tall page")
++        with ctx:
++            result = json.loads(await vision_analyze_tool(str(img), "describe"))
++
++        assert result["success"] is True
++        assert img.exists() and img.read_bytes() == before
++        leftovers = (
++            sorted(p.name for p in temp_dir.glob("temp_image_*"))
++            if temp_dir.exists()
++            else []
++        )
++        assert leftovers == []
++
++
++# ---------------------------------------------------------------------------
++# the native branch and the Responses conversion are unchanged
++# ---------------------------------------------------------------------------
++
++
++class TestUntouchedSurfaces:
++    def test_native_branch_still_applies_the_same_policy(self, tmp_path):
++        from tools.vision_tools import _vision_analyze_native
++
++        img = _solid_png(tmp_path / "tall_native.png", (128, 8000))
++        result = __import__("asyncio").run(_vision_analyze_native(str(img), "describe"))
++
++        assert result.get("_multimodal") is True
++        url = result["content"][1]["image_url"]["url"]
++        assert max(_sent_size(url)) <= _EMBED_MAX_DIMENSION
++        assert "128x8000" in result["content"][0]["text"]
++
++    @pytest.mark.asyncio
++    async def test_responses_conversion_carries_prepared_bytes_exactly(self, tmp_path):
++        """The chat-to-Responses hop does not rewrite the prepared payload."""
++        from agent.codex_responses_adapter import _chat_messages_to_responses_input
++
++        img = _solid_png(tmp_path / "tall.png", (128, 8000))
++
++        ctx, mock_llm = _mock_aux("a tall page")
++        with ctx:
++            await vision_analyze_tool(str(img), "describe")
++
++        messages = mock_llm.await_args.kwargs["messages"]
++        items = _chat_messages_to_responses_input(messages)
++        sent = _sent_image_url(mock_llm)
++        found = []
++
++        def _walk(node):
++            if isinstance(node, dict):
++                if node.get("type") == "input_image":
++                    found.append(node.get("image_url"))
++                for value in node.values():
++                    _walk(value)
++            elif isinstance(node, list):
++                for value in node:
++                    _walk(value)
++
++        _walk(items)
++        assert found == [sent]
++        assert (
++            hashlib.sha256(_decode(found[0])[1]).hexdigest()
++            == hashlib.sha256(_decode(sent)[1]).hexdigest()
++        )
+diff --git a/tools/vision_tools.py b/tools/vision_tools.py
+index e008983f7f..6303559bc5 100644
+--- a/tools/vision_tools.py
++++ b/tools/vision_tools.py
+@@ -1454,6 +1454,35 @@ async def vision_analyze_tool(
+                     f"or compress the image manually."
+                 )
+ 
++        # Proactive embed cap — same policy the native fast path applies above.
++        # The provider enforces a per-side ceiling INDEPENDENTLY of the byte
++        # size, so a small-byte tall screenshot (e.g. 800x40000 at 0.2 MB)
++        # passes every byte check yet is rejected on its *decode* limit.  The
++        # reactive retry below cannot recover that class: the client-visible
++        # detail carries no size semantics for the classifier, and the payload
++        # is far under the 5 MB resize target.  Resize DOWN to the embed
++        # target (4 MB / 7900px, headroom under both ceilings) whenever the
++        # encoded payload exceeds either bound, before the first request.
++        # Within-bounds images are sent byte-identical — no resize, no
++        # re-encode.
++        _over_bytes = len(image_data_url) > _EMBED_TARGET_BYTES
++        _over_dims = await _run_encode_on_cpu_executor(
++            _image_exceeds_dimension, temp_image_path, _EMBED_MAX_DIMENSION,
++        )
++        if _over_bytes or _over_dims:
++            logger.info(
++                "Image exceeds proactive embed cap (%.1f MB, max_dimension=%s); "
++                "resizing before the first vision request...",
++                len(image_data_url) / (1024 * 1024), _EMBED_MAX_DIMENSION,
++            )
++            image_data_url = await _run_encode_on_cpu_executor(
++                _resize_image_for_vision,
++                temp_image_path, mime_type=detected_mime_type,
++                max_base64_bytes=_EMBED_TARGET_BYTES,
++                max_dimension=_EMBED_MAX_DIMENSION,
++                scale_out=_scale_info,
++            )
++
+         debug_call_data["image_size_bytes"] = image_size_bytes
+         
+         # Use the prompt as provided (model_tools.py now handles full description formatting)

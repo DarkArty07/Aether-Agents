@@ -1,0 +1,71 @@
+{
+  "id": "HLP-275",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-275--proactive-auxiliary-image-preparation",
+  "components": [
+    "HLP-275",
+    "tools/vision_tools.py",
+    "tests/tools/test_vision_aux_image_prep.py"
+  ],
+  "required_behavior": "The auxiliary vision path applies the existing encoded-data/embedded-dimension embed policy before constructing the first auxiliary request, so an oversized prepared image is normalized by the existing bounded resizer with scale disclosure while an already-compliant image is transmitted byte-identically and is never re-encoded.",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_PARTIAL",
+  "upstream": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/275"
+      }
+    ],
+    "disposition": "upstream_partial",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/tools/vision_tools.py",
+        "result": "The inspected revision already applies a proactive embed cap in the auxiliary path, but with materially stricter thresholds (_EMBED_TARGET_BYTES 256 KiB and _EMBED_MAX_DIMENSION 1568 px) than the maintained source's policy, so it would re-encode a within-policy 5000x5000 control that this objective requires to stay byte-identical."
+      }
+    ]
+  },
+  "retirement_gate": {
+    "summary": "Retire only when an adopted exact Hermes release applies a proactive auxiliary-image cap whose thresholds preserve this objective's within-cap byte fidelity and pass the unchanged pre/post oracle including the image-only content read.",
+    "status": "not_executed",
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "specs/006-tools-memory-stability/evidence/TS-275-research.md and fixtures/ts275-*.png through the provisioned route",
+        "result": "PRE reproduced the decode-limit rejection on the untouched runtime revision; POST through the provisioned route returned success:true and read the image-only content, one attempt, with both within-cap controls byte-identical. The recorded upstream mechanism was not run against this oracle."
+      }
+    ]
+  },
+  "artifact_verification": {
+    "status": "passed",
+    "artifacts": [
+      {
+        "kind": "patch",
+        "reference": "patches/hermes/HLP-275-aux-image-prep-cap.patch",
+        "result": "passed",
+        "ledger_sha256": "10a964f82d9ad5818105cd052ce71febd50d91e8c1e99f171e2464b1b2887f0e",
+        "computed_sha256": "10a964f82d9ad5818105cd052ce71febd50d91e8c1e99f171e2464b1b2887f0e",
+        "checksum_status": "passed",
+        "parse_status": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against an archived tree at fork base 266e412fb83ad32af92ed391db942f88993d76a2",
+        "result": "passed"
+      }
+    ],
+    "blocker": "Portable reconstruction and the reviewed fork candidate passed locally. Upstream carries an equivalent mechanism class with different thresholds, so retirement would require requalifying the oracle against those thresholds before the local patch can be dropped."
+  },
+  "retirement_recommendation": "retain",
+  "blocking_uncertainty": [
+    "The provider's exact per-side image limit remains bounded but unknown; the reused policy (4 MiB encoded data / 7,900 px) lies between the largest observed-accepted side and the smallest observed-rejected side.",
+    "The upstream mechanism's stricter thresholds change within-cap byte behavior relative to this objective's documented controls, so it is not a drop-in replacement without a new oracle run."
+  ],
+  "summary": "Retain HLP-275. The auxiliary vision path now applies the repository's existing embed policy before the first request, so oversized small-byte images are normalized by the existing resizer with scale disclosure and within-policy images stay byte-identical. Upstream already carries a stricter-threshold variant of the same mechanism, so this entry is a retirement candidate only after oracle requalification."
+}
