@@ -19,11 +19,11 @@ def test_project_skill_is_discovered_without_identity_hardcoding() -> None:
     assert ".aether/skills/aether-observe/SKILL.md" in (ROOT / "AGENTS.md").read_text()
     assert "/home/" not in text and "/Users/" not in text
     soul = (ROOT / "src/aether_agents/resources/profiles/morfeo/SOUL.md").read_text()
-    section = soul.split("## Monitoring contract work", 1)[1].split("\n## ", 1)[0]
+    section = soul.split("### Status and observation", 1)[1].split("\n### ", 1)[0]
     for required in ("aether_observe", "freshness", "coverage", "targeted", "independent review"):
         assert required in section
     assert ".aether/skills/aether-observe" not in section
-    assert "## Completing pipeline work" in soul
+    assert "### Final result acceptance" in soul
     assert "contract-result-review" in soul
 
 
