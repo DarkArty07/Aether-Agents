@@ -25,6 +25,7 @@ from observation_helpers import PROJECT_ID, TRACE_ID, EventFactory, complete_tra
 
 from aether_agents.cli import main
 from aether_agents.commands.observe import run_observe
+from aether_agents.objective_contracts.execution_boards import execution_board_slug
 from aether_agents.observation import query, report
 from aether_agents.observation.brief import observe as observe_brief
 from aether_agents.observation.capture.journal import JournalWriter, list_segments, read_segment
@@ -1129,9 +1130,30 @@ def test_worker_exit_hook_preserves_each_native_run_outcome(
 
 
 def _create_native_databases(root: Path) -> tuple[Path, Path]:
-    board = root / "kanban.db"
+    slug = execution_board_slug(PROJECT_ID, "oc_1234567890abcdef", 1)
+    board_dir = root / "kanban" / "boards" / slug
+    board_dir.mkdir(parents=True, exist_ok=True)
+    board = board_dir / "kanban.db"
+    metadata_path = board_dir / "board.json"
+    metadata = {
+        "slug": slug,
+        "name": "Objective oc_1234567890abcdef@v1",
+        "description": "Aether Objective Contract execution board",
+        "icon": "",
+        "color": "",
+        "default_workdir": str(root),
+        "project_id": PROJECT_ID,
+        "aether_project_id": PROJECT_ID,
+        "aether_contract_id": "oc_1234567890abcdef",
+        "aether_contract_version": 1,
+        "observation_trace_id": TRACE_ID,
+        "created_at": 1700000000,
+        "archived": False,
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     state_home = root / "hermes" / "profiles" / "morfeo"
-    state_home.mkdir(parents=True)
+    state_home.mkdir(parents=True, exist_ok=True)
+    os.environ["HERMES_KANBAN_HOME"] = str(root)
     with sqlite3.connect(board) as connection:
         connection.executescript(
             """
