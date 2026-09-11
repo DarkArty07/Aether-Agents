@@ -4,6 +4,12 @@ Provides one package-owned operation to reconcile editable Hermes mappings
 transactionally across every provisioned interpreter, capture private backups,
 verify intended module origins via env -i / python -I canaries, and roll back
 metadata atomically if any interpreter fails.
+
+Targets are inspected before anything is mutated: a clean release installation
+(or a missing distribution) is refused with ``NonEditableTargetError`` and a
+receipt, so this authorized dirty-runtime reconciliation never converts or
+damages a non-editable interpreter. Clean release installation stays strict
+and separate.
 """
 
 from __future__ import annotations
@@ -47,6 +53,16 @@ class EditableReconciliationError(RuntimeError):
         self.receipt = receipt
 
 
+class NonEditableTargetError(EditableReconciliationError):
+    """Raised when a target interpreter's Hermes distribution is not editable.
+
+    The reconciliation refuses such a target before mutating anything: its
+    receipt reports the refusal (interpreter status ``refused``) and the other
+    targets stay untouched (``not_attempted``). A clean release installation is
+    never silently converted into an editable one.
+    """
+
+
 class ForkPackagingError(RuntimeError):
     """Raised when maintained-fork packaging metadata is inconsistent with source."""
 
@@ -85,7 +101,7 @@ class InterpreterReconciliationReceipt:
     pre_fingerprints: dict[str, str]
     post_fingerprints: dict[str, str]
     canary_results: tuple[ModuleCanaryResult, ...]
-    status: str  # "reconciled" | "rolled_back" | "failed"
+    status: str  # "reconciled" | "rolled_back" | "refused" | "not_attempted"
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -153,6 +169,20 @@ class ForkPackagingCheckResult:
             "is_coherent": self.is_coherent,
             "error": self.error,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class _TargetInspection:
+    """Read-only pre-flight inspection of one target interpreter."""
+
+    interpreter: Path
+    site_packages: Path
+    dist_info_dir: Path | None
+    editable_files: dict[str, Path]
+    direct_url: dict[str, Any]
+    version: str
+    is_editable: bool
+    reason: str | None
 
 
 @dataclass
@@ -277,8 +307,13 @@ def get_interpreter_site_packages(interpreter: Path) -> Path:
 def find_editable_metadata(
     site_packages: Path,
     dist_name: str,
-) -> tuple[Path | None, dict[str, Path]]:
-    """Discover editable dist-info and associated files in site-packages."""
+) -> tuple[Path | None, dict[str, Path], dict[str, Path]]:
+    """Discover editable dist-info, associated files, and generated mapping artifacts.
+
+    Returns the dist-info directory (if any), every file belonging to the editable
+    metadata set (dist-info contents plus generated artifacts), and the generated
+    editable mapping artifacts themselves (``__editable__*`` / ``_editable_impl_*``).
+    """
     normalized = dist_name.lower().replace("-", "_")
     dist_info_dir: Path | None = None
 
@@ -291,15 +326,16 @@ def find_editable_metadata(
                 dist_info_dir = entry
                 break
 
-    editable_files: dict[str, Path] = {}
+    dist_info_files: dict[str, Path] = {}
     if dist_info_dir is not None:
         for rootpath, _, filenames in os.walk(dist_info_dir):
             for fname in filenames:
                 fpath = Path(rootpath) / fname
                 rel = fpath.relative_to(site_packages).as_posix()
-                editable_files[rel] = fpath
+                dist_info_files[rel] = fpath
 
     # Look for .pth and finder files associated with the editable distribution
+    editable_artifacts: dict[str, Path] = {}
     pth_patterns = [
         f"__editable__.{dist_name}-*.pth",
         f"__editable__.{normalized}-*.pth",
@@ -309,7 +345,7 @@ def find_editable_metadata(
     for pattern in pth_patterns:
         for pth in site_packages.glob(pattern):
             rel = pth.relative_to(site_packages).as_posix()
-            editable_files[rel] = pth
+            editable_artifacts[rel] = pth
 
     finder_patterns = [
         f"__editable___{normalized}_*_finder.py",
@@ -319,9 +355,83 @@ def find_editable_metadata(
     for pattern in finder_patterns:
         for finder in site_packages.glob(pattern):
             rel = finder.relative_to(site_packages).as_posix()
-            editable_files[rel] = finder
+            editable_artifacts[rel] = finder
 
-    return dist_info_dir, editable_files
+    editable_files = {**dist_info_files, **editable_artifacts}
+    return dist_info_dir, editable_files, editable_artifacts
+
+
+def _read_distribution_version(dist_info_dir: Path | None, fallback: str) -> str:
+    """Read the ``Version`` field from a dist-info METADATA file without side effects."""
+    if dist_info_dir is not None:
+        metadata_path = dist_info_dir / "METADATA"
+        if metadata_path.is_file():
+            try:
+                for line in metadata_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("Version:"):
+                        return line.split(":", 1)[1].strip()
+            except (OSError, UnicodeDecodeError):
+                pass
+    return fallback
+
+
+def inspect_editable_target(interpreter: Path, dist_name: str) -> _TargetInspection:
+    """Inspect one interpreter's Hermes installation without mutating anything.
+
+    Classifies the installed distribution from its PEP 610 ``direct_url`` identity
+    and the generated editable mapping files. ``is_editable`` is True only for an
+    installed distribution whose ``dir_info.editable`` is true or that carries
+    generated ``__editable__*`` / ``_editable_impl_*`` artifacts; a clean release
+    installation or a missing distribution is reported as non-editable so the
+    caller can refuse it before any mutation.
+    """
+    site_packages = get_interpreter_site_packages(interpreter)
+    dist_info_dir, editable_files, editable_artifacts = find_editable_metadata(
+        site_packages, dist_name
+    )
+
+    direct_url_info: dict[str, Any] = {}
+    if dist_info_dir is not None:
+        direct_url_path = dist_info_dir / "direct_url.json"
+        if direct_url_path.is_file():
+            try:
+                parsed = json.loads(direct_url_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                parsed = None
+            if isinstance(parsed, dict):
+                direct_url_info = parsed
+
+    dir_info = direct_url_info.get("dir_info")
+    editable_by_direct_url = isinstance(dir_info, dict) and dir_info.get("editable") is True
+    editable_by_artifacts = bool(editable_artifacts)
+
+    if dist_info_dir is None:
+        is_editable = False
+        reason = (
+            f"{dist_name} is not installed in {interpreter}: no "
+            f"{dist_name.lower().replace('-', '_')}*.dist-info in {site_packages}"
+        )
+    elif editable_by_direct_url or editable_by_artifacts:
+        is_editable = True
+        reason = None
+    else:
+        is_editable = False
+        reason = (
+            f"{dist_name} in {interpreter} is not an editable installation "
+            "(no PEP 610 dir_info.editable and no generated editable mapping "
+            "files); refusing to convert a clean release installation"
+        )
+
+    return _TargetInspection(
+        interpreter=interpreter,
+        site_packages=site_packages,
+        dist_info_dir=dist_info_dir,
+        editable_files=editable_files,
+        direct_url=direct_url_info,
+        version=_read_distribution_version(dist_info_dir, ""),
+        is_editable=is_editable,
+        reason=reason,
+    )
 
 
 def compute_file_fingerprints(files: dict[str, Path]) -> dict[str, str]:
@@ -352,7 +462,7 @@ def restore_private_backup(
 ) -> None:
     """Restore private backup into site-packages, removing any new files."""
     # First, find whatever editable files exist now in site-packages
-    _, current_files = find_editable_metadata(site_packages, dist_name)
+    _, current_files, _ = find_editable_metadata(site_packages, dist_name)
     # Remove files that were not in pre_files or are newly created
     for rel_name, path in current_files.items():
         if path.exists() and not path.is_symlink():
@@ -636,8 +746,14 @@ def reconcile_hermes_editable(
         offline: Whether to enforce offline installation (--offline).
         expected_modules: Explicit sequence of top-level modules to verify via canaries.
         verify_imports: Whether canaries attempt actual importlib.import_module.
-        raise_on_failure: Whether to raise EditableReconciliationError on failure/rollback.
+        raise_on_failure: Whether to raise EditableReconciliationError on failure or
+            rollback. Pre-mutation refusals always raise, regardless of this flag.
         _fault_injection: Private test hook for deterministic failure simulation.
+
+    Raises:
+        NonEditableTargetError: A target interpreter's Hermes distribution is not an
+            editable install (or is missing). Raised before any source or
+            site-packages mutation, with a refusal receipt attached.
 
     Returns:
         EditableReconciliationReceipt recording pre/post fingerprints and status.
@@ -687,47 +803,71 @@ def reconcile_hermes_editable(
             seen.add(interp_path)
             resolved_interpreters.append(interp_path)
 
-    # 1. Clean pre-existing build debris and capture source fingerprints
+    # 1. Read-only pre-flight: classify every target before touching anything.
+    # A non-editable (clean release) target is refused before the source or any
+    # site-packages is mutated, so this operation never converts a release install.
+    inspections = [inspect_editable_target(interp, dist_name) for interp in resolved_interpreters]
+    refused_targets = [insp for insp in inspections if not insp.is_editable]
+    if refused_targets:
+        refusal_receipt = EditableReconciliationReceipt(
+            status="failed",
+            source_path=str(resolved_source),
+            source_tree_sha256=compute_source_tree_sha256(resolved_source),
+            source_git_status=get_git_status(resolved_source),
+            offline=offline,
+            interpreters=tuple(
+                InterpreterReconciliationReceipt(
+                    interpreter=str(insp.interpreter),
+                    site_packages=str(insp.site_packages),
+                    distribution=dist_name,
+                    version=insp.version or expected_version,
+                    direct_url=insp.direct_url,
+                    pre_fingerprints=compute_file_fingerprints(insp.editable_files),
+                    post_fingerprints={},
+                    canary_results=(),
+                    status="refused" if not insp.is_editable else "not_attempted",
+                    error=insp.reason,
+                )
+                for insp in inspections
+            ),
+            rolled_back=False,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        raise NonEditableTargetError(
+            "Editable reconciliation refused before any mutation; non-editable "
+            "target(s): "
+            + "; ".join(f"{insp.interpreter}: {insp.reason}" for insp in refused_targets),
+            receipt=refusal_receipt,
+        )
+
+    # 2. Clean pre-existing build debris and capture source fingerprints
     remove_editable_build_debris(resolved_source, dist_name)
     source_tree_sha256 = compute_source_tree_sha256(resolved_source)
     source_git_status = get_git_status(resolved_source)
 
-    # 2. Inspect interpreters, collect pre-fingerprints, and create private backups
+    # 3. Collect pre-fingerprints and create private backups
     backup_root = Path(tempfile.mkdtemp(prefix="aether-editable-backup-"))
     os.chmod(backup_root, 0o700)
 
     interpreter_data: list[_InterpreterStaging] = []
     try:
-        for idx, interp in enumerate(resolved_interpreters):
-            sp = get_interpreter_site_packages(interp)
-            dist_info_dir, editable_files = find_editable_metadata(sp, dist_name)
-
-            direct_url_info: dict[str, Any] = {}
-            if dist_info_dir is not None:
-                direct_url_path = dist_info_dir / "direct_url.json"
-                if direct_url_path.is_file():
-                    try:
-                        direct_url_info = json.loads(direct_url_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        pass
-
-            pre_fp = compute_file_fingerprints(editable_files)
+        for idx, insp in enumerate(inspections):
             interp_backup_dir = backup_root / f"interp_{idx}"
-            create_private_backup(editable_files, interp_backup_dir)
+            create_private_backup(insp.editable_files, interp_backup_dir)
 
             interpreter_data.append(
                 _InterpreterStaging(
-                    interpreter=interp,
-                    site_packages=sp,
-                    dist_info_dir=dist_info_dir,
-                    editable_files=editable_files,
-                    pre_fingerprints=pre_fp,
+                    interpreter=insp.interpreter,
+                    site_packages=insp.site_packages,
+                    dist_info_dir=insp.dist_info_dir,
+                    editable_files=insp.editable_files,
+                    pre_fingerprints=compute_file_fingerprints(insp.editable_files),
                     backup_dir=interp_backup_dir,
-                    direct_url=direct_url_info,
+                    direct_url=insp.direct_url,
                 )
             )
 
-        # 3. Transactional execution: update all interpreters
+        # 4. Transactional execution: update all interpreters
         modified_interpreters: list[int] = []
         try:
             for idx, stage in enumerate(interpreter_data):
@@ -843,10 +983,9 @@ def reconcile_hermes_editable(
             interp_receipts: list[InterpreterReconciliationReceipt] = []
             for idx, stage in enumerate(interpreter_data):
                 sp = stage.site_packages
-                dist_info_dir, editable_files = find_editable_metadata(sp, dist_name)
+                dist_info_dir, editable_files, _ = find_editable_metadata(sp, dist_name)
 
                 post_direct_url: dict[str, Any] = {}
-                observed_version = expected_version
                 if dist_info_dir is not None:
                     direct_url_path = dist_info_dir / "direct_url.json"
                     if direct_url_path.is_file():
@@ -856,12 +995,7 @@ def reconcile_hermes_editable(
                             )
                         except Exception:
                             pass
-                    metadata_path = dist_info_dir / "METADATA"
-                    if metadata_path.is_file():
-                        for line in metadata_path.read_text(encoding="utf-8").splitlines():
-                            if line.startswith("Version:"):
-                                observed_version = line.split(":", 1)[1].strip()
-                                break
+                observed_version = _read_distribution_version(dist_info_dir, expected_version)
 
                 post_fp = compute_file_fingerprints(editable_files)
                 interp_receipts.append(
@@ -900,7 +1034,7 @@ def reconcile_hermes_editable(
                 sp = stage.site_packages
                 backup_dir = stage.backup_dir
                 restore_private_backup(backup_dir, sp, stage.editable_files, dist_name)
-                _, restored_files = find_editable_metadata(sp, dist_name)
+                _, restored_files, _ = find_editable_metadata(sp, dist_name)
                 restored_fp = compute_file_fingerprints(restored_files)
 
                 rolled_back_receipts.append(

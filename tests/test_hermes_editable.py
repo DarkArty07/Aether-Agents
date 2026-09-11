@@ -13,6 +13,7 @@ import pytest
 from aether_agents.hermes_editable import (
     EditableReconciliationError,
     ForkPackagingError,
+    NonEditableTargetError,
     assert_fork_packaging_coherent,
     check_fork_packaging_inventory,
     compute_source_tree_sha256,
@@ -95,6 +96,40 @@ def _initial_editable_install(python: Path, source: Path) -> None:
         check=False,
     )
     assert completed.returncode == 0, f"Initial editable install failed: {completed.stderr}"
+
+
+def _non_editable_wheel_install(python: Path, source: Path, work_dir: Path) -> None:
+    """Install the disposable fork as a clean, non-editable release wheel."""
+    wheel_dir = work_dir / "wheels"
+    built = subprocess.run(
+        ["uv", "build", "--wheel", "--offline", "--out-dir", str(wheel_dir)],
+        cwd=source,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, f"uv build --wheel failed: {built.stderr}"
+    wheels = sorted(wheel_dir.glob("*.whl"))
+    assert len(wheels) == 1, f"Expected exactly one built wheel, found: {wheels}"
+
+    installed = subprocess.run(
+        [
+            "uv",
+            "--no-config",
+            "pip",
+            "install",
+            "--link-mode=copy",
+            "--python",
+            str(python),
+            "--no-deps",
+            "--offline",
+            str(wheels[0]),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert installed.returncode == 0, f"Non-editable wheel install failed: {installed.stderr}"
 
 
 def test_red_green_editable_reconciliation(tmp_path: Path) -> None:
@@ -436,6 +471,251 @@ def test_atomic_rollback_on_canary_failure(tmp_path: Path) -> None:
 
     finder1_after = list(sp1.glob("__editable___hermes_agent_*_finder.py"))[0].read_bytes()
     assert finder1_after == finder1_before, "Interpreter 1 was not restored after canary fault"
+
+
+def test_non_editable_target_refused_before_mutation(tmp_path: Path) -> None:
+    """A clean release (non-editable) target is refused before anything is mutated.
+
+    Regression pin for the round-1 review: previously the operation converted a
+    non-editable install and, on failure, reported ``rolled_back`` while the
+    installed module file was gone. Now the distribution identity is inspected
+    first and a non-editable target is refused without any mutation.
+    """
+    modules = ["hermes_constants"]
+    fork_dir = _create_disposable_hermes_fork(tmp_path / "fork", modules=modules)
+    venv = _create_disposable_venv(tmp_path / "venv")
+    _non_editable_wheel_install(venv, fork_dir, tmp_path)
+
+    sp = get_interpreter_site_packages(venv)
+    module_path = sp / "hermes_constants.py"
+    dist_info_dir = next(sp.glob("hermes_agent-*.dist-info"))
+    pre_files = [module_path, *(p for p in sorted(dist_info_dir.rglob("*")) if p.is_file())]
+    pre_payloads = {p.relative_to(sp).as_posix(): p.read_bytes() for p in pre_files}
+
+    def resolved_origin() -> Path:
+        completed = subprocess.run(
+            [
+                str(venv),
+                "-I",
+                "-c",
+                "import importlib.util; print(importlib.util.find_spec('hermes_constants').origin)",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={},
+        )
+        assert completed.returncode == 0, completed.stderr
+        return Path(completed.stdout.strip()).resolve()
+
+    # Pre-condition: a real clean release install, resolving from site-packages.
+    assert resolved_origin() == module_path.resolve()
+    status_before = get_git_status(fork_dir)
+    egg_info_before = (fork_dir / "hermes_agent.egg-info").exists()
+
+    with pytest.raises(NonEditableTargetError) as exc_info:
+        reconcile_hermes_editable(
+            source=fork_dir,
+            interpreters=[venv],
+            offline=True,
+            expected_modules=modules,
+        )
+
+    receipt = exc_info.value.receipt
+    assert receipt is not None
+    assert receipt.status == "failed"
+    assert receipt.rolled_back is False
+    assert receipt.interpreters[0].status == "refused"
+    assert "not an editable installation" in (receipt.interpreters[0].error or "")
+    assert receipt.interpreters[0].direct_url, "Refusal receipt must record the observed identity"
+    assert receipt.interpreters[0].direct_url.get("dir_info", {}).get("editable") is not True
+    assert "refused before any mutation" in str(exc_info.value)
+
+    # No site-packages mutation: pre-existing files byte-identical, no new artifacts.
+    for rel, payload in pre_payloads.items():
+        assert (sp / rel).is_file(), f"Refusal removed {rel}"
+        assert (sp / rel).read_bytes() == payload, f"Refusal modified {rel}"
+    assert not list(sp.glob("__editable__*")), "Refusal created editable mapping artifacts"
+    assert not list(sp.glob("_editable_impl_hermes*"))
+    assert resolved_origin() == module_path.resolve(), "Refusal changed resolution"
+
+    # No source mutation: status and build debris are unchanged.
+    assert get_git_status(fork_dir) == status_before
+    assert (fork_dir / "hermes_agent.egg-info").exists() == egg_info_before
+
+
+def test_mixed_targets_refused_without_mutating_editable_target(tmp_path: Path) -> None:
+    """One non-editable target refuses the transaction before ANY interpreter is touched."""
+    modules = ["hermes_constants"]
+    fork_dir = _create_disposable_hermes_fork(tmp_path / "fork", modules=modules)
+    editable_venv = _create_disposable_venv(tmp_path / "venv-editable")
+    release_venv = _create_disposable_venv(tmp_path / "venv-release")
+    _initial_editable_install(editable_venv, fork_dir)
+    _non_editable_wheel_install(release_venv, fork_dir, tmp_path)
+
+    editable_sp = get_interpreter_site_packages(editable_venv)
+    editable_artifacts = [
+        *sorted(editable_sp.glob("__editable__*")),
+        *sorted(editable_sp.glob("_editable_impl_hermes*")),
+    ]
+    assert editable_artifacts, "Expected the editable pre-state to carry mapping artifacts"
+    artifacts_before = {p.name: p.read_bytes() for p in editable_artifacts}
+    editable_dist_info = next(editable_sp.glob("hermes_agent-*.dist-info"))
+    dist_info_before = {
+        p.relative_to(editable_sp).as_posix(): p.read_bytes()
+        for p in sorted(editable_dist_info.rglob("*"))
+        if p.is_file()
+    }
+
+    release_sp = get_interpreter_site_packages(release_venv)
+    release_module = release_sp / "hermes_constants.py"
+    release_before = release_module.read_bytes()
+
+    with pytest.raises(NonEditableTargetError) as exc_info:
+        reconcile_hermes_editable(
+            source=fork_dir,
+            interpreters=[editable_venv, release_venv],
+            offline=True,
+            expected_modules=modules,
+        )
+
+    receipt = exc_info.value.receipt
+    assert receipt is not None
+    assert receipt.status == "failed"
+    assert receipt.rolled_back is False
+    assert [entry.status for entry in receipt.interpreters] == ["not_attempted", "refused"]
+
+    # The editable target was never converted, reinstalled or otherwise touched.
+    for name, payload in artifacts_before.items():
+        assert (editable_sp / name).read_bytes() == payload, f"Editable artifact {name} changed"
+    for rel, payload in dist_info_before.items():
+        assert (editable_sp / rel).read_bytes() == payload, f"Editable metadata {rel} changed"
+    assert release_module.read_bytes() == release_before
+
+    # The editable target still resolves every module from the exact source.
+    completed = subprocess.run(
+        [
+            str(editable_venv),
+            "-I",
+            "-c",
+            "import importlib.util; print(importlib.util.find_spec('hermes_constants').origin)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={},
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert Path(completed.stdout.strip()).resolve() == (fork_dir / "hermes_constants.py").resolve()
+
+
+def test_missing_distribution_target_refused(tmp_path: Path) -> None:
+    """A target interpreter without the Hermes distribution is refused before mutation."""
+    modules = ["hermes_constants"]
+    fork_dir = _create_disposable_hermes_fork(tmp_path / "fork", modules=modules)
+    venv = _create_disposable_venv(tmp_path / "venv")
+
+    with pytest.raises(NonEditableTargetError) as exc_info:
+        reconcile_hermes_editable(
+            source=fork_dir,
+            interpreters=[venv],
+            offline=True,
+            expected_modules=modules,
+        )
+
+    receipt = exc_info.value.receipt
+    assert receipt is not None
+    assert receipt.status == "failed"
+    assert receipt.rolled_back is False
+    assert receipt.interpreters[0].status == "refused"
+    assert "not installed" in (receipt.interpreters[0].error or "")
+
+    # Nothing was created in either the source or the interpreter.
+    assert not (fork_dir / "hermes_agent.egg-info").exists()
+    assert get_git_status(fork_dir) == ""
+    sp = get_interpreter_site_packages(venv)
+    assert not list(sp.glob("__editable__*"))
+    assert not list(sp.glob("hermes_agent-*.dist-info"))
+
+
+def test_real_canary_failure_rolls_back_metadata_faithfully(tmp_path: Path) -> None:
+    """A real (non-injected) canary failure restores every touched interpreter byte-for-byte."""
+    modules = ["hermes_constants"]
+    fork_dir = _create_disposable_hermes_fork(tmp_path / "fork", modules=modules)
+    venv1 = _create_disposable_venv(tmp_path / "venv1")
+    venv2 = _create_disposable_venv(tmp_path / "venv2")
+    interpreters = [venv1, venv2]
+    for interp in interpreters:
+        _initial_editable_install(interp, fork_dir)
+
+    # Update source with a new module and force a real canary failure with a bogus
+    # expected module: the reinstall succeeds, the canary fails on its own.
+    (fork_dir / "hermes_state_compaction.py").write_text("COMPACT = 1\n", encoding="utf-8")
+    (fork_dir / "pyproject.toml").write_text(
+        f"""[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-agent"
+version = "0.20.4"
+dependencies = []
+
+[tool.setuptools]
+py-modules = {json.dumps([*modules, "hermes_state_compaction"])}
+""",
+        encoding="utf-8",
+    )
+
+    pre_state: dict[Path, tuple[Path, dict[str, bytes]]] = {}
+    for interp in interpreters:
+        sp = get_interpreter_site_packages(interp)
+        dist_info = next(sp.glob("hermes_agent-*.dist-info"))
+        entries = [
+            *sorted(sp.glob("__editable__*")),
+            *sorted(sp.glob("_editable_impl_hermes*")),
+            *(p for p in sorted(dist_info.rglob("*")) if p.is_file()),
+        ]
+        pre_state[interp] = (
+            sp,
+            {p.relative_to(sp).as_posix(): p.read_bytes() for p in entries},
+        )
+
+    with pytest.raises(EditableReconciliationError) as exc_info:
+        reconcile_hermes_editable(
+            source=fork_dir,
+            interpreters=interpreters,
+            offline=True,
+            expected_modules=["hermes_constants", "module_that_does_not_exist_anywhere"],
+        )
+
+    receipt = exc_info.value.receipt
+    assert receipt is not None
+    assert receipt.status == "rolled_back"
+    assert receipt.rolled_back is True
+    assert "Canary check failed" in (receipt.rollback_reason or "")
+
+    for interp, (sp, entries) in pre_state.items():
+        for rel, payload in entries.items():
+            assert (sp / rel).is_file(), f"{rel} missing after rollback for {interp}"
+            assert (sp / rel).read_bytes() == payload, f"{rel} not restored for {interp}"
+
+    # The new module is not resolvable again on either interpreter.
+    for interp in interpreters:
+        completed = subprocess.run(
+            [
+                str(interp),
+                "-I",
+                "-c",
+                "import importlib.util as u; print(u.find_spec('hermes_state_compaction'))",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={},
+        )
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.strip() == "None", "Rollback did not restore the pre-state mapping"
 
 
 def test_reconcile_raise_on_failure_false(tmp_path: Path) -> None:
