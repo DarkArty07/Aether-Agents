@@ -4,7 +4,10 @@ The monitor is an observer of native Aether/Hermes state.  This module deliberat
 contains no native mutator imports: every SQLite source is opened with a ``mode=ro``
 URI, ``query_only`` is asserted, and only an explicit allow-list of columns crosses the
 adapter boundary.  Invalid identity is represented as a coverage gap rather than a
-best-effort project/session guess.
+best-effort project/session guess.  Board contracts committed at an execution-board
+base ref are read as Git objects (``git show <rev>:<path>``) from the registered
+repository; that object read is read-only, runs as an argument array and never
+requires the primary working tree to contain the file.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import os
 import re
 import sqlite3
 import stat
+import subprocess
 import tomllib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -52,6 +56,7 @@ _PROJECT_RE = re.compile(
 )
 _CONTRACT_RE = re.compile(r"^oc_[0-9a-f]{16}$", re.ASCII)
 _BOARD_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$", re.ASCII)
+_BASE_REF_RE = re.compile(r"^[0-9a-f]{40}$", re.ASCII)
 _VERSION_RE = re.compile(r"^v([1-9][0-9]*)$", re.ASCII)
 _SAFE_REF_RE = re.compile(r"^[^\x00-\x1f\x7f]{1,256}$")
 _EMAIL_RE = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -75,6 +80,11 @@ _FAILURE_STATES = frozenset({"failed", "crashed", "timed_out", "gave_up", "spawn
 _PENDING_STATES = frozenset({"blocked", "triage", "review", "todo", "ready", "scheduled", "queued"})
 _REPORT_SOURCES = frozenset({"cron", "report", "monitor", "gateway"})
 _TASK_RE = re.compile(r"^t_[0-9a-f]{8}$", re.ASCII)
+
+#: Bounded budget for one base-ref Git object read.
+_GIT_READ_TIMEOUT_SECONDS = 30
+#: Ambient Git variables that could redirect a read away from the registered repository.
+_GIT_REPOSITORY_REDIRECTIONS = frozenset({"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"})
 
 
 class ReadOnlySourceError(RuntimeError):
@@ -410,13 +420,58 @@ def _read_json_file(path: Path) -> Mapping[str, Any] | None:
     return value if isinstance(value, Mapping) else None
 
 
+def _marker_from_bytes(raw: bytes) -> Mapping[str, Any] | None:
+    """Validate one ``.aether/project.toml`` payload against the canonical schema."""
+    try:
+        return validate_project_marker(tomllib.loads(raw.decode("utf-8")))
+    except (UnicodeError, tomllib.TOMLDecodeError, ProjectMarkerValidationError):
+        return None
+
+
 def _read_marker(path: Path) -> Mapping[str, Any] | None:
     marker_path = path / ".aether" / "project.toml"
     try:
-        data = tomllib.loads(read_private_bytes(marker_path).decode("utf-8"))
-        return validate_project_marker(data)
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError, ProjectMarkerValidationError):
+        raw = read_private_bytes(marker_path)
+    except OSError:
         return None
+    return _marker_from_bytes(raw)
+
+
+def _git_read_environment() -> dict[str, str]:
+    """Bound a Git object read to the requested repository and to reading only."""
+    environment = {
+        key: value for key, value in os.environ.items() if key not in _GIT_REPOSITORY_REDIRECTIONS
+    }
+    environment["GIT_OPTIONAL_LOCKS"] = "0"
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return environment
+
+
+def _git_object_bytes(repository: Path, revision: str, path: str) -> bytes | None:
+    """Read one committed blob through a read-only Git object read.
+
+    ``git show <revision>^{commit}:<path>`` runs as an argument array against the
+    registered repository: there is no shell interpolation, no working-tree read and
+    no write subcommand, and ``^{commit}`` keeps the revision an exact commit instead
+    of any other object type.  Callers validate the revision grammar first; unknown
+    revisions, non-commit objects, missing blobs and unreadable output all fail closed
+    as ``None``.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repository), "show", f"{revision}^{{commit}}:{path}"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=_GIT_READ_TIMEOUT_SECONDS,
+            env=_git_read_environment(),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout
 
 
 def _registry_entries(registry: ProjectRegistry) -> tuple[Mapping[str, Any], ...]:
@@ -540,18 +595,17 @@ def enumerate_project_bindings(
     return tuple(sorted(bindings, key=lambda item: item.project_id)), tuple(sorted(set(gaps)))
 
 
-def _contract_metadata(
-    project: ProjectBinding,
+def _parse_contract_metadata(
+    raw: bytes,
+    *,
+    project_id: str,
     contract_id: str,
     version: str,
 ) -> _ContractMetadata | None:
-    if not _CONTRACT_RE.fullmatch(contract_id):
-        return None
-    version_number = version[1:] if version.startswith("v") else version
-    path = project.path / ".aether" / "objective-contracts" / contract_id / f"v{version_number}.md"
+    """Parse and validate finalized-contract front matter against one board identity."""
     try:
-        text = read_private_bytes(path).decode("utf-8")
-    except (OSError, UnicodeError):
+        text = raw.decode("utf-8")
+    except UnicodeError:
         return None
     if not text.startswith("---\n") or "\n---\n" not in text[4:]:
         return None
@@ -559,14 +613,14 @@ def _contract_metadata(
     metadata: dict[str, Any] = {}
     try:
         for line in front.splitlines():
-            key, raw = line.split(": ", 1)
-            metadata[key] = json.loads(raw)
+            key, value = line.split(": ", 1)
+            metadata[key] = json.loads(value)
     except (ValueError, json.JSONDecodeError):
         return None
     if (
         metadata.get("artifact_type") != "aether.objective-contract.v1"
         or metadata.get("status") != "final"
-        or canonical_project_id(metadata.get("project_id")) != project.project_id
+        or canonical_project_id(metadata.get("project_id")) != project_id
         or metadata.get("contract_id") != contract_id
     ):
         return None
@@ -580,6 +634,60 @@ def _contract_metadata(
     if trace is not None and _safe_ref(trace) is None:
         trace = None
     return _ContractMetadata(contract_id, version, title, created, finalized, trace)
+
+
+def _contract_metadata(
+    project: ProjectBinding,
+    contract_id: str,
+    version: str,
+) -> _ContractMetadata | None:
+    if not _CONTRACT_RE.fullmatch(contract_id):
+        return None
+    version_number = version[1:] if version.startswith("v") else version
+    path = project.path / ".aether" / "objective-contracts" / contract_id / f"v{version_number}.md"
+    try:
+        raw = read_private_bytes(path)
+    except (OSError, UnicodeError):
+        return None
+    return _parse_contract_metadata(
+        raw, project_id=project.project_id, contract_id=contract_id, version=version
+    )
+
+
+def _contract_metadata_from_base_ref(
+    project: ProjectBinding,
+    base_ref: Any,
+    contract_id: str,
+    version: str,
+) -> _ContractMetadata | None:
+    """Resolve marker and finalized contract from one validated board base commit.
+
+    ``worktree_base_ref`` is authoritative once the key is present: both blobs are
+    read from the registered repository's object store at that exact commit, and any
+    format, object or identity problem fails closed instead of borrowing the mutable
+    primary checkout, another board or another commit.
+    """
+    if not isinstance(base_ref, str) or _BASE_REF_RE.fullmatch(base_ref) is None:
+        return None
+    if _CONTRACT_RE.fullmatch(contract_id) is None or _VERSION_RE.fullmatch(version) is None:
+        return None
+    marker_raw = _git_object_bytes(project.path, base_ref, ".aether/project.toml")
+    if marker_raw is None:
+        return None
+    marker = _marker_from_bytes(marker_raw)
+    if marker is None or canonical_project_id(marker.get("project_id")) != project.project_id:
+        return None
+    version_number = version[1:] if version.startswith("v") else version
+    contract_raw = _git_object_bytes(
+        project.path,
+        base_ref,
+        f".aether/objective-contracts/{contract_id}/v{version_number}.md",
+    )
+    if contract_raw is None:
+        return None
+    return _parse_contract_metadata(
+        contract_raw, project_id=project.project_id, contract_id=contract_id, version=version
+    )
 
 
 def _extract_contract_fields(
@@ -713,9 +821,19 @@ def _read_board_bindings(
         if contract_id is None or version is None:
             gaps.append("BOARD_CONTRACT_UNBOUND")
             continue
-        contract = _contract_metadata(project, contract_id, version)
+        if "worktree_base_ref" in metadata:
+            # A present ``worktree_base_ref`` is authoritative: the board's marker and
+            # finalized contract are read from that exact commit instead of the mutable
+            # registered checkout, and an unusable ref is a gap rather than a fallback.
+            contract = _contract_metadata_from_base_ref(
+                project, metadata.get("worktree_base_ref"), contract_id, version
+            )
+            contract_gap = "BOARD_BASE_REF_UNREADABLE"
+        else:
+            contract = _contract_metadata(project, contract_id, version)
+            contract_gap = "FINAL_CONTRACT_UNREADABLE"
         if contract is None:
-            gaps.append("FINAL_CONTRACT_UNREADABLE")
+            gaps.append(contract_gap)
             continue
         expected_slug = f"oc-{portable_id.replace('-', '')}-{contract_id[3:]}-v{int(version[1:]):x}"
         if slug != expected_slug:
