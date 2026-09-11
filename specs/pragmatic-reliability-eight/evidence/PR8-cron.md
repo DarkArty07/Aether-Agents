@@ -29,7 +29,7 @@ Four distinct, separately attributed commits on branch `fix/pr8-cron-script-root
    - **Files:** `run_agent.py`, `tests/cron/test_cron_workdir_session_388.py` (new)
 
 4. **#393 / #372 (Rework 1 - Preserve Gateway Origin Route & Honor Scheduler Home Accessor):**
-   - **SHA:** `4fc5141f8d83296c00f7e43e2f0a1d471556942c`
+   - **SHA:** `4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62`
    - **Subject:** `fix(cron): preserve gateway origin route and honor scheduler home accessor (#393, #372)`
    - **Files:** `cron/script_root.py`, `tools/kanban_tools.py`, `tests/cron/test_cron_commissioning_origin_393.py`
 
