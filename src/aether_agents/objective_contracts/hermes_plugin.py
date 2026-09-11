@@ -8,10 +8,14 @@ import re
 import subprocess
 import threading
 import time
+import tomllib
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Final
+
+from aether_agents.observation.context import ProjectRegistry, canonical_project_id
+from aether_agents.project_marker import validate_project_marker
 
 from .execution_boards import ExecutionBoardError, execution_board_slug
 from .store import REQUIRED_SECTIONS, ContractError, ObjectiveContractStore, _git_environment
@@ -78,6 +82,131 @@ def _native_session_workspace(session_id: str) -> Path | None:
     if result.returncode != 0:
         return None
     return Path(result.stdout.strip()).resolve()
+
+
+def _resolve_session_authoring_workspace(session_id: str, project_id: str) -> Path:
+    """Resolve and validate the exact Git workspace for a native Hermes authoring session.
+
+    Fails closed before store construction if the session workspace cannot be resolved
+    to a valid registered Git workspace for the specified project.
+    """
+    raw_workspace = _native_session_workspace(session_id)
+    if raw_workspace is None:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "Hermes authoring session has no resolved Git workspace",
+        )
+
+    canonical = canonical_project_id(project_id)
+    if canonical is None:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-PROJECT-INVALID",
+            "project_id must be a canonical UUID",
+        )
+
+    registry = ProjectRegistry()
+    root = registry.project_path(canonical)
+    if root is None or not registry.knows(canonical):
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "registered project root is unknown",
+        )
+    resolved = root.expanduser().resolve()
+    if not resolved.is_dir():
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "registered project root is unavailable",
+        )
+
+    if raw_workspace == resolved:
+        marker_path = resolved / ".aether" / "project.toml"
+        if not marker_path.is_file():
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+                "registered project root marker is missing or invalid",
+            )
+        try:
+            with open(marker_path, "rb") as f:
+                marker = tomllib.load(f)
+            validate_project_marker(marker)
+            if canonical_project_id(marker.get("project_id")) != canonical:
+                raise ValueError("project mismatch")
+        except Exception as exc:
+            raise ContractError(
+                "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+                "registered project root marker is invalid",
+            ) from exc
+        return raw_workspace
+
+    # Candidate worktree checks
+    if raw_workspace.is_symlink() or not raw_workspace.is_dir():
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "authoring workspace is not an accessible directory",
+        )
+
+    marker_path = raw_workspace / ".aether" / "project.toml"
+    if not marker_path.is_file():
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "authoring workspace has no valid project marker",
+        )
+    try:
+        with open(marker_path, "rb") as f:
+            marker = tomllib.load(f)
+        validate_project_marker(marker)
+        if canonical_project_id(marker.get("project_id")) != canonical:
+            raise ValueError("project mismatch")
+    except Exception as exc:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "authoring workspace does not belong to the registered project",
+        ) from exc
+
+    wt_root = subprocess.run(
+        ("git", "rev-parse", "--show-toplevel"),
+        cwd=raw_workspace,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_git_environment(),
+    )
+    if wt_root.returncode != 0 or Path(wt_root.stdout.strip()).resolve() != raw_workspace:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "authoring workspace is not a Git repository or worktree root",
+        )
+
+    primary_common = subprocess.run(
+        ("git", "rev-parse", "--git-common-dir"),
+        cwd=resolved,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_git_environment(),
+    )
+    wt_common = subprocess.run(
+        ("git", "rev-parse", "--git-common-dir"),
+        cwd=raw_workspace,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_git_environment(),
+    )
+    if primary_common.returncode != 0 or wt_common.returncode != 0:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "failed to inspect Git common directory for authoring workspace",
+        )
+    primary_common_dir = (resolved / primary_common.stdout.strip()).resolve()
+    wt_common_dir = (raw_workspace / wt_common.stdout.strip()).resolve()
+    if primary_common_dir != wt_common_dir:
+        raise ContractError(
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+            "authoring workspace does not share Git common directory with registered project root",
+        )
+
+    return raw_workspace
 
 
 def _required(args: dict[str, Any], name: str) -> Any:
@@ -259,8 +388,7 @@ def _validate_execution_metadata(
     else:
         metadata_ref = metadata.get("worktree_base_ref")
         if metadata_ref is not None and (
-            not isinstance(metadata_ref, str)
-            or _BASE_REF_RE.fullmatch(metadata_ref) is None
+            not isinstance(metadata_ref, str) or _BASE_REF_RE.fullmatch(metadata_ref) is None
         ):
             raise ExecutionBoardError(
                 "AETHER-EXECUTION-BOARD-IDENTITY-CONFLICT",
@@ -477,7 +605,12 @@ def _handle(
             )
         action = _required(args, "action")
         project_id = _required(args, "project_id")
-        session_workspace = _native_session_workspace(session_id)
+        session_workspace: Path | None = None
+        if session_id:
+            session_workspace = _resolve_session_authoring_workspace(
+                session_id=session_id,
+                project_id=project_id,
+            )
         store = ObjectiveContractStore(
             author_profile=author_profile,
             authoring_root=session_workspace,
