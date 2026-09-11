@@ -1,0 +1,83 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf",
+        "kind": "patch",
+        "ledger_sha256": "97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-372-profile-cron-script-root.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks profile-scoped script root resolution.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream hardcodes default ~/.hermes/scripts in validation and diagnostic error strings at the inspected revision."
+  ],
+  "components": [
+    "HLP-372",
+    "cron/script_root.py",
+    "cron/lifecycle_guard.py",
+    "cron/scheduler.py",
+    "cron/jobs.py",
+    "tools/cronjob_tools.py",
+    "tests/cron/test_cron_script_root_372.py"
+  ],
+  "id": "HLP-372",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-372--profile-scoped-cron-script-root",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "Creation/update validation, lifecycle scanning, execution, and user-facing diagnostics resolve script and monitor_script through one effective profile-scoped script-root contract; relative paths stay confined to the active HERMES_HOME/scripts, absolute/traversal/symlink-escape/non-regular targets fail closed, and error diagnostics name the effective profile root dynamically resolved at call time.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_script_root_372.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "4 of 9 tests fail (hardcoded ~/.hermes/scripts diagnostics, accepts non-regular target, missing monitor_script scanning)."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_script_root_372.py on candidate 4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62",
+        "result": "9 passed in 0.43s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release resolves script and monitor_script through an effective profile-scoped root at call time, enforces confinement and non-regular rejection, and passes the PR8-CRON #372 test suite without downstream patches."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-372. Cron scripts and monitor scripts resolve dynamically through one effective profile-scoped root at call time with fail-closed confinement on traversal, symlink escapes, and non-regular files.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/lifecycle_guard.py",
+        "result": "The inspected revision resolves script paths against hardcoded ~/.hermes/scripts and does not share a unified profile-scoped script-root contract between validation, lifecycle scanning, and execution (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/372"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}

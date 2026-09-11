@@ -47,6 +47,10 @@ This file prevents a Hermes update from silently removing local repairs. An Aeth
 | `HLP-275` | `#275` | auxiliary vision applies the existing embed cap before the first request; oversized inputs are prepared by the existing resizer with scale disclosure, and within-cap bytes stay exact | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-382` | `#382` | transcript publication stages bounded batches in the existing store and publishes with one metadata-only cutover, so concurrent appends are never starved and staging rows stay invisible | upstream PR `#100273` closed unmerged at contract inspection; no landed equivalent | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 | `HLP-389` | `#389` | quoted interpreter heredoc data is not promoted to an executable shell reference; direct lifecycle detection and referenced real scripts remain enforced | current upstream reproduces the false positive and loses one direct control the maintained source retains | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-372` | `#372` | profile-scoped cron script root contract with fail-closed confinement and dynamic path resolution | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-385` | `#385` | worker guidance distinguishes explicit review/QA phase children from terminal integration/release children | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-388` | `#388` | verified cron launch workdir persisted in session row before tools run | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
+| `HLP-393` | `#393` | trusted commissioning notification origin preserved for Kanban auto-subscription in cron runs | no equivalent in `NousResearch/hermes-agent` at contract inspection | `ACTIVE_LOCAL / UPSTREAM_MISSING` |
 
 ## HLP-188 — sticky `initial_status=blocked`
 
@@ -562,3 +566,75 @@ The #349 tests-only commit `59ee7d05a7b67d52dbbfa95b6b2ced57ec6df20e` corrected 
 - **Rollback:** revert fork commit `6c96428f640d1405a8f34d8619ac6d6378cb53c0` (`cron/lifecycle_guard.py` plus the new focused test module).
 - **Retirement gate:** an adopted exact Hermes release provides a syntax-aware reference walk that accepts inert interpreter heredoc data while still blocking direct lifecycle commands and referenced real scripts, verified with the same control matrix.
 - **Activation:** adopted into the live editable runtime (`cron/lifecycle_guard.py` SHA-256 `7789323846a406fa708434580b2b0201aa0f195572ffe444b607879080c81a74`). Runtime canary: the harmless Python log-read path is accepted while a direct restart and a referenced real script remain blocked (pre-fix base blocks the harmless path).
+
+## HLP-362 — independent same-card review ownership
+
+- **Reason:** an implementer could request review without specifying a reviewer, leaving the review run claimable by itself (self-review) or leaving the card in an ambiguous state without an assigned reviewer.
+- **Primary active files:**
+  - `hermes_cli/kanban_db.py`
+  - `tools/kanban_tools.py`
+  - `tests/hermes_cli/test_kanban_review_independence.py`
+  - `tests/hermes_cli/test_kanban_review_lifecycle.py`
+  - `tests/hermes_cli/test_kanban_review_lifecycle_complete.py`
+  - `tests/hermes_cli/test_kanban_review_surfaces.py`
+- **Local evidence:** `specs/autonomous-bug-remediation/evidence/ABR-362.md` (reviewed candidate `8afefe7e304f2b3c80cecbbb24bf9e60be72044b` on maintained fork base `28b593efa86bbc674b32f488c35932a4e7e85a51`, PR #5). Baseline fails 4 of 5 tests in `test_kanban_review_independence.py` (accepts missing reviewer, self-review, claims legacy reviewer-null event). Candidate passes all 5 tests cleanly.
+- **Portable artifact:** `patches/hermes/HLP-362-independent-review-ownership.patch`, SHA-256 `e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638`. Applies cleanly to the fork base.
+- **Upstream:** inspected at `4f22543509d1b91dc45bcb369447126c5eb14fb7` and `31d0a2428e9db346d6781da66f5b37ff3e12def2`; upstream allows `request_review` without a reviewer and does not enforce independent review ownership.
+- **Rollback:** revert fork commit `8afefe7e304f2b3c80cecbbb24bf9e60be72044b` in `aether-hermes`.
+- **Retirement gate:** an adopted exact Hermes release enforces independent review ownership (initial same-card review without an independent reviewer fails closed before clearing the claim; self-review is rejected) and passes `tests/hermes_cli/test_kanban_review_independence.py`.
+
+## HLP-372 — profile-scoped cron script root
+
+- **Reason:** creation/update validation, lifecycle scanning, execution, and user diagnostics resolved scripts against hardcoded default-profile `~/.hermes/scripts` instead of the active profile root, allowing escape via traversal/symlinks and diagnostics naming the wrong directory.
+- **Primary active files:**
+  - `cron/jobs.py`
+  - `cron/lifecycle_guard.py`
+  - `cron/scheduler.py`
+  - `cron/script_root.py`
+  - `tools/cronjob_tools.py`
+  - `tests/cron/test_cron_script_root_372.py`
+- **Local evidence:** `specs/pragmatic-reliability-eight/evidence/PR8-cron.md` (reviewed commits `bd0f0ad6db0f9552b824cfc495a314a48e218af2` and `4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62` on base `6551b7c31cc665d59103c6d89cb5e0c60666f803`, fork PR #10). Pristine base fails 4 of 9 tests in `test_cron_script_root_372.py`; reviewed candidate passes 9/9 in 0.43s.
+- **Portable artifact:** `patches/hermes/HLP-372-profile-cron-script-root.patch`, SHA-256 `97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf`. Applies cleanly to the fork base.
+- **Upstream:** inspected at `4f22543509d1b91dc45bcb369447126c5eb14fb7` and `31d0a2428e9db346d6781da66f5b37ff3e12def2`; upstream resolves scripts against `~/.hermes/scripts` and lacks unified profile-scoped script root resolution.
+- **Rollback:** revert fork commits `bd0f0ad6db` and the #372 portion of `4fc5141f8d`, removing `cron/script_root.py`.
+- **Retirement gate:** an adopted exact Hermes release resolves script and monitor_script through one effective profile-scoped root at call time, enforces confinement and non-regular target rejection, and passes `tests/cron/test_cron_script_root_372.py`.
+
+## HLP-385 — review topology guidance
+
+- **Reason:** `KANBAN_GUIDANCE` instructed workers that any pre-created child releases on `kanban_complete`, leading workers to mistake terminal integration or release children as handling review, calling `kanban_complete` and skipping unit review entirely.
+- **Primary active files:**
+  - `agent/prompt_builder.py`
+  - `tests/hermes_cli/test_kanban_review_surfaces.py`
+- **Local evidence:** `specs/pragmatic-reliability-eight/evidence/PR8-review.md` (reviewed candidate `9fba8552bba30004ab452823668a105dee1ee89d` on base `6551b7c31cc665d59103c6d89cb5e0c60666f803`, fork PR #9). Pristine base fails 2 of 12 tests in `test_kanban_review_surfaces.py`; reviewed candidate passes 12/12 in 1.95s.
+- **Portable artifact:** `patches/hermes/HLP-385-review-topology-guidance.patch`, SHA-256 `b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003`. Applies cleanly to the fork base.
+- **Upstream:** inspected at `4f22543509d1b91dc45bcb369447126c5eb14fb7` and `31d0a2428e9db346d6781da66f5b37ff3e12def2`; upstream prompt guidance still conflates review and release children.
+- **Rollback:** revert fork commit `9fba8552bba30004ab452823668a105dee1ee89d` in `aether-hermes`.
+- **Retirement gate:** an adopted exact Hermes release clarifies prompt guidance so terminal integration or release children do not substitute for unit review, passing `tests/hermes_cli/test_kanban_review_surfaces.py`.
+
+## HLP-388 — persisted launch workdir in cron session row
+
+- **Reason:** cron sessions did not record the verified launch workdir in the session row (`_launch_cwd_for_session("cron")` returned `None`), preventing downstream contract authoring tools from grounding to the intended workspace.
+- **Primary active files:**
+  - `run_agent.py`
+  - `tests/cron/test_cron_workdir_session_388.py`
+- **Local evidence:** `specs/pragmatic-reliability-eight/evidence/PR8-cron.md` (reviewed commit `62eee7baab1337a9e40a8312052cecd096caaed7` on base `6551b7c31cc665d59103c6d89cb5e0c60666f803`, fork PR #10). Pristine base fails 2 of 3 tests in `test_cron_workdir_session_388.py`; candidate passes 3/3 in 1.37s.
+- **Portable artifact:** `patches/hermes/HLP-388-cron-session-launch-workdir.patch`, SHA-256 `1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210`. Applies cleanly to the fork base.
+- **Upstream:** inspected at `4f22543509d1b91dc45bcb369447126c5eb14fb7` and `31d0a2428e9db346d6781da66f5b37ff3e12def2`; upstream only records cwd for CLI sessions and leaves cron sessions with null cwd.
+- **Rollback:** revert fork commit `62eee7baab1337a9e40a8312052cecd096caaed7` in `aether-hermes`.
+- **Retirement gate:** an adopted exact Hermes release persists verified launch workdir in the cron session row and keeps null when workdir is unset, passing `tests/cron/test_cron_workdir_session_388.py`.
+
+## HLP-393 — trusted commissioning origin and kanban auto-subscription
+
+- **Reason:** creating a cron job from a TUI or gateway session did not capture the commissioning notification origin; at fire time Kanban tasks created by the cron job lacked a return route and could not auto-subscribe or wake the origin upon completion.
+- **Primary active files:**
+  - `cron/jobs.py`
+  - `cron/scheduler.py`
+  - `gateway/session_context.py`
+  - `tools/cronjob_tools.py`
+  - `tools/kanban_tools.py`
+  - `tests/cron/test_cron_commissioning_origin_393.py`
+- **Local evidence:** `specs/pragmatic-reliability-eight/evidence/PR8-cron.md` (reviewed commits `3c9f955ae4c9e9970a73db7fc435d102581b6350` and `4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62` on base `6551b7c31cc665d59103c6d89cb5e0c60666f803`, fork PR #10). Pristine base fails 5 of 8 tests in `test_cron_commissioning_origin_393.py`; candidate passes 8/8 in 1.45s.
+- **Portable artifact:** `patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch`, SHA-256 `d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460`. Applies cleanly to the fork base.
+- **Upstream:** inspected at `4f22543509d1b91dc45bcb369447126c5eb14fb7` and `31d0a2428e9db346d6781da66f5b37ff3e12def2`; upstream lacks notification_origin capture and restoration for Kanban auto-subscription.
+- **Rollback:** revert fork commits `3c9f955ae4` and the #393 portion of `4fc5141f8d` in `aether-hermes`.
+- **Retirement gate:** an adopted exact Hermes release captures commissioning notification origin at create time, restores it as request-local context at fire time for Kanban auto-subscription, and passes `tests/cron/test_cron_commissioning_origin_393.py`.

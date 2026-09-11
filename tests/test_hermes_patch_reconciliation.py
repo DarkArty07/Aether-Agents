@@ -54,9 +54,14 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-310",
     "HLP-335",
     "HLP-354",
+    "HLP-362",
     "HLP-369",
+    "HLP-372",
     "HLP-382",
+    "HLP-385",
+    "HLP-388",
     "HLP-389",
+    "HLP-393",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
@@ -74,7 +79,12 @@ PATCH_DIGESTS = {
     "HLP-305": ("05a655cf2a4509d6f6d64895decec20922cc9ae42dfeaa737fe0488678d3dab1",),
     "HLP-310": ("85522d5d5b9bf6609894b1a50f199334d8842bd8c2265d2425e2b920e184f413",),
     "HLP-354": ("d0f185207c4ff953902c2f40aa9c48f2b27499e1b5f4a264e39a70d0a2383fc1",),
+    "HLP-362": ("e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638",),
     "HLP-369": ("f90b2264fdf60a7b5da6476967366e7b5bd5d40acfc25ab7095ddfccb7f7ac1c",),
+    "HLP-372": ("97152a6358b13b34b95341d5f82f7b7012c5174d917817d3e3934260d15ebdaf",),
+    "HLP-385": ("b3decd3e83ea0133765ce0204ddc3ad017bffa0cac657f6b0153a92fbb8e4003",),
+    "HLP-388": ("1d3bdad267ae3e95a6db379f7f4fe24ff3e895f3b0941d41f42ef3d06d0a5210",),
+    "HLP-393": ("d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460",),
 }
 
 

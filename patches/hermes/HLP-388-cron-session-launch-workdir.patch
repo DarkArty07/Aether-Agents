@@ -1,0 +1,131 @@
+diff --git a/run_agent.py b/run_agent.py
+index 62d55fa780..b4ac91cdb7 100644
+--- a/run_agent.py
++++ b/run_agent.py
+@@ -87,6 +87,13 @@ def _launch_cwd_for_session(source: str) -> Optional[str]:
+         if workspace and os.path.isabs(workspace) and os.path.isdir(workspace):
+             return workspace
+         return None
++    if source == "cron":
++        from agent.runtime_cwd import _session_cwd_override
++
++        override = _session_cwd_override()
++        if override and os.path.isabs(override) and os.path.isdir(override):
++            return str(Path(override).resolve())
++        return None
+     if source != "cli":
+         return None
+     backend = (os.environ.get("TERMINAL_ENV") or "local").strip().lower()
+diff --git a/tests/cron/test_cron_workdir_session_388.py b/tests/cron/test_cron_workdir_session_388.py
+new file mode 100644
+index 0000000000..dc9b91f178
+--- /dev/null
++++ b/tests/cron/test_cron_workdir_session_388.py
+@@ -0,0 +1,107 @@
++"""Focused unit and regression tests for #388 (framework side): Cron launch cwd persistence.
++
++The scheduler's context-local effective workdir is preserved and
++`run_agent._launch_cwd_for_session("cron")` persists that trusted value in the session row
++before tools run. A job with no workdir keeps a null cwd; never invent one.
++"""
++
++from __future__ import annotations
++
++import os
++from pathlib import Path
++import pytest
++
++
++@pytest.fixture(autouse=True)
++def _reset_context_vars():
++    from gateway.session_context import _UNSET, _VAR_MAP
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++    yield
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++
++
++class TestIssue388FrameworkWorkdir:
++    def test_launch_cwd_for_cron_with_workdir(self, tmp_path):
++        from run_agent import _launch_cwd_for_session
++        from gateway.session_context import set_session_vars, clear_session_vars
++
++        tokens = set_session_vars(cwd=str(tmp_path))
++        try:
++            cwd = _launch_cwd_for_session("cron")
++            assert cwd == str(tmp_path.resolve())
++        finally:
++            clear_session_vars(tokens)
++
++    def test_launch_cwd_for_cron_without_workdir(self):
++        from run_agent import _launch_cwd_for_session
++        from gateway.session_context import set_session_vars, clear_session_vars
++
++        tokens = set_session_vars(cwd="")
++        try:
++            cwd = _launch_cwd_for_session("cron")
++            assert cwd is None
++        finally:
++            clear_session_vars(tokens)
++
++    def test_cron_session_row_persists_workdir_before_tools_run(self, tmp_path, monkeypatch):
++        from cron.scheduler import run_job
++        from hermes_state import SessionDB
++        from run_agent import _launch_cwd_for_session
++
++        workdir = tmp_path / "cron_project"
++        workdir.mkdir()
++
++        recorded_cwd_before_run = None
++        session_id_captured = None
++
++        class MockAgent:
++            def __init__(self, **kwargs):
++                nonlocal session_id_captured
++                session_id_captured = kwargs.get("session_id")
++                sdb = kwargs.get("session_db")
++                if sdb and session_id_captured:
++                    sdb.create_session(
++                        session_id=session_id_captured,
++                        source="cron",
++                        cwd=_launch_cwd_for_session("cron"),
++                    )
++
++            def run_conversation(self, *a, **kw):
++                nonlocal recorded_cwd_before_run
++                if session_id_captured:
++                    sdb = SessionDB()
++                    meta = sdb.get_session(session_id_captured) or {}
++                    recorded_cwd_before_run = meta.get("cwd")
++                return {"final_response": "done", "messages": []}
++
++            def get_activity_summary(self):
++                return {"seconds_since_activity": 0.0}
++
++        import sys
++        fake_mod = type(sys)("run_agent")
++        fake_mod.AIAgent = MockAgent
++        fake_mod._launch_cwd_for_session = _launch_cwd_for_session
++        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
++
++        from hermes_cli import runtime_provider as _rtp
++        monkeypatch.setattr(
++            _rtp, "resolve_runtime_provider",
++            lambda **kw: {"provider": "test", "api_key": "k", "base_url": "http://test", "api_mode": "chat_completions"}
++        )
++        monkeypatch.setattr("cron.scheduler._build_job_prompt", lambda *a, **kw: "prompt")
++        monkeypatch.setattr("cron.scheduler._deliver_result", lambda *a, **kw: None)
++        monkeypatch.setenv("HERMES_CRON_TIMEOUT", "0")
++
++        job = {
++            "id": "job-workdir-persist",
++            "name": "workdir-persist",
++            "prompt": "run",
++            "schedule": {"kind": "once"},
++            "workdir": str(workdir),
++        }
++
++        run_job(job)
++
++        assert recorded_cwd_before_run == str(workdir.resolve())

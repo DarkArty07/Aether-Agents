@@ -1,0 +1,833 @@
+diff --git a/cron/jobs.py b/cron/jobs.py
+index d9415a7d57..b2dae6af05 100644
+--- a/cron/jobs.py
++++ b/cron/jobs.py
+@@ -1648,6 +1648,36 @@ def _validate_job_mode_invariants(
+         )
+ 
+ 
++def _normalize_notification_origin(origin: Any) -> Optional[Dict[str, Any]]:
++    """Normalize and validate a trusted commissioning notification origin (#393)."""
++    if not origin or not isinstance(origin, dict):
++        return None
++    platform = str(origin.get("platform") or "").strip()
++    chat_id = str(origin.get("chat_id") or origin.get("session_key") or "").strip()
++    if not platform or not chat_id:
++        return None
++    if any(c in platform or c in chat_id for c in ("\n", "\r", "\0")):
++        return None
++    normalized: Dict[str, Any] = {
++        "platform": platform,
++        "chat_id": chat_id,
++    }
++    if platform == "tui":
++        normalized["session_key"] = str(origin.get("session_key") or chat_id).strip()
++        ui_session_id = str(origin.get("ui_session_id") or "").strip()
++        if ui_session_id:
++            normalized["ui_session_id"] = ui_session_id
++    else:
++        for k in ("chat_type", "thread_id", "user_id", "user_id_alt", "message_id"):
++            v = str(origin.get(k) or "").strip()
++            if v:
++                normalized[k] = v
++    prof = str(origin.get("notifier_profile") or "").strip()
++    if prof:
++        normalized["notifier_profile"] = prof
++    return normalized
++
++
+ def create_job(
+     prompt: Optional[str],
+     schedule: str,
+@@ -1668,6 +1698,7 @@ def create_job(
+     attach_to_session: Optional[bool] = None,
+     monitor_script: Optional[str] = None,
+     monitor_url: Optional[str] = None,
++    notification_origin: Optional[Dict[str, Any]] = None,
+ ) -> Dict[str, Any]:
+     """
+     Create a new cron job.
+@@ -1861,6 +1892,7 @@ def create_job(
+         # Delivery configuration
+         "deliver": deliver,
+         "origin": origin,  # Tracks where job was created for "origin" delivery
++        "notification_origin": _normalize_notification_origin(notification_origin),
+         "enabled_toolsets": normalized_toolsets,
+         "workdir": normalized_workdir,
+     }
+@@ -1975,6 +2007,9 @@ def update_job(job_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]
+                     _mv = str(_mv).strip() if isinstance(_mv, str) else None
+                     updates[_mon_field] = _mv or None
+ 
++            if "notification_origin" in updates:
++                updates["notification_origin"] = _normalize_notification_origin(updates["notification_origin"])
++
+             previous_inference_axes = _normalized_inference_axes(job)
+             updated = _apply_skill_fields({**job, **updates})
+ 
+diff --git a/cron/scheduler.py b/cron/scheduler.py
+index 852ec57539..1ab618c91f 100644
+--- a/cron/scheduler.py
++++ b/cron/scheduler.py
+@@ -4601,6 +4601,12 @@ def run_job(
+     _cron_session_var = _VAR_MAP["HERMES_CRON_SESSION"]
+     _cron_session_token = None
+     _non_dispatcher_token = None
++    _notif_token = None
++    try:
++        from gateway.session_context import set_kanban_notification_origin
++        _notif_token = set_kanban_notification_origin(job.get("notification_origin"))
++    except Exception:
++        pass
+     try:
+         if not _cwd_lock_acquired:
+             # Fail closed (#79768): running without the lock would let a
+@@ -5465,6 +5471,12 @@ def run_job(
+         clear_session_vars(_ctx_tokens)
+         if _cron_session_token is not None:
+             _cron_session_var.reset(_cron_session_token)
++        if _notif_token is not None:
++            try:
++                from gateway.session_context import reset_kanban_notification_origin
++                reset_kanban_notification_origin(_notif_token)
++            except Exception:
++                pass
+         if _non_dispatcher_token is not None:
+             exit_non_dispatcher_owned_context(_non_dispatcher_token)
+         for _var_name in _cron_delivery_vars:
+diff --git a/gateway/session_context.py b/gateway/session_context.py
+index 7a2c53ab3a..eb9e008b5e 100644
+--- a/gateway/session_context.py
++++ b/gateway/session_context.py
+@@ -38,7 +38,7 @@ needs to replace the import + call site:
+ 
+ from contextlib import contextmanager
+ from contextvars import ContextVar
+-from typing import Any, Iterator
++from typing import Any, Iterator, Optional
+ 
+ # Sentinel to distinguish "never set in this context" from "explicitly set to empty".
+ # When a contextvar holds _UNSET, we fall back to os.environ (CLI/cron compat).
+@@ -157,6 +157,29 @@ _VAR_MAP = {
+     "HERMES_CRON_AUTO_DELIVER_THREAD_ID": _CRON_AUTO_DELIVER_THREAD_ID,
+ }
+ 
++# Request-local commissioning notification origin for cron-commissioned Kanban subscriptions (#393).
++_KANBAN_NOTIFICATION_ORIGIN: ContextVar = ContextVar("HERMES_KANBAN_NOTIFICATION_ORIGIN", default=None)
++
++
++def set_kanban_notification_origin(origin: Optional[dict]) -> Any:
++    """Set request-local commissioning notification origin for cron-commissioned Kanban subscriptions (#393)."""
++    return _KANBAN_NOTIFICATION_ORIGIN.set(origin)
++
++
++def get_kanban_notification_origin() -> Optional[dict]:
++    """Get request-local commissioning notification origin, or None."""
++    val = _KANBAN_NOTIFICATION_ORIGIN.get()
++    return val if isinstance(val, dict) else None
++
++
++def reset_kanban_notification_origin(token: Any) -> None:
++    """Reset the request-local commissioning notification origin token."""
++    if token is not None:
++        try:
++            _KANBAN_NOTIFICATION_ORIGIN.reset(token)
++        except Exception:
++            _KANBAN_NOTIFICATION_ORIGIN.set(None)
++
+ 
+ def set_current_session_id(session_id: str) -> None:
+     """Synchronize ``HERMES_SESSION_ID`` across ContextVar and ``os.environ``.
+diff --git a/tools/cronjob_tools.py b/tools/cronjob_tools.py
+index 1ec90d2569..51b8f03500 100644
+--- a/tools/cronjob_tools.py
++++ b/tools/cronjob_tools.py
+@@ -356,6 +356,68 @@ def _origin_from_env() -> Optional[Dict[str, str]]:
+     return None
+ 
+ 
++def _capture_commissioning_origin() -> tuple[Optional[Dict[str, Any]], Optional[str]]:
++    """Capture trusted durable notification origin for cron-commissioned Kanban auto-subscription (#393).
++
++    TUI/desktop sessions capture durable session key plus optional live UI id.
++    Gateway sessions capture full stable route.
++    Unattached cron/CLI/test sessions capture nothing.
++    Malformed/stale origins fail closed and return an error message.
++    """
++    import os
++    from gateway.session_context import get_session_env
++
++    platform = (get_session_env("HERMES_SESSION_PLATFORM") or "").strip()
++    chat_id = (get_session_env("HERMES_SESSION_CHAT_ID") or "").strip()
++
++    # Check gateway origin
++    if platform or chat_id:
++        if not platform or not chat_id:
++            return None, "Malformed gateway commissioning origin: platform or chat_id is missing"
++        if any(c in platform or c in chat_id for c in ("\n", "\r", "\0")):
++            return None, "Malformed gateway commissioning origin: invalid characters"
++        return {
++            "platform": platform,
++            "chat_id": chat_id,
++            "chat_type": get_session_env("HERMES_SESSION_CHAT_TYPE") or None,
++            "thread_id": get_session_env("HERMES_SESSION_THREAD_ID") or None,
++            "user_id": get_session_env("HERMES_SESSION_USER_ID") or None,
++            "user_id_alt": get_session_env("HERMES_SESSION_USER_ID_ALT") or None,
++            "message_id": get_session_env("HERMES_SESSION_MESSAGE_ID") or None,
++            "notifier_profile": (
++                get_session_env("HERMES_SESSION_PROFILE")
++                or os.environ.get("HERMES_PROFILE")
++                or "default"
++            ),
++        }, None
++
++    # Check TUI / desktop session
++    session_key = (
++        get_session_env("HERMES_SESSION_KEY", "")
++        or os.environ.get("HERMES_SESSION_KEY", "")
++    ).strip()
++    if session_key:
++        if any(c in session_key for c in ("\n", "\r", "\0")):
++            return None, "Malformed TUI commissioning origin: invalid characters in session key"
++        ui_session_id = (
++            get_session_env("HERMES_UI_SESSION_ID", "")
++            or os.environ.get("HERMES_UI_SESSION_ID", "")
++        ).strip() or None
++        return {
++            "platform": "tui",
++            "chat_id": session_key,
++            "session_key": session_key,
++            "ui_session_id": ui_session_id,
++            "notifier_profile": (
++                get_session_env("HERMES_SESSION_PROFILE")
++                or os.environ.get("HERMES_PROFILE")
++                or "default"
++            ),
++        }, None
++
++    return None, None
++
++
+ def _local_delivery_notice(job: Dict[str, Any], user_deliver: Optional[str]) -> Optional[str]:
+     """Return an informational notice when a created job won't deliver anywhere.
+ 
+@@ -636,6 +698,8 @@ def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
+         result["enabled_toolsets"] = job["enabled_toolsets"]
+     if job.get("workdir"):
+         result["workdir"] = job["workdir"]
++    if job.get("notification_origin"):
++        result["notification_origin"] = job["notification_origin"]
+     return result
+ 
+ 
+@@ -1210,6 +1274,8 @@ def cronjob(
+                 create_job_with_scheduler_registration,
+             )
+ 
++            notif_origin, notif_err = _capture_commissioning_origin()
++
+             try:
+                 job = create_job_with_scheduler_registration(
+                     prompt=prompt or "",
+@@ -1220,6 +1286,7 @@ def cronjob(
+                         _normalize_deliver_param(deliver)
+                     ),
+                     origin=_origin_from_env(),
++                    notification_origin=notif_origin,
+                     skills=canonical_skills,
+                     model=_normalize_optional_job_value(model),
+                     provider=_normalize_optional_job_value(provider),
+@@ -1237,23 +1304,30 @@ def cronjob(
+                 _partial = exc.to_dict()
+                 return tool_error(_partial.pop("error"), success=False, **_partial)
+             _create_message = f"Cron job '{job['name']}' created."
++            if notif_err:
++                _create_message = f"{_create_message} Notification origin warning: {notif_err}."
+             _local_notice = _local_delivery_notice(job, _normalize_deliver_param(deliver))
+             if _local_notice:
+                 _create_message = f"{_create_message} {_local_notice}"
++            response_payload: Dict[str, Any] = {
++                "success": True,
++                "job_id": job["id"],
++                "name": job["name"],
++                "skill": job.get("skill"),
++                "skills": job.get("skills", []),
++                "schedule": job["schedule_display"],
++                "repeat": _repeat_display(job),
++                "deliver": job.get("deliver", "local"),
++                "next_run_at": job["next_run_at"],
++                "job": _format_job(job),
++                "message": _create_message,
++            }
++            if notif_err:
++                response_payload["notification_origin_error"] = notif_err
++            elif job.get("notification_origin"):
++                response_payload["notification_origin"] = job["notification_origin"]
+             return json.dumps(
+-                {
+-                    "success": True,
+-                    "job_id": job["id"],
+-                    "name": job["name"],
+-                    "skill": job.get("skill"),
+-                    "skills": job.get("skills", []),
+-                    "schedule": job["schedule_display"],
+-                    "repeat": _repeat_display(job),
+-                    "deliver": job.get("deliver", "local"),
+-                    "next_run_at": job["next_run_at"],
+-                    "job": _format_job(job),
+-                    "message": _create_message,
+-                },
++                response_payload,
+                 indent=2,
+             )
+ 
+diff --git a/tests/cron/test_cron_commissioning_origin_393.py b/tests/cron/test_cron_commissioning_origin_393.py
+new file mode 100644
+index 0000000000..e97ebbcc30
+--- /dev/null
++++ b/tests/cron/test_cron_commissioning_origin_393.py
+@@ -0,0 +1,407 @@
++"""Focused unit and regression tests for #393: Cron commissioning origin and Kanban auto-subscription.
++
++Creating a cron job from a TUI/desktop or gateway session captures a trusted durable notification
++origin separately from ordinary deliver metadata (TUI: durable session key plus optional live UI id;
++gateway: its full stable route). At fire time that origin is restored only as a request-local context
++consumed by Kanban auto-subscription. A root created by such a cron run reports subscribed=true,
++persists exactly the originating subscription, and wakes that origin once on terminal flow.
++An unattached cron, CLI or test creates no subscription; wrong/stale origins fail closed and are
++surfaced in the creation receipt. It must not impersonate inbound authority, become a model-supplied
++session id, leak through process-global environment, or alter stateless cron delivery.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import pytest
++
++
++@pytest.fixture(autouse=True)
++def _reset_context_vars():
++    from gateway.session_context import _UNSET, _VAR_MAP
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++    yield
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++
++
++@pytest.fixture
++def profile_env(tmp_path, monkeypatch):
++    """Isolated environment simulating a non-default profile (e.g. morfeo)."""
++    profile_home = tmp_path / "profiles" / "morfeo"
++    profile_home.mkdir(parents=True)
++    (profile_home / "scripts").mkdir()
++    (profile_home / "cron").mkdir()
++    (profile_home / "cron" / "output").mkdir()
++
++    monkeypatch.setenv("HERMES_HOME", str(profile_home))
++    monkeypatch.setenv("HERMES_PROFILE", "morfeo")
++    monkeypatch.delenv("HERMES_KANBAN_TASK", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_KEY", raising=False)
++    monkeypatch.delenv("HERMES_UI_SESSION_ID", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_PLATFORM", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_CHAT_ID", raising=False)
++
++    import cron.jobs as jobs_mod
++    monkeypatch.setattr(jobs_mod, "HERMES_DIR", profile_home)
++    monkeypatch.setattr(jobs_mod, "CRON_DIR", profile_home / "cron")
++    monkeypatch.setattr(jobs_mod, "JOBS_FILE", profile_home / "cron" / "jobs.json")
++    monkeypatch.setattr(jobs_mod, "OUTPUT_DIR", profile_home / "cron" / "output")
++
++    import cron.scheduler as sched_mod
++    monkeypatch.setattr(sched_mod, "_hermes_home", profile_home)
++
++    from hermes_cli import kanban_db as kb
++    kb._INITIALIZED_PATHS.clear()
++
++    return {
++        "profile_home": profile_home,
++    }
++
++
++class TestIssue393CommissioningOrigin:
++    def test_capture_tui_commissioning_origin_at_create(self, profile_env, monkeypatch):
++        monkeypatch.setenv("HERMES_SESSION_KEY", "tui-origin-key-12345")
++        monkeypatch.setenv("HERMES_UI_SESSION_ID", "ui-tab-678")
++
++        from tools.cronjob_tools import cronjob
++
++        result_raw = cronjob(action="create", schedule="every 1h", prompt="test job")
++        res = json.loads(result_raw)
++        assert res.get("success") is True
++
++        from cron.jobs import get_job
++        job = get_job(res["job_id"]) or {}
++        notif = job.get("notification_origin")
++        assert notif is not None
++        assert notif.get("platform") == "tui"
++        assert notif.get("chat_id") == "tui-origin-key-12345"
++        assert notif.get("session_key") == "tui-origin-key-12345"
++        assert notif.get("ui_session_id") == "ui-tab-678"
++
++    def test_capture_gateway_commissioning_origin_at_create(self, profile_env):
++        from gateway.session_context import set_session_vars
++        set_session_vars(
++            platform="telegram",
++            chat_id="tg-chat-999",
++            chat_name="Dev Group",
++            thread_id="101",
++        )
++
++        from tools.cronjob_tools import cronjob
++
++        result_raw = cronjob(action="create", schedule="every 1h", prompt="test job 2")
++        res = json.loads(result_raw)
++        assert res.get("success") is True
++
++        from cron.jobs import get_job
++        job = get_job(res["job_id"]) or {}
++        notif = job.get("notification_origin")
++        assert notif is not None
++        assert notif.get("platform") == "telegram"
++        assert notif.get("chat_id") == "tg-chat-999"
++        assert notif.get("thread_id") == "101"
++
++    def test_unattached_create_captures_no_notification_origin(self, profile_env):
++        from tools.cronjob_tools import cronjob
++
++        result_raw = cronjob(action="create", schedule="every 1h", prompt="unattached job")
++        res = json.loads(result_raw)
++        assert res.get("success") is True
++
++        from cron.jobs import get_job
++        job = get_job(res["job_id"]) or {}
++        assert job.get("notification_origin") is None
++
++    def test_fire_restores_request_local_context_for_kanban_auto_subscribe(self, profile_env, monkeypatch):
++        from hermes_cli import kanban_db as kb
++        import tools.kanban_tools as kt
++        from cron.scheduler import run_job
++
++        conn = kb.connect()
++        conn.close()
++
++        job = {
++            "id": "job-with-tui-origin",
++            "name": "tui-origin-job",
++            "prompt": "do work",
++            "schedule": {"kind": "once"},
++            "notification_origin": {
++                "platform": "tui",
++                "chat_id": "durable-tui-session-key",
++                "session_key": "durable-tui-session-key",
++                "ui_session_id": "win-live-1",
++            },
++        }
++
++        created_receipt = {}
++        class MockAgent:
++            def __init__(self, **kwargs):
++                pass
++            def run_conversation(self, *a, **kw):
++                monkeypatch.setenv("HERMES_KANBAN_TASK", "t_root_worker")
++                raw = kt._handle_create({"title": "Root cron task", "assignee": "implementer"})
++                created_receipt.update(json.loads(raw))
++                return {"final_response": "done", "messages": []}
++            def get_activity_summary(self):
++                return {"seconds_since_activity": 0.0}
++
++        import sys
++        fake_mod = type(sys)("run_agent")
++        fake_mod.AIAgent = MockAgent
++        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
++
++        from hermes_cli import runtime_provider as _rtp
++        monkeypatch.setattr(
++            _rtp, "resolve_runtime_provider",
++            lambda **kw: {"provider": "test", "api_key": "k", "base_url": "http://test", "api_mode": "chat_completions"}
++        )
++        monkeypatch.setattr("cron.scheduler._build_job_prompt", lambda *a, **kw: "prompt")
++        monkeypatch.setattr("cron.scheduler._deliver_result", lambda *a, **kw: None)
++        monkeypatch.setenv("HERMES_CRON_TIMEOUT", "0")
++
++        run_job(job)
++
++        # 1. kanban_create reports subscribed=True
++        assert created_receipt.get("subscribed") is True
++        task_id = created_receipt["task_id"]
++
++        # 2. Database contains exactly the originating subscription
++        c = kb.connect()
++        try:
++            subs = kb.list_notify_subs(c, task_id=task_id)
++            assert len(subs) == 1
++            assert subs[0].get("platform") == "tui"
++            assert subs[0].get("chat_id") == "durable-tui-session-key"
++            meta = subs[0].get("delivery_metadata") or {}
++            assert meta.get("ui_session_id") == "win-live-1"
++        finally:
++            c.close()
++
++        # 3. Process-global env was not mutated
++        assert os.environ.get("HERMES_SESSION_PLATFORM") is None
++        assert os.environ.get("HERMES_SESSION_CHAT_ID") is None
++
++    def test_fire_restores_gateway_origin_kanban_auto_subscribe_group(self, profile_env, monkeypatch):
++        from hermes_cli import kanban_db as kb
++        import tools.kanban_tools as kt
++        from cron.scheduler import run_job
++
++        conn = kb.connect()
++        conn.close()
++
++        job = {
++            "id": "job-with-gateway-group-origin",
++            "name": "gateway-group-origin-job",
++            "prompt": "do work",
++            "schedule": {"kind": "once"},
++            "notification_origin": {
++                "platform": "telegram",
++                "chat_id": "tg-chat-999",
++                "chat_type": "group",
++                "thread_id": 101,
++                "user_id": "user-42",
++                "message_id": "msg-7",
++            },
++        }
++
++        created_receipt = {}
++        class MockAgent:
++            def __init__(self, **kwargs):
++                pass
++            def run_conversation(self, *a, **kw):
++                monkeypatch.setenv("HERMES_KANBAN_TASK", "t_root_worker_gw_group")
++                raw = kt._handle_create({"title": "Root cron task gateway group", "assignee": "implementer"})
++                created_receipt.update(json.loads(raw))
++                return {"final_response": "done", "messages": []}
++            def get_activity_summary(self):
++                return {"seconds_since_activity": 0.0}
++
++        import sys
++        fake_mod = type(sys)("run_agent")
++        fake_mod.AIAgent = MockAgent
++        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
++
++        from hermes_cli import runtime_provider as _rtp
++        monkeypatch.setattr(
++            _rtp, "resolve_runtime_provider",
++            lambda **kw: {"provider": "test", "api_key": "k", "base_url": "http://test", "api_mode": "chat_completions"}
++        )
++        monkeypatch.setattr("cron.scheduler._build_job_prompt", lambda *a, **kw: "prompt")
++        monkeypatch.setattr("cron.scheduler._deliver_result", lambda *a, **kw: None)
++        monkeypatch.setenv("HERMES_CRON_TIMEOUT", "0")
++
++        run_job(job)
++
++        assert created_receipt.get("subscribed") is True
++        task_id = created_receipt["task_id"]
++
++        c = kb.connect()
++        try:
++            subs = kb.list_notify_subs(c, task_id=task_id)
++            assert len(subs) == 1
++            sub = subs[0]
++            assert sub.get("platform") == "telegram"
++            assert sub.get("chat_id") == "tg-chat-999"
++            assert sub.get("chat_type") == "group"
++            assert str(sub.get("thread_id")) == "101"
++            assert sub.get("user_id") == "user-42"
++            assert sub.get("delivery_mode") == "notify+wake"
++            meta = sub.get("delivery_metadata") or {}
++            assert str(meta.get("thread_id")) == "101"
++            assert meta.get("chat_type") == "group"
++            assert meta.get("message_id") == "msg-7"
++            assert "telegram_dm_topic_reply_fallback" not in meta
++        finally:
++            c.close()
++
++    def test_fire_restores_gateway_origin_kanban_auto_subscribe_telegram_dm_with_thread(self, profile_env, monkeypatch):
++        from hermes_cli import kanban_db as kb
++        import tools.kanban_tools as kt
++        from cron.scheduler import run_job
++
++        conn = kb.connect()
++        conn.close()
++
++        job = {
++            "id": "job-with-gateway-dm-origin",
++            "name": "gateway-dm-origin-job",
++            "prompt": "do work",
++            "schedule": {"kind": "once"},
++            "notification_origin": {
++                "platform": "telegram",
++                "chat_id": "tg-chat-999",
++                "chat_type": "dm",
++                "thread_id": 101,
++                "user_id": "user-42",
++                "message_id": "msg-7",
++            },
++        }
++
++        created_receipt = {}
++        class MockAgent:
++            def __init__(self, **kwargs):
++                pass
++            def run_conversation(self, *a, **kw):
++                monkeypatch.setenv("HERMES_KANBAN_TASK", "t_root_worker_gw_dm")
++                raw = kt._handle_create({"title": "Root cron task gateway dm", "assignee": "implementer"})
++                created_receipt.update(json.loads(raw))
++                return {"final_response": "done", "messages": []}
++            def get_activity_summary(self):
++                return {"seconds_since_activity": 0.0}
++
++        import sys
++        fake_mod = type(sys)("run_agent")
++        fake_mod.AIAgent = MockAgent
++        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
++
++        from hermes_cli import runtime_provider as _rtp
++        monkeypatch.setattr(
++            _rtp, "resolve_runtime_provider",
++            lambda **kw: {"provider": "test", "api_key": "k", "base_url": "http://test", "api_mode": "chat_completions"}
++        )
++        monkeypatch.setattr("cron.scheduler._build_job_prompt", lambda *a, **kw: "prompt")
++        monkeypatch.setattr("cron.scheduler._deliver_result", lambda *a, **kw: None)
++        monkeypatch.setenv("HERMES_CRON_TIMEOUT", "0")
++
++        run_job(job)
++
++        assert created_receipt.get("subscribed") is True
++        task_id = created_receipt["task_id"]
++
++        c = kb.connect()
++        try:
++            subs = kb.list_notify_subs(c, task_id=task_id)
++            assert len(subs) == 1
++            sub = subs[0]
++            assert sub.get("platform") == "telegram"
++            assert sub.get("chat_id") == "tg-chat-999"
++            assert sub.get("chat_type") == "dm"
++            assert str(sub.get("thread_id")) == "101"
++            assert sub.get("user_id") == "user-42"
++            assert sub.get("delivery_mode") == "notify+wake"
++            meta = sub.get("delivery_metadata") or {}
++            assert str(meta.get("thread_id")) == "101"
++            assert meta.get("chat_type") == "dm"
++            assert meta.get("message_id") == "msg-7"
++            assert meta.get("telegram_dm_topic_reply_fallback") is True
++            assert meta.get("direct_messages_topic_id") == "101"
++            assert meta.get("telegram_reply_to_message_id") == "msg-7"
++        finally:
++            c.close()
++
++    def test_unattached_cron_fire_creates_no_kanban_subscription(self, profile_env, monkeypatch):
++        from hermes_cli import kanban_db as kb
++        import tools.kanban_tools as kt
++        from cron.scheduler import run_job
++
++        conn = kb.connect()
++        conn.close()
++
++        job = {
++            "id": "job-unattached",
++            "name": "unattached",
++            "prompt": "do work",
++            "schedule": {"kind": "once"},
++        }
++
++        created_receipt = {}
++        class MockAgent:
++            def __init__(self, **kwargs):
++                pass
++            def run_conversation(self, *a, **kw):
++                monkeypatch.setenv("HERMES_KANBAN_TASK", "t_root_worker_2")
++                raw = kt._handle_create({"title": "Unattached cron task", "assignee": "implementer"})
++                created_receipt.update(json.loads(raw))
++                return {"final_response": "done", "messages": []}
++            def get_activity_summary(self):
++                return {"seconds_since_activity": 0.0}
++
++        import sys
++        fake_mod = type(sys)("run_agent")
++        fake_mod.AIAgent = MockAgent
++        monkeypatch.setitem(sys.modules, "run_agent", fake_mod)
++
++        from hermes_cli import runtime_provider as _rtp
++        monkeypatch.setattr(
++            _rtp, "resolve_runtime_provider",
++            lambda **kw: {"provider": "test", "api_key": "k", "base_url": "http://test", "api_mode": "chat_completions"}
++        )
++        monkeypatch.setattr("cron.scheduler._build_job_prompt", lambda *a, **kw: "prompt")
++        monkeypatch.setattr("cron.scheduler._deliver_result", lambda *a, **kw: None)
++        monkeypatch.setenv("HERMES_CRON_TIMEOUT", "0")
++
++        run_job(job)
++
++        assert created_receipt.get("subscribed") is False
++        task_id = created_receipt["task_id"]
++
++        c = kb.connect()
++        try:
++            subs = kb.list_notify_subs(c, task_id=task_id)
++            assert len(subs) == 0
++        finally:
++            c.close()
++
++    def test_tui_terminal_flow_wakes_origin_once(self, profile_env):
++        from hermes_cli import kanban_db as kb
++        from tui_gateway.server import _collect_kanban_notifications
++
++        c = kb.connect()
++        try:
++            tid = kb.create_task(c, title="tui wake task", assignee="implementer")
++            kb.add_notify_sub(c, task_id=tid, platform="tui", chat_id="origin-key-test")
++            kb.complete_task(c, task_id=tid, summary="task completed successfully")
++        finally:
++            c.close()
++
++        session_dict = {"session_key": "origin-key-test"}
++        notifications = _collect_kanban_notifications(session_dict)
++        assert len(notifications) == 1
++        assert "completed" in notifications[0].lower()
++
++        # Second collect must return 0 (cursor advanced, wakes once)
++        again = _collect_kanban_notifications(session_dict)
++        assert len(again) == 0
+diff --git a/tools/kanban_tools.py b/tools/kanban_tools.py
+index 9071f38ce3..b2a2a4bd06 100644
+--- a/tools/kanban_tools.py
++++ b/tools/kanban_tools.py
+@@ -1768,43 +1768,88 @@ def _maybe_auto_subscribe(conn: Any, task_id: str) -> bool:
+ 
+     platform = ""
+     chat_id = ""
++    notifier_profile = ""
++    ui_session_id = None
++    chat_type = None
++    thread_id = None
++    user_id = None
++    user_id_alt = None
++    message_id = ""
++
+     try:
+         from gateway.session_context import get_session_env
+-        platform = get_session_env("HERMES_SESSION_PLATFORM", "")
+-        chat_id = get_session_env("HERMES_SESSION_CHAT_ID", "")
+-        if not platform or not chat_id:
+-            # TUI / desktop fallback: platform/chat_id ContextVars are
+-            # cleared for TUI sessions, but the parent process exports
+-            # HERMES_SESSION_KEY into the subprocess env. Treat that
+-            # as a "tui" subscription so the TUI notification poller
+-            # (tui_gateway/server.py) can pick it up.
+-            #
+-            # HERMES_SESSION_ID is intentionally NOT a fallback here:
+-            # it is set by ACP / the agent subprocess for telemetry
+-            # regardless of whether the parent is a TUI or a CLI, so
+-            # treating it as a notification target would auto-subscribe
+-            # every CLI invocation, which is exactly the over-eager
+-            # behaviour that got #19718 reverted upstream. The TUI
+-            # poller keys on HERMES_SESSION_KEY.
++        platform = (
++            get_session_env("HERMES_SESSION_PLATFORM", "")
++            or os.environ.get("HERMES_SESSION_PLATFORM", "")
++        )
++        chat_id = (
++            get_session_env("HERMES_SESSION_CHAT_ID", "")
++            or os.environ.get("HERMES_SESSION_CHAT_ID", "")
++        )
++        if platform and chat_id:
++            chat_type = (
++                get_session_env("HERMES_SESSION_CHAT_TYPE", "")
++                or os.environ.get("HERMES_SESSION_CHAT_TYPE", "")
++                or None
++            )
++            thread_id = (
++                get_session_env("HERMES_SESSION_THREAD_ID", "")
++                or os.environ.get("HERMES_SESSION_THREAD_ID", "")
++                or None
++            )
++            user_id = (
++                get_session_env("HERMES_SESSION_USER_ID", "")
++                or os.environ.get("HERMES_SESSION_USER_ID", "")
++                or None
++            )
++            user_id_alt = (
++                get_session_env("HERMES_SESSION_USER_ID_ALT", "")
++                or os.environ.get("HERMES_SESSION_USER_ID_ALT", "")
++                or None
++            )
++            message_id = (
++                get_session_env("HERMES_SESSION_MESSAGE_ID", "")
++                or os.environ.get("HERMES_SESSION_MESSAGE_ID", "")
++                or ""
++            )
++        else:
+             session_key = (
+                 get_session_env("HERMES_SESSION_KEY", "")
+                 or os.environ.get("HERMES_SESSION_KEY", "")
+             )
+-            if not session_key:
+-                return False  # CLI / cron / test — no persistent channel
+-            platform = "tui"
+-            chat_id = session_key
++            if session_key:
++                platform = "tui"
++                chat_id = session_key
++            else:
++                # Ordinary inbound session routing is absent (e.g. in cron run).
++                # Check for request-local notification origin from cron (#393).
++                from gateway.session_context import get_kanban_notification_origin
++                notif_origin = get_kanban_notification_origin()
++                if not notif_origin or not isinstance(notif_origin, dict):
++                    return False  # CLI / cron / test — no persistent channel
++
++                notif_platform = str(notif_origin.get("platform") or "").strip()
++                notif_chat_id = str(notif_origin.get("chat_id") or notif_origin.get("session_key") or "").strip()
++                if not notif_platform or not notif_chat_id:
++                    return False
++
++                platform = notif_platform
++                chat_id = notif_chat_id
++                chat_type = str(notif_origin["chat_type"]) if notif_origin.get("chat_type") is not None else None
++                thread_id = str(notif_origin["thread_id"]) if notif_origin.get("thread_id") is not None else None
++                user_id = str(notif_origin["user_id"]) if notif_origin.get("user_id") is not None else None
++                user_id_alt = str(notif_origin["user_id_alt"]) if notif_origin.get("user_id_alt") is not None else None
++                message_id = str(notif_origin.get("message_id") or "")
++                notifier_profile = str(notif_origin.get("notifier_profile") or "")
++                ui_session_id = notif_origin.get("ui_session_id")
++
+         is_gateway_session = platform != "tui"
+-        chat_type = get_session_env("HERMES_SESSION_CHAT_TYPE", "") or None
+         delivery_mode = "notify+wake" if is_gateway_session else None
+-        thread_id = get_session_env("HERMES_SESSION_THREAD_ID", "") or None
+-        user_id = get_session_env("HERMES_SESSION_USER_ID", "") or None
+-        user_id_alt = get_session_env("HERMES_SESSION_USER_ID_ALT", "") or None
+-        message_id = get_session_env("HERMES_SESSION_MESSAGE_ID", "") or ""
+-        notifier_profile = (
+-            get_session_env("HERMES_SESSION_PROFILE", "")
+-            or os.environ.get("HERMES_PROFILE")
+-        )
++        if not notifier_profile:
++            notifier_profile = (
++                get_session_env("HERMES_SESSION_PROFILE", "")
++                or os.environ.get("HERMES_PROFILE")
++            )
+         if not notifier_profile:
+             try:
+                 from hermes_cli.profiles import get_active_profile_name
+@@ -1812,10 +1857,14 @@ def _maybe_auto_subscribe(conn: Any, task_id: str) -> bool:
+             except Exception:
+                 notifier_profile = "default"
+         delivery_metadata: dict[str, Any] = {}
++        if ui_session_id:
++            delivery_metadata["ui_session_id"] = ui_session_id
+         if thread_id:
+             delivery_metadata["thread_id"] = thread_id
+         if chat_type:
+             delivery_metadata["chat_type"] = chat_type
++        if message_id:
++            delivery_metadata["message_id"] = str(message_id)
+         if (
+             platform.lower() == "telegram"
+             and thread_id
