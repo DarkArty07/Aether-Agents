@@ -2,6 +2,11 @@
 
 No daemon is introduced. The harness uses Hermes's existing one-pass dispatcher and
 polls its durable board until the scenario settles or reaches its explicit budget.
+
+``dispatch_until_settled`` invokes the native ``hermes kanban dispatch`` writer, so it
+accepts the caller's declared disposable roots and verifies the effective writer context
+before the first dispatch.  Callers that omit them are responsible for passing an
+environment produced by a verified constructor (:func:`aether_agents.lab.isolation`).
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .collect import CommandResult, json_from_stdout, run_command, write_json
+from .isolation import require_verified_writer_context
 
 SETTLED_STATUSES = {"done", "archived", "blocked"}
 SUCCESS_STATUSES = {"done", "archived"}
@@ -106,7 +112,18 @@ def dispatch_until_settled(
     max_passes: int,
     timeout_seconds: int,
     poll_seconds: float = 0.5,
+    run_root: Path | None = None,
+    hermes_root: Path | None = None,
 ) -> BoardState:
+    if run_root is not None:
+        # `hermes kanban dispatch` is a native writer: refuse a context that resolves
+        # outside the caller's disposable roots before the first dispatch.
+        require_verified_writer_context(
+            run_root=run_root,
+            hermes_root=hermes_root,
+            environ=env,
+            cwd=cwd,
+        )
     started = time.monotonic()
     last_tasks: list[dict[str, object]] = []
     poll_seconds = max(poll_seconds, timeout_seconds / max(1, max_passes))

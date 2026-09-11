@@ -73,6 +73,14 @@ another unit's scope. Unfinished, blocked, review-active, concurrent, or
 unrelated work is preserved. Completion evidence states what changed, what was
 actually verified, and what material risk or non-applicability remains.
 
+Write-capable probes and review steps construct one disposable board context with the
+reviewed laboratory constructors and refuse a context that resolves outside their
+private roots before the first native writer. Accidental mutation of a live or shared
+board is preserved as evidence and escalated through the supported lifecycle: direct
+SQL deletion of tasks, comments, events or runs is never cleanup. Isolation defects are
+reproduced against disposable copies, and the fixing unit reports a byte/row-stable
+live-board fingerprint.
+
 ## Review convergence
 
 Supervisor owns convergence as well as defect detection. Repeated failure classes,

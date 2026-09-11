@@ -24,6 +24,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .isolation import scrub_inherited_identity
 from .observation import live_observation, prepare_observation_only
 from .resources import source_root
 from .validation import validate_evidence
@@ -213,7 +214,10 @@ def _run_scenario(
                 "--allow-model-spend",
             ]
         )
-    child_env = dict(os.environ)
+    # The scenario runner constructs its own disposable context before any native
+    # writer; this launcher must not seed it with an inherited board/session selector
+    # that would be carried into a laboratory child.
+    child_env = scrub_inherited_identity(dict(os.environ))
     source_path = ROOT / "src"
     if source_path.is_dir():
         prior_path = child_env.get("PYTHONPATH")

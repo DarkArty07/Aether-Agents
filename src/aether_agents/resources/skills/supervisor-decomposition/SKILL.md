@@ -99,6 +99,11 @@ current limits and authority as constraints, not settings to tune during decompo
    when the trusted runtime graph explicitly supplies it. The terminal integration
    card consumes reviewed units; it does not replace unit review. Integrate and close
    out under existing procedures, preserving accepted commits and release conclusions.
+   A write-capable probe or review step constructs one disposable board context and
+   refuses a context that resolves outside its private roots before the first writer.
+   If an accidental mutation of a live or shared board is discovered, preserve it as
+   evidence and escalate through the supported lifecycle; direct SQL deletion of
+   tasks, comments, events or runs is never cleanup.
 
 ## Review convergence
 
@@ -149,6 +154,15 @@ Document/loading tests can check that this procedure exists and remains consiste
 They cannot prove that a model follows it. Observe actual authorized work through the
 existing adoption tracker; do not restart a retired synthetic campaign or fabricate a
 speedup or behavioral qualification result.
+
+### Accidental mutation is evidence, not cleanup
+
+Synthetic rows written into a live or shared board are a preservation event, not a
+cleanliness problem. Direct SQL deletion of tasks, comments, events or runs is never
+cleanup: it destroys the audit trail of the accident. Preserve the rows and the exact
+mutation evidence, and escalate through the supported lifecycle so the owning flow can
+decide. Reproduce the isolation defect only against disposable boards, and require a
+byte/row-stable live-board fingerprint from the unit that fixes it.
 
 ## Compact unit delivery (template, not another schema)
 
