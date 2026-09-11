@@ -1840,7 +1840,7 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
         )
     )
     assert res["success"] is False
-    assert res["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
+    assert res["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID"
 
     # Direct store use still surfaces the specific marker validation error
     store_direct = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
@@ -1873,7 +1873,7 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
         )
     )
     assert res_mismatch["success"] is False
-    assert res_mismatch["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
+    assert res_mismatch["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
 
     store_direct2 = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
     with pytest.raises(ContractError) as exc_direct2:
@@ -1903,7 +1903,7 @@ def test_session_worktree_authoring_rejects_unrelated_workspace(
         )
     )
     assert res_diff_git["success"] is False
-    assert res_diff_git["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
+    assert res_diff_git["error"]["code"] == "AETHER-OBJECTIVE-CONTRACT-PROJECT-CONFLICT"
 
     store_direct3 = ObjectiveContractStore(registry=registry, authoring_root=unrelated_repo)
     with pytest.raises(ContractError) as exc_direct3:
@@ -2564,15 +2564,39 @@ def test_objective_contract_fails_closed_without_resolved_git_workspace(
         return snapshot
 
     negatives = [
-        ("missing session row", "session-missing-row"),
-        ("NULL cwd", "session-null-cwd"),
-        ("empty cwd", "session-empty-cwd"),
-        ("nonexistent cwd", "session-nonexistent-cwd"),
-        ("existing non-Git cwd", "session-non-git-cwd"),
-        ("unrelated project/worktree", "session-unrelated-repo"),
+        (
+            "missing session row",
+            "session-missing-row",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "NULL cwd",
+            "session-null-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "empty cwd",
+            "session-empty-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "nonexistent cwd",
+            "session-nonexistent-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "existing non-Git cwd",
+            "session-non-git-cwd",
+            "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+        ),
+        (
+            "unrelated project/worktree",
+            "session-unrelated-repo",
+            "AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID",
+        ),
     ]
 
-    for label, session_id in negatives:
+    for label, session_id, expected_code in negatives:
         primary_snap_before = snapshot_tree(primary)
         assert not (primary / ".aether" / "drafts").exists()
         assert not (primary / ".aether" / "objective-contracts").exists()
@@ -2588,11 +2612,8 @@ def test_objective_contract_fails_closed_without_resolved_git_workspace(
         assert begin_res.get("success") is False, (
             f"Expected failure for negative: {label}, got: {begin_res}"
         )
-        assert (
-            begin_res.get("error", {}).get("code")
-            == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
-        ), (
-            f"Expected AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED for negative: {label}, got: {begin_res.get('error')}"
+        assert begin_res.get("error", {}).get("code") == expected_code, (
+            f"Expected {expected_code} for negative: {label}, got: {begin_res.get('error')}"
         )
 
         # Attempt set_section fails closed
@@ -2611,9 +2632,7 @@ def test_objective_contract_fails_closed_without_resolved_git_workspace(
             )
         )
         assert set_res.get("success") is False
-        assert (
-            set_res.get("error", {}).get("code") == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
-        )
+        assert set_res.get("error", {}).get("code") == expected_code
 
         # Attempt finalize fails closed
         finalize_neg_res = json.loads(
@@ -2629,10 +2648,7 @@ def test_objective_contract_fails_closed_without_resolved_git_workspace(
             )
         )
         assert finalize_neg_res.get("success") is False
-        assert (
-            finalize_neg_res.get("error", {}).get("code")
-            == "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED"
-        )
+        assert finalize_neg_res.get("error", {}).get("code") == expected_code
 
         # Assert zero primary / draft / final changes
         primary_snap_after = snapshot_tree(primary)

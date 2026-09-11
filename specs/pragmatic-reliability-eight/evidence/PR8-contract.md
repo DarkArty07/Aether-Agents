@@ -1,9 +1,9 @@
 # Implementation Evidence — Unit PR8-CONTRACT (#388 Fail-Closed Boundary)
 
-**Status:** Aether-side fail-closed boundary for `#388` implemented and verified. Native Hermes authoring sessions that cannot resolve a valid registered Git workspace fail closed before store construction, draft/final writes, or primary checkout mutation. Direct sessionless store use remains completely preserved. Ready for independent Supervisor review on child card `t_d760638b` (`PR8-CONTRACT-REVIEW`).
+**Status:** Aether-side fail-closed boundary for `#388` implemented and verified at the causal minimum (rework unit `PR8-CONTRACT-REWORK-1`). Native Hermes authoring sessions that cannot resolve a valid registered Git workspace fail closed before store construction with stable error `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED` and zero primary checkout mutation. For resolved workspaces, positive workspace validation is delegated directly to `ObjectiveContractStore._project` without duplicate logic in the plugin. Direct sessionless store use remains completely preserved. Ready for independent Supervisor re-review on child card `t_d760638b` (`PR8-CONTRACT-REVIEW`).
 
-**Unit ID:** `PR8-CONTRACT`
-**Task ID:** `t_3250f19c`
+**Unit ID:** `PR8-CONTRACT` (rework `PR8-CONTRACT-REWORK-1`, card `t_139b1878`)
+**Parent Task ID:** `t_3250f19c`
 **Objective Contract:** `oc_c780a10d94b78d85@v1` (SHA-256 `0fdd7931cc77e75eecc20e37c32f1352afbd8bf91869340aa092ac20e12905a5`)
 **Source Requirements:** `specs/pragmatic-reliability-eight/spec.md` §R388; `plan.md` §D3 U-CONTRACT; `specs/pragmatic-reliability-eight/tasks.md` (PR8-CONTRACT); Issue [#388](https://github.com/DarkArty07/Aether-Agents/issues/388).
 
@@ -24,7 +24,7 @@
 
 ## 2. Scope and Modification Boundaries
 
-Exclusive writable boundary for PR8-CONTRACT:
+Exclusive writable boundary for PR8-CONTRACT / PR8-CONTRACT-REWORK-1:
 - `src/aether_agents/objective_contracts/hermes_plugin.py`
 - `tests/test_objective_contracts.py`
 - `specs/pragmatic-reliability-eight/evidence/PR8-contract.md`
@@ -51,18 +51,21 @@ In `src/aether_agents/objective_contracts/hermes_plugin.py`:
 When running `test_objective_contract_fails_closed_without_resolved_git_workspace` against the unpatched base:
 ```text
 FAILED tests/test_objective_contracts.py::test_objective_contract_fails_closed_without_resolved_git_workspace
-AssertionError: Expected failure for negative: missing session row, got: {'project_id': '11111111-1111-4111-8111-111111111111', 'contract_id': 'oc_f790ca5ffa857190', 'revision': 1, 'status': 'draft', 'draft_path': '.aether/drafts/oc_f790ca5ffa857190.json', 'created_in_session': 'session-missing-row'}
+AssertionError: Expected failure for negative: missing session row, got: {'project_id': '11111111-1111-4111-8111-111111111111', 'contract_id': 'oc_908d6ef5b8752c2c', 'revision': 1, 'status': 'draft', 'draft_path': '.aether/drafts/oc_908d6ef5b8752c2c.json', 'created_in_session': 'session-missing-row'}
 ```
 The negative test confirmed that an unbound session mutated the primary project checkout and created `.aether/drafts/` instead of failing closed before mutation.
 
-### 3.3 Implementation Details (GREEN on Candidate)
-1. **Validation Before Store Construction:** Added `_resolve_session_authoring_workspace(session_id: str, project_id: str) -> Path` in `hermes_plugin.py`. When a non-empty `session_id` is supplied:
-   - Derives the candidate workspace from `_native_session_workspace(session_id)`. If `None`, raises `ContractError("AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED", "Hermes authoring session has no resolved Git workspace")`.
-   - Validates that the candidate workspace matches the registered project: resolves `project_id` via `ProjectRegistry`, checks that the project root is available, and verifies whether the candidate is the primary checkout or a valid linked worktree.
-   - For linked worktrees, verifies: not a symlink, accessible directory, `.aether/project.toml` exists and has matching canonical `project_id`, `git rev-parse --show-toplevel` matches the workspace, and `git rev-parse --git-common-dir` matches the registered primary checkout.
-   - Any failure raises `ContractError("AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED", ...)`.
-2. **Call Seam in `_handle`:** In `_handle`, when `session_id` is provided, `_resolve_session_authoring_workspace` is invoked **before** `ObjectiveContractStore(author_profile=author_profile, authoring_root=session_workspace)` is constructed. All actions (`begin`, `set_section`, `finalize`, `supersede`, `prepare_handoff`) fail closed with the stable error code before store construction and before any filesystem writes.
-3. **Preservation of Direct Store Use:** When `ObjectiveContractStore` is instantiated directly in Python without `authoring_root` (or with `authoring_root=None`), it continues to function exactly as before, operating directly on the registered project primary root.
+### 3.3 Implementation Details (Causal Minimum on Candidate)
+1. **Fail-Closed Seam Before Store Construction:** In `src/aether_agents/objective_contracts/hermes_plugin.py`, within `_handle`:
+   - When `session_id` is provided and non-empty, `session_workspace = _native_session_workspace(session_id)`.
+   - If `session_workspace is None` (session row missing, `cwd` is `NULL`, empty, nonexistent, or non-Git), `_handle` immediately raises `ContractError("AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED", "Hermes authoring session has no resolved Git workspace")`.
+   - This check runs **before** `ObjectiveContractStore(author_profile=author_profile, authoring_root=session_workspace)` is constructed, failing closed with zero filesystem writes.
+2. **Delegation of Positive Workspace Validation:**
+   - When `session_workspace` is resolved (non-`None`), it is passed directly as `authoring_root` to `ObjectiveContractStore`.
+   - `ObjectiveContractStore._project` enforces all registered project root, worktree, marker validity, Git-root and git common-dir constraints on every store action before any mutation.
+   - The plugin does not duplicate store validation logic or construct its own separate registry.
+3. **Preservation of Direct Store Use:**
+   - Direct sessionless store use (or tool invocation without `session_id`) passes `authoring_root=None` as default, preserving primary root authoring for authorized callers.
 
 ---
 
@@ -72,21 +75,21 @@ The negative test confirmed that an unbound session mutated the primary project 
 
 | Fixture | Scenario Description | Check Executed | Observed Result | Evidence Location |
 |---|---|---|---|---|
-| Negative 1 | Missing session row in `state.db` | `hermes_plugin._handle(action="begin", session_id="session-missing-row")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2557` |
-| Negative 2 | `NULL` cwd in `sessions` table | `hermes_plugin._handle(action="begin", session_id="session-null-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2558` |
-| Negative 3 | Empty string `""` cwd in `sessions` table | `hermes_plugin._handle(action="begin", session_id="session-empty-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2559` |
-| Negative 4 | Nonexistent directory cwd | `hermes_plugin._handle(action="begin", session_id="session-nonexistent-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2560` |
-| Negative 5 | Existing non-Git directory cwd | `hermes_plugin._handle(action="begin", session_id="session-non-git-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2561` |
-| Negative 6 | Unrelated Git repository / worktree | `hermes_plugin._handle(action="begin", session_id="session-unrelated-repo")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2562` |
-| Positive 7 | Valid linked worktree | `hermes_plugin._handle` for `begin`, `set_section`, `finalize` in `session-valid-worktree` | PASS; contract `v1.md` created in worktree; primary checkout remains 100% byte/stat/inode unchanged | `tests/test_objective_contracts.py:2629-2678` |
-| Regression | Direct sessionless store use | `ObjectiveContractStore(registry=registry).begin(...)` | PASS; direct store use succeeds without session workspace constraint | `tests/test_objective_contracts.py:2619-2627` |
+| Negative 1 | Missing session row in `state.db` | `hermes_plugin._handle(action="begin", session_id="session-missing-row")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2567-2571` |
+| Negative 2 | `NULL` cwd in `sessions` table | `hermes_plugin._handle(action="begin", session_id="session-null-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2572-2576` |
+| Negative 3 | Empty string `""` cwd in `sessions` table | `hermes_plugin._handle(action="begin", session_id="session-empty-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2577-2581` |
+| Negative 4 | Nonexistent directory cwd | `hermes_plugin._handle(action="begin", session_id="session-nonexistent-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2582-2586` |
+| Negative 5 | Existing non-Git directory cwd | `hermes_plugin._handle(action="begin", session_id="session-non-git-cwd")` | `AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED`; zero primary/draft/final mutations | `tests/test_objective_contracts.py:2587-2591` |
+| Negative 6 | Unrelated Git repository / worktree | `hermes_plugin._handle(action="begin", session_id="session-unrelated-repo")` | `AETHER-OBJECTIVE-CONTRACT-PROJECT-MARKER-INVALID` (from store delegation); zero primary/draft/final mutations | `tests/test_objective_contracts.py:2592-2596` |
+| Positive 7 | Valid linked worktree | `hermes_plugin._handle` for `begin`, `set_section`, `finalize` in `session-valid-worktree` | PASS; contract `v1.md` created in worktree; primary checkout remains 100% byte/stat/inode unchanged | `tests/test_objective_contracts.py:2676-2727` |
+| Regression | Direct sessionless store use | `ObjectiveContractStore(registry=registry).begin(...)` | PASS; direct store use succeeds without session workspace constraint | `tests/test_objective_contracts.py:2668-2675` |
 
 ### 4.2 Verification Commands and Exit Codes
 
 1. **Focused regression suite with new and updated nodes:**
    ```bash
    PYTHONPATH="$HOME/.cache/aether-agents/hermes/v2026.8.18" uv run --frozen pytest -q tests/test_objective_contracts.py
-   # Result: 45 passed in 29.15s, exit code 0
+   # Result: 45 passed in 30.17s, exit code 0
    ```
 2. **Linter:**
    ```bash
@@ -105,13 +108,13 @@ The negative test confirmed that an unbound session mutated the primary project 
    ```
 5. **Documentation validator:**
    ```bash
-   uv run --frozen python scripts/check_documentation.py
+   python3 scripts/check_documentation.py
    # Result: documentation validation passed, exit code 0
    ```
 6. **Public artifact scanner:**
    ```bash
-   uv run --frozen python scripts/check_public_artifacts.py
-   # Result: Expected known historical oc_0084270d940c98d9/v1.md finding (owned by PR8-CI); zero findings from touched unit files.
+   python3 scripts/check_public_artifacts.py
+   # Result: Expected known historical oc_0084270d940c98d9/v1.md findings (owned by PR8-CI); zero findings from touched unit files.
    ```
 
 ---
