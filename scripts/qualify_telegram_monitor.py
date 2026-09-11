@@ -620,8 +620,13 @@ def _check_lab_schedule_contract() -> tuple[str, str]:
 
     if PRODUCTION_LAB_SCHEDULE != "0 * * * *":
         return "fail", "the monitor production schedule is not exactly 0 * * * *"
-    if ACCELERATED_LAB_SCHEDULE != "* * * * *":
+    if (
+        ACCELERATED_LAB_SCHEDULE != "* * * * *"
+        or monitor_runtime.QUALIFICATION_SCHEDULE != ACCELERATED_LAB_SCHEDULE
+    ):
         return "fail", "the accelerated laboratory schedule is not exactly * * * * *"
+    if monitor_runtime.QUALIFICATION_SCHEDULE_ENV != "AETHER_MONITOR_QUALIFICATION_SCHEDULE":
+        return "fail", "the accelerated schedule selector is not qualification-only"
     if "cron_jobs.update_job" not in _LAB_SCHEDULE_UPDATE_PROBE:
         return "fail", "the accelerated path does not call cron.jobs.update_job"
     if "cron_jobs.get_due_jobs" in _LAB_SCHEDULE_UPDATE_PROBE:
@@ -5011,6 +5016,20 @@ def _live_run(
                 "the private lab schedule update did not prove one approved native update",
                 detail={"schedule_update": schedule_update},
             )
+        environment = lab["environment"]
+        if not isinstance(environment, dict):
+            abort(
+                "lab-context",
+                "the private laboratory environment is not mutable for the qualification-only schedule",
+            )
+        environment[monitor_runtime.QUALIFICATION_SCHEDULE_ENV] = (
+            monitor_runtime.QUALIFICATION_SCHEDULE
+        )
+        record["schedule_update"]["runtime_schedule_environment"] = {
+            "name": monitor_runtime.QUALIFICATION_SCHEDULE_ENV,
+            "value": ACCELERATED_LAB_SCHEDULE,
+            "scope": "private-lab-scheduler-child",
+        }
         accelerated_job = backends.job_record(interpreter, job_id, environment)
         if not _job_shape_ok(accelerated_job, schedule=ACCELERATED_LAB_SCHEDULE):
             abort(

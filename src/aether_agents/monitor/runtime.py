@@ -62,6 +62,8 @@ __all__ = [
     "HermesRuntime",
     "MORFEO_PROFILE",
     "NARRATION_LEASE_TTL_SECONDS",
+    "QUALIFICATION_SCHEDULE",
+    "QUALIFICATION_SCHEDULE_ENV",
     "REPORTER_TOOL",
     "REPORTER_TOOLSET",
     "execute_action",
@@ -72,6 +74,8 @@ __all__ = [
     "main",
     "main_precheck",
     "run_precheck",
+    "service_minute_boundary",
+    "service_hour_boundary",
 ]
 
 #: Dedicated restricted toolset that a reporter run is limited to.
@@ -88,6 +92,11 @@ REPORTER_TOOL = "aether_monitor_report_snapshot"
 PLUGIN_ID = "aether-telegram-monitor"
 #: Explicit private override for the narration output language.
 OWNER_LANGUAGE_ENV = "AETHER_MONITOR_LANGUAGE"
+#: Qualification-only cron expression.  The harness sets this only in the isolated lab
+#: child after the native job has been updated; production leaves it unset and therefore
+#: continues to use the fixed hourly monitor shape.
+QUALIFICATION_SCHEDULE_ENV = "AETHER_MONITOR_QUALIFICATION_SCHEDULE"
+QUALIFICATION_SCHEDULE = "* * * * *"
 
 #: Sources that may enroll direct Morfeo project work: local interactive sessions only.
 #: Gateway platform traffic, cron/report runs, sub-agent "tool" runs and unknown
@@ -937,7 +946,7 @@ def run_precheck(
     ):
         return 0
     now = clock() if clock is not None else datetime.now(timezone.utc)
-    cutoff = service_hour_boundary(now, timezone_name=_precheck_timezone_name(settings))
+    cutoff = _precheck_boundary(now, settings)
     previous = settings.last_cutoff_utc
     if previous is not None and _utc_text(cutoff) <= previous:
         print(_gate(False, reason="already-collected"), file=stream)
@@ -1034,6 +1043,29 @@ def service_hour_boundary(value: datetime, *, timezone_name: str | None = None) 
     zone = _zone(timezone_name)
     local = value.astimezone(zone) if zone is not None else value.astimezone()
     return local.replace(minute=0, second=0, microsecond=0)
+
+
+def service_minute_boundary(value: datetime, *, timezone_name: str | None = None) -> datetime:
+    """Return the configured wall-clock minute boundary that this tick belongs to."""
+
+    zone = _zone(timezone_name)
+    local = value.astimezone(zone) if zone is not None else value.astimezone()
+    return local.replace(second=0, microsecond=0)
+
+
+def _precheck_boundary(value: datetime, settings: Any) -> datetime:
+    """Select the production hour or the explicit isolated-lab minute boundary.
+
+    The qualification expression is intentionally an environment-only child setting.  It is
+    accepted only for the one fixed minute expression and is absent from normal Hermes
+    processes, so the production monitor continues to use its fixed hourly cutoff even when
+    the host happens to carry unrelated environment values.
+    """
+
+    timezone_name = _precheck_timezone_name(settings)
+    if os.environ.get(QUALIFICATION_SCHEDULE_ENV, "").strip() == QUALIFICATION_SCHEDULE:
+        return service_minute_boundary(value, timezone_name=timezone_name)
+    return service_hour_boundary(value, timezone_name=timezone_name)
 
 
 def main_precheck(argv: Sequence[str] | None = None) -> int:

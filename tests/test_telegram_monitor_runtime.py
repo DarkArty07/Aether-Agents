@@ -987,6 +987,41 @@ def test_manual_off_blocks_narration_delivery_and_retry(tmp_path: Path) -> None:
     assert delivered is not None and delivered.state.value == "confirmed"
 
 
+def test_precheck_uses_minute_boundaries_only_for_the_explicit_lab_schedule(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lab-only child selector accelerates cuts without changing the production oracle."""
+
+    monkeypatch.delenv(runtime_module.QUALIFICATION_SCHEDULE_ENV, raising=False)
+    value = datetime(2026, 9, 10, 12, 34, 56, tzinfo=UTC)
+    store = _store(tmp_path)
+    collector = _FakeCollector(store, idle=True)
+
+    code, output, _ = _run_precheck(store, collector, clock=lambda: value)
+    assert code == 0
+    assert collector.calls == [service_hour_boundary(value)]
+
+    store = _store(tmp_path / "lab")
+    collector = _FakeCollector(store, idle=True)
+    monkeypatch.setenv(
+        runtime_module.QUALIFICATION_SCHEDULE_ENV, runtime_module.QUALIFICATION_SCHEDULE
+    )
+
+    code, output, _ = _run_precheck(store, collector, clock=lambda: value)
+    assert code == 0
+    assert collector.calls == [runtime_module.service_minute_boundary(value)]
+    assert _gate_line(output)["reason"] == "idle"
+
+    # Any other value is not a second scheduling mode: it falls back to the fixed hourly
+    # production boundary, preventing an accidental production cadence change.
+    monkeypatch.setenv(runtime_module.QUALIFICATION_SCHEDULE_ENV, "every 30m")
+    store = _store(tmp_path / "invalid")
+    collector = _FakeCollector(store, idle=True)
+    code, _, _ = _run_precheck(store, collector, clock=lambda: value)
+    assert code == 0
+    assert collector.calls == [service_hour_boundary(value)]
+
+
 # ---------------------------------------------------------------------------
 # Control surface
 # ---------------------------------------------------------------------------

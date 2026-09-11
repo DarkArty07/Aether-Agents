@@ -3268,6 +3268,12 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert record["schedule_update"]["after"]["schedule"] == "* * * * *"
     assert record["schedule_update"]["validated_job"]["schedule"] == "* * * * *"
     assert record["schedule_update"]["validated_job"]["next_run_at"] is not None
+    assert record["schedule_update"]["runtime_schedule_environment"] == {
+        "name": "AETHER_MONITOR_QUALIFICATION_SCHEDULE",
+        "value": "* * * * *",
+        "scope": "private-lab-scheduler-child",
+    }
+    assert backends.jobs[SYNTHETIC_JOB_ID]["schedule"] == "* * * * *"
     assert record["smoke"]["confirmed"] is True
     assert record["smoke"]["narration_writes"] == 1
     assert record["smoke"]["part_count"] == 3
