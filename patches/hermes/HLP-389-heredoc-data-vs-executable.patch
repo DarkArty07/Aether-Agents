@@ -1,0 +1,412 @@
+diff --git a/cron/lifecycle_guard.py b/cron/lifecycle_guard.py
+index af7c1c8c53..ec7e54974d 100644
+--- a/cron/lifecycle_guard.py
++++ b/cron/lifecycle_guard.py
+@@ -43,6 +43,8 @@ import stat
+ from pathlib import Path
+ from typing import Callable, Iterator, Optional
+ 
++from tools.shell_heredoc import strip_inert_heredoc_bodies
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+@@ -506,6 +508,34 @@ def _sanitize_remote_script_text(text: Optional[str]) -> tuple[Optional[str], bo
+     return text, False
+ 
+ 
++def _reference_scan_view(command: str) -> str:
++    """Return the syntax-aware view used to discover executable references.
++
++    Direct lifecycle detection always scans the ORIGINAL text: interpreter
++    source that really asks for a lifecycle action
++    (``os.system("hermes gateway restart")``) lives in exactly the region this
++    view masks away, and that control must survive the #389 correction.
++
++    Executable-*reference* discovery is a different question. In a
++    well-formed, terminated, *quoted* heredoc whose consumer is a non-shell
++    interpreter (``python3``/``osascript``/``cat``) the body is program text or
++    plain data for that interpreter — never shell syntax this command line
++    executes. Walking those lines as shell made a path literal in Python source
++    (``Path('/var/log/gateway.log')``) look like an executable shell-script
++    reference and scanned the referenced log as shell (#389), so a read-only
++    log reader was denied whenever the log happened to mention a lifecycle
++    command.
++
++    ``strip_inert_heredoc_bodies`` is the conservative shared parse of that
++    view: it masks only quoted, terminated, single-command, known-consumer
++    bodies, replaces them with newlines that preserve line structure, and
++    returns the command untouched on ANY ambiguity (unquoted delimiter,
++    unterminated body, list operator, nested shell scope, unknown consumer), so
++    shell-capable and malformed forms keep the plain walk.
++    """
++    return strip_inert_heredoc_bodies(command)
++
++
+ def _contains_unsafe_gateway_action(
+     command: str,
+     *,
+@@ -519,7 +549,13 @@ def _contains_unsafe_gateway_action(
+     if depth >= _MAX_REFERENCED_SCRIPT_DEPTH:
+         return True
+ 
+-    for payload in _iter_shell_command_payloads(command):
++    # The walk below discovers executable *references* — shell scripts and
++    # ``sh -c`` payloads. It must not attribute an interpreter's inline program
++    # text or data to the shell; direct detection above already scanned the
++    # original text in full (#389).
++    reference_view = _reference_scan_view(command)
++
++    for payload in _iter_shell_command_payloads(reference_view):
+         if _contains_unsafe_gateway_action(
+             payload,
+             cwd=cwd,
+@@ -529,7 +565,7 @@ def _contains_unsafe_gateway_action(
+         ):
+             return True
+ 
+-    for script_path in _iter_referenced_shell_scripts(command, cwd=cwd):
++    for script_path in _iter_referenced_shell_scripts(reference_view, cwd=cwd):
+         try:
+             resolved = script_path.resolve(strict=False)
+         except (OSError, ValueError):
+diff --git a/tests/tools/test_lifecycle_guard_heredoc_data.py b/tests/tools/test_lifecycle_guard_heredoc_data.py
+new file mode 100644
+index 0000000000..1fb02b1cc7
+--- /dev/null
++++ b/tests/tools/test_lifecycle_guard_heredoc_data.py
+@@ -0,0 +1,334 @@
++"""TS-389: quoted Python heredoc data must not read as an executable script.
++
++Regression for Aether-Agents #389. The terminal gateway-lifecycle guard walks
++command segments looking for *referenced shell scripts* and scans each
++referenced file as shell. Heredoc source lines are exposed to that walk, so a
++read-only Python stdin heredoc that merely opens a log looked like it executed
++the log::
++
++    python3 - <<'PY'
++    from pathlib import Path
++    p = Path('/tmp/green-candidate-full-suite.log')
++    for line in p.read_text(errors='replace').splitlines():
++        if 'failed' in line:
++            print(line)
++    PY
++
++The log was ordinary pytest output from the gateway-restart-defense suites, so
++it contained the literal lifecycle phrase as *data*; the guard denied the
++command before Python ran (exit 1, "command or referenced script cannot
++restart or stop the gateway").
++
++The fix gives the referenced-script walk a syntax-aware view
++(``tools.shell_heredoc.strip_inert_heredoc_bodies``): in a well-formed,
++terminated, *quoted* heredoc consumed by a non-shell interpreter
++(python/osascript/cat) the body is program text or data for that interpreter,
++never shell syntax this command line executes, so a path literal inside it
++cannot promote the referenced file into an executable shell-script candidate.
++
++DIRECT lifecycle detection keeps scanning the ORIGINAL text, so an interpreter
++source that really asks for a lifecycle action is still blocked; malformed,
++unquoted and shell-capable forms keep their conservative verdict.
++"""
++
++from __future__ import annotations
++
++import json
++
++import pytest
++
++from cron.lifecycle_guard import (
++    _iter_referenced_shell_scripts as iter_referenced_scripts,
++)
++from cron.lifecycle_guard import (
++    _reference_scan_view,
++)
++from cron.lifecycle_guard import (
++    contains_gateway_lifecycle_command as direct_scan,
++)
++from cron.lifecycle_guard import (
++    contains_gateway_lifecycle_command_or_referenced_script as contains_unsafe,
++)
++
++NL = chr(10)
++
++# Ordinary pytest output from the gateway-restart-defense suites: the
++# lifecycle phrase appears only as data (an assertion message), which is
++# exactly what the reported command was reading.
++LIFECYCLE_LOG_TEXT = (
++    "FAILED tests/hermes_cli/test_gateway_restart_loop.py::"
++    "test_blocks_lifecycle_commands_inside_gateway" + NL
++    + "    assert 'hermes gateway restart' in result['error']" + NL
++    + "1 failed, 259 passed, 1 skipped in 87.42s" + NL
++)
++
++
++def _log_reader_command(log_path) -> str:
++    """The reported read-only shape: a quoted Python stdin heredoc."""
++    return (
++        "python3 - <<'PY'" + NL
++        + "from pathlib import Path" + NL
++        + f"p = Path('{log_path}')" + NL
++        + "for line in p.read_text(errors='replace').splitlines():" + NL
++        + "    if 'failed' in line:" + NL
++        + "        print(line)" + NL
++        + "PY"
++    )
++
++
++def _lifecycle_script(tmp_path):
++    """A real shell script whose execution would restart the gateway."""
++    script = tmp_path / "delayed-ops.sh"
++    script.write_text(
++        "#!/bin/bash" + NL + "sleep 45" + NL + "hermes gateway restart" + NL,
++        encoding="utf-8",
++    )
++    return script
++
++
++@pytest.fixture
++def lifecycle_log(tmp_path):
++    log = tmp_path / "green-candidate-full-suite.log"
++    log.write_text(LIFECYCLE_LOG_TEXT, encoding="utf-8")
++    return log
++
++
++class TestPythonHeredocDataIsNotAScriptReference:
++    """The reported false positive: data read through a quoted Python heredoc."""
++
++    def test_read_only_log_reader_is_accepted(self, lifecycle_log):
++        command = _log_reader_command(lifecycle_log)
++
++        assert contains_unsafe(command) is False
++
++    def test_log_path_is_not_promoted_to_a_script_candidate(self, lifecycle_log):
++        """Causal site: the referenced-script walk must not open the log."""
++        command = _log_reader_command(lifecycle_log)
++
++        assert list(iter_referenced_scripts(_reference_scan_view(command))) == []
++
++    def test_reference_view_blanks_only_the_heredoc_body(self, lifecycle_log):
++        """The syntax-aware view keeps every visible shell token (line 1 here)."""
++        command = _log_reader_command(lifecycle_log)
++        view = _reference_scan_view(command)
++
++        assert view != command
++        assert view.splitlines()[0] == "python3 - <<'PY'"
++        assert str(lifecycle_log) not in view
++
++    def test_direct_scan_sees_no_lifecycle_command(self, lifecycle_log):
++        """The block came from the reference walk, never from the direct scan."""
++        command = _log_reader_command(lifecycle_log)
++
++        assert direct_scan(command) is False
++
++    @pytest.mark.parametrize(
++        "consumer",
++        [
++            "python3 - <<'PY'",
++            "python3 <<'PY'",
++            "PYTHONPATH=/tmp python3 - <<'PY'",
++        ],
++    )
++    def test_quoted_python_heredoc_consumers_are_inert(self, lifecycle_log, consumer):
++        command = (
++            consumer + NL
++            + "from pathlib import Path" + NL
++            + f"p = Path('{lifecycle_log}')" + NL
++            + "print(p.read_text())" + NL
++            + "PY"
++        )
++
++        assert contains_unsafe(command) is False
++
++    def test_harmless_shell_data_heredocs_stay_allowed(self):
++        assert contains_unsafe("cat <<'EOF'" + NL + "plain UI text" + NL + "EOF") is False
++        assert contains_unsafe(
++            "bash <<'EOF'" + NL + "printf 'ok'" + NL + "EOF"
++        ) is False
++
++
++class TestSupervisedTerminalToolPath:
++    """The acceptance oracle: the ordinary supervised-gateway terminal path."""
++
++    @staticmethod
++    def _patch_terminal_tool(monkeypatch, fake_env):
++        import tools.terminal_tool as tt
++        from tools import process_registry
++
++        monkeypatch.setattr(tt, "_active_environments", {"default": fake_env})
++        monkeypatch.setattr(tt, "_last_activity", {"default": 0.0})
++        monkeypatch.setattr(tt, "_task_env_overrides", {})
++        monkeypatch.setattr(
++            tt,
++            "_get_env_config",
++            lambda: {
++                "env_type": "local",
++                "cwd": "/tmp",
++                "timeout": 60,
++                "lifetime_seconds": 3600,
++            },
++        )
++        monkeypatch.setattr(
++            process_registry, "_is_supervised_gateway_process", lambda: True
++        )
++        monkeypatch.setattr(
++            tt, "_check_all_guards", lambda cmd, env, **kwargs: {"approved": True}
++        )
++        return tt
++
++    def test_python_log_reader_is_not_blocked(self, monkeypatch, lifecycle_log):
++        calls = []
++
++        class _FakeEnv:
++            env = {}
++
++            def execute(self, command, **kwargs):
++                calls.append(command)
++                return {"output": "1 failed, 259 passed", "returncode": 0}
++
++        tt = self._patch_terminal_tool(monkeypatch, _FakeEnv())
++        command = _log_reader_command(lifecycle_log)
++
++        result = json.loads(tt.terminal_tool(command=command))
++
++        assert result["exit_code"] == 0
++        assert calls == [command]
++
++    def test_direct_lifecycle_command_is_still_blocked(self, monkeypatch):
++        class _FakeEnv:
++            env = {}
++
++            def execute(self, command, **kwargs):  # pragma: no cover
++                raise AssertionError("execute must not be reached")
++
++        tt = self._patch_terminal_tool(monkeypatch, _FakeEnv())
++
++        result = json.loads(tt.terminal_tool(command="hermes gateway restart"))
++
++        assert result["exit_code"] == 1
++        assert "Blocked" in result["error"]
++
++    def test_referenced_lifecycle_script_is_still_blocked(
++        self, monkeypatch, tmp_path
++    ):
++        script = _lifecycle_script(tmp_path)
++
++        class _FakeEnv:
++            env = {}
++
++            def execute(self, command, **kwargs):  # pragma: no cover
++                raise AssertionError("execute must not be reached")
++
++        tt = self._patch_terminal_tool(monkeypatch, _FakeEnv())
++
++        result = json.loads(tt.terminal_tool(command=f"/bin/bash {script}"))
++
++        assert result["exit_code"] == 1
++        assert "Blocked" in result["error"]
++
++
++class TestExecutableControlsRemainDetected:
++    """Preserved controls: the fix must not trade these away."""
++
++    @pytest.mark.parametrize(
++        "command",
++        [
++            "hermes gateway restart",
++            "hermes gateway stop",
++            "systemctl --user restart hermes-gateway",
++            "launchctl kickstart -k gui/501/ai.hermes.gateway",
++            "pkill -f hermes.*gateway",
++        ],
++    )
++    def test_direct_lifecycle_commands_stay_blocked(self, command):
++        assert contains_unsafe(command) is True
++
++    def test_heredoc_python_source_that_requests_lifecycle_execution(self):
++        """Interpreter source *asking* for a restart is not data (#389 control
++        the inspected upstream dropped)."""
++        command = (
++            "python3 - <<'PY'" + NL
++            + "import os" + NL
++            + "os.system('hermes gateway restart')" + NL
++            + "PY"
++        )
++
++        assert contains_unsafe(command) is True
++
++    def test_dash_c_python_source_that_requests_lifecycle_execution(self):
++        command = (
++            "python3 -c "
++            + "\"import os; os.system('hermes gateway restart')\""
++        )
++
++        assert contains_unsafe(command) is True
++
++    def test_referenced_real_shell_script_stays_blocked(self, tmp_path):
++        script = _lifecycle_script(tmp_path)
++
++        assert contains_unsafe(f"/bin/bash {script}") is True
++        assert direct_scan(f"/bin/bash {script}") is False
++
++    def test_reference_view_keeps_real_command_line_script_references(self, tmp_path):
++        """The syntax-aware view must not discard a real shell reference."""
++        script = _lifecycle_script(tmp_path)
++        command = f"/bin/bash {script}"
++
++        assert _reference_scan_view(command) == command
++        assert [str(path) for path in iter_referenced_scripts(command)] == [str(script)]
++
++    def test_shell_executed_heredoc_body_stays_scanned(self, tmp_path):
++        """A quoted heredoc handed to a *shell* is executable, not inert."""
++        script = _lifecycle_script(tmp_path)
++        command = (
++            "bash <<'EOF'" + NL + f"bash {script}" + NL + "EOF"
++        )
++
++        assert contains_unsafe(command) is True
++
++    def test_heredoc_piped_into_a_shell_stays_scanned(self, tmp_path):
++        script = _lifecycle_script(tmp_path)
++        command = (
++            "cat <<'EOF' | bash" + NL + f"bash {script}" + NL + "EOF"
++        )
++
++        assert contains_unsafe(command) is True
++
++
++class TestAmbiguousHeredocsStayConservative:
++    """Malformed/unquoted/ambiguous heredocs are not globally exempted."""
++
++    def test_unquoted_delimiter_keeps_the_data_path_visible(self, lifecycle_log):
++        command = (
++            "python3 - <<PY" + NL
++            + "from pathlib import Path" + NL
++            + f"p = Path('{lifecycle_log}')" + NL
++            + "print(p.read_text())" + NL
++            + "PY"
++        )
++
++        assert contains_unsafe(command) is True
++
++    def test_unterminated_quoted_heredoc_keeps_the_data_path_visible(
++        self, lifecycle_log
++    ):
++        command = (
++            "python3 - <<'PY'" + NL
++            + "from pathlib import Path" + NL
++            + f"p = Path('{lifecycle_log}')" + NL
++            + "print(p.read_text())" + NL
++        )
++
++        assert contains_unsafe(command) is True
++
++    def test_compound_opener_keeps_the_data_path_visible(self, lifecycle_log):
++        command = (
++            f"cd {lifecycle_log.parent} && python3 - <<'PY'" + NL
++            + "from pathlib import Path" + NL
++            + f"p = Path('{lifecycle_log}')" + NL
++            + "print(p.read_text())" + NL
++            + "PY"
++        )
++
++        assert contains_unsafe(command) is True

@@ -1,10 +1,10 @@
 # Hermes patch reconciliation preflight
 
-Observation timestamp: `2026-09-10T18:18:11Z`
+Observation timestamp: `2026-09-11T03:34:52Z`
 
 Upstream inspected: `https://github.com/NousResearch/hermes-agent@4f22543509d1b91dc45bcb369447126c5eb14fb7`
 
-Source ledger SHA-256: `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44616dc487`
+Source ledger SHA-256: `1aabc18438fc88e6cf303fcda7ae93b038141f519f821a49ce40bd1bad0a758b`
 
 ## Remaining local guarantees
 
@@ -20,12 +20,15 @@ Source ledger SHA-256: `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44
 - `HLP-246`: Retain HLP-246. The exact public snapshot accepts a synthetic truncated payload with valid base64 and has no sender identity claims, SHA-256 persistence, or readback verification.
 - `HLP-247`: Retain HLP-247. The exact public snapshot still promotes an eventless blocked child on parent archive, while the required todo and non-sticky compatibility controls remain promotable.
 - `HLP-262`: Retain HLP-262. Exact upstream has neither the origin_signal block API prerequisite nor sticky predicate support for origin_signal, and the portable patch checksum and parser controls pass without establishing full-patch reconstruction from unavailable inputs.
+- `HLP-275`: Retain HLP-275. The auxiliary vision path now applies the repository's existing embed policy before the first request, so oversized small-byte images are normalized by the existing resizer with scale disclosure and within-policy images stay byte-identical. Upstream already carries a stricter-threshold variant of the same mechanism, so this entry is a retirement candidate only after oracle requalification.
 - `HLP-280`: Retain the bounded HLP-280 recovery. Local 15 recovery probes, 129 affected tests with one Windows skip, 44 notifier tests and a native-origin canary passed. This records a downstream repair, not the rejected v4/v5 architecture or a Hermes release upgrade.
 - `HLP-305`: Retain HLP-305 in maintained fork c185ee3bb. Source hash readback and normal SessionDB activation passed after consistent backup/quick_check/SHA-256. Live owner TUI tool result retains complete11576-character message with8203-character index(prefix+metadata), proving writer-side activation without restarting TUI. Existing Python processes still require graceful reload for their cached code paths. Expanded testing retains baseline failure #349.
 - `HLP-310`: Retain HLP-310. Inspected upstream does not exclude delegated child identity or Kanban environment variables from terminal snapshots. Maintained fork commit 25cabeb25327199a03aa3cf1613ed2f815f646cb provides the causal repair in PR #4.
 - `HLP-335`: Retain HLP-335. The local respawn-guard recovery releases only independently verifiable CLOSED/MERGED PR references so Graphify closeout can resume; OPEN/unknown/auth failures stay guarded. This records a downstream repair, not a Hermes upgrade or a Graphify product delivery.
 - `HLP-354`: Retain HLP-354. Inspected upstream lacks worktree_base_ref materialization and fail-closed validation. Maintained fork commit 7d3173e1f3dba107f9a389d4e35c95f215775ee1 provides the causal repair in PR #4.
 - `HLP-369`: Retain HLP-369. Exact upstream retains the circular goal-mode review gate and recovery-kind mismatch; maintained-fork PR #6 merge 415056fee527c5a2302370bd6dba56f84b9a4202 separates review readiness from completion, preserves independent review and completion gates, and accepts only the exact pending controller recovery signal while retaining origin attention.
+- `HLP-382`: Retain HLP-382. Transcript publication is now bounded and atomic: staged batches in the existing store, exact-once preservation of interleaved concurrent appends, one metadata-only cutover, and bounded target-local cleanup. The unchanged oracle is deterministically RED at the fork base and green on the candidate and integrated tree.
+- `HLP-389`: Retain HLP-389. Referenced-script discovery now uses a syntax-aware view for inert interpreter heredoc bodies while direct detection keeps the original text, so the harmless log-read path is accepted and every recorded executable control remains blocked.
 
 ## Qualified upstream equivalents
 
@@ -72,6 +75,9 @@ Source ledger SHA-256: `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44
 - `HLP-262` (uncertainty): The exact upstream lacks both the origin_signal API prerequisite and sticky handling for origin_signal events.
 - `HLP-262` (uncertainty): The full input, revision, and recovery regression with database reopen and native-controller resolution was not executable after the prerequisite failure.
 - `HLP-262` (uncertainty): The documented pre-change reconstruction input is unavailable; no byte-equivalence claim is recorded.
+- `HLP-275` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-275` (uncertainty): The provider's exact per-side image limit remains bounded but unknown; the reused policy (4 MiB encoded data / 7,900 px) lies between the largest observed-accepted side and the smallest observed-rejected side.
+- `HLP-275` (uncertainty): The upstream mechanism's stricter thresholds change within-cap byte behavior relative to this objective's documented controls, so it is not a drop-in replacement without a new oracle run.
 - `HLP-280` (artifact): The exact local reconstruction passed, but its already-modified operator runtime preimage is private and not a public release artifact. Public readers must not infer clean upstream applicability from this patch checksum.
 - `HLP-280` (retirement_gate): Retirement gate status is failed.
 - `HLP-280` (uncertainty): The inventory upstream lacks the affinity origin primitives.
@@ -95,6 +101,10 @@ Source ledger SHA-256: `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44
 - `HLP-369` (artifact): The exact maintained-fork reconstruction, focused candidate checks, and fork PR #6 merged source passed, but the public upstream revision is not an equivalent reconstruction input; upstream artifact equivalence therefore remains unavailable.
 - `HLP-369` (retirement_gate): Retirement gate status is failed.
 - `HLP-369` (uncertainty): The inspected upstream revision retains the circular request-review judge gate and has no equivalent exact recovery-controller route.
+- `HLP-382` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-382` (uncertainty): The historical holder that first exhausted the append budget was never identified; the causal class (unbounded publication transaction) is proven and the repair is verified against that class, not against the unavailable historical identity.
+- `HLP-389` (retirement_gate): Retirement gate status is not_executed.
+- `HLP-389` (uncertainty): The syntax-aware view intentionally matches the already-permitted `python3 -c` form: a path that appears only inside a quoted non-shell interpreter heredoc body is no longer scanned as a shell script. Direct lifecycle text in that body is still blocked.
 
 ## Artifact integrity
 
@@ -110,12 +120,15 @@ Source ledger SHA-256: `c5dfccb4108986a162fd4f84cd3d6686031d7c42ca185e8bcff66c44
 - `HLP-246`: not_applicable
 - `HLP-247`: not_applicable
 - `HLP-262`: unavailable
+- `HLP-275`: passed
 - `HLP-280`: unavailable
 - `HLP-305`: unavailable
 - `HLP-310`: unavailable
 - `HLP-335`: unavailable
 - `HLP-354`: unavailable
 - `HLP-369`: unavailable
+- `HLP-382`: passed
+- `HLP-389`: passed
 
 ## Safe next decisions
 

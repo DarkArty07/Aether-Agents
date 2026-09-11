@@ -48,12 +48,15 @@ EXPECTED_ACTIVE_IDS = (
     "HLP-246",
     "HLP-247",
     "HLP-262",
+    "HLP-275",
     "HLP-280",
     "HLP-305",
     "HLP-310",
     "HLP-335",
     "HLP-354",
     "HLP-369",
+    "HLP-382",
+    "HLP-389",
 )
 HLP226_PATCH_REFERENCES = (
     "patches/hermes/HLP-226b-affinity-terminal-project-inheritance.patch",
