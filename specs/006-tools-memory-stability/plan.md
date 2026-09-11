@@ -91,33 +91,27 @@ and loses a control detected by the maintained source, so blind cherry-pick is r
 Record any indispensable fork patch, evidence, rollback and retirement gate in
 HERMES_LOCAL_PATCHES.md without changing the distribution release baseline.
 
-## TS-382: causal qualification, then persistence-safe repair
+## TS-382: research gate satisfied; bounded publication design recorded
 
-Known: the original append_message exhausted a 60-second writer budget. Legacy FTS
-triggers are bounded; a short real SQLite lock is waited out successfully. Neither
-fact identifies the historical writer. The live state DB is not a stress-test fixture.
+**Morfeo checkpoint: build-ready for U382F under the existing v1 contract.**
+The approved research at `26f0a885287cb380d12c92d13ede992f2dcd6f7c` establishes
+unbounded `archive_and_compact` publication as a causal writer class. Morfeo independently
+reproduced the unchanged oracle: 2 failed/8 passed, with only the two legacy contention
+cases failing. Historical holder identity is still unavailable and is not invented.
 
-Bounded research: inspect exact write/maintenance call sites and use small sanitized
-operation/timing metadata, not transcript text or credential/process-environment dumps.
-Reproduce the candidate writer/append overlap in a temporary SQLite DB using the real
-SessionDB paths. Scale the fixture to expose the mechanism deterministically; distinguish
-an intentionally held generic lock from a reproduction of the product transaction.
-Do not raise timeouts, kill processes, VACUUM/rebuild/backup the live DB, or infer a cause
-from file size. Closed/unmerged upstream PR #100273 is a hypothesis source, not a fix.
+The normative repair algorithm, ownership/visibility boundary, exact batch policy,
+concurrent-tail ordering, interruption/cleanup semantics and verification matrix are
+recorded in [TS-382-design.md](TS-382-design.md), decisions D1-D7. It uses bounded
+hidden staging in the existing database and one atomic metadata cutover, not a new store,
+schema migration, queue or timeout increase. Ordinary appends must remain admissible;
+the writer must not introduce a new target compression lock merely to stage rows.
 
-Selected repair envelope after the causal gate: shorten the proven writer critical
-section while preserving atomic visible transcript replacement, exact session/lease
-ownership, concurrent append/watermark ordering, archived/search semantics, counters,
-model metadata, error propagation and rollback. Move pure preparation outside the writer
-transaction where sufficient. If bounded staging is actually necessary, reuse existing
-visibility and lease boundaries, ensure readers see complete old or complete new data,
-and define crash/cleanup behavior in Morfeo's research-result plan revision before build.
-No new global queue, secondary persistence store, silent write drop, live DB migration,
-unbounded retry, timeout inflation or full runtime rewrite is approved as a local choice.
-The exact algorithm is deliberately not declared build-ready until the writer is proven.
-
-The gate acceptance is an exact causal proposal plus pre/post oracle or a precise access
-blocker. The issue acceptance is the repaired concurrency behavior, not that proposal.
+This is the evidence-backed design revision explicitly reserved by v1, not a new owner
+objective or weaker acceptance. The original finalized contract/digest remains in force;
+no successor board or contract version is needed to satisfy this gate. Supervisor and
+Implementer consume the exact committed checkpoint before resuming U382F, and retain
+independent review plus integrated/runtime acceptance. No implementation or issue closure
+is claimed by this design record.
 
 ## TS-275: real route qualification, then compatible boundary repair
 
