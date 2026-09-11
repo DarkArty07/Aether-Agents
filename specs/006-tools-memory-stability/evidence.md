@@ -116,3 +116,34 @@ so those canaries become effective after this branch merges and the primary chec
 refreshed — recorded as pending rather than claimed. (3) `scripts/check_public_artifacts.py`
 still reports only the two pre-existing findings in the unchanged
 `oc_0084270d940c98d9/v1.md`; no new finding was introduced by this objective.
+
+## Morfeo contract-result reception
+
+Reception revision: Aether merge `f2db73ff1da62f6a281907fd013adfb01341cf6f` and
+maintained-fork merge `6551b7c31cc665d59103c6d89cb5e0c60666f803`. Contract
+`oc_6176d2be6cb7e6fe@v1` remains the acceptance authority. This reception does not
+reinterpret Supervisor's terminal `done` state as owner-objective acceptance.
+
+| Criterion | Evidence | Reception result |
+|---|---|---|
+| TS-373 | Reused reviewed unit evidence at merged revision; issue #373 closed | **Supported as integrated.** The actual operator checkout still does not byte-match the merged binding source, so its tool-level runtime canary remains unverified. |
+| TS-390 | Reused event/reducer/storage/privacy differential evidence at merged revision; issue #390 closed | **Supported as integrated.** A direct native `aether_observe` call in the receiving TUI still returns `AETHER-OBSERVE-STATE-UNREADABLE`; the actual operator checkout does not byte-match the merged privacy/contracts sources. Runtime acceptance remains pending. |
+| TS-389 | Reused 296-test lane and adopted-runtime positive/negative canary; live fork files directly hash-compared with fork merge | **Supported.** |
+| TS-382 | Reused deterministic base RED, candidate GREEN and state/caller lanes; live fork files directly hash-compared with fork merge | **Supported**, with the recorded one-of-five host-contention timing excursion retained as a limit rather than hidden. |
+| TS-275 | Direct GitHub disposition, merged fix, live-file comparison and reused six-call route evidence | **Material mismatch / not accepted.** Preparation is repaired and adopted, but the provisioned route still returns success without image interpretation. Issue #275 remains open. |
+| TS-P | Direct diff/source and residue inspection plus reused pipeline evidence | **Supported with residue.** Unrelated state and stashes remain preserved. Objective root, Morfeo authoring and provisioning-quarantine worktrees/branches plus two merged remote branches remain; cleanup was denied to Supervisor and is not reported complete. |
+| TS-C | Direct PR/check/issue inspection | **Partial.** Aether PR #398 and fork PR #8 are merged; required Aether checks were green. Four issues are closed, one remains open; full exact-public-baseline qualification was not run. |
+
+Directly verified by Morfeo: contract bytes, PR merge identities and required-check state,
+issue dispositions, current native observation failure, operator Aether source mismatch,
+live fork source parity, and residue presence. Pipeline test/canary counts are reused with
+producer and revision attribution; Morfeo did not rerun every suite. The public-artifact
+baseline and non-required observation qualification remain recorded limitations, not new
+exceptions.
+
+**Reception decision:** execution of the Aether/fork remediation is complete, but the
+owner's five-issue objective is **not accepted as complete**. Four issue outcomes are
+supported. TS-275 and the operator-runtime portion of TS-C require continuation in the
+actual owning surfaces. The separate router product needs explicit deployment authority
+before its production path can be changed and qualified; acceptance is not weakened to
+avoid that gate.
