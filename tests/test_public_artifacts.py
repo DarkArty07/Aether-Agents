@@ -124,4 +124,5 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
         "aether-contract-observer",
         "aether-objective-contracts",
         "aether-project-knowledge",
+        "aether-telegram-monitor",
     }

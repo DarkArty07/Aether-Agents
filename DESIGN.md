@@ -25,6 +25,8 @@ Both greenfield and brownfield work are first-class. Aether is used by a working
 
 Aether is not specialized to a stack, a domain, or a project type, and it is not tailored to any individual. It is public and open source, and intended to be usable by any owner. The only personalization is the preferences Morfeo learns about its owner through the Hermes framework, which makes that memory structural rather than convenient: it is the system's single adaptation mechanism.
 
+**Telegram Monitor:** the owner-authorized principal monitoring capability provides hourly Morfeo-written progress through the existing Telegram bot and a single conversation, with explicit project, originating session and contract attribution. It reuses qualified Hermes scheduling/messaging and remains observational, not a fourth role or workflow authority. The owning feature requirements, delegated pragmatic decisions and bounded build/activation exception are in [`specs/telegram-monitor/spec.md`](specs/telegram-monitor/spec.md). This is accepted intent, not a claim of implemented or qualified behavior.
+
 **Success** is fidelity to intent, achieved without supervision. Aether fails if the agents cannot work alone, or if they work alone and produce something that is not the idea the owner asked for.
 
 **Quality** means the software does what the owner wanted. The specification is the quality mechanism, and Spec Kit's practices are how it earns that role. The corollary is load-bearing: what is obvious to the owner does not exist for the agent, so the job of the specification is to write the obvious down.

@@ -2415,36 +2415,73 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         },
     }
 
-    fp_base = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
-    fp_provider = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_provider)
-    fp_model = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_model)
-    fp_api_mode = sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_api_mode)
+    fp_base = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_base
+    )
+    fp_provider = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_provider
+    )
+    fp_model = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_model
+    )
+    fp_api_mode = sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_api_mode
+    )
 
     assert fp_base is not None
     assert fp_base != fp_provider, "Changing provider must change semantic fingerprint"
     assert fp_base != fp_model, "Changing model must change semantic fingerprint"
     assert fp_base != fp_api_mode, "Changing api_mode must change semantic fingerprint"
-    assert fp_base == sem_mod.compute_semantic_fingerprint(backend, source_root, graph_path, inputs, cfg_base)
+    assert fp_base == sem_mod.compute_semantic_fingerprint(
+        backend, source_root, graph_path, inputs, cfg_base
+    )
 
     call_count = 0
     actual_route: dict[str, str] = {}
 
-    def mock_aux(task: str, *args: Any, route_info: dict[str, Any] | None = None, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+    def mock_aux(
+        task: str, *args: Any, route_info: dict[str, Any] | None = None, **kwargs: Any
+    ) -> tuple[str, dict[str, Any]]:
         nonlocal call_count
         call_count += 1
         if route_info is not None and actual_route:
             route_info.update(actual_route)
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "Doc1", "label": "Doc1", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "Doc1", "target": "module_process_order", "relation": "specifies"}],
-        })
-        return fake_llm_json, {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150, "route": dict(actual_route)}
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "Doc1",
+                        "label": "Doc1",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {"source": "Doc1", "target": "module_process_order", "relation": "specifies"}
+                ],
+            }
+        )
+        return fake_llm_json, {
+            "prompt_tokens": 100,
+            "completion_tokens": 50,
+            "total_tokens": 150,
+            "route": dict(actual_route),
+        }
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_aux)
 
     # 2. Unchanged explicit route yields zero model calls on repeat
-    actual_route = {"provider": "openrouter", "model": "meta-llama/llama-3-70b-instruct", "api_mode": "chat_completions"}
-    store = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_base})
+    actual_route = {
+        "provider": "openrouter",
+        "model": "meta-llama/llama-3-70b-instruct",
+        "api_mode": "chat_completions",
+    }
+    store = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": True, **cfg_base},
+    )
     res1 = store.execute(ctx, "update", {"mode": "configured"})
     assert res1["ok"] is True
     assert res1["semantic"]["state"] == "complete"
@@ -2457,8 +2494,17 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     assert call_count == recorded_calls, "Unchanged explicit route must yield zero model calls"
 
     # 3. Changing route invalidates fingerprint and triggers new model calls
-    store_new_model = KnowledgeStore(state, tmp_path / "cache", backend, configuration={"enabled": True, "semantic_enabled": True, **cfg_model})
-    actual_route = {"provider": "openrouter", "model": "openai/gpt-4o-mini", "api_mode": "chat_completions"}
+    store_new_model = KnowledgeStore(
+        state,
+        tmp_path / "cache",
+        backend,
+        configuration={"enabled": True, "semantic_enabled": True, **cfg_model},
+    )
+    actual_route = {
+        "provider": "openrouter",
+        "model": "openai/gpt-4o-mini",
+        "api_mode": "chat_completions",
+    }
     res3 = store_new_model.execute(ctx, "update", {"mode": "configured"})
     assert res3["ok"] is True
     assert res3["outcome"] == "updated"
@@ -2487,9 +2533,17 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
     mismatch_cache_root = tmp_path / "mismatch_cache"
     mismatch_cfg = {
         "semantic_auxiliary_task": "web_extract",
-        "semantic": {"provider": "openrouter", "model": "expected-model", "api_mode": "chat_completions"},
+        "semantic": {
+            "provider": "openrouter",
+            "model": "expected-model",
+            "api_mode": "chat_completions",
+        },
     }
-    actual_route = {"provider": "different_provider", "model": "different_model", "api_mode": "chat_completions"}
+    actual_route = {
+        "provider": "different_provider",
+        "model": "different_model",
+        "api_mode": "chat_completions",
+    }
     sem_mod.run_semantic_extraction(
         backend=backend,
         source_root=root,
@@ -2500,7 +2554,9 @@ def test_ae_345_semantic_route_fingerprint_invalidation_and_caching(
         configuration=mismatch_cfg,
     )
     mismatch_cache_dir = mismatch_cache_root / "knowledge" / ctx.project_id / "semantic_cache"
-    mismatch_cached_files = list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
+    mismatch_cached_files = (
+        list(mismatch_cache_dir.glob("*.json")) if mismatch_cache_dir.exists() else []
+    )
     assert len(mismatch_cached_files) == 0, "Mismatched route must not publish to cache"
 
 
@@ -2515,10 +2571,21 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 1. Establish a complete snapshot first
     def mock_complete(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocGood", "label": "DocGood", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocGood", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocGood",
+                        "label": "DocGood",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {"source": "DocGood", "target": "module_process_order", "relation": "specifies"}
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100, "finish_reason": "stop"}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_complete)
@@ -2536,10 +2603,25 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 2. Attempt refresh with finish_reason="length" and parseable JSON
     def mock_length_finish(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocTruncated", "label": "DocTruncated", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocTruncated", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocTruncated",
+                        "label": "DocTruncated",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "DocTruncated",
+                        "target": "module_process_order",
+                        "relation": "specifies",
+                    }
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100, "finish_reason": "length"}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_length_finish)
@@ -2547,7 +2629,11 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
         "enabled": True,
         "semantic_enabled": True,
         "semantic_auxiliary_task": "web_extract",
-        "semantic": {"provider": "openrouter", "model": "gpt-4o-new", "api_mode": "chat_completions"},
+        "semantic": {
+            "provider": "openrouter",
+            "model": "gpt-4o-new",
+            "api_mode": "chat_completions",
+        },
     }
     store_refresh = KnowledgeStore(state, tmp_path / "cache", backend, configuration=new_cfg)
     refresh_res = store_refresh.execute(ctx, "update", {"mode": "configured"})
@@ -2576,16 +2662,37 @@ def test_ae_345_incomplete_finish_reason_not_cached_or_applied(
 
     # 3. Missing/omitted finish_reason remains compatible
     def mock_legacy_omitted(*args: Any, **kwargs: Any) -> tuple[str, dict[str, Any]]:
-        fake_llm_json = json.dumps({
-            "nodes": [{"id": "DocLegacy", "label": "DocLegacy", "source_file": "README.md", "source_location": "1"}],
-            "edges": [{"source": "DocLegacy", "target": "module_process_order", "relation": "specifies"}],
-        })
+        fake_llm_json = json.dumps(
+            {
+                "nodes": [
+                    {
+                        "id": "DocLegacy",
+                        "label": "DocLegacy",
+                        "source_file": "README.md",
+                        "source_location": "1",
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "DocLegacy",
+                        "target": "module_process_order",
+                        "relation": "specifies",
+                    }
+                ],
+            }
+        )
         return fake_llm_json, {"total_tokens": 100}
 
     monkeypatch.setattr(sem_mod, "_call_auxiliary_model", mock_legacy_omitted)
     legacy_cache = tmp_path / "legacy_cache"
     complete_graph = (
-        tmp_path / "cache" / "knowledge" / PROJECT / complete_snap_id / "graphify-out" / "graph.json"
+        tmp_path
+        / "cache"
+        / "knowledge"
+        / PROJECT
+        / complete_snap_id
+        / "graphify-out"
+        / "graph.json"
     )
     res_legacy = sem_mod.run_semantic_extraction(
         backend=backend,
