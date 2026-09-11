@@ -147,3 +147,25 @@ supported. TS-275 and the operator-runtime portion of TS-C require continuation 
 actual owning surfaces. The separate router product needs explicit deployment authority
 before its production path can be changed and qualified; acceptance is not weakened to
 avoid that gate.
+
+## Final continuation reception
+
+Owner-authorized continuation completed the two acceptance gaps above.
+
+| Gap | Exact result | Morfeo reception |
+|---|---|---|
+| TS-275 semantic route | Aether Router PR #18 merged at `8e5d5d3f11801beb56c980b17068fbcedf13c598`; follow-up PR #19 merged at `914c5361ba6bfd52ebaa2b3621479ae005713bce`. Both Python/package and UI checks were green. The gated production deploy completed with runtime checkout `914c5361ba6bfd52ebaa2b3621479ae005713bce`, service active with `NRestarts=0`. Reused pipeline evidence at that revision records three semantic image-only canaries (`ZEPHYR-42`, `MARLIN-31`, `QUARTZ-77`) plus a text-only control, all passing. Router #17 and Aether-Agents #275 are closed. | **Supported and accepted.** Morfeo directly verified PR/check/issue state, runtime revision and service state; semantic canary content is reused from terminal Supervisor evidence. |
+| TS-373 operator source/runtime | The shared Hermes venv editable was moved from the divergent primary checkout to a dedicated clean detached Aether runtime worktree at `c8880462ed5dd7e9560ae7409b77d71102dc6aa7`, with the prior `.pth` and rollback manifest retained privately. Fresh-runtime `tests/test_knowledge_session_binding.py`: 29 passed/1 optional Graphify skip; `tests/test_knowledge_plugin_cli.py`: 10 passed/1 optional Graphify skip. | **Supported and accepted.** The primary development checkout and its active work remained untouched. |
+| TS-390 native runtime | Fresh-runtime `aether observe ctr_11ead748d50a614e9b52f3a34964477b --project <verified Aether root> --json` returned `result=ready` and a structured summary instead of `AETHER-OBSERVE-STATE-UNREADABLE`; the summary preserved `finish_reasons.stop=14` and `finish_reasons.tool_calls=212`. | **Supported and accepted.** The summary retains incomplete historical observation coverage; that is not a privacy-validation failure or an invented completion claim. |
+| Controlled activation | Morfeo restarted the profile gateway after verifying the editable target. PID `2461576` was replaced by `3190743`, runtime state is `running`, and an unrelated active Supervisor remained the same process in a transient preservation scope. No worker stop signal, credential/configuration change or rollback was required. | **Supported.** |
+
+The exact semantic outcomes, Aether runtime source and current service state were checked after
+the corresponding merges. Morfeo did not rerun all Router/Aether suites: those are reused with
+producer and revision attribution. Release conclusions remain
+`release_impact=patch`, `release_action=defer`, `release_channel=none`; production activation
+was authorized and completed, but no package/tag/release was published.
+
+**Final reception decision:** all five issue outcomes are now supported and the owner's objective
+is **accepted as complete**, subject only to the explicit historical observation-coverage limits
+already recorded. Cleanup is audited separately and never removes unrelated active work or
+pre-existing stashes.
