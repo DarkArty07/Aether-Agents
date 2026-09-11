@@ -118,3 +118,97 @@ the retired registry-swap machinery inside it is removed there, never in a paral
 - Expected integration conflict: this file is new on the v2 root branch and also exists on the
   v1 root branch. MON-INT2 resolves that add/add by taking this v2 continuation version; the v1
   text remains preserved in Git history and in immutable `v1.md`.
+
+## v3 continuation — D14 provisioned preflight correction (Supervisor)
+
+**Status:** verified executable continuation/decomposition for Objective Contract
+`oc_f8c9fc9320587cf3@v3`.
+
+**Derived by:** Supervisor (root task `t_53a2f761`, flow
+`aether.flow.v1:b7e864b140fbb0a9451fc675cb5f1f69fb96673fa3b4ca8d9fae7ad0ee122b20`).
+
+**Source contract:** `.aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md`
+(SHA-256 `f21facaf58af20a2d0595cdaa927a99ca6336e5b14b5d073ec3501bbfbf7f47c`) on base
+`db4bb59439a3b381901f0f3d00a01f21026aa02d`.
+
+The v2 sections above remain the accepted historical breakdown. This section is the
+executable continuation for the remaining work; it does not widen the contract, re-implement
+any accepted unit or record feature acceptance.
+
+### v3 receipt
+
+| Check | Observed |
+| --- | --- |
+| Portable project | `.aether/project.toml` `project_id` `12027989-a08f-41cd-a82c-54ff1bfb6b03` matches the envelope; repository `DarkArty07/Aether-Agents` |
+| Contract bytes | SHA-256 `f21facaf58af20a2d0595cdaa927a99ca6336e5b14b5d073ec3501bbfbf7f47c`; `status: final`, `version: 3`, supersedes the immutable v2 |
+| Base / branch | Base `db4bb59439a3b381901f0f3d00a01f21026aa02d`; clean objective branch `aether-agents-2/t_53a2f761-telegram-monitor-v3-verify-d14-preflight` |
+| Preserved candidate | `19dfc9d68e797f7d365f078ef65be70fbd16f158` verified present with the full accepted monitor chain, harness, tests and evidence; its deterministic verification is recorded on v2 card `t_e7a3aafb` |
+| Integration base | Clean merge `3db391a747579605304ceea91f2bdeac50c7dd67` (parents `db4bb594` + `19dfc9d6`); the only path both sides changed, `.github/workflows/policy.yml`, auto-merged keeping both manifest additions — no manual resolution, no behavior change, no accepted commit dropped |
+| Design sufficiency | D14 (`spec.md` §D14, `qualification-isolation.md` §"D14 provisioned profile and destination preflight") settles normalization, the native dotenv reference probe, lab/reference independence, the negative control and the one-attempt budget; the inspected native interfaces `hermes_cli.env_loader.load_hermes_dotenv` and `gateway.config.load_gateway_config` exist in the pinned baseline revision |
+| Preserved refusal | Private receipt sha256 `eb2f3ad3…`, log sha256 `5a9ca1fe…`; bootstrap-preflight refusal before the attempt boundary, budget unconsumed; left untouched |
+| Prior units | MON-01..MON-06R and MON-LC1 commits/evidence are preserved inputs; none is re-implemented or re-reviewed |
+| Profiles / capacity | `implementer`, `supervisor`, `morfeo` exist; no new role or profile required |
+| Project Canonical Skills | no `.aether/skills/` directory exists; Aether Canonical procedures apply |
+| Tracker | issue #367 is open; tracking, not contract authority |
+
+### v3 continuation map
+
+| Source | Unit | Outcome |
+| --- | --- | --- |
+| D14 profile normalization, provisioned reference destination through the native dotenv loader, lab/reference independence, the testing standard's D14 focused tests, AC-8 documentation coherence | **D14** `t_5a7b776a` (Implementer, root-gated) | corrected harness bootstrap preflight with reproduction-first tests and one evidence record; no live effect |
+| AC-1..AC-9 integrated verification, the single corrected live attempt, production activation/first delivery/rollback, PR/checks/merge/#367/residue | **MON-V3-INT** `t_b8077e66` (Supervisor, terminal) | terminal integration and closeout |
+| Preservation, authority, privacy, no profile/config/credential/provider/model change, no new expense | every unit plus MON-V3-INT | bounded local and reversible work only |
+
+### v3 execution graph
+
+```text
+t_53a2f761 (v3 root: receipt, integration base, continuation handoff)
+    └── D14 t_5a7b776a (Implementer; base 3db391a7 + this breakdown commit)
+
+D14  →  MON-V3-INT t_b8077e66 (Supervisor, terminal=true, same flow affinity)
+```
+
+D14 is the only implementation unit: `scripts/qualify_telegram_monitor.py` remains a
+single-writer hotspot, so no second unit may touch it. MON-V3-INT is serialized by design —
+it consumes the reviewed correction, pins the exact final tree, spends the single authorized
+live attempt and owns closeout.
+
+### Shared decisions stamped into the v3 unit cards
+
+1. Authority is Objective Contract `oc_f8c9fc9320587cf3@v3` plus the named owning artifacts
+   and this breakdown; skills provide procedure only.
+2. `HERMES_HOME` accepts both the installation multi-profile root and the exact
+   `profiles/morfeo` home and normalizes both to one verified Morfeo profile; missing,
+   ambiguous, linked, conflicting or wrong-named candidates and any cwd/worker identity
+   fallback are refused; public evidence records only the path class and a digest.
+3. The provisioned reference destination is resolved by a restricted child rooted at the
+   normalized profile home that calls the native `load_hermes_dotenv()` before
+   `load_gateway_config()`, returning only bounded digests/presence and making no
+   model/transport call; lab access is never injected into the reference probe (a negative
+   control must prove the reference side receives none).
+4. The lab receives only already-provisioned access in ephemeral memory and must digest-match
+   the reference; the preserved refusal stays unchanged and does not consume the budget.
+5. Implementation units make no live external effect: no `--live`, no model or Telegram call,
+   no profile/job/plugin/service activation, no push/PR/merge/issue mutation.
+6. Unit review uses the native same-card lane; MON-V3-INT consumes the reviewed unit and does
+   not replace its review.
+7. The unit writes one evidence record under `specs/telegram-monitor/evidence/` with
+   requirement mapping, candidate commit, exact commands/results and residual risk; the
+   sanitized AC mapping and the aggregate release conclusions belong to MON-V3-INT
+   (`release_impact=minor`, `release_action=defer`, `release_channel=none`, only if observed
+   evidence confirms).
+8. Exactly one corrected live attempt is authorized after review, with a new no-overwrite
+   private target; a later live failure stops the experiment with no automatic rerun.
+
+### Preservation and residue (v3)
+
+- Never edit, stage or exact-copy the canonical Objective Contract; immutable v1/v2 stay intact.
+- No SOUL edits, no credential acquisition/widening or persisted copies, no
+  profile/config/provider/model/router change, no production registry replacement or
+  restoration, no forced restart or active-agent interruption, no package publication or
+  deployment.
+- Preserve the blocked v2 board cards (`t_e7a3aafb`, `t_d22ba5b9`, `t_287d682d`) and their
+  evidence, the operator's registry/boards/sessions/jobs, and every concurrent or unrelated
+  branch, worktree, stash and job.
+- The terminal phase spends the environment's single corrected live attempt and stops on the
+  contract's stop conditions; failure preserves integrated HEAD and keeps issue #367 open.
