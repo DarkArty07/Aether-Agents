@@ -91,60 +91,48 @@ and loses a control detected by the maintained source, so blind cherry-pick is r
 Record any indispensable fork patch, evidence, rollback and retirement gate in
 HERMES_LOCAL_PATCHES.md without changing the distribution release baseline.
 
-## TS-382: causal qualification, then persistence-safe repair
+## TS-382: research gate satisfied; bounded publication design recorded
 
-Known: the original append_message exhausted a 60-second writer budget. Legacy FTS
-triggers are bounded; a short real SQLite lock is waited out successfully. Neither
-fact identifies the historical writer. The live state DB is not a stress-test fixture.
+**Morfeo checkpoint: build-ready for U382F under the existing v1 contract.**
+The approved research at `26f0a885287cb380d12c92d13ede992f2dcd6f7c` establishes
+unbounded `archive_and_compact` publication as a causal writer class. Morfeo independently
+reproduced the unchanged oracle: 2 failed/8 passed, with only the two legacy contention
+cases failing. Historical holder identity is still unavailable and is not invented.
 
-Bounded research: inspect exact write/maintenance call sites and use small sanitized
-operation/timing metadata, not transcript text or credential/process-environment dumps.
-Reproduce the candidate writer/append overlap in a temporary SQLite DB using the real
-SessionDB paths. Scale the fixture to expose the mechanism deterministically; distinguish
-an intentionally held generic lock from a reproduction of the product transaction.
-Do not raise timeouts, kill processes, VACUUM/rebuild/backup the live DB, or infer a cause
-from file size. Closed/unmerged upstream PR #100273 is a hypothesis source, not a fix.
+The normative repair algorithm, ownership/visibility boundary, exact batch policy,
+concurrent-tail ordering, interruption/cleanup semantics and verification matrix are
+recorded in [TS-382-design.md](TS-382-design.md), decisions D1-D7. It uses bounded
+hidden staging in the existing database and one atomic metadata cutover, not a new store,
+schema migration, queue or timeout increase. Ordinary appends must remain admissible;
+the writer must not introduce a new target compression lock merely to stage rows.
 
-Selected repair envelope after the causal gate: shorten the proven writer critical
-section while preserving atomic visible transcript replacement, exact session/lease
-ownership, concurrent append/watermark ordering, archived/search semantics, counters,
-model metadata, error propagation and rollback. Move pure preparation outside the writer
-transaction where sufficient. If bounded staging is actually necessary, reuse existing
-visibility and lease boundaries, ensure readers see complete old or complete new data,
-and define crash/cleanup behavior in Morfeo's research-result plan revision before build.
-No new global queue, secondary persistence store, silent write drop, live DB migration,
-unbounded retry, timeout inflation or full runtime rewrite is approved as a local choice.
-The exact algorithm is deliberately not declared build-ready until the writer is proven.
+This is the evidence-backed design revision explicitly reserved by v1, not a new owner
+objective or weaker acceptance. The original finalized contract/digest remains in force;
+no successor board or contract version is needed to satisfy this gate. Supervisor and
+Implementer consume the exact committed checkpoint before resuming U382F, and retain
+independent review plus integrated/runtime acceptance. No implementation or issue closure
+is claimed by this design record.
 
-The gate acceptance is an exact causal proposal plus pre/post oracle or a precise access
-blocker. The issue acceptance is the repaired concurrency behavior, not that proposal.
+## TS-275: research gate satisfied; auxiliary preparation design recorded
 
-## TS-275: real route qualification, then compatible boundary repair
+**Morfeo checkpoint: build-ready for U275F under the existing v1 contract.**
+The approved research at `9245d435410eb23cf5a2f0fd29add94cc8c1f20e` separates the
+historical external session-header episode (not repaired by this unit) from the real
+remaining extreme-dimension rejection in the auxiliary vision path. Routing and
+byte-exact adapter conversion are not the broken boundary.
 
-Owners in the maintained fork: tools/vision_tools.py, agent/image_routing.py,
-agent/codex_responses_adapter.py, agent/transports/codex.py. Offline evidence proves
-byte preservation, not current-turn route selection or backend success.
+The normative payload/preparation decision is [TS-275-design.md](TS-275-design.md),
+V1-V5: reuse the existing 4-MiB encoded-data / 7,900-px embed policy proactively before
+the first auxiliary request, only when a bound is exceeded, using the existing bounded
+CPU executor and resizer. Already-compliant supported images remain byte-identical;
+necessary rescaling preserves image meaning/aspect ratio and the existing scale note.
+No provider/model/configuration/transport change or generic HTTP-400 retry is authorized.
 
-Bounded research: recover effective routing from native turn context, not shell defaults.
-Use only the already provisioned tool/client and credentials; do not print keys or add
-providers. Make a small real baseline call with a valid synthetic image containing
-image-only content; retain sanitized request-shape, response status/reason and correlation
-metadata privately. A loopback server, HTTP 200 without image interpretation or a manually
-forced unrelated model does not qualify the real route. Check the actual protocol/API
-schema before assigning blame to an upstream backend.
-
-Selected repair envelope after the causal gate: preserve image bytes, tool call identity,
-response chronology and supported public tool interface. Correct the smallest proven
-preparation/routing/adapter boundary. A protocol-specific normalization must preserve
-semantics and remain isolated to that protocol; do not globally drop/replace image content
-or silently change configured provider/model. Do not embed a secondary agent, acquire
-credentials or edit a separate router product as an assumed prerequisite. If only external
-backend entitlement/service changes can solve it, return the evidence and exact authority
-needed; keep this issue open and continue the other repairs.
-
-Morfeo records the exact payload/transport decision after the research result before the
-new behavior is built. Real candidate qualification must interpret image-only content
-through the operator's supported provisioned route, with the route explicitly evidenced.
+This fulfills the evidence-backed design point reserved by v1 without superseding its
+contract bytes, authority or acceptance. The exact reviewed three-fixture pre/post
+oracle still requires real image-only content interpretation; a 200 status is insufficient.
+Supervisor/Implementer consume the committed checkpoint before building and preserve
+independent review, scoped runtime qualification and normal terminal closeout.
 
 ## Integration and judgement
 

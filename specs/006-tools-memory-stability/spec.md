@@ -43,7 +43,7 @@ runtime bytes to remain unchanged.
 
 ## Explicit research gates for TS-275 and TS-382
 
-These two remediation surfaces are not yet build-qualified. Their first executable
+At initial handoff, these two remediation surfaces were not build-qualified. Their first executable
 outcome is bounded causal qualification, not speculative implementation. Each must
 produce: (1) exact loaded source/route; (2) discriminating failing scenario and
 sanitized observation; (3) causal boundary; (4) smallest compatible repair proposal;
@@ -58,6 +58,14 @@ path; Morfeo records the evidence-backed design in plan.md and supersedes contra
 bytes if required. This is an autonomous design checkpoint, not a routine owner
 approval question. Healthy independent work must continue. Supervisor/Implementer
 must not invent an unresolved transport, persistence or external-product design.
+
+Current gate disposition: **TS-382 and TS-275 are build-ready** under the original v1
+acceptance and protected boundaries. Morfeo's [TS-382 design](TS-382-design.md), D1-D7,
+consumes approved research `26f0a885287cb380d12c92d13ede992f2dcd6f7c`;
+Morfeo's [TS-275 design](TS-275-design.md), V1-V5, consumes approved research
+`9245d435410eb23cf5a2f0fd29add94cc8c1f20e`. These recorded decisions fulfill the existing
+research gates; they do not claim implemented fixes, permit a different backend or
+waive the unchanged real-route/atomic-persistence verification.
 
 ## Authority boundary
 
