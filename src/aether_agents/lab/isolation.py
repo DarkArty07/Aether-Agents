@@ -116,6 +116,10 @@ def isolated_hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict
 
     preflight_disposable_destinations(run_root, run_root / "kanban.db", run_root / "worktrees")
 
+    # The laboratory's --in directory is authoritative.  Ambient cwd and dispatcher-worker
+    # identity belong to the outer process; carrying either into the isolated home/board
+    # would make the canary act on a foreign task.  Callers verify the effective roots
+    # through :func:`require_verified_writer_context` before the first writer.
     env = scrub_inherited_identity(os.environ)
     env.update(
         {

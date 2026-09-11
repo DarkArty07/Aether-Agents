@@ -26,7 +26,7 @@ from typing import Mapping
 import pytest
 
 from aether_agents import lab
-from aether_agents.lab import dispatch, isolation, matrix, observation, persistent, runner
+from aether_agents.lab import dispatch, matrix, observation, persistent, runner
 
 #: Modules whose helpers may invoke a native Kanban/board writer.
 WRITE_CAPABLE_MODULES = (persistent, runner, observation, dispatch, matrix)
@@ -279,6 +279,8 @@ def test_persistent_session_constructs_the_disposable_context_and_writes_only_th
 def test_pre_write_gate_refuses_a_mismatch_with_zero_rows_written(tmp_path: Path) -> None:
     """The effective-root gate refuses before any writer, deterministically."""
 
+    from aether_agents.lab import isolation
+
     run_root = tmp_path / "run"
     run_root.mkdir()
     hermes_root = tmp_path / "hermes-home"
@@ -387,6 +389,8 @@ def test_child_gate_resolves_every_effective_root_with_the_native_modules(
 
     if importlib.util.find_spec("hermes_cli") is None:
         pytest.skip("native Hermes modules are unavailable to this interpreter")
+
+    from aether_agents.lab import isolation
 
     run_root = tmp_path / "run"
     run_root.mkdir()
@@ -532,6 +536,8 @@ print(json.dumps({"task": task_id, "receipt": registry}))
 
 def test_every_write_capable_helper_constructs_or_verifies_a_context() -> None:
     """No write-capable helper inherits the ambient environment without the gate."""
+
+    from aether_agents.lab import isolation
 
     allowed = (
         "require_verified_writer_context(",
