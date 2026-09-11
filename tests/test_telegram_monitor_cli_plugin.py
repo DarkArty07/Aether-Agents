@@ -20,6 +20,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+import time
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -3057,7 +3058,7 @@ def test_scope_manifest_encodes_the_d12_corpus_without_crashing(tmp_path: Path) 
         "Partial success: three of five checks pass; the source review is still pending."
     )
     # A completed corpus task and one genuinely open descendant keep project A's contract
-    # observable; project B carries the pending review alongside its partial success.
+    # observable; project B carries a ready root and the pending review alongside its partial success.
     assert [task["status"] for task in project_a["tasks"]] == [
         "running",
         "done",
@@ -3065,7 +3066,7 @@ def test_scope_manifest_encodes_the_d12_corpus_without_crashing(tmp_path: Path) 
         "done",
         "done",
     ]
-    assert [task["status"] for task in project_b["tasks"]] == ["running", "done", "review"]
+    assert [task["status"] for task in project_b["tasks"]] == ["ready", "done", "review"]
     # The between-cut transition names the open work by manifest key: the task identity
     # itself is owned by the shipped kanban writer and is bound only after seeding.
     assert [task["key"] for task in project_a["transition"]] == ["A1"]
@@ -3416,6 +3417,30 @@ def test_live_preflight_and_full_run_without_external_effects(
     assert public["semantic_certification"]["retained_private_comparison"] is True
     assert any("deterministic" in entry for entry in public["qualified_scope"])
     assert any("adjudication" in entry for entry in public["unqualified_scope"])
+
+
+def test_failure_path_disables_lab_before_stopping_scheduler(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed live phase pauses the lab job before the scheduler stop attempt."""
+    world = _build_world(tmp_path, monkeypatch)
+    backends = world["backends"]
+    backends.scheduler_result = {"execution_mode": "forced-tick"}
+    output = tmp_path / "private" / "receipt.json"
+
+    with pytest.raises(world["module"].QualificationError) as error:
+        _run_live(world, output)
+
+    assert error.value.code == "scheduler-evidence"
+    order = backends.calls
+    assert order.index("lab_control:off") < order.index("lab_scheduler_stop")
+    assert order.count("lab_control:off") == 1
+    receipt = json.loads(output.read_text(encoding="utf-8"))
+    assert receipt["off"]["failure_path"] is True
+    assert receipt["off"]["enabled_after_off"] is False
+    assert receipt["off"]["job_paused"] is True
+    assert receipt["retention"]["scheduler_stopped"] is True
+    assert receipt["scheduler"]["stopped"] is True
 
 
 def test_d16_schedule_evidence_rejects_manual_and_custom_substitutes() -> None:
@@ -5527,8 +5552,11 @@ _PROBE_STUB_MODULES: dict[str, str] = {
         "def connect(db_path=None, *, board=None):\n"
         "    return None\n\n\n"
         "def create_task(conn, *, title, body=None, assignee=None, created_by=None, workspace_kind='scratch',\n"
-        "                workspace_path=None, initial_status='running', session_id=None, board=None):\n"
+        "                workspace_path=None, initial_status='running', session_id=None,\n"
+        "                session_affinity=None, board=None, project_id=None):\n"
         "    return 't_stub'\n\n\n"
+        "def claim_task(conn, task_id, *, ttl_seconds=None, claimer=None):\n"
+        "    return object()\n\n\n"
         "def link_tasks(conn, parent_id, child_id):\n"
         "    return None\n\n\n"
         "def complete_task(conn, task_id, *, result=None, summary=None):\n"
@@ -5909,7 +5937,7 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "                max_retries=None, model_override=None, provider_override=None,\n"
         "                reasoning_effort=None, goal_mode=False, goal_max_turns=None,\n"
         "                initial_status='running', session_id=None, board=None,\n"
-        "                project_id=None, project_source_task_id=None):\n"
+        "                project_id=None, project_source_task_id=None, session_affinity=None):\n"
         "    task_id = 't_' + uuid.uuid4().hex[:8]\n"
         "    conn.execute(\n"
         "        'INSERT INTO tasks (id, title, status, session_id) VALUES (?, ?, ?, ?)',\n"
@@ -5917,6 +5945,12 @@ _CHAIN_STUB_MODULES: dict[str, str] = {
         "    )\n"
         "    conn.commit()\n"
         "    return task_id\n\n\n"
+        "def claim_task(conn, task_id, *, ttl_seconds=None, claimer=None):\n"
+        "    cursor = conn.execute(\n"
+        "        \"UPDATE tasks SET status = 'running' WHERE id = ?\", (task_id,)\n"
+        "    )\n"
+        "    conn.commit()\n"
+        "    return object() if cursor.rowcount == 1 else None\n\n\n"
         "def link_tasks(conn, parent_id, child_id):\n"
         "    conn.execute(\n"
         "        'INSERT INTO links (parent_id, child_id) VALUES (?, ?)', (parent_id, child_id)\n"
@@ -6264,7 +6298,113 @@ def test_real_laboratory_chain_reaches_the_fixture_and_the_transition(tmp_path: 
     assert facts["expected_transition"] == [bound["A1"], bound["B1"], bound["B3"]]
 
 
-def test_real_laboratory_gate_refuses_an_unsupported_writer_before_any_seeding(
+def test_d16s_real_fixture_expectations_cover_smoke_boundaries_and_idle(
+    tmp_path: Path,
+) -> None:
+    """The real fixture and collector satisfy every live scope plan without live effects."""
+    from aether_agents.monitor.collector import MonitorCollector
+    from aether_agents.monitor.runtime import _markers_for_snapshot, load_direct_records
+    from aether_agents.monitor.sources import ReadOnlySources
+    from scripts import qualify_telegram_monitor as q
+    from scripts import telegram_monitor_lab as lab
+
+    runtime_py = Path(os.environ.get("AETHER_HERMES_PYTHON", "").strip())
+    if not runtime_py.is_file():
+        pytest.skip("product runtime interpreter not available")
+
+    profile_home, env_prov = _make_d16r_test_profile(tmp_path)
+    plan = lab.build_plan(tmp_path / "lab", "20260911T120000Z", token="abcdef012345")
+    preflight = q._lab_preflight(
+        plan, interpreter=runtime_py, profile_home=profile_home, environ=env_prov
+    )
+    assert preflight["problems"] == []
+    record = q._lab_create(plan, preflight)
+    gate = q._lab_context_preflight(plan, preflight, interpreter=runtime_py)
+    assert gate["problems"] == []
+
+    manifest = q._scope_manifest(Path(record["scope_root"]), plan.stamp)
+    q._write_scope_projects(Path(record["scope_root"]), manifest)
+    seeded = q._lab_fixture(runtime_py, record, manifest)
+    assert {
+        key: len(seeded[key]) for key in ("projects", "boards", "sessions", "tasks", "direct")
+    } == {
+        "projects": 2,
+        "boards": 2,
+        "sessions": 5,
+        "tasks": 8,
+        "direct": 2,
+    }
+
+    store = q.MonitorStore(Path(record["state_root"]))
+    assert q._environment_gaps(store, hermes_home=Path(record["hermes_home"])) == []
+    enabled = q._lab_control(runtime_py, record, q.ACTION_ON)
+    assert enabled["ok"] is True
+
+    try:
+        sources = ReadOnlySources(
+            state_root=store.state_root,
+            hermes_home=Path(record["hermes_home"]),
+        )
+        collector = MonitorCollector(store, sources)
+        first_cutoff = datetime.now(timezone.utc)
+        first = collector.collect(
+            cutoff_utc=first_cutoff,
+            direct_records=load_direct_records(store),
+        )
+        plans = q._scope_expectation_plans(manifest)
+        for label, expected_items, expected_item_gaps in plans[:2]:
+            q._evaluate_scope_expectations(
+                first.snapshot,
+                expected_items=expected_items,
+                expected_item_gaps=expected_item_gaps,
+            )
+            assert label in {"smoke", "boundary-1"}
+
+        wrong = dict(plans[0][1])
+        pipeline_a = next(key for key in wrong if key.startswith("pipeline:"))
+        wrong[pipeline_a] = "queued"
+        with pytest.raises(q.QualificationError) as mismatch:
+            q._evaluate_scope_expectations(first.snapshot, expected_items=wrong)
+        assert mismatch.value.code == "scope-state"
+        assert mismatch.value.detail["observed"] == "running"
+
+        for work_key, marker in _markers_for_snapshot(first.snapshot).items():
+            store.mark_final_outcome_delivery(work_key, marker)
+
+        time.sleep(1.1)
+        transition = q._lab_transition(runtime_py, record, manifest)
+        assert transition["errors"] == []
+        second_cutoff = first_cutoff + timedelta(minutes=1)
+        second = collector.collect(
+            cutoff_utc=second_cutoff,
+            direct_records=load_direct_records(store),
+        )
+        _, expected_after, expected_item_gaps_after = plans[2]
+        q._evaluate_scope_expectations(
+            second.snapshot,
+            expected_items=expected_after,
+            expected_item_gaps=expected_item_gaps_after,
+        )
+        for work_key, marker in _markers_for_snapshot(second.snapshot).items():
+            store.mark_final_outcome_delivery(work_key, marker)
+
+        idle = collector.collect(
+            cutoff_utc=second_cutoff + timedelta(minutes=1),
+            direct_records=load_direct_records(store),
+        )
+        _, expected_idle, expected_item_gaps_idle = plans[3]
+        q._evaluate_scope_expectations(
+            idle.snapshot,
+            expected_items=expected_idle,
+            expected_item_gaps=expected_item_gaps_idle,
+        )
+        assert idle.source.idle is True
+    finally:
+        # This is a scratch lab only; leave no enabled native job behind in the test root.
+        q._lab_control(runtime_py, record, q.ACTION_OFF)
+
+
+def test_real_laboratory_gate_refuses_an_unsupported_writer(
     tmp_path: Path,
 ) -> None:
     """The in-laboratory gate, not the read-only phase, owns the writer surface refusal.
@@ -7228,7 +7368,13 @@ def test_d15r_fixture_and_environment_gaps_chain_end_to_end(tmp_path: Path) -> N
             "HERMES_HOME": str(plan.hermes_home),
             "HOME": str(plan.home),
             "TMPDIR": str(plan.tmp),
-            "PYTHONPATH": os.pathsep.join((str(ROOT / "src"), os.environ.get("PYTHONPATH", ""))),
+            # ``scripts/run_tests.py`` puts the exact Hermes baseline checkout first on the
+            # test process's PYTHONPATH.  A laboratory child inherits PYTHONPATH by design,
+            # so forwarding the runner's value would shadow the product runtime's own tree
+            # with the baseline checkout (which lacks this fork's patched writers).  The
+            # live lane never runs with that shadow: the child resolves only the worktree's
+            # own sources plus its interpreter's environment.
+            "PYTHONPATH": str(ROOT / "src"),
         },
     }
     lab_record = q._lab_create(plan, preflight)
@@ -7388,6 +7534,12 @@ def _make_d16r_test_profile(tmp_path: Path) -> tuple[Path, dict[str, str]]:
         "TELEGRAM_BOT_TOKEN=tok-123\nTELEGRAM_HOME_CHANNEL=-1000\n", encoding="utf-8"
     )
     env = dict(os.environ)
+    # ``scripts/run_tests.py`` puts the exact Hermes baseline checkout first on the test
+    # process's PYTHONPATH.  A laboratory child inherits PYTHONPATH by design, so that
+    # runner path would shadow the provisioned runtime's own tree (the baseline lacks this
+    # fork's patched writers) and the gate would refuse it before any effect.  The live
+    # lane runs without that shadow, so the simulated provisioned context omits it.
+    env.pop("PYTHONPATH", None)
     env["HERMES_HOME"] = str(prof)
     return prof, env
 

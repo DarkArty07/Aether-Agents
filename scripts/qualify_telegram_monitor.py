@@ -196,8 +196,15 @@ SMOKE_MIN_LEAD_SECONDS = 5.0
 
 #: Bounds of the one supervised native scheduler instance the laboratory starts and stops.
 LAB_SCHEDULER_READY_SECONDS = 120.0
-LAB_SCHEDULER_STOP_SECONDS = 120.0
 LAB_SCHEDULER_POLL_SECONDS = 1.0
+#: A scheduler may be executing an in-flight smoke or scheduled run when failure is
+#: detected.  Reuse the lane's existing operation deadlines rather than a shorter,
+#: scheduler-only timeout; the boundary slop already includes the ordinary delivery bound.
+LAB_SCHEDULER_STOP_SECONDS = max(
+    COLLECTION_DEADLINE_SECONDS,
+    SMOKE_DEADLINE_SECONDS,
+    BOUNDARY_SLOP.total_seconds(),
+)
 #: The native ticker checks every second so a real minute due time is observed inside the
 #: 120-second collection oracle; due selection remains owned by Hermes cron.
 LAB_SCHEDULER_INTERVAL_SECONDS = 1
@@ -1661,6 +1668,11 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
                 status = "done"
             elif key == "review":
                 status = "review"
+            elif key == "root":
+                # Project A provides the genuinely started decomposition root. Project B
+                # remains ready under its review descendant so the collector's canonical
+                # aggregate state is the expected review boundary until transition.
+                status = "running" if letter == "A" else "ready"
             else:
                 status = "running"
             tasks.append(
@@ -1735,7 +1747,7 @@ def _scope_manifest(scope_root: Path, stamp: str) -> list[dict[str, Any]]:
                     "result": task["result"],
                 }
                 for task in tasks
-                if task["status"] in {"running", "review"}
+                if task["status"] in {"running", "ready", "review"}
             ],
         }
         if letter == "A":
@@ -2297,6 +2309,99 @@ def _identity_headers_ok(
     return True
 
 
+def _scope_expectation_parts(
+    snapshot: Any,
+) -> tuple[Mapping[str, Any], dict[str, Mapping[str, Any]], set[str]]:
+    """Normalize a stored snapshot or source collection for the scope oracle."""
+
+    if isinstance(snapshot, Mapping):
+        raw_payload = snapshot.get("payload")
+        raw_items = raw_payload.get("items", ()) if isinstance(raw_payload, Mapping) else ()
+        raw_gaps = snapshot.get("coverage_gaps", ())
+    else:
+        raw_payload = getattr(snapshot, "payload", None)
+        raw_items = (
+            raw_payload.get("items", ())
+            if isinstance(raw_payload, Mapping)
+            else getattr(snapshot, "items", ())
+        )
+        raw_gaps = getattr(snapshot, "coverage_gaps", ())
+    payload: Mapping[str, Any] = raw_payload if isinstance(raw_payload, Mapping) else {}
+    payload_items: dict[str, Mapping[str, Any]] = {}
+    for item in (
+        raw_items
+        if isinstance(raw_items, Sequence) and not isinstance(raw_items, (str, bytes))
+        else ()
+    ):
+        if isinstance(item, Mapping):
+            work_key = str(item.get("work_key") or "")
+            normalized = item
+        else:
+            work_key = str(getattr(item, "work_key", "") or "")
+            normalized = {
+                "work_key": work_key,
+                "observed_state": getattr(item, "observed_state", None),
+                "coverage_gaps": getattr(item, "coverage_gaps", ()),
+            }
+        if work_key:
+            payload_items[work_key] = normalized
+    gaps = {str(gap) for gap in (raw_gaps or ())}
+    return payload, payload_items, gaps
+
+
+def _evaluate_scope_expectations(
+    snapshot: Any,
+    *,
+    expected_items: Mapping[str, str],
+    expected_gaps: frozenset[str] = frozenset(),
+    expected_item_gaps: Mapping[str, Sequence[str]] | None = None,
+) -> None:
+    """Evaluate one collection cut against qualification expectations."""
+
+    _payload, payload_items, gaps = _scope_expectation_parts(snapshot)
+    observed_keys = set(payload_items)
+    expected_keys = set(expected_items)
+    if observed_keys != expected_keys:
+        raise QualificationError(
+            "scope-items",
+            "the scheduled digest did not contain exactly the expected synthetic "
+            f"work identities (expected {len(expected_keys)}, observed {len(observed_keys)})",
+            detail={"expected": sorted(expected_keys), "observed": sorted(observed_keys)},
+        )
+    for work_key, expected_state in expected_items.items():
+        observed_state = str(payload_items[work_key].get("observed_state"))
+        if observed_state != expected_state:
+            raise QualificationError(
+                "scope-state",
+                "a synthetic work identity was not in the expected canonical state at the cut",
+                detail={
+                    "work_key": work_key,
+                    "expected": expected_state,
+                    "observed": observed_state,
+                },
+            )
+    if gaps != set(expected_gaps):
+        raise QualificationError(
+            "scope-gaps",
+            "the scheduled digest reported unexpected coverage gaps for the synthetic scope",
+            detail={"expected": sorted(expected_gaps), "observed": sorted(gaps)},
+        )
+    for work_key, expected_item_gap_values in (expected_item_gaps or {}).items():
+        observed_item_gaps = sorted(
+            str(gap) for gap in (payload_items.get(work_key, {}).get("coverage_gaps") or ())
+        )
+        if observed_item_gaps != sorted(str(gap) for gap in expected_item_gap_values):
+            raise QualificationError(
+                "scope-item-gaps",
+                "a synthetic work identity did not carry the expected item-level coverage gaps",
+                detail={
+                    "work_key": work_key,
+                    "expected": sorted(str(gap) for gap in expected_item_gap_values),
+                    "observed": observed_item_gaps,
+                },
+            )
+
+
 def _boundary_record(
     decision: Mapping[str, Any],
     *,
@@ -2334,54 +2439,14 @@ def _boundary_record(
             "boundary-mismatch",
             "the observed cut does not belong to the expected real time window",
         )
-    payload = snapshot.payload if isinstance(snapshot.payload, Mapping) else {}
-    payload_items = {
-        str(item.get("work_key")): item
-        for item in payload.get("items", ())
-        if isinstance(item, Mapping)
-    }
-    observed_keys = set(payload_items)
+    payload, payload_items, gaps = _scope_expectation_parts(snapshot)
     expected_keys = set(expected_items)
-    if observed_keys != expected_keys:
-        raise QualificationError(
-            "scope-items",
-            "the scheduled digest did not contain exactly the expected synthetic "
-            f"work identities (expected {len(expected_keys)}, observed {len(observed_keys)})",
-            detail={"expected": sorted(expected_keys), "observed": sorted(observed_keys)},
-        )
-    for work_key, expected_state in expected_items.items():
-        observed_state = str(payload_items[work_key].get("observed_state"))
-        if observed_state != expected_state:
-            raise QualificationError(
-                "scope-state",
-                "a synthetic work identity was not in the expected canonical state at the cut",
-                detail={
-                    "work_key": work_key,
-                    "expected": expected_state,
-                    "observed": observed_state,
-                },
-            )
-    gaps = {str(gap) for gap in snapshot.coverage_gaps}
-    if gaps != set(expected_gaps):
-        raise QualificationError(
-            "scope-gaps",
-            "the scheduled digest reported unexpected coverage gaps for the synthetic scope",
-            detail={"expected": sorted(expected_gaps), "observed": sorted(gaps)},
-        )
-    for work_key, expected_item_gap_values in (expected_item_gaps or {}).items():
-        observed_item_gaps = sorted(
-            str(gap) for gap in (payload_items.get(work_key, {}).get("coverage_gaps") or ())
-        )
-        if observed_item_gaps != sorted(str(gap) for gap in expected_item_gap_values):
-            raise QualificationError(
-                "scope-item-gaps",
-                "a synthetic work identity did not carry the expected item-level coverage gaps",
-                detail={
-                    "work_key": work_key,
-                    "expected": sorted(str(gap) for gap in expected_item_gap_values),
-                    "observed": observed_item_gaps,
-                },
-            )
+    _evaluate_scope_expectations(
+        snapshot,
+        expected_items=expected_items,
+        expected_gaps=expected_gaps,
+        expected_item_gaps=expected_item_gaps,
+    )
     collected_lateness = _seconds_between(cutoff, snapshot.collected_at_utc)
     if cutoff_mode == "exact":
         # D2's 120-second collection deadline is a property of each native scheduled cadence;
@@ -2552,6 +2617,53 @@ def _case_task(entry: Mapping[str, Any], case_key: str) -> Mapping[str, Any]:
 
 def _direct_work_key(entry: Mapping[str, Any], interval: Mapping[str, Any]) -> str:
     return f"direct:{entry['project_id']}:{entry['direct']['session_id']}:{interval['interval_id']}"
+
+
+def _scope_expected_before(
+    manifest: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, str], dict[str, Sequence[str]]]:
+    project_a = next(entry for entry in manifest if entry["letter"] == "A")
+    project_b = next(entry for entry in manifest if entry["letter"] == "B")
+    interval_zero = project_a["direct"]["intervals"][0]
+    direct_zero_key = _direct_work_key(project_a, interval_zero)
+    expected_before = {
+        _pipeline_work_key(project_a): "running",
+        _pipeline_work_key(project_b): "review",
+        direct_zero_key: "turn_ended_unknown",
+    }
+    expected_item_gaps: dict[str, Sequence[str]] = {direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)}
+    return expected_before, expected_item_gaps
+
+
+def _scope_expected_after(
+    manifest: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, str], dict[str, Sequence[str]]]:
+    project_a = next(entry for entry in manifest if entry["letter"] == "A")
+    project_b = next(entry for entry in manifest if entry["letter"] == "B")
+    interval_one = project_a["direct"]["intervals"][1]
+    direct_one_key = _direct_work_key(project_a, interval_one)
+    expected_after = {
+        _pipeline_work_key(project_a): "completed",
+        _pipeline_work_key(project_b): "completed",
+        direct_one_key: "turn_ended_completed",
+    }
+    expected_item_gaps: dict[str, Sequence[str]] = {direct_one_key: ()}
+    return expected_after, expected_item_gaps
+
+
+def _scope_expectation_plans(
+    manifest: Sequence[Mapping[str, Any]],
+) -> tuple[tuple[str, Mapping[str, str], Mapping[str, Sequence[str]]], ...]:
+    """Build the four scope-oracle plans shared by live and deterministic checks."""
+
+    expected_before, gaps_before = _scope_expected_before(manifest)
+    expected_after, gaps_after = _scope_expected_after(manifest)
+    return (
+        ("smoke", expected_before, gaps_before),
+        ("boundary-1", expected_before, gaps_before),
+        ("boundary-2", expected_after, gaps_after),
+        ("idle", {}, {}),
+    )
 
 
 def _case_definitions(manifest: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3629,6 +3741,8 @@ for entry in MANIFEST:
                 workspace_path=str(project_root),
                 board=entry["board_slug"],
                 session_id=entry["origin_session"],
+                session_affinity={"flow_id": entry["flow_id"], "terminal": index == 0},
+                project_id=entry["native_project_id"],
                 initial_status="running",
             )
             if not isinstance(task_id, str) or not task_id:
@@ -3656,6 +3770,10 @@ for entry in MANIFEST:
                     with_reason=True,
                 )[0]:
                     fail("fixture-review-refused")
+            elif status == "running":
+                if not kanban_db.claim_task(board_connection, task_id):
+                    fail("fixture-claim-refused")
+                open_descendant = task["key"]
             else:
                 open_descendant = task["key"]
             payload["tasks"].append(
@@ -4944,6 +5062,7 @@ def _live_run(
     scheduler: dict[str, Any] | None = None
     scope: dict[str, Any] | None = None
     job_id: str | None = None
+    environment: dict[str, str] = {}
     try:
         # 0. Read-only, fail-closed preflight: nothing exists yet and nothing is spent.
         preflight = backends.lab_preflight(plan, interpreter=interpreter)
@@ -5142,21 +5261,9 @@ def _live_run(
         output_dir_value = job_record.get("output_dir") if job_record else None
         output_dir = Path(str(output_dir_value)) if output_dir_value else None
         language = backends.owner_language(interpreter, environment)
-        direct_entry = manifest[0]
-        interval_zero = direct_entry["direct"]["intervals"][0]
-        interval_one = direct_entry["direct"]["intervals"][1]
-        direct_zero_key = _direct_work_key(direct_entry, interval_zero)
-        direct_one_key = _direct_work_key(direct_entry, interval_one)
-        expected_before = {
-            _pipeline_work_key(manifest[0]): "running",
-            _pipeline_work_key(manifest[1]): "review",
-            direct_zero_key: "turn_ended_unknown",
-        }
-        expected_after = {
-            _pipeline_work_key(manifest[0]): "completed",
-            _pipeline_work_key(manifest[1]): "completed",
-            direct_one_key: "turn_ended_completed",
-        }
+        scope_plans = _scope_expectation_plans(manifest)
+        _, expected_before, expected_item_gaps_before = scope_plans[0]
+        _, expected_after, expected_item_gaps_after = scope_plans[2]
         # 4. One bounded supervised instance of the native scheduler owns due selection,
         #    execution and receipts for the whole laboratory; closing the test TUI never
         #    stops it and no custom scheduling loop exists here.  The readiness attestation
@@ -5189,7 +5296,7 @@ def _live_run(
             baseline_report_ids=baseline_reports,
             cut_one=accelerated_cut,
             expected_items=expected_before,
-            expected_item_gaps={direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)},
+            expected_item_gaps=expected_item_gaps_before,
             stream=stream,
             environment=environment,
         )
@@ -5214,9 +5321,11 @@ def _live_run(
         #    expression is accelerated only in the private store; these timestamps are not
         #    production-hourly or elapsed-hour evidence.
         boundaries: list[dict[str, Any]] = []
-        boundary_plan: tuple[tuple[datetime, dict[str, str], dict[str, Sequence[str]]], ...] = (
-            (cut_one, expected_before, {direct_zero_key: ("DIRECT_OUTCOME_UNKNOWN",)}),
-            (cut_two, expected_after, {direct_one_key: ()}),
+        boundary_plan: tuple[
+            tuple[datetime, Mapping[str, str], Mapping[str, Sequence[str]]], ...
+        ] = (
+            (cut_one, expected_before, expected_item_gaps_before),
+            (cut_two, expected_after, expected_item_gaps_after),
         )
         for index, (expected_cut, expected_items, expected_item_gaps) in enumerate(boundary_plan):
             deadline = expected_cut + BOUNDARY_SLOP
@@ -5401,6 +5510,65 @@ def _live_run(
         #     retention verification of the laboratory evidence.  The laboratory is never
         #     self-deleted and no operator state is restored because none was displaced.
         retention: dict[str, Any] = {}
+
+        def disable_lab_before_scheduler_stop() -> None:
+            try:
+                emergency_off = backends.lab_control(lab or {}, ACTION_OFF)
+                emergency_result = emergency_off.get("result")
+                if not isinstance(emergency_result, Mapping):
+                    raise QualificationError(
+                        "lab-shutdown-off",
+                        "the laboratory job disable returned no result before scheduler stop",
+                    )
+                if emergency_result.get("enabled") or not emergency_result.get("job_paused"):
+                    raise QualificationError(
+                        "lab-shutdown-off",
+                        "the laboratory job was not disabled before scheduler stop",
+                        detail={
+                            "enabled": bool(emergency_result.get("enabled")),
+                            "job_paused": bool(emergency_result.get("job_paused")),
+                        },
+                    )
+                if job_id is None:
+                    raise QualificationError(
+                        "lab-shutdown-off",
+                        "the owned laboratory job identity was unavailable before scheduler stop",
+                    )
+                emergency_job = backends.job_record(interpreter, job_id, environment)
+                if emergency_job is None or not bool(emergency_job.get("paused")):
+                    raise QualificationError(
+                        "lab-shutdown-off",
+                        "the owned laboratory job was not observed paused before scheduler stop",
+                        detail={"job_present": emergency_job is not None},
+                    )
+                record["off"] = {
+                    "enabled_after_off": bool(emergency_result.get("enabled")),
+                    "job_paused": bool(emergency_result.get("job_paused")),
+                    "native_job_paused": bool(emergency_job.get("paused")),
+                    "paused_at_utc": emergency_result.get("paused_at_utc"),
+                    "failure_path": True,
+                }
+            except QualificationError as error:
+                record["errors"].append(
+                    {"code": error.code, "message": error.message, "detail": error.detail}
+                )
+            except Exception as error:  # noqa: BLE001 - shutdown still proceeds
+                record["errors"].append(
+                    {
+                        "code": "lab-shutdown-off",
+                        "message": "the laboratory job disable raised before scheduler stop",
+                        "detail": {"type": type(error).__name__},
+                    }
+                )
+
+        off_verified = (
+            isinstance(record.get("off"), dict)
+            and not bool(record["off"].get("enabled_after_off"))
+            and bool(record["off"].get("job_paused"))
+            and bool(record["off"].get("native_job_paused"))
+        )
+        if (scheduler is not None or job_id is not None) and not off_verified:
+            disable_lab_before_scheduler_stop()
         if scheduler is not None:
             try:
                 retention["scheduler_stopped"] = bool(
