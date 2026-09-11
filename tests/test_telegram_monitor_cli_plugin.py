@@ -1274,6 +1274,7 @@ def _fake_delivery(
     state: str,
     *,
     message_id: str | None = "424242",
+    created: str = "2026-09-10T14:00:40.000000Z",
     updated: str = "2026-09-10T14:00:40.000000Z",
     text_hash: str = "0" * 64,
 ) -> Any:
@@ -1281,6 +1282,7 @@ def _fake_delivery(
         part_index=index,
         state=state,
         attempts=1,
+        created_at_utc=created,
         updated_at_utc=updated,
         message_id=message_id,
         text_hash=text_hash,
@@ -1596,13 +1598,47 @@ def test_boundary_record_binds_a_real_run_and_a_single_narration() -> None:
     assert fail_with(expected={work_key: "review"}) == "scope-state"
     assert fail_with(expected={"pipeline:other": "running"}) == "scope-items"
     assert fail_with(gaps=frozenset({"UNEXPECTED_GAP"})) == "scope-gaps"
+
+    # The legitimate shipped-path pending->accepted two-phase write before render is accepted
+    legit_decision = _confirmed_decision(payload, narrative)
+    legit_decision["narrative"] = _fake_narrative(
+        payload["report_id"],
+        result=narrative,
+        created="2026-09-10T14:00:20.000000Z",
+        updated="2026-09-10T14:00:35.000000Z",
+    )
+    legit_boundary = module._boundary_record(
+        legit_decision,
+        expected_items=dict(expected_items),
+        expected_gaps=frozenset(),
+        language=None,
+        job_record=_job_record(),
+        run_evidence=_run_evidence(payload["report_id"]),
+        expected_cutoff_utc=EXPECTED_CUT,
+    )
+    assert legit_boundary["narration_writes"] == 1
+    assert legit_boundary["narration_status"] == "accepted"
+
+    # A second narration write after render enqueue is refused
     assert (
         fail_with(
             narrative=_fake_narrative(
                 payload["report_id"],
                 result=narrative,
                 created="2026-09-10T14:00:20.000000Z",
-                updated="2026-09-10T14:00:35.000000Z",
+                updated="2026-09-10T14:00:50.000000Z",
+            )
+        )
+        == "multiple-narrations"
+    )
+    # An inverted narrative timestamp is refused
+    assert (
+        fail_with(
+            narrative=_fake_narrative(
+                payload["report_id"],
+                result=narrative,
+                created="2026-09-10T14:00:35.000000Z",
+                updated="2026-09-10T14:00:20.000000Z",
             )
         )
         == "multiple-narrations"
@@ -1630,6 +1666,146 @@ def test_boundary_record_binds_a_real_run_and_a_single_narration() -> None:
         fail_with(job=_job_record(last_run_at="2026-09-10T13:59:00.000000Z")) == "native-job-state"
     )
     assert fail_with(job=_job_record(last_status="error")) == "native-job-state"
+
+
+def test_narration_oracle_guards_shipped_two_phase_write(tmp_path: Path) -> None:
+    """The narration oracle accepts the shipped two-phase write and refuses a second narration."""
+
+    module = _qualification_module()
+    from aether_agents.monitor import reporting as reporting_module
+    from aether_agents.monitor.store import MonitorStore
+
+    store = MonitorStore(tmp_path)
+    store.set_enabled(True)
+    cutoff = EXPECTED_CUT
+    lease = store.acquire_collection_lease(cutoff, owner_id="collector-1", ttl_seconds=300)
+    assert lease is not None
+
+    payload = _live_payload()
+    report_id = payload["report_id"]
+
+    snapshot = store.create_snapshot(
+        cutoff_utc=payload["cutoff_utc"],
+        previous_cutoff_utc=payload["previous_cutoff_utc"],
+        collected_at_utc=payload["collected_at_utc"],
+        watermarks={},
+        payload=payload,
+        coverage_gaps=(),
+        report_id=report_id,
+        lease=lease,
+    )
+
+    # Phase 1: handoff state written as pending
+    store.put_narrative(
+        report_id, structured_result=None, narrator_session_id=None, attempt_status="pending"
+    )
+
+    # Phase 2: validated narrative written as accepted
+    structured = _live_narrative(payload)
+    store.put_narrative(
+        report_id,
+        structured_result=structured,
+        narrator_session_id="cron_native-job-1_test",
+        attempt_status="accepted",
+    )
+
+    narrative = store.get_narrative(report_id)
+    assert narrative is not None
+    assert narrative.attempt_status == "accepted"
+    assert narrative.structured_result is not None
+
+    # Shipped render and delivery lifecycle
+    parts = reporting_module.render_parts(snapshot.payload, narrative.structured_result)
+    deliveries = store.enqueue_deliveries(report_id, parts)
+    for delivery_part in deliveries:
+        claim = store.claim_delivery(
+            report_id, delivery_part.part_index, owner_id="delivery-1", ttl_seconds=60
+        )
+        assert claim is not None
+        store.complete_delivery(
+            claim, outcome="confirmed", message_id=f"msg_{delivery_part.part_index}"
+        )
+
+    confirmed_deliveries = store.list_deliveries(report_id)
+    work_key = payload["items"][0]["work_key"]
+
+    decision = {
+        "state": "ready",
+        "snapshot": snapshot,
+        "narrative": narrative,
+        "deliveries": confirmed_deliveries,
+    }
+
+    # The legitimate two-phase write must satisfy the smoke oracle (cutoff_mode="not-after")
+    smoke_record = module._boundary_record(
+        decision,
+        expected_items={work_key: "running"},
+        expected_gaps=frozenset(),
+        language=None,
+        job_record=_job_record(),
+        run_evidence=_run_evidence(report_id),
+        expected_cutoff_utc=cutoff,
+        cutoff_mode="not-after",
+    )
+    assert smoke_record["narration_writes"] == 1
+    assert smoke_record["narration_status"] == "accepted"
+    assert smoke_record["delivery_states"] == ["confirmed"]
+
+    # The legitimate two-phase write must also satisfy the boundary oracle (cutoff_mode="exact")
+    boundary_record = module._boundary_record(
+        decision,
+        expected_items={work_key: "running"},
+        expected_gaps=frozenset(),
+        language=None,
+        job_record=_job_record(),
+        run_evidence=_run_evidence(report_id),
+        expected_cutoff_utc=cutoff,
+        cutoff_mode="exact",
+    )
+    assert boundary_record["narration_writes"] == 1
+    assert boundary_record["narration_status"] == "accepted"
+
+    # Drive a genuine second narration write through the store API (after render)
+    store.put_narrative(
+        report_id,
+        structured_result=structured,
+        narrator_session_id="cron_native-job-1_second_run",
+        attempt_status="accepted",
+    )
+    second_narrative = store.get_narrative(report_id)
+    second_decision = {
+        "state": "ready",
+        "snapshot": snapshot,
+        "narrative": second_narrative,
+        "deliveries": confirmed_deliveries,
+    }
+
+    # The second narration write must be refused by the oracle with multiple-narrations
+    with pytest.raises(module.QualificationError) as exc_info:
+        module._boundary_record(
+            second_decision,
+            expected_items={work_key: "running"},
+            expected_gaps=frozenset(),
+            language=None,
+            job_record=_job_record(),
+            run_evidence=_run_evidence(report_id),
+            expected_cutoff_utc=cutoff,
+            cutoff_mode="not-after",
+        )
+    assert exc_info.value.code == "multiple-narrations"
+
+    with pytest.raises(module.QualificationError) as exc_info_exact:
+        module._boundary_record(
+            second_decision,
+            expected_items={work_key: "running"},
+            expected_gaps=frozenset(),
+            language=None,
+            job_record=_job_record(),
+            run_evidence=_run_evidence(report_id),
+            expected_cutoff_utc=cutoff,
+            cutoff_mode="exact",
+        )
+    assert exc_info_exact.value.code == "multiple-narrations"
 
 
 def test_idle_gate_requires_the_native_skip_and_no_new_inference() -> None:

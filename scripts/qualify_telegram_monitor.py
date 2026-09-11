@@ -2492,15 +2492,6 @@ def _boundary_record(
                 "collection did not begin within the accepted deadline after the cut",
                 detail={"collected_lateness_seconds": collected_lateness},
             )
-    if narrative.updated_at_utc != narrative.created_at_utc:
-        raise QualificationError(
-            "multiple-narrations",
-            "a single digest produced more than one narration write",
-            detail={
-                "created_at_utc": narrative.created_at_utc,
-                "updated_at_utc": narrative.updated_at_utc,
-            },
-        )
     ordered = sorted(deliveries, key=lambda delivery: delivery.part_index)
     states = sorted({str(delivery.state) for delivery in ordered})
     if states != ["confirmed"]:
@@ -2513,6 +2504,55 @@ def _boundary_record(
         raise QualificationError(
             "delivery-unconfirmed",
             "a confirmed part carries no native message identifier",
+        )
+    if narrative.attempt_status != "accepted" or narrative.structured_result is None:
+        raise QualificationError(
+            "narration-failed",
+            "the digest did not produce an accepted narrative",
+            detail={"attempt_status": getattr(narrative, "attempt_status", None)},
+        )
+    if not getattr(narrative, "narrator_session_id", None):
+        raise QualificationError(
+            "narration-failed",
+            "accepted narrative carries no narrator session identifier",
+        )
+    narrative_created = _parse_utc(narrative.created_at_utc)
+    narrative_updated = _parse_utc(narrative.updated_at_utc)
+    render_created_text = min(
+        (
+            str(getattr(d, "created_at_utc", None) or getattr(d, "updated_at_utc", "") or "")
+            for d in ordered
+            if (getattr(d, "created_at_utc", None) or getattr(d, "updated_at_utc", None))
+        ),
+        default=None,
+    )
+    render_created = _parse_utc(render_created_text) if render_created_text else None
+    if (
+        narrative_created is not None
+        and narrative_updated is not None
+        and narrative_updated < narrative_created
+    ):
+        raise QualificationError(
+            "multiple-narrations",
+            "narrative update timestamp predates creation",
+            detail={
+                "created_at_utc": narrative.created_at_utc,
+                "updated_at_utc": narrative.updated_at_utc,
+            },
+        )
+    if (
+        render_created is not None
+        and narrative_updated is not None
+        and narrative_updated > render_created
+    ):
+        raise QualificationError(
+            "multiple-narrations",
+            "a single digest produced more than one narration write",
+            detail={
+                "created_at_utc": narrative.created_at_utc,
+                "updated_at_utc": narrative.updated_at_utc,
+                "render_created_at_utc": render_created_text,
+            },
         )
     if not _renderer_matches(snapshot, narrative, ordered, language):
         raise QualificationError(
@@ -2595,6 +2635,11 @@ def _boundary_record(
                         "work_key": work_key,
                         "section": section,
                     }
+    narration_writes = (
+        1
+        if narrative.attempt_status == "accepted" and narrative.structured_result is not None
+        else 0
+    )
     return {
         "cutoff_utc": cutoff,
         "expected_cutoff_utc": expected_cutoff_utc,
@@ -2602,7 +2647,7 @@ def _boundary_record(
         "collected_at_utc": snapshot.collected_at_utc,
         "collected_lateness_seconds": collected_lateness,
         "narration_status": narrative.attempt_status,
-        "narration_writes": 1,
+        "narration_writes": narration_writes,
         "narration_created_at_utc": narrative.created_at_utc,
         "narration_lateness_seconds": narrative_lateness,
         "narrator_session_id": narrative.narrator_session_id,

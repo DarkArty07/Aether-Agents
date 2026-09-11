@@ -372,13 +372,13 @@ What the lane then does, in order:
    execution and its own run receipts; the harness only observes. There is no custom
    scheduling loop in the harness and the hourly cuts are never forced manually.
 7. **One bounded initial smoke.** The owned job is triggered once through the shipped native
-   API and must produce exactly one real collected report, one accepted single-write
+   API and must produce exactly one real collected report, one accepted
    narration, the shipped renderer's parts and one confirmed delivery. It is never a
    substitute for a natural cut. (A narration may contain multiple tool/model requests; the
    budget counts narrations, not HTTP calls.)
 8. **Two natural wall-clock hourly cuts.** Each expected cut must be a fresh report for the
    expected wall-clock hour, collected within the accepted deadline, with an accepted
-   single-write Morfeo narrative whose delivered parts are byte-equal to the shipped
+   Morfeo narrative whose delivered parts are byte-equal to the shipped
    renderer's output over that evidence (immutable identity headers included), every part
    confirmed with a native message identifier, and exactly one native scheduler run record
    containing that digest identity; the deliberately created `DIRECT_OUTCOME_UNKNOWN` gap is
