@@ -392,7 +392,8 @@ def test_wheel_and_sdist_include_valid_portable_canonical_skill_resources(
             assert isinstance(frontmatter["description"], str)
             assert len(frontmatter["description"]) <= 60
             assert frontmatter["description"].endswith(".")
-            assert frontmatter["version"] == "0.1.0"
+            expected_version = "0.1.1" if skill_name == "supervisor-decomposition" else "0.1.0"
+            assert frontmatter["version"] == expected_version
             assert isinstance(frontmatter["author"], str) and frontmatter["author"]
             assert frontmatter["license"] == "MIT"
             expected_platforms = (

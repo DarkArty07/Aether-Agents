@@ -1531,7 +1531,9 @@ def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_ba
         cwd=primary,
         check=True,
     )
-    subprocess.run(("git", "config", "user.email", "test@example.invalid"), cwd=worktree, check=True)
+    subprocess.run(
+        ("git", "config", "user.email", "test@example.invalid"), cwd=worktree, check=True
+    )
     subprocess.run(("git", "config", "user.name", "Test"), cwd=worktree, check=True)
 
     # Advance primary with a divergent commit to ensure HEADs differ
@@ -1552,11 +1554,15 @@ def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_ba
     session_db = hermes_home / "state.db"
     with sqlite3.connect(session_db) as connection:
         connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
-        connection.execute("INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-wt", str(worktree)))
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-wt", str(worktree))
+        )
 
     # 1. Author contract via plugin in session-wt
     begin_args = {"action": "begin", "project_id": PROJECT_A, "title": "Worktree Contract"}
-    begin_res = json.loads(hermes_plugin._handle(begin_args, session_id="session-wt", author_profile="morfeo"))
+    begin_res = json.loads(
+        hermes_plugin._handle(begin_args, session_id="session-wt", author_profile="morfeo")
+    )
     contract_id = begin_res["contract_id"]
 
     revision = 1
@@ -1638,7 +1644,11 @@ def test_session_worktree_authoring_preserves_primary_and_provisions_worktree_ba
     # Primary still unchanged
     assert (
         subprocess.run(
-            ("git", "status", "--porcelain"), cwd=primary, capture_output=True, text=True, check=True
+            ("git", "status", "--porcelain"),
+            cwd=primary,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
         == primary_status_before
     )
@@ -1678,10 +1688,14 @@ def test_session_worktree_authoring_supports_subdirectory_workspace(
     session_db = hermes_home / "state.db"
     with sqlite3.connect(session_db) as connection:
         connection.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT)")
-        connection.execute("INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-sub", str(subdir)))
+        connection.execute(
+            "INSERT INTO sessions (id, cwd) VALUES (?, ?)", ("session-sub", str(subdir))
+        )
 
     begin_args = {"action": "begin", "project_id": PROJECT_A, "title": "Subdir Session Contract"}
-    res = json.loads(hermes_plugin._handle(begin_args, session_id="session-sub", author_profile="morfeo"))
+    res = json.loads(
+        hermes_plugin._handle(begin_args, session_id="session-sub", author_profile="morfeo")
+    )
     assert "contract_id" in res
     assert (worktree / ".aether" / "drafts" / f"{res['contract_id']}.json").is_file()
     assert not (primary / ".aether" / "drafts").exists()
