@@ -416,7 +416,16 @@ jobs:
               ):
                   raise SystemExit(f'unsafe spec path: {name}')
               suffix = path.suffix.lower()
-              if suffix not in {'.json', '.md'}:
+              # Spec documents stay limited to portable .md/.json. A stage's own
+              # executable diagnostics/fixtures are admitted only under that stage's
+              # ``fixtures/`` directory, because a finalized Objective Contract names
+              # those fixtures as canonical verification inputs (for example
+              # ``specs/006-tools-memory-stability/fixtures/binding_privacy_probe.py``).
+              # Every other check below (mode, path safety, NUL bytes, UTF-8, secret
+              # scan) still applies to those files.
+              if suffix not in {'.json', '.md'} and not (
+                  suffix == '.py' and 'fixtures' in path.parts
+              ):
                   raise SystemExit(f'unsupported spec extension: {name}')
               data = Path(name).read_bytes()
               if b'\0' in data:
