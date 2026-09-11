@@ -102,9 +102,12 @@ with the prune trigger configured) is a **legacy inline-FTS** install:
   (`hermes_state_common.py:478-560`).
 - The six `messages_fts*` triggers are present with the #305 8192-character
   tool-content bound and the **legacy inline** `AFTER UPDATE OF content, tool_name,
-  tool_calls, role` forms (`hermes_state_common.py:660-661`, `:688-689`) — not the
-  narrower v23 external-content forms; no CJK objects; no `fts_stale`
-  breadcrumb; no `last_auto_prune` / `last_vacuum` markers on any profile store.
+  tool_calls, role` forms on both update triggers (`hermes_state_common.py:660-661`,
+  `:688-689`) — not the v23 external-content shapes, whose `messages_fts_update`
+  takes `AFTER UPDATE OF content, tool_name, tool_calls` (`:510-511`) and whose
+  `messages_fts_trigram_update` takes the same four-column list (`:579-580`); no CJK
+  objects; no `fts_stale` breadcrumb; no `last_auto_prune` / `last_vacuum` markers on
+  any profile store.
 - On the session that failed first, the store holds **21,706 rows: 20,660 archived
   (`active = 0, compacted = 1`) and 1,046 live**, distributed over **29 contiguous
   insert runs larger than 50 rows, growing from 59 to 1,801 rows**. Contiguous ids
@@ -232,13 +235,15 @@ and rollback; move pure preparation outside the writer transaction where suffici
      counter/model-config patch. `active`/`compacted` flips do not fire the FTS update
      triggers in either trigger family, so this final transaction is cheap — the
      affected store's **legacy inline** family is
-     `AFTER UPDATE OF content, tool_name, tool_calls, role`
-     (`hermes_state_common.py:660-661`, `:688-689`), and the v23 external-content
-     family (`:510-511`, `:579-580`) excludes the same flips with the narrower
-     `AFTER UPDATE OF content, tool_name, tool_calls` list plus its `WHEN` gate. The
-     operative claim is identical for both because neither family lists `active`,
-     `compacted`, `id` or the counters; readers observe complete-old or
-     complete-new, never partial.
+     `AFTER UPDATE OF content, tool_name, tool_calls, role` on both update triggers
+     (`hermes_state_common.py:660-661`, `:688-689`). The v23 external-content family
+     is not uniform: `messages_fts_update` takes `AFTER UPDATE OF content, tool_name,
+     tool_calls` (`:510-511`) behind its `WHEN` gate (`:512-518`), while
+     `messages_fts_trigram_update` takes the same four-column list as the legacy
+     family (`:579-580`) behind its `WHEN` gate (`:581-587`). Both exclude the same
+     flips because no update trigger's column list — three columns in that one v23
+     case, four everywhere else — contains `active`, `compacted`, `id` or the
+     counters; readers observe complete-old or complete-new, never partial.
    - `append_messages_batch`'s `chunk_rows` (`:9234-9241`) and the chunked FTS rebuild
      engine (`:4392-4424`) are the existing in-repo discipline to reuse.
    The bound lives in `archive_and_compact` — the publication writer — not in each
