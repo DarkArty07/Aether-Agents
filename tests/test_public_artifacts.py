@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -125,3 +126,20 @@ def test_readme_is_a_current_beta_portal_and_package_metadata_is_stable() -> Non
         "aether-objective-contracts",
         "aether-project-knowledge",
     }
+
+
+def test_historical_contract_oc_0084270d940c98d9_tombstone_preserves_locator() -> None:
+    tombstone = ROOT / ".aether" / "objective-contracts" / "oc_0084270d940c98d9" / "tombstone.json"
+    assert tombstone.is_file()
+    assert not (ROOT / ".aether" / "objective-contracts" / "oc_0084270d940c98d9" / "v1.md").exists()
+    payload = json.loads(tombstone.read_text(encoding="utf-8"))
+    assert (
+        payload["original_sha256"]
+        == "7447fd890a24f6c7a82ca03f6b4aa7a992299d1beda2c78e078b5c6f578812cb"
+    )
+    assert payload["historical_commit_locator"] == "dad66f7e592b6a172ba9168f63df5080e7a31ec2"
+    assert (
+        payload["superseding_safe_locator"]
+        == ".aether/objective-contracts/oc_0084270d940c98d9/tombstone.json"
+    )
+    assert "403" in payload["reason"]
