@@ -62,22 +62,32 @@ breakdown and coverage map.
 ```text
 t_b92559c8 (Supervisor decomposition root)
     ├─ PR8-CRON      (implementer, fork lane: #372 + #393 + #388-framework)
+    │     └─ PR8-CRON-REVIEW      (supervisor, independent unit review)
     ├─ PR8-CONTRACT  (implementer, Aether: #388 fail-closed boundary)
+    │     └─ PR8-CONTRACT-REVIEW  (supervisor)
     ├─ PR8-REVIEW    (implementer, fork lane: #385 guidance)
+    │     └─ PR8-REVIEW-REVIEW    (supervisor)
     ├─ PR8-CI        (implementer, Aether: #357 disposition + #403)
+    │     └─ PR8-CI-REVIEW        (supervisor)
     ├─ PR8-CONSUME   (implementer, BLOCKED: external oc_291b2fb34b413d92@v2)
+    │     └─ PR8-CONSUME-REVIEW   (supervisor)
     └─ PR8-LEDGER    (implementer, Aether ledger lane; parents: PR8-CRON, PR8-REVIEW)
-            ↓ all independently reviewed
+          └─ PR8-LEDGER-REVIEW    (supervisor)
+
     PR8-INT (supervisor, terminal: integrate, publish, activate, canary, close)
+      parents: root + all six review cards
 ```
 
 Edges and why they exist:
 
+- One review card per implementation unit (`plan.md` §D2): the implementation card's
+  named child is an explicit review card, so completing it is the correct handoff even
+  under the still-ambiguous worker guidance, and no unit can reach `done` unreviewed.
 - `PR8-LEDGER → {PR8-CRON, PR8-REVIEW}`: it needs the exact pushed fork candidate
   revisions and it is the only writer of the shared ledger/digest surface. No other
   edge is inferred from listing order.
-- `PR8-INT → {root, PR8-CRON, PR8-CONTRACT, PR8-REVIEW, PR8-CI, PR8-LEDGER, PR8-CONSUME}`:
-  integration consumes independently reviewed units plus the external consume gate.
+- `PR8-INT → {root, six review cards}`: integration consumes independently reviewed
+  units plus the external consume gate, never an unreviewed implementation card.
 - `PR8-CONSUME` has **no** parent edge and starts `blocked`: a parent edge would
   auto-promote it when the root completes, which would defeat the external gate.
 
@@ -93,7 +103,16 @@ fourth. `PR8-LEDGER` is serialized by the shared ledger surface, not by preferen
 4. Regression-first: identical focused tests RED on the pristine base and GREEN on the candidate. Fork suites run with `HERMES_TEST_FILE_RETRIES=0`. No pass-on-retry, skip, timeout increase, `PYTHONPATH` runtime workaround, real credential, live board, production DB or paid model as fixture.
 5. Writable-file ownership is exclusive. A needed edit outside the unit's surface returns to Supervisor instead of being taken.
 6. Unit evidence is `specs/pragmatic-reliability-eight/evidence/PR8-<unit>.md` on the unit branch, unique per unit. No secrets, operator-local paths, private destinations or raw private model output in evidence or artifacts.
-7. Same-card independent review: `kanban_request_review(reviewer="supervisor")` with the structured handoff. A bounded correction returns through `kanban_request_changes`; a material design question returns to Supervisor/Morfeo.
+7. **Review topology while #385 is still inactive.** The activated worker guidance
+   treats *any* pre-created dependent child as sufficient reason to `kanban_complete`
+   instead of requesting review, which is exactly the #385 defect. Every unit therefore
+   gets its own pre-created Supervisor review card (the contract's `plan.md` §D2
+   two-card lane): the implementation card completes because its named child is an
+   explicit review card, and the terminal card depends on review cards, never directly
+   on unreviewed implementation cards. The reviewer issues its verdict from that review
+   card's own claimed run. A bounded correction returns as a new linked rework card
+   gated into the review card, not as an inline same-card round.
+
 8. Implementation units do not merge, do not open/merge the Aether PR and do not close issues. Fork units may push their feature branch and open the fork PR only (no merge).
 9. `HERMES_LOCAL_PATCHES.md`, `patches/hermes/**`, `specs/001-aether-v1-productization/evidence/hermes-patch-reconciliation/**`, `scripts/validate_hermes_patch_reconciliation.py` and `tests/test_hermes_patch_reconciliation.py` are `PR8-LEDGER`-exclusive.
 10. Local judgement belongs to the implementer (private helper names, fixture arrangement, equivalent reversible structure, whether to extend an owned test file). Public result shape, issue attribution, shared interfaces, acceptance oracles and preservation gates may not vary.
