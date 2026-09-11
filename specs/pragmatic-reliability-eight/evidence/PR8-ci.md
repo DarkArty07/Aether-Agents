@@ -88,7 +88,7 @@ Execution used the repository's own canonical entry points:
 
 ### 3.1 Defect Analysis
 
-- Historical finalized contract `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (introduced at commit `dad66f7e592b6a172ba9168f63df5080e7a31ec2`) contained operator-local path data (an absolute user home path and desktop project layout) and destination data (`Telegram DM 5275738997`), triggering the public-artifact scanner with `absolute-user-home` and `operator-desktop-layout` violations.
+- Historical finalized contract `.aether/objective-contracts/oc_0084270d940c98d9/v1.md` (introduced at commit `dad66f7e592b6a172ba9168f63df5080e7a31ec2`) contained operator-local path data (an absolute user home path and desktop project layout) and destination data (a private messaging destination identifier (redacted)), triggering the public-artifact scanner with `absolute-user-home` and `operator-desktop-layout` violations.
 - Because finalized contracts are immutable Git objects, rewriting the historical file in place or rewriting Git history is forbidden.
 - Per contract instructions: remove the unsafe bytes from the current tracked artifact set and establish a portable tombstone/redaction receipt.
 
@@ -241,3 +241,4 @@ Audit properties:
 - Child review card: `PR8-CI-REVIEW` (`t_f23c6d5f`) is pre-created and ready to claim upon completion of this task.
 - Per card instructions, `kanban_complete` is called directly without `kanban_request_review`.
 - No remote branches were pushed and no GitHub PR was opened (publication belongs to PR8-INT).
+- PR8-CI-REWORK-2: redacted the private messaging destination identifier previously cited in Section 3.1; no destination identifiers remain in tracked evidence or artifacts.
