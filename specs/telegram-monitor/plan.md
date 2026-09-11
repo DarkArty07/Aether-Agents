@@ -261,9 +261,12 @@ per affected report cut. Manual off blocks both narrative and retry delivery.
 The owner-approved [qualification-isolation.md](qualification-isolation.md) defines the
 remaining live path and preserved previous revisions. It replaces shared-registry
 substitution with a private native scheduler-only laboratory, preserving the production
-installation. Exactly one initial smoke, two active native hourly cuts and a following
-native idle cut prove laboratory behavior. Independently verify the same candidate's
-first hourly report on the existing production gateway before terminal acceptance.
+installation. Exactly one initial smoke, two active native minute-scheduled cuts and a following
+minute-scheduled idle cut prove laboratory behavior under D16. Independently verify the
+same candidate's first natural hourly report on the existing production gateway before
+terminal acceptance. Deterministic controls retain the exact `0 * * * *`, DST/restart and
+drift proofs; the lab uses `* * * * *` only in its private cron store through the native
+update interface, never a fake clock or scheduler.
 A second temporary native scheduler instance is allowed only inside this private lab;
 no second service/receiver/dispatcher or custom scheduling engine is authorized.
 Retain private test evidence and stop the runner; do not self-delete or restore the

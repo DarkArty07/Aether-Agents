@@ -85,3 +85,16 @@ effect. Pre-effect recovery remains bounded and reversible; any failure after ex
 qualification effects begin stops without an automatic rerun. This is authority to run
 the existing accepted test, not evidence that it passed or authority to change the
 candidate, destination, credentials, provider/model or acceptance criteria.
+
+## D16 — accelerated laboratory temporal oracle
+
+The owner rejected the multi-hour lab wait as disproportionate and requested simulation.
+Inspection of the provisioned native scheduler confirmed `compute_next_run` resolves
+`* * * * *` to the next minute and `0 * * * *` to the next hour, and `update_job`
+recomputes stored due state through the supported cron interface. D16 therefore keeps the
+system clock and scheduler real but changes only the private lab job to minute cadence:
+two active and one idle cut in minutes. Production remains hourly and one natural
+production due/report/ack remains mandatory. Lab receipts must name their actual cadence
+and cannot claim elapsed-hour evidence. This authoring performed no scheduler/model/send
+operation and did not change the in-flight D15R review; it only prevented another old-plan
+live run while v4 is finalized.

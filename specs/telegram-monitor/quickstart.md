@@ -104,11 +104,14 @@ No CLI token/model/recipient overrides or persisted credential copies.
 The supported native scheduler runs only the private lab profile; no receiver, dispatcher,
 custom scheduler or permanent service. The production gateway and projects are untouched.
 
-Perform one bounded initial smoke, then two actual hourly active cuts and a subsequent
-native idle cut. Native synthetic source records cover the original identity/lifecycle,
+Perform one bounded initial smoke, then use the isolated native job at `* * * * *` for
+two actual minute-boundary active cuts and a subsequent minute-boundary native idle cut.
+Production remains `0 * * * *`; no system clock change, fake scheduler or manual tick is
+accepted. Native synthetic source records cover the original identity/lifecycle,
 D12 narrative corpus, blocked/unchanged, short-lived final and direct-work scenarios.
 Keep projects registered after their work finishes; unreadable source state is not idle.
-Manual triggering never substitutes for hourly evidence. Preserve existing pickup,
+The receipt labels the accelerated lab schedule and never calls it production-hourly
+evidence. Manual triggering never substitutes for scheduled evidence. Preserve existing pickup,
 lateness, inference/fallback and timeout bounds. Do not retry live calls indefinitely.
 
 Stop the lab scheduler/job cooperatively and retain private receipts/root as declared
@@ -126,7 +129,9 @@ product lifecycle/native interfaces. Rollback disables only the feature and pres
 monitor receipts and all unrelated work; no destructive database cleanup.
 
 After the independently accepted laboratory, verify the exact candidate on the existing
-production gateway with the full D3 real scope and a first normal hourly report/ack.
+production gateway with the full D3 real scope and exactly one first normal hourly
+due execution/report/ack. This one natural production cut is the hourly wall-clock oracle;
+the lab supplies the accepted idle behavior, so no second idle production hour is required.
 Do not copy lab job IDs, cursors, source records or acceptance state into production; do
 not hide real work to force idle. If there is no reportable real work, keep first-delivery
 acceptance pending rather than fabricate an outcome. A cached incompatible gateway

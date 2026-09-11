@@ -77,6 +77,33 @@ experiment with evidence and no automatic rerun. This authorization does not per
 different candidate, destination, provider/model change, credential widening, weakened
 acceptance, fabricated receipt or unbounded retry loop.
 
+### D16 proportionate accelerated laboratory schedule
+
+The owner rejected the multi-hour laboratory wait as disproportionate and selected an
+accelerated temporal oracle. Production cadence remains exactly `0 * * * *`. After the
+normal monitor service creates and validates the isolated lab job, the harness uses the
+native `cron.jobs.update_job` interface **inside the private lab store only** to set that
+job's qualification schedule to `* * * * *`. The same native `get_due_jobs` and
+`InProcessCronScheduler` then cross real minute boundaries: two active cuts followed by
+one idle cut. Do not change the system clock, monkeypatch a fake scheduler clock, invoke
+manual/forced ticks as evidence, build another scheduler or use this accelerated schedule
+in production.
+
+The existing `--wait-hourly-boundaries 2` spelling is retained only to avoid expanding the
+unfinished private harness interface; under D16 it selects two hourly-behavior scenarios
+executed on accelerated **lab scheduled boundaries**, not evidence of elapsed hours. The
+receipt must state the actual lab cron expression and timestamps and must never label
+those cuts as production-hourly evidence. Deterministic tests separately prove the fixed
+production job shape `0 * * * *`, schedule calculation, DST/restart and drift refusal.
+
+After independent laboratory acceptance, activate the exact candidate with `0 * * * *`
+on the existing production gateway and observe one natural hourly due execution and real
+Telegram acknowledgment. That single production cut is the only wall-clock hourly oracle;
+it is not replaced by the minute laboratory. No second production idle hour is required:
+the idle behavior is accepted from the real native scheduler/monitor/transport path in the
+isolated lab plus deterministic controls. Maximum unavoidable wait after production
+activation is one hour, plus ordinary delivery and GitHub closeout.
+
 This is operational isolation for cooperating processes and controlled paths, not an OS sandbox against a malicious process of the same user. Production state may legitimately change because other agents work; do not demand that all production files remain byte-identical. The harness itself must never replace, restore, quarantine, merge or delete the production registry.
 
 ## Live sequence and budget
@@ -89,17 +116,20 @@ uv run --frozen python scripts/qualify_telegram_monitor.py --live \
   --wait-hourly-boundaries 2 --output "$PRIVATE_EVIDENCE/telegram-monitor-live.json" --json
 ```
 
-Without `--live`, there are zero model/sender calls. `2` means two active wall-clock hourly cuts, followed by one naturally scheduled idle cut. Existing D2 pickup/lateness tolerances remain unchanged.
+Without `--live`, there are zero model/sender calls. `2` means two active lab scheduled
+boundaries, followed by one lab idle boundary. Under D16 these are real minute boundaries
+on the private `* * * * *` job; production remains hourly. Existing D2 pickup/lateness
+tolerances apply relative to the actual schedule being observed.
 
 - First run deterministic/static/exact-runtime gates and bootstrap preflight.
 - One initial bounded native model/transport smoke, labeled test; not a substitute for a scheduled boundary. Preserve the existing lead-time/deadline limits so the smoke cannot be counted as the first cut.
-- First natural cut: two projects/origins/contracts, a completed decomposition root with open descendant, review/blocked/unchanged work, and direct no-contract work. Cover the existing D12 semantic corpus within the smoke/hourly narratives; independently assess fidelity, not only structural validation.
+- First accelerated lab cut: two projects/origins/contracts, a completed decomposition root with open descendant, review/blocked/unchanged work, and direct no-contract work. Cover the existing D12 semantic corpus within the smoke/lab narratives; independently assess fidelity, not only structural validation.
 - Between cuts: create a short-lived work interval and finish it; complete the other synthetic scenarios through supported lifecycle. Do not directly edit source SQL or fabricate closure evidence.
-- Second natural cut: report pending final outcomes once with correct period/identity and actual native Telegram acknowledgments. Keep projects registered; only their work terminates.
-- Next natural cut: same registered projects, genuinely no work and no unreported outcome. Require the native silent gate, zero new narration and zero new send. Unreadable/ambiguous source state is not idle.
+- Second accelerated lab cut: report pending final outcomes once with correct period/identity and actual native Telegram acknowledgments. Keep projects registered; only their work terminates.
+- Next accelerated lab cut: same registered projects, genuinely no work and no unreported outcome. Require the native silent gate, zero new narration and zero new send. Unreadable/ambiguous source state is not idle.
 - Preserve manual-off/idempotence/recovery controls. Induce network/fault/concurrency cases only through deterministic adapters and test-owned roots, never the owner's real transport or shared state.
 
-Budget is one smoke plus at most one normal narration per active lab digest, with existing provisioned fallback/agent bounds. One narration may contain multiple tool/model requests; do not misreport this as one HTTP call. The idle cut consumes none. No automatic live rerun loop. A failed qualification stops with evidence; a retry needs the corrected cause and an explicit remaining budget within approved authority. Scheduler lifetime is bounded by the planned cuts plus existing tolerances; closing the test TUI must not stop it.
+Budget is one smoke plus at most one normal narration per active lab digest, with existing provisioned fallback/agent bounds. One narration may contain multiple tool/model requests; do not misreport this as one HTTP call. The idle cut consumes none. No automatic live rerun loop. A failed qualification stops with evidence; a retry needs the corrected cause and an explicit remaining budget within approved authority. Scheduler lifetime is bounded to the three accelerated lab boundaries plus existing tolerances; closing the test TUI must not stop it.
 
 ## Receipt, shutdown and retention
 

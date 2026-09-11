@@ -87,6 +87,17 @@ This explicit method/authority amendment supersedes v1's blanket second-schedule
 only for the isolated bounded test, and requires Objective Contract v2. Preserve the
 reviewed code/commits; Supervisor owns the remaining continuation and its review.
 
+### D16 — Accelerated lab boundaries and one real production hour
+
+The owner replaced the disproportionate multi-hour laboratory wait. The private lab uses
+the native scheduler on `* * * * *` for two active and one idle real minute boundaries;
+production remains exactly `0 * * * *` and supplies one natural hourly execution after
+activation. No system-clock mutation, fake scheduler, manual tick evidence or production
+cadence change is allowed. Lab receipts label the accelerated expression/timestamps and
+cannot claim elapsed-hour evidence. Deterministic schedule/DST/restart controls plus the
+single production cut preserve the original hourly product oracle. Objective Contract v4
+supersedes v3 for this testing-standard change.
+
 ## Acceptance criteria
 
 | ID | Observable outcome |
@@ -121,4 +132,4 @@ identical destination/route. No credential value is copied or accepted as CLI in
 The preserved preflight refusal consumed no live budget; one corrected attempt is allowed
 after independent review, and a later live failure stops normally.
 
-Objective Contract `oc_f8c9fc9320587cf3@v3` supersedes v2 with D14 at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md`; immutable v1 and v2 remain preserved. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
+Objective Contract `oc_f8c9fc9320587cf3@v4` supersedes v3 with D16 at `.aether/objective-contracts/oc_f8c9fc9320587cf3/v4.md`; immutable v1/v2/v3 remain preserved. This is executable design and authority, not implementation or qualification success. Supervisor receipt review and execution are separate evidence.
