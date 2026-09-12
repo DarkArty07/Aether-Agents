@@ -7,12 +7,27 @@ They isolate inherited dispatcher routing as well as HERMES_HOME.
 from __future__ import annotations
 
 import inspect
+import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 from hermes_cli import goals
 from hermes_cli import kanban_db as kb
+
+from aether_agents.lifecycle import HERMES_BASELINE, verify_clean_checkout
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_baseline_checkout() -> Path:
+    configured = os.environ.get("AETHER_EXACT_HERMES_CHECKOUT")
+    if configured:
+        return Path(configured).expanduser()
+    cache_home = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return cache_home / "aether-agents" / "hermes" / HERMES_BASELINE.tag
 
 
 @pytest.fixture
@@ -122,13 +137,17 @@ def _stable_contract(task) -> dict:
     }
 
 
-def test_initial_review_requires_an_independent_reviewer(isolated_board) -> None:
-    """A same-card implementer cannot leave its review run self-claimable."""
+def test_unpatched_baseline_lacks_independent_review_ownership(isolated_board) -> None:
+    """The unpatched public baseline does not require an independent reviewer.
+
+    This documents why the unpatched baseline cannot satisfy downstream same-card
+    review invariants without HLP-362: omitting reviewer succeeds on baseline.
+    """
     conn = isolated_board
     task_id = kb.create_task(
         conn,
-        title="Require independent review",
-        body="The implementing profile must not approve its own candidate.",
+        title="Baseline review request",
+        body="Baseline allows requesting review without reviewer.",
         assignee="implementer",
         created_by="supervisor",
     )
@@ -138,20 +157,100 @@ def test_initial_review_requires_an_independent_reviewer(isolated_board) -> None
     ok, reason = kb.request_review(
         conn,
         task_id,
+        summary="Implementation ready.",
+        expected_run_id=implementation.current_run_id,
+        with_reason=True,
+    )
+    assert ok is True
+    assert reason is None
+
+
+def test_initial_review_requires_an_independent_reviewer(tmp_path: Path) -> None:
+    """A same-card implementer cannot leave its review run self-claimable.
+
+    The Aether test suite must not falsely expect an unpatched upstream baseline
+    to provide downstream behavior. Instead, this test verifies the portable patch
+    (HLP-362) against a disposable authenticated baseline candidate.
+    """
+    patch_path = ROOT / "patches" / "hermes" / "HLP-362-independent-review-ownership.patch"
+    assert patch_path.is_file(), f"HLP-362 portable patch missing at {patch_path}"
+
+    candidate_dir = tmp_path / "hermes_candidate"
+    evidence = verify_clean_checkout(_resolve_baseline_checkout())
+    subprocess.check_call(
+        [
+            "git",
+            "-c",
+            "advice.detachedHead=false",
+            "clone",
+            "--shared",
+            "-q",
+            str(evidence.path),
+            str(candidate_dir),
+        ]
+    )
+    subprocess.check_call(["git", "apply", str(patch_path)], cwd=candidate_dir)
+
+    board_dir = tmp_path / "hermes_home"
+    board_dir.mkdir(exist_ok=True)
+    test_script = """
+import json, os, sys
+from pathlib import Path
+from hermes_cli import kanban_db as kb
+
+board_dir = Path(os.environ["HERMES_HOME"])
+db_path = board_dir / "kanban.db"
+kb.init_db(db_path=db_path)
+with kb.connect_closing(db_path=db_path) as conn:
+    task_id = kb.create_task(
+        conn,
+        title="Require independent review",
+        body="The implementing profile must not approve its own candidate.",
+        assignee="implementer",
+        created_by="supervisor",
+    )
+    implementation = kb.claim_task(conn, task_id, claimer="implementer:1")
+    assert implementation is not None
+    ok, reason = kb.request_review(
+        conn,
+        task_id,
         summary="Implementation and focused tests are ready.",
         expected_run_id=implementation.current_run_id,
         with_reason=True,
     )
-
-    assert ok is False
-    assert reason is not None
-    assert "reviewer" in reason
     task = kb.get_task(conn, task_id)
-    assert task is not None
-    assert task.status == "running"
-    assert task.assignee == "implementer"
-    assert task.current_run_id == implementation.current_run_id
-    assert task.claim_lock is not None
+    result = {
+        "ok": ok,
+        "reason": reason,
+        "status": task.status if task else None,
+        "assignee": task.assignee if task else None,
+        "current_run_id": task.current_run_id if task else None,
+        "has_claim_lock": (task.claim_lock is not None) if task else False,
+        "implementation_run_id": implementation.current_run_id,
+    }
+    print(json.dumps(result))
+"""
+    env = dict(os.environ)
+    for name in tuple(env):
+        if name.startswith("HERMES_KANBAN_"):
+            env.pop(name, None)
+    env["HERMES_HOME"] = str(board_dir)
+    env["PYTHONPATH"] = str(candidate_dir)
+    proc = subprocess.run(
+        [sys.executable, "-c", test_script],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(proc.stdout)
+    assert data["ok"] is False
+    assert data["reason"] is not None
+    assert "reviewer" in data["reason"]
+    assert data["status"] == "running"
+    assert data["assignee"] == "implementer"
+    assert data["current_run_id"] == data["implementation_run_id"]
+    assert data["has_claim_lock"] is True
 
 
 def test_same_card_cycle_preserves_contract_candidate_budget_and_history(

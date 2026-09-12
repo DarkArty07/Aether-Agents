@@ -1,0 +1,83 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460",
+        "kind": "patch",
+        "ledger_sha256": "d81191d1727361528864498d2ee41a3c9fa95302559932e300a7c15e6838f460",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and PR #10 candidate passed, but public upstream equivalence remains unavailable because upstream lacks cron commissioning origin and kanban auto-subscription.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "Upstream does not capture or restore durable commissioning origin for cron-spawned tasks at the inspected revision."
+  ],
+  "components": [
+    "HLP-393",
+    "cron/jobs.py",
+    "cron/scheduler.py",
+    "gateway/session_context.py",
+    "tools/cronjob_tools.py",
+    "tools/kanban_tools.py",
+    "tests/cron/test_cron_commissioning_origin_393.py"
+  ],
+  "id": "HLP-393",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-393--trusted-commissioning-origin-and-kanban-auto-subscription",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "Creating a cron job from a TUI/desktop or gateway session captures a trusted durable commissioning origin; at fire time that origin is restored only as a request-local context consumed by Kanban auto-subscription, reporting subscribed=true, persisting exactly the originating subscription, and waking that origin once on terminal flow.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_commissioning_origin_393.py on pristine base 6551b7c31cc665d59103c6d89cb5e0c60666f803",
+        "result": "5 of 8 tests fail (notification_origin is None, auto-subscription returns False)."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/cron/test_cron_commissioning_origin_393.py on candidate 4fc5141f8d764f1dbc2b4d37128b5351b8d0aa62",
+        "result": "8 passed in 1.45s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release captures trusted commissioning origin at create time, restores it as request-local context during cron execution, and passes the #393 test suite without downstream patches."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-393. Cron jobs commissioned from TUI or gateway capture durable origin, restored at fire time as request-local context so spawned Kanban root tasks auto-subscribe and wake the exact origin upon completion.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/cron/jobs.py",
+        "result": "The inspected revision captures no notification_origin on cron jobs and has no request-local origin restoration for Kanban auto-subscription at fire time (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/393"
+      },
+      {
+        "kind": "pull_request",
+        "url": "https://github.com/DarkArty07/aether-hermes/pull/10"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}

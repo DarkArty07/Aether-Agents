@@ -65,6 +65,7 @@ jobs:
           .aether/objective-contracts/oc_ba23edf6f74b7b43/v1.md
           .aether/objective-contracts/oc_c0abec2179f6b09c/v1.md
           .aether/objective-contracts/oc_c53c85ffb6c24f69/v1.md
+          .aether/objective-contracts/oc_c780a10d94b78d85/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v1.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v2.md
           .aether/objective-contracts/oc_d7d067bf87e67cba/v3.md
@@ -77,7 +78,7 @@ jobs:
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v3.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v4.md
           .aether/objective-contracts/oc_f8c9fc9320587cf3/v5.md
-          .aether/objective-contracts/oc_0084270d940c98d9/v1.md
+          .aether/objective-contracts/oc_0084270d940c98d9/tombstone.json
           .aether/objective-contracts/oc_fd2332ffe34aa5f7/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v1.md
           .aether/objective-contracts/oc_fd5b84ea7e9ceb96/v2.md
@@ -132,6 +133,11 @@ jobs:
           patches/hermes/HLP-305-tui-lease-refresh-contention.patch
           patches/hermes/HLP-310-delegated-child-snapshot-exclusion.patch
           patches/hermes/HLP-354-kanban-worktree-base-ref.patch
+          patches/hermes/HLP-362-independent-review-ownership.patch
+          patches/hermes/HLP-372-profile-cron-script-root.patch
+          patches/hermes/HLP-385-review-topology-guidance.patch
+          patches/hermes/HLP-388-cron-session-launch-workdir.patch
+          patches/hermes/HLP-393-cron-commissioning-origin-subscription.patch
           patches/hermes/HLP-369-goal-mode-review-recovery.patch
           patches/hermes/HLP-275-aux-image-prep-cap.patch
           patches/hermes/HLP-382-bounded-transcript-publication.patch

@@ -1,0 +1,562 @@
+diff --git a/cron/jobs.py b/cron/jobs.py
+index 766209148d..d9415a7d57 100644
+--- a/cron/jobs.py
++++ b/cron/jobs.py
+@@ -1791,7 +1791,11 @@ def create_job(
+     # `cronjob` model tool — which calls create_job directly — is also
+     # covered, not just `hermes cron create`.
+     from cron.lifecycle_guard import check_gateway_lifecycle
+-    check_gateway_lifecycle(prompt_text, normalized_script)
++    check_gateway_lifecycle(
++        prompt_text,
++        script=normalized_script,
++        monitor_script=normalized_monitor_script,
++    )
+ 
+     label_source = (prompt_text or (normalized_skills[0] if normalized_skills else None) or (normalized_script if normalized_no_agent else None)) or "cron job"
+ 
+diff --git a/cron/lifecycle_guard.py b/cron/lifecycle_guard.py
+index ec7e54974d..c7b71cf447 100644
+--- a/cron/lifecycle_guard.py
++++ b/cron/lifecycle_guard.py
+@@ -656,35 +656,17 @@ def contains_gateway_lifecycle_command_or_referenced_script(
+ 
+ 
+ def _resolve_script_path(script_path: str) -> Optional[Path]:
+-    """Resolve a cron ``script`` value the same way the scheduler does.
+-
+-    The scheduler (``cron.scheduler``) resolves a bare/relative script path
+-    under ``<HERMES_HOME>/scripts/`` and only accepts absolute paths as-is.
+-    We MUST mirror that here so the guard scans the file that will actually
+-    run — otherwise a job whose script lives at the scheduler's real location
+-    (``~/.hermes/scripts/restart.sh``) but is passed as the bare name
+-    ``restart.sh`` would read as a nonexistent relative path and silently
+-    scan prompt-only content, letting the command through.
+-
+-    Returns ``None`` for values that cannot be a real path (NUL bytes,
+-    unexpandable ``~``) — the same ingestion contract as
+-    ``_expand_candidate_path``; such a value can never name a file the
+-    scheduler would execute, so there is nothing to scan.
++    """Resolve a cron ``script`` or ``monitor_script`` value (#372).
++
++    Uses the shared profile-scoped script root resolver so the guard scans
++    the file that execution will actually run under the active profile.
+     """
+-    from hermes_constants import get_hermes_home
++    from cron.script_root import resolve_cron_script_path
+ 
+-    raw = _expand_candidate_path(script_path)
+-    if raw is None:
+-        return None
+-    if raw.is_absolute():
+-        return raw
+-    try:
+-        return get_hermes_home() / "scripts" / raw
+-    except (RuntimeError, OSError):
+-        # get_hermes_home() falls back to Path.home(), which raises when
+-        # neither HERMES_HOME nor HOME is resolvable (launchd/systemd
+-        # environments) — same ingestion contract: nothing to scan.
++    resolved, err = resolve_cron_script_path(script_path, for_execution=False)
++    if err or resolved is None:
+         return None
++    return resolved
+ 
+ 
+ def _read_script_for_scanning(script_path: str) -> str:
+@@ -706,25 +688,22 @@ def _read_script_for_scanning(script_path: str) -> str:
+ def check_gateway_lifecycle(
+     prompt: Optional[str],
+     script: Optional[str] = None,
++    monitor_script: Optional[str] = None,
+ ) -> None:
+-    """Raise ``GatewayLifecycleBlocked`` if *prompt* or *script* contains a
+-    gateway-lifecycle command pattern.
+-
+-    ``prompt`` is scanned directly.  ``script``, when supplied, is read from
+-    disk and concatenated for the scan.  Both are considered together so a
+-    job cannot slip through by splitting the command across the prompt and
+-    the script.
++    """Raise ``GatewayLifecycleBlocked`` if *prompt*, *script*, or *monitor_script* contains
++    a gateway-lifecycle command pattern.
+ 
+-    Callers should let the exception propagate when they want the create to
+-    fail with a ``ValueError``-shaped error (the agent's ``cronjob`` tool
+-    surfaces this as a tool error; the CLI prints it in red and exits 1).
++    ``prompt`` is scanned directly. ``script`` and ``monitor_script``, when supplied,
++    are read from disk and concatenated for the scan.
+     """
+     combined = prompt or ""
+     python_script = False
+-    if script:
+-        resolved_script = _resolve_script_path(script)
+-        python_script = resolved_script is not None and resolved_script.suffix == ".py"
+-        script_text = _read_script_for_scanning(script)
++    scripts_to_scan = [s for s in (script, monitor_script) if s]
++    for s in scripts_to_scan:
++        resolved_script = _resolve_script_path(s)
++        if resolved_script is not None and resolved_script.suffix == ".py":
++            python_script = True
++        script_text = _read_script_for_scanning(s)
+         if script_text:
+             combined = f"{combined}\n{script_text}"
+ 
+@@ -740,7 +719,8 @@ def check_gateway_lifecycle(
+         # via the lifecycle-shaped sentinel in _read_script_for_scanning.
+         unsafe = _lifecycle_command_scan_with_data_exemption(combined)
+     else:
+-        script_dir = _resolve_script_directory(script) if script else None
++        first_script = scripts_to_scan[0] if scripts_to_scan else None
++        script_dir = _resolve_script_directory(first_script) if first_script else None
+         unsafe = contains_gateway_lifecycle_command_or_referenced_script(
+             combined,
+             cwd=script_dir,
+diff --git a/cron/scheduler.py b/cron/scheduler.py
+index b67853200c..852ec57539 100644
+--- a/cron/scheduler.py
++++ b/cron/scheduler.py
+@@ -3147,39 +3147,11 @@ def _run_job_script(
+         (success, output) — on failure *output* contains the error message so the
+         LLM can report the problem to the user.
+     """
+-    scripts_dir = _get_hermes_home() / "scripts"
+-    scripts_dir.mkdir(parents=True, exist_ok=True)
+-    scripts_dir_resolved = scripts_dir.resolve()
++    from cron.script_root import resolve_cron_script_path
+ 
+-    try:
+-        raw = Path(script_path).expanduser()
+-    except (ValueError, RuntimeError, OSError):
+-        # Same ingestion contract as cron.lifecycle_guard: a NUL-bearing
+-        # value (ValueError) or an unexpandable ``~`` (RuntimeError with no
+-        # resolvable HOME) can never name a real script. The creation-time
+-        # guard tolerates such values as "nothing to scan", so they can
+-        # reach fire time — fail the run with a report instead of crashing
+-        # the scheduler with an unhandled exception.
+-        return False, f"Blocked: script path is not a valid filesystem path: {script_path!r}"
+-    if raw.is_absolute():
+-        path = raw.resolve()
+-    else:
+-        path = (scripts_dir / raw).resolve()
+-
+-    # Guard against path traversal, absolute path injection, and symlink
+-    # escape — scripts MUST reside within HERMES_HOME/scripts/.
+-    try:
+-        path.relative_to(scripts_dir_resolved)
+-    except ValueError:
+-        return False, (
+-            f"Blocked: script path resolves outside the scripts directory "
+-            f"({scripts_dir_resolved}): {script_path!r}"
+-        )
+-
+-    if not path.exists():
+-        return False, f"Script not found: {path}"
+-    if not path.is_file():
+-        return False, f"Script path is not a file: {path}"
++    path, error = resolve_cron_script_path(script_path, for_execution=True)
++    if error or path is None:
++        return False, error or "Blocked: invalid script path"
+ 
+     script_timeout = _get_script_timeout()
+ 
+diff --git a/tests/cron/test_cron_script_root_372.py b/tests/cron/test_cron_script_root_372.py
+new file mode 100644
+index 0000000000..d16643d44f
+--- /dev/null
++++ b/tests/cron/test_cron_script_root_372.py
+@@ -0,0 +1,185 @@
++"""Focused unit and regression tests for #372: One effective cron script root.
++
++Creation/update validation, lifecycle scanning, execution and user-facing diagnostics
++resolve `script` and `monitor_script` through ONE effective profile-scoped script-root contract.
++Relative paths stay confined to the active `HERMES_HOME/scripts`; absolute, home-relative,
++traversal, symlink-escape and non-regular targets fail closed. A create accepted for an
++existing script executes that same file (same inode/content). Error text names the
++effective profile root instead of the default-profile `~/.hermes/scripts` shorthand.
++Resolve the effective home at call time; no import-time/default-home capture.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++import pytest
++
++
++@pytest.fixture(autouse=True)
++def _reset_context_vars():
++    from gateway.session_context import _UNSET, _VAR_MAP
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++    yield
++    for v in _VAR_MAP.values():
++        v.set(_UNSET)
++
++
++@pytest.fixture
++def profile_env(tmp_path, monkeypatch):
++    """Isolated environment simulating a non-default profile (e.g. morfeo)."""
++    default_home = tmp_path / "default_hermes"
++    default_home.mkdir()
++    (default_home / "scripts").mkdir()
++    (default_home / "cron").mkdir()
++
++    profile_home = tmp_path / "profiles" / "morfeo"
++    profile_home.mkdir(parents=True)
++    (profile_home / "scripts").mkdir()
++    (profile_home / "cron").mkdir()
++    (profile_home / "cron" / "output").mkdir()
++
++    monkeypatch.setenv("HERMES_HOME", str(profile_home))
++    monkeypatch.setenv("HERMES_PROFILE", "morfeo")
++    monkeypatch.delenv("HERMES_KANBAN_TASK", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_KEY", raising=False)
++    monkeypatch.delenv("HERMES_UI_SESSION_ID", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_PLATFORM", raising=False)
++    monkeypatch.delenv("HERMES_SESSION_CHAT_ID", raising=False)
++
++    import cron.jobs as jobs_mod
++    monkeypatch.setattr(jobs_mod, "HERMES_DIR", profile_home)
++    monkeypatch.setattr(jobs_mod, "CRON_DIR", profile_home / "cron")
++    monkeypatch.setattr(jobs_mod, "JOBS_FILE", profile_home / "cron" / "jobs.json")
++    monkeypatch.setattr(jobs_mod, "OUTPUT_DIR", profile_home / "cron" / "output")
++
++    import cron.scheduler as sched_mod
++    monkeypatch.setattr(sched_mod, "_hermes_home", profile_home)
++
++    from hermes_cli import kanban_db as kb
++    kb._INITIALIZED_PATHS.clear()
++
++    return {
++        "default_home": default_home,
++        "profile_home": profile_home,
++        "profile_scripts": profile_home / "scripts",
++        "default_scripts": default_home / "scripts",
++    }
++
++
++class TestIssue372ScriptRoot:
++    def test_validation_rejects_absolute_path_and_names_effective_profile_root(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        profile_scripts = profile_env["profile_scripts"]
++        err = _validate_cron_script_path("/tmp/arbitrary.py")
++
++        assert err is not None
++        # Must fail closed on absolute paths
++        assert "must be relative" in err.lower()
++        # Must name the effective profile root instead of ~/.hermes/scripts/
++        assert str(profile_scripts) in err
++        assert "~/.hermes/scripts" not in err
++
++    def test_validation_rejects_home_relative_path(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        profile_scripts = profile_env["profile_scripts"]
++        err = _validate_cron_script_path("~/my_script.py")
++
++        assert err is not None
++        assert str(profile_scripts) in err
++        assert "~/.hermes/scripts" not in err
++
++    def test_validation_rejects_traversal(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        err = _validate_cron_script_path("../../etc/passwd")
++        assert err is not None
++        assert "escapes" in err.lower() or "traversal" in err.lower()
++
++    def test_validation_rejects_symlink_escape(self, profile_env, tmp_path):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        outside = tmp_path / "outside_evil.py"
++        outside.write_text('print("evil")\n')
++
++        symlink = profile_env["profile_scripts"] / "escaped_link.py"
++        try:
++            symlink.symlink_to(outside)
++        except OSError:
++            pytest.skip("Symlinks not supported in this environment")
++
++        err = _validate_cron_script_path("escaped_link.py")
++        assert err is not None
++        assert "escapes" in err.lower() or "symlink" in err.lower() or "traversal" in err.lower()
++
++    def test_validation_rejects_non_regular_target(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        subdir = profile_env["profile_scripts"] / "a_directory"
++        subdir.mkdir()
++
++        err = _validate_cron_script_path("a_directory")
++        assert err is not None
++        assert "not a regular file" in err.lower() or "not a file" in err.lower()
++
++    def test_validation_accepts_valid_relative_script(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++
++        script_file = profile_env["profile_scripts"] / "valid.py"
++        script_file.write_text('print("valid")\n')
++
++        err = _validate_cron_script_path("valid.py")
++        assert err is None
++
++    def test_create_accepted_script_executes_same_file_same_inode(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++        from cron.scheduler import _run_job_script
++
++        profile_script = profile_env["profile_scripts"] / "fingerprinted.py"
++        profile_script.write_text('print("profile-morfeo-unique-token-999")\n')
++
++        default_script = profile_env["default_scripts"] / "fingerprinted.py"
++        default_script.write_text('print("default-decoy-token-000")\n')
++
++        # Validation under active morfeo profile passes
++        err = _validate_cron_script_path("fingerprinted.py")
++        assert err is None
++
++        # Execution resolves under active profile, NOT default decoy
++        success, output = _run_job_script("fingerprinted.py")
++        assert success is True
++        assert "profile-morfeo-unique-token-999" in output
++        assert "default-decoy-token-000" not in output
++
++    def test_monitor_script_shares_identical_resolver_contract(self, profile_env):
++        from tools.cronjob_tools import _validate_cron_script_path
++        from cron.monitor import _run_monitor_source
++
++        profile_mon = profile_env["profile_scripts"] / "monitor_source.py"
++        profile_mon.write_text('print("hash-input-value-42")\n')
++
++        # Negative checks on monitor_script
++        assert _validate_cron_script_path("/tmp/outside_mon.py") is not None
++        assert _validate_cron_script_path("../../escape.sh") is not None
++
++        # Positive check
++        assert _validate_cron_script_path("monitor_source.py") is None
++
++        job = {"monitor_script": "monitor_source.py"}
++        ok, output = _run_monitor_source(job)
++        assert ok is True
++        assert "hash-input-value-42" in output
++
++    def test_lifecycle_scanning_resolves_profile_scripts_root(self, profile_env):
++        from cron.lifecycle_guard import check_gateway_lifecycle, GatewayLifecycleBlocked
++
++        bad_script = profile_env["profile_scripts"] / "restart_gateway.py"
++        bad_script.write_text('import os\nos.system("hermes gateway restart")\n')
++
++        with pytest.raises(GatewayLifecycleBlocked):
++            check_gateway_lifecycle(prompt="run monitor", script="restart_gateway.py")
++
++        with pytest.raises(GatewayLifecycleBlocked):
++            check_gateway_lifecycle(prompt="run monitor", monitor_script="restart_gateway.py")
+diff --git a/tools/cronjob_tools.py b/tools/cronjob_tools.py
+index 11c94b4772..1ec90d2569 100644
+--- a/tools/cronjob_tools.py
++++ b/tools/cronjob_tools.py
+@@ -579,42 +579,20 @@ def _validate_cron_base_url(
+ 
+ 
+ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
+-    """Validate a cron job script path at the API boundary.
++    """Validate a cron job script path at the API boundary (#372).
+ 
+-    Scripts must be relative paths that resolve within HERMES_HOME/scripts/.
+-    Absolute paths and ~ expansion are rejected to prevent arbitrary script
+-    execution via prompt injection.
++    Scripts must be relative paths that resolve within the active profile's
++    scripts directory. Absolute paths, ~ expansion, traversal, symlink escapes,
++    and non-regular files are rejected.
+ 
+     Returns an error string if blocked, else None (valid).
+     """
+     if not script or not script.strip():
+         return None  # empty/None = clearing the field, always OK
+ 
+-    from hermes_constants import get_hermes_home
++    from cron.script_root import validate_cron_script_path
+ 
+-    raw = script.strip()
+-
+-    # Reject absolute paths and ~ expansion at the API boundary.
+-    # Only relative paths within ~/.hermes/scripts/ are allowed.
+-    if raw.startswith(("/", "~")) or (len(raw) >= 2 and raw[1] == ":"):
+-        return (
+-            f"Script path must be relative to ~/.hermes/scripts/. "
+-            f"Got absolute or home-relative path: {raw!r}. "
+-            f"Place scripts in ~/.hermes/scripts/ and use just the filename."
+-        )
+-
+-    # Validate containment after resolution
+-    from tools.path_security import validate_within_dir
+-
+-    scripts_dir = get_hermes_home() / "scripts"
+-    scripts_dir.mkdir(parents=True, exist_ok=True)
+-    containment_error = validate_within_dir(scripts_dir / raw, scripts_dir)
+-    if containment_error:
+-        return (
+-            f"Script path escapes the scripts directory via traversal: {raw!r}"
+-        )
+-
+-    return None
++    return validate_cron_script_path(script)
+ 
+ 
+ def _format_job(job: Dict[str, Any]) -> Dict[str, Any]:
+diff --git a/cron/script_root.py b/cron/script_root.py
+new file mode 100644
+index 0000000000..49e3b0f981
+--- /dev/null
++++ b/cron/script_root.py
+@@ -0,0 +1,152 @@
++"""Canonical profile-scoped script root resolver for cron (#372).
++
++Shared contract across:
++- API / tool validation (cronjob_create, cronjob_update)
++- Gateway lifecycle scanning (cron.lifecycle_guard)
++- Scheduler and monitor execution (cron.scheduler, cron.monitor)
++- User-facing diagnostics
++
++Confines scripts to the active HERMES_HOME/scripts directory resolved dynamically
++at call time. Absolute, home-relative, traversal, symlink-escape, and non-regular
++targets fail closed. Error text names the effective profile root.
++"""
++
++from __future__ import annotations
++
++import os
++from pathlib import Path
++from typing import Optional
++
++
++def get_effective_scripts_dir() -> Path:
++    """Return the active profile-scoped scripts directory, resolved at call time.
++
++    Respects context-local overrides, HERMES_HOME, and scheduler test hooks.
++    """
++    from hermes_constants import get_hermes_home
++
++    try:
++        from cron import scheduler
++        if hasattr(scheduler, "_get_hermes_home") and callable(scheduler._get_hermes_home):
++            base = scheduler._get_hermes_home()
++        else:
++            base = getattr(scheduler, "_hermes_home", None) or get_hermes_home()
++    except Exception:
++        base = get_hermes_home()
++
++    scripts_dir = Path(base) / "scripts"
++    try:
++        scripts_dir.mkdir(parents=True, exist_ok=True)
++    except OSError:
++        pass
++    return scripts_dir
++
++
++def resolve_cron_script_path(
++    script_path: Optional[str],
++    *,
++    for_execution: bool = False,
++) -> tuple[Optional[Path], Optional[str]]:
++    """Resolve and validate a cron script path under the active scripts root.
++
++    Args:
++        script_path: The user-supplied or stored script string.
++        for_execution: When True, requires the target to exist and be a regular file,
++            and validates path confinement for execution. When False (validation mode),
++            rejects all absolute/home-relative paths, traversal, symlink escapes,
++            and existing non-regular targets.
++
++    Returns:
++        (resolved_path, error_message): Exactly one is non-None for a non-empty
++        input. If script_path is empty or None, returns (None, None).
++    """
++    if not script_path or not str(script_path).strip():
++        return None, None
++
++    raw = str(script_path).strip()
++    if "\0" in raw:
++        return None, f"Blocked: script path is not a valid filesystem path: {script_path!r}"
++
++    scripts_dir = get_effective_scripts_dir()
++    scripts_dir_resolved = scripts_dir.resolve()
++
++    # Detect absolute or home-relative paths
++    is_abs_or_home = (
++        raw.startswith(("/", "~"))
++        or (len(raw) >= 2 and raw[1] == ":")
++        or Path(raw).is_absolute()
++    )
++
++    if is_abs_or_home:
++        if for_execution:
++            try:
++                expanded = Path(raw).expanduser().resolve()
++            except (ValueError, RuntimeError, OSError):
++                return None, f"Blocked: script path is not a valid filesystem path: {script_path!r}"
++
++            try:
++                expanded.relative_to(scripts_dir_resolved)
++            except ValueError:
++                return None, (
++                    f"Blocked: script path resolves outside the scripts directory "
++                    f"({scripts_dir_resolved}): {script_path!r}"
++                )
++
++            if not expanded.exists():
++                return None, f"Script not found: {expanded}"
++            if not expanded.is_file():
++                return None, f"Script path is not a file: {expanded}"
++            return expanded, None
++        else:
++            return None, (
++                f"Script path must be relative to {scripts_dir}. "
++                f"Got absolute or home-relative path: {raw!r}. "
++                f"Place scripts in {scripts_dir} and use just the filename."
++            )
++
++    # Relative path checks
++    try:
++        raw_path = Path(raw)
++        if ".." in raw_path.parts:
++            # Explicit traversal component
++            if for_execution:
++                return None, (
++                    f"Blocked: script path resolves outside the scripts directory "
++                    f"({scripts_dir_resolved}): {script_path!r}"
++                )
++            return None, f"Script path escapes the scripts directory via traversal: {raw!r}"
++
++        candidate = scripts_dir / raw_path
++        resolved = candidate.resolve()
++        resolved.relative_to(scripts_dir_resolved)
++    except (ValueError, RuntimeError, OSError):
++        if for_execution:
++            return None, (
++                f"Blocked: script path resolves outside the scripts directory "
++                f"({scripts_dir_resolved}): {script_path!r}"
++            )
++        return None, f"Script path escapes the scripts directory via traversal or symlink: {raw!r}"
++
++    # Non-regular target check (directories, devices, sockets, FIFOs)
++    if candidate.exists() and not candidate.is_file():
++        if for_execution:
++            return None, f"Script path is not a file: {candidate}"
++        return None, f"Script path is not a regular file: {raw!r}"
++
++    if for_execution:
++        if not candidate.exists():
++            return None, f"Script not found: {candidate}"
++        if not candidate.is_file():
++            return None, f"Script path is not a file: {candidate}"
++        return candidate, None
++
++    return candidate, None
++
++
++def validate_cron_script_path(script_path: Optional[str]) -> Optional[str]:
++    """Validate a cron script or monitor_script path at the API boundary.
++
++    Returns an error string if blocked, or None if valid.
++    """
++    _, error = resolve_cron_script_path(script_path, for_execution=False)
++    return error

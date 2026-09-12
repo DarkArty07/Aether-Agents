@@ -1,0 +1,12 @@
+{
+  "artifact_type": "aether.objective-contract-tombstone.v1",
+  "project_id": "12027989-a08f-41cd-a82c-54ff1bfb6b03",
+  "contract_id": "oc_0084270d940c98d9",
+  "version": 1,
+  "status": "tombstone",
+  "reason": "Issue #403: removed from active tracked public release surface because pre-validation historical contract bytes contained operator-local path data. Immutable original preserved in Git history.",
+  "original_sha256": "7447fd890a24f6c7a82ca03f6b4aa7a992299d1beda2c78e078b5c6f578812cb",
+  "historical_commit_locator": "dad66f7e592b6a172ba9168f63df5080e7a31ec2",
+  "historical_path": ".aether/objective-contracts/oc_0084270d940c98d9/v1.md",
+  "superseding_safe_locator": ".aether/objective-contracts/oc_0084270d940c98d9/tombstone.json"
+}

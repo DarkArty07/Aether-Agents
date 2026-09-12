@@ -493,7 +493,14 @@ def _handle(
             )
         action = _required(args, "action")
         project_id = _required(args, "project_id")
-        session_workspace = _native_session_workspace(session_id)
+        session_workspace: Path | None = None
+        if session_id:
+            session_workspace = _native_session_workspace(session_id)
+            if session_workspace is None:
+                raise ContractError(
+                    "AETHER-OBJECTIVE-CONTRACT-WORKSPACE-UNRESOLVED",
+                    "Hermes authoring session has no resolved Git workspace",
+                )
         store = ObjectiveContractStore(
             author_profile=author_profile,
             authoring_root=session_workspace,

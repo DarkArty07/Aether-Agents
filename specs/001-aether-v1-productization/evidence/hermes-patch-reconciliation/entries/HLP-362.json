@@ -1,0 +1,76 @@
+{
+  "artifact_verification": {
+    "artifacts": [
+      {
+        "checksum_status": "passed",
+        "computed_sha256": "e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638",
+        "kind": "patch",
+        "ledger_sha256": "e6218c02d5da3eee1b620c4e2e845c840a8e86ce36616781c97ddcdcad7e5638",
+        "parse_status": "passed",
+        "reference": "patches/hermes/HLP-362-independent-review-ownership.patch",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction_input",
+        "reference": "maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+        "result": "passed"
+      },
+      {
+        "kind": "reconstruction",
+        "reference": "git apply --check against maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+        "result": "passed"
+      }
+    ],
+    "blocker": "The exact maintained-fork reconstruction, focused candidate checks, and fork PR #5 merged source passed, but public upstream equivalence remains unavailable because upstream has no equivalent independent-review requirement.",
+    "status": "unavailable"
+  },
+  "blocking_uncertainty": [
+    "The upstream Hermes Kanban protocol does not distinguish self-review from independent review at the inspected revision."
+  ],
+  "components": [
+    "HLP-362",
+    "hermes_cli/kanban_db.py",
+    "tools/kanban_tools.py",
+    "tests/hermes_cli/test_kanban_review_independence.py"
+  ],
+  "id": "HLP-362",
+  "ledger_locator": "HERMES_LOCAL_PATCHES.md#hlp-362--independent-same-card-review-ownership",
+  "local_status": "ACTIVE_LOCAL / UPSTREAM_MISSING",
+  "required_behavior": "An initial same-card review request without an independent reviewer fails closed before clearing the implementation claim; self-review is rejected; legacy reviewer-null review events remain parked; valid re-review provenance and explicit reviewer cycles remain supported.",
+  "retirement_gate": {
+    "evidence": [
+      {
+        "kind": "test",
+        "reference": "tests/hermes_cli/test_kanban_review_independence.py on maintained fork base 28b593efa86bbc674b32f488c35932a4e7e85a51",
+        "result": "Baseline fails 4 of 5 tests (accepts missing reviewer, self-review, and claims legacy reviewer-null event)."
+      },
+      {
+        "kind": "test",
+        "reference": "tests/hermes_cli/test_kanban_review_independence.py on reviewed candidate 8afefe7e304f2b3c80cecbbb24bf9e60be72044b",
+        "result": "5 passed in 0.87s."
+      }
+    ],
+    "status": "not_executed",
+    "summary": "Retire only when an adopted exact Hermes release provides equivalent independent review gating (initial review without an independent reviewer fails closed and self-review is rejected) and passes the ABR-362 regression predicates without downstream patches."
+  },
+  "retirement_recommendation": "retain",
+  "summary": "Retain HLP-362. Initial same-card review requires an explicit independent reviewer; self-review is rejected and legacy unassigned review claims remain parked. Verified by regression tests on the maintained fork and candidate testing in Aether.",
+  "upstream": {
+    "disposition": "upstream_missing",
+    "evidence": [
+      {
+        "kind": "source",
+        "reference": "https://github.com/NousResearch/hermes-agent/blob/4f22543509d1b91dc45bcb369447126c5eb14fb7/hermes_cli/kanban_db.py",
+        "result": "The inspected revision allows initial request_review without a reviewer and transitions the card without independent reviewer gating (verified also at 31d0a2428e9db346d6781da66f5b37ff3e12def2)."
+      }
+    ],
+    "inspected_revision": "4f22543509d1b91dc45bcb369447126c5eb14fb7",
+    "linked_refs": [
+      {
+        "kind": "issue",
+        "url": "https://github.com/DarkArty07/Aether-Agents/issues/362"
+      }
+    ],
+    "repository": "https://github.com/NousResearch/hermes-agent"
+  }
+}
