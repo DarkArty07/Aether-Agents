@@ -214,6 +214,7 @@ jobs:
           src/aether_agents/lab/affinity.py
           src/aether_agents/lab/collect.py
           src/aether_agents/lab/dispatch.py
+          src/aether_agents/lab/isolation.py
           src/aether_agents/lab/__init__.py
           src/aether_agents/lab/matrix.py
           src/aether_agents/lab/observation.py
@@ -224,6 +225,7 @@ jobs:
           src/aether_agents/lab/validation.py
           src/aether_agents/lifecycle.py
           src/aether_agents/hermes_baseline.py
+          src/aether_agents/hermes_editable.py
           src/aether_agents/monitor/__init__.py
           src/aether_agents/monitor/collector.py
           src/aether_agents/monitor/commands.py
@@ -304,8 +306,10 @@ jobs:
           tests/test_e2e15_qualification.py
           tests/test_e2e_matrix.py
           tests/test_lab_formalization.py
+          tests/test_lab_writer_isolation.py
           tests/test_hermes_patch_reconciliation.py
           tests/test_hermes_baseline.py
+          tests/test_hermes_editable.py
           tests/test_objective_contracts.py
           tests/test_observation_brief_tool.py
           tests/test_observation_cli_plugin.py
