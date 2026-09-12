@@ -16,6 +16,14 @@ non-symlink, contained roots; a mismatch refuses before any write.  Native Herme
 destination precedence is unchanged: an explicit ``HERMES_KANBAN_DB`` still outranks
 ``HERMES_HOME``, and production workers still require that explicit pin.
 
+The child probe run under the provisioned interpreter is the native confirmation of those
+roots.  The environment-derived fallback used when that probe is unavailable models the
+loaded revision's resolution exactly, including the platform-native-home branch of
+``get_default_hermes_root()``: a ``HERMES_HOME`` that resolves under the native home
+anchors the kanban roots on that native home (the operator's live root), never on
+``HERMES_HOME`` itself.  When a mapping cannot show which branch applies, the anchored
+roots are refused as unresolved instead of guessed.
+
 This module is behavior, not authority: it neither grants permissions nor replaces the
 native lifecycle.
 """
@@ -136,6 +144,17 @@ def isolated_hermes_env(run_root: Path, hermes_root: Path, hermes: Path) -> dict
     return env
 
 
+def _is_python_interpreter(candidate: Path) -> bool:
+    """True when ``candidate`` names a Python interpreter rather than any script runner.
+
+    The child probe is Python source, so a launcher whose shebang is a shell (or any
+    other runner) must never be probed: the runner would be handed Python source, which
+    can block instead of failing.
+    """
+
+    return candidate.name.casefold().startswith("python")
+
+
 def native_python_for(hermes: Path | None) -> Path:
     """Resolve the interpreter belonging to the caller-supplied Hermes executable."""
 
@@ -159,12 +178,68 @@ def native_python_for(hermes: Path | None) -> Path:
     return Path(sys.executable)
 
 
-def _hermes_root_for_profile(home: Path | None) -> Path | None:
-    """Return the shared root that anchors a profile-scoped ``HERMES_HOME``."""
+def _platform_default_hermes_home(environ: Mapping[str, str]) -> Path | None:
+    """Model ``hermes_constants._get_platform_default_hermes_home()`` for a mapping.
 
-    if home is None:
+    POSIX uses ``$HOME/.hermes``; native Windows uses ``%LOCALAPPDATA%\\hermes``.
+    ``None`` means the mapping does not carry the variable that branch reads, so the
+    native home cannot be shown faithful and the caller must refuse rather than guess.
+    """
+
+    if sys.platform == "win32":
+        local_appdata = environ.get("LOCALAPPDATA", "").strip()
+        return Path(local_appdata) / "hermes" if local_appdata else None
+    home = environ.get("HOME", "").strip()
+    return Path(home) / ".hermes" if home else None
+
+
+def _hermes_home_from_env(environ: Mapping[str, str]) -> Path | None:
+    """Model ``hermes_constants._hermes_home_from_env()`` for a mapping."""
+
+    value = environ.get("HERMES_HOME", "").strip()
+    if value:
+        return Path(value)
+    return _platform_default_hermes_home(environ)
+
+
+def _default_hermes_root_from_env(environ: Mapping[str, str]) -> Path | None:
+    """Model ``hermes_constants.get_default_hermes_root()`` exactly for a mapping.
+
+    A ``HERMES_HOME`` that resolves under the platform-native home anchors on that native
+    home (the operator's live root), a ``<root>/profiles/<name>`` home anchors on
+    ``<root>``, any other home is its own root, and an unset ``HERMES_HOME`` falls back to
+    the native home.  ``None`` means the mapping cannot show which branch the loaded
+    revision takes, so anchored roots are refused as unresolved instead of assumed.
+    """
+
+    native_home = _platform_default_hermes_home(environ)
+    env_home = environ.get("HERMES_HOME", "")
+    if not env_home:
+        return native_home
+    if native_home is None:
         return None
-    return home.parent.parent if home.parent.name == "profiles" else home
+    env_path = Path(env_home)
+    try:
+        env_resolved = env_path.resolve()
+        native_resolved = native_home.resolve()
+    except OSError:
+        return None
+    try:
+        env_resolved.relative_to(native_resolved)
+    except ValueError:
+        if env_path.parent.name == "profiles":
+            return env_path.parent.parent
+        return env_path
+    return native_home
+
+
+def _kanban_home_from_env(environ: Mapping[str, str], default_root: Path | None) -> Path | None:
+    """Model ``hermes_cli.kanban_db.kanban_home()``: its override, else the default root."""
+
+    override = environ.get("HERMES_KANBAN_HOME", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return default_root
 
 
 def _native_root(qualified: str) -> Path | None:
@@ -186,27 +261,37 @@ def _native_root(qualified: str) -> Path | None:
 
 
 def _environment_root(
-    name: str, environ: Mapping[str, str], hermes_home: Path | None
+    name: str,
+    environ: Mapping[str, str],
+    hermes_home: Path | None,
+    default_root: Path | None,
 ) -> Path | None:
-    """Derive one root from the environment exactly as the native resolver would."""
+    """Derive one root from the environment exactly as the native resolver would.
 
-    overrides = {root: override for root, _qualified, override in WRITER_ROOT_RESOLVERS}
-    override = environ.get(overrides.get(name, ""), "")
-    if override.strip():
-        return Path(override).expanduser()
+    ``hermes_home`` and ``default_root`` are the faithful models of
+    ``get_hermes_home()`` and ``get_default_hermes_root()`` for this mapping; a ``None``
+    model refuses the anchored roots as unresolved instead of assuming a value.
+    """
+
     if name == "hermes_home":
         return hermes_home
-    root = _hermes_root_for_profile(hermes_home)
-    if name == "kanban_home":
-        return root
-    if name == "boards_root":
-        return root / "kanban" / "boards" if root is not None else None
-    if name == "kanban_db":
-        return root / "kanban.db" if root is not None else None
+    overrides = {root: override for root, _qualified, override in WRITER_ROOT_RESOLVERS}
+    override = environ.get(overrides.get(name, ""), "").strip()
+    if override:
+        return Path(override).expanduser()
     if name == "projects_db":
         return hermes_home / "projects.db" if hermes_home is not None else None
+    kanban_root = _kanban_home_from_env(environ, default_root)
+    if name == "kanban_home":
+        return kanban_root
+    if kanban_root is None:
+        return None
+    if name == "boards_root":
+        return kanban_root / "kanban" / "boards"
+    if name == "kanban_db":
+        return kanban_root / "kanban.db"
     if name == "workspaces_root":
-        return root / "kanban" / "workspaces" if root is not None else None
+        return kanban_root / "kanban" / "workspaces"
     return None
 
 
@@ -223,12 +308,13 @@ def resolve_writer_roots(
 
     env = dict(os.environ) if environ is None else dict(environ)
     use_native = (environ is None) if native is None else native
-    hermes_home = _environment_root("hermes_home", env, None)
+    hermes_home = _hermes_home_from_env(env)
+    default_root = _default_hermes_root_from_env(env)
     roots: dict[str, Path | None] = {}
     for name, qualified, _override in WRITER_ROOT_RESOLVERS:
         value = _native_root(qualified) if use_native else None
         if value is None:
-            value = _environment_root(name, env, hermes_home)
+            value = _environment_root(name, env, hermes_home, default_root)
         roots[name] = value
     return roots
 
@@ -354,10 +440,14 @@ def probe_child_writer_roots(
 ) -> tuple[bool, dict[str, Path | None]]:
     """Run the read-only child probe and return ``(complete, effective roots)``.
 
-    A child whose provisioned revision cannot resolve every root returns ``complete =
-    False``; the caller then verifies the environment-derived form instead of guessing.
+    The probe is Python source, so only an interpreter that names itself as Python is
+    probed: handing it to a shell or another runner can block instead of failing, and an
+    unprobed context is verified by the environment-derived form instead.  A child whose
+    provisioned revision cannot resolve every root returns ``complete = False``.
     """
 
+    if not _is_python_interpreter(Path(python)):
+        return False, {}
     try:
         completed = subprocess.run(
             [str(python), "-c", CHILD_WRITER_ROOTS_PROBE],

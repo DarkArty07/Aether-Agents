@@ -16,6 +16,7 @@ import importlib.util
 import inspect
 import json
 import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -70,8 +71,11 @@ def _snapshot(path: Path) -> dict[str, object]:
     }
 
 
-def _fake_hermes(path: Path, *, payload: str = "[]") -> Path:
-    path.write_text(f"#!/bin/sh\nprintf '{payload}'\n", encoding="utf-8")
+def _fake_hermes(path: Path, *, payload: str = "[]", marker: Path | None = None) -> Path:
+    script = f"#!/bin/sh\nprintf '{payload}'\n"
+    if marker is not None:
+        script += f"touch {shlex.quote(str(marker))}\n"
+    path.write_text(script, encoding="utf-8")
     path.chmod(0o755)
     return path
 
@@ -325,6 +329,137 @@ def test_pre_write_gate_refuses_a_mismatch_with_zero_rows_written(tmp_path: Path
     assert _snapshot(foreign_copy) == foreign_before
 
 
+def test_fallback_refuses_a_hermes_home_below_the_platform_native_home(tmp_path: Path) -> None:
+    """The env-derived form models ``get_default_hermes_root()``'s native-home branch.
+
+    A ``HERMES_HOME`` that resolves under the platform-native home is never the kanban
+    root the loaded revision uses — that home is — so a non-profile subdirectory of the
+    real Hermes home cannot be waved through as disposable.  Round-1 review reproduction:
+    the pre-fix fallback returned no problems and a PASS receipt while the native
+    resolvers escaped to the live root.
+    """
+
+    from aether_agents.lab import isolation
+
+    synth_home = tmp_path / "synth"
+    lab_home = synth_home / ".hermes" / "labs" / "x"
+    lab_home.mkdir(parents=True)
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("HERMES_", "AETHER_", "XDG_"))
+    }
+    env["HOME"] = str(synth_home)
+    env["HERMES_HOME"] = str(lab_home)
+
+    roots = isolation.resolve_writer_roots(env, native=False)
+    assert Path(str(roots["hermes_home"])).resolve() == lab_home.resolve()
+    assert Path(str(roots["kanban_home"])).resolve() == (synth_home / ".hermes").resolve()
+    problems = isolation.writer_root_problems(roots, private_roots=[lab_home])
+    assert problems == [
+        "boards_root-escape",
+        "kanban_db-escape",
+        "kanban_home-escape",
+        "workspaces_root-escape",
+    ]
+    with pytest.raises(lab.HarnessError, match="kanban_home-escape"):
+        isolation.verify_writer_context(roots, private_roots=[lab_home])
+    with pytest.raises(lab.HarnessError):
+        isolation.require_verified_writer_context(
+            run_root=lab_home, hermes_root=lab_home, environ=env
+        )
+
+    if importlib.util.find_spec("hermes_cli") is None:
+        return
+    # The native child probe (the confirmation the fallback models) resolves the same
+    # roots, so the derived refusal matches native behavior instead of being stricter.
+    complete, probed = isolation.probe_child_writer_roots(Path(sys.executable), env, cwd=tmp_path)
+    assert complete is True
+    assert {name: Path(str(value)).resolve() for name, value in probed.items()} == {
+        name: Path(str(value)).resolve() for name, value in roots.items()
+    }
+    assert isolation.writer_root_problems(probed, private_roots=[lab_home]) == problems
+
+
+def test_fallback_models_the_branch_order_of_the_loaded_revision(tmp_path: Path) -> None:
+    """Profile, unset-home, unfaithful-home and override branches of the derived root."""
+
+    from aether_agents.lab import isolation
+
+    base = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith(("HERMES_", "AETHER_", "XDG_"))
+    }
+    synth = tmp_path / "synth"
+    profile_home = synth / "deploy" / "profiles" / "coder"
+    profile_home.mkdir(parents=True)
+
+    # A <root>/profiles/<name> home outside the native home anchors on <root>.
+    env = dict(base, HOME=str(synth), HERMES_HOME=str(profile_home))
+    roots = isolation.resolve_writer_roots(env, native=False)
+    assert Path(str(roots["kanban_home"])).resolve() == (synth / "deploy").resolve()
+    assert (
+        Path(str(roots["boards_root"])).resolve()
+        == (synth / "deploy" / "kanban" / "boards").resolve()
+    )
+
+    # An unset HERMES_HOME anchors on the platform-native home.
+    env = dict(base, HOME=str(synth))
+    env.pop("HERMES_HOME", None)
+    roots = isolation.resolve_writer_roots(env, native=False)
+    assert Path(str(roots["hermes_home"])).resolve() == (synth / ".hermes").resolve()
+    assert Path(str(roots["kanban_home"])).resolve() == (synth / ".hermes").resolve()
+
+    # A mapping without HOME cannot show the native home: the anchored roots refuse.
+    env = dict(base, HERMES_HOME=str(tmp_path / "custom"))
+    env.pop("HOME", None)
+    problems = isolation.writer_root_problems(
+        isolation.resolve_writer_roots(env, native=False), private_roots=[tmp_path]
+    )
+    assert problems == [
+        "boards_root-unresolved",
+        "kanban_db-unresolved",
+        "kanban_home-unresolved",
+        "workspaces_root-unresolved",
+    ]
+
+    # HERMES_KANBAN_HOME anchors every kanban root even without a faithful native home.
+    env = dict(
+        base,
+        HERMES_HOME=str(tmp_path / "custom"),
+        HERMES_KANBAN_HOME=str(tmp_path / "run"),
+    )
+    env.pop("HOME", None)
+    roots = isolation.resolve_writer_roots(env, native=False)
+    assert Path(str(roots["kanban_home"])).resolve() == (tmp_path / "run").resolve()
+    assert Path(str(roots["kanban_db"])).resolve() == (tmp_path / "run" / "kanban.db").resolve()
+
+
+def test_child_probe_never_hands_python_source_to_a_non_python_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The child probe is only run under an interpreter that names itself Python.
+
+    A shell shebang runner would be handed Python source, which can block (an ambient
+    ``import`` command) instead of failing, so it is skipped and the faithful
+    environment-derived form is used.  The probe must not even be spawned.
+    """
+
+    from aether_agents.lab import isolation
+
+    shell_launcher = _fake_hermes(tmp_path / "hermes")
+    assert isolation.native_python_for(shell_launcher) == Path("/bin/sh")
+
+    def _forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("the probe source must not be handed to a non-Python runner")
+
+    monkeypatch.setattr(isolation.subprocess, "run", _forbidden)
+    assert isolation.probe_child_writer_roots(
+        isolation.native_python_for(shell_launcher), dict(os.environ), cwd=tmp_path
+    ) == (False, {})
+
+
 def test_child_side_gate_refuses_before_writing_and_allows_the_disposable_target(
     tmp_path: Path,
 ) -> None:
@@ -556,6 +691,60 @@ def test_every_write_capable_helper_constructs_or_verifies_a_context() -> None:
     assert lab.isolated_hermes_env is isolation.isolated_hermes_env
     assert runner.isolated_hermes_env is isolation.isolated_hermes_env
     assert persistent.isolated_hermes_env is isolation.isolated_hermes_env
+
+
+def test_dispatch_refuses_an_undeclared_context_before_any_dispatch(tmp_path: Path) -> None:
+    """No caller reaches the native dispatch writer without declared disposable roots."""
+
+    invoked = tmp_path / "DISPATCH_INVOKED"
+    hermes = _fake_hermes(tmp_path / "hermes", marker=invoked)
+    env: Mapping[str, str] = _write_disposable_boards(
+        tmp_path / "run", tmp_path / "hermes-home", hermes
+    )
+
+    with pytest.raises(lab.HarnessError, match="disposable"):
+        dispatch.dispatch_until_settled(
+            hermes,
+            cwd=tmp_path,
+            env=env,
+            commands_log=tmp_path / "commands.jsonl",
+            evidence_dir=tmp_path / "evidence",
+            max_passes=1,
+            timeout_seconds=5,
+        )
+
+    assert not invoked.exists(), "the native dispatch writer ran without a declared context"
+
+
+def test_dispatch_consumes_the_native_child_probe_before_dispatching(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dispatch writer verifies through the provisioned interpreter, not only the fallback."""
+
+    from aether_agents.lab import isolation
+
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    hermes_root = run_root / "hermes-home"
+    hermes = _fake_hermes(tmp_path / "hermes")
+    env: Mapping[str, str] = _write_disposable_boards(run_root, hermes_root, hermes)
+    foreign = {name: tmp_path / "outside" / name for name in isolation.WRITER_ROOT_NAMES}
+    monkeypatch.setattr(
+        isolation, "probe_child_writer_roots", lambda *args, **kwargs: (True, dict(foreign))
+    )
+
+    with pytest.raises(lab.HarnessError, match="escape"):
+        dispatch.dispatch_until_settled(
+            hermes,
+            cwd=tmp_path,
+            env=env,
+            commands_log=tmp_path / "commands.jsonl",
+            evidence_dir=tmp_path / "evidence",
+            max_passes=1,
+            timeout_seconds=5,
+            run_root=run_root,
+            hermes_root=hermes_root,
+        )
 
 
 def test_dispatch_writer_verifies_the_declared_disposable_roots(tmp_path: Path) -> None:
